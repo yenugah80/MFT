@@ -14,7 +14,9 @@ export const favoritesSchema = z.object({
   title: z.string({ required_error: "title is required" }),
   image: z.string().optional(),
   cookTime: z.string().optional(),
-  servings: z.string().optional(),
+  // Accept either a string or a number for servings since the
+  // mobile client currently sends a numeric value (e.g. 4).
+  servings: z.union([z.string(), z.number()]).optional(),
 });
 
 export const profileBasicsSchema = z.object({
