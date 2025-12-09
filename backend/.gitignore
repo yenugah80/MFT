@@ -1,0 +1,48 @@
+# -------------------
+# Node & Backend
+# -------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+pnpm-lock.yaml
+yarn.lock
+
+# Env files
+.env
+.env.local
+.env.production
+.env.development
+
+# Build outputs
+dist/
+build/
+.esbuild/
+drizzle/
+drizzle-kit*
+.esbuild/
+
+# Logs
+logs/
+*.log
+
+# Drizzle metadata
+*.sql-journal
+.neon/
+
+# React Native / Expo
+.expo/
+.expo-shared/
+web-build/
+android/
+ios/
+
+# VSCode
+.vscode/
+.history/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+

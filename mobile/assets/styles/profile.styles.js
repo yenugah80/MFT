@@ -1,0 +1,272 @@
+import { StyleSheet } from "react-native";
+import { COLORS } from "../../constants/colors";
+
+// Styles for the Profile screen (React Native)
+export const profileStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    padding: 16,
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  sectionCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  inputLabel: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    marginBottom: 6,
+  },
+  inputBox: {
+    backgroundColor: "#F8F7FB",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    color: COLORS.text,
+  },
+  rowGap16: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 4,
+  },
+  rowItem: { flex: 1 },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
+  },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  chipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipText: {
+    color: COLORS.text,
+    fontWeight: "700",
+  },
+  chipTextSelected: {
+    color: COLORS.white,
+  },
+  chipDisabled: {
+    opacity: 0.55,
+  },
+  activityLevelRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  activityOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    minWidth: 140,
+    gap: 4,
+  },
+  activityOptionSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#F3E8FF",
+  },
+  activityOptionDisabled: {
+    opacity: 0.5,
+  },
+  activityText: {
+    color: COLORS.text,
+    fontWeight: "800",
+  },
+  metaText: {
+    color: COLORS.textLight,
+    fontSize: 12,
+  },
+  metricsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 12,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  metricLabel: {
+    color: COLORS.textLight,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  inlineInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  flex1: { flex: 1 },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  tagPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#F4F1FF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tagDanger: {
+    backgroundColor: "#FFF6F1",
+    borderColor: "#F59E0B",
+  },
+  tagText: {
+    color: COLORS.text,
+    fontWeight: "700",
+  },
+  tagRemove: {
+    color: COLORS.textLight,
+    marginLeft: 6,
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: COLORS.white,
+    fontWeight: "700",
+  },
+  secondaryButton: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: COLORS.text,
+    fontWeight: "700",
+  },
+  ghostButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  ghostButtonText: {
+    color: COLORS.textLight,
+    fontWeight: "700",
+  },
+  addButton: {
+    marginLeft: 6,
+  },
+  sectionActions: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  subTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  progressCard: {
+    marginTop: 6,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  progressBar: {
+    height: 10,
+    backgroundColor: COLORS.border,
+    borderRadius: 10,
+    overflow: "hidden",
+    marginVertical: 8,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: COLORS.primary,
+  },
+  mutedText: {
+    color: COLORS.textLight,
+    fontSize: 12,
+  },
+  footerNote: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 24,
+  },
+  warningInput: {
+    borderColor: "#F59E0B",
+    backgroundColor: "#FFF9ED",
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  settingText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginLeft: 12,
+  },
+});
