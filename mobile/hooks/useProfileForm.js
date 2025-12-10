@@ -9,6 +9,7 @@ import {
   validateGamification,
   hasValidationErrors,
   sanitizeBasicsForApi,
+  sanitizeGoalsForApi,
 } from "../utils/profileValidation";
 import {
   fetchUserProfile,
@@ -267,7 +268,7 @@ export default function useProfileForm(user) {
             await saveDietaryPreferences(token, dataToSave);
             break;
           case 'goals':
-            await saveNutritionGoals(token, dataToSave);
+            await saveNutritionGoals(token, sanitizeGoalsForApi(dataToSave));
             break;
           case 'gamification':
             await saveGamificationStats(token, dataToSave);

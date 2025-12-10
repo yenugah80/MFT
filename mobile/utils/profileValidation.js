@@ -193,3 +193,19 @@ export const sanitizeBasicsForApi = (basics) => {
     activityLevel: basics.activityLevel || undefined,
   };
 };
+
+/**
+ * Sanitize goals data for API
+ * @param {Object} goals - Raw goals data
+ * @returns {Object} Sanitized data
+ */
+export const sanitizeGoalsForApi = (goals) => {
+  return {
+    ...goals,
+    dailyCalories: goals.dailyCalories ? parseInt(goals.dailyCalories, 10) : undefined,
+    proteinG: goals.proteinG ? parseInt(goals.proteinG, 10) : undefined,
+    carbsG: goals.carbsG ? parseInt(goals.carbsG, 10) : undefined,
+    fatsG: goals.fatsG ? parseInt(goals.fatsG, 10) : undefined,
+    waterLiters: goals.waterLiters ? parseFloat(goals.waterLiters) : undefined,
+  };
+};
