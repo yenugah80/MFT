@@ -188,6 +188,17 @@ export const userNotificationsTable = pgTable("user_notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Mood log table
+export const moodLogTable = pgTable("mood_log", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  mood: text("mood").notNull(), // 'happy', 'sad', 'neutral', etc.
+  note: text("note"),
+  source: text("source"), // 'quick_action', 'manual', etc.
+  loggedDate: timestamp("logged_date").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Activity Levels table - admin configuration
 export const activityLevelsTable = pgTable("activity_levels", {
   id: serial("id").primaryKey(),

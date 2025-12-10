@@ -42,4 +42,23 @@ router.get("/barcode/:code", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/food/analyze-image
+ * Analyze a food image using AI.
+ */
+router.post("/analyze-image", async (req, res) => {
+  try {
+    const { image } = req.body; // base64 string
+    if (!image) return res.status(400).json({ error: "Image required" });
+
+    const result = await FoodService.analyzeImage(image);
+    if (!result) return res.status(500).json({ error: "Analysis failed" });
+
+    res.json(result);
+  } catch (error) {
+    console.error("[FoodAnalyzeImage] Error:", error);
+    res.status(500).json({ error: "Image analysis failed" });
+  }
+});
+
 export default router;

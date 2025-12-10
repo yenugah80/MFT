@@ -392,54 +392,23 @@ export const FoodService = {
         messages: [
           {
             role: "system",
-            content:
-              "You are a nutritional assistant. Analyze the food in the image and return ONLY a JSON object.",
+            content: "You are a nutritionist. Analyze the food in the image. Return a JSON object with nutritional details.",
           },
           {
             role: "user",
             content: [
-              {
-                type: "text",
-                text:
-                  "Analyze this food and return a JSON object with fields: " +
-                  '{ "id": "string", "title": "string", "description": "string", "calories": number, "protein": number, "carbs": number, "fat": number, "nutriscore": "A"|"B"|"C"|"D"|"E"|"UNKNOWN", "ecoscore": "A"|"B"|"C"|"D"|"E"|"UNKNOWN", "novaScore": 1|2|3|4, "dietLabels": ["Vegan"|"Keto"|"Gluten-Free"|"Low-Carb"], "allergens": ["Peanuts"|"Dairy"|"Gluten"|"Soy"|"Eggs"|"Fish"|"Shellfish"|"Tree Nuts"], "category": "string", "servingSize": "string", "ingredients": [{"name": "string", "amount": "string"}], "micros": { "calcium": "string", "iron": "string", "vitaminA": "string", "vitaminC": "string", "potassium": "string" }, "detectedFoods": [{"name": "string", "calories": number, "protein": number, "carbs": number, "fat": number, "portion": "string"}] } ' +
-                  "Use best estimates for micros, ingredients, and diet labels. If multiple foods are present, list them in 'detectedFoods'. If food is unrecognized, return null.",
-              },
-              {
-                type: "image_url",
-                image_url: { url: `data:image/jpeg;base64,${base64Image}` },
-              },
+              { type: "text", text: "Identify the food and estimate nutrition. Return JSON with: { foodName, description, calories (number), protein (number), carbs (number), fat (number), servingSize, mealType, nutriscore (A-E), micros: { calcium, iron, vitaminA, vitaminC, potassium } }." },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
             ],
           },
         ],
+        max_tokens: 500,
       },
       "analyzeImage"
     );
 
     if (!json) return null;
-    if (json === null) return null;
-
-    const id = json.id || `ai_${Date.now()}`;
-
-    return {
-      id,
-      title: json.title || "Unknown Food",
-      description: json.description || "",
-      calories: Number.isFinite(json.calories) ? json.calories : null,
-      protein: Number.isFinite(json.protein) ? json.protein : null,
-      carbs: Number.isFinite(json.carbs) ? json.carbs : null,
-      fat: Number.isFinite(json.fat) ? json.fat : null,
-      nutriscore: json.nutriscore || "UNKNOWN",
-      ecoscore: json.ecoscore || "UNKNOWN",
-      novaScore: json.novaScore || null,
-      dietLabels: Array.isArray(json.dietLabels) ? json.dietLabels : [],
-      allergens: Array.isArray(json.allergens) ? json.allergens : [],
-      category: json.category || "General",
-      servingSize: json.servingSize || "1 serving",
-      ingredients: Array.isArray(json.ingredients) ? json.ingredients : [],
-      micros: json.micros || {},
-      detectedFoods: Array.isArray(json.detectedFoods) ? json.detectedFoods : [],
-    };
+    return FoodService.transformAIResponse(json);
   },
 
   // ------------- AI: Text-based fallback -------------
@@ -575,28 +544,29 @@ export const FoodService = {
   },
 
   transformUSDAData: (food) => {
-    const getNutrientVal = (predicate) => {
-      const n = (food.foodNutrients || []).find(predicate);
-      return n ? n.value : null;
+    const getNutrient = (name) => {
+      const n = food.foodNutrients.find((x) => x.nutrientName === name);
+      return n ? n.value : 0;
     };
-
     const getNutrientString = (name) => {
-      const n = (food.foodNutrients || []).find(nut => nut.nutrientName.toLowerCase().includes(name.toLowerCase()));
-      return n ? `${n.value} ${n.unitName}` : null;
+      const n = food.foodNutrients.find((x) => x.nutrientName === name);
+      return n ? `${n.value}${n.unitName.toLowerCase()}` : "0";
     };
 
-    const kcal = getNutrientVal((n) => /energy/i.test(n.nutrientName));
-    const protein = getNutrientVal((n) => /protein/i.test(n.nutrientName));
-    const carbs = getNutrientVal((n) => /carbohydrate/i.test(n.nutrientName));
-    const fat = getNutrientVal((n) => /total lipid/i.test(n.nutrientName));
-    const satFat = getNutrientVal((n) => /saturated fat/i.test(n.nutrientName));
-    const sugars = getNutrientVal((n) => /sugars/i.test(n.nutrientName));
-    const fiber = getNutrientVal((n) => /fiber/i.test(n.nutrientName));
-    const sodium = getNutrientVal((n) => /sodium/i.test(n.nutrientName));
+    const kcal = getNutrient("Energy");
+    const protein = getNutrient("Protein");
+    const carbs = getNutrient("Carbohydrate, by difference");
+    const fat = getNutrient("Total lipid (fat)");
+    const sugars = getNutrient("Sugars, total including NLEA");
+    const fiber = getNutrient("Fiber, total dietary");
+    const sodium = getNutrient("Sodium, Na");
+    const satFat = getNutrient("Fatty acids, total saturated");
 
-    // Build a pseudo-nutriments to reuse NutriScore engine
+    // Construct pseudo-nutriments for NutriScore (assuming USDA values are per 100g usually, 
+    // but sometimes per serving. We'll assume per 100g for scoring if not specified, 
+    // or just use what we have as a best effort).
     const pseudoNutriments = {
-      "energy-kj_100g": kcal != null ? kcal * 4.184 : undefined,
+      "energy-kcal_100g": kcal,
       "sugars_100g": sugars,
       "saturated-fat_100g": satFat,
       "sodium_100g": sodium != null ? sodium / 1000 : undefined, // USDA mg -> g
@@ -630,6 +600,49 @@ export const FoodService = {
         vitaminA: getNutrientString("Vitamin A"),
         vitaminC: getNutrientString("Vitamin C"),
         potassium: getNutrientString("Potassium"),
+      }
+    };
+  },
+
+  /**
+   * Transform AI response into standard Food object.
+   * Ensures all required fields for FoodDetailsScreen are present.
+   */
+  transformAIResponse: (aiData) => {
+    // 1. Calculate NutriScore if not provided
+    let nutri = { grade: aiData.nutriscore || "UNKNOWN", score: null };
+    
+    if (!aiData.nutriscore) {
+      // Attempt to calculate from macros if we assume they are per 100g or similar density
+      // This is an estimation since AI usually returns per serving.
+      // We'll just skip calculation to avoid misleading scores unless we have 100g data.
+      // Or we can try to normalize if serving size is known (e.g. 200g serving -> divide by 2).
+      
+      // For now, let's default to 'C' or 'UNKNOWN' if not provided, 
+      // but we will ask AI to provide it in the prompt.
+    }
+
+    return {
+      id: `ai_${Date.now()}`,
+      title: aiData.foodName || aiData.title || "Unknown Food",
+      description: aiData.description || "AI Analyzed Meal",
+      image: null,
+      calories: aiData.calories || 0,
+      protein: aiData.protein || 0,
+      carbs: aiData.carbs || 0,
+      fat: aiData.fat || aiData.fats || 0,
+      nutriscore: nutri.grade,
+      nutriscoreScore: nutri.score,
+      ecoscore: "UNKNOWN",
+      category: aiData.mealType || aiData.category || "General",
+      servingSize: aiData.servingSize || "1 serving",
+      ingredients: [],
+      micros: aiData.micros || {
+        calcium: "0mg",
+        iron: "0mg",
+        vitaminA: "0IU",
+        vitaminC: "0mg",
+        potassium: "0mg",
       }
     };
   },

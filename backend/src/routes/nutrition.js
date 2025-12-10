@@ -5,6 +5,18 @@ import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import { OpenAI } from "openai";
+
+// Configure Multer for temporary file storage
+const upload = multer({ dest: "uploads/" });
+
+// Initialize OpenAI (ensure OPENAI_API_KEY is in env)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const router = express.Router();
 
@@ -129,31 +141,7 @@ router.get("/history", async (req, res) => {
   }
 });
 
-/**
- * POST /api/nutrition/analyze-plate
- * Uses AI (Vision) to detect food, estimate portions, and return nutrition.
- * Replaces local YOLOv8 for cloud-native scalability.
- */
-router.post("/analyze-plate", async (req, res) => {
-  try {
-    const { imageBase64 } = req.body;
-    if (!imageBase64) {
-      return res.status(400).json({ error: "Image required" });
-    }
 
-    // Use the robust FoodService we built
-    const analysis = await FoodService.analyzeImage(imageBase64);
-    
-    if (!analysis) {
-      return res.status(422).json({ error: "Could not analyze food in image" });
-    }
-
-    res.json(analysis);
-  } catch (error) {
-    console.error("[AnalyzePlate] Error:", error);
-    res.status(500).json({ error: "Analysis failed" });
-  }
-});
 
 /**
  * POST /api/nutrition/recipe/parse
@@ -186,6 +174,83 @@ router.post("/scale", (req, res) => {
   const { nutrients, baseAmount, targetAmount } = req.body;
   const scaled = scaleNutrients(nutrients, baseAmount, targetAmount);
   res.json(scaled);
+});
+
+/**
+ * POST /api/nutrition/voice-log
+ * Transcribe audio and analyze food content.
+ */
+router.post("/voice-log", upload.single("audio"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No audio file provided" });
+    }
+
+    const filePath = req.file.path;
+
+    // 1. Transcribe with Whisper
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(filePath),
+      model: "whisper-1",
+    });
+
+    const text = transcription.text;
+    console.log(`[VoiceLog] Transcribed: "${text}"`);
+
+    // 2. Analyze text with GPT-4 (reuse existing logic if available, or call directly)
+    // We'll reuse the FoodService.parseRecipe logic or similar AI analysis
+    // For now, let's assume we have a helper or call GPT directly.
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a nutritionist. Analyze the user's spoken food log. 
+          Return a JSON object with: 
+          { 
+            foodName, 
+            description,
+            calories (number), 
+            protein (number), 
+            carbs (number), 
+            fats (number), 
+            servingSize, 
+            mealType,
+            nutriscore (A/B/C/D/E),
+            micros: {
+              calcium (string with unit),
+              iron (string with unit),
+              vitaminA (string with unit),
+              vitaminC (string with unit),
+              potassium (string with unit)
+            }
+          }. 
+          Estimate nutrition if not specified. Return ONLY JSON.`
+        },
+        { role: "user", content: text }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const rawAnalysis = JSON.parse(completion.choices[0].message.content);
+    
+    // 3. Transform to standard app format
+    const analysis = FoodService.transformAIResponse(rawAnalysis);
+
+    // Cleanup temp file
+    fs.unlinkSync(filePath);
+
+    res.json(analysis);
+
+  } catch (error) {
+    console.error("[VoiceLog] Error:", error);
+    // Cleanup temp file if it exists
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: "Voice processing failed" });
+  }
 });
 
 export default router;

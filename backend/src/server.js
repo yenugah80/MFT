@@ -11,7 +11,8 @@ import {
   gamificationTable,
   activityLevelsTable,
   foodLogTable,
-  waterLogTable
+  waterLogTable,
+  moodLogTable
 } from "./db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { FoodService } from "./services/foodService.js";
@@ -668,21 +669,28 @@ app.post("/api/log/water", requireAuth, async (req, res) => {
 });
 
 /* -------------------------------------------
-   MOOD LOGGING  (optional – requires new table)
+   MOOD LOGGING
 -------------------------------------------- */
 
-// You'd need a `mood_log` table in schema.js for this.
-// For now, you can just store them as notifications or skip.
 app.post("/api/log/mood", requireAuth, async (req, res) => {
   try {
+    const { userId } = req.auth;
     const { mood, note, source } = req.body;
     if (!mood) {
       return res.status(400).json({ error: "mood is required" });
     }
 
-    // TODO: insert into mood_log table or userNotificationsTable
-    console.log("Mood logged", { userId: req.auth.userId, mood, note, source });
-    res.status(201).json({ success: true });
+    const [inserted] = await db
+      .insert(moodLogTable)
+      .values({
+        userId,
+        mood,
+        note,
+        source,
+      })
+      .returning();
+
+    res.status(201).json(inserted);
   } catch (err) {
     console.error("Error logging mood", err);
     res.status(500).json({ error: "Something went wrong" });
