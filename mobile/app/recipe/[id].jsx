@@ -89,7 +89,11 @@ const RecipeDetailScreen = () => {
 
     try {
       const token = await getToken();
-      
+
+      if (!token) {
+        throw new Error("No auth token available");
+      }
+
       if (isSaved) {
         // remove from favorites
         const response = await fetch(`${API_URL}/favorites/${recipeId}`, {
@@ -98,36 +102,44 @@ const RecipeDetailScreen = () => {
             Authorization: `Bearer ${token}`,
           },
         });
-        if (!response.ok) throw new Error("Failed to remove recipe");
-
-        setIsSaved(false);
-      } else {
-        // add to favorites
-        const response = await fetch(`${API_URL}/favorites`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            // userId is extracted from token on backend
-            recipeId: parseInt(recipeId),
-            title: recipe.title,
-            image: recipe.image,
-            cookTime: recipe.cookTime,
-            servings: recipe.servings,
-          }),
-        });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to save recipe: ${errorText}`);
+          const text = await response.text();
+          console.log("Delete failed:", response.status, text);
+          throw new Error(text);
         }
-        setIsSaved(true);
+
+        setIsSaved(false);
+        return;
       }
+
+      // add to favorites
+      const response = await fetch(`${API_URL}/favorites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          // userId is extracted from token on backend
+          recipeId: parseInt(recipeId),
+          title: recipe.title,
+          image: recipe.image,
+          cookTime: recipe.cookTime,
+          servings: recipe.servings,
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.log("Save failed:", response.status, text);
+        throw new Error(text);
+      }
+
+      setIsSaved(true);
     } catch (error) {
       console.error("Error toggling recipe save:", error);
-      Alert.alert("Error", `Something went wrong. Please try again.`);
+      Alert.alert("Error", "Something went wrong. Please try again.");
     } finally {
       setIsSaving(false);
     }

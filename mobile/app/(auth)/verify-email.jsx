@@ -65,8 +65,17 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
         // Create profile in backend
         try {
           // Small delay to ensure session is propagated
-          await new Promise(resolve => setTimeout(resolve, 100));
-          const token = await getToken();
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Retry getting token a few times if needed
+          let token = await getToken();
+          let retries = 3;
+          while (!token && retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            token = await getToken();
+            retries--;
+          }
+
           if (token) {
             await saveProfileBasics(token, {
               fullName: `${firstName} ${lastName}`.trim(),
@@ -74,21 +83,36 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
             });
             console.log("Profile created successfully in backend");
           } else {
-            console.warn("Could not get token to create backend profile");
+            console.warn("Could not get token to create backend profile after retries");
+            Alert.alert("Profile Error", "Account created but failed to initialize profile. Please contact support.");
           }
         } catch (profileErr) {
           console.error("Failed to create backend profile:", profileErr);
+          Alert.alert("Profile Error", "Account created but failed to save profile data.");
         }
       } else {
         const status = signUpAttempt?.status || "unknown";
         const serverMessage = signUpAttempt?.errors?.[0]?.message || signUpAttempt?.fullMessage || null;
+        
+        // Detailed debugging for missing requirements
+        if (status === "missing_requirements") {
+            console.error("Missing Requirements:", JSON.stringify({
+                missingFields: signUpAttempt.missingFields,
+                unverifiedFields: signUpAttempt.unverifiedFields,
+            }, null, 2));
+            
+            Alert.alert(
+                "Verification Incomplete", 
+                `Please complete the following requirements: ${signUpAttempt.missingFields?.join(", ") || "Unknown requirements"}`
+            );
+        } else {
+            Alert.alert(
+              "Verification failed",
+              serverMessage || `Verification did not complete (status: ${status}). Please try again.`
+            );
+        }
+        
         const debug = safeStringify(signUpAttempt);
-        console.warn("Email verification did not complete:", status, serverMessage);
-        Alert.alert(
-          "Verification failed",
-          serverMessage || `Verification did not complete (status: ${status}). Please try again.`
-        );
-        // also print a debug console log (safe)
         console.error("signUpAttempt (debug):", debug);
       }
     } catch (err) {

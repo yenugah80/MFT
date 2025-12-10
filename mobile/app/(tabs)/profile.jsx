@@ -1,9 +1,10 @@
 import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { useState } from "react";
 import { useUser, useClerk } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import SafeScreen from "../../components/SafeScreen";
 import { profileStyles } from "../../assets/styles/profile.styles";
-import { useProfile } from "../../hooks/useProfile";
+import useProfileForm from "../../hooks/useProfileForm";
 import EditProfileModal from "../../components/EditProfileModal";
 
 /**
@@ -13,17 +14,36 @@ import EditProfileModal from "../../components/EditProfileModal";
 export default function ProfileScreen() {
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { 
-    profile, 
-    isLoading, 
-    isEditModalVisible, 
-    openEditModal, 
-    closeEditModal, 
-    formData, 
-    updateFormField, 
-    saveProfile, 
-    isUpdating 
-  } = useProfile();
+  const { state, updateField, saveSection } = useProfileForm(user);
+
+  const profile = state.draft;
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const formData = profile.basics;
+
+  const isLoading = false;
+
+  const openEditModal = () => {
+    setIsEditModalVisible(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalVisible(false);
+  };
+
+  const updateFormField = (field, value) => {
+    updateField("basics", field, value);
+  };
+
+  const handleSaveProfile = async () => {
+    setIsUpdating(true);
+    const ok = await saveSection("basics");
+    if (ok) {
+      setIsEditModalVisible(false);
+    }
+    setIsUpdating(false);
+  };
 
   const handleSignOut = async () => {
     try {
@@ -155,7 +175,7 @@ export default function ProfileScreen() {
         onClose={closeEditModal}
         formData={formData}
         updateFormField={updateFormField}
-        onSave={() => saveProfile(formData)}
+        onSave={handleSaveProfile}
         isUpdating={isUpdating}
       />
     </SafeScreen>

@@ -175,6 +175,19 @@ export default function useProfileForm(user) {
               email: user.primaryEmailAddress?.emailAddress || "",
             },
           };
+
+          // AUTO-SYNC: If profile is missing in backend but exists in Clerk, create it now.
+          // This handles cases where the initial sign-up webhook/call failed.
+          if (token) {
+             try {
+               console.log("Profile missing in backend. Syncing from Clerk...");
+               await saveProfileBasics(token, profileWithUser.basics);
+               console.log("Profile synced successfully.");
+             } catch (syncErr) {
+               console.error("Failed to sync profile:", syncErr);
+             }
+          }
+
           dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profileWithUser });
         }
       } catch (error) {
