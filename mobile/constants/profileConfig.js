@@ -29,9 +29,9 @@ export const GENDER_OPTIONS = [
 ];
 
 export const PRIMARY_GOAL_OPTIONS = [
-  { key: "lose", label: "Lose weight" },
-  { key: "maintain", label: "Maintain" },
-  { key: "gain", label: "Gain muscle" },
+  { key: "lose_weight", label: "Lose weight" },
+  { key: "maintain_weight", label: "Maintain" },
+  { key: "gain_muscle", label: "Gain muscle" },
 ];
 
 export const SECTION_LABELS = {
@@ -59,12 +59,12 @@ export const DEFAULT_PROFILE = {
     dislikes: [],
   },
   goals: {
-    primaryGoal: "maintain",
-    calories: "",
-    protein: "",
-    carbs: "",
-    fats: "",
-    water: "",
+    primaryGoal: "maintain_weight",
+    dailyCalories: "",
+    proteinG: "",
+    carbsG: "",
+    fatsG: "",
+    waterLiters: "",
   },
   gamification: {
     xp: 0,

@@ -90,16 +90,16 @@ export const validateGoals = (goals) => {
   const errors = {};
 
   // Calories validation
-  if (goals.calories) {
-    const calories = parseFloat(goals.calories);
+  if (goals.dailyCalories) {
+    const calories = parseFloat(goals.dailyCalories);
     if (isNaN(calories) || calories < 500 || calories > 10000) {
-      errors.calories = 'Calories must be between 500 and 10,000';
+      errors.dailyCalories = 'Calories must be between 500 and 10,000';
     }
 
     // Macro validation
-    const protein = parseFloat(goals.protein) || 0;
-    const carbs = parseFloat(goals.carbs) || 0;
-    const fats = parseFloat(goals.fats) || 0;
+    const protein = parseFloat(goals.proteinG) || 0;
+    const carbs = parseFloat(goals.carbsG) || 0;
+    const fats = parseFloat(goals.fatsG) || 0;
 
     const macroCalories = protein * 4 + carbs * 4 + fats * 9;
     const difference = Math.abs(macroCalories - calories);
@@ -111,34 +111,34 @@ export const validateGoals = (goals) => {
   }
 
   // Protein validation
-  if (goals.protein) {
-    const protein = parseFloat(goals.protein);
+  if (goals.proteinG) {
+    const protein = parseFloat(goals.proteinG);
     if (isNaN(protein) || protein < 0 || protein > 500) {
-      errors.protein = 'Protein must be between 0 and 500g';
+      errors.proteinG = 'Protein must be between 0 and 500g';
     }
   }
 
   // Carbs validation
-  if (goals.carbs) {
-    const carbs = parseFloat(goals.carbs);
+  if (goals.carbsG) {
+    const carbs = parseFloat(goals.carbsG);
     if (isNaN(carbs) || carbs < 0 || carbs > 1000) {
-      errors.carbs = 'Carbs must be between 0 and 1000g';
+      errors.carbsG = 'Carbs must be between 0 and 1000g';
     }
   }
 
   // Fats validation
-  if (goals.fats) {
-    const fats = parseFloat(goals.fats);
+  if (goals.fatsG) {
+    const fats = parseFloat(goals.fatsG);
     if (isNaN(fats) || fats < 0 || fats > 300) {
-      errors.fats = 'Fats must be between 0 and 300g';
+      errors.fatsG = 'Fats must be between 0 and 300g';
     }
   }
 
   // Water validation
-  if (goals.water) {
-    const water = parseFloat(goals.water);
+  if (goals.waterLiters) {
+    const water = parseFloat(goals.waterLiters);
     if (isNaN(water) || water < 0 || water > 20) {
-      errors.water = 'Water must be between 0 and 20 liters';
+      errors.waterLiters = 'Water must be between 0 and 20 liters';
     }
   }
 

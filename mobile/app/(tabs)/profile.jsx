@@ -202,8 +202,8 @@ export default function ProfileScreen() {
               <Text style={[profileStyles.inputLabel, { marginTop: 12 }]}>Daily Calories (kcal)</Text>
               <TextInput
                 style={profileStyles.inputBox}
-                value={profile.goals.calories?.toString() || ""}
-                onChangeText={(t) => updateField("goals", "calories", t)}
+                value={profile.goals.dailyCalories?.toString() || ""}
+                onChangeText={(t) => updateField("goals", "dailyCalories", t)}
                 keyboardType="numeric"
                 placeholder="e.g. 2000"
               />
@@ -213,8 +213,8 @@ export default function ProfileScreen() {
                   <Text style={profileStyles.inputLabel}>Protein (g)</Text>
                   <TextInput
                     style={profileStyles.inputBox}
-                    value={profile.goals.protein?.toString() || ""}
-                    onChangeText={(t) => updateField("goals", "protein", t)}
+                    value={profile.goals.proteinG?.toString() || ""}
+                    onChangeText={(t) => updateField("goals", "proteinG", t)}
                     keyboardType="numeric"
                     placeholder="0"
                   />
@@ -223,8 +223,8 @@ export default function ProfileScreen() {
                   <Text style={profileStyles.inputLabel}>Carbs (g)</Text>
                   <TextInput
                     style={profileStyles.inputBox}
-                    value={profile.goals.carbs?.toString() || ""}
-                    onChangeText={(t) => updateField("goals", "carbs", t)}
+                    value={profile.goals.carbsG?.toString() || ""}
+                    onChangeText={(t) => updateField("goals", "carbsG", t)}
                     keyboardType="numeric"
                     placeholder="0"
                   />
@@ -233,8 +233,8 @@ export default function ProfileScreen() {
                   <Text style={profileStyles.inputLabel}>Fats (g)</Text>
                   <TextInput
                     style={profileStyles.inputBox}
-                    value={profile.goals.fats?.toString() || ""}
-                    onChangeText={(t) => updateField("goals", "fats", t)}
+                    value={profile.goals.fatsG?.toString() || ""}
+                    onChangeText={(t) => updateField("goals", "fatsG", t)}
                     keyboardType="numeric"
                     placeholder="0"
                   />
@@ -251,19 +251,19 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
                   <Text style={profileStyles.inputLabel}>Calories</Text>
-                  <Text style={profileStyles.text}>{profile.goals.calories || "—"} kcal</Text>
+                  <Text style={profileStyles.text}>{profile.goals.dailyCalories || "—"} kcal</Text>
                 </View>
                 <View>
                   <Text style={profileStyles.inputLabel}>Protein</Text>
-                  <Text style={profileStyles.text}>{profile.goals.protein || "—"} g</Text>
+                  <Text style={profileStyles.text}>{profile.goals.proteinG || "—"} g</Text>
                 </View>
                 <View>
                   <Text style={profileStyles.inputLabel}>Carbs</Text>
-                  <Text style={profileStyles.text}>{profile.goals.carbs || "—"} g</Text>
+                  <Text style={profileStyles.text}>{profile.goals.carbsG || "—"} g</Text>
                 </View>
                 <View>
                   <Text style={profileStyles.inputLabel}>Fats</Text>
-                  <Text style={profileStyles.text}>{profile.goals.fats || "—"} g</Text>
+                  <Text style={profileStyles.text}>{profile.goals.fatsG || "—"} g</Text>
                 </View>
               </View>
             </View>

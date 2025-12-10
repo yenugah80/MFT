@@ -88,15 +88,15 @@ export default function DashboardScreen() {
         <View style={dashboardStyles.card}>
           <Text style={dashboardStyles.cardTitle}>Nutrition Goals</Text>
           <Text style={dashboardStyles.text}>
-            Goal: {profile.goals.primaryGoal === "lose" ? "Lose Weight" : 
-                   profile.goals.primaryGoal === "gain" ? "Gain Muscle" : "Maintain"}
+            Goal: {profile.goals.primaryGoal === "lose_weight" ? "Lose Weight" : 
+                   profile.goals.primaryGoal === "gain_muscle" ? "Gain Muscle" : "Maintain"}
           </Text>
-          {profile.goals.calories && (
-            <Text style={dashboardStyles.text}>{profile.goals.calories} kcal/day</Text>
+          {profile.goals.dailyCalories && (
+            <Text style={dashboardStyles.text}>{profile.goals.dailyCalories} kcal/day</Text>
           )}
-          {(profile.goals.protein || profile.goals.carbs || profile.goals.fats) && (
+          {(profile.goals.proteinG || profile.goals.carbsG || profile.goals.fatsG) && (
             <Text style={dashboardStyles.subText}>
-              P: {profile.goals.protein || 0}g · C: {profile.goals.carbs || 0}g · F: {profile.goals.fats || 0}g
+              P: {profile.goals.proteinG || 0}g · C: {profile.goals.carbsG || 0}g · F: {profile.goals.fatsG || 0}g
             </Text>
           )}
         </View>
