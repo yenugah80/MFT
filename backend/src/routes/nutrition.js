@@ -14,9 +14,10 @@ import { OpenAI } from "openai";
 const upload = multer({ dest: "uploads/" });
 
 // Initialize OpenAI (ensure OPENAI_API_KEY is in env)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// We use a lazy initialization or check for the key to avoid crashing if not set
+const openai = process.env.OPENAI_API_KEY 
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) 
+  : null;
 
 const router = express.Router();
 
@@ -187,6 +188,12 @@ router.post("/voice-log", upload.single("audio"), async (req, res) => {
     }
 
     const filePath = req.file.path;
+
+    if (!openai) {
+      // Cleanup temp file
+      fs.unlinkSync(filePath);
+      return res.status(503).json({ error: "AI service unavailable (API Key missing)" });
+    }
 
     // 1. Transcribe with Whisper
     const transcription = await openai.audio.transcriptions.create({
