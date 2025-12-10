@@ -11,7 +11,7 @@ import {
   gamificationTable,
   activityLevelsTable
 } from "./db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { FoodService } from "./services/foodService.js";
 import { validate, favoritesSchema, profileBasicsSchema, nutritionGoalsSchema, imageAnalysisSchema } from "./middleware/validation.js";
 import nutritionRouter from "./routes/nutrition.js";
@@ -19,6 +19,28 @@ import foodRouter from "./routes/food.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
+
+// Ensure the profiles table has all columns expected by the schema.
+// This guards against older databases that were created before we added
+// fields like `gender`, `activity_level`, or changed `weight_kg` to numeric.
+let profilesTableEnsured = false;
+async function ensureProfilesTableShape() {
+  if (profilesTableEnsured) return;
+  try {
+    await db.execute(
+      sql`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "gender" text;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "activity_level" text;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "profiles" ALTER COLUMN "weight_kg" TYPE numeric(5,2);`
+    );
+    profilesTableEnsured = true;
+  } catch (err) {
+    console.warn("Failed to ensure profiles table shape", err);
+  }
+}
 
 // CORS configuration – allow Authorization header for Expo Web and mobile
 app.use(
@@ -153,6 +175,10 @@ app.get("/api/profile/me", requireAuth, async (req, res) => {
   try {
     const { userId } = req.auth;
 
+    // Make sure the profiles table matches the current schema so that
+    // SELECTs do not fail due to missing columns.
+    await ensureProfilesTableShape();
+
     const [profile] = await db
       .select()
       .from(profilesTable)
@@ -215,6 +241,9 @@ app.post("/api/profile/basics", requireAuth, validate(profileBasicsSchema), asyn
   try {
     const { userId } = req.auth;
     const { fullName, email, gender, age, weightKg, heightCm, activityLevel } = req.body;
+
+    // Ensure table shape before performing INSERT/UPDATE operations.
+    await ensureProfilesTableShape();
 
     const existingProfile = await db
       .select()
