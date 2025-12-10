@@ -158,20 +158,40 @@ app.get("/api/profile/me", requireAuth, async (req, res) => {
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId));
 
-    const [dietary] = await db
-      .select()
-      .from(dietaryPreferencesTable)
-      .where(eq(dietaryPreferencesTable.userId, userId));
+    // The dietary/goals/gamification tables may not exist yet in some
+    // environments. If they are missing, we gracefully fall back to
+    // default objects instead of throwing a 500 error.
+    const safeLoadSingle = async (table, where, tableName) => {
+      try {
+        const [row] = await db.select().from(table).where(where);
+        return row || null;
+      } catch (err) {
+        if (err && err.code === "42P01") {
+          // 42P01 = undefined_table in Postgres
+          console.warn(`Optional profile table missing: ${tableName}`);
+          return null;
+        }
+        throw err;
+      }
+    };
 
-    const [goals] = await db
-      .select()
-      .from(nutritionGoalsTable)
-      .where(eq(nutritionGoalsTable.userId, userId));
+    const dietary = await safeLoadSingle(
+      dietaryPreferencesTable,
+      eq(dietaryPreferencesTable.userId, userId),
+      "dietary_preferences"
+    );
 
-    const [gamification] = await db
-      .select()
-      .from(gamificationTable)
-      .where(eq(gamificationTable.userId, userId));
+    const goals = await safeLoadSingle(
+      nutritionGoalsTable,
+      eq(nutritionGoalsTable.userId, userId),
+      "nutrition_goals"
+    );
+
+    const gamification = await safeLoadSingle(
+      gamificationTable,
+      eq(gamificationTable.userId, userId),
+      "gamification"
+    );
 
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });
@@ -181,7 +201,8 @@ app.get("/api/profile/me", requireAuth, async (req, res) => {
       basics: profile,
       dietary: dietary || { preferences: [], allergies: [], dislikes: [] },
       goals: goals || { primaryGoal: null, dailyCalories: null },
-      gamification: gamification || { xp: 0, level: 1, streak: 0, badges: [] },
+      gamification:
+        gamification || { xp: 0, level: 1, streak: 0, badges: [] },
     });
   } catch (error) {
     console.log("Error fetching profile", error);
