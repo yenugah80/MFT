@@ -1,3 +1,10 @@
+-- Safe guard for environments where this table was manually created
+-- before Drizzle started managing it.
+DROP TABLE IF EXISTS "daily_nutrition_summary";
+--> statement-breakpoint
+DROP TABLE IF EXISTS "food_log";
+--> statement-breakpoint
+
 CREATE TABLE "achievements" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
@@ -147,6 +154,6 @@ CREATE TABLE "weight_history" (
 );
 --> statement-breakpoint
 ALTER TABLE "profiles" ALTER COLUMN "weight_kg" SET DATA TYPE numeric(5, 2);--> statement-breakpoint
-ALTER TABLE "profiles" ADD COLUMN "gender" text;--> statement-breakpoint
-ALTER TABLE "profiles" ADD COLUMN "activity_level" text;--> statement-breakpoint
+ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "gender" text;--> statement-breakpoint
+ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "activity_level" text;--> statement-breakpoint
 ALTER TABLE "profiles" DROP COLUMN "goal";
