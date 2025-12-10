@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, TextInput } from "react-native";
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,10 @@ import SafeScreen from "../../components/SafeScreen";
 import { profileStyles } from "../../assets/styles/profile.styles";
 import useProfileForm from "../../hooks/useProfileForm";
 import EditProfileModal from "../../components/EditProfileModal";
+import EditableSection from "../../components/EditableSection";
+import TagInput from "../../components/TagInput";
+import { DIETARY_PRESETS, PRIMARY_GOAL_OPTIONS } from "../../constants/profileConfig";
+import { COLORS } from "../../constants/colors";
 
 /**
  * ProfileScreen - Simple account information screen
@@ -14,7 +18,7 @@ import EditProfileModal from "../../components/EditProfileModal";
 export default function ProfileScreen() {
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { state, updateField, saveSection } = useProfileForm(user);
+  const { state, updateField, toggleEdit, saveSection, cancelEdit } = useProfileForm(user);
 
   const profile = state.draft;
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -22,26 +26,15 @@ export default function ProfileScreen() {
 
   const formData = profile.basics;
 
-  const isLoading = false;
+  const openEditModal = () => setIsEditModalVisible(true);
+  const closeEditModal = () => setIsEditModalVisible(false);
 
-  const openEditModal = () => {
-    setIsEditModalVisible(true);
-  };
-
-  const closeEditModal = () => {
-    setIsEditModalVisible(false);
-  };
-
-  const updateFormField = (field, value) => {
-    updateField("basics", field, value);
-  };
+  const updateFormField = (field, value) => updateField("basics", field, value);
 
   const handleSaveProfile = async () => {
     setIsUpdating(true);
     const ok = await saveSection("basics");
-    if (ok) {
-      setIsEditModalVisible(false);
-    }
+    if (ok) closeEditModal();
     setIsUpdating(false);
   };
 
@@ -53,19 +46,30 @@ export default function ProfileScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <SafeScreen>
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color="#6A1B9A" />
-        </View>
-      </SafeScreen>
-    );
-  }
+  // Helper for Dietary Preferences
+  const togglePreference = (pref) => {
+    const current = profile.dietary.preferences || [];
+    const updated = current.includes(pref)
+      ? current.filter(p => p !== pref)
+      : [...current, pref];
+    updateField("dietary", "preferences", updated);
+  };
+
+  const addAllergy = (tag) => {
+    const current = profile.dietary.allergies || [];
+    if (!current.includes(tag)) {
+      updateField("dietary", "allergies", [...current, tag]);
+    }
+  };
+
+  const removeAllergy = (tag) => {
+    const current = profile.dietary.allergies || [];
+    updateField("dietary", "allergies", current.filter(t => t !== tag));
+  };
 
   return (
     <SafeScreen>
-      <ScrollView style={profileStyles.container}>
+      <ScrollView style={profileStyles.container} contentContainerStyle={{ paddingBottom: 40 }}>
         <Text style={profileStyles.headerText}>Profile</Text>
 
         {/* USER INFO CARD */}
@@ -74,25 +78,10 @@ export default function ProfileScreen() {
             {user?.imageUrl ? (
               <Image
                 source={{ uri: user.imageUrl }}
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 40,
-                  marginBottom: 12,
-                }}
+                style={{ width: 80, height: 80, borderRadius: 40, marginBottom: 12 }}
               />
             ) : (
-              <View
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 40,
-                  backgroundColor: "#E0BFB8",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: 12,
-                }}
-              >
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "#E0BFB8", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                 <Ionicons name="person" size={40} color="#FFFFFF" />
               </View>
             )}
@@ -103,22 +92,188 @@ export default function ProfileScreen() {
               {user?.primaryEmailAddress?.emailAddress || ""}
             </Text>
           </View>
+          
+          <TouchableOpacity 
+            style={[profileStyles.primaryButton, { alignSelf: 'center', paddingHorizontal: 24 }]} 
+            onPress={openEditModal}
+          >
+            <Text style={profileStyles.primaryButtonText}>Edit Personal Info</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* DIETARY PREFERENCES SECTION */}
+        <EditableSection
+          title="Dietary Preferences"
+          isEditing={state.editing.dietary}
+          onToggleEdit={() => toggleEdit("dietary")}
+          onSave={() => saveSection("dietary")}
+          onCancel={() => cancelEdit("dietary")}
+          isSaving={state.status === 'saving'}
+        >
+          {state.editing.dietary ? (
+            <View>
+              <Text style={profileStyles.inputLabel}>Diet Type</Text>
+              <View style={profileStyles.chipRow}>
+                {DIETARY_PRESETS.map((pref) => {
+                  const isSelected = profile.dietary.preferences?.includes(pref);
+                  return (
+                    <TouchableOpacity
+                      key={pref}
+                      style={[profileStyles.chip, isSelected && profileStyles.chipSelected]}
+                      onPress={() => togglePreference(pref)}
+                    >
+                      <Text style={[profileStyles.chipText, isSelected && profileStyles.chipTextSelected]}>
+                        {pref}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[profileStyles.inputLabel, { marginTop: 12 }]}>Allergies & Restrictions</Text>
+              <TagInput
+                tags={profile.dietary.allergies || []}
+                onAdd={addAllergy}
+                onRemove={removeAllergy}
+                placeholder="Add allergy (e.g. Peanuts)"
+                variant="danger"
+              />
+            </View>
+          ) : (
+            <View>
+              <Text style={profileStyles.inputLabel}>Diet Type</Text>
+              <View style={profileStyles.chipRow}>
+                {profile.dietary.preferences?.length > 0 ? (
+                  profile.dietary.preferences.map((pref) => (
+                    <View key={pref} style={profileStyles.chip}>
+                      <Text style={profileStyles.chipText}>{pref}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={profileStyles.mutedText}>No preferences set</Text>
+                )}
+              </View>
+
+              <Text style={[profileStyles.inputLabel, { marginTop: 12 }]}>Allergies</Text>
+              <View style={profileStyles.chipRow}>
+                {profile.dietary.allergies?.length > 0 ? (
+                  profile.dietary.allergies.map((tag) => (
+                    <View key={tag} style={[profileStyles.chip, { borderColor: '#FFCDD2', backgroundColor: '#FFEBEE' }]}>
+                      <Text style={[profileStyles.chipText, { color: '#D32F2F' }]}>{tag}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={profileStyles.mutedText}>No allergies listed</Text>
+                )}
+              </View>
+            </View>
+          )}
+        </EditableSection>
+
+        {/* NUTRITION GOALS SECTION */}
+        <EditableSection
+          title="Nutrition Goals"
+          isEditing={state.editing.goals}
+          onToggleEdit={() => toggleEdit("goals")}
+          onSave={() => saveSection("goals")}
+          onCancel={() => cancelEdit("goals")}
+          isSaving={state.status === 'saving'}
+        >
+          {state.editing.goals ? (
+            <View>
+              <Text style={profileStyles.inputLabel}>Primary Goal</Text>
+              <View style={profileStyles.chipRow}>
+                {PRIMARY_GOAL_OPTIONS.map((option) => {
+                  const isSelected = profile.goals.primaryGoal === option.key;
+                  return (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[profileStyles.chip, isSelected && profileStyles.chipSelected]}
+                      onPress={() => updateField("goals", "primaryGoal", option.key)}
+                    >
+                      <Text style={[profileStyles.chipText, isSelected && profileStyles.chipTextSelected]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[profileStyles.inputLabel, { marginTop: 12 }]}>Daily Calories (kcal)</Text>
+              <TextInput
+                style={profileStyles.inputBox}
+                value={profile.goals.calories?.toString() || ""}
+                onChangeText={(t) => updateField("goals", "calories", t)}
+                keyboardType="numeric"
+                placeholder="e.g. 2000"
+              />
+
+              <View style={profileStyles.rowGap16}>
+                <View style={profileStyles.rowItem}>
+                  <Text style={profileStyles.inputLabel}>Protein (g)</Text>
+                  <TextInput
+                    style={profileStyles.inputBox}
+                    value={profile.goals.protein?.toString() || ""}
+                    onChangeText={(t) => updateField("goals", "protein", t)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                </View>
+                <View style={profileStyles.rowItem}>
+                  <Text style={profileStyles.inputLabel}>Carbs (g)</Text>
+                  <TextInput
+                    style={profileStyles.inputBox}
+                    value={profile.goals.carbs?.toString() || ""}
+                    onChangeText={(t) => updateField("goals", "carbs", t)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                </View>
+                <View style={profileStyles.rowItem}>
+                  <Text style={profileStyles.inputLabel}>Fats (g)</Text>
+                  <TextInput
+                    style={profileStyles.inputBox}
+                    value={profile.goals.fats?.toString() || ""}
+                    onChangeText={(t) => updateField("goals", "fats", t)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <Text style={profileStyles.inputLabel}>Primary Goal</Text>
+              <Text style={[profileStyles.text, { marginBottom: 12, fontWeight: '600' }]}>
+                {PRIMARY_GOAL_OPTIONS.find(o => o.key === profile.goals.primaryGoal)?.label || "Not set"}
+              </Text>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={profileStyles.inputLabel}>Calories</Text>
+                  <Text style={profileStyles.text}>{profile.goals.calories || "—"} kcal</Text>
+                </View>
+                <View>
+                  <Text style={profileStyles.inputLabel}>Protein</Text>
+                  <Text style={profileStyles.text}>{profile.goals.protein || "—"} g</Text>
+                </View>
+                <View>
+                  <Text style={profileStyles.inputLabel}>Carbs</Text>
+                  <Text style={profileStyles.text}>{profile.goals.carbs || "—"} g</Text>
+                </View>
+                <View>
+                  <Text style={profileStyles.inputLabel}>Fats</Text>
+                  <Text style={profileStyles.text}>{profile.goals.fats || "—"} g</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </EditableSection>
 
         {/* ACCOUNT ACTIONS */}
         <View style={profileStyles.sectionCard}>
           <Text style={profileStyles.sectionTitle}>Account</Text>
           
-          <TouchableOpacity 
-            style={profileStyles.settingRow} 
-            onPress={openEditModal}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="person-outline" size={22} color="#6A1B9A" />
-            <Text style={profileStyles.settingText}>Edit Profile</Text>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-
           <TouchableOpacity style={profileStyles.settingRow} activeOpacity={0.7}>
             <Ionicons name="lock-closed-outline" size={22} color="#6A1B9A" />
             <Text style={profileStyles.settingText}>Privacy & Security</Text>
@@ -128,23 +283,6 @@ export default function ProfileScreen() {
           <TouchableOpacity style={profileStyles.settingRow} activeOpacity={0.7}>
             <Ionicons name="notifications-outline" size={22} color="#6A1B9A" />
             <Text style={profileStyles.settingText}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-        </View>
-
-        {/* PREFERENCES */}
-        <View style={profileStyles.sectionCard}>
-          <Text style={profileStyles.sectionTitle}>Preferences</Text>
-          
-          <TouchableOpacity style={profileStyles.settingRow} activeOpacity={0.7}>
-            <Ionicons name="moon-outline" size={22} color="#6A1B9A" />
-            <Text style={profileStyles.settingText}>Theme</Text>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={profileStyles.settingRow} activeOpacity={0.7}>
-            <Ionicons name="language-outline" size={22} color="#6A1B9A" />
-            <Text style={profileStyles.settingText}>Language</Text>
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
         </View>
