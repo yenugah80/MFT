@@ -1,14 +1,26 @@
-import { View, ScrollView, Text, TouchableOpacity, ActivityIndicator, Alert, Modal, StyleSheet, Button } from "react-native";
-import { useState, useCallback, useRef } from "react";
+// app/(tabs)/log.jsx
+import { 
+  View, 
+  ScrollView, 
+  Text, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  Alert, 
+  Modal 
+} from "react-native";
+import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useAuth } from "@clerk/clerk-expo";
+
 import SafeScreen from "../../components/SafeScreen";
 import { foodLoggingStyles } from "../../assets/styles/foodLogging.styles";
 import { COLORS } from "../../constants/colors";
 import { UnifiedFoodService } from "../../services/unifiedFoodService";
+import { LoggingService } from "../../services/loggingService";
+import { VoiceLoggingService } from "../../services/voiceLoggingService";
 
 const LOGGING_OPTIONS = [
   {
@@ -38,9 +50,9 @@ const LOGGING_OPTIONS = [
 ];
 
 const QUICK_ACTIONS = [
-  { id: "water", icon: "water", label: "Add Water" },
+  { id: "water", icon: "water", label: "Add Water (250ml)" },
   { id: "recipe", icon: "book-outline", label: "Add Recipe" },
-  { id: "mood", icon: "happy-outline", label: "Add Mood" },
+  { id: "mood", icon: "happy-outline", label: "Log Mood" },
 ];
 
 const NAV_ITEMS = [
@@ -53,20 +65,66 @@ const NAV_ITEMS = [
 export default function FoodLoggingScreen() {
   const router = useRouter();
   const { getToken } = useAuth();
+
   const [selectedLogging, setSelectedLogging] = useState(null);
   const [selectedAction, setSelectedAction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  
-  // Camera & Barcode State
+
+  // Camera / barcode
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
 
-  // Handle photo scan
-  const handlePhotoScan = useCallback(async () => {
-    try {
-      setLoading(true);
+  /* -------------------------
+     Helpers
+  --------------------------- */
+
+  const withGlobalLoading = useCallback(
+    async (fn, loadingMessage) => {
+      try {
+        setLoading(true);
+        if (loadingMessage) {
+          setMessage({ type: "info", text: loadingMessage });
+        }
+        await fn();
+      } catch (err) {
+        console.error(err);
+        Alert.alert("Error", err?.message || "Something went wrong");
+        setMessage({ type: "error", text: "An error occurred" });
+      } finally {
+        setLoading(false);
+        setTimeout(() => setMessage(null), 1500);
+      }
+    },
+    []
+  );
+
+  const ensureCameraPermission = useCallback(async () => {
+    if (!permission) {
+      const { status } = await requestPermission();
+      if (status !== "granted") {
+        throw new Error("Camera access is required for this feature.");
+      }
+      return;
+    }
+
+    if (!permission.granted) {
+      const { status } = await requestPermission();
+      if (status !== "granted") {
+        throw new Error("Camera access is required for this feature.");
+      }
+    }
+  }, [permission, requestPermission]);
+
+  /* -------------------------
+     Photo Scan (AI analysis)
+  --------------------------- */
+
+  const handlePhotoScan = useCallback(() => {
+    withGlobalLoading(async () => {
+      await ensureCameraPermission();
+
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -75,184 +133,233 @@ export default function FoodLoggingScreen() {
         base64: true,
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        setMessage({ type: "success", text: "📸 Photo captured! Analyzing food..." });
-        
-        const token = await getToken();
-        const data = await UnifiedFoodService.analyzePlate(result.assets[0].base64, token);
-        
-        if (data) {
-           // Inject the local image URI so it can be displayed
-           data.imageUrl = result.assets[0].uri;
-
-           router.push({
-             pathname: "/(tabs)/food-details",
-             params: { food: JSON.stringify(data) }
-           });
-        } else {
-           throw new Error("Analysis failed");
-        }
+      if (result.canceled) {
+        setMessage({ type: "info", text: "Photo capture cancelled" });
+        return;
       }
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to capture/analyze photo" });
-      console.error(error);
-      Alert.alert("Error", error.message);
-    } finally {
-      setLoading(false);
+
+      const asset = result.assets?.[0];
+      if (!asset?.base64) {
+        throw new Error("No image data returned from camera.");
+      }
+
+      setMessage({ type: "info", text: "Analyzing your meal..." });
+
+      const token = await getToken();
+      if (!token) throw new Error("Missing auth token");
+
+      const analysis = await UnifiedFoodService.analyzePlate(asset.base64, token);
+
+      if (!analysis) {
+        throw new Error("Failed to analyze meal.");
+      }
+
+      // include local URI so UI can show the captured image
+      const payload = { ...analysis, imageUrl: asset.uri };
+
+      router.push({
+        pathname: "/(tabs)/food-details",
+        params: { food: JSON.stringify(payload), source: "photo" },
+      });
+    }, "Opening camera...");
+  }, [withGlobalLoading, ensureCameraPermission, getToken, router]);
+
+  /* -------------------------
+     Barcode Scan
+  --------------------------- */
+
+  const handleBarcodeScan = useCallback(() => {
+    withGlobalLoading(async () => {
+      await ensureCameraPermission();
+      setIsScanning(true);
+      setScanned(false);
       setMessage(null);
-    }
-  }, [getToken]);
+    });
+  }, [withGlobalLoading, ensureCameraPermission]);
 
-  // Handle barcode scan
-  const handleBarcodeScan = useCallback(async () => {
-    if (!permission) {
-        await requestPermission();
-    }
-    if (!permission?.granted) {
-        const { status } = await requestPermission();
-        if (status !== 'granted') {
-            Alert.alert("Permission Denied", "Camera access is required to scan barcodes");
-            return;
-        }
-    }
-    setIsScanning(true);
-    setScanned(false);
-  }, [permission, requestPermission]);
-
-  const onBarcodeScanned = async ({ type, data }) => {
+  const onBarcodeScanned = async ({ data }) => {
     if (scanned) return;
     setScanned(true);
     setIsScanning(false);
-    setLoading(true);
-    setMessage({ type: "success", text: "📦 Barcode detected! Searching..." });
 
-    try {
-        const token = await getToken();
-        const result = await UnifiedFoodService.searchByBarcode(data, token);
-        
-        if (result) {
-            router.push({
-              pathname: "/(tabs)/food-details",
-              params: { food: JSON.stringify(result) }
-            });
-        } else {
-            Alert.alert("Not Found", "Product not found in database.");
-        }
-    } catch (error) {
-        console.error(error);
-        Alert.alert("Error", "Failed to lookup barcode");
-    } finally {
-        setLoading(false);
-        setMessage(null);
-    }
+    await withGlobalLoading(async () => {
+      const token = await getToken();
+      if (!token) throw new Error("Missing auth token");
+
+      setMessage({ type: "info", text: "Looking up product..." });
+
+      const result = await UnifiedFoodService.searchByBarcode(data, token);
+
+      if (!result) {
+        Alert.alert("Not Found", "Product not found in our database.");
+        return;
+      }
+
+      router.push({
+        pathname: "/(tabs)/food-details",
+        params: { food: JSON.stringify(result), source: "barcode" },
+      });
+    });
   };
 
-  // Handle voice logging
-  const handleVoiceLogging = useCallback(async () => {
-    try {
-      setLoading(true);
-      setMessage({ type: "success", text: "🎤 Voice logging started..." });
-      // TODO: Start voice recording and NLP processing
-      setTimeout(() => setMessage(null), 2000);
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to start voice logging" });
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  /* -------------------------
+     Voice Logging
+  --------------------------- */
 
-  // Handle text logging
-  const handleTextLogging = useCallback(async () => {
-    try {
-      setLoading(true);
+  const handleVoiceLogging = useCallback(() => {
+    withGlobalLoading(async () => {
+      const token = await getToken();
+      if (!token) throw new Error("Missing auth token");
+
+      await VoiceLoggingService.start(token, router);
+    }, "Starting voice logging...");
+  }, [withGlobalLoading, getToken, router]);
+
+  /* -------------------------
+     Text Logging (Search)
+  --------------------------- */
+
+  const handleTextLogging = useCallback(() => {
+    withGlobalLoading(async () => {
       router.push("/(modals)/foodSearch");
-      // Fallback: setTimeout(() => setMessage(null), 2000);
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to open food search" });
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
+    }, "Opening food search...");
+  }, [withGlobalLoading, router]);
 
-  // Handle logging option selection
-  const handleLoggingSelect = useCallback((id) => {
-    setSelectedLogging(id);
-    switch (id) {
-      case "photo":
-        handlePhotoScan();
-        break;
-      case "barcode":
-        handleBarcodeScan();
-        break;
-      case "voice":
-        handleVoiceLogging();
-        break;
-      case "text":
-        handleTextLogging();
-        break;
-      default:
-        break;
-    }
-  }, [handlePhotoScan, handleBarcodeScan, handleVoiceLogging, handleTextLogging]);
+  /* -------------------------
+     Quick Actions
+  --------------------------- */
 
-  // Handle quick action
-  const handleQuickAction = useCallback((id) => {
-    setSelectedAction(id);
-    switch (id) {
-      case "water":
-        setMessage({ type: "success", text: "💧 Added 250ml water" });
-        break;
-      case "recipe":
-        setMessage({ type: "success", text: "📖 Opening recipe builder..." });
-        break;
-      case "mood":
-        setMessage({ type: "success", text: "😊 Mood logged" });
-        break;
-      default:
-        break;
-    }
-    setTimeout(() => {
-      setSelectedAction(null);
-      setMessage(null);
-    }, 1500);
-  }, []);
+  const handleQuickAction = useCallback(
+    (id) => {
+      setSelectedAction(id);
 
-  // Handle navigation
-  const handleNavigation = useCallback((route) => {
-    if (route) router.push(route);
-  }, [router]);
+      withGlobalLoading(async () => {
+        const token = await getToken();
+        if (!token) throw new Error("Missing auth token");
+
+        switch (id) {
+          case "water":
+            await LoggingService.logWater(token, 0.25); // 0.25 L (250 ml)
+            setMessage({ type: "success", text: "💧 Added 250ml of water" });
+            break;
+
+          case "recipe":
+            // Navigate to a recipe builder screen (you can implement this route)
+            router.push("/(modals)/recipeBuilder");
+            break;
+
+          case "mood":
+            await LoggingService.logMood(token, {
+              mood: "neutral",
+              source: "quick_action",
+            });
+            setMessage({ type: "success", text: "😊 Mood logged" });
+            break;
+
+          default:
+            break;
+        }
+      }).finally?.(() => {
+        setTimeout(() => {
+          setSelectedAction(null);
+        }, 1200);
+      });
+    },
+    [withGlobalLoading, getToken, router]
+  );
+
+  /* -------------------------
+     Logging option handler
+  --------------------------- */
+
+  const handleLoggingSelect = useCallback(
+    (id) => {
+      if (loading) return;
+
+      setSelectedLogging(id);
+
+      switch (id) {
+        case "photo":
+          handlePhotoScan();
+          break;
+        case "barcode":
+          handleBarcodeScan();
+          break;
+        case "voice":
+          handleVoiceLogging();
+          break;
+        case "text":
+          handleTextLogging();
+          break;
+        default:
+          break;
+      }
+    },
+    [loading, handlePhotoScan, handleBarcodeScan, handleVoiceLogging, handleTextLogging]
+  );
+
+  /* -------------------------
+     Bottom navigation
+  --------------------------- */
+
+  const handleNavigation = useCallback(
+    (route) => {
+      if (route) router.push(route);
+    },
+    [router]
+  );
+
+  /* -------------------------
+     Render
+  --------------------------- */
 
   return (
     <SafeScreen>
       <View style={foodLoggingStyles.container}>
         {/* Barcode Scanner Modal */}
         <Modal visible={isScanning} animationType="slide" presentationStyle="pageSheet">
-            <View style={{ flex: 1, backgroundColor: "black" }}>
-                <CameraView
-                    style={{ flex: 1 }}
-                    facing="back"
-                    onBarcodeScanned={scanned ? undefined : onBarcodeScanned}
-                    barcodeScannerSettings={{
-                        barcodeTypes: ["qr", "ean13", "ean8", "upc_e", "upc_a"],
-                    }}
+          <View style={{ flex: 1, backgroundColor: "black" }}>
+            <CameraView
+              style={{ flex: 1 }}
+              facing="back"
+              onBarcodeScanned={scanned ? undefined : onBarcodeScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: ["qr", "ean13", "ean8", "upc_e", "upc_a"],
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "flex-end",
+                  padding: 20,
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "white",
+                    padding: 15,
+                    borderRadius: 10,
+                    alignItems: "center",
+                  }}
+                  onPress={() => {
+                    setIsScanning(false);
+                    setScanned(false);
+                  }}
                 >
-                    <View style={{ flex: 1, justifyContent: "flex-end", padding: 20 }}>
-                        <TouchableOpacity 
-                            style={{ backgroundColor: "white", padding: 15, borderRadius: 10, alignItems: "center" }}
-                            onPress={() => setIsScanning(false)}
-                        >
-                            <Text style={{ fontSize: 16, fontWeight: "bold" }}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </CameraView>
-            </View>
+                  <Text style={{ fontSize: 16, fontWeight: "bold" }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </CameraView>
+          </View>
         </Modal>
 
         {/* Header */}
         <View style={foodLoggingStyles.header}>
-          <TouchableOpacity style={foodLoggingStyles.iconButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={foodLoggingStyles.iconButton}
+            onPress={() => router.back()}
+            disabled={loading}
+          >
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
           <Text style={foodLoggingStyles.headerTitle}>Log Your Meal</Text>
@@ -261,16 +368,28 @@ export default function FoodLoggingScreen() {
 
         {/* Main Content */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
-          {/* Message Display */}
+          {/* Message */}
           {message && (
-            <View style={message.type === "success" ? foodLoggingStyles.successMessage : foodLoggingStyles.errorMessage}>
-              <Text style={message.type === "success" ? foodLoggingStyles.successText : foodLoggingStyles.errorText}>
+            <View
+              style={
+                message.type === "error"
+                  ? foodLoggingStyles.errorMessage
+                  : foodLoggingStyles.successMessage
+              }
+            >
+              <Text
+                style={
+                  message.type === "error"
+                    ? foodLoggingStyles.errorText
+                    : foodLoggingStyles.successText
+                }
+              >
                 {message.text}
               </Text>
             </View>
           )}
 
-          {/* Logging Options Grid */}
+          {/* Logging Options */}
           <View style={foodLoggingStyles.gridContainer}>
             <View style={foodLoggingStyles.loggingGrid}>
               {LOGGING_OPTIONS.map((option) => (
@@ -279,7 +398,7 @@ export default function FoodLoggingScreen() {
                   style={[
                     foodLoggingStyles.loggingCard,
                     selectedLogging === option.id && foodLoggingStyles.loggingCardActive,
-                    { opacity: loading ? 0.6 : 1 },
+                    loading && { opacity: 0.6 },
                   ]}
                   onPress={() => handleLoggingSelect(option.id)}
                   disabled={loading}
@@ -304,7 +423,7 @@ export default function FoodLoggingScreen() {
                 style={[
                   foodLoggingStyles.quickActionCard,
                   selectedAction === action.id && foodLoggingStyles.quickActionCardActive,
-                  { opacity: loading ? 0.6 : 1 },
+                  loading && { opacity: 0.6 },
                 ]}
                 onPress={() => handleQuickAction(action.id)}
                 disabled={loading}
@@ -320,7 +439,10 @@ export default function FoodLoggingScreen() {
 
           {/* Primary CTA */}
           <TouchableOpacity
-            style={[foodLoggingStyles.primaryButton, { opacity: loading ? 0.7 : 1 }]}
+            style={[
+              foodLoggingStyles.primaryButton,
+              loading && { opacity: 0.7 },
+            ]}
             onPress={() => handleLoggingSelect("photo")}
             disabled={loading}
             activeOpacity={0.8}
@@ -340,7 +462,9 @@ export default function FoodLoggingScreen() {
               key={item.id}
               style={[
                 foodLoggingStyles.navItem,
-                item.active ? foodLoggingStyles.navItemActive : foodLoggingStyles.navItemInactive,
+                item.active
+                  ? foodLoggingStyles.navItemActive
+                  : foodLoggingStyles.navItemInactive,
               ]}
               onPress={() => handleNavigation(item.route)}
               disabled={item.active}
@@ -350,11 +474,14 @@ export default function FoodLoggingScreen() {
                 name={item.active ? "add-circle" : item.icon}
                 size={item.active ? 28 : 24}
                 color={item.active ? COLORS.primary : COLORS.textLight}
-                style={{
-                  ...(item.active ? { fontWeight: "700" } : {}),
-                }}
               />
-              <Text style={item.active ? foodLoggingStyles.navLabelActive : foodLoggingStyles.navLabel}>
+              <Text
+                style={
+                  item.active
+                    ? foodLoggingStyles.navLabelActive
+                    : foodLoggingStyles.navLabel
+                }
+              >
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -364,3 +491,4 @@ export default function FoodLoggingScreen() {
     </SafeScreen>
   );
 }
+

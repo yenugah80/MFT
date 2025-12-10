@@ -9,7 +9,9 @@ import {
   dietaryPreferencesTable,
   nutritionGoalsTable,
   gamificationTable,
-  activityLevelsTable
+  activityLevelsTable,
+  foodLogTable,
+  waterLogTable
 } from "./db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { FoodService } from "./services/foodService.js";
@@ -571,6 +573,122 @@ app.get("/api/food/filter", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to filter meals" });
   }
 });
+
+/* -------------------------------------------
+   MEAL LOGGING
+-------------------------------------------- */
+
+app.post("/api/log/meal", requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const {
+      foodName,
+      calories,
+      protein,
+      carbs,
+      fats,
+      servingSize,
+      mealType,
+      micros,
+      nutriscore,
+      ecoscore,
+      novaScore,
+      dietLabels,
+      allergens,
+      ingredients,
+      barcode,
+      imageUrl,
+      loggedDate,
+      source,
+    } = req.body;
+
+    if (!foodName) {
+      return res.status(400).json({ error: "foodName is required" });
+    }
+
+    const [inserted] = await db
+      .insert(foodLogTable)
+      .values({
+        userId,
+        foodName,
+        calories: calories ?? null,
+        protein: protein ?? null,
+        carbs: carbs ?? null,
+        fats: fats ?? null,
+        servingSize: servingSize ?? null,
+        mealType: mealType ?? null,
+        micros: micros ?? {},
+        nutriscore: nutriscore ?? null,
+        ecoscore: ecoscore ?? null,
+        novaScore: novaScore ?? null,
+        dietLabels: dietLabels ?? [],
+        allergens: allergens ?? [],
+        ingredients: ingredients ?? [],
+        barcode: barcode ?? null,
+        imageUrl: imageUrl ?? null,
+        loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
+        source,
+      })
+      .returning();
+
+    res.status(201).json(inserted);
+  } catch (err) {
+    console.error("Error logging meal", err);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+/* -------------------------------------------
+   WATER LOGGING
+-------------------------------------------- */
+
+app.post("/api/log/water", requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { amountLiters } = req.body;
+
+    const parsed = parseFloat(amountLiters);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      return res.status(400).json({ error: "amountLiters must be a positive number" });
+    }
+
+    const [inserted] = await db
+      .insert(waterLogTable)
+      .values({
+        userId,
+        amountLiters: parsed,
+      })
+      .returning();
+
+    res.status(201).json(inserted);
+  } catch (err) {
+    console.error("Error logging water", err);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+/* -------------------------------------------
+   MOOD LOGGING  (optional – requires new table)
+-------------------------------------------- */
+
+// You'd need a `mood_log` table in schema.js for this.
+// For now, you can just store them as notifications or skip.
+app.post("/api/log/mood", requireAuth, async (req, res) => {
+  try {
+    const { mood, note, source } = req.body;
+    if (!mood) {
+      return res.status(400).json({ error: "mood is required" });
+    }
+
+    // TODO: insert into mood_log table or userNotificationsTable
+    console.log("Mood logged", { userId: req.auth.userId, mood, note, source });
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error("Error logging mood", err);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Server is running on PORT:", PORT);
 });
