@@ -8,6 +8,7 @@ import {
   validateGoals,
   validateGamification,
   hasValidationErrors,
+  sanitizeBasicsForApi,
 } from "../utils/profileValidation";
 import {
   fetchUserProfile,
@@ -181,7 +182,8 @@ export default function useProfileForm(user) {
           if (token) {
              try {
                console.log("Profile missing in backend. Syncing from Clerk...");
-               await saveProfileBasics(token, profileWithUser.basics);
+               const sanitizedBasics = sanitizeBasicsForApi(profileWithUser.basics);
+               await saveProfileBasics(token, sanitizedBasics);
                console.log("Profile synced successfully.");
              } catch (syncErr) {
                console.error("Failed to sync profile:", syncErr);
@@ -259,7 +261,7 @@ export default function useProfileForm(user) {
         
         switch (section) {
           case 'basics':
-            await saveProfileBasics(token, dataToSave);
+            await saveProfileBasics(token, sanitizeBasicsForApi(dataToSave));
             break;
           case 'dietary':
             await saveDietaryPreferences(token, dataToSave);

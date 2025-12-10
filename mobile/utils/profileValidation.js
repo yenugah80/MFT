@@ -176,3 +176,20 @@ export const validateGamification = (gamification) => {
 export const hasValidationErrors = (errors) => {
   return Object.keys(errors).length > 0;
 };
+
+/**
+ * Sanitize basics data for API
+ * Converts string numbers to actual numbers and handles empty strings
+ * @param {Object} basics - Raw basics data from form
+ * @returns {Object} Sanitized data ready for API
+ */
+export const sanitizeBasicsForApi = (basics) => {
+  return {
+    ...basics,
+    age: basics.age ? parseInt(basics.age, 10) : undefined,
+    weightKg: basics.weightKg ? parseFloat(basics.weightKg) : undefined,
+    heightCm: basics.heightCm ? parseFloat(basics.heightCm) : undefined,
+    gender: basics.gender || undefined,
+    activityLevel: basics.activityLevel || undefined,
+  };
+};
