@@ -209,3 +209,17 @@ export const sanitizeGoalsForApi = (goals) => {
     waterLiters: goals.waterLiters ? parseFloat(goals.waterLiters) : undefined,
   };
 };
+
+/**
+ * Sanitize dietary data for API
+ * @param {Object} dietary - Raw dietary data
+ * @returns {Object} Sanitized data
+ */
+export const sanitizeDietaryForApi = (dietary) => {
+  return {
+    ...dietary,
+    preferences: Array.isArray(dietary.preferences) ? dietary.preferences : [],
+    allergies: Array.isArray(dietary.allergies) ? dietary.allergies : [],
+    dislikes: Array.isArray(dietary.dislikes) ? dietary.dislikes : [],
+  };
+};

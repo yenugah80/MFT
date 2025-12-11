@@ -10,6 +10,7 @@ import {
   hasValidationErrors,
   sanitizeBasicsForApi,
   sanitizeGoalsForApi,
+  sanitizeDietaryForApi,
 } from "../utils/profileValidation";
 import {
   fetchUserProfile,
@@ -162,7 +163,13 @@ export default function useProfileForm(user) {
 
     const loadProfile = async () => {
       try {
-        const token = await getToken();
+        const token = await getToken({ template: "backend" });
+        
+        if (!token) {
+          console.log("No auth token available, skipping profile fetch");
+          return;
+        }
+
         const profile = await fetchUserProfile(token);
         
         if (profile) {
@@ -195,6 +202,15 @@ export default function useProfileForm(user) {
         }
       } catch (error) {
         console.error('Failed to load profile:', error);
+        
+        // Detect 401 Unauthorized (Stale Token)
+        if (error.message && error.message.includes('401')) {
+          Alert.alert(
+            "Session Expired", 
+            "Your security keys have changed. Please Sign Out and Sign In again to refresh your session."
+          );
+        }
+
         // Still load default so UI doesn't break
         const profileWithUser = {
           ...DEFAULT_PROFILE,
@@ -257,7 +273,7 @@ export default function useProfileForm(user) {
       dispatch({ type: ACTIONS.SAVE_SECTION_START });
 
       try {
-        const token = await getToken();
+        const token = await getToken({ template: "backend" });
         const dataToSave = state.draft[section];
         
         switch (section) {
@@ -265,7 +281,7 @@ export default function useProfileForm(user) {
             await saveProfileBasics(token, sanitizeBasicsForApi(dataToSave));
             break;
           case 'dietary':
-            await saveDietaryPreferences(token, dataToSave);
+            await saveDietaryPreferences(token, sanitizeDietaryForApi(dataToSave));
             break;
           case 'goals':
             await saveNutritionGoals(token, sanitizeGoalsForApi(dataToSave));
@@ -286,11 +302,21 @@ export default function useProfileForm(user) {
         return true;
       } catch (error) {
         console.error("Save section error:", error);
+
+        // Detect 401 Unauthorized (Stale Token)
+        if (error.message && error.message.includes('401')) {
+          Alert.alert(
+            "Session Expired", 
+            "Your security keys have changed. Please Sign Out and Sign In again to refresh your session."
+          );
+        } else {
+          Alert.alert("Error", "Failed to save profile. Please try again.");
+        }
+
         dispatch({
           type: ACTIONS.SAVE_SECTION_ERROR,
           payload: error.message || "Failed to save",
         });
-        Alert.alert("Error", "Failed to save profile. Please try again.");
         return false;
       }
     },
