@@ -1,5 +1,3 @@
-// Swagger removed
-// Swagger/OpenAPI documentation removed
 import express from "express";
 import cors from "cors";
 import { ENV } from "./config/env.js";
@@ -23,7 +21,6 @@ import nutritionRouter from "./routes/nutrition.js";
 import foodRouter from "./routes/food.js";
 import profileRouter from "./routes/profile.js";
 import favoritesRouter from "./routes/favorites.js";
-import activityRouter from "./routes/activityLevels.js";
 import loggingRouter from "./routes/logging.js";
 
 const app = express();
@@ -88,9 +85,6 @@ app.use("/api/profile", profileRouter);
 
 // Mount Favorites Router (modularized)
 app.use("/api/favorites", favoritesRouter);
-
-// Mount Activity Levels Router (modularized)
-app.use("/api/activity-levels", activityRouter);
 
 // Mount Logging Router (modularized)
 app.use("/api/log", loggingRouter);

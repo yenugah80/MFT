@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback } from "react";
+import { useReducer, useEffect, useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import { useAuth } from "@clerk/clerk-expo";
 import { DEFAULT_PROFILE, SECTION_LABELS } from "../constants/profileConfig";
@@ -156,76 +156,57 @@ function profileReducer(state, action) {
 export default function useProfileForm(user) {
   const { getToken } = useAuth();
   const [state, dispatch] = useReducer(profileReducer, initialState);
+  const hasBootstrappedRef = useRef(false);
 
-  // Load profile data on mount
+  // Helper to bootstrap profile (runs only once)
+  const bootstrapProfile = async (user, token) => {
+    // Try to fetch profile
+    const profile = await fetchUserProfile(token);
+    if (profile) {
+      return profile;
+    }
+    // If not found, create from Clerk info
+    const profileWithUser = {
+      ...DEFAULT_PROFILE,
+      basics: {
+        ...DEFAULT_PROFILE.basics,
+        fullName: user.fullName || "",
+        email: user.primaryEmailAddress?.emailAddress || "",
+      },
+    };
+    await saveProfileBasics(token, sanitizeBasicsForApi(profileWithUser.basics));
+    return profileWithUser;
+  };
+
+  // One-time bootstrap effect
   useEffect(() => {
-    if (!user) return;
+    if (!user || hasBootstrappedRef.current) return;
 
-    const loadProfile = async () => {
+    const run = async () => {
       try {
         const token = await getToken({ template: "backend" });
-        
-        if (!token) {
-          console.log("No auth token available, skipping profile fetch");
-          return;
-        }
-
-        const profile = await fetchUserProfile(token);
-        
-        if (profile) {
-          dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profile });
-        } else {
-          // Fallback for new users or 404
-          const profileWithUser = {
+        if (!token) return;
+        hasBootstrappedRef.current = true;
+        const profile = await bootstrapProfile(user, token);
+        dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profile });
+      } catch (err) {
+        console.error("Profile bootstrap failed", err);
+        hasBootstrappedRef.current = true;
+        dispatch({
+          type: ACTIONS.LOAD_PROFILE,
+          payload: {
             ...DEFAULT_PROFILE,
             basics: {
               ...DEFAULT_PROFILE.basics,
               fullName: user.fullName || "",
               email: user.primaryEmailAddress?.emailAddress || "",
             },
-          };
-
-          // AUTO-SYNC: If profile is missing in backend but exists in Clerk, create it now.
-          // This handles cases where the initial sign-up webhook/call failed.
-          if (token) {
-             try {
-               console.log("Profile missing in backend. Syncing from Clerk...");
-               const sanitizedBasics = sanitizeBasicsForApi(profileWithUser.basics);
-               await saveProfileBasics(token, sanitizedBasics);
-               console.log("Profile synced successfully.");
-             } catch (syncErr) {
-               console.error("Failed to sync profile:", syncErr);
-             }
-          }
-
-          dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profileWithUser });
-        }
-      } catch (error) {
-        console.error('Failed to load profile:', error);
-        
-        // Detect 401 Unauthorized (Stale Token)
-        if (error.message && error.message.includes('401')) {
-          Alert.alert(
-            "Session Expired", 
-            "Your security keys have changed. Please Sign Out and Sign In again to refresh your session."
-          );
-        }
-
-        // Still load default so UI doesn't break
-        const profileWithUser = {
-          ...DEFAULT_PROFILE,
-          basics: {
-            ...DEFAULT_PROFILE.basics,
-            fullName: user.fullName || "",
-            email: user.primaryEmailAddress?.emailAddress || "",
           },
-        };
-        dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profileWithUser });
+        });
       }
     };
-    
-    loadProfile();
-  }, [user, getToken]);
+    run();
+  }, [user]);
 
   // Update field
   const updateField = useCallback((section, key, value) => {
