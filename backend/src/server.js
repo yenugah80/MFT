@@ -3,6 +3,7 @@ import cors from "cors";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
+import { attachDb } from "./middleware/db.js";
 import { 
   favoritesTable,
   profilesTable,
@@ -58,6 +59,7 @@ app.use(
 );
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(attachDb);
 
 /* -------------------------------------------
    HEALTH CHECK ENDPOINT FOR RENDER + CLOUDFLARE

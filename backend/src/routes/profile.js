@@ -1,5 +1,6 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
+import { attachDb } from "../middleware/db.js";
 import {
   getProfile,
   saveBasics,
@@ -10,10 +11,16 @@ import {
 
 const router = express.Router();
 
-router.get("/", requireAuth, getProfile);
-router.post("/basics", requireAuth, saveBasics);
-router.post("/dietary", requireAuth, saveDietary);
-router.post("/goals", requireAuth, saveGoals);
-router.post("/gamification", requireAuth, saveGamification);
+// Apply both auth and db middleware to all routes
+router.use(requireAuth);
+router.use(attachDb);
+
+router.get("/", getProfile);
+// Add /me route for current user's profile
+router.get("/me", getProfile);
+router.post("/basics", saveBasics);
+router.post("/dietary", saveDietary);
+router.post("/goals", saveGoals);
+router.post("/gamification", saveGamification);
 
 export default router;

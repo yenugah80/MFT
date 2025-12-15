@@ -16,17 +16,6 @@ CREATE TABLE "achievements" (
 	CONSTRAINT "achievements_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
-CREATE TABLE "activity_levels" (
-	"id" serial PRIMARY KEY NOT NULL,
-	"key" text NOT NULL,
-	"label" text NOT NULL,
-	"desc" text,
-	"factor" numeric(3, 2) NOT NULL,
-	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now(),
-	CONSTRAINT "activity_levels_key_unique" UNIQUE("key")
-);
---> statement-breakpoint
 CREATE TABLE "daily_nutrition_summary" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,

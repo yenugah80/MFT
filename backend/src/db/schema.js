@@ -5,13 +5,13 @@ export const favoritesTable = pgTable(
   "favorites",
   {
     id: serial("id").primaryKey(),
-    userId: text("user_id").notNull(),
-    recipeId: integer("recipe_id").notNull(),
-    title: text("title").notNull(),
-    image: text("image"),
-    cookTime: text("cook_time"),
-    servings: text("servings"),
-    createdAt: timestamp("created_at").defaultNow(),
+        userId: text("user_id").notNull(),
+        recipeId: integer("recipe_id").notNull(),
+        title: text("title").notNull(),
+        image: text("image"),
+        cookTime: text("cook_time"),
+        servings: text("servings"),
+        createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
     userRecipeUniqueIdx: uniqueIndex("favorites_user_recipe_unique_idx").on(
@@ -199,13 +199,13 @@ export const moodLogTable = pgTable("mood_log", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Activity Levels table - admin configuration
+// Activity levels table - defines different activity levels for users
 export const activityLevelsTable = pgTable("activity_levels", {
   id: serial("id").primaryKey(),
-  key: text("key").notNull().unique(), // e.g., 'sedentary'
-  label: text("label").notNull(), // e.g., 'Sedentary'
-  desc: text("desc"), // e.g., 'Little or no exercise'
-  factor: decimal("factor", { precision: 3, scale: 2 }).notNull(), // e.g., 1.2
-  createdAt: timestamp("created_at").defaultNow(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  desc: text("desc"),
+  factor: decimal("factor", { precision: 3, scale: 2 }),
   updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
 });

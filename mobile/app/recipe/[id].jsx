@@ -105,8 +105,13 @@ const RecipeDetailScreen = () => {
 
         if (!response.ok) {
           const text = await response.text();
-          console.log("Delete failed:", response.status, text);
-          throw new Error(text);
+          let errorMsg = text;
+          try {
+            const data = JSON.parse(text);
+            errorMsg = data.error || text;
+          } catch {}
+          console.log("Delete failed:", response.status, errorMsg);
+          throw new Error(errorMsg);
         }
 
         setIsSaved(false);
@@ -132,14 +137,19 @@ const RecipeDetailScreen = () => {
 
       if (!response.ok) {
         const text = await response.text();
-        console.log("Save failed:", response.status, text);
-        throw new Error(text);
+        let errorMsg = text;
+        try {
+          const data = JSON.parse(text);
+          errorMsg = data.error || text;
+        } catch {}
+        console.log("Save failed:", response.status, errorMsg);
+        throw new Error(errorMsg);
       }
 
       setIsSaved(true);
     } catch (error) {
       console.error("Error toggling recipe save:", error);
-      Alert.alert("Error", "Something went wrong. Please try again.");
+      Alert.alert("Error", error.message || "Something went wrong. Please try again.");
     } finally {
       setIsSaving(false);
     }

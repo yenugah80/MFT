@@ -1,5 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { favoritesTable } from "../db/schema.js";
+import { sendDevError } from "../utils/sendDevError.js";
 
 export async function getFavorites(req, res) {
   try {
@@ -11,7 +12,7 @@ export async function getFavorites(req, res) {
     res.status(200).json(userfavorites);
   } catch (error) {
     console.log("Error fetching the favorites", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }
 
@@ -44,7 +45,7 @@ export async function addFavorite(req, res) {
     res.status(201).json(newFavorite[0]);
   } catch (error) {
     console.log("Error adding favorite", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }
 
@@ -66,6 +67,6 @@ export async function deleteFavorite(req, res) {
     res.status(200).json({ message: "Favorite deleted successfully" });
   } catch (error) {
     console.log("Error removing a favorite", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }

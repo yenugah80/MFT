@@ -5,15 +5,15 @@ import SafeScreen from "../../components/SafeScreen";
 import MetricCard from "../../components/MetricCard";
 import useProfileForm from "../../hooks/useProfileForm";
 import useHealthMetrics from "../../hooks/useHealthMetrics";
-import useActivityLevels from "../../hooks/useActivityLevels";
 import { dashboardStyles } from "../../assets/styles/dashboard.styles";
 
 export default function DashboardScreen() {
   const { user } = useUser();
   const router = useRouter();
   const { state } = useProfileForm(user);
-  const { levels } = useActivityLevels();
-  const { bmi, bmr, tdee } = useHealthMetrics(state.draft.basics, levels || []);
+   // Activity levels feature removed; use default/fallback if needed
+   const levels = [];
+   const { bmi, bmr, tdee } = useHealthMetrics(state.draft.basics, levels);
 
   const profile = state.draft;
 
@@ -51,9 +51,9 @@ export default function DashboardScreen() {
           <Text style={dashboardStyles.text}>
             Weight: {profile.basics.weightKg || "—"} kg · Height: {profile.basics.heightCm || "—"} cm
           </Text>
-          <Text style={dashboardStyles.subText}>
-            Activity: {levels?.find(l => l.key === profile.basics.activityLevel)?.label || "Not set"}
-          </Text>
+           <Text style={dashboardStyles.subText}>
+             Activity: {"Not set"}
+           </Text>
         </View>
 
         {/* DIETARY PREFERENCES */}

@@ -5,7 +5,7 @@ import {
   nutritionGoalsTable,
   gamificationTable,
 } from "../db/schema.js";
-
+import { sendDevError } from "../utils/sendDevError.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
@@ -44,9 +44,9 @@ export async function getProfile(req, res) {
       email: profile.email || "",
       gender: profile.gender || "",
       age: profile.age ?? null,
-      weightKg: profile.weight_kg ?? null,
-      heightCm: profile.height_cm ?? null,
-      activityLevel: profile.activity_level || ""
+      weightKg: profile.weightKg ?? null,
+      heightCm: profile.heightCm ?? null,
+      activityLevel: profile.activityLevel || ""
     };
     const normalizedDietary = {
       preferences: Array.isArray(dietary?.preferences) ? dietary.preferences : [],
@@ -75,7 +75,7 @@ export async function getProfile(req, res) {
     });
   } catch (error) {
     console.log("Error fetching profile", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }
 
@@ -84,15 +84,23 @@ export async function saveBasics(req, res) {
     const { userId } = req.auth;
     const { fullName, email, gender, age, weightKg, heightCm, activityLevel } = req.body;
     await ensureProfilesTableShape();
-    const existingProfile = await req.db
-      .select()
-      .from(profilesTable)
-      .where(eq(profilesTable.userId, userId));
-    let basicsRow;
-    if (existingProfile.length > 0) {
-      const updated = await req.db
-        .update(profilesTable)
-        .set({
+    // Map camelCase to snake_case for DB columns
+    const upserted = await req.db
+      .insert(profilesTable)
+      .values({
+        userId,
+        fullName,
+        email,
+        gender,
+        age: age ? parseInt(age, 10) : null,
+        weightKg: weightKg ? parseFloat(weightKg) : null,
+        heightCm: heightCm ? parseInt(heightCm, 10) : null,
+        activityLevel,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: profilesTable.userId,
+        set: {
           fullName,
           email,
           gender,
@@ -101,39 +109,23 @@ export async function saveBasics(req, res) {
           heightCm: heightCm ? parseInt(heightCm, 10) : null,
           activityLevel,
           updatedAt: new Date(),
-        })
-        .where(eq(profilesTable.userId, userId))
-        .returning();
-      basicsRow = updated[0];
-    } else {
-      const created = await req.db
-        .insert(profilesTable)
-        .values({
-          userId,
-          fullName,
-          email,
-          gender,
-          age: age ? parseInt(age, 10) : null,
-          weightKg: weightKg ? parseFloat(weightKg) : null,
-          heightCm: heightCm ? parseInt(heightCm, 10) : null,
-          activityLevel,
-        })
-        .returning();
-      basicsRow = created[0];
-    }
+        },
+      })
+      .returning();
+    const basicsRow = upserted[0];
     const basics = {
       fullName: basicsRow.fullName || "",
       email: basicsRow.email || "",
       gender: basicsRow.gender || "",
       age: basicsRow.age ?? null,
-      weightKg: basicsRow.weightKg ?? null,
-      heightCm: basicsRow.heightCm ?? null,
-      activityLevel: basicsRow.activityLevel || ""
+      weightKg: basicsRow.weight_kg ?? null,
+      heightCm: basicsRow.height_cm ?? null,
+      activityLevel: basicsRow.activity_level || ""
     };
     res.status(200).json(basics);
   } catch (error) {
     console.log("Error saving profile basics", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }
 
@@ -178,7 +170,7 @@ export async function saveDietary(req, res) {
     res.status(200).json(dietary);
   } catch (error) {
     console.log("Error saving dietary preferences", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }
 
@@ -232,7 +224,7 @@ export async function saveGoals(req, res) {
     res.status(200).json(goals);
   } catch (error) {
     console.log("Error saving nutrition goals", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }
 
@@ -280,6 +272,6 @@ export async function saveGamification(req, res) {
     res.status(200).json(gamification);
   } catch (error) {
     console.log("Error saving gamification stats", error);
-    res.status(500).json({ error: "Something went wrong" });
+    sendDevError(res, error);
   }
 }

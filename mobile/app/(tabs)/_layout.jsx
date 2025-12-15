@@ -67,12 +67,7 @@ const TabsLayout = () => {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="activity-levels"
-        options={{
-          href: null, // Hidden admin screen
-        }}
-      />
+      // Activity Levels tab removed
     </Tabs>
   );
 };
