@@ -1,7 +1,11 @@
-import { Slot } from "expo-router";
+import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 import SafeScreen from "@/components/SafeScreen";
+import { NotificationProvider } from "@/providers/NotificationProvider";
+import { QueryProvider } from "@/providers/QueryProvider";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import ApiInitializer from "@/components/ApiInitializer";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -33,11 +37,25 @@ if (!publishableKey) {
 }
 
 export default function RootLayout() {
+  const router = useRouter();
+
+  const handleErrorReset = () => {
+    router.replace('/(tabs)/dashboard');
+  };
+
   return (
-    <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-      <SafeScreen>
-        <Slot />
-      </SafeScreen>
-    </ClerkProvider>
+    <ErrorBoundary onReset={handleErrorReset}>
+      <NotificationProvider>
+        <QueryProvider>
+          <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+            <ApiInitializer>
+              <SafeScreen>
+                <Slot />
+              </SafeScreen>
+            </ApiInitializer>
+          </ClerkProvider>
+        </QueryProvider>
+      </NotificationProvider>
+    </ErrorBoundary>
   );
 }

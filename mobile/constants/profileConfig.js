@@ -29,9 +29,9 @@ export const GENDER_OPTIONS = [
 ];
 
 export const PRIMARY_GOAL_OPTIONS = [
-  { key: "lose_weight", label: "Lose weight" },
-  { key: "maintain_weight", label: "Maintain" },
-  { key: "gain_muscle", label: "Gain muscle" },
+  { key: "lose", label: "Lose weight" },
+  { key: "maintain", label: "Maintain weight" },
+  { key: "gain", label: "Gain weight" },
 ];
 
 export const SECTION_LABELS = {
@@ -59,7 +59,7 @@ export const DEFAULT_PROFILE = {
     dislikes: [],
   },
   goals: {
-    primaryGoal: "maintain_weight",
+    primaryGoal: "maintain",
     dailyCalories: "",
     proteinG: "",
     carbsG: "",

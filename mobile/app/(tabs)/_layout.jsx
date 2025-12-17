@@ -7,8 +7,7 @@ const TabsLayout = () => {
   const { isSignedIn, isLoaded } = useAuth();
 
   if (!isLoaded) return null;
-
-  if (!isSignedIn) return <Redirect href={"/(auth)/sign-in"} />;
+  if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
   return (
     <Tabs
@@ -34,41 +33,53 @@ const TabsLayout = () => {
         name="dashboard"
         options={{
           title: "Dashboard",
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid" size={size} color={color} />
+          ),
         }}
       />
+
       <Tabs.Screen
         name="index"
         options={{
           title: "Recipes",
-          tabBarIcon: ({ color, size }) => <Ionicons name="restaurant" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="restaurant" size={size} color={color} />
+          ),
         }}
       />
+
       <Tabs.Screen
         name="log"
         options={{
           title: "Log",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle" size={size} color={color} style={{ fontWeight: "700" }} />
+            <Ionicons name="add-circle" size={size} color={color} />
           ),
         }}
       />
+
       <Tabs.Screen
         name="favorites"
         options={{
           title: "Favorites",
-          tabBarIcon: ({ color, size }) => <Ionicons name="heart" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="heart" size={size} color={color} />
+          ),
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size} color={color} />
+          ),
         }}
       />
-      // Activity Levels tab removed
     </Tabs>
   );
 };
+
 export default TabsLayout;

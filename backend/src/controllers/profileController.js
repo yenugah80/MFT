@@ -9,36 +9,92 @@ import { sendDevError } from "../utils/sendDevError.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
+// --- Notification Preferences ---
+export async function getNotifications(req, res) {
+  try {
+    const { userId } = req.auth;
+    const [profile] = await req.db
+      .select({ notifications: profilesTable.notifications })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId));
+    if (!profile) return res.status(404).json({ error: "Profile not found" });
+    res.status(200).json(profile.notifications || {});
+  } catch (error) {
+    console.log("Error fetching notifications", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function saveNotifications(req, res) {
+  try {
+    const { userId } = req.auth;
+    const { notifications } = req.body;
+    if (typeof notifications !== "object" || notifications === null) {
+      return res.status(400).json({ error: "Invalid notifications object" });
+    }
+    const updated = await req.db
+      .update(profilesTable)
+      .set({ notifications, updatedAt: new Date() })
+      .where(eq(profilesTable.userId, userId))
+      .returning({ notifications: profilesTable.notifications });
+    if (!updated[0]) return res.status(404).json({ error: "Profile not found" });
+    res.status(200).json(updated[0].notifications);
+  } catch (error) {
+    console.log("Error saving notifications", error);
+    sendDevError(res, error);
+  }
+}
+
 export async function getProfile(req, res) {
   try {
     const { userId } = req.auth;
+
+    // Ensure schema is up to date
     await ensureProfilesTableShape();
-    const [profile] = await req.db
-      .select()
-      .from(profilesTable)
-      .where(eq(profilesTable.userId, userId));
-    const safeLoadSingle = async (table, where) => {
+
+    // Helper for safe loading with detailed error handling
+    const safeLoadSingle = async (table, where, tableName) => {
       try {
         const [row] = await req.db.select().from(table).where(where);
         return row || null;
       } catch (err) {
-        if (err && err.code === "42P01") return null;
-        throw err;
+        // Table doesn't exist (PostgreSQL error code 42P01)
+        if (err && err.code === "42P01") {
+          console.warn(`⚠️ Table ${tableName} does not exist yet`);
+          return null;
+        }
+        // Column doesn't exist (PostgreSQL error code 42703)
+        if (err && err.code === "42703") {
+          console.warn(`⚠️ Column missing in ${tableName}:`, err.message);
+          return null;
+        }
+        console.error(`❌ Error loading ${tableName}:`, err);
+        return null; // Graceful degradation
       }
     };
-    const dietary = await safeLoadSingle(
-      dietaryPreferencesTable,
-      eq(dietaryPreferencesTable.userId, userId)
-    );
-    const goals = await safeLoadSingle(
-      nutritionGoalsTable,
-      eq(nutritionGoalsTable.userId, userId)
-    );
-    const gamification = await safeLoadSingle(
-      gamificationTable,
-      eq(gamificationTable.userId, userId)
-    );
-    if (!profile) return res.status(404).json({ error: "Profile not found" });
+
+    // Load profile
+    const [profile] = await req.db
+      .select()
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId));
+
+    if (!profile) {
+      console.log(`⚠️ Profile not found for user ${userId}`);
+      return res.status(404).json({
+        error: "Profile not found",
+        hint: "Profile may not have been created yet"
+      });
+    }
+
+    // Load related data in parallel for better performance
+    const [dietary, goals, gamification] = await Promise.all([
+      safeLoadSingle(dietaryPreferencesTable, eq(dietaryPreferencesTable.userId, userId), 'dietary_preferences'),
+      safeLoadSingle(nutritionGoalsTable, eq(nutritionGoalsTable.userId, userId), 'nutrition_goals'),
+      safeLoadSingle(gamificationTable, eq(gamificationTable.userId, userId), 'gamification')
+    ]);
+
+    // Normalize profile data with safe defaults
     const basics = {
       fullName: profile.fullName || "",
       email: profile.email || "",
@@ -48,11 +104,13 @@ export async function getProfile(req, res) {
       heightCm: profile.heightCm ?? null,
       activityLevel: profile.activityLevel || ""
     };
+
     const normalizedDietary = {
       preferences: Array.isArray(dietary?.preferences) ? dietary.preferences : [],
       allergies: Array.isArray(dietary?.allergies) ? dietary.allergies : [],
       dislikes: Array.isArray(dietary?.dislikes) ? dietary.dislikes : []
     };
+
     const normalizedGoals = {
       primaryGoal: goals?.primaryGoal || "",
       dailyCalories: goals?.dailyCalories ?? null,
@@ -61,12 +119,14 @@ export async function getProfile(req, res) {
       fatsG: goals?.fatsG ?? null,
       waterLiters: goals?.waterLiters ?? null
     };
+
     const normalizedGamification = {
       xp: gamification?.xp ?? 0,
       level: gamification?.level ?? 1,
       streak: gamification?.streak ?? 0,
       badges: Array.isArray(gamification?.badges) ? gamification.badges : []
     };
+
     res.status(200).json({
       basics,
       dietary: normalizedDietary,
@@ -74,7 +134,7 @@ export async function getProfile(req, res) {
       gamification: normalizedGamification
     });
   } catch (error) {
-    console.log("Error fetching profile", error);
+    console.error("❌ Error fetching profile:", error);
     sendDevError(res, error);
   }
 }
@@ -118,9 +178,9 @@ export async function saveBasics(req, res) {
       email: basicsRow.email || "",
       gender: basicsRow.gender || "",
       age: basicsRow.age ?? null,
-      weightKg: basicsRow.weight_kg ?? null,
-      heightCm: basicsRow.height_cm ?? null,
-      activityLevel: basicsRow.activity_level || ""
+      weightKg: basicsRow.weightKg ?? null,
+      heightCm: basicsRow.heightCm ?? null,
+      activityLevel: basicsRow.activityLevel || ""
     };
     res.status(200).json(basics);
   } catch (error) {
@@ -177,7 +237,26 @@ export async function saveDietary(req, res) {
 export async function saveGoals(req, res) {
   try {
     const { userId } = req.auth;
-    const { primaryGoal, dailyCalories, proteinG, carbsG, fatsG, waterLiters } = req.body;
+    let { primaryGoal, dailyCalories, proteinG, carbsG, fatsG, waterLiters } = req.body;
+
+    // Sanitize primaryGoal - normalize to valid values
+    const goalMapping = {
+      'lose_weight': 'lose',
+      'maintain_weight': 'maintain',
+      'gain_weight': 'gain',
+      'gain_muscle': 'gain',
+      'lose': 'lose',
+      'maintain': 'maintain',
+      'gain': 'gain'
+    };
+
+    if (primaryGoal && goalMapping[primaryGoal]) {
+      primaryGoal = goalMapping[primaryGoal];
+    } else if (primaryGoal && !['lose', 'maintain', 'gain'].includes(primaryGoal)) {
+      console.warn(`⚠️ Invalid primaryGoal value: ${primaryGoal}, defaulting to 'maintain'`);
+      primaryGoal = 'maintain';
+    }
+
     const existingGoals = await req.db
       .select()
       .from(nutritionGoalsTable)

@@ -22,6 +22,34 @@
       "when": 1765337056755,
       "tag": "0002_brief_ma_gnuci",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765821814815,
+      "tag": "0003_dry_blob",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1765822743963,
+      "tag": "0004_cold_bucky",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1765823218988,
+      "tag": "0005_purple_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1765935416359,
+      "tag": "0006_faithful_sway",
+      "breakpoints": true
     }
   ]
 }

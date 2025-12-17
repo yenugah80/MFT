@@ -1,19 +1,40 @@
+import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { profileStyles } from "../../assets/styles/profile.styles";
 
+import { useRouter } from "expo-router";
+
 export default function AccountActions({ onSignOut }) {
+  const router = useRouter();
   return (
     <View style={profileStyles.sectionCard}>
       <Text style={profileStyles.sectionTitle}>Account</Text>
-      <TouchableOpacity style={profileStyles.settingRow} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={profileStyles.settingRow}
+        activeOpacity={0.7}
+        onPress={() => router.push("/profile/privacy")}
+      >
         <Ionicons name="lock-closed-outline" size={22} color="#6A1B9A" />
         <Text style={profileStyles.settingText}>Privacy & Security</Text>
         <Ionicons name="chevron-forward" size={20} color="#999" />
       </TouchableOpacity>
-      <TouchableOpacity style={profileStyles.settingRow} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={profileStyles.settingRow}
+        activeOpacity={0.7}
+        onPress={() => router.push("/profile/notifications")}
+      >
         <Ionicons name="notifications-outline" size={22} color="#6A1B9A" />
         <Text style={profileStyles.settingText}>Notifications</Text>
+        <Ionicons name="chevron-forward" size={20} color="#999" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={profileStyles.settingRow}
+        activeOpacity={0.7}
+        onPress={() => router.push("/profile/preferences")}
+      >
+        <Ionicons name="settings-outline" size={22} color="#6A1B9A" />
+        <Text style={profileStyles.settingText}>App Preferences</Text>
         <Ionicons name="chevron-forward" size={20} color="#999" />
       </TouchableOpacity>
       <TouchableOpacity

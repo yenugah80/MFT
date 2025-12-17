@@ -1,7 +1,24 @@
-const API_KEY = process.env.OPENAI_API_KEY || "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"; // Reads OPENAI_API_KEY from environment when available
+// Get OpenAI API key from environment variables
+const API_KEY = process.env.OPENAI_API_KEY;
+
+// Warn in development if API key is missing
+if (!API_KEY && __DEV__) {
+  console.warn('[OpenAI] No API key found. Set OPENAI_API_KEY in .env to enable AI features.');
+}
+
+// Throw error in production if API key is missing
+if (!API_KEY && !__DEV__) {
+  console.error('[OpenAI] OPENAI_API_KEY must be set in production environment');
+}
 
 export const OpenAIAPI = {
   generateFoodDetails: async (query) => {
+    // Return null if API key is not configured
+    if (!API_KEY) {
+      console.warn('[OpenAI] Cannot generate food details: API key not configured');
+      return null;
+    }
+
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",

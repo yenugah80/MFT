@@ -23,13 +23,15 @@ import foodRouter from "./routes/food.js";
 import profileRouter from "./routes/profile.js";
 import favoritesRouter from "./routes/favorites.js";
 import loggingRouter from "./routes/logging.js";
+import moodRouter from "./routes/mood.js";
+import waterRouter from "./routes/water.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
 
 // Ensure the profiles table has all columns expected by the schema.
 // This guards against older databases that were created before we added
-// fields like `gender`, `activity_level`, or changed `weight_kg` to numeric.
+// fields like `gender`, `activity_level`, `notifications`, or changed `weight_kg` to numeric.
 let profilesTableEnsured = false;
 export async function ensureProfilesTableShape() {
   if (profilesTableEnsured) return;
@@ -41,11 +43,24 @@ export async function ensureProfilesTableShape() {
       sql`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "activity_level" text;`
     );
     await db.execute(
-      sql`ALTER TABLE "profiles" ALTER COLUMN "weight_kg" TYPE numeric(5,2);`
+      sql`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "notifications" jsonb DEFAULT '{}'::jsonb;`
     );
+    // Safely alter column type - may fail if already correct type
+    try {
+      await db.execute(
+        sql`ALTER TABLE "profiles" ALTER COLUMN "weight_kg" TYPE numeric(5,2);`
+      );
+    } catch (typeErr) {
+      // Ignore if column already has correct type
+      if (!typeErr.message?.includes('cannot be cast automatically')) {
+        throw typeErr;
+      }
+    }
     profilesTableEnsured = true;
+    console.log('✅ Profiles table schema verified and updated');
   } catch (err) {
-    console.warn("Failed to ensure profiles table shape", err);
+    console.error('❌ Failed to ensure profiles table shape:', err);
+    // Don't throw - allow app to continue but log the issue
   }
 }
 
@@ -90,6 +105,12 @@ app.use("/api/favorites", favoritesRouter);
 
 // Mount Logging Router (modularized)
 app.use("/api/log", loggingRouter);
+
+// Mount Mood Router (modularized)
+app.use("/api/mood", moodRouter);
+
+// Mount Water Router (modularized)
+app.use("/api/water", waterRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES
