@@ -160,11 +160,11 @@ const berryCrushTheme = {
 
 const solarFlareTheme = {
   primary: "#FFB300",    // Vibrant Amber/Gold
-  background: "#FFF8E1", // Warm Cream
-  text: "#FF6F00",       // Dark Orange-Gold
-  border: "#FFE082",     // Soft Yellow
+  background: "#fdfdfdff", // Warm Cream
+  text: "#540384ff",       // Dark Orange-Gold
+  border: "#faf0f0ff",     // Soft Yellow
   white: "#FFFFFF",
-  textLight: "#FFCA28",  // Bright Sunflower
+  textLight: "#a53f04ff",  // Bright Sunflower
   card: "#FFFFFF",
   shadow: "#000000",
 };
@@ -188,4 +188,4 @@ export const THEMES = {
 };
 
 // 👇 change this to switch theme
-export const COLORS = THEMES.purple;
+export const COLORS = THEMES.solarFlare;

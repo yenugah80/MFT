@@ -134,8 +134,6 @@ router.get("/history", async (req, res) => {
   }
 });
 
-
-
 /**
  * POST /api/nutrition/recipe/parse
  * Parses a recipe text or URL (via text content) to extract ingredients and nutrition.
@@ -615,6 +613,58 @@ router.get("/dashboard", async (req, res) => {
   } catch (error) {
     console.error("[Dashboard] Error:", error);
     res.status(500).json({ error: "Failed to fetch dashboard data" });
+  }
+});
+
+/**
+ * POST /api/nutrition/goals
+ * Save or update user's nutrition goals (UPSERT by userId)
+ */
+router.post("/goals", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const {
+      primaryGoal,
+      dailyCalories,
+      proteinG,
+      carbsG,
+      fatsG,
+      waterLiters,
+    } = req.body;
+
+    const [row] = await db
+      .insert(nutritionGoalsTable)
+      .values({
+        userId,
+        primaryGoal,
+        dailyCalories,
+        proteinG,
+        carbsG,
+        fatsG,
+        waterLiters,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: nutritionGoalsTable.userId,
+        set: {
+          primaryGoal,
+          dailyCalories,
+          proteinG,
+          carbsG,
+          fatsG,
+          waterLiters,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    res.json(row);
+  } catch (err) {
+    console.error("[NutritionGoals] Error:", err);
+    res.status(500).json({
+      error: "Failed to save nutrition goals",
+      details: err.message,
+    });
   }
 });
 

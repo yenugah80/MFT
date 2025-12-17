@@ -1,36 +1,59 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-/**
- * Circular progress ring component
- *
- * @param {number} value - Current value
- * @param {number} maxValue - Maximum value (100%)
- * @param {number} size - Diameter of the circle
- * @param {number} strokeWidth - Width of the ring
- * @param {string} color - Color of the progress arc
- * @param {string} backgroundColor - Color of the background arc
- * @param {ReactNode} children - Content to display in the center
- */
+const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
+
 const CircularProgress = ({
-  value = 0,
-  maxValue = 100,
+  value,
+  maxValue,                 // REQUIRED
   size = 120,
   strokeWidth = 10,
   color = '#4f46e5',
   backgroundColor = '#e5e7eb',
-  children,
+  label,
+  unit,
+  showPercent = true,
 }) => {
+  // ---- Defensive guards ----
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const safeMax = Number.isFinite(maxValue) && maxValue > 0 ? maxValue : null;
+
+  // If goal is missing, render a neutral placeholder
+  if (!safeMax) {
+    return (
+      <View style={[styles.container, { width: size, height: size }]}>
+        <Text style={styles.noGoalText}>No goal set</Text>
+        {label && <Text style={styles.label}>{label}</Text>}
+      </View>
+    );
+  }
+
+  // ---- Geometry ----
   const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const percentage = Math.min(Math.max(value / maxValue, 0), 1);
-  const strokeDashoffset = circumference - percentage * circumference;
+  const circumference = 2 * Math.PI * radius;
+
+  // ---- Math ----
+  const ratio = safeValue / safeMax;
+  const visualRatio = clamp(ratio, 0, 1);
+  const strokeDashoffset =
+    circumference - visualRatio * circumference;
+
+  // ---- Text formatting ----
+  const percentText = useMemo(() => {
+    if (!showPercent) return null;
+    if (ratio >= 2) return '200%+';
+    return `${Math.round(ratio * 100)}%`;
+  }, [ratio, showPercent]);
+
+  // ---- Color feedback (optional) ----
+  const progressColor =
+    ratio > 1 ? '#e55c21ff' : color;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       <Svg width={size} height={size}>
-        {/* Background circle */}
+        {/* Background */}
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -39,12 +62,13 @@ const CircularProgress = ({
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Progress circle */}
+
+        {/* Progress */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={color}
+          stroke={progressColor}
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}
@@ -53,23 +77,58 @@ const CircularProgress = ({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
+
+      {/* Center content */}
       <View style={styles.centerContent}>
-        {children}
+        <Text style={styles.value}>
+          {Math.round(safeValue)}
+          {unit && <Text style={styles.unit}>{unit}</Text>}
+        </Text>
+
+        {percentText && (
+          <Text style={styles.percent}>{percentText}</Text>
+        )}
       </View>
+
+      {label && <Text style={styles.label}>{label}</Text>}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+    justifyContent: 'center',
   },
   centerContent: {
     position: 'absolute',
-    justifyContent: 'center',
     alignItems: 'center',
+  },
+  value: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  unit: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  percent: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  label: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  noGoalText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontWeight: '500',
   },
 });
 

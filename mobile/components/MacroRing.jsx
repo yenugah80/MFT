@@ -16,7 +16,7 @@ const MacroRing = ({ label, value, target, unit = 'g', color, size = 100 }) => {
         size={size}
         strokeWidth={8}
         color={color}
-        backgroundColor="#f3f4f6"
+        backgroundColor="#f9e6a3ff"
       >
         <View style={styles.centerContent}>
           <Text style={styles.value}>{Math.round(value)}</Text>

@@ -218,7 +218,7 @@ export const saveNutritionGoals = async (token, goalsData) => {
       throw new ProfileAPIError("Authentication token is required", 401);
     }
 
-    const response = await fetch(`${API_URL}/profile/goals`, {
+    const response = await fetch(`${API_URL}/nutrition/goals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
