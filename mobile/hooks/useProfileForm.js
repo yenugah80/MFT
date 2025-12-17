@@ -184,13 +184,36 @@ export default function useProfileForm(user) {
 
     const run = async () => {
       try {
-        const token = await getToken({ template: "backend" });
-        if (!token) return;
+        console.log('[Profile] Waiting for Clerk token...');
+
+        // Wait for token with retry logic
+        let token = null;
+        let attempts = 0;
+        const maxAttempts = 3;
+
+        while (!token && attempts < maxAttempts) {
+          token = await getToken({ template: "backend" });
+          if (!token) {
+            attempts++;
+            console.warn(`[Profile] Token not ready, attempt ${attempts}/${maxAttempts}`);
+            await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms between attempts
+          }
+        }
+
+        if (!token) {
+          console.error('[Profile] Failed to get token after retries');
+          // Don't mark as bootstrapped - will retry on next render
+          return;
+        }
+
+        console.log('[Profile] Token acquired, bootstrapping profile...');
         hasBootstrappedRef.current = true;
+
         const profile = await bootstrapProfile(user, token);
         dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profile });
+        console.log('[Profile] Bootstrap complete');
       } catch (err) {
-        console.error("Profile bootstrap failed", err);
+        console.error("[Profile] Bootstrap failed:", err);
         hasBootstrappedRef.current = true;
         dispatch({
           type: ACTIONS.LOAD_PROFILE,
@@ -205,8 +228,11 @@ export default function useProfileForm(user) {
         });
       }
     };
-    run();
-  }, [user]);
+
+    // Small delay to ensure Clerk is fully initialized
+    const timer = setTimeout(run, 100);
+    return () => clearTimeout(timer);
+  }, [user, getToken]);
 
   // Update field
   const updateField = useCallback((section, key, value) => {

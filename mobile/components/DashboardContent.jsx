@@ -1,25 +1,29 @@
+/**
+ * DashboardContent - Premium Redesign
+ * Instrument-style dashboard with:
+ * - Proper overflow handling (no "200%+" spam)
+ * - Data state detection (anomalies, missing data)
+ * - Glass morphism design
+ * - Premium components (PremiumRing, MacroDonut, NutriScoreDial)
+ */
+
 import { View, ScrollView, Text, ActivityIndicator, RefreshControl, StyleSheet, TouchableOpacity } from "react-native";
 import { useDashboard } from "../hooks/useDashboard";
-import CircularProgress from "./CircularProgress";
-import MacroRing from "./MacroRing";
-import StatCard from "./StatCard";
-import MicrosCoverageSection from "./MicrosCoverageSection";
-import MoodChip from "./MoodChip";
-import MoodLogger from "./MoodLogger";
-import WaterLogger from "./WaterLogger";
 import { useState, useMemo } from "react";
 import { useNotification } from "../providers/NotificationProvider";
 
-// Health-focused color palette
-const COLORS = {
-  calories: '#10b981', // Green for energy
-  protein: '#8b5cf6', // Purple for protein
-  carbs: '#f59e0b',   // Amber for carbs
-  fat: '#ef4444',     // Red for fats
-  water: '#3b82f6',   // Blue for water
-  xp: '#6366f1',      // Indigo for XP
-  streak: '#f97316',  // Orange for streak
-};
+// Premium components
+import GlassCard from "./dashboard/GlassCard";
+import PremiumRing from "./dashboard/PremiumRing";
+import MacroDonut from "./dashboard/MacroDonut";
+import NutriScoreDial from "./dashboard/NutriScoreDial";
+import MoodChip from "./MoodChip";
+import MoodLogger from "./MoodLogger";
+import WaterLogger from "./WaterLogger";
+import MicrosCoverageSection from "./MicrosCoverageSection";
+
+// Design tokens
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState, formatters } from "../constants/designTokens";
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -42,7 +46,6 @@ export default function DashboardContent() {
     data.today.foodLogs.forEach((log) => {
       if (log.micros && typeof log.micros === 'object') {
         Object.entries(log.micros).forEach(([key, value]) => {
-          // Micros are now stored as numbers (normalized at ingestion)
           const numValue = typeof value === 'number' ? value : (parseFloat(value) || 0);
           micros[key] = (micros[key] || 0) + numValue;
         });
@@ -52,42 +55,69 @@ export default function DashboardContent() {
     return micros;
   }, [data]);
 
-  // View all micros handler
-  const handleViewAllMicros = () => {
-    notify.info('Detailed micros view - Coming soon');
-    // TODO: Navigate to micros detail screen or open bottom sheet
-  };
+  // Detect anomalies in data
+  const dataAnomalies = useMemo(() => {
+    if (!data?.today || !data?.goals) return [];
 
-  // Mood logging handler
-  const handleLogMood = () => {
-    setMoodModalVisible(true);
-  };
+    const anomalies = [];
 
-  // Water logging handler (for water section quick add)
-  const handleLogWater = () => {
-    setWaterModalVisible(true);
-  };
+    // Check calories
+    const calorieState = detectDataState(
+      data.today.nutrition.totalCalories,
+      data.goals.dailyCalories,
+      { warnThreshold: 0.8, overThreshold: 1.0 }
+    );
+    if (calorieState.isAnomaly) {
+      anomalies.push({
+        metric: 'Calories',
+        value: data.today.nutrition.totalCalories,
+        message: 'Unusually high - check serving sizes',
+      });
+    }
 
-  // Success handlers
+    // Check protein
+    const proteinState = detectDataState(
+      data.today.nutrition.totalProtein,
+      data.goals.proteinG,
+      { warnThreshold: 0.8, overThreshold: 1.2 }
+    );
+    if (proteinState.isAnomaly) {
+      anomalies.push({
+        metric: 'Protein',
+        value: data.today.nutrition.totalProtein,
+        message: 'Unusually high - review logs',
+      });
+    }
+
+    return anomalies;
+  }, [data]);
+
+  // Handlers
+  const handleLogMood = () => setMoodModalVisible(true);
+  const handleLogWater = () => setWaterModalVisible(true);
+  const handleViewAllMicros = () => notify.info('Detailed micros view - Coming soon');
+
   const handleMoodSuccess = () => {
     notify.success('Mood logged successfully! 😊');
-    refetch(); // Refresh dashboard data
+    refetch();
   };
 
   const handleWaterSuccess = () => {
     notify.success('Water intake logged! 💧');
-    refetch(); // Refresh dashboard data
+    refetch();
   };
 
+  // Loading state
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.calories} />
+        <ActivityIndicator size="large" color={COLORS.semantic.info} />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
     );
   }
 
+  // Error state
   if (error) {
     return (
       <View style={styles.centerContainer}>
@@ -97,21 +127,9 @@ export default function DashboardContent() {
     );
   }
 
-  if (!data) {
-    return null;
-  }
+  if (!data) return null;
 
   const { today, goals, gamification, trends, recentWeight } = data;
-
-  // Calculate remaining calories
-  const caloriesEaten = today.nutrition.totalCalories;
-  const caloriesTarget = goals?.dailyCalories || 2000;
-  const caloriesRemaining = Math.max(0, caloriesTarget - caloriesEaten);
-  const caloriesOver = caloriesEaten > caloriesTarget;
-
-  // Calculate XP progress to next level
-  const xpCurrent = gamification.xp % 1000;
-  const xpTarget = 1000;
 
   return (
     <>
@@ -122,207 +140,193 @@ export default function DashboardContent() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Today's Progress</Text>
-        <Text style={styles.headerSubtitle}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-        </Text>
-      </View>
-
-      {/* MAIN CALORIE RING */}
-      <View style={styles.heroSection}>
-        <CircularProgress
-          value={caloriesEaten}
-          maxValue={caloriesTarget}
-          size={180}
-          strokeWidth={14}
-          color={caloriesOver ? COLORS.fat : COLORS.calories}
-          backgroundColor="rgba(206, 229, 246, 1)"
-        >
-          <View style={styles.calorieCenter}>
-            <Text style={styles.calorieValue}>
-              {caloriesOver ? '+' : ''}{caloriesOver ? caloriesEaten - caloriesTarget : caloriesRemaining}
-            </Text>
-            <Text style={styles.calorieUnit}>
-              {caloriesOver ? 'over' : 'left'}
-            </Text>
-            <Text style={styles.calorieTarget}>
-              {caloriesEaten} / {caloriesTarget}
-            </Text>
-          </View>
-        </CircularProgress>
-        {trends.weeklyAverages && (
-          <Text style={styles.weeklyContext}>
-            Weekly avg: {Math.round(trends.weeklyAverages.avgCalories)} kcal/day
+        {/* HEADER */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Today</Text>
+          <Text style={styles.headerSubtitle}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </Text>
-        )}
-      </View>
-
-      {/* MACRO RINGS */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Macronutrients</Text>
-        <View style={styles.macroRow}>
-          <MacroRing
-            label="Protein"
-            value={today.nutrition.totalProtein}
-            target={goals?.proteinG || 100}
-            unit="g"
-            color={COLORS.protein}
-            size={90}
-          />
-          <MacroRing
-            label="Carbs"
-            value={today.nutrition.totalCarbs}
-            target={goals?.carbsG || 200}
-            unit="g"
-            color={COLORS.carbs}
-            size={90}
-          />
-          <MacroRing
-            label="Fat"
-            value={today.nutrition.totalFats}
-            target={goals?.fatsG || 60}
-            unit="g"
-            color={COLORS.fat}
-            size={90}
-          />
         </View>
-      </View>
 
-      {/* MICROS COVERAGE */}
-      <View style={styles.section}>
-        <MicrosCoverageSection
-          micros={aggregatedMicros}
-          onViewAll={handleViewAllMicros}
-        />
-      </View>
-
-      {/* WATER INTAKE */}
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.waterContainer} onPress={handleLogWater} activeOpacity={0.7}>
-          <CircularProgress
-            value={today.waterIntakeLiters}
-            maxValue={parseFloat(goals?.waterLiters || 2.0)}
-            size={100}
-            strokeWidth={10}
-            color={COLORS.water}
-            backgroundColor="#f3f4f6"
-          >
-            <View style={styles.waterCenter}>
-              <Text style={styles.waterValue}>
-                {today.waterIntakeLiters.toFixed(1)}
-              </Text>
-              <Text style={styles.waterUnit}>L</Text>
-            </View>
-          </CircularProgress>
-          <View style={styles.waterInfo}>
-            <Text style={styles.waterTitle}>Water Intake</Text>
-            <Text style={styles.waterTarget}>
-              Goal: {goals?.waterLiters || '2.0'}L
-            </Text>
-            <Text style={styles.waterPercentage}>
-              {Math.round((today.waterIntakeLiters / parseFloat(goals?.waterLiters || 2.0)) * 100)}% complete
-            </Text>
-            <Text style={styles.waterCta}>💧 Tap to log water</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* MOOD */}
-      <View style={styles.section}>
-        <MoodChip mood={today.moodLogs} onLogMood={handleLogMood} />
-      </View>
-
-      {/* GAMIFICATION */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Progress & Achievements</Text>
-        <View style={styles.gamificationRow}>
-          <View style={styles.gamificationItem}>
-            <CircularProgress
-              value={xpCurrent}
-              maxValue={xpTarget}
-              size={90}
-              strokeWidth={10}
-              color={COLORS.xp}
-              backgroundColor="#f3f4f6"
-            >
-              <View style={styles.gamificationCenter}>
-                <Text style={styles.gamificationValue}>{gamification.level}</Text>
-                <Text style={styles.gamificationUnit}>LVL</Text>
-              </View>
-            </CircularProgress>
-            <Text style={styles.gamificationLabel}>Level {gamification.level}</Text>
-            <Text style={styles.gamificationSub}>{xpCurrent} / {xpTarget} XP</Text>
-          </View>
-
-          <View style={styles.gamificationItem}>
-            <View style={styles.streakBadge}>
-              <Text style={styles.streakIcon}>🔥</Text>
-              <Text style={styles.streakValue}>{gamification.streak}</Text>
-            </View>
-            <Text style={styles.gamificationLabel}>Day Streak</Text>
-            <Text style={styles.gamificationSub}>
-              {gamification.streak > 0 ? 'Keep it up!' : 'Start today!'}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* WEEKLY TRENDS */}
-      {trends.weeklyAverages && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Weekly Trends</Text>
-          <StatCard
-            label="Average Calories"
-            value={`${Math.round(trends.weeklyAverages.avgCalories)} kcal/day`}
-            subtitle={`P: ${Math.round(trends.weeklyAverages.avgProtein)}g · C: ${Math.round(trends.weeklyAverages.avgCarbs)}g · F: ${Math.round(trends.weeklyAverages.avgFats)}g`}
-            icon="📊"
-            color={COLORS.calories}
-          />
-          {trends.currentStreak > 0 && (
-            <StatCard
-              label="Consistency Streak"
-              value={`${trends.currentStreak} days`}
-              subtitle="Great job staying consistent!"
-              icon="🔥"
-              color={COLORS.streak}
-            />
-          )}
-        </View>
-      )}
-
-      {/* RECENT WEIGHT */}
-      {recentWeight.length > 0 && (
-        <View style={styles.section}>
-          <StatCard
-            label="Recent Weight"
-            value={`${recentWeight[0].weightKg} kg`}
-            subtitle={`Recorded ${new Date(recentWeight[0].recordedDate).toLocaleDateString()}`}
-            icon="⚖️"
-            color="#6b7280"
-          />
-        </View>
-      )}
-
-      {/* RECENT MEALS */}
-      {today.foodLogs.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Meals</Text>
-          {today.foodLogs.slice(0, 3).map((log) => (
-            <View key={log.id} style={styles.mealItem}>
-              <View style={styles.mealDot} />
-              <View style={styles.mealContent}>
-                <Text style={styles.mealName}>{log.foodName}</Text>
-                <Text style={styles.mealMeta}>
-                  {log.mealType} · {log.calories} kcal
+        {/* DATA ANOMALY WARNING */}
+        {dataAnomalies.length > 0 && (
+          <GlassCard style={styles.anomalyCard} padding="md">
+            <View style={styles.anomalyHeader}>
+              <Text style={styles.anomalyIcon}>⚠️</Text>
+              <View style={styles.anomalyTextContainer}>
+                <Text style={styles.anomalyTitle}>Data Check Needed</Text>
+                <Text style={styles.anomalyMessage}>
+                  {dataAnomalies[0].message}
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+          </GlassCard>
+        )}
+
+        {/* PRIMARY KPI - Nutrition Score or Calories */}
+        <GlassCard style={styles.primaryCard} padding="lg">
+          {today.foodLogs && today.foodLogs.length > 0 ? (
+            <View style={styles.primaryContent}>
+              <NutriScoreDial data={data} size={180} />
+              <Text style={styles.primaryHint}>
+                Based on calories, protein, hydration, and consistency
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.primaryContent}>
+              <PremiumRing
+                value={today.nutrition.totalCalories}
+                goal={goals?.dailyCalories}
+                label="Calories"
+                unit="kcal"
+                size={180}
+                strokeWidth={16}
+              />
+              <Text style={styles.primaryHint}>
+                {trends.weeklyAverages
+                  ? `Weekly avg: ${Math.round(trends.weeklyAverages.avgCalories)} kcal/day`
+                  : 'Log food to see nutrition score'}
+              </Text>
+            </View>
+          )}
+        </GlassCard>
+
+        {/* MACRONUTRIENTS - Single Donut */}
+        <GlassCard style={styles.section} padding="lg">
+          <Text style={styles.sectionTitle}>Macronutrients</Text>
+          <MacroDonut
+            protein={today.nutrition.totalProtein}
+            carbs={today.nutrition.totalCarbs}
+            fat={today.nutrition.totalFats}
+            size={200}
+            strokeWidth={24}
+          />
+        </GlassCard>
+
+        {/* HYDRATION */}
+        <TouchableOpacity onPress={handleLogWater} activeOpacity={0.9}>
+          <GlassCard style={styles.section} padding="md">
+            <View style={styles.waterContainer}>
+              <View style={styles.waterLeft}>
+                <Text style={styles.waterIcon}>💧</Text>
+                <View>
+                  <Text style={styles.waterTitle}>Hydration</Text>
+                  <Text style={styles.waterValue}>
+                    {(today.waterIntakeLiters * 1000).toFixed(0)}ml / {((goals?.waterLiters || 2.0) * 1000).toFixed(0)}ml
+                  </Text>
+                  <Text style={styles.waterPercent}>
+                    {formatters.percent(today.waterIntakeLiters / (goals?.waterLiters || 2.0))} complete
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.waterRight}>
+                <View style={[
+                  styles.quickAddButton,
+                  { backgroundColor: COLORS.semantic.info }
+                ]}>
+                  <Text style={styles.quickAddText}>+ Quick Add</Text>
+                </View>
+              </View>
+            </View>
+          </GlassCard>
+        </TouchableOpacity>
+
+        {/* MICRONUTRIENTS */}
+        <GlassCard style={styles.section} padding="md">
+          <MicrosCoverageSection
+            micros={aggregatedMicros}
+            onViewAll={handleViewAllMicros}
+          />
+        </GlassCard>
+
+        {/* MOOD */}
+        <GlassCard style={styles.section} padding="md">
+          <MoodChip mood={today.moodLogs} onLogMood={handleLogMood} />
+        </GlassCard>
+
+        {/* RECENT MEALS */}
+        {today.foodLogs.length > 0 && (
+          <GlassCard style={styles.section} padding="md">
+            <Text style={styles.sectionTitle}>Recent Meals</Text>
+            {today.foodLogs.slice(0, 3).map((log, index) => (
+              <View key={log.id || index} style={styles.mealItem}>
+                <View style={styles.mealDot} />
+                <View style={styles.mealContent}>
+                  <Text style={styles.mealName}>{log.foodName}</Text>
+                  <Text style={styles.mealMeta}>
+                    {log.mealType} · {log.calories} kcal
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </GlassCard>
+        )}
+
+        {/* WEEKLY TRENDS */}
+        {trends.weeklyAverages && (
+          <GlassCard style={styles.section} padding="md">
+            <Text style={styles.sectionTitle}>Weekly Trends</Text>
+            <View style={styles.trendRow}>
+              <View style={styles.trendItem}>
+                <Text style={styles.trendValue}>
+                  {Math.round(trends.weeklyAverages.avgCalories)}
+                </Text>
+                <Text style={styles.trendLabel}>Avg Calories</Text>
+              </View>
+              <View style={styles.trendItem}>
+                <Text style={styles.trendValue}>
+                  {Math.round(trends.weeklyAverages.avgProtein)}g
+                </Text>
+                <Text style={styles.trendLabel}>Avg Protein</Text>
+              </View>
+              <View style={styles.trendItem}>
+                <Text style={styles.trendValue}>{gamification.streak}</Text>
+                <Text style={styles.trendLabel}>Day Streak 🔥</Text>
+              </View>
+            </View>
+          </GlassCard>
+        )}
+
+        {/* GAMIFICATION */}
+        <GlassCard style={styles.section} padding="md">
+          <Text style={styles.sectionTitle}>Progress</Text>
+          <View style={styles.gamificationRow}>
+            <View style={styles.gamificationItem}>
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelValue}>{gamification.level}</Text>
+                <Text style={styles.levelLabel}>Level</Text>
+              </View>
+              <Text style={styles.gamificationSub}>
+                {gamification.xp % 1000} / 1000 XP
+              </Text>
+            </View>
+            <View style={styles.gamificationItem}>
+              <View style={styles.streakBadge}>
+                <Text style={styles.streakIcon}>🔥</Text>
+                <Text style={styles.streakValue}>{gamification.streak}</Text>
+              </View>
+              <Text style={styles.gamificationSub}>
+                {gamification.streak > 0 ? 'Keep it up!' : 'Start today!'}
+              </Text>
+            </View>
+          </View>
+        </GlassCard>
+
+        {/* RECENT WEIGHT */}
+        {recentWeight.length > 0 && (
+          <GlassCard style={styles.section} padding="md">
+            <View style={styles.weightContainer}>
+              <Text style={styles.weightIcon}>⚖️</Text>
+              <View style={styles.weightInfo}>
+                <Text style={styles.weightValue}>{recentWeight[0].weightKg} kg</Text>
+                <Text style={styles.weightDate}>
+                  {new Date(recentWeight[0].recordedDate).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+          </GlassCard>
+        )}
+      </ScrollView>
 
       {/* Modals */}
       <MoodLogger
@@ -343,139 +347,201 @@ export default function DashboardContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: COLORS.background.primary,
   },
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: SPACING[5],
+    paddingBottom: SPACING[10],
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    backgroundColor: COLORS.background.primary,
+    padding: SPACING[5],
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#6b7280',
+    marginTop: SPACING[3],
+    fontSize: TYPOGRAPHY.size.md,
+    color: COLORS.text.secondary,
   },
   errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 8,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[2],
   },
   errorText: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: TYPOGRAPHY.size.base,
+    color: COLORS.text.secondary,
   },
+
+  // Header
   header: {
-    marginBottom: 20,
+    marginBottom: SPACING[5],
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 4,
+    fontSize: TYPOGRAPHY.size['3xl'],
+    fontWeight: TYPOGRAPHY.weight.extrabold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[1],
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.tertiary,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
-  heroSection: {
+
+  // Anomaly warning card
+  anomalyCard: {
+    marginBottom: SPACING[4],
+    backgroundColor: COLORS.semantic.overGlow,
+    borderColor: COLORS.semantic.over,
+  },
+  anomalyHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
-    paddingVertical: 12,
   },
-  calorieCenter: {
+  anomalyIcon: {
+    fontSize: 32,
+    marginRight: SPACING[3],
+  },
+  anomalyTextContainer: {
+    flex: 1,
+  },
+  anomalyTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.semantic.over,
+    marginBottom: SPACING[1],
+  },
+  anomalyMessage: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.secondary,
+  },
+
+  // Primary KPI card
+  primaryCard: {
+    marginBottom: SPACING[5],
     alignItems: 'center',
   },
-  calorieValue: {
-    fontSize: 42,
-    fontWeight: '700',
-    color: '#1f2937',
+  primaryContent: {
+    alignItems: 'center',
+    width: '100%',
   },
-  calorieUnit: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: -4,
-  },
-  calorieTarget: {
-    fontSize: 13,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  weeklyContext: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 12,
+  primaryHint: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.tertiary,
+    marginTop: SPACING[3],
     textAlign: 'center',
   },
+
+  // Sections
   section: {
-    marginBottom: 24,
+    marginBottom: SPACING[4],
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 16,
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[4],
   },
-  macroRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
+
+  // Water section
   waterContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  waterCenter: {
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  waterValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  waterUnit: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  waterInfo: {
+  waterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    marginLeft: 20,
+  },
+  waterIcon: {
+    fontSize: 40,
+    marginRight: SPACING[3],
   },
   waterTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[1],
   },
-  waterTarget: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginBottom: 2,
+  waterValue: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.semantic.info,
+    marginBottom: SPACING[1],
   },
-  waterPercentage: {
-    fontSize: 12,
-    color: '#9ca3af',
+  waterPercent: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.tertiary,
   },
-  waterCta: {
-    fontSize: 12,
-    color: '#3b82f6',
-    fontWeight: '600',
-    marginTop: 8,
+  waterRight: {
+    alignItems: 'flex-end',
   },
+  quickAddButton: {
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.md,
+  },
+  quickAddText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#fff',
+  },
+
+  // Meals
+  mealItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.glass.border,
+  },
+  mealDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.semantic.good,
+    marginRight: SPACING[3],
+  },
+  mealContent: {
+    flex: 1,
+  },
+  mealName: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[1],
+  },
+  mealMeta: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.tertiary,
+  },
+
+  // Trends
+  trendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  trendItem: {
+    alignItems: 'center',
+  },
+  trendValue: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.extrabold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[1],
+  },
+  trendLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.muted,
+    textAlign: 'center',
+  },
+
+  // Gamification
   gamificationRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -483,74 +549,71 @@ const styles = StyleSheet.create({
   gamificationItem: {
     alignItems: 'center',
   },
-  gamificationCenter: {
+  gamificationSub: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.muted,
+    marginTop: SPACING[2],
+  },
+  levelBadge: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: COLORS.glass.highlight,
+    borderWidth: 3,
+    borderColor: COLORS.semantic.info,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  gamificationValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
+  levelValue: {
+    fontSize: TYPOGRAPHY.size['3xl'],
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: COLORS.semantic.info,
   },
-  gamificationUnit: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  gamificationLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 8,
-  },
-  gamificationSub: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 2,
+  levelLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.tertiary,
+    marginTop: SPACING[1],
   },
   streakBadge: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: '#fff3e0',
+    backgroundColor: COLORS.glass.highlight,
+    borderWidth: 3,
+    borderColor: COLORS.semantic.warn,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#f97316',
   },
   streakIcon: {
     fontSize: 32,
   },
   streakValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#f97316',
-    marginTop: 4,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: COLORS.semantic.warn,
+    marginTop: SPACING[1],
   },
-  mealItem: {
+
+  // Weight
+  weightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
   },
-  mealDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-    marginRight: 12,
+  weightIcon: {
+    fontSize: 40,
+    marginRight: SPACING[3],
   },
-  mealContent: {
+  weightInfo: {
     flex: 1,
   },
-  mealName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 2,
+  weightValue: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.text.primary,
+    marginBottom: SPACING[1],
   },
-  mealMeta: {
-    fontSize: 13,
-    color: '#6b7280',
+  weightDate: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.tertiary,
   },
 });

@@ -22,9 +22,9 @@ import { useQueryClient } from '@tanstack/react-query';
 const { width } = Dimensions.get('window');
 
 /**
- * Animated water wave component
+ * Animated water wave component - Premium version with volume display
  */
-const WaterWave = ({ progress }) => {
+const WaterWave = ({ progress, todayTotal, dailyGoal }) => {
   const waveAnim1 = useRef(new Animated.Value(0)).current;
   const waveAnim2 = useRef(new Animated.Value(0)).current;
 
@@ -65,7 +65,7 @@ const WaterWave = ({ progress }) => {
     outputRange: [0, width],
   });
 
-  // Calculate water level based on progress
+  // Calculate water level based on progress - cap at 100% visually
   const waterLevel = Math.min(100, progress);
   const waterHeight = `${waterLevel}%`;
 
@@ -95,10 +95,15 @@ const WaterWave = ({ progress }) => {
         />
       </View>
 
-      {/* Progress text */}
+      {/* Progress text - Volume based, not just % */}
       <View style={styles.progressTextContainer}>
-        <Text style={styles.progressNumber}>{waterLevel}%</Text>
-        <Text style={styles.progressLabel}>Daily Goal</Text>
+        <Text style={styles.progressVolume}>
+          {(todayTotal * 1000).toFixed(0)}ml
+        </Text>
+        <Text style={styles.progressGoal}>
+          of {(dailyGoal * 1000).toFixed(0)}ml
+        </Text>
+        <Text style={styles.progressPercent}>{waterLevel}%</Text>
       </View>
     </View>
   );
@@ -155,6 +160,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const successAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
@@ -179,6 +185,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
       // Reset
       slideAnim.setValue(300);
       fadeAnim.setValue(0);
+      successAnim.setValue(0);
       setCustomAmount('');
     }
   }, [visible]);
@@ -187,12 +194,28 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
     try {
       await quickAdd(preset);
       setProgress(getProgress());
+
+      // Success ripple animation
+      Animated.sequence([
+        Animated.spring(successAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
       onSuccess?.();
 
-      // Don't close immediately - show success animation
+      // Close after success animation
       setTimeout(() => {
         onClose();
-      }, 800);
+      }, 1000);
     } catch (err) {
       console.error('Failed to log water:', err);
     }
@@ -206,11 +229,27 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
       await logWater(amountMl / 1000); // Convert ml to liters
       setProgress(getProgress());
       setCustomAmount('');
+
+      // Success ripple animation
+      Animated.sequence([
+        Animated.spring(successAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
       onSuccess?.();
 
       setTimeout(() => {
         onClose();
-      }, 800);
+      }, 1000);
     } catch (err) {
       console.error('Failed to log water:', err);
     }
@@ -254,7 +293,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
         </View>
 
         {/* Water Wave Visualization */}
-        <WaterWave progress={progress} />
+        <WaterWave progress={progress} todayTotal={todayTotal} dailyGoal={dailyGoal} />
 
         {/* Quick Add Buttons */}
         <View style={styles.presetsSection}>
@@ -274,6 +313,25 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
         {/* Custom Amount */}
         <View style={styles.customSection}>
           <Text style={styles.sectionTitle}>Custom Amount</Text>
+
+          {/* Quick increment buttons for fast logging */}
+          <View style={styles.quickIncrementRow}>
+            <Text style={styles.quickIncrementLabel}>Quick add:</Text>
+            {[50, 100, 250].map((ml) => (
+              <TouchableOpacity
+                key={ml}
+                style={styles.quickIncrementButton}
+                onPress={() => {
+                  const current = parseFloat(customAmount) || 0;
+                  setCustomAmount(String(current + ml));
+                }}
+                disabled={isLogging}
+              >
+                <Text style={styles.quickIncrementText}>+{ml}ml</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <View style={styles.customInputRow}>
             <TextInput
               style={styles.customInput}
@@ -305,6 +363,28 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
           <Text style={styles.closeButtonText}>Close</Text>
         </TouchableOpacity>
+
+        {/* Success overlay - shows on successful log */}
+        <Animated.View
+          style={[
+            styles.successOverlay,
+            {
+              opacity: successAnim,
+              transform: [
+                {
+                  scale: successAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1.2],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.successIcon}>💧</Text>
+          <Text style={styles.successText}>Logged!</Text>
+        </Animated.View>
       </Animated.View>
     </Modal>
   );
@@ -378,21 +458,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  progressNumber: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#1f2937',
-    textShadowColor: 'rgba(255, 255, 255, 0.5)',
+  // Premium volume display - concrete numbers, not just %
+  progressVolume: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#1e40af',
+    textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    textShadowRadius: 8,
   },
-  progressLabel: {
+  progressGoal: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#64748b',
     fontWeight: '600',
-    textShadowColor: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 2,
+    textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    textShadowRadius: 8,
+  },
+  progressPercent: {
+    fontSize: 18,
+    color: '#0ea5e9',
+    fontWeight: '700',
+    marginTop: 4,
+    textShadowColor: 'rgba(255, 255, 255, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   presetsSection: {
     marginBottom: 20,
@@ -434,6 +525,31 @@ const styles = StyleSheet.create({
   },
   customSection: {
     marginBottom: 20,
+  },
+  // Quick increment buttons - no typing needed
+  quickIncrementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  quickIncrementLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  quickIncrementButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  quickIncrementText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontWeight: '700',
   },
   customInputRow: {
     flexDirection: 'row',
@@ -477,5 +593,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#6b7280',
+  },
+  // Success overlay - celebration moment
+  successOverlay: {
+    position: 'absolute',
+    top: '40%',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 32,
+    paddingVertical: 20,
+    borderRadius: 20,
+    shadowColor: '#0ea5e9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  successIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  successText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0ea5e9',
   },
 });

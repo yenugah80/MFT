@@ -1,129 +1,136 @@
 /**
- * Enhanced API Client with Interceptors and Retry Logic
+ * Production-Grade API Client with Fast Retries & Health Checks
  *
- * Features:
- * - Automatic token injection from Clerk
- * - Exponential backoff retry for failed requests
- * - Request/Response logging in development
- * - Integrated error handling with notifications
- * - Network error detection
+ * IMPROVEMENTS:
+ * - Fast retry delays: 200ms → 500ms → 1s (vs 1s → 2.8s → 4.8s)
+ * - Request timeout: 10s max
+ * - Backend health check
+ * - Better error handling
  */
 
 import { API_URL } from '@/constants/api';
-import { handleApiError } from '@/utils/errorHandler';
 
-/**
- * Sleep utility for retry delays
- */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Retry configuration
+ * Production-optimized retry config
  */
 const RETRY_CONFIG = {
   maxRetries: 3,
-  initialDelay: 1000, // 1 second
-  maxDelay: 10000, // 10 seconds
-  // Retry on these status codes
+  delays: [200, 500, 1000], // Fast progressive retries
+  timeout: 10000, // 10s timeout
   retryableStatuses: [408, 429, 500, 502, 503, 504],
+};
+
+/**
+ * Fetch with timeout
+ */
+const fetchWithTimeout = (url, options, timeout = RETRY_CONFIG.timeout) => {
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), timeout)
+    ),
+  ]);
 };
 
 /**
  * Check if error is retryable
  */
 const isRetryableError = (error) => {
-  // Network errors (no response from server)
-  if (!error.response) {
-    return true;
-  }
-
-  // Check status code
-  const status = error.response?.status;
-  return RETRY_CONFIG.retryableStatuses.includes(status);
+  if (error.message === 'Request timeout') return false;
+  if (error.response?.status === 401 || error.response?.status === 403) return false;
+  if (!error.response) return true;
+  return RETRY_CONFIG.retryableStatuses.includes(error.response.status);
 };
 
 /**
- * Calculate retry delay with exponential backoff
- */
-const getRetryDelay = (attemptNumber) => {
-  const delay = Math.min(
-    RETRY_CONFIG.initialDelay * Math.pow(2, attemptNumber),
-    RETRY_CONFIG.maxDelay
-  );
-  // Add jitter to prevent thundering herd
-  return delay + Math.random() * 1000;
-};
-
-/**
- * API Client class
+ * API Client
  */
 class ApiClient {
   constructor() {
     this.baseURL = API_URL;
     this.tokenProvider = null;
+    this.isHealthy = null;
+    this.lastHealthCheck = 0;
   }
 
-  /**
-   * Set token provider function (usually from Clerk)
-   */
   setTokenProvider(provider) {
     this.tokenProvider = provider;
   }
 
-  /**
-   * Get authentication token
-   */
   async getToken() {
-    if (!this.tokenProvider) {
-      console.warn('[API Client] No token provider set');
-      return null;
-    }
+    if (!this.tokenProvider) return null;
     try {
       return await this.tokenProvider();
     } catch (error) {
-      console.error('[API Client] Failed to get token:', error);
+      console.error('[API] Token error:', error.message);
       return null;
     }
   }
 
   /**
-   * Build request headers
+   * Quick health check (3s timeout)
    */
+  async healthCheck() {
+    const now = Date.now();
+    if (this.isHealthy !== null && now - this.lastHealthCheck < 30000) {
+      return this.isHealthy;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(`${this.baseURL}/health`, {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' },
+      });
+
+      clearTimeout(timeout);
+      this.isHealthy = response.ok;
+      this.lastHealthCheck = now;
+
+      console.log(`[API] Health: ${this.isHealthy ? '✅' : '⚠️'}`);
+      return this.isHealthy;
+    } catch (error) {
+      this.isHealthy = false;
+      this.lastHealthCheck = now;
+      console.error('[API] ❌ Backend offline');
+      return false;
+    }
+  }
+
   async buildHeaders(customHeaders = {}) {
     const headers = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...customHeaders,
     };
 
-    // Add auth token if available
     const token = await this.getToken();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
+    if (token) headers.Authorization = `Bearer ${token}`;
 
     return headers;
   }
 
   /**
-   * Core fetch with retry logic
+   * Fetch with fast retry
    */
-  async fetchWithRetry(url, options = {}, attemptNumber = 0) {
+  async fetchWithRetry(url, options = {}, attempt = 0) {
     try {
       const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
 
-      // Log request in development
       if (__DEV__) {
         console.log(`[API] ${options.method || 'GET'} ${fullUrl}`);
       }
 
-      const response = await fetch(fullUrl, options);
+      const response = await fetchWithTimeout(fullUrl, options);
 
-      // Log response in development
       if (__DEV__) {
         console.log(`[API] ${response.status} ${fullUrl}`);
       }
 
-      // Handle non-OK responses
       if (!response.ok) {
         const error = new Error(`HTTP ${response.status}`);
         error.response = {
@@ -132,58 +139,48 @@ class ApiClient {
           data: await response.json().catch(() => ({})),
         };
 
-        // Check if we should retry
-        if (
-          isRetryableError(error) &&
-          attemptNumber < RETRY_CONFIG.maxRetries
-        ) {
-          const delay = getRetryDelay(attemptNumber);
-          console.log(
-            `[API] Retrying request (${attemptNumber + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`
-          );
+        // Fast retry logic
+        if (isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
+          const delay = RETRY_CONFIG.delays[attempt];
+          console.log(`[API] Retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
           await sleep(delay);
-          return this.fetchWithRetry(url, options, attemptNumber + 1);
+          return this.fetchWithRetry(url, options, attempt + 1);
         }
 
         throw error;
       }
 
-      // Parse JSON response
       const data = await response.json();
+
+      if (this.isHealthy === false) {
+        this.isHealthy = true;
+        console.log('[API] ✅ Backend recovered');
+      }
+
       return data;
     } catch (error) {
-      // Network error - retry if attempts remaining
-      if (
-        !error.response &&
-        attemptNumber < RETRY_CONFIG.maxRetries
-      ) {
-        const delay = getRetryDelay(attemptNumber);
-        console.log(
-          `[API] Network error, retrying (${attemptNumber + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`
-        );
+      // Network error - fast retry
+      if (!error.response && attempt < RETRY_CONFIG.maxRetries) {
+        const delay = RETRY_CONFIG.delays[attempt];
+        console.log(`[API] Network error, retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
         await sleep(delay);
-        return this.fetchWithRetry(url, options, attemptNumber + 1);
+        return this.fetchWithRetry(url, options, attempt + 1);
+      }
+
+      if (this.isHealthy !== false) {
+        this.isHealthy = false;
+        console.error('[API] ❌ Backend offline');
       }
 
       throw error;
     }
   }
 
-  /**
-   * GET request
-   */
   async get(endpoint, options = {}) {
     const headers = await this.buildHeaders(options.headers);
-    return this.fetchWithRetry(endpoint, {
-      method: 'GET',
-      headers,
-      ...options,
-    });
+    return this.fetchWithRetry(endpoint, { method: 'GET', headers, ...options });
   }
 
-  /**
-   * POST request
-   */
   async post(endpoint, data, options = {}) {
     const headers = await this.buildHeaders(options.headers);
     return this.fetchWithRetry(endpoint, {
@@ -194,9 +191,6 @@ class ApiClient {
     });
   }
 
-  /**
-   * PUT request
-   */
   async put(endpoint, data, options = {}) {
     const headers = await this.buildHeaders(options.headers);
     return this.fetchWithRetry(endpoint, {
@@ -207,9 +201,6 @@ class ApiClient {
     });
   }
 
-  /**
-   * PATCH request
-   */
   async patch(endpoint, data, options = {}) {
     const headers = await this.buildHeaders(options.headers);
     return this.fetchWithRetry(endpoint, {
@@ -220,29 +211,17 @@ class ApiClient {
     });
   }
 
-  /**
-   * DELETE request
-   */
   async delete(endpoint, options = {}) {
     const headers = await this.buildHeaders(options.headers);
-    return this.fetchWithRetry(endpoint, {
-      method: 'DELETE',
-      headers,
-      ...options,
-    });
+    return this.fetchWithRetry(endpoint, { method: 'DELETE', headers, ...options });
   }
 
-  /**
-   * Upload file (multipart/form-data)
-   */
   async upload(endpoint, formData, options = {}) {
     const headers = await this.buildHeaders({
-      // Don't set Content-Type for FormData, let browser set it with boundary
       'Content-Type': undefined,
       ...options.headers,
     });
 
-    // Remove Content-Type if it's undefined
     if (headers['Content-Type'] === undefined) {
       delete headers['Content-Type'];
     }
@@ -256,8 +235,6 @@ class ApiClient {
   }
 }
 
-// Create singleton instance
 const apiClient = new ApiClient();
-
 export default apiClient;
 export { ApiClient };
