@@ -133,6 +133,10 @@ export const foodLogTable = pgTable(
     servingSize: text("serving_size"),
     mealType: text("meal_type"), // 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
+    // Idempotency support (PHASE 1 - STEP 1: Nullable for migration)
+    clientEventId: text("client_event_id"), // NULLABLE initially for backfill
+    sourceMeta: json("source_meta").default({}), // Track logging source (text/photo/voice/barcode)
+
     // Enhanced fields for AI/Scanner features
     micros: json("micros").default({}), // { calcium: "10mg", iron: "2mg" ... }
     nutriscore: text("nutriscore"), // 'A' | 'B' | 'C' | 'D' | 'E'

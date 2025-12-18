@@ -25,75 +25,355 @@ router.use(requireAuth);
 
 /**
  * POST /api/nutrition/log
- * Log a food item to the history.
+ * Log a food item to the history with idempotency support.
  * Validates macros before saving.
+ * PHASE 1 - TRUST FIX: Prevents duplicate entries using clientEventId
  */
 router.post("/log", async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { 
-      foodName, calories, protein, carbs, fats, 
-      servingSize, mealType, micros, nutriscore, ecoscore, novaScore, dietLabels, allergens, ingredients, barcode, imageUrl 
+    const {
+      foodName, calories, protein, carbs, fats,
+      servingSize, mealType, micros, nutriscore, ecoscore, novaScore, dietLabels, allergens, ingredients, barcode, imageUrl,
+      clientEventId, sourceMeta
     } = req.body;
 
-    // 1. Validation Rule: Check Macro/Calorie consistency
+    // 1. Require clientEventId for idempotency
+    if (!clientEventId) {
+      return res.status(400).json({
+        error: "clientEventId is required",
+        hint: "Generate a unique ID on the client: Date.now() + random string"
+      });
+    }
+
+    // 2. Validation Rule: Check Macro/Calorie consistency
     const validation = validateMacros(calories, protein, carbs, fats);
     if (!validation.isValid) {
       console.warn(`[NutritionLog] Macro mismatch for ${foodName}: Expected ${validation.expectedCalories}, got ${calories}`);
       // We don't block it, but we could flag it. For now, just warn.
     }
 
-    // 2. Save to DB
-    const [entry] = await db.insert(foodLogTable).values({
-      userId,
-      foodName,
-      calories,
-      protein,
-      carbs,
-      fats,
-      servingSize,
-      mealType,
-      micros: micros || {},
-      nutriscore,
-      ecoscore,
-      novaScore,
-      dietLabels: dietLabels || [],
-      allergens: allergens || [],
-      ingredients: ingredients || [],
-      barcode,
-      imageUrl,
-      loggedDate: new Date(),
-    }).returning();
+    // 3. Idempotent Insert: Use ON CONFLICT DO NOTHING
+    // If (userId, clientEventId) already exists → returns empty array
+    const result = await db.insert(foodLogTable)
+      .values({
+        userId,
+        foodName,
+        calories,
+        protein,
+        carbs,
+        fats,
+        servingSize,
+        mealType,
+        micros: micros || {},
+        nutriscore,
+        ecoscore,
+        novaScore,
+        dietLabels: dietLabels || [],
+        allergens: allergens || [],
+        ingredients: ingredients || [],
+        barcode,
+        imageUrl,
+        clientEventId,
+        sourceMeta: sourceMeta || {},
+        loggedDate: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [foodLogTable.userId, foodLogTable.clientEventId]
+      })
+      .returning();
 
-    // 3. Update Daily Summary using PostgreSQL UPSERT (atomic operation)
+    const isNewEntry = result.length > 0;
+
+    // 4. Only update daily summary if this is a NEW entry (not duplicate)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Use INSERT ... ON CONFLICT DO UPDATE for atomic upsert
-    await db.insert(dailyNutritionSummaryTable)
-      .values({
-        userId,
-        date: today,
-        totalCalories: calories || 0,
-        totalProtein: protein || 0,
-        totalCarbs: carbs || 0,
-        totalFats: fats || 0,
-      })
-      .onConflictDoUpdate({
-        target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
-        set: {
-          totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${calories || 0}`,
-          totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
-          totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
-          totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,
-          updatedAt: new Date(),
-        },
-      });
+    if (isNewEntry) {
+      // First entry of the day → INSERT
+      // Subsequent entries → UPDATE with additive increment
+      await db.insert(dailyNutritionSummaryTable)
+        .values({
+          userId,
+          date: today,
+          totalCalories: calories || 0,
+          totalProtein: protein || 0,
+          totalCarbs: carbs || 0,
+          totalFats: fats || 0,
+        })
+        .onConflictDoUpdate({
+          target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
+          set: {
+            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${calories || 0}`,
+            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
+            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
+            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,
+            updatedAt: new Date(),
+          },
+        });
+    } else {
+      // Duplicate detected, log for debugging
+      console.log(`[NutritionLog] Duplicate prevented: clientEventId=${clientEventId}, food=${foodName}`);
+    }
 
-    res.json(entry);
+    // 5. Fetch existing entry if duplicate (for consistent response)
+    let entry = result[0] || null;
+    if (!isNewEntry) {
+      const existingEntries = await db.select()
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.userId, userId),
+            eq(foodLogTable.clientEventId, clientEventId)
+          )
+        )
+        .limit(1);
+
+      entry = existingEntries[0] || null;
+
+      // CRITICAL: If entry still null after fetch, something went wrong
+      if (!entry) {
+        console.error(`[CRITICAL] Entry not found for clientEventId: ${clientEventId}`);
+        return res.status(500).json({
+          error: "Internal error: Entry not found after duplicate detection",
+          wasDuplicate: !isNewEntry
+        });
+      }
+    }
+
+    // 6. Fetch current daily total for frontend reconciliation
+    const [dailyTotal] = await db.select()
+      .from(dailyNutritionSummaryTable)
+      .where(
+        and(
+          eq(dailyNutritionSummaryTable.userId, userId),
+          eq(dailyNutritionSummaryTable.date, today)
+        )
+      )
+      .limit(1);
+
+    // 7. Return response with duplicate detection
+    res.json({
+      entry,
+      wasDuplicate: !isNewEntry,
+      currentDailyTotal: dailyTotal || {
+        totalCalories: 0,
+        totalProtein: 0,
+        totalCarbs: 0,
+        totalFats: 0,
+      },
+    });
+
   } catch (error) {
     console.error("[NutritionLog] Error:", error);
+
+    // Handle unique constraint violation (shouldn't happen with onConflictDoNothing, but just in case)
+    if (error.code === '23505') {
+      return res.status(409).json({
+        error: "Duplicate entry detected",
+        wasDuplicate: true
+      });
+    }
+
     res.status(500).json({ error: "Failed to log food" });
+  }
+});
+
+/**
+ * PUT /api/nutrition/log/:id
+ * Edit an existing food log entry.
+ * Updates the entry and adjusts daily summary with delta calculation.
+ * PHASE 1 - TRUST FIX: Ensures accurate daily totals after edits
+ */
+router.put("/log/:id", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const logId = parseInt(req.params.id);
+    const {
+      foodName, calories, protein, carbs, fats,
+      servingSize, mealType, micros, nutriscore, ecoscore, novaScore, dietLabels, allergens, ingredients, barcode, imageUrl
+    } = req.body;
+
+    if (isNaN(logId)) {
+      return res.status(400).json({ error: "Invalid log ID" });
+    }
+
+    // 1. Fetch the existing entry
+    const [existingEntry] = await db.select()
+      .from(foodLogTable)
+      .where(
+        and(
+          eq(foodLogTable.id, logId),
+          eq(foodLogTable.userId, userId) // Security: ensure user owns this log
+        )
+      )
+      .limit(1);
+
+    if (!existingEntry) {
+      return res.status(404).json({ error: "Food log entry not found" });
+    }
+
+    // 2. Calculate deltas for daily summary update
+    const caloriesDelta = (calories || 0) - (existingEntry.calories || 0);
+    const proteinDelta = (protein || 0) - (existingEntry.protein || 0);
+    const carbsDelta = (carbs || 0) - (existingEntry.carbs || 0);
+    const fatsDelta = (fats || 0) - (existingEntry.fats || 0);
+
+    // 3. Update the food log entry
+    const [updatedEntry] = await db.update(foodLogTable)
+      .set({
+        foodName: foodName !== undefined ? foodName : existingEntry.foodName,
+        calories: calories !== undefined ? calories : existingEntry.calories,
+        protein: protein !== undefined ? protein : existingEntry.protein,
+        carbs: carbs !== undefined ? carbs : existingEntry.carbs,
+        fats: fats !== undefined ? fats : existingEntry.fats,
+        servingSize: servingSize !== undefined ? servingSize : existingEntry.servingSize,
+        mealType: mealType !== undefined ? mealType : existingEntry.mealType,
+        micros: micros !== undefined ? micros : existingEntry.micros,
+        nutriscore: nutriscore !== undefined ? nutriscore : existingEntry.nutriscore,
+        ecoscore: ecoscore !== undefined ? ecoscore : existingEntry.ecoscore,
+        novaScore: novaScore !== undefined ? novaScore : existingEntry.novaScore,
+        dietLabels: dietLabels !== undefined ? dietLabels : existingEntry.dietLabels,
+        allergens: allergens !== undefined ? allergens : existingEntry.allergens,
+        ingredients: ingredients !== undefined ? ingredients : existingEntry.ingredients,
+        barcode: barcode !== undefined ? barcode : existingEntry.barcode,
+        imageUrl: imageUrl !== undefined ? imageUrl : existingEntry.imageUrl,
+      })
+      .where(eq(foodLogTable.id, logId))
+      .returning();
+
+    // 4. Update daily summary with deltas (can be positive or negative)
+    const logDate = new Date(existingEntry.loggedDate);
+    logDate.setHours(0, 0, 0, 0);
+
+    if (caloriesDelta !== 0 || proteinDelta !== 0 || carbsDelta !== 0 || fatsDelta !== 0) {
+      await db.update(dailyNutritionSummaryTable)
+        .set({
+          totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${caloriesDelta}`,
+          totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${proteinDelta}`,
+          totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbsDelta}`,
+          totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fatsDelta}`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(dailyNutritionSummaryTable.userId, userId),
+            eq(dailyNutritionSummaryTable.date, logDate)
+          )
+        );
+    }
+
+    // 5. Fetch updated daily total for frontend reconciliation
+    const [dailyTotal] = await db.select()
+      .from(dailyNutritionSummaryTable)
+      .where(
+        and(
+          eq(dailyNutritionSummaryTable.userId, userId),
+          eq(dailyNutritionSummaryTable.date, logDate)
+        )
+      )
+      .limit(1);
+
+    res.json({
+      entry: updatedEntry,
+      deltas: {
+        calories: caloriesDelta,
+        protein: proteinDelta,
+        carbs: carbsDelta,
+        fats: fatsDelta,
+      },
+      currentDailyTotal: dailyTotal || {
+        totalCalories: 0,
+        totalProtein: 0,
+        totalCarbs: 0,
+        totalFats: 0,
+      },
+    });
+
+  } catch (error) {
+    console.error("[NutritionLog Edit] Error:", error);
+    res.status(500).json({ error: "Failed to update food log" });
+  }
+});
+
+/**
+ * DELETE /api/nutrition/log/:id
+ * Delete a food log entry.
+ * Subtracts the entry's nutrition from the daily summary.
+ * PHASE 1 - TRUST FIX: Ensures accurate daily totals after deletions
+ */
+router.delete("/log/:id", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const logId = parseInt(req.params.id);
+
+    if (isNaN(logId)) {
+      return res.status(400).json({ error: "Invalid log ID" });
+    }
+
+    // 1. Fetch the existing entry before deletion
+    const [existingEntry] = await db.select()
+      .from(foodLogTable)
+      .where(
+        and(
+          eq(foodLogTable.id, logId),
+          eq(foodLogTable.userId, userId) // Security: ensure user owns this log
+        )
+      )
+      .limit(1);
+
+    if (!existingEntry) {
+      return res.status(404).json({ error: "Food log entry not found" });
+    }
+
+    // 2. Delete the entry
+    await db.delete(foodLogTable)
+      .where(eq(foodLogTable.id, logId));
+
+    // 3. Subtract from daily summary
+    const logDate = new Date(existingEntry.loggedDate);
+    logDate.setHours(0, 0, 0, 0);
+
+    await db.update(dailyNutritionSummaryTable)
+      .set({
+        totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0}`,
+        totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0}`,
+        totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0}`,
+        totalFats: sql`${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(dailyNutritionSummaryTable.userId, userId),
+          eq(dailyNutritionSummaryTable.date, logDate)
+        )
+      );
+
+    // 4. Fetch updated daily total for frontend reconciliation
+    const [dailyTotal] = await db.select()
+      .from(dailyNutritionSummaryTable)
+      .where(
+        and(
+          eq(dailyNutritionSummaryTable.userId, userId),
+          eq(dailyNutritionSummaryTable.date, logDate)
+        )
+      )
+      .limit(1);
+
+    res.json({
+      success: true,
+      deletedEntry: existingEntry,
+      currentDailyTotal: dailyTotal || {
+        totalCalories: 0,
+        totalProtein: 0,
+        totalCarbs: 0,
+        totalFats: 0,
+      },
+    });
+
+  } catch (error) {
+    console.error("[NutritionLog Delete] Error:", error);
+    res.status(500).json({ error: "Failed to delete food log" });
   }
 });
 
@@ -476,8 +756,10 @@ router.get("/dashboard", async (req, res) => {
         )
         .orderBy(desc(dailyNutritionSummaryTable.date)),
 
-      // Today's food logs
-      db.select()
+      // Today's food logs (PHASE 1 - TRUST FIX: Deduplicated by clientEventId)
+      // Uses DISTINCT ON to ensure only one entry per clientEventId
+      // This handles edge cases during migration where duplicates might exist
+      db.selectDistinctOn([foodLogTable.clientEventId])
         .from(foodLogTable)
         .where(
           and(
@@ -486,7 +768,7 @@ router.get("/dashboard", async (req, res) => {
             lte(foodLogTable.loggedDate, endOfToday)
           )
         )
-        .orderBy(desc(foodLogTable.loggedDate)),
+        .orderBy(foodLogTable.clientEventId, desc(foodLogTable.loggedDate)),
 
       // Today's water intake
       db.select()

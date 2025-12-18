@@ -1,7 +1,6 @@
 import { ENV } from "../config/env.js";
-
-const USDA_API_KEY = ENV?.USDA_API_KEY || process.env.USDA_API_KEY || "DEMO_KEY";
-const OPENAI_API_KEY = ENV?.OPENAI_API_KEY || process.env.OPENAI_API_KEY || null;
+import { usdaClient } from "./apiClients/USDAClient.js";
+import { openaiClient } from "./apiClients/OpenAIClient.js";
 
 // ---------- Generic helpers ----------
 
@@ -20,11 +19,7 @@ async function safeFetchJson(url, options = {}, label = "request") {
 }
 
 function hasOpenAI() {
-  if (!OPENAI_API_KEY) {
-    console.warn("[FoodService] OPENAI_API_KEY is not set. AI features disabled.");
-    return false;
-  }
-  return true;
+  return openaiClient.isAvailable();
 }
 
 // ---------- NutriScore & EcoScore engine ----------
@@ -192,38 +187,9 @@ function scoreToNutriGrade(score) {
   return "E";
 }
 
-// ---------- OpenAI helpers ----------
-
-async function callOpenAIChatJSON(payload, label) {
-  if (!hasOpenAI()) return null;
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        response_format: { type: "json_object" },
-        ...payload,
-      }),
-    });
-
-    const data = await res.json();
-
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) {
-      console.error(`[FoodService] OpenAI (${label}) returned no content`, data);
-      return null;
-    }
-
-    return JSON.parse(content);
-  } catch (err) {
-    console.error(`[FoodService] OpenAI (${label}) error:`, err);
-    return null;
-  }
-}
+// ---------- OpenAI helpers (MIGRATED TO CLIENTS) ----------
+// All OpenAI functionality now handled by industrial-grade OpenAIClient
+// with cost tracking, rate limiting, caching, and circuit breaker
 
 // ---------- Main Service ----------
 
@@ -308,11 +274,31 @@ export const FoodService = {
   },
 
   searchUSDA: async (query) => {
-    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(
-      query
-    )}&pageSize=20`;
-    const data = await safeFetchJson(url, {}, "USDA search");
-    return data?.foods || [];
+    // Using industrial-grade USDA client with rate limiting, caching, circuit breaker
+    const foods = await usdaClient.searchFoods(query, 20);
+    return foods || [];
+  },
+
+  /**
+   * Search USDA by name and return detailed nutrition data for resolver pipeline
+   * Returns array of foods with normalized structure for matching
+   *
+   * NOW USING: Industrial-grade USDA client with caching, rate limiting, circuit breaker
+   */
+  searchUSDAByName: async (name) => {
+    // Delegate to industrial-grade client
+    return await usdaClient.searchByName(name);
+  },
+
+  /**
+   * Parse text query into structured food items using OpenAI
+   * Returns array of parsed food objects with name, quantity, unit
+   *
+   * NOW USING: Industrial-grade OpenAI client with cost tracking, caching, rate limiting
+   */
+  parseTextToFoods: async (query) => {
+    // Delegate to industrial-grade client
+    return await openaiClient.parseTextToFoods(query);
   },
 
   searchByBarcode: async (barcode) => {
@@ -382,61 +368,48 @@ export const FoodService = {
   /**
    * Analyze a food image and return normalized food object from AI.
    * base64Image: string (WITHOUT data: prefix)
+   *
+   * NOW USING: Industrial-grade OpenAI client with cost tracking, vision model optimization
    */
   analyzeImage: async (base64Image) => {
-    if (!hasOpenAI()) return null;
+    // Delegate to industrial-grade client
+    const aiResult = await openaiClient.analyzeImage(base64Image);
+    if (!aiResult) return null;
 
-    const json = await callOpenAIChatJSON(
-      {
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are a nutritionist. Analyze the food in the image. Return a JSON object with nutritional details.",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Identify the food and estimate nutrition. Return JSON with: { foodName, description, calories (number), protein (number), carbs (number), fat (number), servingSize, mealType, nutriscore (A-E), micros: { calcium, iron, vitaminA, vitaminC, potassium } }." },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-            ],
-          },
-        ],
-        max_tokens: 500,
-      },
-      "analyzeImage"
-    );
-
-    if (!json) return null;
-    return FoodService.transformAIResponse(json);
+    // Transform to match FoodService format
+    return FoodService.transformAIResponse(aiResult);
   },
 
   // ------------- AI: Text-based fallback -------------
 
+  /**
+   * Generate food details using AI when no results found in databases
+   *
+   * NOW USING: Industrial-grade OpenAI client with cost tracking, caching
+   */
   generateFoodDetailsAI: async (query) => {
     if (!hasOpenAI()) return null;
 
-    const json = await callOpenAIChatJSON(
+    const messages = [
       {
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a nutritional assistant. Analyze the food query and return ONLY a JSON object.",
-          },
-          {
-            role: "user",
-            content:
-              "Analyze this food item: " +
-              query +
-              ' Return a JSON object with fields: { "id": "string", "title": "string", "description": "string", "calories": number, "protein": number, "carbs": number, "fat": number, "nutriscore": "A"|"B"|"C"|"D"|"E"|"UNKNOWN", "ecoscore": "A"|"B"|"C"|"D"|"E"|"UNKNOWN", "novaScore": 1|2|3|4, "dietLabels": ["Vegan"|"Keto"|"Gluten-Free"|"Low-Carb"], "allergens": ["Peanuts"|"Dairy"|"Gluten"|"Soy"|"Eggs"|"Fish"|"Shellfish"|"Tree Nuts"], "ingredients": [{"name": "string", "amount": "string"}], "category": "string", "servingSize": "string", "micros": { "calcium": "string", "iron": "string", "vitaminA": "string", "vitaminC": "string", "potassium": "string" } }. If unrecognized, return null.',
-          },
-        ],
-        temperature: 0.5,
+        role: "system",
+        content:
+          "You are a nutritional assistant. Analyze the food query and return ONLY a JSON object.",
       },
-      "generateFoodDetailsAI"
-    );
+      {
+        role: "user",
+        content:
+          "Analyze this food item: " +
+          query +
+          ' Return a JSON object with fields: { "id": "string", "title": "string", "description": "string", "calories": number, "protein": number, "carbs": number, "fat": number, "nutriscore": "A"|"B"|"C"|"D"|"E"|"UNKNOWN", "ecoscore": "A"|"B"|"C"|"D"|"E"|"UNKNOWN", "novaScore": 1|2|3|4, "dietLabels": ["Vegan"|"Keto"|"Gluten-Free"|"Low-Carb"], "allergens": ["Peanuts"|"Dairy"|"Gluten"|"Soy"|"Eggs"|"Fish"|"Shellfish"|"Tree Nuts"], "ingredients": [{"name": "string", "amount": "string"}], "category": "string", "servingSize": "string", "micros": { "calcium": "string", "iron": "string", "vitaminA": "string", "vitaminC": "string", "potassium": "string" } }. If unrecognized, return null.',
+      },
+    ];
+
+    // Use industrial-grade client with cost tracking
+    const json = await openaiClient.chatCompletionJSON(messages, {
+      temperature: 0.5,
+      maxTokens: 500
+    });
 
     if (!json) return null;
     if (json === null) return null;

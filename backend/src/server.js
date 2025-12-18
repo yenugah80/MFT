@@ -20,11 +20,13 @@ import { FoodService } from "./services/foodService.js";
 import { validate, favoritesSchema, profileBasicsSchema, nutritionGoalsSchema, imageAnalysisSchema } from "./middleware/validation.js";
 import nutritionRouter from "./routes/nutrition.js";
 import foodRouter from "./routes/food.js";
+import resolveRouter from "./routes/resolve.js";
 import profileRouter from "./routes/profile.js";
 import favoritesRouter from "./routes/favorites.js";
 import loggingRouter from "./routes/logging.js";
 import moodRouter from "./routes/mood.js";
 import waterRouter from "./routes/water.js";
+import apiMetricsRouter from "./routes/apiMetrics.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
@@ -97,6 +99,9 @@ app.use("/api/nutrition", nutritionRouter);
 // Mount Food Router (Search, Barcode)
 app.use("/api/food", foodRouter);
 
+// Mount Resolve Router (Unified Nutrition Resolver)
+app.use("/api/food/resolve", resolveRouter);
+
 // Mount Profile Router (modularized)
 app.use("/api/profile", profileRouter);
 
@@ -111,6 +116,9 @@ app.use("/api/mood", moodRouter);
 
 // Mount Water Router (modularized)
 app.use("/api/water", waterRouter);
+
+// Mount API Metrics Router (monitoring & observability)
+app.use("/api/metrics", apiMetricsRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES
