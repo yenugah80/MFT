@@ -45,13 +45,22 @@ router.get("/barcode/:code", async (req, res) => {
 /**
  * POST /api/food/analyze-image
  * Analyze a food image using AI.
+ *
+ * Body: {
+ *   image: string (base64),
+ *   highAccuracy?: boolean (use GPT-4o for 85-92% accuracy, default: false = gpt-4o-mini 75-85%),
+ *   includeIngredients?: boolean (attempt to list individual ingredients, default: false)
+ * }
  */
 router.post("/analyze-image", async (req, res) => {
   try {
-    const { image } = req.body; // base64 string
+    const { image, highAccuracy = false, includeIngredients = false } = req.body;
     if (!image) return res.status(400).json({ error: "Image required" });
 
-    const result = await FoodService.analyzeImage(image);
+    const result = await FoodService.analyzeImage(image, {
+      highAccuracy,
+      includeIngredients,
+    });
     if (!result) return res.status(500).json({ error: "Analysis failed" });
 
     res.json(result);

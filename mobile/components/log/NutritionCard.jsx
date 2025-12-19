@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 
 /**
@@ -27,17 +28,22 @@ function getHealthScoreColor(score) {
  * Macro pie chart (simplified visual)
  */
 function MacroPieChart({ protein, carbs, fat }) {
-  const total = protein + carbs + fat || 1;
-  const proteinPct = (protein / total) * 100;
-  const carbsPct = (carbs / total) * 100;
-  const fatPct = (fat / total) * 100;
+  // Guard against undefined/null values
+  const p = Number(protein) || 0;
+  const c = Number(carbs) || 0;
+  const f = Number(fat) || 0;
+
+  const total = p + c + f || 1;
+  const proteinPct = (p / total) * 100;
+  const carbsPct = (c / total) * 100;
+  const fatPct = (f / total) * 100;
 
   return (
     <View style={styles.pieContainer}>
       <View style={styles.pieRow}>
-        <View style={[styles.pieSegment, { backgroundColor: '#3B82F6', flex: proteinPct }]} />
-        <View style={[styles.pieSegment, { backgroundColor: '#10B981', flex: carbsPct }]} />
-        <View style={[styles.pieSegment, { backgroundColor: '#F59E0B', flex: fatPct }]} />
+        <View style={[styles.pieSegment, { backgroundColor: '#3B82F6', flex: proteinPct || 0.1 }]} />
+        <View style={[styles.pieSegment, { backgroundColor: '#10B981', flex: carbsPct || 0.1 }]} />
+        <View style={[styles.pieSegment, { backgroundColor: '#F59E0B', flex: fatPct || 0.1 }]} />
       </View>
       <View style={styles.pieLegend}>
         <LegendItem color="#3B82F6" label="Protein" value={`${Math.round(proteinPct)}%`} />
@@ -66,12 +72,12 @@ function MicroBar({ name, amount, unit, percentage }) {
 
   return (
     <View style={styles.microRow}>
-      <Text style={styles.microName}>{name}</Text>
+      <Text style={styles.microName}>{name || 'Unknown'}</Text>
       <View style={styles.microBarContainer}>
         <View style={[styles.microBarFill, { width: `${width}%` }]} />
       </View>
       <Text style={styles.microValue}>
-        {amount}{unit}
+        {amount || '0'}{unit || ''}
       </Text>
     </View>
   );
@@ -129,12 +135,29 @@ function IngredientItem({ ingredient, onPress }) {
 
 /**
  * Main NutritionCard Component
+ * PHASE 1 - TRUST FIX: Added button lock to prevent double-saves
  */
 export function NutritionCard({ foodLog, onSave, onCancel }) {
   const [showMicros, setShowMicros] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!foodLog) return null;
+
+  // Handle save with lock to prevent double-taps
+  const handleSave = async () => {
+    if (isSaving || !onSave) return;
+
+    setIsSaving(true);
+    try {
+      await onSave(foodLog);
+    } catch (error) {
+      console.error('[NutritionCard] Save error:', error);
+      // Error will be handled by parent component
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const {
     foodName,
@@ -280,13 +303,25 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
       {/* Actions */}
       <View style={styles.actions}>
         {onCancel && (
-          <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={onCancel}
+            disabled={isSaving}
+          >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         )}
         {onSave && (
-          <TouchableOpacity style={styles.saveButton} onPress={() => onSave(foodLog)}>
-            <Text style={styles.saveButtonText}>Save to Log</Text>
+          <TouchableOpacity
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.saveButtonText}>Save to Log</Text>
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -572,6 +607,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#6B4EFF',
     alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: 16,

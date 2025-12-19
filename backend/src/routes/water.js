@@ -15,7 +15,7 @@ router.use(requireAuth);
 router.post("/log", async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { amountLiters, loggedDate } = req.body;
+    const { amountLiters, loggedDate, clientEventId } = req.body;
 
     if (!amountLiters || amountLiters <= 0) {
       return res.status(400).json({ error: "Amount must be greater than 0" });
@@ -25,13 +25,46 @@ router.post("/log", async (req, res) => {
       return res.status(400).json({ error: "Amount seems unrealistic (max 5L per entry)" });
     }
 
-    const [entry] = await db.insert(waterLogTable).values({
+    // Validate clientEventId for idempotency
+    if (!clientEventId) {
+      return res.status(400).json({ error: "clientEventId is required for idempotency" });
+    }
+
+    // Insert with idempotency protection via ON CONFLICT
+    const result = await db.insert(waterLogTable).values({
       userId,
       amountLiters: amountLiters.toString(), // Store as string (decimal in DB)
       loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
-    }).returning();
+      clientEventId,
+    }).onConflictDoNothing({ target: [waterLogTable.userId, waterLogTable.clientEventId] })
+      .returning();
 
-    res.json(entry);
+    const isNewEntry = result.length > 0;
+
+    // If duplicate, fetch the existing entry
+    let entry;
+    if (!isNewEntry) {
+      console.log(`[WaterLog] Duplicate detected: userId=${userId}, clientEventId=${clientEventId}`);
+      [entry] = await db
+        .select()
+        .from(waterLogTable)
+        .where(and(
+          eq(waterLogTable.userId, userId),
+          eq(waterLogTable.clientEventId, clientEventId)
+        ))
+        .limit(1);
+
+      if (!entry) {
+        // Edge case: conflict detected but can't find entry
+        console.error("[WaterLog] CRITICAL: Conflict detected but entry not found");
+        return res.status(500).json({ error: "Internal consistency error" });
+      }
+    } else {
+      entry = result[0];
+      console.log(`[WaterLog] New entry created: id=${entry.id}, amount=${entry.amountLiters}L`);
+    }
+
+    res.json({ entry, wasDuplicate: !isNewEntry });
   } catch (error) {
     console.error("[WaterLog] Error:", error);
     res.status(500).json({ error: "Failed to log water" });

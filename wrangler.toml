@@ -1,0 +1,16 @@
+# Wrangler configuration for Cloudflare Pages deployment
+# Points to the actual worker in my-worker/ subdirectory
+
+name = "my-worker"
+main = "my-worker/src/index.js"
+compatibility_date = "2025-01-01"
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+# Environment variables (set these in Cloudflare dashboard)
+# BACKEND_URL = "https://myfoodtracker.onrender.com/health"
+# HEALTH_TOKEN = "my-health-secret-124"

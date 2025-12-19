@@ -131,8 +131,15 @@ class OpenAIClient extends BaseApiClient {
         throw new Error('OpenAI returned no content');
       }
 
-      // Parse JSON
-      const jsonResponse = JSON.parse(content);
+      // Parse JSON with error handling (PHASE 3.1 - API FIX)
+      let jsonResponse;
+      try {
+        jsonResponse = JSON.parse(content);
+      } catch (parseError) {
+        console.error('[OpenAI] JSON parse failed:', parseError.message);
+        console.error('[OpenAI] Raw content:', content.substring(0, 500));
+        throw new Error(`OpenAI returned invalid JSON: ${parseError.message}`);
+      }
 
       // Track usage and costs
       const usage = data.usage || {};
@@ -217,19 +224,72 @@ Examples:
 
   /**
    * Analyze food image (Vision API)
+   *
+   * @param {string} base64Image - Base64-encoded image
+   * @param {object} options - Analysis options
+   * @param {boolean} options.highAccuracy - Use GPT-4o for detailed analysis (16x more expensive but more accurate)
+   * @param {boolean} options.includeIngredients - Attempt to list individual ingredients
    */
-  async analyzeImage(base64Image) {
+  async analyzeImage(base64Image, options = {}) {
+    const { highAccuracy = false, includeIngredients = false } = options;
+
+    // Model selection:
+    // - gpt-4o-mini: Fast, cheap ($0.15/1M), 75-85% accuracy - good for simple foods
+    // - gpt-4o: Slower, expensive ($2.50/1M), 85-92% accuracy - needed for complex meals
+    const visionModel = highAccuracy
+      ? 'gpt-4o'
+      : (process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini');
+
+    const systemPrompt = highAccuracy
+      ? 'You are an expert nutritionist with deep knowledge of food composition, ingredients, and nutrition science. Provide detailed, accurate nutritional analysis.'
+      : 'You are a nutritionist. Analyze the food in the image. Return a JSON object with nutritional details.';
+
+    const userPrompt = includeIngredients
+      ? `Analyze this food image in detail. Identify:
+1. Main food name
+2. Individual ingredients (if visible/detectable)
+3. Estimated portion size in grams
+4. Detailed macronutrients (calories, protein, carbs, fat, fiber, sugar, sodium)
+5. Key micronutrients (calcium, iron, vitamin A, vitamin C, potassium)
+
+Return JSON with: {
+  "foodName": "string",
+  "description": "string",
+  "ingredients": ["ingredient1", "ingredient2", ...],
+  "portionGrams": number,
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "fiber": number,
+  "sugar": number,
+  "sodium": number,
+  "servingSize": "string",
+  "mealType": "breakfast|lunch|dinner|snack",
+  "confidence": 0.0-1.0,
+  "micros": {
+    "calcium": "string with unit (e.g., 80mg)",
+    "iron": "string with unit",
+    "vitaminA": "string with unit",
+    "vitaminC": "string with unit",
+    "potassium": "string with unit"
+  }
+}
+
+NOTE: Nutri-Score and Eco-Score cannot be reliably estimated from images alone - they require verified database lookups.`
+      : 'Identify the food and estimate nutrition. Return JSON with: { foodName, description, calories (number), protein (number), carbs (number), fat (number), servingSize, mealType, confidence (0.0-1.0), micros: { calcium, iron, vitaminA, vitaminC, potassium } }.';
+
     const messages = [
       {
         role: 'system',
-        content: 'You are a nutritionist. Analyze the food in the image. Return a JSON object with nutritional details.',
+        content: systemPrompt,
       },
       {
         role: 'user',
         content: [
           {
             type: 'text',
-            text: 'Identify the food and estimate nutrition. Return JSON with: { foodName, description, calories (number), protein (number), carbs (number), fat (number), servingSize, mealType, nutriscore (A-E), micros: { calcium, iron, vitaminA, vitaminC, potassium } }.',
+            text: userPrompt,
           },
           {
             type: 'image_url',
@@ -243,22 +303,35 @@ Examples:
 
     try {
       const json = await this.chatCompletionJSON(messages, {
-        model: 'gpt-4o', // Vision requires gpt-4o
-        maxTokens: 500,
+        model: visionModel,
+        maxTokens: highAccuracy ? 1000 : 500,
       });
 
-      return {
+      const result = {
         foodName: json.foodName || 'Unknown Food',
         description: json.description || 'AI Analyzed Meal',
         calories: json.calories || 0,
         protein: json.protein || 0,
         carbs: json.carbs || 0,
         fat: json.fat || json.fats || 0,
+        fiber: json.fiber || 0,
+        sugar: json.sugar || 0,
+        sodium: json.sodium || 0,
         servingSize: json.servingSize || '1 serving',
+        portionGrams: json.portionGrams,
         mealType: json.mealType || 'snack',
-        nutriscore: json.nutriscore || 'UNKNOWN',
+        confidence: json.confidence || 0.7,
+        ingredients: json.ingredients || [],
         micros: json.micros || {},
+        _modelUsed: visionModel,
       };
+
+      // Log accuracy mode
+      if (highAccuracy) {
+        console.log(`[OpenAI] High-accuracy mode: ${visionModel} (confidence: ${result.confidence})`);
+      }
+
+      return result;
     } catch (error) {
       console.error(`[OpenAI] Image analysis failed:`, error.message);
       return null;

@@ -36,11 +36,15 @@ export function useMoodLog() {
    */
   const logMoodMutation = useMutation({
     mutationFn: async ({ mood, note, source = 'manual' }) => {
+      // Generate clientEventId for idempotency (prevents duplicate entries from double-taps)
+      const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
       return await apiClient.post('/mood/log', {
         mood,
         note,
         source,
         loggedDate: new Date().toISOString(),
+        clientEventId, // Add for backend idempotency
       });
     },
     onSuccess: () => {

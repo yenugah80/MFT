@@ -139,6 +139,9 @@ export function validateFoodLog(log: Partial<FoodLog>): string | null {
   if (!log.source) {
     return 'Source must be specified';
   }
+  if (!log.clientEventId || typeof log.clientEventId !== 'string') {
+    return 'clientEventId is required for sync';
+  }
   return null; // Valid
 }
 
@@ -212,5 +215,7 @@ export function transformFoodLogToBackend(log: FoodLog): any {
     imageUrl: log.imageUrl,
     loggedDate: log.loggedDate || new Date(),
     source: log.source,
+    clientEventId: log.clientEventId,  // CRITICAL FIX: Include for idempotency
+    sourceMeta: log.sourceMeta || {},
   };
 }

@@ -7,6 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
+import { useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '../constants/api';
 import { validateFoodLog, transformFoodLogToBackend, transformBackendToFoodLog } from '../types/foodLog';
 
@@ -19,14 +20,19 @@ const MAX_LOCAL_LOGS = 500; // Keep last 500 logs locally
  */
 export function useFoodLog() {
   const { getToken, userId } = useAuth();
+  const queryClient = useQueryClient();
 
   const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false); // UI indicator only
   const [error, setError] = useState(null);
 
   const syncQueueRef = useRef([]);
   const isMountedRef = useRef(true);
+
+  // PHASE 1 - TRUST FIX: Hard lock to prevent parallel sync execution
+  const syncInFlightRef = useRef(false); // Synchronous lock (not async like state)
+  const processSyncQueueRef = useRef(null); // Stable reference for callbacks
 
   /**
    * Load logs from local storage
@@ -51,6 +57,12 @@ export function useFoodLog() {
    */
   const saveLocalLogs = useCallback(async (logsToSave) => {
     try {
+      // Guard against undefined/null
+      if (!logsToSave || !Array.isArray(logsToSave)) {
+        console.warn('[useFoodLog] saveLocalLogs called with invalid data:', logsToSave);
+        return false;
+      }
+
       // Keep only the most recent logs to prevent storage bloat
       const trimmed = logsToSave.slice(0, MAX_LOCAL_LOGS);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
@@ -78,13 +90,17 @@ export function useFoodLog() {
 
   /**
    * Process sync queue
+   * PHASE 1 - TRUST FIX: Uses ref-based lock to prevent parallel execution
    */
   const processSyncQueue = useCallback(async () => {
-    if (syncQueueRef.current.length === 0 || isSyncing) {
+    // Hard lock check (synchronous, not async like state)
+    if (syncQueueRef.current.length === 0 || syncInFlightRef.current) {
       return;
     }
 
-    setIsSyncing(true);
+    // Set lock IMMEDIATELY (synchronous)
+    syncInFlightRef.current = true;
+    setIsSyncing(true); // UI indicator (async, doesn't affect lock)
 
     try {
       const token = await getToken();
@@ -102,6 +118,12 @@ export function useFoodLog() {
           if (log.status === 'synced') {
             synced.push(log);
             continue;
+          }
+
+          // PHASE 1 - TRUST FIX: Ensure old logs have clientEventId
+          if (!log.clientEventId) {
+            log.clientEventId = `${log.timestamp || Date.now()}-legacy-${Math.random().toString(36).slice(2, 11)}`;
+            console.log('[useFoodLog] Generated clientEventId for legacy log:', log.foodName);
           }
 
           // Sync to backend
@@ -133,6 +155,10 @@ export function useFoodLog() {
             setLogs(prev =>
               prev.map(l => l.timestamp === log.timestamp ? updatedLog : l)
             );
+
+            // PHASE 2.1 - UX FIX: Invalidate dashboard cache after successful sync
+            // This ensures dashboard auto-refreshes and shows updated totals
+            queryClient.invalidateQueries({ queryKey: ['dashboard'] });
 
             console.log('[useFoodLog] ✅ Synced:', log.foodName);
           } else {
@@ -178,9 +204,14 @@ export function useFoodLog() {
     } catch (err) {
       console.error('[useFoodLog] Sync queue processing error:', err);
     } finally {
-      setIsSyncing(false);
+      // Release lock IMMEDIATELY (synchronous)
+      syncInFlightRef.current = false;
+      setIsSyncing(false); // Update UI indicator
     }
-  }, [getToken, isSyncing, logs, saveLocalLogs]);
+  }, [getToken, logs, saveLocalLogs]); // REMOVED isSyncing from deps (causes infinite re-renders)
+
+  // PHASE 1 - TRUST FIX: Update ref on every render for stable callback reference
+  processSyncQueueRef.current = processSyncQueue;
 
   /**
    * Add a new food log (optimistic update)
@@ -203,17 +234,22 @@ export function useFoodLog() {
         status: 'pending',
       };
 
-      setLogs(prev => [newLog, ...prev]);
+      // PHASE 1 - TRUST FIX: Use functional update to avoid stale closure
+      // Capture the fresh logs array to save it correctly
+      let updatedLogs;
+      setLogs(prev => {
+        updatedLogs = [newLog, ...prev]; // Use FRESH state, not stale closure
+        return updatedLogs;
+      });
 
-      // Save locally
-      const updatedLogs = [newLog, ...logs];
+      // Save locally with FRESH state
       await saveLocalLogs(updatedLogs);
 
       // Add to sync queue
       await addToSyncQueue(newLog);
 
-      // Trigger background sync
-      setTimeout(() => processSyncQueue(), 100);
+      // Trigger background sync (via ref to avoid stale closure)
+      setTimeout(() => processSyncQueueRef.current?.(), 100);
 
       console.log('[useFoodLog] ✅ Log added:', newLog.foodName);
 
@@ -382,14 +418,14 @@ export function useFoodLog() {
         console.error('[useFoodLog] Failed to load sync queue:', err);
       }
 
-      // Trigger initial sync
-      setTimeout(() => processSyncQueue(), 1000);
+      // Trigger initial sync (via ref to avoid stale closure)
+      setTimeout(() => processSyncQueueRef.current?.(), 1000);
     })();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadLocalLogs, processSyncQueue]);
+  }, [loadLocalLogs]); // REMOVED processSyncQueue from deps (use ref instead)
 
   return {
     // State

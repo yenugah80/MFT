@@ -10,12 +10,12 @@
  * - notify.warning('You have unsaved changes')
  * - notify.info('Tip: You can scan barcodes for faster logging')
  * - notify.modal({ title: 'Delete Item?', message: '...', destructive: true, onConfirm: () => {} })
+ *
+ * Note: For React components, import useNotification directly from NotificationProvider instead
  */
 
-import { useNotification } from '@/providers/NotificationProvider';
-
-// This is a helper to be used in components
-export { useNotification };
+// Removed circular dependency - don't import from NotificationProvider here
+// Components should import useNotification directly from NotificationProvider
 
 // Export a singleton for use outside of React components (e.g., in API interceptors)
 let notifyInstance = null;
@@ -31,34 +31,35 @@ export const getNotifyInstance = () => {
   return notifyInstance;
 };
 
-// Convenience exports for common patterns
-export const notifySuccess = (message, options) => {
+// Convenience exports for common patterns - using function declarations to avoid TDZ
+function notifySuccess(message, options) {
   getNotifyInstance()?.success(message, options);
-};
+}
 
-export const notifyError = (message, options) => {
+function notifyError(message, options) {
   getNotifyInstance()?.error(message, options);
-};
+}
 
-export const notifyWarning = (message, options) => {
+function notifyWarning(message, options) {
   getNotifyInstance()?.warning(message, options);
-};
+}
 
-export const notifyInfo = (message, options) => {
+function notifyInfo(message, options) {
   getNotifyInstance()?.info(message, options);
-};
+}
 
-export const notifyModal = (config) => {
+function notifyModal(config) {
   getNotifyInstance()?.modal(config);
-};
+}
 
-// Default export for convenience
-const notify = {
+// Export functions
+export { notifySuccess, notifyError, notifyWarning, notifyInfo, notifyModal };
+
+// Default export for convenience - moved to end to avoid TDZ
+export default {
   success: notifySuccess,
   error: notifyError,
   warning: notifyWarning,
   info: notifyInfo,
   modal: notifyModal,
 };
-
-export default notify;

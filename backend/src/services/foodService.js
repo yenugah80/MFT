@@ -368,12 +368,13 @@ export const FoodService = {
   /**
    * Analyze a food image and return normalized food object from AI.
    * base64Image: string (WITHOUT data: prefix)
+   * options: { highAccuracy: boolean, includeIngredients: boolean }
    *
    * NOW USING: Industrial-grade OpenAI client with cost tracking, vision model optimization
    */
-  analyzeImage: async (base64Image) => {
+  analyzeImage: async (base64Image, options = {}) => {
     // Delegate to industrial-grade client
-    const aiResult = await openaiClient.analyzeImage(base64Image);
+    const aiResult = await openaiClient.analyzeImage(base64Image, options);
     if (!aiResult) return null;
 
     // Transform to match FoodService format

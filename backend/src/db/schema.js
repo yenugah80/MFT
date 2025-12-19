@@ -250,6 +250,10 @@ export const waterLogTable = pgTable(
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
     amountLiters: decimal("amount_liters", { precision: 3, scale: 1 }).notNull(),
+
+    // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
+    clientEventId: text("client_event_id"),
+
     loggedDate: timestamp("logged_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -336,6 +340,10 @@ export const moodLogTable = pgTable(
     mood: text("mood").notNull(), // 'happy', 'sad', 'neutral', etc.
     note: text("note"),
     source: text("source"), // 'quick_action', 'manual', etc.
+
+    // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
+    clientEventId: text("client_event_id"),
+
     loggedDate: timestamp("logged_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },

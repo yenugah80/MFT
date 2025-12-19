@@ -15,10 +15,15 @@ router.use(requireAuth);
 router.post("/log", async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { mood, note, source, loggedDate } = req.body;
+    const { mood, note, source, loggedDate, clientEventId } = req.body;
 
     if (!mood) {
       return res.status(400).json({ error: "Mood is required" });
+    }
+
+    // Validate clientEventId for idempotency
+    if (!clientEventId) {
+      return res.status(400).json({ error: "clientEventId is required for idempotency" });
     }
 
     // Validate mood value
@@ -30,15 +35,43 @@ router.post("/log", async (req, res) => {
       });
     }
 
-    const [entry] = await db.insert(moodLogTable).values({
+    // Insert with idempotency protection via ON CONFLICT
+    const result = await db.insert(moodLogTable).values({
       userId,
       mood: mood.toLowerCase(),
       note: note || null,
       source: source || 'manual',
       loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
-    }).returning();
+      clientEventId,
+    }).onConflictDoNothing({ target: [moodLogTable.userId, moodLogTable.clientEventId] })
+      .returning();
 
-    res.json(entry);
+    const isNewEntry = result.length > 0;
+
+    // If duplicate, fetch the existing entry
+    let entry;
+    if (!isNewEntry) {
+      console.log(`[MoodLog] Duplicate detected: userId=${userId}, clientEventId=${clientEventId}`);
+      [entry] = await db
+        .select()
+        .from(moodLogTable)
+        .where(and(
+          eq(moodLogTable.userId, userId),
+          eq(moodLogTable.clientEventId, clientEventId)
+        ))
+        .limit(1);
+
+      if (!entry) {
+        // Edge case: conflict detected but can't find entry
+        console.error("[MoodLog] CRITICAL: Conflict detected but entry not found");
+        return res.status(500).json({ error: "Internal consistency error" });
+      }
+    } else {
+      entry = result[0];
+      console.log(`[MoodLog] New entry created: id=${entry.id}, mood=${entry.mood}`);
+    }
+
+    res.json({ entry, wasDuplicate: !isNewEntry });
   } catch (error) {
     console.error("[MoodLog] Error:", error);
     res.status(500).json({ error: "Failed to log mood" });

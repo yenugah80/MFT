@@ -856,15 +856,40 @@ router.get("/dashboard", async (req, res) => {
       }
     }
 
+    // PHASE 3.2 - API FIX: Aggregate micronutrients from today's food logs
+    const todayMicros = {};
+    todayFoodLogs.forEach(log => {
+      if (log.micros && typeof log.micros === 'object') {
+        Object.entries(log.micros).forEach(([key, value]) => {
+          // Handle different micronutrient formats: "10mg", 10, { value: 10, unit: "mg" }
+          let numValue;
+          if (typeof value === 'number') {
+            numValue = value;
+          } else if (typeof value === 'object' && value.value !== undefined) {
+            numValue = value.value;
+          } else if (typeof value === 'string') {
+            numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+          }
+
+          if (!isNaN(numValue) && numValue > 0) {
+            todayMicros[key] = (todayMicros[key] || 0) + numValue;
+          }
+        });
+      }
+    });
+
     // Build response
     const dashboard = {
       today: {
         date: today,
-        nutrition: todaySummary[0] || {
-          totalCalories: 0,
-          totalProtein: 0,
-          totalCarbs: 0,
-          totalFats: 0,
+        nutrition: {
+          ...(todaySummary[0] || {
+            totalCalories: 0,
+            totalProtein: 0,
+            totalCarbs: 0,
+            totalFats: 0,
+          }),
+          micros: todayMicros, // Include aggregated micronutrients
         },
         waterIntakeLiters: todayWaterTotal,
         foodLogs: todayFoodLogs,

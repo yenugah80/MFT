@@ -10,6 +10,20 @@
 import { View, ScrollView, Text, ActivityIndicator, RefreshControl, StyleSheet, TouchableOpacity } from "react-native";
 import { useDashboard } from "../hooks/useDashboard";
 import { useState, useMemo } from "react";
+
+// Utility to deduplicate logs by clientEventId (preferred) or id
+function dedupeLogs(logs) {
+  const seen = new Set();
+  return logs.filter(log => {
+    // Use clientEventId if available (preferred), otherwise fallback to id
+    // This ensures deduplication works even if backend returns multiple entries per clientEventId
+    const key = log.clientEventId || log.id;
+    if (!key) return true; // Keep logs without any identifier
+    if (seen.has(key)) return false; // Duplicate detected
+    seen.add(key);
+    return true;
+  });
+}
 import { useNotification } from "../providers/NotificationProvider";
 
 // Premium components
@@ -38,12 +52,17 @@ export default function DashboardContent() {
     setRefreshing(false);
   };
 
-  // Aggregate micros from today's food logs
-  const aggregatedMicros = useMemo(() => {
-    if (!data?.today?.foodLogs) return {};
+  // Deduplicate food logs for today
+  const uniqueFoodLogs = useMemo(() => {
+    if (!data?.today?.foodLogs) return [];
+    return dedupeLogs(data.today.foodLogs);
+  }, [data]);
 
+  // Aggregate micros from deduplicated food logs
+  const aggregatedMicros = useMemo(() => {
+    if (!uniqueFoodLogs.length) return {};
     const micros = {};
-    data.today.foodLogs.forEach((log) => {
+    uniqueFoodLogs.forEach((log) => {
       if (log.micros && typeof log.micros === 'object') {
         Object.entries(log.micros).forEach(([key, value]) => {
           const numValue = typeof value === 'number' ? value : (parseFloat(value) || 0);
@@ -51,9 +70,8 @@ export default function DashboardContent() {
         });
       }
     });
-
     return micros;
-  }, [data]);
+  }, [uniqueFoodLogs]);
 
   // Detect anomalies in data
   const dataAnomalies = useMemo(() => {
@@ -71,7 +89,9 @@ export default function DashboardContent() {
       anomalies.push({
         metric: 'Calories',
         value: data.today.nutrition.totalCalories,
-        message: 'Unusually high - check serving sizes',
+        message: 'Today looks higher than usual. Want to double-check portions?',
+        icon: '💡',
+        tone: 'info',
       });
     }
 
@@ -85,7 +105,9 @@ export default function DashboardContent() {
       anomalies.push({
         metric: 'Protein',
         value: data.today.nutrition.totalProtein,
-        message: 'Unusually high - review logs',
+        message: 'Protein intake is above your usual range. Double-check if needed.',
+        icon: '💡',
+        tone: 'info',
       });
     }
 
@@ -148,14 +170,14 @@ export default function DashboardContent() {
           </Text>
         </View>
 
-        {/* DATA ANOMALY WARNING */}
+        {/* DATA INSIGHT (calm tone, not warning) */}
         {dataAnomalies.length > 0 && (
-          <GlassCard style={styles.anomalyCard} padding="md">
+          <GlassCard style={styles.infoCard} padding="md">
             <View style={styles.anomalyHeader}>
-              <Text style={styles.anomalyIcon}>⚠️</Text>
+              <Text style={styles.anomalyIcon}>{dataAnomalies[0].icon || '💡'}</Text>
               <View style={styles.anomalyTextContainer}>
-                <Text style={styles.anomalyTitle}>Data Check Needed</Text>
-                <Text style={styles.anomalyMessage}>
+                <Text style={styles.infoTitle}>Quick Check</Text>
+                <Text style={styles.infoMessage}>
                   {dataAnomalies[0].message}
                 </Text>
               </View>
@@ -245,11 +267,11 @@ export default function DashboardContent() {
         </GlassCard>
 
         {/* RECENT MEALS */}
-        {today.foodLogs.length > 0 && (
+        {uniqueFoodLogs.length > 0 && (
           <GlassCard style={styles.section} padding="md">
             <Text style={styles.sectionTitle}>Recent Meals</Text>
-            {today.foodLogs.slice(0, 3).map((log, index) => (
-              <View key={log.id || index} style={styles.mealItem}>
+            {uniqueFoodLogs.slice(0, 3).map((log) => (
+              <View key={log.id} style={styles.mealItem}>
                 <View style={styles.mealDot} />
                 <View style={styles.mealContent}>
                   <Text style={styles.mealName}>{log.foodName}</Text>
@@ -392,11 +414,11 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 
-  // Anomaly warning card
-  anomalyCard: {
+  // Info card (calm, supportive tone - blue instead of orange/red)
+  infoCard: {
     marginBottom: SPACING[4],
-    backgroundColor: COLORS.semantic.overGlow,
-    borderColor: COLORS.semantic.over,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)', // Blue glow (calm)
+    borderColor: 'rgba(59, 130, 246, 0.3)', // Blue border
   },
   anomalyHeader: {
     flexDirection: 'row',
@@ -409,13 +431,13 @@ const styles = StyleSheet.create({
   anomalyTextContainer: {
     flex: 1,
   },
-  anomalyTitle: {
+  infoTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.semantic.over,
+    color: '#3b82f6', // Calm blue instead of warning orange
     marginBottom: SPACING[1],
   },
-  anomalyMessage: {
+  infoMessage: {
     fontSize: TYPOGRAPHY.size.sm,
     color: COLORS.text.secondary,
   },
