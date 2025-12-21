@@ -2,7 +2,7 @@
 -- This prevents duplicate mood entries from double-taps
 
 -- Step 1: Add column (nullable for migration compatibility)
-ALTER TABLE "mood_log" ADD COLUMN "client_event_id" text;
+ALTER TABLE "mood_log" ADD COLUMN IF NOT EXISTS "client_event_id" text;
 
 -- Step 2: Backfill existing records with legacy IDs
 UPDATE "mood_log"

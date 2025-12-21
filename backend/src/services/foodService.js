@@ -1,6 +1,9 @@
 import { ENV } from "../config/env.js";
 import { usdaClient } from "./apiClients/USDAClient.js";
 import { openaiClient } from "./apiClients/OpenAIClient.js";
+import { db } from "../config/db.js";
+import { barcodeProductsTable } from "../db/schema.js";
+import { eq } from "drizzle-orm";
 
 // ---------- Generic helpers ----------
 
@@ -302,13 +305,81 @@ export const FoodService = {
   },
 
   searchByBarcode: async (barcode) => {
-    const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
+    const code = (barcode || "").trim();
+    if (!code) return null;
+
+    // 1) Check cache first
+    try {
+      const cached = await db.query.barcodeProductsTable.findFirst({
+        where: eq(barcodeProductsTable.barcode, code),
+      });
+
+      if (cached) {
+        const transformed = FoodService.transformProductData({
+          code: cached.barcode,
+          product_name: cached.productName,
+          brands: cached.brand,
+          categories: cached.category,
+          image_front_small_url: cached.imageUrl,
+          image_front_url: cached.imageUrl,
+          serving_size: cached.servingSize,
+          nutriments: cached.nutriments || {},
+        });
+
+        return {
+          ...transformed,
+          source: cached.source || "cache",
+          type: "product",
+        };
+      }
+    } catch (error) {
+      console.error("[FoodService] Barcode cache lookup failed", error);
+    }
+
+    // 2) Fetch from Open Food Facts
+    const url = `https://world.openfoodfacts.org/api/v0/product/${code}.json`;
     const data = await safeFetchJson(url, {}, "OpenFoodFacts barcode");
     const product = data?.product;
     if (!product) return null;
 
+    const transformed = FoodService.transformProductData(product);
+
+    // 3) Upsert into cache (best effort)
+    try {
+      await db
+        .insert(barcodeProductsTable)
+        .values({
+          barcode: code,
+          productName: transformed.title || product.product_name || "Unknown Product",
+          brand: transformed.description || product.brands || null,
+          category: transformed.category || null,
+          imageUrl: transformed.image || product.image_url || null,
+          nutriments: product.nutriments || {},
+          servingSize: product.serving_size || null,
+          source: "openfoodfacts",
+          lastSyncedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: barcodeProductsTable.barcode,
+          set: {
+            productName: transformed.title || product.product_name || "Unknown Product",
+            brand: transformed.description || product.brands || null,
+            category: transformed.category || null,
+            imageUrl: transformed.image || product.image_url || null,
+            nutriments: product.nutriments || {},
+            servingSize: product.serving_size || null,
+            source: "openfoodfacts",
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+    } catch (error) {
+      console.error("[FoodService] Failed to upsert barcode cache", error);
+    }
+
     return {
-      ...FoodService.transformProductData(product),
+      ...transformed,
       source: "openfoodfacts",
       type: "product",
     };

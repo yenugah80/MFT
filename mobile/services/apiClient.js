@@ -8,7 +8,7 @@
  * - Better error handling
  */
 
-import { API_URL } from '@/constants/api';
+import { API_URL, API_BASE_URL } from '@/constants/api';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -53,6 +53,9 @@ class ApiClient {
     this.tokenProvider = null;
     this.isHealthy = null;
     this.lastHealthCheck = 0;
+    this.consecutiveFailures = 0;
+    this.OFFLINE_THRESHOLD = 3; // Only mark offline after 3 consecutive failures
+    console.log(`[API] Client initialized with Base URL: ${this.baseURL}`);
   }
 
   setTokenProvider(provider) {
@@ -74,7 +77,7 @@ class ApiClient {
    */
   async healthCheck() {
     const now = Date.now();
-    if (this.isHealthy !== null && now - this.lastHealthCheck < 30000) {
+    if (this.isHealthy === true && now - this.lastHealthCheck < 10000) {
       return this.isHealthy;
     }
 
@@ -82,7 +85,7 @@ class ApiClient {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
 
-      const response = await fetch(`${this.baseURL}/health`, {
+      const response = await fetch(`${API_BASE_URL}/health`, {
         signal: controller.signal,
         headers: { 'Accept': 'application/json' },
       });
@@ -96,7 +99,7 @@ class ApiClient {
     } catch (error) {
       this.isHealthy = false;
       this.lastHealthCheck = now;
-      console.error('[API] ❌ Backend offline');
+      console.error(`[API] ❌ Health check failed at ${this.baseURL}/health. Error: ${error.message}`);
       return false;
     }
   }
@@ -152,6 +155,8 @@ class ApiClient {
 
       const data = await response.json();
 
+      // Reset consecutive failures on success
+      this.consecutiveFailures = 0;
       if (this.isHealthy === false) {
         this.isHealthy = true;
         console.log('[API] ✅ Backend recovered');
@@ -167,9 +172,25 @@ class ApiClient {
         return this.fetchWithRetry(url, options, attempt + 1);
       }
 
-      if (this.isHealthy !== false) {
-        this.isHealthy = false;
-        console.error('[API] ❌ Backend offline');
+      // Only increment offline failures for actual network issues or timeouts
+      const isConnectivityIssue = !error.response || error.message === 'Request timeout';
+      
+      if (isConnectivityIssue) {
+        this.consecutiveFailures = (this.consecutiveFailures || 0) + 1;
+      }
+
+      if (this.consecutiveFailures >= this.OFFLINE_THRESHOLD) {
+        if (this.isHealthy !== false) {
+          this.isHealthy = false;
+          if (error.message !== 'Request timeout') {
+            const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
+            console.error(
+              `[API] ❌ Backend Error (${error.response?.status || 'Offline'}).\n` +
+              `URL: ${this.baseURL}\n` +
+              `Details: ${serverError}`
+            );
+          }
+        }
       }
 
       throw error;

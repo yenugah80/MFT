@@ -15,6 +15,9 @@ const STORAGE_KEY = '@food_logs';
 const SYNC_QUEUE_KEY = '@sync_queue';
 const MAX_LOCAL_LOGS = 500; // Keep last 500 logs locally
 
+const MAX_HISTORY_RETRIES = 3;
+const INITIAL_HISTORY_RETRY_DELAY_MS = 1000; // 1 second
+
 /**
  * Hook for food log management
  */
@@ -321,7 +324,14 @@ export function useFoodLog() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch history: ${response.status}`);
+        let errorMessage = `Failed to fetch history: ${response.status}`;
+        if (response.status === 503) {
+          errorMessage = `Our servers are temporarily unavailable. Please try again later. (Status: ${response.status})`;
+        } else if (response.statusText) {
+          // For other HTTP errors, include the status text if available
+          errorMessage += ` - ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const backendLogs = await response.json();

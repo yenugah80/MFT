@@ -1,9 +1,18 @@
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+/**
+ * ProfileScreen - Premium Redesign
+ * Glossy, trendy UI matching Dashboard and Log
+ * - Ionicons throughout
+ * - LinearGradient header
+ * - Premium card styling
+ */
+
+import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import { useState, useMemo } from "react";
 import { useUser, useClerk } from "@clerk/clerk-expo";
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import SafeScreen from "../../components/SafeScreen";
-import { profileStyles } from "../../assets/styles/profile.styles";
 import useProfileForm from "../../hooks/useProfileForm";
 
 import EditProfileModal from "../../components/EditProfileModal";
@@ -11,6 +20,9 @@ import BasicsSection from "../../components/profile/BasicsSection";
 import DietarySection from "../../components/profile/DietarySection";
 import GoalsSection from "../../components/profile/GoalsSection";
 import AccountActions from "../../components/profile/AccountActions";
+
+// Premium theme
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, ICONS } from "../../constants/premiumTheme";
 
 /**
  * ProfileScreen
@@ -64,9 +76,9 @@ export default function ProfileScreen() {
   if (!isLoaded || !profile) {
     return (
       <SafeScreen>
-        <View style={profileStyles.loadingContainer}>
-          <ActivityIndicator size="large" />
-          <Text style={profileStyles.loadingText}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={BRAND.primary} />
+          <Text style={styles.loadingText}>
             Loading profile…
           </Text>
         </View>
@@ -76,12 +88,28 @@ export default function ProfileScreen() {
 
   return (
     <SafeScreen>
-      <ScrollView
-        style={profileStyles.container}
-        contentContainerStyle={{ paddingBottom: 40 }}
+      {/* Premium Header with Gradient */}
+      <LinearGradient
+        colors={SURFACES.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
       >
-        <Text style={profileStyles.headerText}>Profile</Text>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Ionicons name={ICONS.profile} size={ICON_SIZES.lg} color="#FFFFFF" />
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Profile</Text>
+              <Text style={styles.headerSubtitle}>Your nutrition preferences & goals</Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
 
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         {/* Basics */}
         <BasicsSection
           basics={profile.basics}
@@ -129,3 +157,58 @@ export default function ProfileScreen() {
     </SafeScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: SURFACES.background.primary,
+  },
+  content: {
+    padding: SPACING[5],
+    paddingBottom: SPACING[10],
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.primary,
+  },
+  loadingText: {
+    marginTop: SPACING[3],
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+
+  // Premium Header
+  headerGradient: {
+    paddingTop: SPACING[3],
+    paddingBottom: SPACING[4],
+    paddingHorizontal: SPACING[5],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerText: {
+    marginLeft: SPACING[3],
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: TYPOGRAPHY.size['3xl'],
+    fontWeight: TYPOGRAPHY.weight.extrabold,
+    color: '#FFFFFF',
+    marginBottom: SPACING[1],
+  },
+  headerSubtitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+});

@@ -1,5 +1,5 @@
 // Existing imports already include text, integer, timestamp, etc.
-import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, boolean, index, check } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, boolean, index, check, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const favoritesTable = pgTable(
@@ -159,6 +159,8 @@ export const foodLogTable = pgTable(
     // Composite index for user + date queries (most common)
     userDateIdx: index("food_log_user_date_idx").on(table.userId, table.loggedDate),
     // CHECK constraints for nutrition values
+    // Unique constraint for idempotency support
+    userClientEventIdUnique: unique("food_log_user_id_client_event_id_unique").on(table.userId, table.clientEventId),
     caloriesCheck: check("food_calories_check", sql`${table.calories} IS NULL OR (${table.calories} >= 0 AND ${table.calories} <= 10000)`),
     proteinCheck: check("food_protein_check", sql`${table.protein} IS NULL OR (${table.protein} >= 0 AND ${table.protein} <= 500)`),
     carbsCheck: check("food_carbs_check", sql`${table.carbs} IS NULL OR (${table.carbs} >= 0 AND ${table.carbs} <= 1000)`),
@@ -167,6 +169,29 @@ export const foodLogTable = pgTable(
     nutriscoreCheck: check("nutriscore_check", sql`${table.nutriscore} IS NULL OR ${table.nutriscore} IN ('A', 'B', 'C', 'D', 'E')`),
     ecoscoreCheck: check("ecoscore_check", sql`${table.ecoscore} IS NULL OR ${table.ecoscore} IN ('A', 'B', 'C', 'D', 'E')`),
     novaScoreCheck: check("nova_score_check", sql`${table.novaScore} IS NULL OR (${table.novaScore} >= 1 AND ${table.novaScore} <= 4)`),
+  })
+);
+
+// Barcode product cache - stores normalized product + nutrition for scans
+export const barcodeProductsTable = pgTable(
+  "barcode_products",
+  {
+    id: serial("id").primaryKey(),
+    barcode: text("barcode").notNull(),
+    productName: text("product_name").notNull(),
+    brand: text("brand"),
+    category: text("category"),
+    imageUrl: text("image_url"),
+    nutriments: json("nutriments").default({}),
+    servingSize: text("serving_size"),
+    source: text("source").default("openfoodfacts"),
+    lastSyncedAt: timestamp("last_synced_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    barcodeUniqueIdx: uniqueIndex("barcode_products_barcode_unique_idx").on(table.barcode),
+    barcodeSourceIdx: index("barcode_products_barcode_source_idx").on(table.barcode, table.source),
   })
 );
 
@@ -260,6 +285,7 @@ export const waterLogTable = pgTable(
   (table) => ({
     // Composite index for user + date queries
     userDateIdx: index("water_log_user_date_idx").on(table.userId, table.loggedDate),
+    userClientEventIdUnique: unique("water_log_user_id_client_event_id_unique").on(table.userId, table.clientEventId),
     // CHECK constraint
     amountCheck: check("water_amount_check", sql`${table.amountLiters} > 0 AND ${table.amountLiters} <= 20`),
   })
@@ -274,12 +300,16 @@ export const weightHistoryTable = pgTable(
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
     weightKg: decimal("weight_kg", { precision: 5, scale: 2 }).notNull(),
+
+    // Idempotency support
+    clientEventId: text("client_event_id"),
     recordedDate: timestamp("recorded_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
     // Composite index for user + date queries
     userDateIdx: index("weight_history_user_date_idx").on(table.userId, table.recordedDate),
+    userClientEventIdUnique: unique("weight_history_user_id_client_event_id_unique").on(table.userId, table.clientEventId),
     // CHECK constraint
     weightCheck: check("weight_history_check", sql`${table.weightKg} > 20 AND ${table.weightKg} < 500`),
   })
@@ -349,7 +379,9 @@ export const moodLogTable = pgTable(
   },
   (table) => ({
     // Composite index for user + date queries
-    userDateIdx: index("mood_log_user_date_idx").on(table.userId, table.loggedDate),
+    userDateIdx: index("mood_log_user_date_idx").on(table.userId, table.loggedDate), // Existing index
+    // Unique constraint for idempotency support
+    userClientEventIdUnique: unique("mood_log_user_id_client_event_id_unique").on(table.userId, table.clientEventId),
   })
 );
 

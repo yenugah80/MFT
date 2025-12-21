@@ -140,9 +140,15 @@ const QuickAddButton = ({ preset, onPress, isLoading }) => {
         disabled={isLoading}
         activeOpacity={0.8}
       >
-        <Text style={styles.presetIcon}>{preset.icon}</Text>
-        <Text style={styles.presetLabel}>{preset.label}</Text>
-        <Text style={styles.presetAmount}>{preset.amount * 1000}ml</Text>
+        {isLoading ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <Text style={styles.presetIcon}>{preset.icon}</Text>
+            <Text style={styles.presetLabel}>{preset.label}</Text>
+            <Text style={styles.presetAmount}>{preset.amount * 1000}ml</Text>
+          </>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -151,11 +157,12 @@ const QuickAddButton = ({ preset, onPress, isLoading }) => {
 /**
  * Main WaterLogger Modal Component
  */
-export default function WaterLogger({ visible, onClose, onSuccess }) {
-  const { logWater, quickAdd, isLogging, presets, getProgress } = useWaterLog();
+export default function WaterLogger({ visible, onClose, onSuccess }) { // Removed error from here
+  const { logWater, quickAdd, isLogging, presets, getProgress, error: hookError } = useWaterLog();
   const queryClient = useQueryClient();
   const [customAmount, setCustomAmount] = useState('');
   const [progress, setProgress] = useState(0);
+  const [localError, setLocalError] = useState(null); // Use localError for input validation
 
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -166,6 +173,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
     if (visible) {
       // Update progress
       setProgress(getProgress());
+      setLocalError(null); // Clear any previous local errors when modal opens
 
       // Slide up and fade in
       Animated.parallel([
@@ -187,10 +195,12 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
       fadeAnim.setValue(0);
       successAnim.setValue(0);
       setCustomAmount('');
+      setLocalError(null); // Clear local error when modal closes
     }
   }, [visible]);
 
   const handleQuickAdd = async (preset) => {
+    setLocalError(null); // Clear any previous local error before attempting to log
     try {
       await quickAdd(preset);
       setProgress(getProgress());
@@ -208,22 +218,26 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
           duration: 300,
           useNativeDriver: true,
         }),
-      ]).start();
-
-      onSuccess?.();
-
-      // Close after success animation
-      setTimeout(() => {
+      ]).start(() => {
+        // Execute onSuccess and close modal only after success animation completes
+        onSuccess?.();
         onClose();
-      }, 1000);
+      });
     } catch (err) {
       console.error('Failed to log water:', err);
+      // Set a user-friendly error message
+      setLocalError('Failed to log water. Please try again.'); // Use localError for API errors
+      // Do not call onSuccess or onClose on error
     }
   };
 
   const handleCustomAdd = async () => {
     const amountMl = parseFloat(customAmount);
-    if (!amountMl || amountMl <= 0) return;
+    if (!amountMl || amountMl <= 0) {
+      setLocalError('Please enter a valid amount greater than 0.');
+      return;
+    }
+    setLocalError(null); // Clear any previous local error before attempting to log
 
     try {
       await logWater(amountMl / 1000); // Convert ml to liters
@@ -243,15 +257,16 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
           duration: 300,
           useNativeDriver: true,
         }),
-      ]).start();
-
-      onSuccess?.();
-
-      setTimeout(() => {
+      ]).start(() => {
+        // Execute onSuccess and close modal only after success animation completes
+        onSuccess?.();
         onClose();
-      }, 1000);
+      });
     } catch (err) {
       console.error('Failed to log water:', err);
+      // Set a user-friendly error message
+      setLocalError('Failed to log water. Please try again.'); // Use localError for API errors
+      // Do not call onSuccess or onClose on error
     }
   };
 
@@ -358,6 +373,13 @@ export default function WaterLogger({ visible, onClose, onSuccess }) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Error Display */}
+        {(localError || hookError) && ( // Display local or hook error
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{localError || hookError?.message || 'An unexpected error occurred.'}</Text>
+          </View>
+        )}
 
         {/* Close Button */}
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -619,5 +641,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#0ea5e9',
+  },
+  errorContainer: {
+    backgroundColor: '#fee2e2', // Light red background
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#ef4444', // Darker red text
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

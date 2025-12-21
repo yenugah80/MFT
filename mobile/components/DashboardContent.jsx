@@ -1,13 +1,16 @@
 /**
  * DashboardContent - Premium Redesign
- * Instrument-style dashboard with:
- * - Proper overflow handling (no "200%+" spam)
- * - Data state detection (anomalies, missing data)
- * - Glass morphism design
- * - Premium components (PremiumRing, MacroDonut, NutriScoreDial)
+ * Glossy, trendy, user-centric dashboard with:
+ * - Ionicons throughout (no emoticons)
+ * - LinearGradient accents
+ * - Premium card design
+ * - Proper overflow handling
+ * - Data state detection
  */
 
 import { View, ScrollView, Text, ActivityIndicator, RefreshControl, StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useDashboard } from "../hooks/useDashboard";
 import { useState, useMemo } from "react";
 
@@ -36,8 +39,9 @@ import MoodLogger from "./MoodLogger";
 import WaterLogger from "./WaterLogger";
 import MicrosCoverageSection from "./MicrosCoverageSection";
 
-// Design tokens
+// Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState, formatters } from "../constants/designTokens";
+import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -174,7 +178,9 @@ export default function DashboardContent() {
         {dataAnomalies.length > 0 && (
           <GlassCard style={styles.infoCard} padding="md">
             <View style={styles.anomalyHeader}>
-              <Text style={styles.anomalyIcon}>{dataAnomalies[0].icon || '💡'}</Text>
+              <View style={styles.iconContainer}>
+                <Ionicons name={ICONS.info} size={ICON_SIZES.lg} color={BRAND.primary} />
+              </View>
               <View style={styles.anomalyTextContainer}>
                 <Text style={styles.infoTitle}>Quick Check</Text>
                 <Text style={styles.infoMessage}>
@@ -230,7 +236,9 @@ export default function DashboardContent() {
           <GlassCard style={styles.section} padding="md">
             <View style={styles.waterContainer}>
               <View style={styles.waterLeft}>
-                <Text style={styles.waterIcon}>💧</Text>
+                <View style={styles.waterIconContainer}>
+                  <Ionicons name={ICONS.water} size={ICON_SIZES['2xl']} color={SEMANTIC.info.base} />
+                </View>
                 <View>
                   <Text style={styles.waterTitle}>Hydration</Text>
                   <Text style={styles.waterValue}>
@@ -242,12 +250,17 @@ export default function DashboardContent() {
                 </View>
               </View>
               <View style={styles.waterRight}>
-                <View style={[
-                  styles.quickAddButton,
-                  { backgroundColor: COLORS.semantic.info }
-                ]}>
-                  <Text style={styles.quickAddText}>+ Quick Add</Text>
-                </View>
+                <TouchableOpacity style={styles.quickAddButton} activeOpacity={0.8} onPress={handleLogWater}>
+                  <LinearGradient
+                    colors={SURFACES.gradient.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.quickAddGradient}
+                  >
+                    <Ionicons name="add" size={18} color="#FFFFFF" />
+                    <Text style={styles.quickAddText}>Quick Add</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
               </View>
             </View>
           </GlassCard>
@@ -315,6 +328,7 @@ export default function DashboardContent() {
           <View style={styles.gamificationRow}>
             <View style={styles.gamificationItem}>
               <View style={styles.levelBadge}>
+                <Ionicons name={ICONS.trophy} size={ICON_SIZES.lg} color={SEMANTIC.info.base} />
                 <Text style={styles.levelValue}>{gamification.level}</Text>
                 <Text style={styles.levelLabel}>Level</Text>
               </View>
@@ -324,7 +338,7 @@ export default function DashboardContent() {
             </View>
             <View style={styles.gamificationItem}>
               <View style={styles.streakBadge}>
-                <Text style={styles.streakIcon}>🔥</Text>
+                <Ionicons name={ICONS.fire} size={ICON_SIZES.xl} color={SEMANTIC.warning.base} />
                 <Text style={styles.streakValue}>{gamification.streak}</Text>
               </View>
               <Text style={styles.gamificationSub}>
@@ -338,7 +352,9 @@ export default function DashboardContent() {
         {recentWeight.length > 0 && (
           <GlassCard style={styles.section} padding="md">
             <View style={styles.weightContainer}>
-              <Text style={styles.weightIcon}>⚖️</Text>
+              <View style={styles.weightIconContainer}>
+                <Ionicons name={ICONS.weight} size={ICON_SIZES['2xl']} color={BRAND.primary} />
+              </View>
               <View style={styles.weightInfo}>
                 <Text style={styles.weightValue}>{recentWeight[0].weightKg} kg</Text>
                 <Text style={styles.weightDate}>
@@ -417,15 +433,20 @@ const styles = StyleSheet.create({
   // Info card (calm, supportive tone - blue instead of orange/red)
   infoCard: {
     marginBottom: SPACING[4],
-    backgroundColor: 'rgba(59, 130, 246, 0.1)', // Blue glow (calm)
-    borderColor: 'rgba(59, 130, 246, 0.3)', // Blue border
+    backgroundColor: 'rgba(107, 78, 255, 0.05)', // Purple tint
+    borderColor: 'rgba(107, 78, 255, 0.2)', // Purple border
   },
   anomalyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  anomalyIcon: {
-    fontSize: 32,
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING[3],
   },
   anomalyTextContainer: {
@@ -434,7 +455,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#3b82f6', // Calm blue instead of warning orange
+    color: '#6B4EFF', // Brand purple
     marginBottom: SPACING[1],
   },
   infoMessage: {
@@ -480,8 +501,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  waterIcon: {
-    fontSize: 40,
+  waterIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING[3],
   },
   waterTitle: {
@@ -504,14 +530,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   quickAddButton: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  quickAddGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[2],
-    borderRadius: RADIUS.md,
   },
   quickAddText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#fff',
+    color: '#FFFFFF',
   },
 
   // Meals
@@ -600,20 +632,16 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: COLORS.glass.highlight,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
     borderWidth: 3,
     borderColor: COLORS.semantic.warn,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  streakIcon: {
-    fontSize: 32,
-  },
   streakValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.black,
     color: COLORS.semantic.warn,
-    marginTop: SPACING[1],
   },
 
   // Weight
@@ -621,8 +649,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  weightIcon: {
-    fontSize: 40,
+  weightIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING[3],
   },
   weightInfo: {

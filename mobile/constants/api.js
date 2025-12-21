@@ -37,7 +37,7 @@ export const isPhysicalDevice = Constants.isDevice;
 
 // Log API configuration in development for debugging
 if (__DEV__) {
-  console.log('[API Config] Platform:', Platform.OS);
+  console.log(`[API Config] Mode: ${process.env.EXPO_PUBLIC_API_URL ? 'Custom' : 'Local'} | Platform: ${Platform.OS}`);
   console.log('[API Config] Using API URL:', API_URL);
   console.log('[API Config] Physical device:', isPhysicalDevice);
 

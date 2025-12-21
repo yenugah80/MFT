@@ -2,7 +2,7 @@
 -- This prevents duplicate water entries from double-taps on quick-add buttons
 
 -- Step 1: Add column (nullable for migration compatibility)
-ALTER TABLE "water_log" ADD COLUMN "client_event_id" text;
+ALTER TABLE "water_log" ADD COLUMN IF NOT EXISTS "client_event_id" text;
 
 -- Step 2: Backfill existing records with legacy IDs
 UPDATE "water_log"

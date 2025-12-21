@@ -4,7 +4,7 @@
  * Clear user flow with explicit actions
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,9 +17,11 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
+import * as Sharing from 'expo-sharing'; // Import expo-sharing
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 // Hooks
 import { useFoodAnalysis } from '../../hooks/useFoodAnalysis';
@@ -30,32 +32,43 @@ import { useNotification } from '../../providers/NotificationProvider';
 // Components
 import { NutritionCard } from '../../components/log/NutritionCard';
 import { FoodItemsList } from '../../components/log/FoodItemsList';
+import BarcodeScannerModal from '../../components/BarcodeScannerModal'; // Import the new component
 import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
-import { HistoryDrawer } from '../../components/log/HistoryDrawer';
 import MoodLogger from '../../components/MoodLogger';
 import WaterLogger from '../../components/WaterLogger';
+
+// Platform-safe professional fonts for nutrition UI
+const fonts = {
+  display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
+  strong: Platform.select({ ios: 'HelveticaNeue-Medium', android: 'Roboto-Medium', default: 'System' }),
+  regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
+};
 
 export default function LogScreen() {
   // State
   const [selectedImage, setSelectedImage] = useState(null);
   const [analyzedFood, setAnalyzedFood] = useState(null);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [showWaterModal, setShowWaterModal] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
+  const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false); // New state for barcode modal
   const [inputMode, setInputMode] = useState('text'); // 'text', 'photo', 'voice'
+  const [analysisSource, setAnalysisSource] = useState('text');
+  const [isTextFocused, setIsTextFocused] = useState(false);
 
   // Hooks
   const foodAnalysis = useFoodAnalysis();
   const voiceHook = useLiveVoice();
   const foodLog = useFoodLog();
   const notify = useNotification();
+  const router = useRouter();
 
   /**
    * Handle photo selection
    */
+  // This function is for selecting images from library/camera, not for barcode scanning directly
   const handlePhotoSelect = async (source = 'library') => {
     try {
       const { status } = source === 'camera'
@@ -83,6 +96,7 @@ export default function LogScreen() {
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         setSelectedImage(imageUri);
+        setAnalysisSource('photo');
 
         // Analyze image
         const analyzed = await foodAnalysis.analyzePhoto(imageUri);
@@ -98,8 +112,56 @@ export default function LogScreen() {
    * Handle voice logging complete
    */
   const handleVoiceComplete = (result) => {
+    setAnalysisSource('voice');
     setAnalyzedFood(result);
     setShowVoiceModal(false);
+  };
+
+  /**
+   * Handle sharing of analysis results
+   */
+  const handleShare = async () => {
+    if (!foodAnalysis.analysisResult) {
+      notify.info('No analysis results to share.');
+      return;
+    }
+
+    const { items, totals } = foodAnalysis.analysisResult;
+    let shareText = `My Meal Analysis from MyFoodTracker:\n\n`;
+
+    if (items.length === 1) {
+      const item = items[0];
+      shareText += `Food: ${item.name}\n`;
+      shareText += `Portion: ${item.portion?.servingText || `${item.portion?.amount || 1} ${item.portion?.unit || 'serving'}`}\n`;
+    } else {
+      shareText += `Meal with ${items.length} items:\n`;
+      items.forEach((item, index) => {
+        shareText += `  ${index + 1}. ${item.name} (${item.portion?.servingText || `${item.portion?.amount || 1} ${item.portion?.unit || 'serving'}`})\n`;
+      });
+    }
+
+    shareText += `\n--- Totals ---\n`;
+    shareText += `Calories: ${totals.macros?.calories_kcal?.toFixed(0) || 0}kcal\n`;
+    shareText += `Protein: ${totals.macros?.protein_g?.toFixed(1) || 0}g\n`;
+    shareText += `Carbs: ${totals.macros?.carbs_g?.toFixed(1) || 0}g\n`;
+    shareText += `Fat: ${totals.macros?.fat_g?.toFixed(1) || 0}g\n`;
+    shareText += `Fiber: ${totals.macros?.fiber_g?.toFixed(1) || 0}g\n`;
+    shareText += `Sugar: ${totals.macros?.sugar_g?.toFixed(1) || 0}g\n`;
+    shareText += `Net Carbs: ${totals.netCarbs?.toFixed(1) || 0}g\n`;
+
+    // Add micronutrients to share text
+    if (Object.keys(totals.micros).length > 0) {
+      shareText += `\n--- Micronutrients ---\n`;
+      Object.entries(totals.micros).forEach(([key, value]) => {
+        shareText += `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}\n`;
+      });
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(shareText, { mimeType: 'text/plain', dialogTitle: 'Share Meal Analysis' });
+    } else {
+      notify.info('Sharing is not available on this device.');
+    }
   };
 
   /**
@@ -113,9 +175,10 @@ export default function LogScreen() {
       const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
       const foodDataWithId = {
         ...foodData,
+        source: foodData.source || analysisSource,
         clientEventId,
         sourceMeta: {
-          source: selectedImage ? 'photo' : 'text',
+          source: analysisSource,
           timestamp: new Date().toISOString(),
         },
       };
@@ -143,16 +206,26 @@ export default function LogScreen() {
 
     try {
       const mealEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+      const baseTimestamp = Date.now();
 
-      for (const item of foodAnalysis.analysisResult.items) {
+      for (const [index, item] of foodAnalysis.analysisResult.items.entries()) {
+        const servingText = item.portion?.amount && item.portion?.unit
+          ? `${item.portion.amount}${item.portion.unit}`
+          : '1 serving';
+
         const foodLogData = {
-          timestamp: Date.now(),
+          id: `${mealEventId}-${index}`,
+          timestamp: baseTimestamp + index, // deterministic per item to avoid collisions
           status: 'pending',
           source: 'text-multi',
+          sourceMeta: {
+            source: 'text',
+            timestamp: new Date().toISOString(),
+          },
           clientEventId: `${mealEventId}-${item.itemId}`,
           mealId: mealEventId,
           foodName: item.name,
-          servingSize: `${item.portion?.amount}${item.portion?.unit}`,
+          servingSize: servingText,
           calories: item.macros?.calories_kcal || 0,
           protein: item.macros?.protein_g || 0,
           carbs: item.macros?.carbs_g || 0,
@@ -164,6 +237,7 @@ export default function LogScreen() {
           confidence: item.sourceEvidence?.[0]?.confidence || 0.5,
         };
 
+        // Ensure micros are stored as { value, unit } in the log
         await foodLog.addLog(foodLogData);
       }
 
@@ -189,31 +263,33 @@ export default function LogScreen() {
     return {
       timestamp: Date.now(),
       status: 'pending',
-      source: 'text',
+      source: analysisSource || 'text',
       foodName: item.name,
-      servingSize: `${item.portion?.amount}${item.portion?.unit}`,
-      calories: item.macros?.calories_kcal || 0,
-      protein: item.macros?.protein_g || 0,
-      carbs: item.macros?.carbs_g || 0,
-      fat: item.macros?.fat_g || 0,
-      fiber: item.macros?.fiber_g || 0,
-      sugar: item.macros?.sugar_g || 0,
-      sugarAlcohols: 0,
-      netCarbs: (item.macros?.carbs_g || 0) - (item.macros?.fiber_g || 0),
+      servingSize: item.portion?.amount && item.portion?.unit
+        ? `${item.portion.amount}${item.portion.unit}`
+        : '1 serving',
+      calories: Math.round(item.macros?.calories_kcal || 0),
+      protein: Math.round(item.macros?.protein_g || 0),
+      carbs: Math.round(item.macros?.carbs_g || 0),
+      fat: Math.round(item.macros?.fat_g || 0),
+      fiber: Math.round(item.macros?.fiber_g || 0),
+      sugar: Math.round(item.macros?.sugar_g || 0),
+      sugarAlcohols: Math.round(item.macros?.sugarAlcohols_g || 0), // Assuming sugarAlcohols_g might be present
+      netCarbs: Math.round(item.netCarbs || 0),
       micronutrients: item.micros ? Object.entries(item.micros).map(([key, value]) => ({
-        name: key.charAt(0).toUpperCase() + key.slice(1),
-        amount: parseFloat(value) || 0,
-        unit: value?.match(/[a-z]+/i)?.[0] || '',
-        percentage: 0,
+        name: key.charAt(0).toUpperCase() + key.slice(1), // e.g., "calcium" -> "Calcium"
+        amount: value.value || 0,
+        unit: value.unit || '',
+        percentage: 0, // This will be calculated in NutritionCard/FoodItemsList
       })) : [],
       micros: item.micros || {},
-      ingredients: [],
-      healthScore: 70,
-      nutriscore: 'B',
-      ecoscore: 'B',
-      novaScore: 2,
-      dietLabels: [],
-      allergens: [],
+      ingredients: item.ingredients || [],
+      healthScore: item.healthScore ?? null,
+      nutriscore: item.nutriscore ?? null,
+      ecoscore: item.ecoscore ?? null,
+      novaScore: item.novaScore ?? null,
+      dietLabels: item.dietLabels || [],
+      allergens: item.allergens || [],
     };
   };
 
@@ -227,6 +303,7 @@ export default function LogScreen() {
     setSelectedImage(null);
     foodAnalysis.setAnalysisResult(null);
     foodAnalysis.setInputText('');
+    setAnalysisSource('text');
   };
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
@@ -247,13 +324,14 @@ export default function LogScreen() {
           <View style={styles.headerLeft}>
             <Ionicons name="restaurant" size={28} color="#FFFFFF" />
             <View style={styles.headerText}>
-              <Text style={styles.title}>Track Food</Text>
-              <Text style={styles.subtitle}>AI-powered nutrition analysis</Text>
+              <Text style={styles.title}>LOG Meal</Text>
+              <Text style={styles.subtitle}>At your convenient way</Text>
             </View>
           </View>
           <TouchableOpacity
             style={styles.historyButton}
-            onPress={() => setShowHistory(true)}
+            onPress={() => router.push('/history')}
+            accessibilityLabel="Open food history"
           >
             <Ionicons name="time-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -265,6 +343,7 @@ export default function LogScreen() {
             style={styles.quickActionChip}
             onPress={() => setShowMoodModal(true)}
             activeOpacity={0.7}
+            accessibilityLabel="Log your mood"
           >
             <Ionicons name="happy-outline" size={20} color="#6B4EFF" />
             <Text style={styles.quickActionText}>Mood</Text>
@@ -274,12 +353,17 @@ export default function LogScreen() {
             style={styles.quickActionChip}
             onPress={() => setShowWaterModal(true)}
             activeOpacity={0.7}
+            accessibilityLabel="Log your water intake"
           >
             <Ionicons name="water-outline" size={20} color="#6B4EFF" />
             <Text style={styles.quickActionText}>Water</Text>
           </TouchableOpacity>
 
-          <View style={styles.quickActionChip}>
+          <View
+            style={styles.quickActionChip}
+            accessible
+            accessibilityLabel="Food items logged"
+          >
             <Ionicons name="flame-outline" size={20} color="#FF6B4E" />
             <Text style={styles.quickActionValue}>{foodLog.logs?.length || 0}</Text>
             <Text style={styles.quickActionLabel}>logged</Text>
@@ -295,9 +379,16 @@ export default function LogScreen() {
         {/* Input Mode Selector - Modern Tab Pills */}
         <View style={styles.modeSelector}>
           <TouchableOpacity
-            style={[styles.modeTab, inputMode === 'text' && styles.modeTabActive]}
-            onPress={() => setInputMode('text')}
+            style={[
+              styles.modeTab,
+              inputMode === 'text' ? styles.modeTabActive : styles.modeTabInactive,
+            ]}
+            onPress={() => {
+              setInputMode('text');
+              setAnalysisSource('text');
+            }}
             activeOpacity={0.7}
+            accessibilityLabel="Text input mode"
           >
             {inputMode === 'text' ? (
               <LinearGradient
@@ -318,9 +409,16 @@ export default function LogScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.modeTab, inputMode === 'photo' && styles.modeTabActive]}
-            onPress={() => setInputMode('photo')}
+            style={[
+              styles.modeTab,
+              inputMode === 'photo' ? styles.modeTabActive : styles.modeTabInactive,
+            ]}
+            onPress={() => {
+              setInputMode('photo');
+              setAnalysisSource('photo');
+            }}
             activeOpacity={0.7}
+            accessibilityLabel="Photo input mode"
           >
             {inputMode === 'photo' ? (
               <LinearGradient
@@ -341,9 +439,16 @@ export default function LogScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.modeTab, inputMode === 'voice' && styles.modeTabActive]}
-            onPress={() => setInputMode('voice')}
+            style={[
+              styles.modeTab,
+              inputMode === 'voice' ? styles.modeTabActive : styles.modeTabInactive,
+            ]}
+            onPress={() => {
+              setInputMode('voice');
+              setAnalysisSource('voice');
+            }}
             activeOpacity={0.7}
+            accessibilityLabel="Voice input mode"
           >
             {inputMode === 'voice' ? (
               <LinearGradient
@@ -374,21 +479,24 @@ export default function LogScreen() {
               </View>
 
               <TextInput
-                style={styles.textInputLarge}
+                style={[styles.textInputLarge, isTextFocused && styles.textInputFocused]}
                 placeholder="e.g., 200g grilled chicken, brown rice, steamed broccoli..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor="#6B7280"
                 value={foodAnalysis.inputText}
                 onChangeText={foodAnalysis.setInputText}
                 multiline
                 numberOfLines={4}
                 editable={!isAnalyzing}
                 autoFocus={false}
+                onFocus={() => setIsTextFocused(true)}
+                onBlur={() => setIsTextFocused(false)}
+                accessibilityLabel="Describe your meal"
               />
 
               {/* Auto-Analysis Info */}
               {!foodAnalysis.inputText && !isAnalyzing && (
                 <View style={styles.infoBox}>
-                  <Ionicons name="information-circle" size={18} color="#6B4EFF" />
+                  <Ionicons name="information-circle" size={20} color="#6B4EFF" />
                   <Text style={styles.infoText}>
                     Type your food and pause - AI analyzes automatically
                   </Text>
@@ -403,22 +511,25 @@ export default function LogScreen() {
                     <TouchableOpacity
                       style={styles.exampleChip}
                       onPress={() => foodAnalysis.setInputText('2 eggs, whole wheat toast, avocado')}
+                      accessibilityLabel="Example meal breakfast"
                     >
-                      <Ionicons name="egg-outline" size={16} color="#6B4EFF" />
+                      <Ionicons name="egg-outline" size={18} color="#2563EB" />
                       <Text style={styles.exampleChipText}>Breakfast</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.exampleChip}
                       onPress={() => foodAnalysis.setInputText('grilled chicken salad')}
+                      accessibilityLabel="Example meal salad"
                     >
-                      <Ionicons name="leaf-outline" size={16} color="#10B981" />
+                      <Ionicons name="leaf-outline" size={18} color="#059669" />
                       <Text style={styles.exampleChipText}>Salad</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.exampleChip}
                       onPress={() => foodAnalysis.setInputText('200g salmon, 150g quinoa, vegetables')}
+                      accessibilityLabel="Example meal dinner"
                     >
-                      <Ionicons name="fish-outline" size={16} color="#F59E0B" />
+                      <Ionicons name="fish-outline" size={18} color="#D97706" />
                       <Text style={styles.exampleChipText}>Dinner</Text>
                     </TouchableOpacity>
                   </View>
@@ -443,11 +554,39 @@ export default function LogScreen() {
                     foodAnalysis.setInputText('');
                     foodAnalysis.setAnalysisResult(null);
                   }}
+                  accessibilityLabel="Clear meal description"
                 >
                   <Ionicons name="close-circle" size={18} color="#DC2626" />
                   <Text style={styles.clearButtonText}>Clear</Text>
                 </TouchableOpacity>
               )}
+
+              {/* Manual Analyze / Retry */}
+              <TouchableOpacity
+                style={[
+                  styles.analyzeButton,
+                  isAnalyzing && styles.analyzeButtonDisabled,
+                ]}
+                onPress={foodAnalysis.runAnalysis}
+                disabled={isAnalyzing}
+                accessibilityLabel={isAnalyzing ? 'Analyzing meal' : 'Analyze meal'}
+              >
+                <LinearGradient
+                  colors={['#6B4EFF', '#8B6EFF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.analyzeGradient}
+                >
+                  {isAnalyzing ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="sparkles-outline" size={18} color="#FFFFFF" />
+                  )}
+                  <Text style={styles.analyzeText}>
+                    {isAnalyzing ? 'Analyzing...' : 'Analyze / Retry'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -460,7 +599,12 @@ export default function LogScreen() {
                 <Image source={{ uri: selectedImage }} style={styles.photoPreview} />
                 <TouchableOpacity
                   style={styles.photoRemoveButton}
-                  onPress={() => setSelectedImage(null)}
+                  onPress={() => {
+                    setSelectedImage(null);
+                    setAnalyzedFood(null);
+                    setAnalysisSource('text');
+                  }}
+                  accessibilityLabel="Remove selected photo"
                 >
                   <Ionicons name="close" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -476,38 +620,62 @@ export default function LogScreen() {
                 <View style={styles.photoIconContainer}>
                   <Ionicons name="camera" size={64} color="#6B4EFF" />
                 </View>
-                <Text style={styles.photoEmptyTitle}>Snap or Upload Food Photo</Text>
+                <Text style={styles.photoEmptyTitle}>Camera-first logging</Text>
                 <Text style={styles.photoEmptySubtitle}>
-                  AI will identify foods and estimate portions instantly
+                  Snap fresh meals, scan packaged foods, or pull from your gallery.
                 </Text>
 
-                <View style={styles.photoButtonsRow}>
+                <View style={styles.photoActions}>
                   <TouchableOpacity
-                    style={styles.photoPrimaryButton}
+                    style={styles.photoPrimaryCard}
                     onPress={() => handlePhotoSelect('camera')}
                     disabled={isAnalyzing}
-                    activeOpacity={0.8}
+                    activeOpacity={0.9}
+                    accessibilityLabel="Take a new meal photo"
                   >
                     <LinearGradient
                       colors={['#6B4EFF', '#8B6EFF']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
-                      style={styles.buttonGradient}
+                      style={styles.photoPrimaryGradient}
                     >
-                      <Ionicons name="camera" size={22} color="#FFFFFF" />
-                      <Text style={styles.photoButtonText}>Take Photo</Text>
+                      <Ionicons name="camera" size={24} color="#FFFFFF" />
+                      <View style={styles.photoPrimaryCopy}>
+                        <Text style={styles.photoButtonText}>Take Photo</Text>
+                        <Text style={styles.photoButtonSub}>Best for cooked meals</Text>
+                      </View>
                     </LinearGradient>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.photoSecondaryButton}
-                    onPress={() => handlePhotoSelect('library')}
-                    disabled={isAnalyzing}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="images-outline" size={22} color="#6B4EFF" />
-                    <Text style={styles.photoSecondaryText}>Gallery</Text>
-                  </TouchableOpacity>
+                  <View style={styles.photoSecondaryStack}>
+                    <TouchableOpacity
+                      style={styles.photoSecondaryCard}
+                      onPress={() => setShowBarcodeScannerModal(true)}
+                      disabled={isAnalyzing}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Scan a product barcode"
+                    >
+                      <Ionicons name="barcode-outline" size={22} color="#6B4EFF" />
+                      <View>
+                        <Text style={styles.photoSecondaryText}>Scan Barcode</Text>
+                        <Text style={styles.photoSecondarySub}>Packaged foods</Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.photoSecondaryCard}
+                      onPress={() => handlePhotoSelect('library')}
+                      disabled={isAnalyzing}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Choose a meal photo from gallery"
+                    >
+                      <Ionicons name="images-outline" size={22} color="#6B4EFF" />
+                      <View>
+                        <Text style={styles.photoSecondaryText}>Choose from Gallery</Text>
+                        <Text style={styles.photoSecondarySub}>Use an existing shot</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             )}
@@ -531,6 +699,7 @@ export default function LogScreen() {
                 onPress={() => setShowVoiceModal(true)}
                 disabled={isAnalyzing}
                 activeOpacity={0.8}
+                accessibilityLabel="Start voice meal logging"
               >
                 <LinearGradient
                   colors={['#6B4EFF', '#8B6EFF']}
@@ -564,6 +733,7 @@ export default function LogScreen() {
             <NutritionCard
               foodLog={analyzedFood}
               onSave={handleSaveLog}
+              dailyValues={DAILY_VALUES} // Pass daily values
               onCancel={handleCancel}
             />
           </View>
@@ -572,6 +742,7 @@ export default function LogScreen() {
             {foodAnalysis.analysisResult.items.length === 1 ? (
               <NutritionCard
                 foodLog={buildLegacyFoodLog(foodAnalysis.analysisResult.items[0])}
+                dailyValues={DAILY_VALUES} // Pass daily values
                 onSave={handleSaveSingleItem}
                 onCancel={handleCancel}
               />
@@ -581,6 +752,7 @@ export default function LogScreen() {
                   items={foodAnalysis.analysisResult.items}
                   onUpdateQuantity={foodAnalysis.updateItemQuantity}
                   onRemove={foodAnalysis.removeItem}
+                  dailyValues={DAILY_VALUES} // Pass daily values to FoodItemsList
                 />
                 <MealTotalsCard
                   totals={foodAnalysis.analysisResult.totals}
@@ -589,23 +761,42 @@ export default function LogScreen() {
                 />
               </>
             )}
+
+            {/* Share Button for Analysis Results */}
+            {foodAnalysis.analysisResult && (
+              <TouchableOpacity
+                style={styles.shareButton}
+                onPress={handleShare}
+                activeOpacity={0.8}
+                accessibilityLabel="Share meal analysis results"
+              >
+                <Ionicons name="share-social-outline" size={24} color="#FFFFFF" />
+                <Text style={styles.shareButtonText}>Share Results</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : null}
 
         {/* Error Display */}
-        {foodAnalysis.error && (
+        {(foodAnalysis.error || foodLog.error) && (
           <View style={styles.errorCard}>
             <View style={styles.errorHeader}>
               <Ionicons name="warning" size={28} color="#DC2626" />
-              <Text style={styles.errorTitle}>Analysis Failed</Text>
+              <Text style={styles.errorTitle}>
+                {foodAnalysis.error ? 'Analysis Failed' : 'History Error'}
+              </Text>
             </View>
-            <Text style={styles.errorMessage}>{foodAnalysis.error}</Text>
+            <Text style={styles.errorMessage}>{foodAnalysis.error || foodLog.error}</Text>
             <TouchableOpacity
               style={styles.errorDismiss}
-              onPress={foodAnalysis.clearError}
+              onPress={() => {
+                foodAnalysis.clearError();
+                foodLog.clearError(); // Clear foodLog error as well
+              }}
             >
               <Text style={styles.errorDismissText}>Dismiss</Text>
             </TouchableOpacity>
+            {/* Dismiss button will now clear both analysis and log errors */}
           </View>
         )}
 
@@ -644,16 +835,6 @@ export default function LogScreen() {
         voiceHook={voiceHook}
       />
 
-      <HistoryDrawer
-        visible={showHistory}
-        onClose={() => setShowHistory(false)}
-        logs={foodLog.logs}
-        onSelectLog={(log) => {
-          setAnalyzedFood(log);
-          setShowHistory(false);
-        }}
-      />
-
       <MoodLogger
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
@@ -664,6 +845,11 @@ export default function LogScreen() {
         visible={showWaterModal}
         onClose={() => setShowWaterModal(false)}
         onSuccess={() => notify.success('Water logged!')}
+      />
+
+      <BarcodeScannerModal
+        visible={showBarcodeScannerModal}
+        onClose={() => setShowBarcodeScannerModal(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -704,14 +890,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
+    fontFamily: fonts.display,
   },
   subtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontFamily: fonts.strong,
   },
   historyButton: {
     width: 44,
@@ -748,15 +937,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#374151',
+    fontFamily: fonts.strong,
   },
   quickActionValue: {
     fontSize: 16,
     fontWeight: '700',
     color: '#FF6B4E',
+    fontFamily: fonts.display,
   },
   quickActionLabel: {
     fontSize: 11,
     color: '#6B7280',
+    fontFamily: fonts.regular,
   },
 
   /* Scroll View */
@@ -785,6 +977,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   modeTabGradient: {
     flexDirection: 'row',
@@ -797,20 +991,30 @@ const styles = StyleSheet.create({
   modeTabActive: {
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 5,
+    borderColor: '#6B4EFF',
+  },
+  modeTabInactive: {
+    backgroundColor: '#F8FAFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   modeText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
-    paddingVertical: 14,
+    fontFamily: fonts.strong,
   },
   modeTextActive: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: fonts.display,
   },
 
   /* Input Section */
@@ -837,9 +1041,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
+    fontFamily: fonts.strong,
   },
   textInputLarge: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     padding: 18,
     fontSize: 16,
@@ -849,6 +1054,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E5E7EB',
     fontWeight: '500',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    fontFamily: fonts.strong,
+  },
+  textInputFocused: {
+    borderColor: '#6B4EFF',
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
   },
 
   /* Info Box */
@@ -857,7 +1076,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#EEF2FF',
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
     marginTop: 14,
   },
@@ -866,6 +1086,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B4EFF',
     fontWeight: '500',
+    lineHeight: 18,
+    fontFamily: fonts.strong,
   },
 
   /* Examples */
@@ -880,6 +1102,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6B7280',
     marginBottom: 12,
+    fontFamily: fonts.strong,
   },
   exampleChips: {
     flexDirection: 'row',
@@ -889,10 +1112,10 @@ const styles = StyleSheet.create({
   exampleChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#EEF2FF',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    gap: 8,
+    backgroundColor: '#E0E7FF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#C7D2FE',
@@ -901,6 +1124,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#6B4EFF',
+    fontFamily: fonts.strong,
   },
 
   /* Analysis Status */
@@ -917,6 +1141,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B4EFF',
+    fontFamily: fonts.strong,
   },
 
   /* Clear Button */
@@ -935,6 +1160,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#DC2626',
+    fontFamily: fonts.strong,
+  },
+  analyzeButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  analyzeButtonDisabled: {
+    opacity: 0.7,
+  },
+  analyzeGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+  },
+  analyzeText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.display,
   },
 
   /* Photo Mode */
@@ -979,6 +1226,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: fonts.display,
   },
 
   photoEmptyCard: {
@@ -1006,6 +1254,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 10,
+    fontFamily: fonts.display,
   },
   photoEmptySubtitle: {
     fontSize: 15,
@@ -1013,47 +1262,60 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 28,
     lineHeight: 22,
+    fontFamily: fonts.regular,
   },
-  photoButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
+  photoActions: {
     width: '100%',
+    gap: 12,
   },
-  photoPrimaryButton: {
-    flex: 1,
-    borderRadius: 14,
+  photoPrimaryCard: {
+    borderRadius: 16,
     overflow: 'hidden',
   },
-  buttonGradient: {
+  photoPrimaryGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 20,
-    gap: 10,
+    paddingHorizontal: 18,
+    gap: 12,
   },
-  photoSecondaryButton: {
+  photoPrimaryCopy: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    gap: 10,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
   },
   photoButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: fonts.display,
+  },
+  photoButtonSub: {
+    fontSize: 13,
+    color: '#E0E7FF',
+    marginTop: 2,
+  },
+  photoSecondaryStack: {
+    gap: 10,
+  },
+  photoSecondaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   photoSecondaryText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#6B4EFF',
+    color: '#111827',
+    fontFamily: fonts.display,
+  },
+  photoSecondarySub: {
+    fontSize: 13,
+    color: '#6B7280',
   },
 
   /* Voice Mode */
@@ -1082,6 +1344,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 10,
+    fontFamily: fonts.display,
   },
   voiceEmptySubtitle: {
     fontSize: 15,
@@ -1089,6 +1352,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 22,
+    fontFamily: fonts.regular,
   },
   voicePrimaryButton: {
     borderRadius: 50,
@@ -1114,6 +1378,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: fonts.display,
   },
   voiceExamples: {
     flexDirection: 'row',
@@ -1125,6 +1390,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
+    fontFamily: fonts.strong,
   },
   voiceExamplesList: {
     gap: 8,
@@ -1134,6 +1400,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
     textAlign: 'center',
+    fontFamily: fonts.regular,
   },
 
   /* Results Container */
@@ -1160,12 +1427,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#DC2626',
+    fontFamily: fonts.display,
   },
   errorMessage: {
     fontSize: 14,
     color: '#DC2626',
     marginBottom: 14,
     lineHeight: 21,
+    fontFamily: fonts.regular,
   },
   errorDismiss: {
     alignSelf: 'flex-start',
@@ -1180,6 +1449,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#DC2626',
+    fontFamily: fonts.display,
   },
 
   /* Sync Card */
@@ -1207,11 +1477,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#4F46E5',
+    fontFamily: fonts.display,
   },
   syncSubtitle: {
     fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
+    fontFamily: fonts.regular,
   },
   syncRetry: {
     flexDirection: 'row',
@@ -1226,5 +1498,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: fonts.display,
+  },
+
+  /* Share Button */
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6', // A nice blue for sharing
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 20,
+    gap: 10,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  shareButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: fonts.display,
   },
 });
