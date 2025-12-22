@@ -4,7 +4,6 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
 
@@ -21,7 +20,6 @@ export const WATER_PRESETS = [
  * Hook for water logging operations
  */
 export function useWaterLog() {
-  const { userId } = useAuth();
   const queryClient = useQueryClient();
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState(null);
@@ -125,8 +123,79 @@ export function useWaterLog() {
     return Math.min(100, Math.round((total / goal) * 100));
   }, [queryClient]);
 
+  /**
+   * Mutation for removing water entry
+   */
+  const removeWaterMutation = useMutation({
+    mutationFn: async ({ entryId, amountLiters }) => {
+      return await apiClient.delete(`/water/${entryId}`);
+    },
+    onMutate: async ({ amountLiters }) => {
+      // Optimistic update - subtract the amount
+      await queryClient.cancelQueries({ queryKey: ['dashboard'] });
+      await queryClient.cancelQueries({ queryKey: ['waterToday'] });
+
+      const previousDashboard = queryClient.getQueryData(['dashboard']);
+      const previousWaterToday = queryClient.getQueryData(['waterToday']);
+
+      queryClient.setQueryData(['dashboard'], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          today: {
+            ...old.today,
+            waterIntakeLiters: Math.max((old.today.waterIntakeLiters || 0) - amountLiters, 0),
+          },
+        };
+      });
+
+      return { previousDashboard, previousWaterToday };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousDashboard) {
+        queryClient.setQueryData(['dashboard'], context.previousDashboard);
+      }
+      if (context?.previousWaterToday) {
+        queryClient.setQueryData(['waterToday'], context.previousWaterToday);
+      }
+    },
+    onSuccess: () => {
+      // Invalidate to get fresh data from server
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['waterToday'] });
+    },
+  });
+
+  /**
+   * Remove water entry
+   * @param {number} entryId - Water log entry ID
+   * @param {number} amountLiters - Amount in liters (for optimistic update)
+   * @returns {Promise<object>}
+   */
+  const removeWater = useCallback(async (entryId, amountLiters) => {
+    if (!entryId) {
+      throw new Error('Entry ID is required');
+    }
+
+    setIsLogging(true);
+    setError(null);
+
+    try {
+      const result = await removeWaterMutation.mutateAsync({ entryId, amountLiters });
+      return result;
+    } catch (err) {
+      console.error('[useWaterLog] Failed to remove water:', err);
+      setError(err.message || 'Failed to remove water entry');
+      throw err;
+    } finally {
+      setIsLogging(false);
+    }
+  }, [removeWaterMutation]);
+
   return {
     logWater,
+    removeWater,
     quickAdd,
     isLogging,
     error,
