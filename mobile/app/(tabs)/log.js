@@ -4,7 +4,7 @@
  * Clear user flow with explicit actions
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import * as Sharing from 'expo-sharing'; // Import expo-sharing
 import { Ionicons } from '@expo/vector-icons';
@@ -28,15 +29,21 @@ import { useFoodAnalysis } from '../../hooks/useFoodAnalysis';
 import { useLiveVoice } from '../../hooks/useLiveVoice';
 import { useFoodLog } from '../../hooks/useFoodLog';
 import { useNotification } from '../../providers/NotificationProvider';
+import { useWaterLog } from '../../hooks/useWaterLog';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '../../services/apiClient';
 
 // Components
 import { NutritionCard } from '../../components/log/NutritionCard';
 import { FoodItemsList } from '../../components/log/FoodItemsList';
-import BarcodeScannerModal from '../../components/BarcodeScannerModal'; // Import the new component
+import BarcodeScannerModal from '../../components/BarcodeScannerModal';
+import CameraModal from '../../components/log/CameraModal';
 import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
 import MoodLogger from '../../components/MoodLogger';
 import WaterLogger from '../../components/WaterLogger';
+import MealLoggedCard from '../../components/log/MealLoggedCard';
+import HydrationTracker from '../../components/HydrationTracker';
 
 // Platform-safe professional fonts for nutrition UI
 const fonts = {
@@ -45,18 +52,39 @@ const fonts = {
   regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
 };
 
+// Daily nutrition values for percentage calculations
+const DAILY_VALUES = {
+  calories: 2000,
+  protein: 50,
+  carbs: 275,
+  fat: 78,
+  fiber: 28,
+  sugar: 50,
+  sodium: 2300,
+  calcium: 1000,
+  iron: 18,
+  vitaminA: 900,
+  vitaminC: 90,
+  vitaminD: 20,
+  potassium: 3500,
+};
+
 export default function LogScreen() {
   // State
   const [selectedImage, setSelectedImage] = useState(null);
   const [analyzedFood, setAnalyzedFood] = useState(null);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [showWaterModal, setShowWaterModal] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
-  const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false); // New state for barcode modal
+  const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
   const [inputMode, setInputMode] = useState('text'); // 'text', 'photo', 'voice'
   const [analysisSource, setAnalysisSource] = useState('text');
   const [isTextFocused, setIsTextFocused] = useState(false);
+  const [showMealLogged, setShowMealLogged] = useState(false);
+  const [loggedMeal, setLoggedMeal] = useState(null);
+  const [showHydrationModal, setShowHydrationModal] = useState(false);
 
   // Hooks
   const foodAnalysis = useFoodAnalysis();
@@ -64,34 +92,48 @@ export default function LogScreen() {
   const foodLog = useFoodLog();
   const notify = useNotification();
   const router = useRouter();
+  const { logWater, removeWater } = useWaterLog();
+
+  // Fetch water data
+  const { data: waterTodayData } = useQuery({
+    queryKey: ['waterToday'],
+    queryFn: async () => {
+      const response = await apiClient.get('/water/today');
+      return response || { logs: [], totalLiters: 0, count: 0 };
+    },
+    staleTime: 30000,
+  });
 
   /**
-   * Handle photo selection
+   * Handle photo from CameraModal
    */
-  // This function is for selecting images from library/camera, not for barcode scanning directly
-  const handlePhotoSelect = async (source = 'library') => {
+  const handlePhotoFromCamera = async (imageUri) => {
+    setSelectedImage(imageUri);
+    setAnalysisSource('photo');
+
+    // Analyze photo
+    const analyzed = await foodAnalysis.analyzePhoto(imageUri);
+    setAnalyzedFood(analyzed);
+  };
+
+  /**
+   * Handle photo selection from library
+   */
+  const handlePhotoFromLibrary = async () => {
     try {
-      const { status } = source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (status !== 'granted') {
-        notify.error(`Please enable ${source === 'camera' ? 'camera' : 'photo library'} access`);
+        notify.error('Please enable photo library access');
         return;
       }
 
-      const result = source === 'camera'
-        ? await ImagePicker.launchCameraAsync({
-            quality: 0.8,
-            allowsEditing: true,
-            aspect: [4, 3],
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-            allowsEditing: true,
-            aspect: [4, 3],
-          });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [4, 3],
+      });
 
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
@@ -152,8 +194,10 @@ export default function LogScreen() {
     // Add micronutrients to share text
     if (Object.keys(totals.micros).length > 0) {
       shareText += `\n--- Micronutrients ---\n`;
-      Object.entries(totals.micros).forEach(([key, value]) => {
-        shareText += `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}\n`;
+      Object.entries(totals.micros).forEach(([key, micro]) => {
+        const val = micro.value ? micro.value.toFixed(1) : '0';
+        const unit = micro.unit || '';
+        shareText += `${key.charAt(0).toUpperCase() + key.slice(1)}: ${val}${unit}\n`;
       });
     }
 
@@ -184,7 +228,10 @@ export default function LogScreen() {
       };
 
       await foodLog.addLog(foodDataWithId);
-      notify.success('Food logged successfully!');
+
+      // Show MealLoggedCard instead of just notification
+      setLoggedMeal(foodDataWithId);
+      setShowMealLogged(true);
 
       // Clear state
       setAnalyzedFood(null);
@@ -267,15 +314,15 @@ export default function LogScreen() {
       foodName: item.name,
       servingSize: item.portion?.amount && item.portion?.unit
         ? `${item.portion.amount}${item.portion.unit}`
-        : '1 serving',
-      calories: Math.round(item.macros?.calories_kcal || 0),
-      protein: Math.round(item.macros?.protein_g || 0),
-      carbs: Math.round(item.macros?.carbs_g || 0),
-      fat: Math.round(item.macros?.fat_g || 0),
-      fiber: Math.round(item.macros?.fiber_g || 0),
-      sugar: Math.round(item.macros?.sugar_g || 0),
-      sugarAlcohols: Math.round(item.macros?.sugarAlcohols_g || 0), // Assuming sugarAlcohols_g might be present
-      netCarbs: Math.round(item.netCarbs || 0),
+        : null,
+      calories: item.macros?.calories_kcal ?? null,
+      protein: item.macros?.protein_g ?? null,
+      carbs: item.macros?.carbs_g ?? null,
+      fat: item.macros?.fat_g ?? null,
+      fiber: item.macros?.fiber_g ?? null,
+      sugar: item.macros?.sugar_g ?? null,
+      sugarAlcohols: item.macros?.sugarAlcohols_g ?? null,
+      netCarbs: item.netCarbs ?? null,
       micronutrients: item.micros ? Object.entries(item.micros).map(([key, value]) => ({
         name: key.charAt(0).toUpperCase() + key.slice(1), // e.g., "calcium" -> "Calcium"
         amount: value.value || 0,
@@ -305,6 +352,48 @@ export default function LogScreen() {
     foodAnalysis.setInputText('');
     setAnalysisSource('text');
   };
+
+  /**
+   * Handle water logging from HydrationTracker
+   */
+  const handleLogWater = async (entry) => {
+    try {
+      const amountLiters = entry.effectiveAmount / 1000; // Convert ml to liters
+      await logWater(amountLiters);
+      notify.success(`Logged ${entry.amount}ml of ${entry.type}`);
+    } catch (error) {
+      console.error('[LogScreen] Failed to log water:', error);
+      notify.error('Failed to log water');
+    }
+  };
+
+  /**
+   * Handle water entry removal from HydrationTracker
+   */
+  const handleRemoveWater = async (entryId, amountLiters) => {
+    try {
+      await removeWater(entryId, amountLiters);
+      notify.success('Water entry removed');
+    } catch (error) {
+      console.error('[LogScreen] Failed to remove water:', error);
+      notify.error('Failed to remove water entry');
+    }
+  };
+
+  /**
+   * Transform water logs to beverage history format for HydrationTracker
+   */
+  const beverageHistory = useMemo(() => {
+    if (!waterTodayData?.logs) return [];
+
+    return waterTodayData.logs.map(log => ({
+      id: log.id,
+      amount: Math.round(parseFloat(log.amountLiters) * 1000), // Convert to ml
+      type: 'water',
+      timestamp: new Date(log.loggedDate).getTime(),
+      amountLiters: parseFloat(log.amountLiters),
+    }));
+  }, [waterTodayData]);
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
 
@@ -351,7 +440,7 @@ export default function LogScreen() {
 
           <TouchableOpacity
             style={styles.quickActionChip}
-            onPress={() => setShowWaterModal(true)}
+            onPress={() => setShowHydrationModal(true)}
             activeOpacity={0.7}
             accessibilityLabel="Log your water intake"
           >
@@ -401,10 +490,10 @@ export default function LogScreen() {
                 <Text style={styles.modeTextActive}>Text</Text>
               </LinearGradient>
             ) : (
-              <>
+              <View style={styles.modeTabGradient}>
                 <Ionicons name="create-outline" size={22} color="#6B7280" />
                 <Text style={styles.modeText}>Text</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -431,10 +520,10 @@ export default function LogScreen() {
                 <Text style={styles.modeTextActive}>Photo</Text>
               </LinearGradient>
             ) : (
-              <>
+              <View style={styles.modeTabGradient}>
                 <Ionicons name="camera-outline" size={22} color="#6B7280" />
                 <Text style={styles.modeText}>Photo</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -461,10 +550,10 @@ export default function LogScreen() {
                 <Text style={styles.modeTextActive}>Voice</Text>
               </LinearGradient>
             ) : (
-              <>
+              <View style={styles.modeTabGradient}>
                 <Ionicons name="mic-outline" size={22} color="#6B7280" />
                 <Text style={styles.modeText}>Voice</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
         </View>
@@ -628,7 +717,7 @@ export default function LogScreen() {
                 <View style={styles.photoActions}>
                   <TouchableOpacity
                     style={styles.photoPrimaryCard}
-                    onPress={() => handlePhotoSelect('camera')}
+                    onPress={() => setShowCameraModal(true)}
                     disabled={isAnalyzing}
                     activeOpacity={0.9}
                     accessibilityLabel="Take a new meal photo"
@@ -664,7 +753,7 @@ export default function LogScreen() {
 
                     <TouchableOpacity
                       style={styles.photoSecondaryCard}
-                      onPress={() => handlePhotoSelect('library')}
+                      onPress={handlePhotoFromLibrary}
                       disabled={isAnalyzing}
                       activeOpacity={0.85}
                       accessibilityLabel="Choose a meal photo from gallery"
@@ -777,6 +866,7 @@ export default function LogScreen() {
           </View>
         ) : null}
 
+
         {/* Error Display */}
         {(foodAnalysis.error || foodLog.error) && (
           <View style={styles.errorCard}>
@@ -820,7 +910,7 @@ export default function LogScreen() {
                 onPress={foodLog.retryFailedSyncs}
               >
                 <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                <Text style={styles.syncRetryText}>Retry</Text>
+                <Text style={styles.syncRetryText}>Retry All</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -835,6 +925,17 @@ export default function LogScreen() {
         voiceHook={voiceHook}
       />
 
+      <CameraModal
+        visible={showCameraModal}
+        onClose={() => setShowCameraModal(false)}
+        onPhotoTaken={handlePhotoFromCamera}
+      />
+
+      <BarcodeScannerModal
+        visible={showBarcodeScannerModal}
+        onClose={() => setShowBarcodeScannerModal(false)}
+      />
+
       <MoodLogger
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
@@ -847,10 +948,76 @@ export default function LogScreen() {
         onSuccess={() => notify.success('Water logged!')}
       />
 
-      <BarcodeScannerModal
-        visible={showBarcodeScannerModal}
-        onClose={() => setShowBarcodeScannerModal(false)}
-      />
+      <Modal
+        visible={showHydrationModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowHydrationModal(false)}
+      >
+        <View style={styles.hydrationModalContainer}>
+          <View style={styles.hydrationModalHeader}>
+            <TouchableOpacity
+              onPress={() => setShowHydrationModal(false)}
+              style={styles.hydrationModalClose}
+              accessibilityLabel="Close water tracker"
+            >
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+            <Text style={styles.hydrationModalTitle}>Hydration Tracker</Text>
+            <View style={styles.hydrationModalPlaceholder} />
+          </View>
+          <HydrationTracker
+            currentIntake={waterTodayData?.totalLiters || 0}
+            dailyGoal={2.0}
+            onLogWater={handleLogWater}
+            onRemoveWater={handleRemoveWater}
+            beverageHistory={beverageHistory}
+          />
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showMealLogged}
+        animationType="slide"
+        onRequestClose={() => setShowMealLogged(false)}
+      >
+        {loggedMeal && (
+          <MealLoggedCard
+            meal={loggedMeal}
+            dailyGoals={{
+              dailyCalories: 2000,
+              proteinG: 150,
+              carbsG: 250,
+              fatG: 65,
+              fiberG: 30,
+            }}
+            onEdit={() => {
+              setShowMealLogged(false);
+              // Could reopen analysis UI here
+            }}
+            onShare={async () => {
+              try {
+                const shareText = `I logged ${loggedMeal.foodName} - ${loggedMeal.calories} kcal\n` +
+                  `Protein: ${loggedMeal.protein}g | Carbs: ${loggedMeal.carbs}g | Fat: ${loggedMeal.fat}g`;
+
+                if (await Sharing.isAvailableAsync()) {
+                  await Sharing.shareAsync(shareText, {
+                    mimeType: 'text/plain',
+                    dialogTitle: 'Share Meal'
+                  });
+                }
+              } catch (error) {
+                console.error('Share failed:', error);
+              }
+            }}
+            onClose={() => {
+              setShowMealLogged(false);
+              setLoggedMeal(null);
+              notify.success('Meal logged successfully!');
+            }}
+          />
+        )}
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -979,42 +1146,56 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    minWidth: 80,
+    marginHorizontal: 2,
   },
   modeTabGradient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
     gap: 8,
+    width: '100%',
+    height: '100%',
   },
   modeTabActive: {
+    borderColor: '#6B4EFF',
+    borderWidth: 1,
+    backgroundColor: 'transparent', // gradient will be applied
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 6,
     elevation: 5,
-    borderColor: '#6B4EFF',
   },
   modeTabInactive: {
     backgroundColor: '#F8FAFF',
+    borderColor: '#E5E7EB',
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 2,
+    elevation: 1,
   },
   modeText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
     fontFamily: fonts.strong,
+    textAlign: 'center',
   },
   modeTextActive: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600', // match inactive for consistency
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: fonts.strong, // use same font family for both
+    textAlign: 'center',
   },
 
   /* Input Section */
@@ -1522,5 +1703,44 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: fonts.display,
+  },
+
+  /* Hydration Modal */
+  hydrationModalContainer: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  hydrationModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  hydrationModalClose: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hydrationModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: fonts.display,
+  },
+  hydrationModalPlaceholder: {
+    width: 44,
   },
 });

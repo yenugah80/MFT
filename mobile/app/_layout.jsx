@@ -6,6 +6,7 @@ import { NotificationProvider } from "@/providers/NotificationProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
+import DatabaseInitializer from "@/components/DatabaseInitializer";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -45,17 +46,19 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary onReset={handleErrorReset}>
-      <NotificationProvider>
-        <QueryProvider>
-          <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-            <ApiInitializer>
-              <SafeScreen>
-                <Slot />
-              </SafeScreen>
-            </ApiInitializer>
-          </ClerkProvider>
-        </QueryProvider>
-      </NotificationProvider>
+      <DatabaseInitializer>
+        <NotificationProvider>
+          <QueryProvider>
+            <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+              <ApiInitializer>
+                <SafeScreen>
+                  <Slot />
+                </SafeScreen>
+              </ApiInitializer>
+            </ClerkProvider>
+          </QueryProvider>
+        </NotificationProvider>
+      </DatabaseInitializer>
     </ErrorBoundary>
   );
 }

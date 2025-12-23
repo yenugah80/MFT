@@ -34,6 +34,11 @@ export function NutritionCard({ foodLog, onSave, onCancel, dailyValues }) {
     micronutrients, // This is an array of { name, amount, unit }
   } = foodLog;
 
+  // Identify missing key macros for uncertainty state
+  const isMissingKeyData = [calories, protein, carbs, fat].some(
+    (val) => val === null || val === undefined
+  );
+
   const renderMicronutrient = (micro) => {
     const dv = dailyValues[micro.name.toLowerCase()]; // Get DV for this micronutrient
     let percentage = null;
@@ -75,10 +80,22 @@ export function NutritionCard({ foodLog, onSave, onCancel, dailyValues }) {
       <View style={styles.header}>
         <Ionicons name="nutrition-outline" size={28} color="#6B4EFF" />
         <View>
-          <Text style={styles.foodName}>{foodName}</Text>
+          <Text style={styles.foodName}>{foodName || 'Unknown Food'}</Text>
           <Text style={styles.servingSize}>{servingSize}</Text>
         </View>
+        {isMissingKeyData && (
+          <View style={styles.warningIcon}>
+            <Ionicons name="warning" size={24} color="#F59E0B" />
+          </View>
+        )}
       </View>
+
+      {isMissingKeyData && (
+        <View style={styles.uncertaintyBanner}>
+          <Ionicons name="information-circle-outline" size={16} color="#D97706" />
+          <Text style={styles.uncertaintyText}>Data Uncertainty: Some key macros are missing.</Text>
+        </View>
+      )}
 
       <View style={styles.nutritionGrid}>
         <View style={styles.nutritionItem}>
@@ -171,6 +188,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#6B7280',
     fontFamily: fonts.regular,
+  },
+  warningIcon: {
+    marginLeft: 'auto',
+  },
+  uncertaintyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+  },
+  uncertaintyText: {
+    fontSize: 12,
+    color: '#D97706',
+    fontFamily: fonts.strong,
   },
   nutritionGrid: {
     flexDirection: 'row',

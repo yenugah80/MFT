@@ -38,6 +38,7 @@ import MoodChip from "./MoodChip";
 import MoodLogger from "./MoodLogger";
 import WaterLogger from "./WaterLogger";
 import MicrosCoverageSection from "./MicrosCoverageSection";
+import MealCalendar from "./MealCalendar";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState, formatters } from "../constants/designTokens";
@@ -76,6 +77,33 @@ export default function DashboardContent() {
     });
     return micros;
   }, [uniqueFoodLogs]);
+
+  // Transform food logs to calendar format
+  const calendarData = useMemo(() => {
+    if (!data?.today?.foodLogs) return {};
+
+    const calData = {};
+    const allLogs = dedupeLogs(data.today.foodLogs);
+
+    allLogs.forEach(log => {
+      const date = new Date(log.timestamp);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+      if (!calData[key]) {
+        calData[key] = { calories: 0, meals: 0, goalReached: false };
+      }
+
+      calData[key].calories += log.calories || 0;
+      calData[key].meals += 1;
+
+      const calorieGoal = data?.goals?.dailyCalories || 2000;
+      calData[key].goalReached =
+        calData[key].calories >= (calorieGoal * 0.9) &&
+        calData[key].calories <= (calorieGoal * 1.1);
+    });
+
+    return calData;
+  }, [data]);
 
   // Detect anomalies in data
   const dataAnomalies = useMemo(() => {
@@ -120,7 +148,6 @@ export default function DashboardContent() {
 
   // Handlers
   const handleLogMood = () => setMoodModalVisible(true);
-  const handleLogWater = () => setWaterModalVisible(true);
   const handleViewAllMicros = () => notify.info('Detailed micros view - Coming soon');
 
   const handleMoodSuccess = () => {
@@ -231,37 +258,41 @@ export default function DashboardContent() {
           />
         </GlassCard>
 
-        {/* HYDRATION */}
-        <TouchableOpacity onPress={handleLogWater} activeOpacity={0.9}>
-          <GlassCard style={styles.section} padding="md">
-            <View style={styles.waterContainer}>
-              <View style={styles.waterLeft}>
-                <View style={styles.waterIconContainer}>
-                  <Ionicons name={ICONS.water} size={ICON_SIZES['2xl']} color={SEMANTIC.info.base} />
+        {/* HYDRATION SUMMARY - Tap to open WaterLogger for full tracker */}
+        <TouchableOpacity
+          style={styles.section}
+          onPress={() => setWaterModalVisible(true)}
+          activeOpacity={0.9}
+        >
+          <GlassCard padding="lg">
+            <View style={styles.hydrationSummary}>
+              <View style={styles.hydrationHeader}>
+                <Ionicons name="water" size={ICON_SIZES.lg} color={SEMANTIC.info.base} />
+                <Text style={styles.sectionTitle}>Hydration</Text>
+              </View>
+              <View style={styles.hydrationStats}>
+                <View style={styles.hydrationStat}>
+                  <Text style={styles.hydrationValue}>
+                    {(today.waterIntakeLiters * 1000).toFixed(0)}ml
+                  </Text>
+                  <Text style={styles.hydrationLabel}>Today</Text>
                 </View>
-                <View>
-                  <Text style={styles.waterTitle}>Hydration</Text>
-                  <Text style={styles.waterValue}>
-                    {(today.waterIntakeLiters * 1000).toFixed(0)}ml / {((goals?.waterLiters || 2.0) * 1000).toFixed(0)}ml
+                <View style={styles.hydrationDivider} />
+                <View style={styles.hydrationStat}>
+                  <Text style={styles.hydrationValue}>
+                    {Math.min(100, Math.round((today.waterIntakeLiters / (goals?.waterLiters || 2.0)) * 100))}%
                   </Text>
-                  <Text style={styles.waterPercent}>
-                    {formatters.percent(today.waterIntakeLiters / (goals?.waterLiters || 2.0))} complete
+                  <Text style={styles.hydrationLabel}>Progress</Text>
+                </View>
+                <View style={styles.hydrationDivider} />
+                <View style={styles.hydrationStat}>
+                  <Text style={styles.hydrationValue}>
+                    {((goals?.waterLiters || 2.0) * 1000).toFixed(0)}ml
                   </Text>
+                  <Text style={styles.hydrationLabel}>Goal</Text>
                 </View>
               </View>
-              <View style={styles.waterRight}>
-                <TouchableOpacity style={styles.quickAddButton} activeOpacity={0.8} onPress={handleLogWater}>
-                  <LinearGradient
-                    colors={SURFACES.gradient.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.quickAddGradient}
-                  >
-                    <Ionicons name="add" size={18} color="#FFFFFF" />
-                    <Text style={styles.quickAddText}>Quick Add</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.hydrationTapHint}>Tap to log water →</Text>
             </View>
           </GlassCard>
         </TouchableOpacity>
@@ -321,6 +352,16 @@ export default function DashboardContent() {
             </View>
           </GlassCard>
         )}
+
+        {/* MEAL CALENDAR - Monthly Tracking */}
+        <MealCalendar
+          data={calendarData}
+          calorieGoal={goals?.dailyCalories || 2000}
+          onDayPress={(dateKey, dayData) => {
+            console.log('Day pressed:', dateKey, dayData);
+            // Could navigate to history with date filter or show modal
+          }}
+        />
 
         {/* GAMIFICATION */}
         <GlassCard style={styles.section} padding="md">
@@ -670,5 +711,48 @@ const styles = StyleSheet.create({
   weightDate: {
     fontSize: TYPOGRAPHY.size.sm,
     color: COLORS.text.tertiary,
+  },
+
+  // Hydration Summary
+  hydrationSummary: {
+    gap: SPACING[4],
+  },
+  hydrationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  hydrationStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: SPACING[3],
+  },
+  hydrationStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  hydrationValue: {
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: SEMANTIC.info.base,
+    marginBottom: SPACING[1],
+  },
+  hydrationLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  hydrationDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(107, 78, 255, 0.2)',
+  },
+  hydrationTapHint: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: BRAND.primary,
+    textAlign: 'center',
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
 });

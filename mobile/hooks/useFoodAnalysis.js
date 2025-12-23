@@ -1,262 +1,432 @@
 /**
  * useFoodAnalysis Hook
- * Orchestrates food analysis from multiple sources: Open Food Facts (barcode/text) -> USDA (text) -> AI (text/image)
- * Safe, fast, predictable, production-ready
- * Secure API key handling
- * + Multi-item breakdown with auto-analysis
+ * Enterprise-grade food analysis orchestrator
+ *
+ * Data Sources (Priority Order):
+ * 1. Open Food Facts - Barcode & text search (free, fast, accurate)
+ * 2. Backend BFF - Cached products & USDA integration
+ * 3. USDA FoodData Central - via backend
+ * 4. AI Analysis - GPT-4o-mini for complex meals & images
+ *
+ * Features:
+ * - Multi-source cascading fallback
+ * - Multi-item meal breakdown
+ * - Quantity editing with macro scaling
+ * - Debounced auto-analysis (1.5s)
+ * - Request cancellation (abort previous)
+ * - Barcode caching
+ * - Image compression
+ * - Progress tracking
+ *
+ * @module hooks/useFoodAnalysis
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import * as FileSystem from 'expo-file-system';
 import { useAuth } from '@clerk/clerk-expo';
+import Constants from 'expo-constants';
 import { API_URL } from '../constants/api';
 import { calculateNetCarbs } from '../types/foodLog';
-import Constants from 'expo-constants'; // Import Constants
 import { normalizeNutritionData, detectAggregatedData } from '../utils/nutritionNormalizer';
 
-/* ---------------- CONFIG ---------------- */
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
-const TOTAL_BUDGET_MS = 2000;
+/** Total analysis budget (all sources combined) */
+const TOTAL_ANALYSIS_BUDGET_MS = 2000;
+
+/** USDA API timeout */
 const USDA_TIMEOUT_MS = 650;
+
+/** AI API timeout */
 const AI_TIMEOUT_MS = 1600;
 
+/** Open Food Facts timeout */
+const OPEN_FOOD_FACTS_TIMEOUT_MS = 1400;
+
+/** Image analysis timeout */
+const IMAGE_ANALYSIS_TIMEOUT_MS = 2500;
+
+/** Auto-analysis debounce delay (after user stops typing) */
+const AUTO_ANALYSIS_DEBOUNCE_MS = 1500;
+
+/** Fade progress bar delay */
+const PROGRESS_FADE_DELAY_MS = 400;
+
+/** Image compression width */
+const IMAGE_MAX_WIDTH_PX = 1024;
+
+/** Image compression quality (0-1) */
+const IMAGE_COMPRESSION_QUALITY = 0.7;
+
+/** Minimum confidence for USDA single-food detection */
+const USDA_CONFIDENCE_THRESHOLD = 0.78;
+
+/** Maximum words for single-food classification */
+const SINGLE_FOOD_MAX_WORDS = 3;
+
+/** Open Food Facts API */
 const OPEN_FOOD_FACTS_API_URL = 'https://world.openfoodfacts.org/api/v2/product/';
 const OPEN_FOOD_FACTS_SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
-const OPEN_FOOD_FACTS_API_KEY = Constants.expoConfig.extra.openFoodFactsApiKey; // Loaded from .env via app.config.js
+const OPEN_FOOD_FACTS_API_KEY = Constants.expoConfig?.extra?.openFoodFactsApiKey;
 
+/** Backend API endpoints */
 const USDA_ENDPOINT = `${API_URL}/food/resolve`;
 const AI_TEXT_ENDPOINT = `${API_URL}/nutrition/recipe/parse`;
 const AI_IMAGE_ENDPOINT = `${API_URL}/food/analyze-image`;
-const OPEN_FOOD_FACTS_TIMEOUT_MS = 1400;
+const BACKEND_BARCODE_ENDPOINT = `${API_URL}/food/barcode`;
 
-/* ---------------- HELPERS ---------------- */
+// ============================================================================
+// TYPE DEFINITIONS (JSDoc)
+// ============================================================================
 
-// Detect if text looks like a single food or a meal
-// This helps in deciding whether to prioritize a single-item lookup (like USDA)
-// or a multi-item parsing (like AI recipe analysis).
+/**
+ * @typedef {Object} AnalysisItem
+ * @property {string} itemId - Unique identifier
+ * @property {string} name - Food name
+ * @property {Portion} portion - Serving information
+ * @property {Macros} macros - Macronutrients
+ * @property {Object.<string, Micro>} micros - Micronutrients
+ * @property {number|null} netCarbs - Calculated net carbs
+ * @property {Array<SourceEvidence>} sourceEvidence - Data provenance
+ * @property {boolean} isEditing - UI state
+ * @property {Object|null} editedPortion - User-edited portion
+ */
+
+/**
+ * @typedef {Object} Portion
+ * @property {number} amount - Quantity
+ * @property {string} unit - Unit (g, oz, cup, serving, etc.)
+ * @property {number} gramsEquivalent - Amount in grams
+ * @property {string} servingText - Human-readable serving size
+ */
+
+/**
+ * @typedef {Object} Macros
+ * @property {number|null} calories_kcal - Calories
+ * @property {number|null} protein_g - Protein in grams
+ * @property {number|null} carbs_g - Carbs in grams
+ * @property {number|null} fat_g - Fat in grams
+ * @property {number|null} fiber_g - Fiber in grams
+ * @property {number|null} sugar_g - Sugar in grams
+ * @property {number|null} sodium_mg - Sodium in mg
+ */
+
+/**
+ * @typedef {Object} Micro
+ * @property {number} value - Micronutrient value
+ * @property {string} unit - Unit (mg, µg, etc.)
+ */
+
+/**
+ * @typedef {Object} AnalysisResult
+ * @property {Array<AnalysisItem>} items - Food items in the meal
+ * @property {Object} totals - Aggregated nutrition totals
+ * @property {Macros} totals.macros - Total macros
+ * @property {Object.<string, Micro>} totals.micros - Total micros
+ */
+
+// ============================================================================
+// PURE UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Detect meal type based on current time
+ * @returns {'breakfast'|'lunch'|'dinner'|'snack'} Meal type
+ */
+function getMealTypeFromTime() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 15) return 'lunch';
+  if (hour >= 15 && hour < 17) return 'snack';
+  if (hour >= 17 && hour < 22) return 'dinner';
+  return 'snack';
+}
+
+/**
+ * Classify text as single food vs multi-item meal
+ * @param {string} text - Input text
+ * @returns {{isSingleFood: boolean}} Classification result
+ */
 function classifyText(text) {
-  const t = text.toLowerCase().trim();
-  const wordCount = t.split(/\s+/).length;
-  const hasSeparators = /,|and|with|\+/.test(t);
-  const hasNumbers = /\d/.test(t);
-  const hasKeywords = /(g|gram|mg|ml|cup|tbsp|tsp|oz|lb|slice|piece|serving)/.test(t);
+  const normalized = text.toLowerCase().trim();
+  const wordCount = normalized.split(/\s+/).length;
+  const hasSeparators = /,|and|with|\+/.test(normalized);
+  const hasQuantities = /\d+\s*(g|gram|mg|ml|cup|tbsp|tsp|oz|lb|slice|piece|serving)/.test(normalized);
 
-  // A simple heuristic: if few words, no separators, and no explicit quantities, it's likely a single food name.
-  // This can be refined with NLP if needed.
-
+  // Heuristic: Short text without separators or quantities = likely single food
   return {
-    isSingleFood: wordCount <= 3 && !hasSeparators && !hasKeywords,
+    isSingleFood: wordCount <= SINGLE_FOOD_MAX_WORDS && !hasSeparators && !hasQuantities,
   };
 }
 
-// Timeout-safe fetch
+/**
+ * Convert various units to grams
+ * @param {number} amount - Quantity
+ * @param {string} unit - Unit of measurement
+ * @returns {number|null} Amount in grams, or null if unknown unit
+ */
+function convertToGrams(amount, unit) {
+  const conversions = {
+    'g': 1,
+    'gram': 1,
+    'grams': 1,
+    'kg': 1000,
+    'kilogram': 1000,
+    'oz': 28.35,
+    'ounce': 28.35,
+    'lb': 453.59,
+    'pound': 453.59,
+    'ml': 1, // Approximate for water-like liquids
+    'milliliter': 1,
+    'l': 1000,
+    'liter': 1000,
+    'cup': 240,
+    'tbsp': 15,
+    'tablespoon': 15,
+    'tsp': 5,
+    'teaspoon': 5,
+    'serving': 100, // Default assumption
+  };
+
+  const normalizedUnit = (unit || '').toLowerCase().trim();
+  const factor = conversions[normalizedUnit];
+
+  return factor ? amount * factor : null;
+}
+
+/**
+ * Timeout-safe fetch wrapper
+ * @param {string} url - Request URL
+ * @param {Object} options - Fetch options
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @returns {Promise<{res: Response, json: Object}>} Response and parsed JSON
+ */
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  options.headers = { ...options.headers, 'Cache-Control': 'no-cache' }; // Prevent stale responses
+
+  options.headers = {
+    ...options.headers,
+    'Cache-Control': 'no-cache',
+  };
 
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+
     const json = await res.json().catch(() => ({}));
+
     return { res, json };
   } finally {
     clearTimeout(timer);
   }
 }
 
-// Normalize + build FoodLog
+/**
+ * Parse micronutrient string value
+ * @param {string|number} val - Micro value (e.g., "80mg", 80)
+ * @returns {Micro|null} Parsed micro with value and unit
+ */
+function parseMicronutrient(val) {
+  if (val === null || val === undefined) return null;
+
+  if (typeof val === 'number') {
+    return { value: val, unit: '' };
+  }
+
+  if (typeof val !== 'string') return null;
+
+  const match = val.match(/([\d.]+)/);
+  const unit = val.replace(/[\d.\s]/g, '').trim();
+
+  return match ? {
+    value: parseFloat(match[1]),
+    unit: unit || '',
+  } : null;
+}
+
+// ============================================================================
+// DATA NORMALIZATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Build normalized FoodLog from raw API data
+ * @param {Object} params - Build parameters
+ * @param {string} params.inputText - Original user input
+ * @param {string} params.source - Data source (usda, ai, photo, openfoodfacts)
+ * @param {Object} params.raw - Raw API response
+ * @returns {Object} Normalized food log
+ */
 function buildFoodLog({ inputText, source, raw }) {
-  // Ensure raw data is always an object
+  // Ensure raw data is an object
   if (typeof raw !== 'object' || raw === null) {
     raw = {};
   }
+
+  // Check for aggregated data
   const aggregation = detectAggregatedData(raw);
   if (aggregation?.isAggregated) {
-    console.warn('[useFoodAnalysis] Aggregated data detected');
+    console.warn('[useFoodAnalysis] Aggregated data detected - ensure proper multi-item handling');
   }
 
-  const n = normalizeNutritionData(raw);
+  // Normalize nutrition data
+  const normalized = normalizeNutritionData(raw);
+
+  // Extract micronutrients with units
+  const micros = {};
+  Object.entries(normalized.micros || {}).forEach(([key, value]) => {
+    // Infer units if not provided
+    let unit = '';
+    const keyLower = key.toLowerCase();
+
+    if (['calcium', 'iron', 'potassium', 'sodium', 'magnesium', 'zinc'].some(m => keyLower.includes(m))) {
+      unit = 'mg';
+    } else if (keyLower.includes('vitamin')) {
+      unit = ['a', 'd', 'e', 'k'].some(v => keyLower.includes(v)) ? 'µg' : 'mg';
+    }
+
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue > 0) {
+      micros[key] = { value: parseFloat(numValue.toFixed(2)), unit };
+    }
+  });
 
   return {
     timestamp: Date.now(),
     status: 'pending',
     source,
-    foodName: raw.foodName || raw.name || inputText || 'Unknown Food', // Provide a fallback
-    servingSize: raw.servingSize || '1 serving',
-    calories: n.calories,
-    protein: n.protein,
-    carbs: n.carbs,
-    fat: n.fat,
-    fiber: n.fiber,
-    sugar: n.sugar,
-    sugarAlcohols: n.sugarAlcohols,
-    netCarbs: calculateNetCarbs(n), // Ensure n has carbs, fiber, sugarAlcohols
-    micronutrients: n.micronutrients, // This might be a legacy field, keeping for now
-    micros: (() => {
-      const microsWithUnits = {};
-      Object.entries(n.micros || {}).forEach(([key, value]) => {
-        // Infer units for AI-generated micros if not explicitly provided by normalizeNutritionData
-        let unit = '';
-        if (key.toLowerCase().includes('calcium') || key.toLowerCase().includes('iron') || key.toLowerCase().includes('potassium') || key.toLowerCase().includes('sodium') || key.toLowerCase().includes('magnesium') || key.toLowerCase().includes('zinc')) {
-          unit = 'mg';
-        } else if (key.toLowerCase().includes('vitamin')) {
-          if (key.toLowerCase().includes('a') || key.toLowerCase().includes('d') || key.toLowerCase().includes('e') || key.toLowerCase().includes('k')) {
-            unit = 'µg'; // or IU for some vitamins
-          } else {
-            unit = 'mg';
-          }
-        }
-        microsWithUnits[key] = { value: parseFloat(value.toFixed(2)), unit: unit };
-      });
-      return microsWithUnits;
-    })(),
-
-    ingredients: raw.ingredients || [],
-    healthScore: raw.healthScore || 0,
-    nutriscore: raw.nutriscore,
-    ecoscore: raw.ecoscore,
-    novaScore: raw.novaScore,
+    foodName: raw.foodName || raw.name || inputText || null,
+    servingSize: raw.servingSize || null,
+    calories: normalized.calories ?? null,
+    protein: normalized.protein ?? null,
+    carbs: normalized.carbs ?? null,
+    fat: normalized.fat ?? null,
+    fiber: normalized.fiber ?? null,
+    sugar: normalized.sugar ?? null,
+    sugarAlcohols: normalized.sugarAlcohols ?? null,
+    netCarbs: calculateNetCarbs(normalized) ?? null,
+    micronutrients: normalized.micronutrients ?? null,
+    micros,
+    ingredients: raw.ingredients ?? [],
+    healthScore: raw.healthScore ?? null,
+    nutriscore: raw.nutriscore ?? null,
+    ecoscore: raw.ecoscore ?? null,
+    novaScore: raw.novaScore ?? null,
     dietLabels: raw.dietLabels || [],
     allergens: raw.allergens || [],
   };
 }
 
-// Image compression
-async function compressImage(uri) {
-  let manipulateAsync, SaveFormat;
-  try {
-    const mod = await import('expo-image-manipulator');
-    manipulateAsync = mod.manipulateAsync;
-    SaveFormat = mod.SaveFormat;
-  } catch (e) {
-    throw new Error('Image compression unavailable. Install expo-image-manipulator and run on a real device.');
-  }
-
-  if (!FileSystem.readAsStringAsync) {
-    throw new Error('Photo analysis unavailable: expo-file-system missing. Install expo-file-system and rebuild on device.');
-  }
-
-  const result = await manipulateAsync(
-    uri,
-    [{ resize: { width: 1024 } }],
-    { compress: 0.7, format: SaveFormat.JPEG }
-  );
-
-  const encoding = (FileSystem?.EncodingType && FileSystem.EncodingType.Base64) ? FileSystem.EncodingType.Base64 : 'base64';
-
-  const base64 = await FileSystem.readAsStringAsync(result.uri, { encoding });
-
-  return base64;
-}
-
-// Unit conversion to grams (for quantity editing)
-function convertToGrams(amount, unit) {
-  const conversions = {
-    'g': 1,
-    'kg': 1000,
-    'oz': 28.35,
-    'lb': 453.59,
-    'ml': 1, // Approximate for water-like liquids
-    'l': 1000,
-    'cup': 240, // Approximate
-    'tbsp': 15,
-    'tsp': 5,
-    'serving': 100, // Default assumption if no specific serving size is known
-  };
-
-  return amount * (conversions[unit.toLowerCase()] || 100);
-}
-
-// New helper function for Open Food Facts
-function mapOpenFoodFactsProductToAnalysisResult(product, inputText) {
-  // Ensure product is always an object
-  if (typeof product !== 'object' || product === null) {
-    product = {};
-  }
-  if (!product) return null;
+/**
+ * Map Open Food Facts product to analysis item
+ * @param {Object} product - OFF API product object
+ * @param {string} inputText - Original search text
+ * @returns {AnalysisItem|null} Normalized analysis item
+ */
+function mapOpenFoodFactsToItem(product, inputText) {
+  if (typeof product !== 'object' || product === null) return null;
 
   const nutrients = product.nutriments || {};
-  const servingSizeText = product.serving_size || '';
+  const servingSizeText = product.serving_size ?? '';
 
   let portionAmount = 1;
   let portionUnit = 'serving';
-  let gramsEquivalent = 100; // Default if no specific serving size or 100g data
+  let gramsEquivalent = 100;
 
-  // Try to parse serving_size string
+  // Parse serving_size string (e.g., "100g", "1 cup")
   const servingMatch = servingSizeText.match(/(\d+(\.\d+)?)\s*([a-zA-Z]+)?/);
   if (servingMatch) {
     portionAmount = parseFloat(servingMatch[1]);
-    portionUnit = servingMatch[3] ? servingMatch[3].toLowerCase() : 'unit';
-  } else if (nutrients['energy-kcal_serving']) {
-    // If serving_size string is not clear, but _serving nutrients exist, assume 1 serving
+    portionUnit = servingMatch[3]?.toLowerCase() || 'unit';
+  } else if (nutrients['energy-kcal_serving'] !== undefined) {
     portionAmount = 1;
     portionUnit = 'serving';
-  } else {
-    // Default to 100g if no serving info
+  } else if (Object.keys(nutrients).length > 0) {
     portionAmount = 100;
     portionUnit = 'g';
   }
 
-  // Determine if we should use _serving or _100g values
+  // Determine whether to use _serving or _100g values
   const useServingNutrients = nutrients['energy-kcal_serving'] !== undefined;
 
-  const getNutrientValue = (nutrientKey, type = 'macro') => {
+  /**
+   * Get nutrient value from OFF data
+   * @param {string} nutrientKey - Nutrient name
+   * @returns {number|null} Nutrient value
+   */
+  const getNutrient = (nutrientKey) => {
     const key = useServingNutrients ? `${nutrientKey}_serving` : `${nutrientKey}_100g`;
-    const unitKey = `${nutrientKey}_unit`;
-    const value = nutrients[key] !== undefined ? nutrients[key] : 0; // Ensure 0 for missing
-    const unit = nutrients[unitKey] || (type === 'macro' ? '' : (nutrientKey === 'sodium' ? 'mg' : 'µg')); // Default micro units
+    const value = nutrients[key];
 
-    if (type === 'macro') {
-      return parseFloat(value.toFixed(2));
-    } else { // type === 'micro'
-      return { value: parseFloat(value.toFixed(2)), unit: unit };
+    if (value === null || value === undefined || isNaN(value)) {
+      return null;
     }
+
+    return parseFloat(value.toFixed(2));
   };
 
-  // Common micronutrients to extract
-  // Define common micronutrients and their corresponding Open Food Facts keys
-  const commonMicros = { calcium: 'calcium', iron: 'iron', vitaminA: 'vitamin-a', vitaminC: 'vitamin-c', potassium: 'potassium', sodium: 'sodium', magnesium: 'magnesium', zinc: 'zinc', vitaminD: 'vitamin-d', vitaminE: 'vitamin-e', vitaminK: 'vitamin-k', vitaminB1: 'vitamin-b1', vitaminB2: 'vitamin-b2', vitaminB3: 'vitamin-b3', vitaminB6: 'vitamin-b6', vitaminB9: 'vitamin-b9', vitaminB12: 'vitamin-b12' };
-
-  const micros = {};
-  Object.entries(commonMicros).forEach(([appKey, offKey]) => {
-    const microData = getNutrientValue(offKey, 'micro'); // This returns { value, unit }
-    if (microData.value > 0) {
-      micros[appKey] = microData; // Store as { value, unit }
-    }
-  });
-
-  // Calculate gramsEquivalent based on the determined portion
+  // Calculate grams equivalent
   if (useServingNutrients && servingMatch) {
     gramsEquivalent = convertToGrams(portionAmount, portionUnit);
-  } else if (!useServingNutrients && portionUnit === 'g' && portionAmount === 100) {
-    gramsEquivalent = 100; // Already per 100g
+  } else if (!useServingNutrients && portionUnit === 'g') {
+    gramsEquivalent = 100;
   } else {
     gramsEquivalent = convertToGrams(portionAmount, portionUnit);
   }
 
+  // Extract common micronutrients
+  const commonMicros = {
+    calcium: 'calcium',
+    iron: 'iron',
+    vitaminA: 'vitamin-a',
+    vitaminC: 'vitamin-c',
+    potassium: 'potassium',
+    sodium: 'sodium',
+    magnesium: 'magnesium',
+    zinc: 'zinc',
+    vitaminD: 'vitamin-d',
+    vitaminE: 'vitamin-e',
+    vitaminK: 'vitamin-k',
+  };
+
+  const micros = {};
+  Object.entries(commonMicros).forEach(([appKey, offKey]) => {
+    const value = getNutrient(offKey);
+    if (value && value > 0) {
+      micros[appKey] = {
+        value,
+        unit: appKey === 'sodium' ? 'mg' : 'µg',
+      };
+    }
+  });
+
   return {
-    itemId: product.code || product.id,
-    name: product.product_name || product.generic_name || inputText || 'Unknown Food Product',
+    itemId: product.code || product.id || `off-${Date.now()}`,
+    name: product.product_name || product.generic_name || inputText || null,
     portion: {
       amount: portionAmount,
       unit: portionUnit,
-      gramsEquivalent: gramsEquivalent,
-      servingText: servingSizeText || `${portionAmount} ${portionUnit}`
+      gramsEquivalent,
+      servingText: servingSizeText || `${portionAmount} ${portionUnit}`,
     },
     macros: {
-      calories_kcal: getNutrientValue('energy-kcal'),
-      protein_g: getNutrientValue('proteins'),
-      carbs_g: getNutrientValue('carbohydrates'),
-      fat_g: getNutrientValue('fat'),
-      fiber_g: getNutrientValue('fiber'),
-      sugar_g: getNutrientValue('sugars'),
-      sodium_mg: getNutrientValue('sodium', 'macro'), // Sodium as a macro for display (often listed as such)
+      calories_kcal: getNutrient('energy-kcal'),
+      protein_g: getNutrient('proteins'),
+      carbs_g: getNutrient('carbohydrates'),
+      fat_g: getNutrient('fat'),
+      fiber_g: getNutrient('fiber'),
+      sugar_g: getNutrient('sugars'),
+      sodium_mg: getNutrient('sodium'),
     },
-    micros: micros, // Now micros contains numbers
+    micros,
     netCarbs: calculateNetCarbs({
-      carbs: getNutrientValue('carbohydrates'),
-      fiber: getNutrientValue('fiber'),
-      sugarAlcohols: getNutrientValue('polyols') // Open Food Facts uses 'polyols' for sugar alcohols
+      carbs: getNutrient('carbohydrates') ?? 0,
+      fiber: getNutrient('fiber') ?? 0,
+      sugarAlcohols: getNutrient('polyols') ?? 0,
     }),
     sourceEvidence: [{
       source: 'Open Food Facts',
@@ -271,7 +441,136 @@ function mapOpenFoodFactsProductToAnalysisResult(product, inputText) {
   };
 }
 
-// Direct Open Food Facts fetcher (text + barcode)
+/**
+ * Map backend product to analysis item
+ * @param {Object} product - Backend product object
+ * @param {string} inputText - Original search text
+ * @returns {AnalysisItem|null} Normalized analysis item
+ */
+function mapBackendProductToItem(product, inputText) {
+  if (typeof product !== 'object' || product === null) return null;
+
+  const servingSizeText = product.servingSize ?? '';
+  const servingMatch = servingSizeText.match(/(\d+(\.\d+)?)\s*([a-zA-Z]+)?/);
+  const portionAmount = servingMatch ? parseFloat(servingMatch[1]) : 100;
+  const portionUnit = servingMatch ? (servingMatch[3]?.toLowerCase() || 'g') : 'g';
+  const gramsEquivalent = convertToGrams(portionAmount, portionUnit);
+
+  const macros = {
+    calories_kcal: Number.isFinite(product.calories) ? product.calories : null,
+    protein_g: Number.isFinite(product.protein) ? product.protein : null,
+    carbs_g: Number.isFinite(product.carbs) ? product.carbs : null,
+    fat_g: Number.isFinite(product.fat) ? product.fat : null,
+    fiber_g: Number.isFinite(product.fiber) ? product.fiber : null,
+    sugar_g: Number.isFinite(product.sugar) ? product.sugar : null,
+    sodium_mg: Number.isFinite(product.sodium) ? product.sodium : null,
+  };
+
+  const micros = {};
+  Object.entries(product.micros || {}).forEach(([key, val]) => {
+    const parsed = typeof val === 'number'
+      ? { value: val, unit: '' }
+      : parseMicronutrient(val);
+
+    if (parsed && Number.isFinite(parsed.value)) {
+      micros[key] = parsed;
+    }
+  });
+
+  return {
+    itemId: product.id || product.code || inputText || `backend-${Date.now()}`,
+    name: product.title || product.product_name || inputText || null,
+    portion: {
+      amount: portionAmount,
+      unit: portionUnit,
+      gramsEquivalent,
+      servingText: servingSizeText || `${portionAmount}${portionUnit}`,
+    },
+    macros,
+    micros,
+    netCarbs: calculateNetCarbs({
+      carbs: macros.carbs_g,
+      fiber: macros.fiber_g,
+      sugarAlcohols: macros.sugarAlcohols_g || 0,
+    }),
+    sourceEvidence: [{
+      source: product.source || 'backend',
+      confidence: 0.9,
+      data: {
+        image_url: product.image,
+        brand: product.description,
+        category: product.category,
+      },
+    }],
+  };
+}
+
+/**
+ * Calculate totals from array of items
+ * @param {Array<AnalysisItem>} items - Food items
+ * @returns {{macros: Macros, micros: Object.<string, Micro>}} Aggregated totals
+ */
+function calculateTotals(items) {
+  if (!items || items.length === 0) {
+    return {
+      macros: {
+        calories_kcal: null,
+        protein_g: null,
+        carbs_g: null,
+        fat_g: null,
+        fiber_g: null,
+        sugar_g: null,
+        sodium_mg: null,
+      },
+      micros: {},
+    };
+  }
+
+  const totals = {
+    macros: {
+      calories_kcal: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: 0,
+      sugar_g: 0,
+      sodium_mg: 0,
+    },
+    micros: {},
+  };
+
+  items.forEach(item => {
+    // Sum macros
+    Object.keys(totals.macros).forEach(key => {
+      totals.macros[key] += item.macros?.[key] ?? 0;
+    });
+
+    // Sum micros
+    if (item.micros) {
+      Object.entries(item.micros).forEach(([key, micro]) => {
+        if (micro && typeof micro.value === 'number' && !isNaN(micro.value)) {
+          if (!totals.micros[key]) {
+            totals.micros[key] = { value: 0, unit: micro.unit || '' };
+          }
+          totals.micros[key].value += micro.value;
+        }
+      });
+    }
+  });
+
+  return totals;
+}
+
+// ============================================================================
+// API FUNCTIONS
+// ============================================================================
+
+/**
+ * Fetch product from Open Food Facts
+ * @param {string} query - Search query (barcode or text)
+ * @param {'text'|'barcode'} mode - Search mode
+ * @returns {Promise<AnalysisItem|null>} Product item or null
+ */
 async function fetchFromOpenFoodFacts(query, mode = 'text') {
   const searchTerm = (query || '').toString().trim();
   if (!searchTerm) return null;
@@ -284,6 +583,7 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
   try {
     if (mode === 'barcode') {
       const url = `${OPEN_FOOD_FACTS_API_URL}${encodeURIComponent(searchTerm)}.json?fields=code,product_name,generic_name,brands,categories,nutriments,serving_size,url,image_url`;
+
       const { res, json } = await fetchWithTimeout(
         url,
         { method: 'GET', headers },
@@ -291,9 +591,11 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
       );
 
       if (!res.ok || json?.status !== 1 || !json?.product) return null;
-      return mapOpenFoodFactsProductToAnalysisResult(json.product, searchTerm);
+
+      return mapOpenFoodFactsToItem(json.product, searchTerm);
     }
 
+    // Text search
     const params = new URLSearchParams({
       search_terms: searchTerm,
       search_simple: '1',
@@ -311,183 +613,134 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
 
     if (!res.ok || !json?.products?.length) return null;
 
-    const product =
-      json.products.find((p) => p?.nutriments) ||
-      json.products[0];
+    const product = json.products.find(p => p?.nutriments) || json.products[0];
 
     if (!product?.nutriments) return null;
 
-    return mapOpenFoodFactsProductToAnalysisResult(product, searchTerm);
+    return mapOpenFoodFactsToItem(product, searchTerm);
   } catch (err) {
-    console.warn('[useFoodAnalysis] Open Food Facts lookup failed', err);
+    console.warn('[useFoodAnalysis] Open Food Facts lookup failed:', err.message);
     return null;
   }
 }
 
-// Map backend barcode product response into analysis item
-function mapBackendProductToAnalysisResult(product, inputText) {
-  if (typeof product !== 'object' || product === null) return null;
+/**
+ * Compress image for upload
+ * @param {string} uri - Image URI
+ * @returns {Promise<string>} Base64-encoded compressed image
+ */
+async function compressImage(uri) {
+  let manipulateAsync, SaveFormat;
 
-  const servingSizeText = product.servingSize || '';
-  const servingMatch = servingSizeText.match(/(\d+(\.\d+)?)\s*([a-zA-Z]+)?/);
-  const portionAmount = servingMatch ? parseFloat(servingMatch[1]) : 100;
-  const portionUnit = servingMatch ? (servingMatch[3]?.toLowerCase() || 'g') : 'g';
-  const gramsEquivalent = convertToGrams(portionAmount, portionUnit || 'g');
-
-  const parseMicro = (val) => {
-    if (!val || typeof val !== 'string') return null;
-    const m = val.match(/([\d.]+)/);
-    const unit = val.replace(/[\d.\s]/g, '') || '';
-    return m ? { value: parseFloat(m[1]), unit } : null;
-  };
-
-  const macros = {
-    calories_kcal: Number.isFinite(product.calories) ? product.calories : 0,
-    protein_g: Number.isFinite(product.protein) ? product.protein : 0,
-    carbs_g: Number.isFinite(product.carbs) ? product.carbs : 0,
-    fat_g: Number.isFinite(product.fat) ? product.fat : 0,
-    fiber_g: Number.isFinite(product.fiber) ? product.fiber : 0,
-    sugar_g: Number.isFinite(product.sugar) ? product.sugar : 0,
-    sodium_mg: Number.isFinite(product.sodium) ? product.sodium : 0,
-  };
-
-  const micros = {};
-  Object.entries(product.micros || {}).forEach(([key, val]) => {
-    const parsed = typeof val === 'number' ? { value: val, unit: '' } : parseMicro(val);
-    if (parsed && Number.isFinite(parsed.value)) {
-      micros[key] = parsed;
-    }
-  });
-
-  return {
-    itemId: product.id || product.code || inputText,
-    name: product.title || product.product_name || inputText || 'Unknown Product',
-    portion: {
-      amount: portionAmount,
-      unit: portionUnit,
-      gramsEquivalent,
-      servingText: servingSizeText || `${portionAmount}${portionUnit}`,
-    },
-    macros,
-    micros,
-    netCarbs: calculateNetCarbs({
-      carbs: macros.carbs_g,
-      fiber: macros.fiber_g,
-      sugarAlcohols: macros.sugarAlcohols_g || 0,
-    }),
-    sourceEvidence: [{
-      source: product.source || 'openfoodfacts',
-      confidence: 0.9,
-      data: {
-        image_url: product.image,
-        brand: product.description,
-        category: product.category,
-      },
-    }],
-  };
-}
-
-// Calculate totals from items array
-function calculateTotals(items) {
-  if (!items || items.length === 0) {
-    return {
-      macros: { calories_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0, sodium_mg: 0 },
-      micros: {} // Initialize as empty object, will be populated with formatted strings
-    };
+  try {
+    const mod = await import('expo-image-manipulator');
+    manipulateAsync = mod.manipulateAsync;
+    SaveFormat = mod.SaveFormat;
+  } catch (e) {
+    throw new Error('Image compression unavailable. Install expo-image-manipulator and run on a real device.');
   }
 
-  const totals = {
-    macros: {
-      calories_kcal: 0,
-      protein_g: 0,
-      carbs_g: 0,
-      fat_g: 0,
-      fiber_g: 0,
-      sugar_g: 0,
-      sodium_mg: 0,
-    },
-    micros: {}, // Will store { value: number, unit: string } for each micro
-  }; // Initialize as empty object, will be populated with formatted strings
+  if (!FileSystem.readAsStringAsync) {
+    throw new Error('Photo analysis unavailable: expo-file-system missing. Install expo-file-system and rebuild on device.');
+  }
 
-  items.forEach(item => {
-    // Sum macros
-    Object.keys(totals.macros).forEach(key => {
-      totals.macros[key] += item.macros?.[key] || 0;
-    });
+  const result = await manipulateAsync(
+    uri,
+    [{ resize: { width: IMAGE_MAX_WIDTH_PX } }],
+    { compress: IMAGE_COMPRESSION_QUALITY, format: SaveFormat.JPEG }
+  );
 
-    // Sum micros (now assuming they are { value, unit } objects)
-    if (item.micros) {
-      Object.keys(item.micros).forEach(key => {
-        const microItem = item.micros[key];
-        if (microItem && typeof microItem.value === 'number' && !isNaN(microItem.value)) { // Ensure value is a valid number
-          // Initialize if not present, or update value
-          totals.micros[key] = totals.micros[key] || { value: 0, unit: '' };
-          totals.micros[key].value += microItem.value; // Sum the numerical values
+  const encoding = (FileSystem?.EncodingType && FileSystem.EncodingType.Base64)
+    ? FileSystem.EncodingType.Base64
+    : 'base64';
 
-          // Take the unit from the first item that has it
-          if (!totals.micros[key].unit && microItem.unit) {
-            totals.micros[key].unit = microItem.unit;
-          }
-        }
-      });
-    }
-  });
+  const base64 = await FileSystem.readAsStringAsync(result.uri, { encoding });
 
-  // Format micros back to strings with units
-  Object.keys(totals.micros).forEach(key => {
-    const microTotal = totals.micros[key]; // This is { value: number, unit: string }
-    if (microTotal && typeof microTotal.value === 'number') {
-      totals.micros[key] = `${microTotal.value.toFixed(1)}${microTotal.unit}`;
-    } else {
-      totals.micros[key] = '0'; // Default if no value
-    }
-  });
-
-  return totals;
+  return base64;
 }
 
-/* ---------------- HOOK ---------------- */
+// ============================================================================
+// MAIN HOOK
+// ============================================================================
 
+/**
+ * Food Analysis Hook
+ *
+ * @returns {{
+ *   analyzeText: (text: string) => Promise<Object>,
+ *   analyzePhoto: (uri: string, barcode?: string) => Promise<void>,
+ *   analyzeBarcode: (barcode: string) => Promise<AnalysisResult>,
+ *   analysisResult: AnalysisResult|null,
+ *   setAnalysisResult: Function,
+ *   inputText: string,
+ *   setInputText: Function,
+ *   updateItemQuantity: (itemId: string, newAmount: number, newUnit: string) => void,
+ *   removeItem: (itemId: string) => void,
+ *   runAnalysis: () => Promise<void>,
+ *   isAnalyzing: boolean,
+ *   progress: number,
+ *   error: string|null,
+ *   clearError: () => void
+ * }}
+ */
 export function useFoodAnalysis() {
+  // ============================================================================
+  // STATE & REFS
+  // ============================================================================
+
   const { getToken } = useAuth();
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
 
-  // Multi-item state
+  // Multi-item analysis state
   const [analysisResult, setAnalysisResult] = useState(null);
   const [inputText, setInputText] = useState('');
   const [debouncedText, setDebouncedText] = useState('');
+
+  // Refs
   const debounceTimerRef = useRef(null);
-  const abortControllerRef = useRef(null); // Declare abortControllerRef here
+  const abortControllerRef = useRef(null);
   const barcodeCacheRef = useRef({});
 
+  // ============================================================================
+  // TEXT ANALYSIS (Universal Entry Point)
+  // ============================================================================
+
+  /**
+   * Analyze text query with cascading fallback
+   * Priority: Open Food Facts → Backend AI → USDA → AI
+   *
+   * @param {string} text - Food description
+   * @returns {Promise<void>}
+   */
   const analyzeTextUniversal = useCallback(async (text) => {
     if (!text?.trim()) return;
 
-    try { // Main try-catch for the entire analysis flow
+    try {
       setIsAnalyzing(true);
       setError(null);
       setProgress(10);
 
-      // 1. Try Open Food Facts first for text queries
-      setProgress(20); // Indicate progress for OFF lookup
+      // 1. Try Open Food Facts first (fast, accurate for known products)
+      setProgress(20);
       const offResult = await fetchFromOpenFoodFacts(text, 'text');
-      if (offResult) { // If OFF finds a product, use it and skip AI
+
+      if (offResult) {
         setAnalysisResult({
           items: [{
             ...offResult,
             isEditing: false,
-            editedPortion: null
+            editedPortion: null,
           }],
-          totals: calculateTotals([offResult]) // Calculate totals for a single item
+          totals: calculateTotals([offResult]),
         });
         setProgress(100);
-        return; // Found in Open Food Facts, so we're done
+        return;
       }
 
-      // 2. If not found in Open Food Facts, proceed with existing API_URL/food/resolve (your backend AI)
+      // 2. Fallback to backend AI (handles multi-item meals)
       // Cancel any in-flight requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -497,11 +750,12 @@ export function useFoodAnalysis() {
       setProgress(30);
 
       const token = await getToken();
-      if (!token) throw new Error('Authentication required');
+      if (!token) {
+        throw new Error('Authentication required for text analysis');
+      }
 
-      setProgress(50); // Progress for AI backend call
+      setProgress(50);
 
-      // Call resolve endpoint (supports multi-item)
       const response = await fetch(`${API_URL}/food/resolve`, {
         method: 'POST',
         headers: {
@@ -511,12 +765,12 @@ export function useFoodAnalysis() {
         body: JSON.stringify({
           mode: 'text',
           query: text,
-          mealType: 'snack' // Default, could be time-based
+          mealType: getMealTypeFromTime(), // Time-based detection
         }),
         signal: abortControllerRef.current.signal,
       });
 
-      if (!response.ok) { // Handle non-2xx responses from your backend
+      if (!response.ok) {
         const json = await response.json().catch(() => ({}));
         throw new Error(json?.error || 'Analysis failed');
       }
@@ -524,35 +778,46 @@ export function useFoodAnalysis() {
       const data = await response.json();
 
       setProgress(90);
-      // Transform backend response into the expected analysisResult structure
-      // Store result with UI-specific fields
+
       setAnalysisResult({
         ...data,
         items: (data.items || []).map(item => ({
           ...item,
           isEditing: false,
-          editedPortion: null
-        }))
+          editedPortion: null,
+        })),
       });
 
       setProgress(100);
-    } catch (err) { // Catch any errors during the entire analysis process
-      if (err.name !== 'AbortError') { // Ignore abort errors (user typed something new)
-        setError(err.message || 'Analysis failed. Please try again.'); // More user-friendly message
-        console.error('[useFoodAnalysis] Universal text analysis error:', err);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err.message || 'Analysis failed. Please try again.');
+        console.error('[useFoodAnalysis] Text analysis error:', err);
       }
     } finally {
-      setIsAnalyzing(false); // This should be set to false only if no other analysis is pending
-      setTimeout(() => setProgress(0), 400);
+      setIsAnalyzing(false);
+      setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken, fetchFromOpenFoodFacts]);
+  }, [getToken]);
 
-  /* -------- BARCODE -------- */
+  // ============================================================================
+  // BARCODE ANALYSIS
+  // ============================================================================
 
+  /**
+   * Analyze barcode with caching
+   * Priority: Cache → Backend BFF → Open Food Facts
+   *
+   * @param {string} barcode - Product barcode
+   * @returns {Promise<AnalysisResult>} Analysis result
+   */
   const analyzeBarcode = useCallback(async (barcode) => {
     const code = (barcode || '').trim();
-    if (!code) throw new Error('Barcode is required for analysis.');
+    if (!code) {
+      throw new Error('Barcode is required for analysis');
+    }
 
+    // Check cache
     if (barcodeCacheRef.current[code]) {
       const cached = barcodeCacheRef.current[code];
       setAnalysisResult(cached);
@@ -565,14 +830,16 @@ export function useFoodAnalysis() {
 
     try {
       const token = await getToken();
-      if (!token) throw new Error('Authentication required to analyze barcode.');
+      if (!token) {
+        throw new Error('Authentication required to analyze barcode');
+      }
 
       let productItem = null;
 
-      // 1) Try backend BFF
+      // 1. Try backend BFF (cached products + USDA)
       try {
         setProgress(25);
-        const res = await fetch(`${API_URL}/food/barcode/${encodeURIComponent(code)}`, {
+        const res = await fetch(`${BACKEND_BARCODE_ENDPOINT}/${encodeURIComponent(code)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -580,16 +847,16 @@ export function useFoodAnalysis() {
           productItem = null;
         } else if (!res.ok) {
           const text = await res.text().catch(() => '');
-          throw new Error(text || 'Barcode lookup failed.');
+          throw new Error(text || 'Barcode lookup failed');
         } else {
           const data = await res.json();
-          productItem = mapBackendProductToAnalysisResult(data, code);
+          productItem = mapBackendProductToItem(data, code);
         }
       } catch (err) {
-        console.warn('[useFoodAnalysis] Backend barcode lookup failed, falling back to OFF', err);
+        console.warn('[useFoodAnalysis] Backend barcode lookup failed, falling back to OFF:', err.message);
       }
 
-      // 2) Fallback to Open Food Facts directly
+      // 2. Fallback to Open Food Facts
       if (!productItem) {
         setProgress(50);
         productItem = await fetchFromOpenFoodFacts(code, 'barcode');
@@ -608,152 +875,57 @@ export function useFoodAnalysis() {
         totals: calculateTotals([productItem]),
       };
 
+      // Cache result
       barcodeCacheRef.current[code] = resultPayload;
+
       setAnalysisResult(resultPayload);
       setProgress(100);
+
       return resultPayload;
     } catch (err) {
-      setError(err.message || 'Barcode analysis failed. Please try again.');
+      const errorMsg = err.message || 'Barcode analysis failed. Please try again or enter manually.';
+      setError(errorMsg);
       throw err;
     } finally {
       setIsAnalyzing(false);
-      setTimeout(() => setProgress(0), 400);
+      setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken, fetchFromOpenFoodFacts]);
+  }, [getToken]);
 
-  /* -------- DEBOUNCE EFFECTS -------- */
+  // ============================================================================
+  // LEGACY TEXT ANALYSIS (For backwards compatibility)
+  // ============================================================================
 
-  // Debounce input text (1.5s delay after user stops typing)
-  useEffect(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    if (inputText.trim()) {
-      debounceTimerRef.current = setTimeout(() => { // Debounce text input
-        setDebouncedText(inputText);
-      }, 1500);
-    } else {
-      // Clear results if input is empty
-      setAnalysisResult(null);
-      setDebouncedText('');
-    }
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, [inputText]);
-
-  // Trigger analysis when debounced text changes
-  useEffect(() => {
-    if (debouncedText.trim() && !isAnalyzing) { // Only analyze if not already analyzing
-      analyzeTextUniversal(debouncedText);
-    }
-  }, [debouncedText, isAnalyzing, analyzeTextUniversal]);
-
-  /* -------- QUANTITY EDITING -------- */
-
-  const updateItemQuantity = useCallback((itemId, newAmount, newUnit) => {
-    setAnalysisResult(prev => {
-      if (!prev) return null;
-
-      const updatedItems = prev.items.map(item => {
-        if (item.itemId === itemId) {
-          // Calculate scaling factor based on grams equivalent for accuracy
-          const originalGrams = item.portion?.gramsEquivalent || convertToGrams(item.portion?.amount || 1, item.portion?.unit || 'g');
-          const newGrams = convertToGrams(newAmount, newUnit);
-          const scaleFactor = originalGrams > 0 ? newGrams / originalGrams : 0; // Avoid division by zero
-
-          // Scale all nutrition values
-          const scaledMacros = {};
-          Object.keys(item.macros || {}).forEach(key => {
-            scaledMacros[key] = (item.macros[key] || 0) * scaleFactor;
-          });
-
-          const scaledMicros = {};
-          Object.keys(item.micros || {}).forEach(key => { // Iterate over existing micros
-            const micro = item.micros[key];
-            scaledMicros[key] = { value: (micro.value || 0) * scaleFactor, unit: micro.unit || '' };
-          });
-
-          return {
-            ...item,
-            portion: {
-              amount: newAmount,
-              unit: newUnit,
-              gramsEquivalent: newGrams,
-              servingText: `${newAmount}${newUnit}`
-            },
-            macros: scaledMacros,
-            micros: scaledMicros,
-            editedPortion: { amount: newAmount, unit: newUnit } // Track edited state
-          };
-        }
-        return item;
-      });
-
-      // Recalculate totals
-      const newTotals = calculateTotals(updatedItems);
-
-      return {
-        ...prev, // Keep other properties of analysisResult
-        items: updatedItems,
-        totals: newTotals
-      };
-    });
-  }, []);
-
-  const removeItem = useCallback((itemId) => {
-    setAnalysisResult(prev => {
-      if (!prev) return null;
-
-      const updatedItems = prev.items.filter(item => item.itemId !== itemId);
-
-      if (updatedItems.length === 0) { // If no items left, clear the entire analysis
-        return null; // Clear all if no items left
-      }
-
-      return {
-        ...prev,
-        items: updatedItems,
-        totals: calculateTotals(updatedItems) // Recalculate totals for remaining items
-      };
-    });
-  }, []);
-
-  /* -------- TEXT -------- */
-
-  const runAnalysis = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text) {
-      setError('Please describe your meal to analyze.'); // More specific error
-      return;
-    }
-    await analyzeTextUniversal(text);
-  }, [inputText, analyzeTextUniversal]);
-
+  /**
+   * Legacy text analysis with USDA → AI fallback
+   * @deprecated Use analyzeTextUniversal instead
+   * @param {string} text - Food description
+   * @returns {Promise<Object>} Food log object
+   */
   const analyzeText = useCallback(async (text) => {
-    if (!text?.trim()) throw new Error('Please describe your meal');
+    if (!text?.trim()) {
+      throw new Error('Please describe your meal');
+    }
 
-    setIsAnalyzing(true); // Start loading state
+    setIsAnalyzing(true);
     setError(null);
     setProgress(10);
 
     const started = Date.now();
-    const timeLeft = () => TOTAL_BUDGET_MS - (Date.now() - started);
+    const timeLeft = () => TOTAL_ANALYSIS_BUDGET_MS - (Date.now() - started);
 
     try {
-      const token = await getToken(); // Ensure authentication
-      if (!token) throw new Error('Authentication required');
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Authentication required');
+      }
 
       const intent = classifyText(text);
 
-      /* ---- USDA FIRST ---- */
+      // Try USDA first for single foods
       if (timeLeft() > 300) {
         setProgress(30);
-        // Attempt USDA lookup
+
         try {
           const { res, json } = await fetchWithTimeout(
             USDA_ENDPOINT,
@@ -768,10 +940,10 @@ export function useFoodAnalysis() {
             USDA_TIMEOUT_MS
           );
 
-          if (res.ok && json?.data) { // If USDA provides data
+          if (res.ok && json?.data) {
             const confidence = json.confidence ?? 0.8;
 
-            if (confidence >= 0.78 || intent.isSingleFood) {
+            if (confidence >= USDA_CONFIDENCE_THRESHOLD || intent.isSingleFood) {
               setProgress(80);
               return buildFoodLog({
                 inputText: text,
@@ -781,14 +953,14 @@ export function useFoodAnalysis() {
             }
           }
         } catch {
-          // Silent fallback to AI if USDA fails or times out
+          // Silent fallback to AI
         }
       }
 
-      /* ---- AI FALLBACK ---- */
+      // AI fallback
       if (timeLeft() < 300) {
         throw new Error('Analysis timed out. Try a shorter description.');
-      } // If not enough time left, throw timeout error
+      }
 
       setProgress(60);
 
@@ -805,10 +977,9 @@ export function useFoodAnalysis() {
         AI_TIMEOUT_MS
       );
 
-      if (!res.ok) { // Handle non-2xx responses from AI
+      if (!res.ok) {
         throw new Error(
-          json?.error ||
-          'Could not understand this meal. Try adding quantities.'
+          json?.error || 'Could not understand this meal. Try adding quantities.'
         );
       }
 
@@ -820,21 +991,34 @@ export function useFoodAnalysis() {
         raw: json.data || json,
       });
     } catch (err) {
-      setError(err.message || 'Analysis failed. Please try again.'); // Consistent error message
+      const errorMsg = err.message || 'Analysis failed. Please try again.';
+      setError(errorMsg);
       throw err;
     } finally {
       setIsAnalyzing(false);
-      setTimeout(() => setProgress(0), 400);
+      setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
   }, [getToken]);
 
-  /* -------- PHOTO -------- */
+  // ============================================================================
+  // PHOTO ANALYSIS
+  // ============================================================================
 
+  /**
+   * Analyze photo with AI vision
+   * @param {string} uri - Image URI
+   * @param {string|null} barcode - Optional barcode from photo
+   * @returns {Promise<void>}
+   */
   const analyzePhoto = useCallback(async (uri, barcode = null) => {
+    // If barcode detected, use barcode analysis
     if (barcode) {
       return analyzeBarcode(barcode);
     }
-    if (!uri) throw new Error('Image URI is required for analysis.'); // More precise check
+
+    if (!uri) {
+      throw new Error('Image URI is required for analysis');
+    }
 
     setIsAnalyzing(true);
     setError(null);
@@ -842,20 +1026,24 @@ export function useFoodAnalysis() {
 
     try {
       const token = await getToken();
-      if (!token) throw new Error('Authentication required to analyze photo.');
+      if (!token) {
+        throw new Error('Authentication required to analyze photo');
+      }
 
-      // Proceed with AI image analysis
       setProgress(40);
 
+      // Compress image
       let base64;
       try {
-        base64 = await compressImage(uri); // Compress image before sending
+        base64 = await compressImage(uri);
       } catch (e) {
         setError(e.message);
         throw e;
       }
+
       setProgress(60);
 
+      // Send to AI vision API
       const { res, json } = await fetchWithTimeout(
         AI_IMAGE_ENDPOINT,
         {
@@ -866,17 +1054,18 @@ export function useFoodAnalysis() {
           },
           body: JSON.stringify({ image: base64 }),
         },
-        2500
+        IMAGE_ANALYSIS_TIMEOUT_MS
       );
 
       if (!res.ok) {
-        throw new Error(json?.error || 'Image analysis failed. Please try a clearer photo.'); // More specific error
+        throw new Error(json?.error || 'Image analysis failed. Please try a clearer photo.');
       }
 
       setProgress(95);
 
+      // Build food log from AI response
       const rawAIData = json.data || json;
-      const foodLog = buildFoodLog({ // buildFoodLog returns a single item
+      const foodLog = buildFoodLog({
         inputText: 'Photo',
         source: 'photo',
         raw: rawAIData,
@@ -884,51 +1073,204 @@ export function useFoodAnalysis() {
 
       foodLog.imageUrl = uri;
 
-      // Convert the single foodLog into the multi-item analysisResult format
+      // Convert to multi-item format
       const aiItem = {
-        itemId: foodLog.foodName + '-' + Date.now(), // Generate a unique ID
+        itemId: `${foodLog.foodName}-${Date.now()}`,
         name: foodLog.foodName,
         portion: {
-          amount: parseFloat(foodLog.servingSize.match(/(\d+(\.\d+)?)/)?.[1] || 1),
-          unit: foodLog.servingSize.match(/[a-zA-Z]+/)?.[0] || 'serving',
+          amount: parseFloat(foodLog.servingSize?.match(/(\d+(\.\d+)?)/)?.[1] || 1),
+          unit: foodLog.servingSize?.match(/[a-zA-Z]+/)?.[0] || null,
           gramsEquivalent: convertToGrams(
-            parseFloat(foodLog.servingSize.match(/(\d+(\.\d+)?)/)?.[1] || 1),
-            foodLog.servingSize.match(/[a-zA-Z]+/)?.[0] || 'serving'
+            parseFloat(foodLog.servingSize?.match(/(\d+(\.\d+)?)/)?.[1] || 1),
+            foodLog.servingSize?.match(/[a-zA-Z]+/)?.[0] || 'g'
           ),
-          servingText: foodLog.servingSize
+          servingText: foodLog.servingSize,
         },
         macros: {
-          calories_kcal: foodLog.calories,
-          protein_g: foodLog.protein,
-          carbs_g: foodLog.carbs,
-          fat_g: foodLog.fat,
-          fiber_g: foodLog.fiber,
-          sugar_g: foodLog.sugar,
-          sodium_mg: foodLog.micros?.sodium?.value || 0, // Assuming sodium is { value, unit }
-        }, // Macros remain numbers
-        micros: foodLog.micros, // These should be numbers now from buildFoodLog
-        netCarbs: foodLog.netCarbs, // Add netCarbs from buildFoodLog
-        sourceEvidence: [{ source: 'Image AI', confidence: 0.7, data: { imageUrl: uri, raw: rawAIData } }],
+          calories_kcal: foodLog.calories ?? null,
+          protein_g: foodLog.protein ?? null,
+          carbs_g: foodLog.carbs ?? null,
+          fat_g: foodLog.fat ?? null,
+          fiber_g: foodLog.fiber ?? null,
+          sugar_g: foodLog.sugar ?? null,
+          sodium_mg: foodLog.micros?.sodium?.value || 0,
+        },
+        micros: foodLog.micros || {},
+        netCarbs: foodLog.netCarbs,
+        sourceEvidence: [{
+          source: 'Image AI',
+          confidence: 0.7,
+          data: { imageUrl: uri, raw: rawAIData },
+        }],
         isEditing: false,
-        editedPortion: null
+        editedPortion: null,
       };
 
       setAnalysisResult({
         items: [aiItem],
-        totals: calculateTotals([aiItem])
+        totals: calculateTotals([aiItem]),
       });
 
+      setProgress(100);
     } catch (err) {
-      setError(err.message || 'Photo analysis failed. Please try again.'); // Consistent error message
+      const errorMsg = err.message || 'Photo analysis failed. Please try again.';
+      setError(errorMsg);
       throw err;
     } finally {
       setIsAnalyzing(false);
-      setTimeout(() => setProgress(0), 400);
+      setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken, analyzeBarcode, buildFoodLog, calculateNetCarbs, compressImage]);
+  }, [getToken, analyzeBarcode]);
+
+  // ============================================================================
+  // UI STATE MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Update item quantity and scale macros
+   * @param {string} itemId - Item ID
+   * @param {number} newAmount - New quantity
+   * @param {string} newUnit - New unit
+   */
+  const updateItemQuantity = useCallback((itemId, newAmount, newUnit) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+
+      const updatedItems = prev.items.map(item => {
+        if (item.itemId === itemId) {
+          const originalGrams = item.portion?.gramsEquivalent;
+
+          if (!originalGrams) {
+            console.warn(`[useFoodAnalysis] Cannot update quantity for ${itemId}: missing gramsEquivalent`);
+            return item;
+          }
+
+          const newGrams = convertToGrams(newAmount, newUnit);
+          if (!newGrams) {
+            console.warn(`[useFoodAnalysis] Cannot convert ${newAmount} ${newUnit} to grams`);
+            return item;
+          }
+
+          const scaleFactor = newGrams / originalGrams;
+
+          // Scale macros
+          const scaledMacros = {};
+          Object.entries(item.macros || {}).forEach(([key, value]) => {
+            scaledMacros[key] = value !== null ? value * scaleFactor : null;
+          });
+
+          // Scale micros
+          const scaledMicros = {};
+          Object.entries(item.micros || {}).forEach(([key, micro]) => {
+            scaledMicros[key] = micro.value !== null
+              ? { value: micro.value * scaleFactor, unit: micro.unit }
+              : null;
+          });
+
+          return {
+            ...item,
+            portion: {
+              amount: newAmount,
+              unit: newUnit,
+              gramsEquivalent: newGrams,
+              servingText: `${newAmount} ${newUnit}`,
+            },
+            macros: scaledMacros,
+            micros: scaledMicros,
+            editedPortion: { amount: newAmount, unit: newUnit },
+          };
+        }
+        return item;
+      });
+
+      return {
+        ...prev,
+        items: updatedItems,
+        totals: calculateTotals(updatedItems),
+      };
+    });
+  }, []);
+
+  /**
+   * Remove item from analysis
+   * @param {string} itemId - Item ID to remove
+   */
+  const removeItem = useCallback((itemId) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+
+      const updatedItems = prev.items.filter(item => item.itemId !== itemId);
+
+      if (updatedItems.length === 0) {
+        return null; // Clear analysis if no items left
+      }
+
+      return {
+        ...prev,
+        items: updatedItems,
+        totals: calculateTotals(updatedItems),
+      };
+    });
+  }, []);
+
+  /**
+   * Trigger manual analysis
+   */
+  const runAnalysis = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text) {
+      setError('Please describe your meal to analyze');
+      return;
+    }
+    await analyzeTextUniversal(text);
+  }, [inputText, analyzeTextUniversal]);
+
+  /**
+   * Clear error state
+   */
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  // ============================================================================
+  // DEBOUNCED AUTO-ANALYSIS
+  // ============================================================================
+
+  // Debounce input text (1.5s delay after user stops typing)
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (inputText.trim()) {
+      debounceTimerRef.current = setTimeout(() => {
+        setDebouncedText(inputText);
+      }, AUTO_ANALYSIS_DEBOUNCE_MS);
+    } else {
+      setAnalysisResult(null);
+      setDebouncedText('');
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [inputText]);
+
+  // Trigger analysis when debounced text changes
+  useEffect(() => {
+    if (debouncedText.trim() && !isAnalyzing) {
+      analyzeTextUniversal(debouncedText);
+    }
+  }, [debouncedText, isAnalyzing, analyzeTextUniversal]);
+
+  // ============================================================================
+  // PUBLIC API
+  // ============================================================================
 
   return {
-    // Legacy single-item analysis
+    // Legacy single-item analysis (backwards compatibility)
     analyzeText,
     analyzePhoto,
     analyzeBarcode,
@@ -948,6 +1290,6 @@ export function useFoodAnalysis() {
     isAnalyzing,
     progress,
     error,
-    clearError: () => setError(null),
+    clearError,
   };
 }
