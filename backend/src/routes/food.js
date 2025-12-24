@@ -70,4 +70,56 @@ router.post("/analyze-image", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/food/analyze-voice
+ * Analyze a voice recording and extract nutrition data.
+ *
+ * Content-Type: multipart/form-data
+ * Body (form-data): {
+ *   audio: File (m4a, mp3, wav, etc.),
+ *   language?: string (e.g., 'en', default: 'en')
+ * }
+ *
+ * Uses gpt-4o-transcribe for speech-to-text + GPT-4o for nutrition extraction
+ */
+router.post("/analyze-voice", async (req, res) => {
+  try {
+    // Check if file was uploaded
+    if (!req.files || !req.files.audio) {
+      return res.status(400).json({ error: "Audio file required" });
+    }
+
+    const audioFile = req.files.audio;
+    const language = req.body.language || 'en';
+
+    // Validate file size (max 25MB as per OpenAI limits)
+    const maxSize = 25 * 1024 * 1024; // 25MB
+    if (audioFile.size > maxSize) {
+      return res.status(400).json({ error: "Audio file too large (max 25MB)" });
+    }
+
+    // Validate file type
+    const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/wav', 'audio/webm'];
+    if (!validTypes.some(type => audioFile.mimetype.includes(type))) {
+      return res.status(400).json({ error: "Invalid audio format. Supported: m4a, mp3, wav, webm" });
+    }
+
+    console.log(`[FoodAnalyzeVoice] Processing audio: ${audioFile.name}, size: ${audioFile.size} bytes`);
+
+    // Analyze voice using FoodService
+    const result = await FoodService.analyzeVoice(audioFile.data, { language });
+
+    if (!result) {
+      return res.status(500).json({ error: "Voice analysis failed" });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("[FoodAnalyzeVoice] Error:", error);
+    res.status(500).json({
+      error: error.message || "Voice analysis failed"
+    });
+  }
+});
+
 export default router;

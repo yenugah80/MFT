@@ -434,6 +434,87 @@ export const FoodService = {
     return data?.meals || [];
   },
 
+  // ------------- AI: Voice Analysis -------------
+
+  /**
+   * Analyze voice recording and return nutrition data
+   * audioBuffer: Buffer containing audio file (m4a, mp3, wav)
+   * options: { language: string }
+   *
+   * USES: gpt-4o-transcribe for speech-to-text + GPT-4o for nutrition extraction
+   */
+  analyzeVoice: async (audioBuffer, options = {}) => {
+    try {
+      // Step 1: Transcribe audio using gpt-4o-transcribe
+      const transcription = await openaiClient.transcribeAudio(audioBuffer, options);
+
+      if (!transcription || !transcription.text) {
+        throw new Error('Transcription failed or empty');
+      }
+
+      console.log(`[FoodService] Transcribed: "${transcription.text}"`);
+
+      // Step 2: Extract nutrition from transcript using GPT-4o
+      const messages = [
+        {
+          role: 'system',
+          content: 'You are a nutrition expert. Extract food and nutrition data from voice transcripts. Return ONLY a JSON object.',
+        },
+        {
+          role: 'user',
+          content: `Analyze this food description from a voice recording: "${transcription.text}"
+
+Return JSON with:
+{
+  "foodName": "string (e.g., 'Grilled Chicken Salad')",
+  "description": "string (brief description)",
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "fiber": number,
+  "sugar": number,
+  "sodium": number,
+  "servingSize": "string (e.g., '1 cup', '200g')",
+  "mealType": "breakfast"|"lunch"|"dinner"|"snack",
+  "confidence": 0.0-1.0,
+  "micros": {
+    "calcium": "string with unit",
+    "iron": "string with unit",
+    "vitaminA": "string with unit",
+    "vitaminC": "string with unit",
+    "potassium": "string with unit"
+  }
+}
+
+Important: Be accurate and realistic with nutrition values. If uncertain, use moderate estimates.`,
+        },
+      ];
+
+      const json = await openaiClient.chatCompletionJSON(messages, {
+        model: 'gpt-4o',
+        temperature: 0.3,
+        maxTokens: 600,
+      });
+
+      if (!json) {
+        throw new Error('Nutrition extraction failed');
+      }
+
+      // Return normalized food object with transcript
+      return {
+        ...json,
+        transcript: transcription.text,
+        transcriptionConfidence: transcription.confidence,
+        source: 'voice',
+      };
+
+    } catch (error) {
+      console.error(`[FoodService] Voice analysis failed:`, error.message);
+      throw error;
+    }
+  },
+
   // ------------- AI: Image Analysis -------------
 
   /**

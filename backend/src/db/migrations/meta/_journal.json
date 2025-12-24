@@ -85,6 +85,13 @@
       "when": 1766339797104,
       "tag": "0011_cool_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1766542814543,
+      "tag": "0012_public_sumo",
+      "breakpoints": true
     }
   ]
 }

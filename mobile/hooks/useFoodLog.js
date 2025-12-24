@@ -123,6 +123,7 @@ export function useFoodLog() {
   const syncInFlightRef = useRef(false); // Prevents parallel sync execution
   const processSyncQueueRef = useRef(null); // Stable callback reference
   const syncTimeoutRef = useRef(null); // For debouncing
+  const authFailedRef = useRef(false); // Prevents sync retries on auth failures
 
   // ============================================================================
   // DATABASE OPERATIONS
@@ -366,6 +367,11 @@ export function useFoodLog() {
    * @returns {Promise<void>}
    */
   const processSyncQueue = useCallback(async () => {
+    // Don't retry if auth previously failed
+    if (authFailedRef.current) {
+      return;
+    }
+
     const queue = await db.getAllAsync('SELECT * FROM sync_queue ORDER BY timestamp ASC');
 
     if (queue.length === 0 || syncInFlightRef.current) {
@@ -378,12 +384,16 @@ export function useFoodLog() {
 
     try {
       // Try to get a fresh token (forces refresh if expired)
-      const token = await getToken({ template: 'default' });
+      const token = await getToken();
       if (!token) {
         console.warn('[useFoodLog] No auth token, skipping sync');
+        authFailedRef.current = true; // Prevent future sync attempts
         setError('Authentication required. Please sign in.');
         return;
       }
+
+      // Reset auth failed flag on successful token retrieval
+      authFailedRef.current = false;
 
       for (const row of queue) {
         const log = JSON.parse(row.log_data);
@@ -617,7 +627,7 @@ export function useFoodLog() {
       setError(null);
 
       // Try to get a fresh token (forces refresh if expired)
-      const token = await getToken({ template: 'default' });
+      const token = await getToken();
       if (!token) {
         throw new Error('Authentication required. Please sign in.');
       }

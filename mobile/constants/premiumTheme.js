@@ -275,6 +275,124 @@ export const MACRO_COLORS = {
   },
 };
 
+// MOOD COLORS (8 core moods for premium MoodTracker)
+export const MOOD_PALETTE = {
+  happy: {
+    base: '#10B981',
+    light: '#34D399',
+    dark: '#059669',
+    bg: '#ECFDF5',
+    gradient: ['#10B981', '#34D399'],
+  },
+  calm: {
+    base: '#3B82F6',
+    light: '#60A5FA',
+    dark: '#2563EB',
+    bg: '#EFF6FF',
+    gradient: ['#3B82F6', '#60A5FA'],
+  },
+  focused: {
+    base: '#14B8A6',
+    light: '#2DD4BF',
+    dark: '#0D9488',
+    bg: '#F0FDFA',
+    gradient: ['#14B8A6', '#2DD4BF'],
+  },
+  energized: {
+    base: '#FBBF24',
+    light: '#FCD34D',
+    dark: '#F59E0B',
+    bg: '#FFFBEB',
+    gradient: ['#FBBF24', '#FCD34D'],
+  },
+  neutral: {
+    base: '#6B7280',
+    light: '#9CA3AF',
+    dark: '#4B5563',
+    bg: '#F3F4F6',
+    gradient: ['#6B7280', '#9CA3AF'],
+  },
+  tired: {
+    base: '#8B5CF6',
+    light: '#A78BFA',
+    dark: '#7C3AED',
+    bg: '#F5F3FF',
+    gradient: ['#8B5CF6', '#A78BFA'],
+  },
+  stressed: {
+    base: '#F97316',
+    light: '#FB923C',
+    dark: '#EA580C',
+    bg: '#FFF7ED',
+    gradient: ['#F97316', '#FB923C'],
+  },
+  sad: {
+    base: '#6366F1',
+    light: '#818CF8',
+    dark: '#4F46E5',
+    bg: '#EEF2FF',
+    gradient: ['#6366F1', '#818CF8'],
+  },
+  // Future expansion (Phase 4+): angry, anxious, excited, relaxed
+};
+
+// ENERGY LEVEL COLORS
+export const ENERGY_PALETTE = {
+  veryHigh: {
+    color: '#FBBF24',
+    label: 'Very High',
+    range: [9, 10],
+  },
+  high: {
+    color: '#10B981',
+    label: 'High',
+    range: [7, 8],
+  },
+  medium: {
+    color: '#3B82F6',
+    label: 'Medium',
+    range: [5, 6],
+  },
+  low: {
+    color: '#F97316',
+    label: 'Low',
+    range: [3, 4],
+  },
+  veryLow: {
+    color: '#8B5CF6',
+    label: 'Very Low',
+    range: [1, 2],
+  },
+};
+
+// CORRELATION STRENGTH COLORS (for meal-mood correlations)
+export const CORRELATION_COLORS = {
+  strong: {
+    base: '#10B981',
+    light: '#34D399',
+    label: 'Strong',
+    gradient: ['#10B981', '#34D399'],
+  },
+  moderate: {
+    base: '#3B82F6',
+    light: '#60A5FA',
+    label: 'Moderate',
+    gradient: ['#3B82F6', '#60A5FA'],
+  },
+  weak: {
+    base: '#F59E0B',
+    light: '#FBBF24',
+    label: 'Weak',
+    gradient: ['#F59E0B', '#FBBF24'],
+  },
+  none: {
+    base: '#6B7280',
+    light: '#9CA3AF',
+    label: 'None',
+    gradient: ['#6B7280', '#9CA3AF'],
+  },
+};
+
 // ICON NAMES MAPPING (Ionicons)
 export const ICONS = {
   // Navigation
@@ -417,6 +535,9 @@ export const PREMIUM_THEME = {
   GRADIENT_BUTTON,
   ANIMATION,
   MACRO_COLORS,
+  MOOD_PALETTE,
+  ENERGY_PALETTE,
+  CORRELATION_COLORS,
   ICONS,
 };
 

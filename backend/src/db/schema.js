@@ -371,6 +371,12 @@ export const moodLogTable = pgTable(
     note: text("note"),
     source: text("source"), // 'quick_action', 'manual', etc.
 
+    // Enhanced mood tracking fields
+    intensity: integer("intensity"), // 1-10 mood intensity
+    tags: json("tags").$type().default({}), // Context tags: { sleep: 'Good', exercise: 'Moderate', ... }
+    energyLevel: integer("energy_level"), // 1-10 energy level
+    mealContext: json("meal_context").$type().default({}), // { mealIds: [123, 124], windowHours: 4 }
+
     // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
     clientEventId: text("client_event_id"),
 
@@ -382,6 +388,31 @@ export const moodLogTable = pgTable(
     userDateIdx: index("mood_log_user_date_idx").on(table.userId, table.loggedDate), // Existing index
     // Unique constraint for idempotency support
     userClientEventIdUnique: unique("mood_log_user_id_client_event_id_unique").on(table.userId, table.clientEventId),
+  })
+);
+
+// Mood-meal correlations table (derived cache for analytics)
+export const moodMealCorrelationsTable = pgTable(
+  "mood_meal_correlations",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    mealPattern: json("meal_pattern").$type().notNull(), // { avgCarbs, avgProtein, avgFat, avgNova }
+    moodPattern: text("mood_pattern").notNull(), // Mood type
+    strength: decimal("strength", { precision: 3, scale: 2 }), // 0.00-1.00
+    confidence: decimal("confidence", { precision: 3, scale: 2 }), // 0.00-1.00
+    occurrences: integer("occurrences").default(0),
+
+    // Reproducibility tracking
+    source: text("source").notNull().default("rules"), // 'rules' | 'ai'
+    version: text("version").notNull().default("v1"), // Schema version for re-computation
+
+    lastAnalyzedAt: timestamp("last_analyzed_at").defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("mood_meal_corr_user_id_idx").on(table.userId),
   })
 );
 

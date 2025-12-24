@@ -12,6 +12,8 @@ import { View, ScrollView, Text, ActivityIndicator, RefreshControl, StyleSheet, 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDashboard } from "../hooks/useDashboard";
+import { useMoodTrends, calculateMoodStats } from "../hooks/useMoodTrends";
+import { useMoodLog } from "../hooks/useMoodLog";
 import { useState, useMemo } from "react";
 
 // Utility to deduplicate logs by clientEventId (preferred) or id
@@ -32,17 +34,57 @@ import { useNotification } from "../providers/NotificationProvider";
 // Premium components
 import GlassCard from "./dashboard/GlassCard";
 import PremiumRing from "./dashboard/PremiumRing";
-import MacroDonut from "./dashboard/MacroDonut";
 import NutriScoreDial from "./dashboard/NutriScoreDial";
-import MoodChip from "./MoodChip";
-import MoodLogger from "./MoodLogger";
+import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
+import { MoodTracker } from "./MoodTracker";
 import WaterLogger from "./WaterLogger";
-import MicrosCoverageSection from "./MicrosCoverageSection";
 import MealCalendar from "./MealCalendar";
+import HydrationWellnessDashboard from "./dashboard/HydrationWellnessDashboard";
+import { useWaterLog } from "../hooks/useWaterLog";
+// Professional nutrition components
+import NutritionOverviewCard from "./dashboard/NutritionOverviewCard";
+import MicronutrientsGrid from "./dashboard/MicronutrientsGrid";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState, formatters } from "../constants/designTokens";
 import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
+
+// ============================================================================
+// COLLAPSIBLE SECTION COMPONENT
+// ============================================================================
+const CollapsibleSection = ({ title, icon, expanded, onToggle, children, badge }) => {
+  return (
+    <View style={styles.collapsibleSection}>
+      <TouchableOpacity
+        style={styles.collapsibleHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={styles.collapsibleLeft}>
+          <LinearGradient
+            colors={expanded ? SURFACES.gradient.primary : ['#E5E7EB', '#D1D5DB']}
+            style={styles.collapsibleIconContainer}
+          >
+            <Ionicons name={icon} size={20} color={expanded ? '#FFF' : TEXT.secondary} />
+          </LinearGradient>
+          <Text style={styles.collapsibleTitle}>{title}</Text>
+          {badge && (
+            <View style={styles.collapsibleBadge}>
+              <Text style={styles.collapsibleBadgeText}>{badge}</Text>
+            </View>
+          )}
+        </View>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={24}
+          color={TEXT.secondary}
+        />
+      </TouchableOpacity>
+
+      {expanded && <View style={styles.collapsibleContent}>{children}</View>}
+    </View>
+  );
+};
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -50,6 +92,24 @@ export default function DashboardContent() {
   const [moodModalVisible, setMoodModalVisible] = useState(false);
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const notify = useNotification();
+
+  // Collapsible section states
+  const [nutritionExpanded, setNutritionExpanded] = useState(true);
+  const [wellnessExpanded, setWellnessExpanded] = useState(true);
+  const [progressExpanded, setProgressExpanded] = useState(false);
+
+  // Mood tracking hooks
+  const { data: trendData } = useMoodTrends({ period: 'week' });
+  const { logMood } = useMoodLog();
+
+  // Water tracking hook
+  const { logWater } = useWaterLog();
+
+  // Calculate mood stats from trend data
+  const moodStats = useMemo(() => {
+    if (!trendData?.data) return null;
+    return calculateMoodStats(trendData.data);
+  }, [trendData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -148,16 +208,40 @@ export default function DashboardContent() {
 
   // Handlers
   const handleLogMood = () => setMoodModalVisible(true);
-  const handleViewAllMicros = () => notify.info('Detailed micros view - Coming soon');
+  const handleViewInsights = () => {
+    // TODO: Navigate to full mood insights screen
+    notify.info('Mood insights view - Coming soon');
+  };
 
-  const handleMoodSuccess = () => {
-    notify.success('Mood logged successfully! 😊');
-    refetch();
+  const handleMoodSave = async (moodData) => {
+    try {
+      await logMood(moodData);
+      notify.success('Mood logged successfully! 😊');
+      refetch();
+    } catch (error) {
+      notify.error('Failed to log mood');
+    }
   };
 
   const handleWaterSuccess = () => {
     notify.success('Water intake logged! 💧');
     refetch();
+  };
+
+  const handleQuickAddWater = async (ml) => {
+    try {
+      await logWater(ml / 1000); // Convert ml to liters
+      notify.success(`Added ${ml}ml! 💧`);
+    } catch (error) {
+      notify.error('Failed to log water');
+    }
+  };
+
+  // Calculate hydration streak (simplified - counts consecutive days with goal achieved)
+  const calculateHydrationStreak = () => {
+    // This is a simplified version - you might want to fetch actual streak data from backend
+    const currentProgress = (today.waterIntakeLiters / (goals?.waterLiters || 2.0)) * 100;
+    return currentProgress >= 80 ? gamification.streak : 0;
   };
 
   // Loading state
@@ -218,7 +302,7 @@ export default function DashboardContent() {
           </GlassCard>
         )}
 
-        {/* PRIMARY KPI - Nutrition Score or Calories */}
+        {/* PRIMARY KPI - Always visible */}
         <GlassCard style={styles.primaryCard} padding="lg">
           {today.foodLogs && today.foodLogs.length > 0 ? (
             <View style={styles.primaryContent}>
@@ -246,172 +330,186 @@ export default function DashboardContent() {
           )}
         </GlassCard>
 
-        {/* MACRONUTRIENTS - Single Donut */}
-        <GlassCard style={styles.section} padding="lg">
-          <Text style={styles.sectionTitle}>Macronutrients</Text>
-          <MacroDonut
-            protein={today.nutrition.totalProtein}
-            carbs={today.nutrition.totalCarbs}
-            fat={today.nutrition.totalFats}
-            size={200}
-            strokeWidth={24}
-          />
-        </GlassCard>
-
-        {/* HYDRATION SUMMARY - Tap to open WaterLogger for full tracker */}
-        <TouchableOpacity
-          style={styles.section}
-          onPress={() => setWaterModalVisible(true)}
-          activeOpacity={0.9}
+        {/* ============================================ */}
+        {/* NUTRITION SECTION - Collapsible */}
+        {/* ============================================ */}
+        <CollapsibleSection
+          title="Nutrition"
+          icon="nutrition"
+          expanded={nutritionExpanded}
+          onToggle={() => setNutritionExpanded(!nutritionExpanded)}
+          badge={`${Math.round(today.nutrition.totalCalories)} kcal`}
         >
-          <GlassCard padding="lg">
-            <View style={styles.hydrationSummary}>
-              <View style={styles.hydrationHeader}>
-                <Ionicons name="water" size={ICON_SIZES.lg} color={SEMANTIC.info.base} />
-                <Text style={styles.sectionTitle}>Hydration</Text>
-              </View>
-              <View style={styles.hydrationStats}>
-                <View style={styles.hydrationStat}>
-                  <Text style={styles.hydrationValue}>
-                    {(today.waterIntakeLiters * 1000).toFixed(0)}ml
-                  </Text>
-                  <Text style={styles.hydrationLabel}>Today</Text>
-                </View>
-                <View style={styles.hydrationDivider} />
-                <View style={styles.hydrationStat}>
-                  <Text style={styles.hydrationValue}>
-                    {Math.min(100, Math.round((today.waterIntakeLiters / (goals?.waterLiters || 2.0)) * 100))}%
-                  </Text>
-                  <Text style={styles.hydrationLabel}>Progress</Text>
-                </View>
-                <View style={styles.hydrationDivider} />
-                <View style={styles.hydrationStat}>
-                  <Text style={styles.hydrationValue}>
-                    {((goals?.waterLiters || 2.0) * 1000).toFixed(0)}ml
-                  </Text>
-                  <Text style={styles.hydrationLabel}>Goal</Text>
-                </View>
-              </View>
-              <Text style={styles.hydrationTapHint}>Tap to log water →</Text>
-            </View>
-          </GlassCard>
-        </TouchableOpacity>
-
-        {/* MICRONUTRIENTS */}
-        <GlassCard style={styles.section} padding="md">
-          <MicrosCoverageSection
-            micros={aggregatedMicros}
-            onViewAll={handleViewAllMicros}
-          />
-        </GlassCard>
-
-        {/* MOOD */}
-        <GlassCard style={styles.section} padding="md">
-          <MoodChip mood={today.moodLogs} onLogMood={handleLogMood} />
-        </GlassCard>
-
-        {/* RECENT MEALS */}
-        {uniqueFoodLogs.length > 0 && (
-          <GlassCard style={styles.section} padding="md">
-            <Text style={styles.sectionTitle}>Recent Meals</Text>
-            {uniqueFoodLogs.slice(0, 3).map((log) => (
-              <View key={log.id} style={styles.mealItem}>
-                <View style={styles.mealDot} />
-                <View style={styles.mealContent}>
-                  <Text style={styles.mealName}>{log.foodName}</Text>
-                  <Text style={styles.mealMeta}>
-                    {log.mealType} · {log.calories} kcal
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </GlassCard>
-        )}
-
-        {/* WEEKLY TRENDS */}
-        {trends.weeklyAverages && (
-          <GlassCard style={styles.section} padding="md">
-            <Text style={styles.sectionTitle}>Weekly Trends</Text>
-            <View style={styles.trendRow}>
-              <View style={styles.trendItem}>
-                <Text style={styles.trendValue}>
-                  {Math.round(trends.weeklyAverages.avgCalories)}
-                </Text>
-                <Text style={styles.trendLabel}>Avg Calories</Text>
-              </View>
-              <View style={styles.trendItem}>
-                <Text style={styles.trendValue}>
-                  {Math.round(trends.weeklyAverages.avgProtein)}g
-                </Text>
-                <Text style={styles.trendLabel}>Avg Protein</Text>
-              </View>
-              <View style={styles.trendItem}>
-                <Text style={styles.trendValue}>{gamification.streak}</Text>
-                <Text style={styles.trendLabel}>Day Streak 🔥</Text>
-              </View>
-            </View>
-          </GlassCard>
-        )}
-
-        {/* MEAL CALENDAR - Monthly Tracking */}
-        <MealCalendar
-          data={calendarData}
-          calorieGoal={goals?.dailyCalories || 2000}
-          onDayPress={(dateKey, dayData) => {
-            console.log('Day pressed:', dateKey, dayData);
-            // Could navigate to history with date filter or show modal
-          }}
-        />
-
-        {/* GAMIFICATION */}
-        <GlassCard style={styles.section} padding="md">
-          <Text style={styles.sectionTitle}>Progress</Text>
-          <View style={styles.gamificationRow}>
-            <View style={styles.gamificationItem}>
-              <View style={styles.levelBadge}>
-                <Ionicons name={ICONS.trophy} size={ICON_SIZES.lg} color={SEMANTIC.info.base} />
-                <Text style={styles.levelValue}>{gamification.level}</Text>
-                <Text style={styles.levelLabel}>Level</Text>
-              </View>
-              <Text style={styles.gamificationSub}>
-                {gamification.xp % 1000} / 1000 XP
-              </Text>
-            </View>
-            <View style={styles.gamificationItem}>
-              <View style={styles.streakBadge}>
-                <Ionicons name={ICONS.fire} size={ICON_SIZES.xl} color={SEMANTIC.warning.base} />
-                <Text style={styles.streakValue}>{gamification.streak}</Text>
-              </View>
-              <Text style={styles.gamificationSub}>
-                {gamification.streak > 0 ? 'Keep it up!' : 'Start today!'}
-              </Text>
-            </View>
+          {/* PROFESSIONAL NUTRITION OVERVIEW - Compact macros + calories */}
+          <View style={styles.sectionCard}>
+            <NutritionOverviewCard
+              calories={today.nutrition.totalCalories}
+              calorieGoal={goals?.dailyCalories || 2000}
+              protein={today.nutrition.totalProtein}
+              proteinGoal={goals?.proteinG || 150}
+              carbs={today.nutrition.totalCarbs}
+              carbsGoal={goals?.carbsG || 250}
+              fat={today.nutrition.totalFats}
+              fatGoal={goals?.fatsG || 65}
+              fiber={aggregatedMicros.fiber || 0}
+              fiberGoal={30}
+              sugar={today.nutrition.totalSugars || 0}
+              sugarGoal={50}
+            />
           </View>
-        </GlassCard>
 
-        {/* RECENT WEIGHT */}
-        {recentWeight.length > 0 && (
-          <GlassCard style={styles.section} padding="md">
-            <View style={styles.weightContainer}>
-              <View style={styles.weightIconContainer}>
-                <Ionicons name={ICONS.weight} size={ICON_SIZES['2xl']} color={BRAND.primary} />
+          {/* PROFESSIONAL MICRONUTRIENTS GRID */}
+          <View style={styles.sectionCard}>
+            <MicronutrientsGrid micros={aggregatedMicros} showAll={false} />
+          </View>
+
+          {/* RECENT MEALS */}
+          {uniqueFoodLogs.length > 0 && (
+            <GlassCard style={styles.sectionCard} padding="md">
+              <Text style={styles.sectionTitle}>Recent Meals</Text>
+              {uniqueFoodLogs.slice(0, 3).map((log) => (
+                <View key={log.id} style={styles.mealItem}>
+                  <View style={styles.mealDot} />
+                  <View style={styles.mealContent}>
+                    <Text style={styles.mealName}>{log.foodName}</Text>
+                    <Text style={styles.mealMeta}>
+                      {log.mealType} · {log.calories} kcal
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </GlassCard>
+          )}
+        </CollapsibleSection>
+
+        {/* ============================================ */}
+        {/* WELLNESS SECTION - Collapsible */}
+        {/* ============================================ */}
+        <CollapsibleSection
+          title="Wellness"
+          icon="heart"
+          expanded={wellnessExpanded}
+          onToggle={() => setWellnessExpanded(!wellnessExpanded)}
+          badge={`${Math.round((today.waterIntakeLiters / (goals?.waterLiters || 2.0)) * 100)}%`}
+        >
+          {/* HYDRATION WELLNESS DASHBOARD */}
+          <View style={styles.sectionCard}>
+            <HydrationWellnessDashboard
+              currentIntake={today.waterIntakeLiters || 0}
+              dailyGoal={goals?.waterLiters || 2.0}
+              streak={calculateHydrationStreak()}
+              onQuickAdd={handleQuickAddWater}
+              onOpenFullTracker={() => setWaterModalVisible(true)}
+            />
+          </View>
+
+          {/* MOOD TRACKING */}
+          <EnhancedMoodCard
+            mood={today.moodLogs}
+            trendData={trendData?.data || []}
+            stats={moodStats}
+            loading={false}
+            onLogMood={handleLogMood}
+            onViewInsights={handleViewInsights}
+          />
+        </CollapsibleSection>
+
+        {/* ============================================ */}
+        {/* PROGRESS SECTION - Collapsible */}
+        {/* ============================================ */}
+        <CollapsibleSection
+          title="Progress & Tracking"
+          icon="analytics"
+          expanded={progressExpanded}
+          onToggle={() => setProgressExpanded(!progressExpanded)}
+          badge={`${gamification.streak} day streak`}
+        >
+          {/* WEEKLY TRENDS */}
+          {trends.weeklyAverages && (
+            <GlassCard style={styles.sectionCard} padding="md">
+              <Text style={styles.sectionTitle}>Weekly Trends</Text>
+              <View style={styles.trendRow}>
+                <View style={styles.trendItem}>
+                  <Text style={styles.trendValue}>
+                    {Math.round(trends.weeklyAverages.avgCalories)}
+                  </Text>
+                  <Text style={styles.trendLabel}>Avg Calories</Text>
+                </View>
+                <View style={styles.trendItem}>
+                  <Text style={styles.trendValue}>
+                    {Math.round(trends.weeklyAverages.avgProtein)}g
+                  </Text>
+                  <Text style={styles.trendLabel}>Avg Protein</Text>
+                </View>
+                <View style={styles.trendItem}>
+                  <Text style={styles.trendValue}>{gamification.streak}</Text>
+                  <Text style={styles.trendLabel}>Day Streak 🔥</Text>
+                </View>
               </View>
-              <View style={styles.weightInfo}>
-                <Text style={styles.weightValue}>{recentWeight[0].weightKg} kg</Text>
-                <Text style={styles.weightDate}>
-                  {new Date(recentWeight[0].recordedDate).toLocaleDateString()}
+            </GlassCard>
+          )}
+
+          {/* GAMIFICATION */}
+          <GlassCard style={styles.sectionCard} padding="md">
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <View style={styles.gamificationRow}>
+              <View style={styles.gamificationItem}>
+                <View style={styles.levelBadge}>
+                  <Ionicons name={ICONS.trophy} size={ICON_SIZES.lg} color={SEMANTIC.info.base} />
+                  <Text style={styles.levelValue}>{gamification.level}</Text>
+                  <Text style={styles.levelLabel}>Level</Text>
+                </View>
+                <Text style={styles.gamificationSub}>
+                  {gamification.xp % 1000} / 1000 XP
+                </Text>
+              </View>
+              <View style={styles.gamificationItem}>
+                <View style={styles.streakBadge}>
+                  <Ionicons name={ICONS.fire} size={ICON_SIZES.xl} color={SEMANTIC.warning.base} />
+                  <Text style={styles.streakValue}>{gamification.streak}</Text>
+                </View>
+                <Text style={styles.gamificationSub}>
+                  {gamification.streak > 0 ? 'Keep it up!' : 'Start today!'}
                 </Text>
               </View>
             </View>
           </GlassCard>
-        )}
+
+          {/* MEAL CALENDAR */}
+          <MealCalendar
+            data={calendarData}
+            calorieGoal={goals?.dailyCalories || 2000}
+            onDayPress={(dateKey, dayData) => {
+              console.log('Day pressed:', dateKey, dayData);
+            }}
+          />
+
+          {/* RECENT WEIGHT */}
+          {recentWeight.length > 0 && (
+            <GlassCard style={styles.sectionCard} padding="md">
+              <Text style={styles.sectionTitle}>Weight Tracking</Text>
+              <View style={styles.weightContainer}>
+                <View style={styles.weightIconContainer}>
+                  <Ionicons name={ICONS.weight} size={ICON_SIZES['2xl']} color={BRAND.primary} />
+                </View>
+                <View style={styles.weightInfo}>
+                  <Text style={styles.weightValue}>{recentWeight[0].weightKg} kg</Text>
+                  <Text style={styles.weightDate}>
+                    {new Date(recentWeight[0].recordedDate).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+            </GlassCard>
+          )}
+        </CollapsibleSection>
       </ScrollView>
 
       {/* Modals */}
-      <MoodLogger
+      <MoodTracker
         visible={moodModalVisible}
         onClose={() => setMoodModalVisible(false)}
-        onSuccess={handleMoodSuccess}
+        onSave={handleMoodSave}
+        recentMeals={uniqueFoodLogs.slice(0, 5)}
       />
 
       <WaterLogger
@@ -529,6 +627,57 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING[4],
+  },
+  sectionCard: {
+    marginBottom: SPACING[3],
+  },
+
+  // Collapsible Section
+  collapsibleSection: {
+    marginBottom: SPACING[4],
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    ...PREMIUM_SHADOWS.sm,
+    marginBottom: SPACING[2],
+  },
+  collapsibleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    flex: 1,
+  },
+  collapsibleIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  collapsibleTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+    flex: 1,
+  },
+  collapsibleBadge: {
+    backgroundColor: `${BRAND.primary}15`,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: RADIUS.md,
+  },
+  collapsibleBadgeText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: BRAND.primary,
+  },
+  collapsibleContent: {
+    gap: SPACING[3],
   },
 
   // Water section

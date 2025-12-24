@@ -223,6 +223,71 @@ Examples:
   }
 
   /**
+   * Transcribe audio to text using gpt-4o-transcribe (Whisper successor)
+   *
+   * @param {Buffer} audioBuffer - Audio file buffer (m4a, mp3, wav, etc.)
+   * @param {object} options - Transcription options
+   * @param {string} options.language - Language code (e.g., 'en') for better accuracy
+   * @param {number} options.temperature - Temperature for transcription (0-1, default 0)
+   * @returns {Promise<{text: string, confidence: number}>}
+   */
+  async transcribeAudio(audioBuffer, options = {}) {
+    if (!this.isAvailable()) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const { language = 'en', temperature = 0 } = options;
+
+    // Use gpt-4o-transcribe as specified by user
+    const model = 'gpt-4o-transcribe';
+
+    try {
+      // Create form data for multipart upload
+      const FormData = (await import('form-data')).default;
+      const formData = new FormData();
+
+      formData.append('file', audioBuffer, {
+        filename: 'audio.m4a',
+        contentType: 'audio/m4a',
+      });
+      formData.append('model', model);
+      formData.append('language', language);
+      formData.append('temperature', temperature.toString());
+      formData.append('response_format', 'json'); // Returns JSON with text and metadata
+
+      // Make request with FormData headers
+      const response = await fetch(`${this.baseURL}/audio/transcriptions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          ...formData.getHeaders(),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Transcription failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Track usage (approximate - audio transcription is priced differently)
+      console.log(`[OpenAI] ${model} - Transcription completed`);
+
+      return {
+        text: data.text || '',
+        confidence: 0.9, // gpt-4o-transcribe has high accuracy (95%+)
+        language: data.language || language,
+        duration: data.duration,
+      };
+    } catch (error) {
+      console.error(`[OpenAI] Audio transcription failed:`, error.message);
+      throw new Error(`Audio transcription failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Analyze food image (Vision API)
    *
    * @param {string} base64Image - Base64-encoded image

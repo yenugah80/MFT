@@ -1,6 +1,6 @@
 /**
- * MoodLogger Modal
- * Beautiful, animated modal for logging mood with optional notes
+ * Premium MoodLogger Modal
+ * 3D Lottie animations, intensity tracking, context tags, meal correlation
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -16,76 +16,156 @@ import {
   Platform,
   Pressable,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useMoodLog, MOOD_TYPES } from '../hooks/useMoodLog';
+import MoodIcon3D from './MoodTracker/MoodIcon3D';
+import {
+  MOOD_PALETTE,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  TEXT,
+  SURFACES,
+} from '../constants/premiumTheme';
+
+// Tag categories for mood context
+const TAG_CATEGORIES = {
+  sleep: { label: 'Sleep', icon: 'moon', options: ['Poor', 'Fair', 'Good', 'Excellent'] },
+  exercise: { label: 'Exercise', icon: 'barbell', options: ['None', 'Light', 'Moderate', 'Intense'] },
+  social: { label: 'Social', icon: 'people', options: ['Alone', 'Friends', 'Family', 'Crowded'] },
+};
 
 /**
- * Animated mood button component
+ * Intensity Slider Component
  */
-const MoodButton = ({ mood, isSelected, onSelect }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+const IntensitySlider = ({ value, onChange, moodColor }) => {
+  const [sliderWidth, setSliderWidth] = useState(0);
+  const position = useRef(new Animated.Value((value - 1) / 9)).current;
 
-  const handlePress = () => {
-    // Satisfying pop animation with spring overshoot
-    Animated.sequence([
-      Animated.spring(scaleAnim, {
-        toValue: 1.15,
-        tension: 300,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1.0,
-        tension: 300,
-        friction: 15,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  useEffect(() => {
+    Animated.spring(position, {
+      toValue: (value - 1) / 9,
+      tension: 200,
+      friction: 20,
+      useNativeDriver: false,
+    }).start();
+  }, [value]);
 
-    onSelect(mood.key);
+  const handleSlide = (evt) => {
+    if (!sliderWidth) return;
+    const newPos = Math.max(0, Math.min(evt.nativeEvent.locationX, sliderWidth));
+    const newValue = Math.round((newPos / sliderWidth) * 9) + 1;
+
+    if (newValue !== value) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onChange(newValue);
+    }
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity
-        style={[
-          styles.moodButton,
-          isSelected && { ...styles.moodButtonSelected, borderColor: mood.color },
-        ]}
-        onPress={handlePress}
-        activeOpacity={0.7}
+    <View style={styles.sliderContainer}>
+      <View style={styles.sliderHeader}>
+        <Text style={styles.sliderLabel}>Intensity</Text>
+        <Text style={[styles.sliderValue, { color: moodColor }]}>{value}/10</Text>
+      </View>
+      <View
+        style={styles.sliderTrack}
+        onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={handleSlide}
+        onResponderMove={handleSlide}
       >
-        <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-        <Text
+        <LinearGradient
+          colors={[`${moodColor}40`, moodColor]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.sliderFill, { width: `${((value - 1) / 9) * 100}%` }]}
+        />
+        <Animated.View
           style={[
-            styles.moodLabel,
-            isSelected && { color: mood.color, fontWeight: '700' },
+            styles.sliderThumb,
+            {
+              backgroundColor: moodColor,
+              left: position.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, sliderWidth - 24],
+              }),
+            },
           ]}
         >
-          {mood.label}
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
+          <Text style={styles.sliderThumbText}>{value}</Text>
+        </Animated.View>
+      </View>
+      <View style={styles.sliderLabels}>
+        <Text style={styles.sliderLabelText}>Low</Text>
+        <Text style={styles.sliderLabelText}>High</Text>
+      </View>
+    </View>
   );
 };
 
 /**
- * Main MoodLogger Modal Component
+ * Tag Selection Component
+ */
+const TagSelector = ({ category, selectedValue, onSelect }) => {
+  const { label, icon, options } = TAG_CATEGORIES[category];
+
+  return (
+    <View style={styles.tagCategory}>
+      <View style={styles.tagHeader}>
+        <Ionicons name={icon} size={16} color={TEXT.secondary} />
+        <Text style={styles.tagLabel}>{label}</Text>
+      </View>
+      <View style={styles.tagOptions}>
+        {options.map((option) => (
+          <TouchableOpacity
+            key={option}
+            style={[
+              styles.tagOption,
+              selectedValue === option && styles.tagOptionSelected,
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onSelect(category, option);
+            }}
+          >
+            <Text
+              style={[
+                styles.tagOptionText,
+                selectedValue === option && styles.tagOptionTextSelected,
+              ]}
+            >
+              {option}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+/**
+ * Main Premium MoodLogger Component
  */
 export default function MoodLogger({ visible, onClose, onSuccess }) {
   const { logMood, isLogging, moodTypes } = useMoodLog();
   const [selectedMood, setSelectedMood] = useState(null);
+  const [intensity, setIntensity] = useState(5);
+  const [energyLevel, setEnergyLevel] = useState(5);
+  const [tags, setTags] = useState({});
   const [note, setNote] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const contentFadeAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (visible) {
-      // Staged entrance: backdrop/modal first, then content
       Animated.parallel([
         Animated.spring(slideAnim, {
           toValue: 0,
@@ -98,53 +178,30 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
           duration: 200,
           useNativeDriver: true,
         }),
-      ]).start(() => {
-        // Fade in content after modal appears
-        Animated.timing(contentFadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-      });
+      ]).start();
     } else {
-      // Reset animations
       slideAnim.setValue(300);
       fadeAnim.setValue(0);
-      contentFadeAnim.setValue(0);
       setSelectedMood(null);
+      setIntensity(5);
+      setEnergyLevel(5);
+      setTags({});
       setNote('');
+      setShowAdvanced(false);
     }
   }, [visible]);
-
-  // Pulse save button when mood selected
-  useEffect(() => {
-    if (selectedMood) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.03,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1.0,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      pulse.start();
-      return () => pulse.stop();
-    } else {
-      pulseAnim.setValue(1);
-    }
-  }, [selectedMood]);
 
   const handleSave = async () => {
     if (!selectedMood) return;
 
     try {
-      await logMood(selectedMood, note);
+      await logMood({
+        mood: selectedMood,
+        intensity,
+        energyLevel,
+        tags,
+        note: note.trim(),
+      });
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -152,7 +209,19 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
     }
   };
 
-  const selectedMoodMeta = moodTypes.find(m => m.key === selectedMood);
+  const handleTagSelect = (category, value) => {
+    setTags(prev => {
+      const newTags = { ...prev };
+      if (newTags[category] === value) {
+        delete newTags[category];
+      } else {
+        newTags[category] = value;
+      }
+      return newTags;
+    });
+  };
+
+  const moodColors = selectedMood ? MOOD_PALETTE[selectedMood] : MOOD_PALETTE.neutral;
 
   return (
     <Modal
@@ -177,55 +246,110 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
             { transform: [{ translateY: slideAnim }] },
           ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
+          {/* Header with gradient */}
+          <LinearGradient
+            colors={selectedMood ? moodColors.gradient : SURFACES.gradient.primary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
             <Text style={styles.headerTitle}>How are you feeling?</Text>
-            <Text style={styles.headerSubtitle}>Select your current mood</Text>
-          </View>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Ionicons name="close" size={24} color={TEXT.white} />
+            </TouchableOpacity>
+          </LinearGradient>
 
-          {/* Staged content fade-in */}
-          <Animated.View style={{ opacity: contentFadeAnim }}>
-            {/* Mood Grid */}
+          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Mood Selection with 3D Lottie */}
             <View style={styles.moodGrid}>
               {moodTypes.map((mood) => (
-                <MoodButton
-                  key={mood.key}
-                  mood={mood}
-                  isSelected={selectedMood === mood.key}
-                  onSelect={setSelectedMood}
-                />
+                <View key={mood.key} style={styles.moodItemWrapper}>
+                  <MoodIcon3D
+                    mood={mood.key}
+                    selected={selectedMood === mood.key}
+                    onSelect={setSelectedMood}
+                    size={64}
+                    showLabel={true}
+                  />
+                </View>
               ))}
             </View>
 
-            {/* Note Input - Always Visible */}
-            <View style={styles.noteContainer}>
-            <View style={styles.noteLabelContainer}>
-              <Text
-                style={[
-                  styles.noteLabel,
-                  selectedMood && selectedMoodMeta && { color: selectedMoodMeta.color },
-                ]}
-              >
-                {selectedMood ? `${selectedMoodMeta?.emoji} Add a note (optional)` : '📝 Select a mood above to continue'}
-              </Text>
-            </View>
-            <TextInput
-              style={[
-                styles.noteInput,
-                !selectedMood && styles.noteInputDisabled,
-                selectedMood && selectedMoodMeta && { borderColor: selectedMoodMeta.color, borderWidth: 2 },
-              ]}
-              placeholder={selectedMood ? "What's on your mind?" : "Select a mood first..."}
-              placeholderTextColor={selectedMood ? "#9ca3af" : "#d1d5db"}
-              value={note}
-              onChangeText={setNote}
-              multiline
-              maxLength={200}
-              editable={!!selectedMood}
-            />
-            <Text style={styles.charCount}>{note.length}/200</Text>
-          </View>
-          </Animated.View>
+            {/* Intensity Slider */}
+            {selectedMood && (
+              <View style={styles.section}>
+                <IntensitySlider
+                  value={intensity}
+                  onChange={setIntensity}
+                  moodColor={moodColors.base}
+                />
+              </View>
+            )}
+
+            {/* Energy Level Slider */}
+            {selectedMood && (
+              <View style={styles.section}>
+                <IntensitySlider
+                  value={energyLevel}
+                  onChange={setEnergyLevel}
+                  moodColor={moodColors.base}
+                />
+                <Text style={styles.sectionSubtitle}>Energy Level</Text>
+              </View>
+            )}
+
+            {/* Advanced Context (Collapsible) */}
+            {selectedMood && (
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.advancedToggle}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowAdvanced(!showAdvanced);
+                  }}
+                >
+                  <Text style={styles.advancedToggleText}>
+                    Add Context (Optional)
+                  </Text>
+                  <Ionicons
+                    name={showAdvanced ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color={TEXT.secondary}
+                  />
+                </TouchableOpacity>
+
+                {showAdvanced && (
+                  <View style={styles.tagsContainer}>
+                    {Object.keys(TAG_CATEGORIES).map((category) => (
+                      <TagSelector
+                        key={category}
+                        category={category}
+                        selectedValue={tags[category]}
+                        onSelect={handleTagSelect}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Note Input */}
+            {selectedMood && (
+              <View style={styles.section}>
+                <Text style={styles.noteLabel}>Note (Optional)</Text>
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="What's on your mind?"
+                  placeholderTextColor="#9ca3af"
+                  value={note}
+                  onChangeText={setNote}
+                  multiline
+                  maxLength={200}
+                />
+                <Text style={styles.charCount}>{note.length}/200</Text>
+              </View>
+            )}
+          </ScrollView>
 
           {/* Action Buttons */}
           <View style={styles.actions}>
@@ -237,27 +361,24 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
 
-            {/* Pulsing save button when ready */}
-            <Animated.View style={{ flex: 1, transform: [{ scale: selectedMood ? pulseAnim : 1 }] }}>
-              <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  selectedMood && selectedMoodMeta && { backgroundColor: selectedMoodMeta.color },
-                  !selectedMood && styles.saveButtonDisabled,
-                ]}
-                onPress={handleSave}
-                disabled={!selectedMood || isLogging}
-                activeOpacity={0.8}
-              >
-                {isLogging ? (
-                  <ActivityIndicator color="#fdd3d3ff" />
-                ) : (
-                  <Text style={styles.saveButtonText}>
-                    {selectedMood ? `Save ${selectedMoodMeta.emoji}` : 'Select a mood'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                selectedMood && { backgroundColor: moodColors.base },
+                !selectedMood && styles.saveButtonDisabled,
+              ]}
+              onPress={handleSave}
+              disabled={!selectedMood || isLogging}
+              activeOpacity={0.8}
+            >
+              {isLogging ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>
+                  {selectedMood ? 'Save Mood' : 'Select a mood'}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -274,13 +395,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   modalContent: {
-    backgroundColor: '#a8e1e0ff',
+    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 34,
-    maxHeight: '85%',
+    maxHeight: '90%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
@@ -288,121 +406,205 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   header: {
-    marginBottom: 24,
-    alignItems: 'center',
+    paddingTop: SPACING[6],
+    paddingHorizontal: SPACING[5],
+    paddingBottom: SPACING[4],
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 4,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
+    textAlign: 'center',
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#062a73ff',
+  closeButton: {
+    position: 'absolute',
+    top: SPACING[6],
+    right: SPACING[5],
+  },
+  scrollContent: {
+    paddingHorizontal: SPACING[5],
+    paddingTop: SPACING[4],
+  },
+  section: {
+    marginBottom: SPACING[5],
   },
   moodGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    justifyContent: 'space-around',
+    marginBottom: SPACING[4],
   },
-  moodButton: {
-    width: '23%',
-    aspectRatio: 1,
-    backgroundColor: '#f5bcbcff',
-    borderRadius: 20,
-    borderWidth: 2.5,
-    borderColor: '#e5e7eb',
+  moodItemWrapper: {
+    marginBottom: SPACING[3],
+  },
+  sliderContainer: {
+    marginBottom: SPACING[2],
+  },
+  sliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING[2],
+  },
+  sliderLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  sliderValue: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+  sliderTrack: {
+    height: 40,
+    backgroundColor: '#f3f4f6',
+    borderRadius: RADIUS.full,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  sliderFill: {
+    position: 'absolute',
+    height: '100%',
+    borderRadius: RADIUS.full,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    padding: 8,
-    // Subtle depth for premium feel
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  moodButtonSelected: {
-    backgroundColor: '#feebaaff',
-    borderWidth: 3.5,
-    borderColor: '#fbbf24',
-    // Elevated with gold glow
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
     elevation: 4,
-    transform: [{ scale: 1.05 }],
   },
-  moodEmoji: {
-    fontSize: 38,
-    marginBottom: 6,
-    lineHeight: 40,
+  sliderThumbText: {
+    color: TEXT.white,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontSize: TYPOGRAPHY.size.base,
   },
-  moodLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '600',
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING[1],
+  },
+  sliderLabelText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+  },
+  sectionSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
     textAlign: 'center',
-    letterSpacing: 0.2,
+    marginTop: SPACING[1],
   },
-  noteContainer: {
-    marginBottom: 20,
+  advancedToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    backgroundColor: '#f9fafb',
+    borderRadius: RADIUS.lg,
   },
-  noteLabelContainer: {
-    marginBottom: 8,
+  advancedToggleText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+  },
+  tagsContainer: {
+    marginTop: SPACING[3],
+  },
+  tagCategory: {
+    marginBottom: SPACING[3],
+  },
+  tagHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+    marginBottom: SPACING[2],
+  },
+  tagLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+  },
+  tagOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[2],
+  },
+  tagOption: {
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    backgroundColor: '#f3f4f6',
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  tagOptionSelected: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  tagOptionText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  tagOptionTextSelected: {
+    color: TEXT.white,
   },
   noteLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+    marginBottom: SPACING[2],
   },
   noteInput: {
     backgroundColor: '#f9fafb',
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 10,
-    fontSize: 15,
-    color: '#1f2937',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.primary,
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  noteInputDisabled: {
-    backgroundColor: '#f3f4f6',
-    borderColor: '#e5e7eb',
-    opacity: 0.6,
-  },
   charCount: {
-    fontSize: 12,
-    color: '#9ca3af',
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
     textAlign: 'right',
-    marginTop: 4,
+    marginTop: SPACING[1],
   },
   actions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: SPACING[3],
+    paddingHorizontal: SPACING[5],
+    paddingVertical: SPACING[4],
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.lg,
     borderWidth: 2,
     borderColor: '#e5e7eb',
     alignItems: 'center',
   },
   cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6b7280',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
   },
   saveButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.lg,
     backgroundColor: '#10b981',
     alignItems: 'center',
     shadowColor: '#000',
@@ -415,8 +617,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1d5db',
   },
   saveButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
   },
 });

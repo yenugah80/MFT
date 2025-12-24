@@ -15,7 +15,7 @@
  *
  */
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,8 @@ import {
   ScrollView,
   Alert,
   PanResponder,
+  ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,6 +38,8 @@ import Svg, {
   Circle,
 } from 'react-native-svg';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 import {
   TEXT,
   SEMANTIC,
@@ -45,6 +49,7 @@ import {
   SHADOWS,
   ICON_SIZES,
   SURFACES,
+  BRAND,
 } from '../constants/premiumTheme';
 
 // ============================================================================
@@ -67,6 +72,25 @@ const QUICK_ADD_SIZES = [
 ];
 
 const MILESTONES = [25, 50, 75, 100];
+
+// Gamified tips and motivational messages
+const HYDRATION_TIPS = [
+  { emoji: '💡', message: 'Drink water before meals to aid digestion!' },
+  { emoji: '🧠', message: 'Your brain is 75% water - stay sharp!' },
+  { emoji: '⚡', message: 'Hydration boosts energy levels naturally!' },
+  { emoji: '✨', message: 'Water helps maintain healthy skin glow!' },
+  { emoji: '🏃', message: 'Drink water 30 mins before exercise!' },
+  { emoji: '🌙', message: 'Hydrate early, sleep better tonight!' },
+  { emoji: '💪', message: 'Water aids muscle recovery!' },
+  { emoji: '🎯', message: 'Consistency is key - you\'re doing great!' },
+  { emoji: '🔥', message: 'Water helps regulate body temperature!' },
+  { emoji: '🌟', message: 'Small sips throughout the day work best!' },
+  { emoji: '🎪', message: 'Thirsty? You\'re already slightly dehydrated!' },
+  { emoji: '🚀', message: 'Water carries nutrients to your cells!' },
+  { emoji: '💎', message: 'Clear urine = well hydrated!' },
+  { emoji: '🌊', message: 'Every sip counts toward your goal!' },
+  { emoji: '🎨', message: 'Mix it up - add lemon or cucumber!' },
+];
 
 // ============================================================================
 // CONFETTI PARTICLE - For celebration
@@ -168,9 +192,9 @@ const LiquidWave = ({ percentage, size = 200 }) => {
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Defs>
           <SvgGradient id="liquidGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <Stop offset="0%" stopColor="#60A5FA" stopOpacity="0.9" />
-            <Stop offset="50%" stopColor="#3B82F6" stopOpacity="0.95" />
-            <Stop offset="100%" stopColor="#2563EB" stopOpacity="1" />
+            <Stop offset="0%" stopColor={SEMANTIC.info.light} stopOpacity="0.9" />
+            <Stop offset="50%" stopColor={SEMANTIC.info.base} stopOpacity="0.95" />
+            <Stop offset="100%" stopColor={SEMANTIC.info.dark} stopOpacity="1" />
           </SvgGradient>
         </Defs>
 
@@ -179,8 +203,8 @@ const LiquidWave = ({ percentage, size = 200 }) => {
           cx={size / 2}
           cy={size / 2}
           r={size / 2 - 4}
-          fill="rgba(59, 130, 246, 0.05)"
-          stroke="rgba(59, 130, 246, 0.2)"
+          fill={`${SEMANTIC.info.base}0D`}
+          stroke={`${SEMANTIC.info.base}33`}
           strokeWidth="2"
         />
 
@@ -217,10 +241,26 @@ const LiquidWave = ({ percentage, size = 200 }) => {
 // PROGRESS RING WITH GLOW EFFECT
 // ============================================================================
 
-const ProgressRing = ({ percentage, size = 180, strokeWidth = 12 }) => {
+const ProgressRing = ({ percentage, size = 200, strokeWidth = 14, reduceMotion = false }) => {
+  const animatedProgress = useRef(new Animated.Value(0)).current;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  useEffect(() => {
+    const animConfig = reduceMotion
+      ? { duration: 250, useNativeDriver: false }
+      : { tension: 60, friction: 10, useNativeDriver: false };
+
+    Animated[reduceMotion ? 'timing' : 'spring'](animatedProgress, {
+      toValue: percentage,
+      ...animConfig,
+    }).start();
+  }, [percentage, reduceMotion]);
+
+  const strokeDashoffset = animatedProgress.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circumference, 0],
+  });
 
   return (
     <View
@@ -228,13 +268,17 @@ const ProgressRing = ({ percentage, size = 180, strokeWidth = 12 }) => {
         styles.ringContainer,
         { width: size, height: size },
       ]}
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Hydration progress: ${Math.round(percentage)} percent of daily goal`}
+      accessibilityValue={{ min: 0, max: 100, now: percentage }}
     >
       <Svg width={size} height={size}>
         <Defs>
           <SvgGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#60A5FA" stopOpacity="1" />
-            <Stop offset="50%" stopColor="#8B5CF6" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#EC4899" stopOpacity="1" />
+            <Stop offset="0%" stopColor={SEMANTIC.info.light} stopOpacity="1" />
+            <Stop offset="50%" stopColor={SEMANTIC.info.base} stopOpacity="1" />
+            <Stop offset="100%" stopColor={SEMANTIC.info.dark} stopOpacity="1" />
           </SvgGradient>
         </Defs>
 
@@ -243,13 +287,13 @@ const ProgressRing = ({ percentage, size = 180, strokeWidth = 12 }) => {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(107, 78, 255, 0.08)"
+          stroke={`${BRAND.primary}14`}
           strokeWidth={strokeWidth}
           fill="none"
         />
 
-        {/* Progress Circle */}
-        <Circle
+        {/* Animated Progress Circle */}
+        <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
           r={radius}
@@ -275,7 +319,7 @@ const ProgressRing = ({ percentage, size = 180, strokeWidth = 12 }) => {
               cx={x}
               cy={y}
               r={reached ? 6 : 4}
-              fill={reached ? '#10B981' : 'rgba(107, 78, 255, 0.2)'}
+              fill={reached ? SEMANTIC.success.base : `${BRAND.primary}33`}
             />
           );
         })}
@@ -291,6 +335,8 @@ const ProgressRing = ({ percentage, size = 180, strokeWidth = 12 }) => {
 const SwipeableEntry = ({ entry, onDelete, bevType }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const deleteOpacity = useRef(new Animated.Value(0)).current;
+  const deleteScale = useRef(new Animated.Value(0.8)).current;
+  const lastHapticThreshold = useRef(0);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -298,34 +344,63 @@ const SwipeableEntry = ({ entry, onDelete, bevType }) => {
       onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 10,
       onPanResponderMove: (_, gesture) => {
         if (gesture.dx < 0) {
-          translateX.setValue(Math.max(gesture.dx, -100));
-          deleteOpacity.setValue(Math.min(Math.abs(gesture.dx) / 100, 1));
+          const clampedDx = Math.max(gesture.dx, -120);
+          translateX.setValue(clampedDx);
+
+          // Progressive reveal
+          const progress = Math.min(Math.abs(clampedDx) / 100, 1);
+          deleteOpacity.setValue(progress);
+          deleteScale.setValue(0.8 + (progress * 0.2));
+
+          // Haptic at threshold
+          if (Math.abs(clampedDx) > 60 && lastHapticThreshold.current === 0) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            lastHapticThreshold.current = 1;
+          }
         }
       },
       onPanResponderRelease: (_, gesture) => {
+        lastHapticThreshold.current = 0;
+
         if (gesture.dx < -60) {
           // Delete threshold
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          Animated.timing(translateX, {
-            toValue: -300,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
+          Animated.parallel([
+            Animated.timing(translateX, {
+              toValue: -400,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+            Animated.timing(deleteOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
             if (onDelete) onDelete();
           });
         } else {
-          // Snap back
-          Animated.spring(translateX, {
-            toValue: 0,
-            tension: 80,
-            friction: 10,
-            useNativeDriver: true,
-          }).start();
-          Animated.timing(deleteOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
+          // Better spring bounce-back
+          Animated.parallel([
+            Animated.spring(translateX, {
+              toValue: 0,
+              tension: 100,
+              friction: 12,
+              useNativeDriver: true,
+            }),
+            Animated.spring(deleteOpacity, {
+              toValue: 0,
+              tension: 100,
+              friction: 12,
+              useNativeDriver: true,
+            }),
+            Animated.spring(deleteScale, {
+              toValue: 0.8,
+              tension: 100,
+              friction: 12,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       },
     })
@@ -352,8 +427,16 @@ const SwipeableEntry = ({ entry, onDelete, bevType }) => {
 
   return (
     <View style={styles.swipeableContainer}>
-      <Animated.View style={[styles.deleteBackground, { opacity: deleteOpacity }]}>
-        <Ionicons name="trash" size={24} color="#FFF" />
+      <Animated.View
+        style={[
+          styles.deleteBackground,
+          {
+            opacity: deleteOpacity,
+            transform: [{ scale: deleteScale }],
+          },
+        ]}
+      >
+        <Ionicons name="trash" size={ICON_SIZES.md} color={TEXT.white} />
         <Text style={styles.deleteText}>Delete</Text>
       </Animated.View>
       <Animated.View
@@ -474,10 +557,10 @@ const UndoToast = ({ visible, message, onUndo, onDismiss }) => {
 };
 
 // ============================================================================
-// MILESTONE TOAST - Celebrates progress milestones
+// MILESTONE TOAST - Celebrates progress milestones and shows tips
 // ============================================================================
 
-const MilestoneToast = ({ milestone, visible, onDismiss }) => {
+const MilestoneToast = ({ milestone, visible, onDismiss, message, isFirstLog, isTip }) => {
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
@@ -500,6 +583,7 @@ const MilestoneToast = ({ milestone, visible, onDismiss }) => {
         }),
       ]).start();
 
+      const duration = isTip ? 4000 : 3000; // Tips stay longer
       setTimeout(() => {
         Animated.parallel([
           Animated.timing(slideAnim, {
@@ -515,20 +599,32 @@ const MilestoneToast = ({ milestone, visible, onDismiss }) => {
         ]).start(() => {
           if (onDismiss) onDismiss();
         });
-      }, 3000);
+      }, duration);
     }
-  }, [visible, milestone]);
+  }, [visible, milestone, message, isTip]);
 
   if (!visible) return null;
 
-  const messages = {
-    25: { text: 'Great start! 🌟', color: '#3B82F6' },
-    50: { text: 'Halfway there! 💪', color: '#8B5CF6' },
-    75: { text: 'Almost there! 🚀', color: '#EC4899' },
-    100: { text: 'Goal reached! 🎉', color: '#10B981' },
-  };
+  // Custom message or default milestone messages
+  let displayText, color;
 
-  const { text, color } = messages[milestone] || messages[25];
+  if (message) {
+    displayText = message;
+    color = isTip ? '#6366F1' : '#10B981';
+  } else if (isFirstLog) {
+    displayText = 'Great start! 🌟';
+    color = '#10B981';
+  } else {
+    const messages = {
+      25: { text: 'Keep going! 💪', color: '#3B82F6' },
+      50: { text: 'Halfway there! 🎯', color: '#8B5CF6' },
+      75: { text: 'Almost there! 🚀', color: '#EC4899' },
+      100: { text: 'Goal reached! 🎉', color: '#10B981' },
+    };
+    const milestoneData = messages[milestone] || messages[25];
+    displayText = milestoneData.text;
+    color = milestoneData.color;
+  }
 
   return (
     <Animated.View
@@ -540,7 +636,7 @@ const MilestoneToast = ({ milestone, visible, onDismiss }) => {
         },
       ]}
     >
-      <Text style={styles.milestoneText}>{text}</Text>
+      <Text style={styles.milestoneText}>{displayText}</Text>
     </Animated.View>
   );
 };
@@ -574,6 +670,96 @@ const EmptyState = () => {
         </View>
       </View>
     </View>
+  );
+};
+
+// ============================================================================
+// BEVERAGE CHIP - Animated Selection with Pulse
+// ============================================================================
+
+const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const bgAnim = useRef(new Animated.Value(selected ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(bgAnim, {
+      toValue: selected ? 1 : 0,
+      tension: 80,
+      friction: 10,
+      useNativeDriver: false,
+    }).start();
+  }, [selected]);
+
+  const handlePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Pulse animation
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 0.94,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    onSelect(bevKey);
+  };
+
+  const backgroundColor = bgAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SURFACES.background.secondary, `${bev.color}15`],
+  });
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[
+          styles.beverageChip,
+          selected && {
+            borderColor: bev.color,
+            ...SHADOWS.sm,
+          },
+        ]}
+        onPress={handlePress}
+        activeOpacity={1}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor, borderRadius: RADIUS.full }
+          ]}
+        />
+
+        <View style={styles.beverageChipContent}>
+          <Text style={styles.beverageEmoji}>{bev.emoji}</Text>
+          <Text
+            style={[
+              styles.beverageChipLabel,
+              selected && {
+                color: bev.color,
+                fontWeight: TYPOGRAPHY.weight.bold
+              },
+            ]}
+          >
+            {bev.label}
+          </Text>
+          {bev.multiplier < 1 && (
+            <View style={styles.multiplierBadge}>
+              <Text style={styles.beverageMultiplier}>
+                {Math.round(bev.multiplier * 100)}%
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -706,6 +892,111 @@ const Timeline = ({ beverageHistory, onDelete }) => {
 };
 
 // ============================================================================
+// PREMIUM QUICK ADD BUTTON - With Scale Animation + Glow + Loading
+// ============================================================================
+
+const PremiumQuickAddButton = ({ size, onPress, isLoading = false, accessible, accessibilityRole, accessibilityLabel, accessibilityHint }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Scale down + glow up
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Scale up bounce then back + glow down
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 1.05,
+        tension: 300,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.timing(glowAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const glowColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(107, 78, 255, 0)', 'rgba(107, 78, 255, 0.4)'],
+  });
+
+  return (
+    <TouchableOpacity
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={onPress}
+      activeOpacity={1}
+      disabled={isLoading}
+      style={styles.quickAddTile}
+      accessible={accessible}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+    >
+      <Animated.View
+        style={[
+          styles.quickAddTileWrapper,
+          {
+            transform: [{ scale: scaleAnim }],
+            shadowColor: glowColor,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 1,
+            shadowRadius: 12,
+            elevation: 8,
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={SURFACES.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.quickAddTileGradient}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="large" color="#FFF" />
+          ) : (
+            <>
+              <Ionicons name={size.icon} size={32} color="#FFF" />
+              <Text style={styles.quickAddTileLabel}>{size.label}</Text>
+              <Text style={styles.quickAddTileSubtitle}>{size.subtitle}</Text>
+            </>
+          )}
+        </LinearGradient>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -722,6 +1013,20 @@ export default function HydrationTracker({
   const [showMilestone, setShowMilestone] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [previousPercentage, setPreviousPercentage] = useState(0);
+  const [milestoneMessage, setMilestoneMessage] = useState(null);
+  const [isTipMessage, setIsTipMessage] = useState(false);
+  const [logCount, setLogCount] = useState(0);
+  const [shownFirstLogToast, setShownFirstLogToast] = useState(false);
+  const [loadingButton, setLoadingButton] = useState(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Ref to prevent concurrent operations
+  const syncInFlightRef = useRef(false);
+
+  // Check for reduced motion preference
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
 
   const percentage = Math.min((currentIntake / dailyGoal) * 100, 100);
   const remainingLiters = Math.max(dailyGoal - currentIntake, 0);
@@ -735,6 +1040,8 @@ export default function HydrationTracker({
     );
 
     if (currentMilestone) {
+      setMilestoneMessage(null);
+      setIsTipMessage(false);
       setShowMilestone(currentMilestone);
 
       if (currentMilestone === 100) {
@@ -746,44 +1053,116 @@ export default function HydrationTracker({
     setPreviousPercentage(percentage);
   }, [percentage]);
 
-  const handleQuickAdd = async (ml) => {
-    // Haptic feedback
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  // Show random tips periodically (every 3 logs, not at milestones)
+  useEffect(() => {
+    // Show tip every 3 logs, but not if we just hit a milestone
+    const shouldShowTip = logCount > 0 && logCount % 3 === 0 && !showMilestone;
 
-    const bevType = BEVERAGE_TYPES[selectedBeverage];
-    const effectiveMl = ml * bevType.multiplier;
+    if (shouldShowTip) {
+      const randomTip = HYDRATION_TIPS[Math.floor(Math.random() * HYDRATION_TIPS.length)];
+      setMilestoneMessage(`${randomTip.emoji} ${randomTip.message}`);
+      setIsTipMessage(true);
+      setShowMilestone('tip'); // Use a special key for tips
 
-    const entry = {
-      amount: ml,
-      type: selectedBeverage,
-      effectiveAmount: effectiveMl,
-      timestamp: Date.now(),
-    };
-
-    setLastEntry(entry);
-    setShowUndoToast(true);
-
-    if (onLogWater) {
-      onLogWater(entry);
+      // Reset after showing
+      setTimeout(() => {
+        setMilestoneMessage(null);
+        setIsTipMessage(false);
+      }, 4500);
     }
-  };
+  }, [logCount]);
 
-  const handleUndo = async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  const handleQuickAdd = useCallback(async (ml) => {
+    // Prevent double-clicks with debouncing
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    setLoadingButton(ml); // Show loading state for this button
 
-    if (lastEntry && onRemoveWater && beverageHistory.length > 0) {
-      const lastLoggedEntry = beverageHistory[beverageHistory.length - 1];
-      onRemoveWater(lastLoggedEntry.id, lastLoggedEntry.amountLiters);
+    try {
+      // Haptic feedback
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const bevType = BEVERAGE_TYPES[selectedBeverage];
+      const effectiveMl = ml * bevType.multiplier;
+
+      const entry = {
+        amount: ml,
+        type: selectedBeverage,
+        effectiveAmount: effectiveMl,
+        timestamp: Date.now(),
+      };
+
+      setLastEntry(entry);
+      setShowUndoToast(true);
+
+      // Increment log count for tip tracking
+      setLogCount(prev => prev + 1);
+
+      // Show "Great Start" only on first log of the day
+      if (beverageHistory.length === 0 && !shownFirstLogToast) {
+        setMilestoneMessage('Great start! 🌟');
+        setIsTipMessage(false);
+        setShowMilestone('firstLog');
+        setShownFirstLogToast(true);
+
+        setTimeout(() => {
+          setMilestoneMessage(null);
+          setShowMilestone(null);
+        }, 3500);
+      }
+
+      if (onLogWater) {
+        await onLogWater(entry);
+      }
+
+      // Success haptic
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('[HydrationTracker] Error logging water:', error);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoadingButton(null);
+      // Release lock after a short delay to prevent rapid clicks
+      setTimeout(() => {
+        syncInFlightRef.current = false;
+      }, 500);
     }
-    setShowUndoToast(false);
-  };
+  }, [selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater]);
 
-  const handleSwipeDelete = async (entry) => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    if (onRemoveWater) {
-      onRemoveWater(entry.id, entry.amountLiters);
+  const handleUndo = useCallback(async () => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+      if (lastEntry && onRemoveWater && beverageHistory.length > 0) {
+        const lastLoggedEntry = beverageHistory[beverageHistory.length - 1];
+        await onRemoveWater(lastLoggedEntry.id, lastLoggedEntry.amountLiters);
+      }
+      setShowUndoToast(false);
+    } finally {
+      setTimeout(() => {
+        syncInFlightRef.current = false;
+      }, 500);
     }
-  };
+  }, [lastEntry, onRemoveWater, beverageHistory]);
+
+  const handleSwipeDelete = useCallback(async (entry) => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (onRemoveWater) {
+        await onRemoveWater(entry.id, entry.amountLiters);
+      }
+    } finally {
+      setTimeout(() => {
+        syncInFlightRef.current = false;
+      }, 500);
+    }
+  }, [onRemoveWater]);
 
   const isEmpty = beverageHistory.length === 0;
 
@@ -795,7 +1174,7 @@ export default function HydrationTracker({
       >
         {/* Header */}
         <LinearGradient
-          colors={['#F0F9FF', '#FFFFFF']}
+          colors={SURFACES.gradient.blue}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerCard}
@@ -803,7 +1182,7 @@ export default function HydrationTracker({
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconContainer}>
-                <Ionicons name="water" size={28} color={SEMANTIC.info.base} />
+                <Ionicons name="water" size={ICON_SIZES.xl} color={TEXT.white} />
               </View>
               <View>
                 <Text style={styles.headerTitle}>Hydration Tracker</Text>
@@ -812,7 +1191,7 @@ export default function HydrationTracker({
             </View>
             {goalReached && (
               <View style={styles.goalBadge}>
-                <Ionicons name="trophy" size={20} color="#F59E0B" />
+                <Ionicons name="trophy" size={20} color={SEMANTIC.warning.base} />
               </View>
             )}
           </View>
@@ -821,9 +1200,22 @@ export default function HydrationTracker({
         {/* Main Visualization */}
         <View style={styles.visualizationCard}>
           <View style={styles.progressContainer}>
-            <ProgressRing percentage={percentage} size={160} strokeWidth={10} />
-            <View style={styles.liquidInner}>
-              <LiquidWave percentage={percentage} size={120} />
+            <ProgressRing percentage={percentage} size={200} strokeWidth={14} reduceMotion={reduceMotion} />
+
+            {/* Stats overlay inside ring */}
+            <View style={styles.progressCenter}>
+              <Text style={styles.progressPercentage}>{Math.round(percentage)}%</Text>
+              <Text style={styles.progressLabel}>Hydrated</Text>
+
+              {/* Next milestone indicator */}
+              {percentage >= 25 && percentage < 100 && (
+                <View style={styles.nextMilestoneChip}>
+                  <Ionicons name="flag-outline" size={ICON_SIZES.xs} color={SEMANTIC.info.base} />
+                  <Text style={styles.nextMilestoneText}>
+                    {MILESTONES.find(m => m > percentage)}% next
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -858,65 +1250,32 @@ export default function HydrationTracker({
             contentContainerStyle={styles.beverageScroll}
           >
             {Object.entries(BEVERAGE_TYPES).map(([key, bev]) => (
-              <TouchableOpacity
+              <BeverageChip
                 key={key}
-                style={[
-                  styles.beverageChip,
-                  selectedBeverage === key && styles.beverageChipActive,
-                ]}
-                onPress={async () => {
-                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSelectedBeverage(key);
-                }}
-                activeOpacity={0.7}
-              >
-                {selectedBeverage === key && (
-                  <LinearGradient
-                    colors={[bev.color + '20', bev.color + '10']}
-                    style={StyleSheet.absoluteFill}
-                  />
-                )}
-                <Text style={styles.beverageEmoji}>{bev.emoji}</Text>
-                <Text
-                  style={[
-                    styles.beverageChipLabel,
-                    selectedBeverage === key && { color: bev.color, fontWeight: '700' },
-                  ]}
-                >
-                  {bev.label}
-                </Text>
-                {bev.multiplier < 1 && (
-                  <Text style={styles.beverageMultiplier}>
-                    {Math.round(bev.multiplier * 100)}%
-                  </Text>
-                )}
-              </TouchableOpacity>
+                bevKey={key}
+                bev={bev}
+                selected={selectedBeverage === key}
+                onSelect={setSelectedBeverage}
+              />
             ))}
           </ScrollView>
         </View>
 
-        {/* Quick Add Buttons */}
+        {/* Quick Add Buttons - Premium with Scale Animation + Glow */}
         <View style={styles.quickAddCard}>
           <Text style={styles.sectionLabel}>Quick Add</Text>
           <View style={styles.quickAddGrid}>
             {QUICK_ADD_SIZES.map((size) => (
-              <TouchableOpacity
+              <PremiumQuickAddButton
                 key={size.ml}
-                style={styles.quickAddTile}
+                size={size}
                 onPress={() => handleQuickAdd(size.ml)}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={SURFACES.gradient.primary}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.quickAddTileGradient}
-                >
-                  <Ionicons name={size.icon} size={32} color="#FFF" />
-                  <Text style={styles.quickAddTileLabel}>{size.label}</Text>
-                  <Text style={styles.quickAddTileSubtitle}>{size.subtitle}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                isLoading={loadingButton === size.ml}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${size.ml} milliliters of ${BEVERAGE_TYPES[selectedBeverage].label}`}
+                accessibilityHint="Double tap to log this amount"
+              />
             ))}
           </View>
         </View>
@@ -944,7 +1303,14 @@ export default function HydrationTracker({
       <MilestoneToast
         milestone={showMilestone}
         visible={!!showMilestone}
-        onDismiss={() => setShowMilestone(null)}
+        message={milestoneMessage}
+        isTip={isTipMessage}
+        isFirstLog={showMilestone === 'firstLog'}
+        onDismiss={() => {
+          setShowMilestone(null);
+          setMilestoneMessage(null);
+          setIsTipMessage(false);
+        }}
       />
 
       {/* Confetti */}
@@ -971,7 +1337,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     padding: SPACING[5],
     marginBottom: SPACING[4],
-    ...SHADOWS.md,
+    ...SHADOWS.info,
   },
   headerContent: {
     flexDirection: 'row',
@@ -984,30 +1350,33 @@ const styles = StyleSheet.create({
     gap: SPACING[3],
   },
   headerIconContainer: {
-    width: 56,
-    height: 56,
+    width: 64,
+    height: 64,
     borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
+    ...SHADOWS.md,
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontWeight: TYPOGRAPHY.weight.extrabold,
+    color: TEXT.white,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginTop: 2,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: SPACING[1],
   },
   goalBadge: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     borderRadius: RADIUS.full,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: SEMANTIC.warning.bg,
     justifyContent: 'center',
     alignItems: 'center',
+    ...SHADOWS.warning,
   },
 
   // Visualization
@@ -1023,13 +1392,59 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING[5],
+    marginBottom: SPACING[6],
+    width: 220,
+    height: 220,
+  },
+  ringWrapper: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 0,
   },
   ringContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressCenter: {
     position: 'absolute',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  progressPercentage: {
+    fontSize: TYPOGRAPHY.size['4xl'],
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: SEMANTIC.info.base,
+    letterSpacing: -1,
+  },
+  progressLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  nextMilestoneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+    backgroundColor: SEMANTIC.info.bg,
+    paddingVertical: SPACING[1],
+    paddingHorizontal: SPACING[2],
+    borderRadius: RADIUS.full,
+    marginTop: SPACING[2],
+  },
+  nextMilestoneText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: SEMANTIC.info.base,
   },
   liquidInner: {
-    position: 'relative',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -60,
+    marginLeft: -60,
     zIndex: 1,
   },
   liquidContainer: {
@@ -1127,16 +1542,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[2],
-    paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[3],
+    minHeight: 44,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
     borderRadius: RADIUS.full,
     backgroundColor: SURFACES.background.secondary,
     borderWidth: 2,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
   beverageChipActive: {
     borderColor: SEMANTIC.info.base,
     ...SHADOWS.sm,
+  },
+  beverageChipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    zIndex: 1,
   },
   beverageEmoji: {
     fontSize: 20,
@@ -1149,7 +1572,12 @@ const styles = StyleSheet.create({
   beverageMultiplier: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.muted,
-    marginLeft: SPACING[1],
+  },
+  multiplierBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    paddingHorizontal: SPACING[1],
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
   },
 
   // Quick Add
@@ -1167,9 +1595,11 @@ const styles = StyleSheet.create({
   quickAddTile: {
     flex: 1,
     aspectRatio: 1,
+  },
+  quickAddTileWrapper: {
+    flex: 1,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    ...SHADOWS.md,
   },
   quickAddTileGradient: {
     flex: 1,
