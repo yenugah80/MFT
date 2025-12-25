@@ -4,6 +4,7 @@ import { foodLogTable, recipesTable, dailyNutritionSummaryTable, waterLogTable, 
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC } from "../utils/timezone.js";
+import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../server.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import multer from "multer";
@@ -23,6 +24,11 @@ const openai = process.env.OPENAI_API_KEY
 const router = express.Router();
 
 router.use(requireAuth);
+router.use(async (req, res, next) => {
+  await ensureDailyNutritionSummaryTableShape();
+  await ensureWaterLogTableShape();
+  next();
+});
 
 /**
  * POST /api/nutrition/log
@@ -711,6 +717,7 @@ router.get("/mood", async (req, res) => {
  */
 router.get("/dashboard", async (req, res) => {
   try {
+    await ensureWaterLogTableShape();
     const userId = req.auth.userId;
 
     const offsetMinutes = parseTimezoneOffsetMinutes(req);

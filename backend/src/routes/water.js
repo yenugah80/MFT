@@ -4,6 +4,7 @@ import { dailyNutritionSummaryTable, waterLogTable } from "../db/schema.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
+import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../server.js";
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ const BEVERAGE_FACTORS = {
  */
 router.post("/log", async (req, res) => {
   try {
+    await ensureWaterLogTableShape();
     const userId = req.auth.userId;
     const { amountLiters, loggedDate, clientEventId, beverageType } = req.body;
 
@@ -96,6 +98,7 @@ router.post("/log", async (req, res) => {
  */
 router.get("/today", async (req, res) => {
   try {
+    await ensureWaterLogTableShape();
     const userId = req.auth.userId;
 
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
@@ -136,6 +139,7 @@ router.get("/today", async (req, res) => {
  */
 router.get("/history", async (req, res) => {
   try {
+    await ensureWaterLogTableShape();
     const userId = req.auth.userId;
     const { startDate, endDate, limit = 100 } = req.query;
 
@@ -170,6 +174,7 @@ router.get("/history", async (req, res) => {
  */
 router.post("/celebration", async (req, res) => {
   try {
+    await ensureDailyNutritionSummaryTableShape();
     const userId = req.auth.userId;
     const { dateKey } = req.body;
 
