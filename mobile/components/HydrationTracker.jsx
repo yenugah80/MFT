@@ -314,7 +314,7 @@ const ProgressRing = ({ percentage, size = 200, strokeWidth = 14, reduceMotion =
       accessible={true}
       accessibilityRole="progressbar"
       accessibilityLabel={`Hydration progress: ${Math.round(percentage)} percent of daily goal`}
-      accessibilityValue={{ min: 0, max: 100, now: percentage }}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(percentage) }}
     >
       <Svg width={size} height={size}>
         <Defs>
