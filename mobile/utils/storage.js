@@ -18,6 +18,8 @@ export const STORAGE_KEYS = {
   USER_PREFERENCES: 'user-preferences',
   OFFLINE_QUEUE: 'offline-queue',
   LAST_SYNC: 'last-sync',
+  HYDRATION_CELEBRATION: 'hydration-celebration-key',
+  INSIGHTS_FILTER_DAYS: 'insights-filter-days',
 };
 
 /**

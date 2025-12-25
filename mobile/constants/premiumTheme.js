@@ -306,11 +306,11 @@ export const MOOD_PALETTE = {
     gradient: ['#FBBF24', '#FCD34D'],
   },
   neutral: {
-    base: '#6B7280',
-    light: '#9CA3AF',
-    dark: '#4B5563',
-    bg: '#F3F4F6',
-    gradient: ['#6B7280', '#9CA3AF'],
+    base: '#4B5563',
+    light: '#0b57eeff',
+    dark: '#374151',
+    bg: '#E5E7EB',
+    gradient: ['#4B5563', '#6B7280'],
   },
   tired: {
     base: '#8B5CF6',

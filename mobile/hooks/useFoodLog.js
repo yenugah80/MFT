@@ -419,6 +419,7 @@ export function useFoodLog() {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
+              'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
             },
             body: JSON.stringify(payload),
           });
@@ -595,6 +596,7 @@ export function useFoodLog() {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
           },
         }).catch(err => {
           console.warn('[useFoodLog] Backend delete failed:', err);
@@ -647,6 +649,7 @@ export function useFoodLog() {
           const response = await fetch(`${API_URL}/nutrition/history?${params}`, {
             headers: {
               'Authorization': `Bearer ${token}`,
+              'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
             },
           });
 
@@ -675,7 +678,11 @@ export function useFoodLog() {
           const merged = [...transformedLogs];
 
           localLogs.forEach(local => {
-            if (!merged.some(m => m.id === local.id || m.timestamp === local.timestamp)) {
+            if (!merged.some(m =>
+              (m.id && local.id && m.id === local.id) ||
+              (m.clientEventId && local.clientEventId && m.clientEventId === local.clientEventId) ||
+              m.timestamp === local.timestamp
+            )) {
               merged.push(local);
             }
           });

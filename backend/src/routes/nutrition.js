@@ -3,6 +3,7 @@ import { db } from "../config/db.js";
 import { foodLogTable, recipesTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable } from "../db/schema.js";
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
+import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC } from "../utils/timezone.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import multer from "multer";
@@ -35,8 +36,12 @@ router.post("/log", async (req, res) => {
     const {
       foodName, calories, protein, carbs, fats,
       servingSize, mealType, micros, nutriscore, ecoscore, novaScore, dietLabels, allergens, ingredients, barcode, imageUrl,
-      clientEventId, sourceMeta
+      clientEventId, sourceMeta, loggedDate
     } = req.body;
+
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const parsedLoggedDate = loggedDate ? new Date(loggedDate) : new Date();
+    const safeLoggedDate = Number.isNaN(parsedLoggedDate.getTime()) ? new Date() : parsedLoggedDate;
 
     // 1. Require clientEventId for idempotency
     if (!clientEventId) {
@@ -76,7 +81,7 @@ router.post("/log", async (req, res) => {
         imageUrl,
         clientEventId,
         sourceMeta: sourceMeta || {},
-        loggedDate: new Date(),
+        loggedDate: safeLoggedDate,
       })
       .onConflictDoNothing({
         target: [foodLogTable.userId, foodLogTable.clientEventId]
@@ -86,8 +91,7 @@ router.post("/log", async (req, res) => {
     const isNewEntry = result.length > 0;
 
     // 4. Only update daily summary if this is a NEW entry (not duplicate)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getLocalDateUTC(offsetMinutes, safeLoggedDate);
 
     if (isNewEntry) {
       // First entry of the day → INSERT
@@ -468,7 +472,7 @@ router.post("/voice-log", upload.single("audio"), async (req, res) => {
     // 1. Transcribe with Whisper
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(filePath),
-      model: "whisper-1",
+      model: "gpt-4o-mini-transcribe",
     });
 
     const text = transcription.text;
@@ -709,19 +713,15 @@ router.get("/dashboard", async (req, res) => {
   try {
     const userId = req.auth.userId;
 
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { start: todayStart, end: todayEnd } = getLocalDayRange(offsetMinutes);
+    const today = getLocalDateUTC(offsetMinutes);
 
     // Get last 7 days date range
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 7);
+    const sevenDaysAgo = addDaysUTC(today, -7);
 
     // Get last 30 days date range
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
+    const thirtyDaysAgo = addDaysUTC(today, -30);
 
     // Fetch all data in parallel for performance
     const [
@@ -764,8 +764,8 @@ router.get("/dashboard", async (req, res) => {
         .where(
           and(
             eq(foodLogTable.userId, userId),
-            gte(foodLogTable.loggedDate, today),
-            lte(foodLogTable.loggedDate, endOfToday)
+            gte(foodLogTable.loggedDate, todayStart),
+            lte(foodLogTable.loggedDate, todayEnd)
           )
         )
         .orderBy(foodLogTable.clientEventId, desc(foodLogTable.loggedDate)),
@@ -776,8 +776,8 @@ router.get("/dashboard", async (req, res) => {
         .where(
           and(
             eq(waterLogTable.userId, userId),
-            gte(waterLogTable.loggedDate, today),
-            lte(waterLogTable.loggedDate, endOfToday)
+            gte(waterLogTable.loggedDate, todayStart),
+            lte(waterLogTable.loggedDate, todayEnd)
           )
         ),
 
@@ -794,8 +794,8 @@ router.get("/dashboard", async (req, res) => {
         .where(
           and(
             eq(moodLogTable.userId, userId),
-            gte(moodLogTable.loggedDate, today),
-            lte(moodLogTable.loggedDate, endOfToday)
+            gte(moodLogTable.loggedDate, todayStart),
+            lte(moodLogTable.loggedDate, todayEnd)
           )
         )
         .orderBy(desc(moodLogTable.loggedDate)),
@@ -814,10 +814,11 @@ router.get("/dashboard", async (req, res) => {
     ]);
 
     // Calculate today's water total
-    const todayWaterTotal = todayWaterLogs.reduce(
-      (sum, log) => sum + parseFloat(log.amountLiters || 0),
-      0
-    );
+    const todayWaterTotal = todayWaterLogs.reduce((sum, log) => {
+      const hydrationValue = parseFloat(log.hydrationLiters || 0);
+      if (hydrationValue > 0) return sum + hydrationValue;
+      return sum + parseFloat(log.amountLiters || 0);
+    }, 0);
 
     // Calculate weekly averages
     const weeklyAverages = weekSummaries.length > 0 ? {
@@ -839,18 +840,15 @@ router.get("/dashboard", async (req, res) => {
     let currentStreak = 0;
     let checkDate = new Date(today);
     for (let i = 0; i < 365; i++) {
-      const dayStart = new Date(checkDate);
-      dayStart.setHours(0, 0, 0, 0);
+      const dayStart = normalizeDateUTC(checkDate);
 
       const hasSummary = weekSummaries.some(s => {
-        const summaryDate = new Date(s.date);
-        summaryDate.setHours(0, 0, 0, 0);
-        return summaryDate.getTime() === dayStart.getTime();
+        return normalizeDateUTC(s.date).getTime() === dayStart.getTime();
       });
 
       if (hasSummary) {
         currentStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
+        checkDate = addDaysUTC(checkDate, -1);
       } else {
         break;
       }
@@ -892,8 +890,10 @@ router.get("/dashboard", async (req, res) => {
           micros: todayMicros, // Include aggregated micronutrients
         },
         waterIntakeLiters: todayWaterTotal,
+        waterLogs: todayWaterLogs,
         foodLogs: todayFoodLogs,
         moodLogs: todayMoodLogs,
+        hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
       goals: goals[0] || null,
       gamification: gamification[0] || {

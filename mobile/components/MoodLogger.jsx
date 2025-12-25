@@ -42,7 +42,7 @@ const TAG_CATEGORIES = {
 /**
  * Intensity Slider Component
  */
-const IntensitySlider = ({ value, onChange, moodColor }) => {
+const IntensitySlider = ({ value, onChange, moodColor, label = 'Intensity', helperText }) => {
   const [sliderWidth, setSliderWidth] = useState(0);
   const position = useRef(new Animated.Value((value - 1) / 9)).current;
 
@@ -69,7 +69,7 @@ const IntensitySlider = ({ value, onChange, moodColor }) => {
   return (
     <View style={styles.sliderContainer}>
       <View style={styles.sliderHeader}>
-        <Text style={styles.sliderLabel}>Intensity</Text>
+        <Text style={styles.sliderLabel}>{label}</Text>
         <Text style={[styles.sliderValue, { color: moodColor }]}>{value}/10</Text>
       </View>
       <View
@@ -104,6 +104,9 @@ const IntensitySlider = ({ value, onChange, moodColor }) => {
         <Text style={styles.sliderLabelText}>Low</Text>
         <Text style={styles.sliderLabelText}>High</Text>
       </View>
+      {helperText ? (
+        <Text style={styles.sliderHelperText}>{helperText}</Text>
+      ) : null}
     </View>
   );
 };
@@ -192,15 +195,32 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   }, [visible]);
 
   const handleSave = async () => {
+    // Validate mood selection
     if (!selectedMood) return;
+
+    // Validate intensity (1-10)
+    const validatedIntensity = Math.max(1, Math.min(10, Math.round(intensity)));
+
+    // Validate energy level (1-10)
+    const validatedEnergyLevel = Math.max(1, Math.min(10, Math.round(energyLevel)));
+
+    // Validate note length (max 500 characters)
+    const trimmedNote = note.trim().substring(0, 500);
+
+    // Validate mood is in allowed list
+    const validMoods = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
+    if (!validMoods.includes(selectedMood)) {
+      console.error('Invalid mood type:', selectedMood);
+      return;
+    }
 
     try {
       await logMood({
         mood: selectedMood,
-        intensity,
-        energyLevel,
+        intensity: validatedIntensity,
+        energyLevel: validatedEnergyLevel,
         tags,
-        note: note.trim(),
+        note: trimmedNote,
       });
       onSuccess?.();
       onClose();
@@ -282,6 +302,8 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   value={intensity}
                   onChange={setIntensity}
                   moodColor={moodColors.base}
+                  label="Mood Intensity"
+                  helperText="How strong is this feeling?"
                 />
               </View>
             )}
@@ -293,8 +315,9 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   value={energyLevel}
                   onChange={setEnergyLevel}
                   moodColor={moodColors.base}
+                  label="Energy Level"
+                  helperText="How much energy do you have?"
                 />
-                <Text style={styles.sectionSubtitle}>Energy Level</Text>
               </View>
             )}
 
@@ -339,7 +362,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                 <Text style={styles.noteLabel}>Note (Optional)</Text>
                 <TextInput
                   style={styles.noteInput}
-                  placeholder="What's on your mind?"
+                  placeholder="Add a private note (optional)"
                   placeholderTextColor="#9ca3af"
                   value={note}
                   onChangeText={setNote}
@@ -495,7 +518,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
   },
-  sectionSubtitle: {
+  sliderHelperText: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     textAlign: 'center',

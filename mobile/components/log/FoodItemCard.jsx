@@ -71,7 +71,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
               onChangeText={setAmount}
               keyboardType="decimal-pad"
               style={styles.quantityInput}
-              placeholder="Amount"
+              placeholder="Amount (e.g., 150)"
               accessible
               accessibilityLabel="Quantity amount"
             />

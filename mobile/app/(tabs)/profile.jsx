@@ -6,11 +6,12 @@
  * - Premium card styling
  */
 
-import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity } from "react-native";
 import { useState, useMemo } from "react";
 import { useUser, useClerk } from "@clerk/clerk-expo";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from "expo-router";
 
 import SafeScreen from "../../components/SafeScreen";
 import useProfileForm from "../../hooks/useProfileForm";
@@ -30,6 +31,7 @@ import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, ICONS }
  * - Daily metrics live in Dashboard
  */
 export default function ProfileScreen() {
+  const router = useRouter();
 
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
@@ -97,6 +99,13 @@ export default function ProfileScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerLeft}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/(tabs)/favorites')}
+              accessibilityLabel="Go to Favorites tab"
+            >
+              <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
             <Ionicons name={ICONS.profile} size={ICON_SIZES.lg} color="#FFFFFF" />
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Profile</Text>
@@ -195,6 +204,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING[3],
   },
   headerText: {
     marginLeft: SPACING[3],

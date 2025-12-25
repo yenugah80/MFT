@@ -19,7 +19,24 @@ export function useMoodTrends({ period = 'week', days }) {
     queryFn: async () => {
       const params = days ? { days } : { period };
       const response = await apiClient.get('/mood/trends', { params });
-      return response.data;
+
+      // Validate response structure
+      if (!response || !response.data) {
+        throw new Error('Invalid response from mood trends API');
+      }
+
+      // Ensure data is an object with expected structure
+      const data = response.data;
+      if (typeof data !== 'object') {
+        throw new Error('Invalid mood trends data format');
+      }
+
+      // Validate data array if it exists
+      if (data.data && !Array.isArray(data.data)) {
+        throw new Error('Mood trends data must be an array');
+      }
+
+      return data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     cacheTime: 30 * 60 * 1000, // 30 minutes
@@ -46,7 +63,7 @@ export function calculateMoodStats(trendData) {
   }, null);
 
   const bestDay = bestEntry
-    ? new Date(bestEntry.date).toLocaleDateString('en-US', { weekday: 'short' })
+    ? new Date(bestEntry.loggedDate).toLocaleDateString('en-US', { weekday: 'short' })
     : 'N/A';
 
   // Calculate average mood

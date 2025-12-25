@@ -223,7 +223,7 @@ Examples:
   }
 
   /**
-   * Transcribe audio to text using gpt-4o-transcribe (Whisper successor)
+   * Transcribe audio to text using gpt-4o-mini-transcribe
    *
    * @param {Buffer} audioBuffer - Audio file buffer (m4a, mp3, wav, etc.)
    * @param {object} options - Transcription options
@@ -238,8 +238,8 @@ Examples:
 
     const { language = 'en', temperature = 0 } = options;
 
-    // Use gpt-4o-transcribe as specified by user
-    const model = 'gpt-4o-transcribe';
+    // Use gpt-4o-mini-transcribe for cost-efficient, high-quality speech-to-text
+    const model = 'gpt-4o-mini-transcribe';
 
     try {
       // Create form data for multipart upload

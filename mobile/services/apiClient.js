@@ -111,6 +111,10 @@ class ApiClient {
       ...customHeaders,
     };
 
+    if (!('X-Timezone-Offset' in headers) && !('x-timezone-offset' in headers)) {
+      headers['X-Timezone-Offset'] = String(new Date().getTimezoneOffset());
+    }
+
     const token = await this.getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
 

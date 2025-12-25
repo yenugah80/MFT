@@ -160,9 +160,15 @@ export default function NutriScoreDial({ data, size = 160 }) {
   const strokeDashoffset = circumference * (1 - progress);
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessible={true}
+      accessibilityRole="text"
+      accessibilityLabel={`Nutrition score: ${score} out of 100. ${message}`}
+      accessibilityHint="Your daily nutrition quality score based on calories, protein, hydration, and micronutrients"
+    >
       {/* SVG Gauge */}
-      <Svg width={size} height={size * 0.7}>
+      <Svg width={size} height={size * 0.7} accessible={false}>
         <Defs>
           <LinearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor={color} stopOpacity="1" />

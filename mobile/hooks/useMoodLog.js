@@ -16,7 +16,7 @@ export const MOOD_TYPES = [
   { key: 'calm', emoji: '😌', label: 'Calm', color: '#3B82F6' },
   { key: 'focused', emoji: '🎯', label: 'Focused', color: '#14B8A6' },
   { key: 'energized', emoji: '⚡', label: 'Energized', color: '#FBBF24' },
-  { key: 'neutral', emoji: '😐', label: 'Neutral', color: '#6B7280' },
+  { key: 'neutral', emoji: '😐', label: 'Neutral', color: '#a8ddbfff' },
   { key: 'tired', emoji: '😴', label: 'Tired', color: '#8B5CF6' },
   { key: 'stressed', emoji: '😰', label: 'Stressed', color: '#F97316' },
   { key: 'sad', emoji: '😢', label: 'Sad', color: '#6366F1' },
@@ -36,8 +36,12 @@ export function useMoodLog() {
    */
   const logMoodMutation = useMutation({
     mutationFn: async ({ mood, intensity, energyLevel, tags, note, source = 'manual' }) => {
-      // Generate clientEventId for idempotency (prevents duplicate entries from double-taps)
-      const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+      // Generate strong clientEventId for idempotency (prevents duplicate entries from double-taps)
+      // Format: userId-timestamp-random1-random2 for maximum uniqueness
+      const timestamp = Date.now();
+      const random1 = Math.random().toString(36).substring(2, 15);
+      const random2 = Math.random().toString(36).substring(2, 15);
+      const clientEventId = `${userId}-${timestamp}-${random1}-${random2}`;
 
       return await apiClient.post('/mood/log', {
         mood,

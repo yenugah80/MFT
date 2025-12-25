@@ -22,7 +22,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import * as FileSystem from 'expo-file-system';
+import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import { useAuth } from '@clerk/clerk-expo';
 import Constants from 'expo-constants';
 import { API_URL } from '../constants/api';
@@ -46,7 +46,7 @@ const AI_TIMEOUT_MS = 1600;
 const OPEN_FOOD_FACTS_TIMEOUT_MS = 1400;
 
 /** Image analysis timeout */
-const IMAGE_ANALYSIS_TIMEOUT_MS = 2500;
+const IMAGE_ANALYSIS_TIMEOUT_MS = 12000;
 
 /** Auto-analysis debounce delay (after user stops typing) */
 const AUTO_ANALYSIS_DEBOUNCE_MS = 1500;
@@ -76,6 +76,9 @@ const USDA_ENDPOINT = `${API_URL}/food/resolve`;
 const AI_TEXT_ENDPOINT = `${API_URL}/nutrition/recipe/parse`;
 const AI_IMAGE_ENDPOINT = `${API_URL}/food/analyze-image`;
 const BACKEND_BARCODE_ENDPOINT = `${API_URL}/food/barcode`;
+
+const OCR_MIN_TEXT_LENGTH = 40;
+const OCR_KEYWORDS = ['calories', 'protein', 'carb', 'fat', 'serving', 'nutrition', 'sodium', 'fiber', 'sugar'];
 
 // ============================================================================
 // TYPE DEFINITIONS (JSDoc)
@@ -142,6 +145,12 @@ function getMealTypeFromTime() {
   if (hour >= 15 && hour < 17) return 'snack';
   if (hour >= 17 && hour < 22) return 'dinner';
   return 'snack';
+}
+
+function looksLikeNutritionLabel(text) {
+  if (!text || text.length < OCR_MIN_TEXT_LENGTH) return false;
+  const lower = text.toLowerCase();
+  return OCR_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
 /**
@@ -630,7 +639,12 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
  * @returns {Promise<string>} Base64-encoded compressed image
  */
 async function compressImage(uri) {
+  if (!uri) {
+    throw new Error('Photo analysis unavailable: missing image URI.');
+  }
+
   let manipulateAsync, SaveFormat;
+  let resultUri = null;
 
   try {
     const mod = await import('expo-image-manipulator');
@@ -640,21 +654,28 @@ async function compressImage(uri) {
     throw new Error('Image compression unavailable. Install expo-image-manipulator and run on a real device.');
   }
 
-  if (!FileSystem.readAsStringAsync) {
+  if (!readAsStringAsync) {
     throw new Error('Photo analysis unavailable: expo-file-system missing. Install expo-file-system and rebuild on device.');
   }
 
-  const result = await manipulateAsync(
-    uri,
-    [{ resize: { width: IMAGE_MAX_WIDTH_PX } }],
-    { compress: IMAGE_COMPRESSION_QUALITY, format: SaveFormat.JPEG }
-  );
+  try {
+    const result = await manipulateAsync(
+      uri,
+      [{ resize: { width: IMAGE_MAX_WIDTH_PX } }],
+      { compress: IMAGE_COMPRESSION_QUALITY, format: SaveFormat.JPEG }
+    );
+    resultUri = result?.uri || null;
+  } catch (err) {
+    console.warn('[useFoodAnalysis] Image compression failed, using original photo.', err?.message || err);
+  }
 
-  const encoding = (FileSystem?.EncodingType && FileSystem.EncodingType.Base64)
-    ? FileSystem.EncodingType.Base64
-    : 'base64';
+  if (!resultUri) {
+    resultUri = uri;
+  }
 
-  const base64 = await FileSystem.readAsStringAsync(result.uri, { encoding });
+  const encoding = EncodingType?.Base64 || 'base64';
+
+  const base64 = await readAsStringAsync(resultUri, { encoding });
 
   return base64;
 }
@@ -1030,6 +1051,64 @@ export function useFoodAnalysis() {
         throw new Error('Authentication required to analyze photo');
       }
 
+      // OCR pass: detect nutrition label text and resolve via text pipeline
+      setProgress(25);
+      try {
+        let MLKitOcr = null;
+        try {
+          MLKitOcr = require('expo-mlkit-ocr');
+        } catch (importError) {
+          MLKitOcr = null;
+        }
+
+        if (!MLKitOcr?.detectFromUri) {
+          throw new Error('OCR module unavailable');
+        }
+
+        const ocrBlocks = await MLKitOcr.detectFromUri(uri);
+        const ocrText = ocrBlocks.map((block) => block.text).join('\n').trim();
+
+        if (looksLikeNutritionLabel(ocrText)) {
+          setProgress(50);
+          const response = await fetch(`${API_URL}/food/resolve`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              mode: 'text',
+              query: ocrText,
+              mealType: getMealTypeFromTime(),
+              userContext: { source: 'ocr' },
+            }),
+          });
+
+          if (!response.ok) {
+            const json = await response.json().catch(() => ({}));
+            throw new Error(json?.error || 'OCR analysis failed');
+          }
+
+          const data = await response.json();
+          setAnalysisResult({
+            ...data,
+            items: (data.items || []).map(item => ({
+              ...item,
+              isEditing: false,
+              editedPortion: null,
+            })),
+          });
+
+          setProgress(100);
+          return;
+        }
+      } catch (ocrError) {
+        const message = ocrError?.message || '';
+        if (!message.includes('OCR module unavailable')) {
+          console.warn('[useFoodAnalysis] OCR pass failed, falling back to image analysis.');
+        }
+      }
+
       setProgress(40);
 
       // Compress image
@@ -1113,6 +1192,11 @@ export function useFoodAnalysis() {
 
       setProgress(100);
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        const errorMsg = 'Photo analysis timed out. Try again on a faster connection.';
+        setError(errorMsg);
+        return;
+      }
       const errorMsg = err.message || 'Photo analysis failed. Please try again.';
       setError(errorMsg);
       throw err;

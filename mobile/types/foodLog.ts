@@ -196,6 +196,10 @@ export function transformBackendToFoodLog(backendData: any): FoodLog {
  * Transform FoodLog to backend payload
  */
 export function transformFoodLogToBackend(log: FoodLog): any {
+  const resolvedLoggedDate = log.loggedDate
+    ? new Date(log.loggedDate).toISOString()
+    : (log.timestamp ? new Date(log.timestamp).toISOString() : new Date().toISOString());
+
   return {
     foodName: log.foodName,
     calories: Math.round(log.calories),
@@ -213,7 +217,7 @@ export function transformFoodLogToBackend(log: FoodLog): any {
     ingredients: log.ingredients || [],
     barcode: log.barcode,
     imageUrl: log.imageUrl,
-    loggedDate: log.loggedDate || new Date(),
+    loggedDate: resolvedLoggedDate,
     source: log.source,
     clientEventId: log.clientEventId,  // CRITICAL FIX: Include for idempotency
     sourceMeta: log.sourceMeta || {},

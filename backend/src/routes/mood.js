@@ -3,6 +3,7 @@ import { db } from "../config/db.js";
 import { moodLogTable, foodLogTable } from "../db/schema.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
+import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
 import { generateMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
 
 const router = express.Router();
@@ -200,10 +201,8 @@ router.get("/today", async (req, res) => {
   try {
     const userId = req.auth.userId;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { start, end } = getLocalDayRange(offsetMinutes);
 
     const moods = await db
       .select()
@@ -211,8 +210,8 @@ router.get("/today", async (req, res) => {
       .where(
         and(
           eq(moodLogTable.userId, userId),
-          gte(moodLogTable.loggedDate, today),
-          lte(moodLogTable.loggedDate, endOfToday)
+          gte(moodLogTable.loggedDate, start),
+          lte(moodLogTable.loggedDate, end)
         )
       )
       .orderBy(desc(moodLogTable.loggedDate));

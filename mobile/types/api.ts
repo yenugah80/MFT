@@ -73,6 +73,7 @@ export interface DailyNutritionSummary {
   totalProtein: number;
   totalCarbs: number;
   totalFats: number;
+  hydrationCelebratedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,6 +86,9 @@ export interface WaterLog {
   id: number;
   userId: string;
   amountLiters: string; // Decimal stored as string
+  beverageType?: string | null;
+  hydrationFactor?: string | null;
+  hydrationLiters?: string | null;
   loggedDate: string;
   createdAt: string;
 }
@@ -107,6 +111,11 @@ export interface MoodLog {
   mood: string;
   note: string | null;
   source: string | null;
+  intensity?: number; // 1-10 mood intensity
+  tags?: Record<string, string>; // Context tags: { sleep: 'Good', exercise: 'Moderate', ... }
+  energyLevel?: number; // 1-10 energy level
+  mealContext?: Record<string, any>; // { mealIds: [123, 124], windowHours: 4 }
+  clientEventId?: string; // For idempotency
   loggedDate: string;
   createdAt: string;
 }
@@ -202,8 +211,10 @@ export interface DashboardData {
     date: string;
     nutrition: TodayNutrition;
     waterIntakeLiters: number;
+    waterLogs: WaterLog[];
     foodLogs: FoodLog[];
     moodLogs: MoodLog[];
+    hydrationCelebratedAt: string | null;
   };
   goals: NutritionGoals | null;
   gamification: Gamification;
@@ -267,4 +278,3 @@ export interface PaginatedResponse<T> {
     totalPages: number;
   };
 }
-

@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
 
@@ -16,10 +17,20 @@ export const WATER_PRESETS = [
   { label: 'Large', amount: 1.0, icon: '🚰', color: '#0ea5e9' },
 ];
 
+const BEVERAGE_FACTORS = {
+  water: 1.0,
+  coffee: 0.5,
+  tea: 0.9,
+  juice: 0.8,
+  milk: 0.9,
+  electrolyte: 1.1,
+};
+
 /**
  * Hook for water logging operations
  */
 export function useWaterLog() {
+  const { userId } = useAuth();
   const queryClient = useQueryClient();
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState(null);
@@ -28,18 +39,23 @@ export function useWaterLog() {
    * Mutation for logging water to backend
    */
   const logWaterMutation = useMutation({
-    mutationFn: async ({ amountLiters }) => {
-      // Generate clientEventId for idempotency (prevents duplicate entries from double-taps)
-      const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    mutationFn: async ({ amountLiters, beverageType }) => {
+      // Generate strong clientEventId for idempotency (prevents duplicate entries from double-taps)
+      // Format: userId-timestamp-random1-random2 for maximum uniqueness
+      const timestamp = Date.now();
+      const random1 = Math.random().toString(36).substring(2, 15);
+      const random2 = Math.random().toString(36).substring(2, 15);
+      const clientEventId = `${userId}-${timestamp}-${random1}-${random2}`;
 
       return await apiClient.post('/water/log', {
         amountLiters,
         loggedDate: new Date().toISOString(),
         clientEventId, // Add for backend idempotency
+        beverageType,
       });
     },
-    onMutate: async ({ amountLiters }) => {
-      // Optimistic update
+    onMutate: async ({ amountLiters, beverageType }) => {
+      // Simplified optimistic update - just add raw amount, backend will calculate hydration factor
       await queryClient.cancelQueries({ queryKey: ['dashboard'] });
 
       const previousData = queryClient.getQueryData(['dashboard']);
@@ -50,6 +66,7 @@ export function useWaterLog() {
           ...old,
           today: {
             ...old.today,
+            // Add raw amount optimistically - backend response will overwrite with correct hydration value
             waterIntakeLiters: (old.today.waterIntakeLiters || 0) + amountLiters,
           },
         };
@@ -66,6 +83,7 @@ export function useWaterLog() {
     onSuccess: () => {
       // Invalidate to get fresh data from server
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['waterToday'] });
     },
   });
 
@@ -74,20 +92,33 @@ export function useWaterLog() {
    * @param {number} amountLiters - Amount in liters
    * @returns {Promise<object>}
    */
-  const logWater = useCallback(async (amountLiters) => {
-    if (!amountLiters || amountLiters <= 0) {
+  const logWater = useCallback(async (amountLiters, beverageType = 'water') => {
+    // Validate amount is a valid number
+    const amount = parseFloat(amountLiters);
+    if (isNaN(amount) || !isFinite(amount)) {
+      throw new Error('Amount must be a valid number');
+    }
+
+    if (amount <= 0) {
       throw new Error('Amount must be greater than 0');
     }
 
-    if (amountLiters > 5) {
+    if (amount > 5) {
       throw new Error('Amount seems unrealistic (max 5L per entry)');
+    }
+
+    // Validate beverage type
+    const validBeverageTypes = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte'];
+    if (!validBeverageTypes.includes(beverageType)) {
+      console.warn('Invalid beverage type, defaulting to water:', beverageType);
+      beverageType = 'water';
     }
 
     setIsLogging(true);
     setError(null);
 
     try {
-      const result = await logWaterMutation.mutateAsync({ amountLiters });
+      const result = await logWaterMutation.mutateAsync({ amountLiters: amount, beverageType });
       return result;
     } catch (err) {
       console.error('[useWaterLog] Failed to log water:', err);
@@ -102,7 +133,7 @@ export function useWaterLog() {
    * Quick add water using presets
    */
   const quickAdd = useCallback(async (preset) => {
-    return await logWater(preset.amount);
+    return await logWater(preset.amount, 'water');
   }, [logWater]);
 
   /**
@@ -127,16 +158,17 @@ export function useWaterLog() {
    * Mutation for removing water entry
    */
   const removeWaterMutation = useMutation({
-    mutationFn: async ({ entryId, amountLiters }) => {
+    mutationFn: async ({ entryId, amountLiters, hydrationLiters }) => {
       return await apiClient.delete(`/water/${entryId}`);
     },
-    onMutate: async ({ amountLiters }) => {
+    onMutate: async ({ amountLiters, hydrationLiters }) => {
       // Optimistic update - subtract the amount
       await queryClient.cancelQueries({ queryKey: ['dashboard'] });
       await queryClient.cancelQueries({ queryKey: ['waterToday'] });
 
       const previousDashboard = queryClient.getQueryData(['dashboard']);
       const previousWaterToday = queryClient.getQueryData(['waterToday']);
+      const hydrationDelta = Number.isFinite(hydrationLiters) ? hydrationLiters : amountLiters;
 
       queryClient.setQueryData(['dashboard'], (old) => {
         if (!old) return old;
@@ -144,7 +176,7 @@ export function useWaterLog() {
           ...old,
           today: {
             ...old.today,
-            waterIntakeLiters: Math.max((old.today.waterIntakeLiters || 0) - amountLiters, 0),
+            waterIntakeLiters: Math.max((old.today.waterIntakeLiters || 0) - hydrationDelta, 0),
           },
         };
       });
@@ -173,7 +205,7 @@ export function useWaterLog() {
    * @param {number} amountLiters - Amount in liters (for optimistic update)
    * @returns {Promise<object>}
    */
-  const removeWater = useCallback(async (entryId, amountLiters) => {
+  const removeWater = useCallback(async (entryId, amountLiters, hydrationLiters) => {
     if (!entryId) {
       throw new Error('Entry ID is required');
     }
@@ -182,16 +214,71 @@ export function useWaterLog() {
     setError(null);
 
     try {
-      const result = await removeWaterMutation.mutateAsync({ entryId, amountLiters });
+      const result = await removeWaterMutation.mutateAsync({ entryId, amountLiters, hydrationLiters });
       return result;
     } catch (err) {
+      if (err?.response?.status === 404) {
+        // Entry already removed or stale ID; resync without surfacing an error.
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['waterToday'] });
+        return null;
+      }
       console.error('[useWaterLog] Failed to remove water:', err);
       setError(err.message || 'Failed to remove water entry');
       throw err;
     } finally {
       setIsLogging(false);
     }
-  }, [removeWaterMutation]);
+  }, [removeWaterMutation, queryClient]);
+
+  /**
+   * Persist daily hydration celebration (confetti gate)
+   */
+  const celebrationMutation = useMutation({
+    mutationFn: async ({ dateKey }) => {
+      return await apiClient.post('/water/celebration', { dateKey });
+    },
+    onMutate: async ({ dateKey }) => {
+      await queryClient.cancelQueries({ queryKey: ['dashboard'] });
+      const previousData = queryClient.getQueryData(['dashboard']);
+
+      queryClient.setQueryData(['dashboard'], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          today: {
+            ...old.today,
+            hydrationCelebratedAt: new Date().toISOString(),
+          },
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(['dashboard'], context.previousData);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+
+  const markHydrationCelebration = useCallback(async (dateKey) => {
+    if (!dateKey) {
+      throw new Error('dateKey is required');
+    }
+
+    try {
+      return await celebrationMutation.mutateAsync({ dateKey });
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }, [celebrationMutation]);
 
   return {
     logWater,
@@ -202,5 +289,6 @@ export function useWaterLog() {
     presets: WATER_PRESETS,
     getTodayTotal,
     getProgress,
+    markHydrationCelebration,
   };
 }

@@ -441,11 +441,11 @@ export const FoodService = {
    * audioBuffer: Buffer containing audio file (m4a, mp3, wav)
    * options: { language: string }
    *
-   * USES: gpt-4o-transcribe for speech-to-text + GPT-4o for nutrition extraction
+   * USES: gpt-4o-mini-transcribe for speech-to-text + GPT-4o for nutrition extraction
    */
   analyzeVoice: async (audioBuffer, options = {}) => {
     try {
-      // Step 1: Transcribe audio using gpt-4o-transcribe
+      // Step 1: Transcribe audio using gpt-4o-mini-transcribe
       const transcription = await openaiClient.transcribeAudio(audioBuffer, options);
 
       if (!transcription || !transcription.text) {

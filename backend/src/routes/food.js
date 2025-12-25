@@ -80,7 +80,7 @@ router.post("/analyze-image", async (req, res) => {
  *   language?: string (e.g., 'en', default: 'en')
  * }
  *
- * Uses gpt-4o-transcribe for speech-to-text + GPT-4o for nutrition extraction
+ * Uses gpt-4o-mini-transcribe for speech-to-text + GPT-4o for nutrition extraction
  */
 router.post("/analyze-voice", async (req, res) => {
   try {

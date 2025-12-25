@@ -24,6 +24,21 @@ import {
   SEMANTIC,
 } from '../../constants/premiumTheme';
 
+// ============================================================================
+// SMART CONTEXT ENGINE - Nutrition Advice
+// ============================================================================
+const getNutritionAdvice = (percentage) => {
+  const hour = new Date().getHours();
+  
+  if (percentage >= 100) return "Goal hit! You're fueled up 🔥";
+  if (percentage >= 90) return "So close! Finish strong 🎯";
+  
+  if (hour < 11) return percentage < 15 ? "Fuel your morning 🍳" : "Great start to the day 🚀";
+  if (hour < 15) return percentage < 40 ? "Don't forget lunch! 🥗" : "Keeping energy steady ⚡";
+  if (hour < 20) return percentage < 70 ? "Dinner time approaching 🍽️" : "On track for the day 👌";
+  return "Winding down for rest 🌙";
+};
+
 export default function NutritionOverviewCard({
   calories = 0,
   calorieGoal = 2000,
@@ -51,6 +66,8 @@ export default function NutritionOverviewCard({
   const carbsPercent = totalMacroCals > 0 ? Math.round((carbsCals / totalMacroCals) * 100) : 0;
   const fatPercent = totalMacroCals > 0 ? Math.round((fatCals / totalMacroCals) * 100) : 0;
 
+  const smartAdvice = getNutritionAdvice(caloriePercentage);
+
   return (
     <GlassCard padding="lg">
       {/* Header */}
@@ -62,7 +79,10 @@ export default function NutritionOverviewCard({
           >
             <Ionicons name="nutrition" size={20} color="#FFF" />
           </LinearGradient>
-          <Text style={styles.headerTitle}>Nutrition</Text>
+          <View>
+            <Text style={styles.headerTitle}>Nutrition</Text>
+            <Text style={styles.headerSubtitle}>{smartAdvice}</Text>
+          </View>
         </View>
         <Text style={styles.headerBadge}>{caloriePercentage}% of goal</Text>
       </View>
@@ -77,16 +97,13 @@ export default function NutritionOverviewCard({
         {/* Progress bar */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarBg}>
-            <LinearGradient
-              colors={
-                caloriePercentage >= 100
-                  ? ['#10B981', '#059669'] // Green for goal reached
-                  : SURFACES.gradient.blue // Blue for in progress
+            <View style={[
+              styles.progressBarFill,
+              {
+                width: `${Math.min(caloriePercentage, 100)}%`,
+                backgroundColor: caloriePercentage >= 100 ? '#10B981' : '#3B82F6'
               }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.progressBarFill, { width: `${Math.min(caloriePercentage, 100)}%` }]}
-            />
+            ]} />
           </View>
           <Text style={styles.progressBarText}>
             {calorieGoal - calories > 0
@@ -247,6 +264,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
+  },
+  headerSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 2,
   },
   headerBadge: {
     fontSize: TYPOGRAPHY.size.sm,

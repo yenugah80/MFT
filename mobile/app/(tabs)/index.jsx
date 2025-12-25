@@ -159,6 +159,17 @@ const HomeScreen = () => {
         }
         contentContainerStyle={homeStyles.scrollContent}
       >
+        <View style={homeStyles.tabHeader}>
+          <TouchableOpacity
+            style={homeStyles.backButton}
+            onPress={() => router.replace('/(tabs)/dashboard')}
+            accessibilityLabel="Go to Dashboard tab"
+          >
+            <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={homeStyles.tabTitle}>Recipes</Text>
+        </View>
+
         {/* SEARCH BAR */}
         <View style={homeStyles.searchSection}>
           <View style={homeStyles.searchContainer}>

@@ -5,11 +5,13 @@ import { API_URL } from "../../constants/api";
 import { favoritesStyles } from "../../assets/styles/favorites.styles";
 import { COLORS } from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import RecipeCard from "../../components/RecipeCard";
 import NoFavoritesFound from "../../components/NoFavoritesFound";
 import LoadingSpinner from "../../components/LoadingSpinner";
 
 const FavoritesScreen = () => {
+  const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
   const { getToken } = useAuth();
@@ -63,7 +65,16 @@ const FavoritesScreen = () => {
     <View style={favoritesStyles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={favoritesStyles.header}>
-          <Text style={favoritesStyles.title}>Favorites</Text>
+          <View style={favoritesStyles.headerLeft}>
+            <TouchableOpacity
+              style={favoritesStyles.backButton}
+              onPress={() => router.replace('/(tabs)/log')}
+              accessibilityLabel="Go to Log tab"
+            >
+              <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text style={favoritesStyles.title}>Favorites</Text>
+          </View>
           <TouchableOpacity style={favoritesStyles.logoutButton} onPress={handleSignOut}>
             <Ionicons name="log-out-outline" size={22} color={COLORS.text} />
           </TouchableOpacity>

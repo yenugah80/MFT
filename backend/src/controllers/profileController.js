@@ -4,6 +4,7 @@ import {
   dietaryPreferencesTable,
   nutritionGoalsTable,
   gamificationTable,
+  accountSettingsTable,
 } from "../db/schema.js";
 import { sendDevError } from "../utils/sendDevError.js";
 // Utility to ensure table shape (imported from server.js)
@@ -13,12 +14,35 @@ import { ensureProfilesTableShape } from "../server.js";
 export async function getNotifications(req, res) {
   try {
     const { userId } = req.auth;
+    const [settings] = await req.db
+      .select({ notifications: accountSettingsTable.notifications })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId));
+
+    if (settings?.notifications) {
+      return res.status(200).json(settings.notifications);
+    }
+
     const [profile] = await req.db
       .select({ notifications: profilesTable.notifications })
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId));
     if (!profile) return res.status(404).json({ error: "Profile not found" });
-    res.status(200).json(profile.notifications || {});
+
+    const notifications = profile.notifications || {};
+    await req.db
+      .insert(accountSettingsTable)
+      .values({
+        userId,
+        notifications,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: { notifications, updatedAt: new Date() },
+      });
+
+    res.status(200).json(notifications);
   } catch (error) {
     console.log("Error fetching notifications", error);
     sendDevError(res, error);
@@ -33,14 +57,124 @@ export async function saveNotifications(req, res) {
       return res.status(400).json({ error: "Invalid notifications object" });
     }
     const updated = await req.db
-      .update(profilesTable)
-      .set({ notifications, updatedAt: new Date() })
-      .where(eq(profilesTable.userId, userId))
-      .returning({ notifications: profilesTable.notifications });
-    if (!updated[0]) return res.status(404).json({ error: "Profile not found" });
-    res.status(200).json(updated[0].notifications);
+      .insert(accountSettingsTable)
+      .values({
+        userId,
+        notifications,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: { notifications, updatedAt: new Date() },
+      })
+      .returning({ notifications: accountSettingsTable.notifications });
+
+    if (!updated[0]) return res.status(404).json({ error: "Settings not found" });
+    res.status(200).json(updated[0].notifications || {});
   } catch (error) {
     console.log("Error saving notifications", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function getPrivacySettings(req, res) {
+  try {
+    const { userId } = req.auth;
+    const [settings] = await req.db
+      .select({ privacy: accountSettingsTable.privacy })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId));
+
+    if (!settings) {
+      return res.status(200).json({
+        shareInsights: false,
+        analytics: true,
+        biometricLock: false,
+      });
+    }
+    res.status(200).json(settings.privacy || {});
+  } catch (error) {
+    console.log("Error fetching privacy settings", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function savePrivacySettings(req, res) {
+  try {
+    const { userId } = req.auth;
+    const { privacy } = req.body;
+    if (typeof privacy !== "object" || privacy === null) {
+      return res.status(400).json({ error: "Invalid privacy object" });
+    }
+
+    const updated = await req.db
+      .insert(accountSettingsTable)
+      .values({
+        userId,
+        privacy,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: { privacy, updatedAt: new Date() },
+      })
+      .returning({ privacy: accountSettingsTable.privacy });
+
+    if (!updated[0]) return res.status(404).json({ error: "Settings not found" });
+    res.status(200).json(updated[0].privacy || {});
+  } catch (error) {
+    console.log("Error saving privacy settings", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function getPreferences(req, res) {
+  try {
+    const { userId } = req.auth;
+    const [settings] = await req.db
+      .select({ preferences: accountSettingsTable.preferences })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId));
+
+    if (!settings) {
+      return res.status(200).json({
+        autoAnalyze: true,
+        hapticFeedback: true,
+        metricUnits: true,
+      });
+    }
+    res.status(200).json(settings.preferences || {});
+  } catch (error) {
+    console.log("Error fetching preferences", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function savePreferences(req, res) {
+  try {
+    const { userId } = req.auth;
+    const { preferences } = req.body;
+    if (typeof preferences !== "object" || preferences === null) {
+      return res.status(400).json({ error: "Invalid preferences object" });
+    }
+
+    const updated = await req.db
+      .insert(accountSettingsTable)
+      .values({
+        userId,
+        preferences,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: { preferences, updatedAt: new Date() },
+      })
+      .returning({ preferences: accountSettingsTable.preferences });
+
+    if (!updated[0]) return res.status(404).json({ error: "Settings not found" });
+    res.status(200).json(updated[0].preferences || {});
+  } catch (error) {
+    console.log("Error saving preferences", error);
     sendDevError(res, error);
   }
 }

@@ -12,6 +12,32 @@ export const homeStyles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32,
   },
+  tabHeader: {
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.card,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.text,
+    letterSpacing: -0.4,
+  },
   // Search section
   searchSection: {
     paddingHorizontal: 20,

@@ -57,11 +57,54 @@ import {
 // ============================================================================
 
 const BEVERAGE_TYPES = {
-  water: { multiplier: 1.0, icon: 'water', color: '#3B82F6', label: 'Water', emoji: '💧' },
-  coffee: { multiplier: 0.5, icon: 'cafe', color: '#78350F', label: 'Coffee', emoji: '☕' },
-  tea: { multiplier: 0.9, icon: 'leaf', color: '#059669', label: 'Tea', emoji: '🍵' },
-  juice: { multiplier: 0.8, icon: 'wine', color: '#F59E0B', label: 'Juice', emoji: '🧃' },
-  milk: { multiplier: 0.9, icon: 'nutrition', color: '#FBBF24', label: 'Milk', emoji: '🥛' },
+  water: {
+    hydrationFactor: 1.0,
+    icon: 'water',
+    color: '#3B82F6',
+    label: 'Water',
+    emoji: '💧',
+    description: '100% hydration credit',
+  },
+  coffee: {
+    hydrationFactor: 0.5,
+    icon: 'cafe',
+    color: '#78350F',
+    label: 'Coffee',
+    emoji: '☕',
+    description: 'Partial hydration credit',
+  },
+  tea: {
+    hydrationFactor: 0.9,
+    icon: 'leaf',
+    color: '#059669',
+    label: 'Tea',
+    emoji: '🍵',
+    description: 'Lightly hydrating',
+  },
+  juice: {
+    hydrationFactor: 0.8,
+    icon: 'wine',
+    color: '#F59E0B',
+    label: 'Juice',
+    emoji: '🧃',
+    description: 'Hydrating with sugars',
+  },
+  milk: {
+    hydrationFactor: 0.9,
+    icon: 'nutrition',
+    color: '#FBBF24',
+    label: 'Milk',
+    emoji: '🥛',
+    description: 'Hydrating with protein',
+  },
+  electrolyte: {
+    hydrationFactor: 1.1,
+    icon: 'flash',
+    color: '#0EA5E9',
+    label: 'Electrolyte',
+    emoji: '⚡',
+    description: 'Hydration boost',
+  },
 };
 
 const QUICK_ADD_SIZES = [
@@ -750,10 +793,10 @@ const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
           >
             {bev.label}
           </Text>
-          {bev.multiplier < 1 && (
+          {bev.hydrationFactor !== 1 && (
             <View style={styles.multiplierBadge}>
               <Text style={styles.beverageMultiplier}>
-                {Math.round(bev.multiplier * 100)}%
+                {Math.round(bev.hydrationFactor * 100)}%
               </Text>
             </View>
           )}
@@ -770,7 +813,12 @@ const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
 const StatsCard = ({ beverageHistory, dailyGoal }) => {
   const stats = useMemo(() => {
     const today = beverageHistory || [];
-    const totalToday = today.reduce((sum, entry) => sum + (entry.amountLiters || 0), 0);
+    const totalToday = today.reduce((sum, entry) => {
+      const hydrationLiters = Number.isFinite(entry.hydrationLiters)
+        ? entry.hydrationLiters
+        : entry.amountLiters;
+      return sum + (hydrationLiters || 0);
+    }, 0);
     const avgPerEntry = today.length > 0 ? totalToday / today.length : 0;
 
     const hourlyCounts = new Array(24).fill(0);
@@ -908,7 +956,7 @@ const PremiumQuickAddButton = ({ size, onPress, isLoading = false, accessible, a
         toValue: 0.95,
         tension: 300,
         friction: 20,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(glowAnim, {
         toValue: 1,
@@ -927,13 +975,13 @@ const PremiumQuickAddButton = ({ size, onPress, isLoading = false, accessible, a
         toValue: 1.05,
         tension: 300,
         friction: 10,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 300,
         friction: 20,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
 
@@ -1083,13 +1131,20 @@ export default function HydrationTracker({
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       const bevType = BEVERAGE_TYPES[selectedBeverage];
-      const effectiveMl = ml * bevType.multiplier;
+      const effectiveMl = ml * bevType.hydrationFactor;
+
+      // Generate strong clientEventId for idempotency (prevents duplicates from network retries)
+      const timestamp = Date.now();
+      const random1 = Math.random().toString(36).substring(2, 15);
+      const random2 = Math.random().toString(36).substring(2, 15);
+      const clientEventId = `hydration-${timestamp}-${random1}-${random2}`;
 
       const entry = {
         amount: ml,
         type: selectedBeverage,
         effectiveAmount: effectiveMl,
-        timestamp: Date.now(),
+        timestamp,
+        clientEventId,
       };
 
       setLastEntry(entry);
@@ -1137,8 +1192,14 @@ export default function HydrationTracker({
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
       if (lastEntry && onRemoveWater && beverageHistory.length > 0) {
-        const lastLoggedEntry = beverageHistory[beverageHistory.length - 1];
-        await onRemoveWater(lastLoggedEntry.id, lastLoggedEntry.amountLiters);
+        const lastLoggedEntry = beverageHistory[0];
+        if (Number.isFinite(lastLoggedEntry?.id)) {
+          await onRemoveWater(
+            lastLoggedEntry.id,
+            lastLoggedEntry.amountLiters,
+            lastLoggedEntry.hydrationLiters
+          );
+        }
       }
       setShowUndoToast(false);
     } finally {
@@ -1155,7 +1216,9 @@ export default function HydrationTracker({
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (onRemoveWater) {
-        await onRemoveWater(entry.id, entry.amountLiters);
+        if (Number.isFinite(entry?.id)) {
+          await onRemoveWater(entry.id, entry.amountLiters, entry.hydrationLiters);
+        }
       }
     } finally {
       setTimeout(() => {

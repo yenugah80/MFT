@@ -441,7 +441,7 @@ export function VoiceModal({
                     onChangeText={setTranscription}
                     multiline
                     autoFocus
-                    placeholder="Edit your transcription..."
+                    placeholder="Refine transcription (optional)"
                   />
                 ) : (
                   <View style={styles.transcriptionContainer}>

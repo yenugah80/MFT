@@ -43,14 +43,15 @@ const SPARKLINE_WIDTH = 280;
 const SPARKLINE_HEIGHT = 60;
 
 const EnhancedMoodCard = ({
-  mood = null,
+  moodLogs = [],
   trendData = [],
   stats = null,
   loading = false,
   onLogMood,
   onViewInsights,
+  onPreviewInsights,
 }) => {
-  const latestMood = Array.isArray(mood) && mood.length > 0 ? mood[0] : mood;
+  const latestMood = moodLogs[0] || null;
   const moodColors = latestMood?.mood
     ? MOOD_PALETTE[latestMood.mood]
     : MOOD_PALETTE.neutral;
@@ -77,6 +78,9 @@ const EnhancedMoodCard = ({
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 onLogMood?.();
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Log your first mood"
+              accessibilityHint="Opens the mood logging interface to record how you're feeling"
             >
               <Ionicons name="add-circle" size={ICON_SIZES.md} color={TEXT.white} />
               <Text style={styles.emptyButtonText}>Log Your First Mood</Text>
@@ -116,9 +120,12 @@ const EnhancedMoodCard = ({
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onViewInsights?.();
+              onPreviewInsights?.();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Preview mood insights"
+            accessibilityHint="View a quick preview of your mood patterns and insights"
           >
             <Ionicons name="chevron-forward" size={ICON_SIZES.md} color={TEXT.white} />
           </TouchableOpacity>
@@ -167,7 +174,7 @@ const EnhancedMoodCard = ({
       </View>
 
       {/* 7-Day Trend Sparkline */}
-      {trendData && trendData.length > 0 && (
+      {Array.isArray(trendData) && trendData.length > 0 && (
         <View style={styles.trendSection}>
           <Text style={styles.trendLabel}>7-Day Trend</Text>
           <MiniSparkline data={trendData} width={SPARKLINE_WIDTH} height={SPARKLINE_HEIGHT} />
@@ -215,6 +222,9 @@ const EnhancedMoodCard = ({
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             onLogMood?.();
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Log mood"
+          accessibilityHint="Opens the mood logging interface to record your current mood and energy level"
         >
           <LinearGradient
             colors={moodColors?.gradient || SURFACES.gradient.primary}
@@ -233,6 +243,9 @@ const EnhancedMoodCard = ({
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onViewInsights?.();
           }}
+          accessibilityRole="button"
+          accessibilityLabel="View insights"
+          accessibilityHint="Opens detailed mood insights showing patterns, correlations, and AI-powered recommendations"
         >
           <Ionicons name="bulb-outline" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
           <Text style={styles.secondaryButtonText}>View Insights</Text>
@@ -254,10 +267,11 @@ const MiniSparkline = ({ data, width, height }) => {
 
     return data
       .map((point, i) => {
+        const intensity = point.intensity ?? 5; // Fallback to neutral if missing
         const x = (i / Math.max(data.length - 1, 1)) * width;
         const y =
           height -
-          ((point.intensity - minIntensity) / (maxIntensity - minIntensity)) * height;
+          ((intensity - minIntensity) / (maxIntensity - minIntensity)) * height;
         return `${x},${y}`;
       })
       .join(' ');

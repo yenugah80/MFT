@@ -101,7 +101,7 @@ const MoodInsightCard = ({
           </LinearGradient>
           <View>
             <Text style={styles.title}>AI Insights</Text>
-            <Text style={styles.subtitle}>Powered by GPT-4o</Text>
+            <Text style={styles.subtitle}>Personalized from your logs</Text>
           </View>
         </View>
 

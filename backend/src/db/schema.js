@@ -50,6 +50,23 @@ export const profilesTable = pgTable(
   })
 );
 
+// Account settings table - privacy, notifications, and app preferences
+export const accountSettingsTable = pgTable(
+  "account_settings",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    privacy: json("privacy").default({}),
+    notifications: json("notifications").default({}),
+    preferences: json("preferences").default({}),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  }
+);
+
 // Dietary preferences table
 export const dietaryPreferencesTable = pgTable("dietary_preferences", {
   id: serial("id").primaryKey(),
@@ -105,6 +122,8 @@ export const gamificationTable = pgTable(
     xp: integer("xp").default(0),
     level: integer("level").default(1),
     streak: integer("streak").default(0), // days
+    streakFreezes: integer("streak_freezes").default(0),
+    lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
     badges: json("badges").default([]), // Array of unlocked achievement badges
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -114,6 +133,7 @@ export const gamificationTable = pgTable(
     xpCheck: check("xp_check", sql`${table.xp} >= 0`),
     levelCheck: check("level_check", sql`${table.level} >= 1 AND ${table.level} <= 999`),
     streakCheck: check("streak_check", sql`${table.streak} >= 0`),
+    streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
   })
 );
 
@@ -245,6 +265,13 @@ export const dailyNutritionSummaryTable = pgTable(
     totalProtein: integer("total_protein").default(0),
     totalCarbs: integer("total_carbs").default(0),
     totalFats: integer("total_fats").default(0),
+    
+    // Enhanced Calendar Fields
+    dailyScore: integer("daily_score"), // 0-100 combined wellness score
+    moodScore: integer("mood_score"), // 0-100 normalized mood
+    hydrationScore: integer("hydration_score"), // 0-100 normalized hydration
+    hydrationCelebratedAt: timestamp("hydration_celebrated_at"),
+    storyLine: text("story_line"), // "High sugar dinner → lower calm next morning"
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -263,6 +290,9 @@ export const dailyNutritionSummaryTable = pgTable(
     totalProteinCheck: check("total_protein_check", sql`${table.totalProtein} >= 0`),
     totalCarbsCheck: check("total_carbs_check", sql`${table.totalCarbs} >= 0`),
     totalFatsCheck: check("total_fats_check", sql`${table.totalFats} >= 0`),
+    dailyScoreCheck: check("daily_score_check", sql`${table.dailyScore} >= 0 AND ${table.dailyScore} <= 100`),
+    moodScoreCheck: check("mood_score_check", sql`${table.moodScore} >= 0 AND ${table.moodScore} <= 100`),
+    hydrationScoreCheck: check("hydration_score_check", sql`${table.hydrationScore} >= 0 AND ${table.hydrationScore} <= 100`),
   })
 );
 
@@ -275,6 +305,9 @@ export const waterLogTable = pgTable(
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
     amountLiters: decimal("amount_liters", { precision: 3, scale: 1 }).notNull(),
+    beverageType: text("beverage_type").default("water"),
+    hydrationFactor: decimal("hydration_factor", { precision: 3, scale: 2 }).default("1.0"),
+    hydrationLiters: decimal("hydration_liters", { precision: 3, scale: 1 }),
 
     // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
     clientEventId: text("client_event_id"),

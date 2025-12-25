@@ -240,7 +240,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
     setLocalError(null); // Clear any previous local error before attempting to log
 
     try {
-      await logWater(amountMl / 1000); // Convert ml to liters
+      await logWater(amountMl / 1000, 'water'); // Convert ml to liters
       setProgress(getProgress());
       setCustomAmount('');
 

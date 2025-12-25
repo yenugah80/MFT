@@ -9,7 +9,11 @@ import {
   saveGoals,
   saveGamification,
   getNotifications,
-  saveNotifications
+  saveNotifications,
+  getPrivacySettings,
+  savePrivacySettings,
+  getPreferences,
+  savePreferences
 } from "../controllers/profileController.js";
 
 const router = express.Router();
@@ -29,6 +33,14 @@ router.post("/goals", saveGoals);
 // Notification preferences
 router.get("/notifications", getNotifications);
 router.post("/notifications", saveNotifications);
+
+// Privacy settings
+router.get("/privacy", getPrivacySettings);
+router.post("/privacy", savePrivacySettings);
+
+// App preferences
+router.get("/preferences", getPreferences);
+router.post("/preferences", savePreferences);
 
 router.post("/gamification", saveGamification);
 

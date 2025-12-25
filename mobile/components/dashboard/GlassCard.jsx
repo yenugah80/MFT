@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/designTokens';
+import { SPACING, RADIUS } from '../../constants/designTokens';
 
 /**
  * @param {Object} props
@@ -52,12 +52,15 @@ export default function GlassCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.glass.surface,
+    backgroundColor: '#FFFFFF', // Clean white card
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.glass.border,
-    ...SHADOWS.md,
-    // Overflow hidden for nested elements
+    borderColor: 'rgba(0, 0, 0, 0.08)', // Subtle gray border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
     overflow: 'hidden',
   },
 });

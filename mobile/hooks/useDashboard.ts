@@ -20,10 +20,10 @@ export const useDashboard = () => {
   return useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboard,
-    // Refresh dashboard every 2 minutes when screen is focused
-    staleTime: 2 * 60 * 1000,
-    // Keep cached data for 10 minutes (gcTime replaces deprecated cacheTime in React Query v5)
-    gcTime: 10 * 60 * 1000,
+    // Refresh dashboard every 30 seconds for real-time water/mood tracking
+    staleTime: 30 * 1000,
+    // Keep cached data for 5 minutes (gcTime replaces deprecated cacheTime in React Query v5)
+    gcTime: 5 * 60 * 1000,
   });
 };
 

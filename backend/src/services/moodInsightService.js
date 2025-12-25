@@ -297,6 +297,7 @@ function summarizeFoodLogs(foodLogs) {
   let totalProtein = 0;
   let totalFat = 0;
   let totalCalories = 0;
+  let totalSugar = 0;
   let novaScores = [];
 
   foodLogs.forEach((food) => {
@@ -304,6 +305,7 @@ function summarizeFoodLogs(foodLogs) {
     totalProtein += food.protein || 0;
     totalFat += food.fats || 0;
     totalCalories += food.calories || 0;
+    totalSugar += food.sugar || 0;
     if (food.novaScore) novaScores.push(food.novaScore);
   });
 
@@ -318,6 +320,7 @@ function summarizeFoodLogs(foodLogs) {
     avgDailyProtein: Math.round((totalProtein / foodLogs.length) * 10) / 10,
     avgDailyFat: Math.round((totalFat / foodLogs.length) * 10) / 10,
     avgDailyCalories: Math.round(totalCalories / foodLogs.length),
+    avgDailySugar: Math.round((totalSugar / foodLogs.length) * 10) / 10,
     avgNovaScore: Math.round(avgNova * 10) / 10,
   };
 }
@@ -455,6 +458,21 @@ function generateRuleBasedInsights(moods, foodLogs) {
         "Use this as your baseline when planning meals",
       ],
       relatedData: { moodTrigger: "happy", foodPattern: "balanced" },
+    });
+  }
+
+  // Pattern 9: Sugar Crash (High sugar → Low energy/Tired)
+  if (foodSummary.avgDailySugar > 35 && (moodSummary.averageEnergy < 5 || moodSummary.dominantMood === "tired")) {
+    insights.push({
+      type: "Energy Pattern",
+      title: "Sugar Crash Detected",
+      message: "High sugar intake appears to be followed by a drop in energy. This is often called a 'sugar crash'.",
+      confidence: 0.85,
+      suggestions: [
+        "Pair sweets with fiber or protein to slow absorption",
+        "Try satisfying cravings with whole fruit instead"
+      ],
+      relatedData: { moodTrigger: "tired", foodPattern: "high-sugar" },
     });
   }
 
