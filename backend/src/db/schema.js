@@ -122,8 +122,9 @@ export const gamificationTable = pgTable(
     xp: integer("xp").default(0),
     level: integer("level").default(1),
     streak: integer("streak").default(0), // days
-    streakFreezes: integer("streak_freezes").default(0),
-    lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
+    // TEMPORARILY COMMENTED OUT - Production DB doesn't have this column yet
+    // streakFreezes: integer("streak_freezes").default(0),
+    // lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
     badges: json("badges").default([]), // Array of unlocked achievement badges
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -133,7 +134,8 @@ export const gamificationTable = pgTable(
     xpCheck: check("xp_check", sql`${table.xp} >= 0`),
     levelCheck: check("level_check", sql`${table.level} >= 1 AND ${table.level} <= 999`),
     streakCheck: check("streak_check", sql`${table.streak} >= 0`),
-    streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
+    // TEMPORARILY COMMENTED OUT - Production DB doesn't have this column yet
+    // streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
   })
 );
 
