@@ -34,6 +34,11 @@ const getSourceIcon = (source) => {
 
 
 export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }) {
+  // Hooks must be called at the top level before any conditional returns
+  const [editingUnitId, setEditingUnitId] = useState(null);
+  const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState('');
+
   if (!items || items.length === 0) {
     return null;
   }
@@ -67,10 +72,6 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }
       </View>
     );
   };
-
-  const [editingUnitId, setEditingUnitId] = useState(null);
-  const [showUnitPicker, setShowUnitPicker] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState('');
   return (
     <View style={styles.listContainer}>
       <Text style={styles.listTitle}>Meal Breakdown</Text>

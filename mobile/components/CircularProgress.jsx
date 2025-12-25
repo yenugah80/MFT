@@ -19,6 +19,23 @@ const CircularProgress = ({
   const safeValue = Number.isFinite(value) ? value : 0;
   const safeMax = Number.isFinite(maxValue) && maxValue > 0 ? maxValue : null;
 
+  // ---- Geometry (always calculate to avoid hook order issues) ----
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  // ---- Math ----
+  const ratio = safeMax ? safeValue / safeMax : 0;
+  const visualRatio = clamp(ratio, 0, 1);
+  const strokeDashoffset =
+    circumference - visualRatio * circumference;
+
+  // ---- Text formatting (hook must be called before any conditional returns) ----
+  const percentText = useMemo(() => {
+    if (!showPercent) return null;
+    if (ratio >= 2) return '200%+';
+    return `${Math.round(ratio * 100)}%`;
+  }, [ratio, showPercent]);
+
   // If goal is missing, render a neutral placeholder
   if (!safeMax) {
     return (
@@ -28,23 +45,6 @@ const CircularProgress = ({
       </View>
     );
   }
-
-  // ---- Geometry ----
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  // ---- Math ----
-  const ratio = safeValue / safeMax;
-  const visualRatio = clamp(ratio, 0, 1);
-  const strokeDashoffset =
-    circumference - visualRatio * circumference;
-
-  // ---- Text formatting ----
-  const percentText = useMemo(() => {
-    if (!showPercent) return null;
-    if (ratio >= 2) return '200%+';
-    return `${Math.round(ratio * 100)}%`;
-  }, [ratio, showPercent]);
 
   // ---- Color feedback (optional) ----
   const progressColor =

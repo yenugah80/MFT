@@ -1204,7 +1204,7 @@ export default function HydrationWellnessDashboard({
         >
           <View style={styles.sectionTitleRow}>
             <Ionicons name="star" size={18} color={BRAND.primary} />
-            <Text style={styles.sectionTitle}>Today's Impact</Text>
+            <Text style={styles.sectionTitle}>Today&apos;s Impact</Text>
           </View>
           <Ionicons
             name={showInsights ? 'chevron-up' : 'chevron-down'}

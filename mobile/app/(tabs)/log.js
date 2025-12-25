@@ -17,8 +17,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   Modal,
+  Share,
 } from 'react-native';
-import * as Sharing from 'expo-sharing'; // Import expo-sharing
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -246,10 +246,14 @@ export default function LogScreen() {
       });
     }
 
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(shareText, { mimeType: 'text/plain', dialogTitle: 'Share Meal Analysis' });
-    } else {
-      notify.info('Sharing is not available on this device.');
+    try {
+      await Share.share({
+        message: shareText,
+        title: 'Share Meal Analysis'
+      });
+    } catch (error) {
+      console.error('Share failed:', error);
+      notify.error('Failed to share meal analysis');
     }
   };
 
@@ -833,7 +837,7 @@ export default function LogScreen() {
               </View>
               <Text style={styles.voiceEmptyTitle}>Voice Logging</Text>
               <Text style={styles.voiceEmptySubtitle}>
-                Speak naturally - we'll transcribe and analyze your meal
+                Speak naturally - we&apos;ll transcribe and analyze your meal
               </Text>
 
               <TouchableOpacity
@@ -861,9 +865,9 @@ export default function LogScreen() {
                 <Text style={styles.voiceExamplesTitle}>Try saying:</Text>
               </View>
               <View style={styles.voiceExamplesList}>
-                <Text style={styles.voiceExample}>"I had two eggs and whole wheat toast"</Text>
-                <Text style={styles.voiceExample}>"200 grams of grilled chicken with rice"</Text>
-                <Text style={styles.voiceExample}>"Large coffee with almond milk"</Text>
+                <Text style={styles.voiceExample}>&quot;I had two eggs and whole wheat toast&quot;</Text>
+                <Text style={styles.voiceExample}>&quot;200 grams of grilled chicken with rice&quot;</Text>
+                <Text style={styles.voiceExample}>&quot;Large coffee with almond milk&quot;</Text>
               </View>
             </View>
           </View>
@@ -1047,12 +1051,10 @@ export default function LogScreen() {
                 const shareText = `I logged ${loggedMeal.foodName} - ${loggedMeal.calories} kcal\n` +
                   `Protein: ${loggedMeal.protein}g | Carbs: ${loggedMeal.carbs}g | Fat: ${loggedMeal.fat}g`;
 
-                if (await Sharing.isAvailableAsync()) {
-                  await Sharing.shareAsync(shareText, {
-                    mimeType: 'text/plain',
-                    dialogTitle: 'Share Meal'
-                  });
-                }
+                await Share.share({
+                  message: shareText,
+                  title: 'Share Meal'
+                });
               } catch (error) {
                 console.error('Share failed:', error);
               }

@@ -125,10 +125,10 @@ const HYDRATION_TIPS = [
   { emoji: '🏃', message: 'Drink water 30 mins before exercise!' },
   { emoji: '🌙', message: 'Hydrate early, sleep better tonight!' },
   { emoji: '💪', message: 'Water aids muscle recovery!' },
-  { emoji: '🎯', message: 'Consistency is key - you\'re doing great!' },
+  { emoji: '🎯', message: 'Consistency is key - you are doing great!' },
   { emoji: '🔥', message: 'Water helps regulate body temperature!' },
   { emoji: '🌟', message: 'Small sips throughout the day work best!' },
-  { emoji: '🎪', message: 'Thirsty? You\'re already slightly dehydrated!' },
+  { emoji: '🎪', message: 'Thirsty? You are already slightly dehydrated!' },
   { emoji: '🚀', message: 'Water carries nutrients to your cells!' },
   { emoji: '💎', message: 'Clear urine = well hydrated!' },
   { emoji: '🌊', message: 'Every sip counts toward your goal!' },
@@ -174,7 +174,8 @@ const ConfettiParticle = ({ delay = 0 }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delay]);
 
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F'];
   const color = colors[Math.floor(Math.random() * colors.length)];
@@ -217,6 +218,7 @@ const Confetti = ({ visible }) => {
 // LIQUID WAVE ANIMATION - Enhanced with actual wave
 // ============================================================================
 
+// eslint-disable-next-line no-unused-vars
 const LiquidWave = ({ percentage, size = 200 }) => {
   const fillAnim = useRef(new Animated.Value(0)).current;
 
@@ -228,6 +230,7 @@ const LiquidWave = ({ percentage, size = 200 }) => {
       friction: 8,
       useNativeDriver: false,
     }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   return (
@@ -298,6 +301,7 @@ const ProgressRing = ({ percentage, size = 200, strokeWidth = 14, reduceMotion =
       toValue: percentage,
       ...animConfig,
     }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage, reduceMotion]);
 
   const strokeDashoffset = animatedProgress.interpolate({
@@ -515,6 +519,24 @@ const UndoToast = ({ visible, message, onUndo, onDismiss }) => {
   const slideAnim = useRef(new Animated.Value(100)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
+  const dismissToast = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 100,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      if (onDismiss) onDismiss();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onDismiss]);
+
   useEffect(() => {
     if (visible) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -541,24 +563,7 @@ const UndoToast = ({ visible, message, onUndo, onDismiss }) => {
     } else {
       dismissToast();
     }
-  }, [visible]);
-
-  const dismissToast = () => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 100,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      if (onDismiss) onDismiss();
-    });
-  };
+  }, [visible, dismissToast]);
 
   if (!visible) return null;
 
@@ -840,7 +845,7 @@ const StatsCard = ({ beverageHistory, dailyGoal }) => {
     <View style={styles.statsCard}>
       <View style={styles.statsHeader}>
         <Ionicons name="stats-chart" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
-        <Text style={styles.statsTitle}>Today's Stats</Text>
+        <Text style={styles.statsTitle}>Today&apos;s Stats</Text>
       </View>
 
       <View style={styles.statsGrid}>

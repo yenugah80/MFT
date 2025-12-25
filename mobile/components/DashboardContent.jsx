@@ -8,17 +8,48 @@
  * - Data state detection
  */
 
-import { View, ScrollView, Text, RefreshControl, StyleSheet, TouchableOpacity, Modal, Animated, Share } from "react-native";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { View, ScrollView, Text, RefreshControl, StyleSheet, TouchableOpacity, Modal, Share } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { useDashboard } from "../hooks/useDashboard";
-import { useMoodTrends, calculateMoodStats } from "../hooks/useMoodTrends";
-import { useMoodLog } from "../hooks/useMoodLog";
-import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
+import * as Haptics from 'expo-haptics';
+
+// Hooks
+import { useDashboard } from "../hooks/useDashboard";
+import { useMoodTrends, calculateMoodStats } from "../hooks/useMoodTrends";
+import { useWaterLog } from "../hooks/useWaterLog";
+import { useNotification } from "../providers/NotificationProvider";
+
+// Premium components
+import GlassCard from "./dashboard/GlassCard";
+import PremiumRing from "./dashboard/PremiumRing";
+import NutriScoreDial from "./dashboard/NutriScoreDial";
+import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
+import MealMoodCalendar from "./MealMoodCalendar";
+import HydrationWellnessDashboard from "./dashboard/HydrationWellnessDashboard";
+import EmptyState from "./EmptyState";
+import MoodInsightCard from "./MoodTracker/MoodInsightCard";
+import NutritionOverviewCard from "./dashboard/NutritionOverviewCard";
+import MicronutrientsGrid from "./dashboard/MicronutrientsGrid";
+import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
+import PremiumWeeklyTrends from "./dashboard/PremiumWeeklyTrends";
+import InsightsCard from "./dashboard/InsightsCard";
+import MacroBalanceCard from "./dashboard/MacroBalanceCard";
+import SkeletonCard, { SkeletonText, SkeletonCircle } from "./dashboard/SkeletonCard";
+
+// Design tokens - using unified premium theme
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
+import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
+import { LUXURY_BACKGROUNDS, LUXURY_TEXT } from "../constants/luxuryTheme";
+
+// Utility functions
+import { calculateFoodMoodScore, generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
+import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
+import apiClient from "../services/apiClient";
+import storage, { STORAGE_KEYS } from "../utils/storage";
 
 // Utility to deduplicate logs by clientEventId (preferred) or id
 function dedupeLogs(logs) {
@@ -33,38 +64,6 @@ function dedupeLogs(logs) {
     return true;
   });
 }
-import { useNotification } from "../providers/NotificationProvider";
-
-// Premium components
-import GlassCard from "./dashboard/GlassCard";
-import PremiumRing from "./dashboard/PremiumRing";
-import NutriScoreDial from "./dashboard/NutriScoreDial";
-import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
-import { MoodTracker } from "./MoodTracker";
-import MealMoodCalendar from "./MealMoodCalendar";
-import HydrationWellnessDashboard from "./dashboard/HydrationWellnessDashboard";
-import { useWaterLog } from "../hooks/useWaterLog";
-import EmptyState from "./EmptyState";
-import MoodInsightCard from "./MoodTracker/MoodInsightCard";
-// Professional nutrition components
-import NutritionOverviewCard from "./dashboard/NutritionOverviewCard";
-import MicronutrientsGrid from "./dashboard/MicronutrientsGrid";
-import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
-import PremiumWeeklyTrends from "./dashboard/PremiumWeeklyTrends";
-
-// Design tokens - using unified premium theme
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState, formatters } from "../constants/designTokens";
-import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
-import { LUXURY_BACKGROUNDS, LUXURY_GRADIENTS, LUXURY_SHADOWS, LUXURY_SURFACES, LUXURY_TEXT, LUXURY_SEMANTIC } from "../constants/luxuryTheme";
-
-// Utility functions
-import { calculateFoodMoodScore, generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
-import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
-import InsightsCard from "./dashboard/InsightsCard";
-import MacroBalanceCard from "./dashboard/MacroBalanceCard";
-import SkeletonCard, { SkeletonText, SkeletonCircle } from "./dashboard/SkeletonCard";
-import apiClient from "../services/apiClient";
-import storage, { STORAGE_KEYS } from "../utils/storage";
 
 // ============================================================================
 // ERROR HANDLING UTILITIES
@@ -249,7 +248,6 @@ const StreakSavedModal = ({ visible, onClose, freezesLeft }) => {
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
   const [refreshing, setRefreshing] = useState(false);
-  const [moodModalVisible, setMoodModalVisible] = useState(false);
   const [streakSavedVisible, setStreakSavedVisible] = useState(false);
   const notify = useNotification();
   const router = useRouter();
@@ -284,7 +282,6 @@ export default function DashboardContent() {
 
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
-  const { logMood } = useMoodLog();
 
   // Water tracking hook
   const { markHydrationCelebration } = useWaterLog();
@@ -752,15 +749,6 @@ export default function DashboardContent() {
     }
   };
 
-  const handleMoodSave = async (moodData) => {
-    try {
-      await logMood(moodData);
-      notify.success('Mood logged successfully! 😊');
-      refetch();
-    } catch (error) {
-      notify.error('Failed to log mood');
-    }
-  };
 
 
   const insightsCoverage = useMemo(() => {
