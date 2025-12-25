@@ -4,7 +4,7 @@ import { dailyNutritionSummaryTable, waterLogTable } from "../db/schema.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
-import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../server.js";
+import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../utils/schemaGuards.js";
 
 const router = express.Router();
 
