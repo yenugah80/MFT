@@ -492,13 +492,25 @@ const SwipeableEntry = ({ entry, onDelete, bevType }) => {
       >
         <View style={styles.timelineDot} />
         <Text style={styles.timelineEmoji}>{bevType.emoji}</Text>
-        <Text style={styles.timelineAmount}>{entry.amount}ml</Text>
-        <Text style={styles.timelineTime}>
-          {new Date(entry.timestamp).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-          })}
-        </Text>
+        <View style={styles.timelineContent}>
+          <View style={styles.timelineAmountRow}>
+            <Text style={styles.timelineAmount}>{entry.amount}ml</Text>
+            {bevType.hydrationFactor !== 1.0 && (
+              <View style={styles.hydrationFactorBadge}>
+                <View style={[styles.hydrationBar, { width: `${bevType.hydrationFactor * 100}%`, backgroundColor: bevType.color }]} />
+                <Text style={styles.hydrationFactorText}>
+                  {Math.round(entry.amount * bevType.hydrationFactor)}ml 💧
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.timelineTime}>
+            {new Date(entry.timestamp).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </Text>
+        </View>
         <TouchableOpacity
           onPress={handleDirectDelete}
           style={styles.timelineDeleteButton}
@@ -1840,6 +1852,32 @@ const styles = StyleSheet.create({
   },
   timelineDeleteButton: {
     padding: 4,
+  },
+  timelineContent: {
+    flex: 1,
+    gap: 2,
+  },
+  timelineAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  hydrationFactorBadge: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  hydrationBar: {
+    height: 4,
+    borderRadius: 2,
+    flex: 1,
+    maxWidth: 60,
+  },
+  hydrationFactorText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.muted,
   },
 
   // Empty State

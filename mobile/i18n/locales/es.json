@@ -1,0 +1,185 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "retry": "Intentar de nuevo",
+    "refresh": "Actualizar",
+    "synced": "Sincronizado",
+    "syncing": "Sincronizando...",
+    "offline": "Sin conexión"
+  },
+  "navigation": {
+    "dashboard": "Panel",
+    "log": "Registrar",
+    "history": "Historial",
+    "profile": "Perfil",
+    "settings": "Configuración"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Buenos días",
+      "afternoon": "Buenas tardes",
+      "evening": "Buenas noches"
+    },
+    "welcome": "¡Bienvenido a tu viaje de salud!",
+    "startLogging": "Comenzar registro",
+    "todaysCalories": "Calorías de hoy",
+    "nutritionScore": "Puntuación nutricional",
+    "weeklyAverage": "Promedio semanal: {{calories}} kcal/día",
+    "focusMode": "Modo concentración activo",
+    "showingEssentials": "Mostrando solo lo esencial"
+  },
+  "nutrition": {
+    "calories": "Calorías",
+    "protein": "Proteína",
+    "carbs": "Carbohidratos",
+    "fat": "Grasa",
+    "fiber": "Fibra",
+    "sugar": "Azúcar",
+    "sodium": "Sodio",
+    "calcium": "Calcio",
+    "iron": "Hierro",
+    "vitaminA": "Vitamina A",
+    "vitaminC": "Vitamina C",
+    "vitaminD": "Vitamina D",
+    "goal": "Objetivo",
+    "remaining": "Restante",
+    "exceeded": "Excedido"
+  },
+  "logging": {
+    "logMeal": "Registrar comida",
+    "logWater": "Registrar agua",
+    "logMood": "Registrar ánimo",
+    "textInput": "Describe tu comida...",
+    "photoInput": "Tomar una foto",
+    "voiceInput": "Entrada de voz",
+    "barcodeInput": "Escanear código de barras",
+    "mealType": {
+      "breakfast": "Desayuno",
+      "lunch": "Almuerzo",
+      "dinner": "Cena",
+      "snack": "Merienda"
+    },
+    "analyzing": "Analizando...",
+    "analyzingFood": "Analizando comida...",
+    "analyzingPhoto": "Analizando foto...",
+    "analyzingVoice": "Procesando voz..."
+  },
+  "mood": {
+    "howAreYouFeeling": "¿Cómo te sientes?",
+    "great": "Genial",
+    "good": "Bien",
+    "okay": "Regular",
+    "bad": "Mal",
+    "terrible": "Terrible",
+    "addNote": "Agregar una nota (opcional)",
+    "moodLogged": "Ánimo registrado exitosamente"
+  },
+  "hydration": {
+    "waterIntake": "Consumo de agua",
+    "dailyGoal": "Objetivo diario",
+    "addGlass": "Agregar vaso",
+    "glasses": "vasos",
+    "liters": "litros",
+    "goalReached": "¡Objetivo alcanzado!",
+    "keepGoing": "¡Sigue así!"
+  },
+  "gamification": {
+    "level": "Nivel",
+    "xp": "XP",
+    "streak": "Racha de días",
+    "achievements": "Logros",
+    "streakSaved": "¡Racha guardada!",
+    "freezesRemaining": "{{count}} congelación restante",
+    "freezesRemaining_plural": "{{count}} congelaciones restantes",
+    "levelUp": "¡Subiste de nivel!",
+    "achievementUnlocked": "¡Logro desbloqueado!"
+  },
+  "profile": {
+    "myProfile": "Mi perfil",
+    "editProfile": "Editar perfil",
+    "goals": "Objetivos",
+    "dailyCalorieGoal": "Objetivo diario de calorías",
+    "proteinGoal": "Objetivo de proteína",
+    "waterGoal": "Objetivo de agua",
+    "height": "Altura",
+    "weight": "Peso",
+    "age": "Edad",
+    "activityLevel": "Nivel de actividad",
+    "signOut": "Cerrar sesión"
+  },
+  "insights": {
+    "moodInsights": "Análisis de ánimo",
+    "weeklyTrends": "Tendencias semanales",
+    "mealMoodCorrelation": "Correlación comida-ánimo",
+    "viewInsights": "Ver análisis",
+    "noInsightsYet": "Aún no hay suficientes datos",
+    "logMoreMeals": "Registra más comidas para desbloquear análisis"
+  },
+  "errors": {
+    "networkError": "Error de red. Por favor verifica tu conexión.",
+    "analysisFailedPhoto": "No se pudo analizar la foto. Intenta con una imagen más clara.",
+    "analysisFailedText": "No se pudo analizar la comida. Intenta agregar más detalles.",
+    "authRequired": "Por favor inicia sesión para continuar",
+    "sessionExpired": "Tu sesión expiró. Por favor inicia sesión nuevamente.",
+    "serverError": "Error del servidor. Por favor intenta más tarde.",
+    "timeoutError": "La solicitud excedió el tiempo de espera. Verifica tu conexión.",
+    "unknownError": "Algo salió mal. Por favor intenta de nuevo."
+  },
+  "success": {
+    "mealLogged": "¡Comida registrada exitosamente!",
+    "moodLogged": "¡Ánimo registrado exitosamente!",
+    "waterLogged": "¡Agua registrada exitosamente!",
+    "goalUpdated": "¡Objetivo actualizado!",
+    "profileUpdated": "¡Perfil actualizado!",
+    "syncComplete": "Sincronizado con la nube"
+  },
+  "emptyStates": {
+    "noMealsYet": "Aún no hay comidas registradas",
+    "noMealsDescription": "Registra tu primera comida para comenzar a generar análisis",
+    "noMoodLogsYet": "Aún no hay registros de ánimo",
+    "noMoodLogsDescription": "Registra tu ánimo para descubrir patrones",
+    "noWaterYet": "No se ha registrado agua hoy",
+    "noWaterDescription": "¡Mantente hidratado! Registra tu primer vaso.",
+    "noHistoryYet": "Aún no hay historial",
+    "noHistoryDescription": "Tu historial de comidas aparecerá aquí"
+  },
+  "accessibility": {
+    "logMealButton": "Botón registrar comida",
+    "takePictureButton": "Botón tomar foto",
+    "voiceInputButton": "Botón entrada de voz",
+    "scanBarcodeButton": "Botón escanear código de barras",
+    "closeButton": "Botón cerrar",
+    "deleteButton": "Botón eliminar",
+    "editButton": "Botón editar",
+    "saveButton": "Botón guardar",
+    "refreshButton": "Botón actualizar"
+  },
+  "settings": {
+    "language": "Idioma",
+    "notifications": "Notificaciones",
+    "darkMode": "Modo oscuro",
+    "units": "Unidades",
+    "metric": "Métrico (kg, cm)",
+    "imperial": "Imperial (lb, in)",
+    "privacy": "Privacidad",
+    "termsOfService": "Términos de servicio",
+    "privacyPolicy": "Política de privacidad",
+    "deleteAccount": "Eliminar cuenta",
+    "appVersion": "Versión de la aplicación"
+  },
+  "legal": {
+    "privacyPolicy": "Política de privacidad",
+    "termsOfService": "Términos de servicio",
+    "dataCollection": "Recopilación de datos",
+    "yourRights": "Tus derechos",
+    "contactUs": "Contáctanos"
+  }
+}

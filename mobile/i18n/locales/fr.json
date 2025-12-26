@@ -1,0 +1,185 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "retry": "Réessayer",
+    "refresh": "Actualiser",
+    "synced": "Synchronisé",
+    "syncing": "Synchronisation...",
+    "offline": "Hors ligne"
+  },
+  "navigation": {
+    "dashboard": "Tableau de bord",
+    "log": "Journal",
+    "history": "Historique",
+    "profile": "Profil",
+    "settings": "Paramètres"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Bonjour",
+      "afternoon": "Bon après-midi",
+      "evening": "Bonsoir"
+    },
+    "welcome": "Bienvenue dans votre parcours santé!",
+    "startLogging": "Commencer l'enregistrement",
+    "todaysCalories": "Calories du jour",
+    "nutritionScore": "Score nutritionnel",
+    "weeklyAverage": "Moyenne hebdomadaire: {{calories}} kcal/jour",
+    "focusMode": "Mode concentration actif",
+    "showingEssentials": "Affichage des éléments essentiels uniquement"
+  },
+  "nutrition": {
+    "calories": "Calories",
+    "protein": "Protéines",
+    "carbs": "Glucides",
+    "fat": "Lipides",
+    "fiber": "Fibres",
+    "sugar": "Sucre",
+    "sodium": "Sodium",
+    "calcium": "Calcium",
+    "iron": "Fer",
+    "vitaminA": "Vitamine A",
+    "vitaminC": "Vitamine C",
+    "vitaminD": "Vitamine D",
+    "goal": "Objectif",
+    "remaining": "Restant",
+    "exceeded": "Dépassé"
+  },
+  "logging": {
+    "logMeal": "Enregistrer un repas",
+    "logWater": "Enregistrer l'eau",
+    "logMood": "Enregistrer l'humeur",
+    "textInput": "Décrivez votre repas...",
+    "photoInput": "Prendre une photo",
+    "voiceInput": "Saisie vocale",
+    "barcodeInput": "Scanner le code-barres",
+    "mealType": {
+      "breakfast": "Petit-déjeuner",
+      "lunch": "Déjeuner",
+      "dinner": "Dîner",
+      "snack": "Collation"
+    },
+    "analyzing": "Analyse en cours...",
+    "analyzingFood": "Analyse des aliments...",
+    "analyzingPhoto": "Analyse de la photo...",
+    "analyzingVoice": "Traitement de la voix..."
+  },
+  "mood": {
+    "howAreYouFeeling": "Comment vous sentez-vous?",
+    "great": "Excellent",
+    "good": "Bien",
+    "okay": "Correct",
+    "bad": "Mauvais",
+    "terrible": "Terrible",
+    "addNote": "Ajouter une note (facultatif)",
+    "moodLogged": "Humeur enregistrée avec succès"
+  },
+  "hydration": {
+    "waterIntake": "Consommation d'eau",
+    "dailyGoal": "Objectif quotidien",
+    "addGlass": "Ajouter un verre",
+    "glasses": "verres",
+    "liters": "litres",
+    "goalReached": "Objectif atteint!",
+    "keepGoing": "Continuez!"
+  },
+  "gamification": {
+    "level": "Niveau",
+    "xp": "XP",
+    "streak": "Série de jours",
+    "achievements": "Succès",
+    "streakSaved": "Série sauvegardée!",
+    "freezesRemaining": "{{count}} gel restant",
+    "freezesRemaining_plural": "{{count}} gels restants",
+    "levelUp": "Niveau supérieur!",
+    "achievementUnlocked": "Succès débloqué!"
+  },
+  "profile": {
+    "myProfile": "Mon profil",
+    "editProfile": "Modifier le profil",
+    "goals": "Objectifs",
+    "dailyCalorieGoal": "Objectif calorique quotidien",
+    "proteinGoal": "Objectif de protéines",
+    "waterGoal": "Objectif d'eau",
+    "height": "Taille",
+    "weight": "Poids",
+    "age": "Âge",
+    "activityLevel": "Niveau d'activité",
+    "signOut": "Se déconnecter"
+  },
+  "insights": {
+    "moodInsights": "Aperçus de l'humeur",
+    "weeklyTrends": "Tendances hebdomadaires",
+    "mealMoodCorrelation": "Corrélation repas-humeur",
+    "viewInsights": "Voir les aperçus",
+    "noInsightsYet": "Pas encore assez de données",
+    "logMoreMeals": "Enregistrez plus de repas pour débloquer les aperçus"
+  },
+  "errors": {
+    "networkError": "Erreur réseau. Veuillez vérifier votre connexion.",
+    "analysisFailedPhoto": "Impossible d'analyser la photo. Essayez une image plus claire.",
+    "analysisFailedText": "Impossible d'analyser le repas. Essayez d'ajouter plus de détails.",
+    "authRequired": "Veuillez vous connecter pour continuer",
+    "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter.",
+    "serverError": "Erreur du serveur. Veuillez réessayer plus tard.",
+    "timeoutError": "Délai d'attente dépassé. Vérifiez votre connexion.",
+    "unknownError": "Quelque chose s'est mal passé. Veuillez réessayer."
+  },
+  "success": {
+    "mealLogged": "Repas enregistré avec succès!",
+    "moodLogged": "Humeur enregistrée avec succès!",
+    "waterLogged": "Eau enregistrée avec succès!",
+    "goalUpdated": "Objectif mis à jour!",
+    "profileUpdated": "Profil mis à jour!",
+    "syncComplete": "Synchronisé avec le cloud"
+  },
+  "emptyStates": {
+    "noMealsYet": "Aucun repas enregistré",
+    "noMealsDescription": "Suivez votre premier repas pour commencer à générer des aperçus",
+    "noMoodLogsYet": "Aucune humeur enregistrée",
+    "noMoodLogsDescription": "Enregistrez votre humeur pour découvrir des tendances",
+    "noWaterYet": "Aucune eau enregistrée aujourd'hui",
+    "noWaterDescription": "Restez hydraté! Enregistrez votre premier verre.",
+    "noHistoryYet": "Aucun historique",
+    "noHistoryDescription": "Votre historique de repas apparaîtra ici"
+  },
+  "accessibility": {
+    "logMealButton": "Bouton enregistrer un repas",
+    "takePictureButton": "Bouton prendre une photo",
+    "voiceInputButton": "Bouton saisie vocale",
+    "scanBarcodeButton": "Bouton scanner le code-barres",
+    "closeButton": "Bouton fermer",
+    "deleteButton": "Bouton supprimer",
+    "editButton": "Bouton modifier",
+    "saveButton": "Bouton enregistrer",
+    "refreshButton": "Bouton actualiser"
+  },
+  "settings": {
+    "language": "Langue",
+    "notifications": "Notifications",
+    "darkMode": "Mode sombre",
+    "units": "Unités",
+    "metric": "Métrique (kg, cm)",
+    "imperial": "Impérial (lb, in)",
+    "privacy": "Confidentialité",
+    "termsOfService": "Conditions d'utilisation",
+    "privacyPolicy": "Politique de confidentialité",
+    "deleteAccount": "Supprimer le compte",
+    "appVersion": "Version de l'application"
+  },
+  "legal": {
+    "privacyPolicy": "Politique de confidentialité",
+    "termsOfService": "Conditions d'utilisation",
+    "dataCollection": "Collecte de données",
+    "yourRights": "Vos droits",
+    "contactUs": "Nous contacter"
+  }
+}

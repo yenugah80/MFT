@@ -1,4 +1,4 @@
-# MyFoodTracker Mobile - Architecture Documentation
+# MFT Mobile - Architecture Documentation
 
 ## Overview
 

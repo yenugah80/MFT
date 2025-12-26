@@ -26,6 +26,7 @@ import {
   SHADOWS
 } from '../constants/premiumTheme';
 import { generateStoryLine } from '../utils/healthCalculations';
+import { formatDateLocal } from '../utils/dateHelpers';
 
 const { width } = Dimensions.get('window');
 const DAYS_OF_WEEK = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -85,18 +86,18 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
     // Days
     for (let i = 1; i <= daysInMonth; i++) {
       const date = new Date(today.getFullYear(), today.getMonth(), i);
-      const key = date.toISOString().split('T')[0];
-      const dayData = data[key] || { 
-        calories: 0, 
-        meals: 0, 
-        goalReached: false, 
-        moodAvg: null, 
-        hydrationPercent: null, 
+      const key = formatDateLocal(date); // Fixed: Use local timezone instead of UTC
+      const dayData = data[key] || {
+        calories: 0,
+        meals: 0,
+        goalReached: false,
+        moodAvg: null,
+        hydrationPercent: null,
         logged: false,
         foodMoodScore: null,
         storyLine: null
       };
-      
+
       grid.push({
         day: i,
         key,
@@ -117,7 +118,7 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
       const story = selectedDay.storyLine || (selectedDay.logged ? "Tracked my nutrition and wellness." : "No data logged.");
       const score = selectedDay.foodMoodScore ? `Daily Score: ${selectedDay.foodMoodScore}/100` : "";
       
-      const message = `📅 My Daily Wellness - ${dateStr}\n\n"${story}"\n\n${score}\n\nTracked with MyFoodTracker 🥗`;
+      const message = `📅 My Daily Wellness - ${dateStr}\n\n"${story}"\n\n${score}\n\nTracked with MFT 🥗`;
       
       await Share.share({
         message,

@@ -43,7 +43,7 @@ function DashboardScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>MyFoodTracker 🍎</Text>
+      <Text style={styles.title}>MFT 🍎</Text>
       
       <View style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>Today's Calories</Text>

@@ -1,5 +1,5 @@
 /**
- * Modern Design System for MyFoodTracker
+ * Modern Design System for MFT
  * Clean, health-focused, 2025 aesthetic
  * Replaces luxury theme with professional health app design
  */

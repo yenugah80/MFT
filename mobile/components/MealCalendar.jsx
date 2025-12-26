@@ -11,6 +11,7 @@ import {
   BRAND,
   SEMANTIC
 } from '../constants/premiumTheme';
+import { formatDateLocal } from '../utils/dateHelpers';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -25,8 +26,8 @@ export default function MealCalendar({ data = {}, calorieGoal = 2000, onDayPress
       const d = new Date();
       d.setDate(today.getDate() - i);
 
-      // Use ISO format to match DashboardContent.jsx format
-      const key = d.toISOString().split('T')[0];
+      // Use local timezone format to avoid off-by-one errors
+      const key = formatDateLocal(d);
       const dayData = data[key] || { calories: 0, meals: 0, goalReached: false };
 
       days.push({

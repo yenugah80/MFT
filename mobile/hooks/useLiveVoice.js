@@ -185,18 +185,10 @@ export function useLiveVoice() {
       }
 
       // Configure audio session for optimal recording
-      const interruptionIOS = Audio.InterruptionModeIOS
-        ? Audio.InterruptionModeIOS.DoNotMix
-        : Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX;
-      const interruptionAndroid = Audio.InterruptionModeAndroid
-        ? Audio.InterruptionModeAndroid.DoNotMix
-        : Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX;
-
+      // Expo AV v16+ simplified API - removed deprecated interruptionMode properties
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
-        interruptionModeIOS: interruptionIOS,
-        interruptionModeAndroid: interruptionAndroid,
         shouldDuckAndroid: true,
         staysActiveInBackground: false,
       });

@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { useDashboard } from "../hooks/useDashboard";
 import { useMoodTrends, calculateMoodStats } from "../hooks/useMoodTrends";
 import { useWaterLog } from "../hooks/useWaterLog";
+import { useFoodLog } from "../hooks/useFoodLog";
 import { useNotification } from "../providers/NotificationProvider";
 
 // Premium components
@@ -48,6 +49,7 @@ import { LUXURY_BACKGROUNDS, LUXURY_TEXT } from "../constants/luxuryTheme";
 // Utility functions
 import { calculateFoodMoodScore, generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
 import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
+import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
 import apiClient from "../services/apiClient";
 import storage, { STORAGE_KEYS } from "../utils/storage";
 
@@ -247,6 +249,7 @@ const StreakSavedModal = ({ visible, onClose, freezesLeft }) => {
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
+  const { logs: localFoodLogs } = useFoodLog(); // Get local SQLite logs
   const [refreshing, setRefreshing] = useState(false);
   const [streakSavedVisible, setStreakSavedVisible] = useState(false);
   const notify = useNotification();
@@ -376,11 +379,27 @@ export default function DashboardContent() {
     }
   }, [data?.gamification?.freezeConsumed]);
 
-  // Deduplicate food logs for today
+  // Deduplicate food logs for today (merge local SQLite + backend)
   const uniqueFoodLogs = useMemo(() => {
-    if (!data?.today?.foodLogs) return [];
-    return dedupeLogs(data.today.foodLogs);
-  }, [data]);
+    // Get today's date range for filtering local logs
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Filter local logs for today only
+    const todayLocalLogs = localFoodLogs.filter(log => {
+      const logDate = new Date(log.timestamp || log.loggedDate);
+      return logDate >= todayStart && logDate <= todayEnd;
+    });
+
+    // Merge backend logs with local logs
+    const backendLogs = data?.today?.foodLogs || [];
+    const allLogs = [...backendLogs, ...todayLocalLogs];
+
+    // Deduplicate by clientEventId (backend + local may have same meal)
+    return dedupeLogs(allLogs);
+  }, [data, localFoodLogs]);
 
   const hydrationEvents = useMemo(() => {
     if (!data?.today?.waterLogs) return [];
@@ -420,12 +439,38 @@ export default function DashboardContent() {
   // Aggregate micros from deduplicated food logs
   const aggregatedMicros = useMemo(() => {
     if (!uniqueFoodLogs.length) return {};
+
+    // Key mapping to normalize camelCase to snake_case (vitaminA -> vitamin_a)
+    const keyMapping = {
+      'vitaminA': 'vitamin_a',
+      'vitaminC': 'vitamin_c',
+      'vitaminD': 'vitamin_d',
+      'vitaminE': 'vitamin_e',
+      'vitaminK': 'vitamin_k',
+      'vitaminB12': 'vitamin_b12',
+      'vitamin_a': 'vitamin_a',
+      'vitamin_c': 'vitamin_c',
+      'vitamin_d': 'vitamin_d',
+      'vitamin_e': 'vitamin_e',
+      'vitamin_k': 'vitamin_k',
+      'vitamin_b12': 'vitamin_b12',
+      'calcium': 'calcium',
+      'iron': 'iron',
+      'magnesium': 'magnesium',
+      'potassium': 'potassium',
+      'zinc': 'zinc',
+      'sodium': 'sodium',
+      'folate': 'folate',
+    };
+
     const micros = {};
     uniqueFoodLogs.forEach((log) => {
       if (log.micros && typeof log.micros === 'object') {
         Object.entries(log.micros).forEach(([key, value]) => {
+          // Normalize key (camelCase -> snake_case)
+          const normalizedKey = keyMapping[key] || key;
           const numValue = parseDecimal(value, 0);
-          micros[key] = (micros[key] || 0) + numValue;
+          micros[normalizedKey] = (micros[normalizedKey] || 0) + numValue;
         });
       }
     });
@@ -449,10 +494,9 @@ export default function DashboardContent() {
   // Transform data into rich calendar format (Food + Mood + Hydration)
   const calendarData = useMemo(() => {
     const calData = {};
-    
+
     // 1. Process Food Logs (Today)
-    // Note: In a real app, 'data' should contain history. For now we map what we have.
-    const todayKey = new Date().toISOString().split('T')[0];
+    const todayKey = getTodayKey();
 
     if (data?.today?.foodLogs && uniqueFoodLogs.length > 0) {
       const totalCals = uniqueFoodLogs.reduce((sum, l) => sum + parseCalories(l.calories), 0);
@@ -505,11 +549,60 @@ export default function DashboardContent() {
       };
     }
 
-    // 2. Process Mood Trends (History)
+    // 2. Process Weekly Nutrition History (Last 7 Days)
+    if (data?.trends?.weekSummaries) {
+      const goal = parseGoal(data?.goals?.dailyCalories, 2000, 800, 10000);
+      const proteinGoalValue = parseGoal(data.goals?.proteinG, 150, 20, 500);
+
+      data.trends.weekSummaries.forEach(summary => {
+        const date = new Date(summary.date);
+        const key = formatDateLocal(date);
+
+        // Skip today since we already processed it above
+        if (key === todayKey) return;
+
+        const totalCals = parseCalories(summary.totalCalories);
+        const totalProtein = parseMacro(summary.totalProtein);
+        const goalReached = totalCals >= (goal * 0.9) && totalCals <= (goal * 1.1);
+
+        // Merge with existing data (in case mood data exists)
+        calData[key] = {
+          ...(calData[key] || {}),
+          calories: totalCals,
+          meals: summary.mealCount || 0,
+          goalReached,
+          logged: totalCals > 0,
+          protein: totalProtein,
+          proteinGoal: proteinGoalValue,
+          // Calculate food mood score if we have the data
+          foodMoodScore: calculateFoodMoodScore({
+            calories: totalCals,
+            calorieGoal: goal,
+            protein: totalProtein,
+            proteinGoal: proteinGoalValue,
+            hydrationPercent: calData[key]?.hydrationPercent || 0,
+            micronutrientCount: 0,
+            moodIntensity: calData[key]?.moodAvg || null,
+          }),
+          storyLine: generateStoryLine({
+            calories: totalCals,
+            calorieGoal: goal,
+            meals: summary.mealCount || 0,
+            goalReached,
+            moodAvg: calData[key]?.moodAvg || null,
+            hydrationPercent: calData[key]?.hydrationPercent || 0,
+            protein: totalProtein,
+            proteinGoal: proteinGoalValue,
+          }),
+        };
+      });
+    }
+
+    // 3. Process Mood Trends (History)
     if (trendData?.data) {
       trendData.data.forEach(log => {
         const date = new Date(log.loggedDate);
-        const key = date.toISOString().split('T')[0];
+        const key = formatDateLocal(date);
 
         if (!calData[key]) {
           calData[key] = {
@@ -528,7 +621,7 @@ export default function DashboardContent() {
     if (!calData[todayKey]) {
       calData[todayKey] = { calories: 0, meals: 0, goalReached: false, logged: false, moodAvg: null, hydrationPercent: null, foodMoodScore: null };
     }
-    
+
     return calData;
   }, [data, trendData]);
 

@@ -19,23 +19,23 @@ import { SPACING, RADIUS } from '../../constants/designTokens';
 export default function GlassCard({
   children,
   style,
-  padding = 'md',
+  padding = 'sm',
   glow = false,
   glowColor,
 }) {
   const paddingValue = {
-    sm: SPACING[2],
+    sm: SPACING[3],
     md: SPACING[4],
     lg: SPACING[5],
     xl: SPACING[6],
-  }[padding] || SPACING[4];
+  }[padding] || SPACING[3];
 
   const glowStyle = glow && glowColor ? {
     shadowColor: glowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 2,
   } : {};
 
   return (
@@ -55,12 +55,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', // Clean white card
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)', // Subtle gray border
+    borderColor: 'rgba(0, 0, 0, 0.06)', // Lighter border
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
     overflow: 'hidden',
   },
 });

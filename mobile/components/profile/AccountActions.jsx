@@ -48,6 +48,35 @@ export default function AccountActions({ onSignOut }) {
         </TouchableOpacity>
       </View>
 
+      {/* Legal Section */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Legal</Text>
+
+        <TouchableOpacity
+          style={styles.settingRow}
+          activeOpacity={0.7}
+          onPress={() => router.push("/privacy")}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+            <Ionicons name="shield-checkmark-outline" size={ICON_SIZES.sm} color={SEMANTIC.success.base} />
+          </View>
+          <Text style={styles.settingText}>Privacy Policy</Text>
+          <Ionicons name="chevron-forward" size={ICON_SIZES.sm} color={TEXT.muted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.settingRow, { borderBottomWidth: 0 }]}
+          activeOpacity={0.7}
+          onPress={() => router.push("/terms")}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+            <Ionicons name="document-text-outline" size={ICON_SIZES.sm} color={SEMANTIC.success.base} />
+          </View>
+          <Text style={styles.settingText}>Terms of Service</Text>
+          <Ionicons name="chevron-forward" size={ICON_SIZES.sm} color={TEXT.muted} />
+        </TouchableOpacity>
+      </View>
+
       {/* Sign Out Button */}
       <TouchableOpacity
         style={styles.signOutButton}

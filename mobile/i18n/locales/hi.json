@@ -1,0 +1,185 @@
+{
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "error": "त्रुटि",
+    "success": "सफलता",
+    "cancel": "रद्द करें",
+    "confirm": "पुष्टि करें",
+    "save": "सहेजें",
+    "delete": "हटाएं",
+    "edit": "संपादित करें",
+    "close": "बंद करें",
+    "retry": "पुनः प्रयास करें",
+    "refresh": "रीफ़्रेश करें",
+    "synced": "समन्वयित",
+    "syncing": "समन्वयन हो रहा है...",
+    "offline": "ऑफ़लाइन"
+  },
+  "navigation": {
+    "dashboard": "डैशबोर्ड",
+    "log": "लॉग",
+    "history": "इतिहास",
+    "profile": "प्रोफ़ाइल",
+    "settings": "सेटिंग्स"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "सुप्रभात",
+      "afternoon": "नमस्ते",
+      "evening": "शुभ संध्या"
+    },
+    "welcome": "अपनी स्वास्थ्य यात्रा में आपका स्वागत है!",
+    "startLogging": "लॉगिंग शुरू करें",
+    "todaysCalories": "आज की कैलोरी",
+    "nutritionScore": "पोषण स्कोर",
+    "weeklyAverage": "साप्ताहिक औसत: {{calories}} कैलोरी/दिन",
+    "focusMode": "फोकस मोड सक्रिय",
+    "showingEssentials": "केवल आवश्यक जानकारी दिखा रहे हैं"
+  },
+  "nutrition": {
+    "calories": "कैलोरी",
+    "protein": "प्रोटीन",
+    "carbs": "कार्बोहाइड्रेट",
+    "fat": "वसा",
+    "fiber": "फाइबर",
+    "sugar": "शर्करा",
+    "sodium": "सोडियम",
+    "calcium": "कैल्शियम",
+    "iron": "आयरन",
+    "vitaminA": "विटामिन ए",
+    "vitaminC": "विटामिन सी",
+    "vitaminD": "विटामिन डी",
+    "goal": "लक्ष्य",
+    "remaining": "शेष",
+    "exceeded": "अधिक"
+  },
+  "logging": {
+    "logMeal": "भोजन लॉग करें",
+    "logWater": "पानी लॉग करें",
+    "logMood": "मूड लॉग करें",
+    "textInput": "अपने भोजन का वर्णन करें...",
+    "photoInput": "फोटो लें",
+    "voiceInput": "आवाज़ इनपुट",
+    "barcodeInput": "बारकोड स्कैन करें",
+    "mealType": {
+      "breakfast": "नाश्ता",
+      "lunch": "दोपहर का भोजन",
+      "dinner": "रात का खाना",
+      "snack": "स्नैक"
+    },
+    "analyzing": "विश्लेषण हो रहा है...",
+    "analyzingFood": "भोजन का विश्लेषण हो रहा है...",
+    "analyzingPhoto": "फोटो का विश्लेषण हो रहा है...",
+    "analyzingVoice": "आवाज़ संसाधित हो रही है..."
+  },
+  "mood": {
+    "howAreYouFeeling": "आप कैसा महसूस कर रहे हैं?",
+    "great": "बहुत अच्छा",
+    "good": "अच्छा",
+    "okay": "ठीक है",
+    "bad": "खराब",
+    "terrible": "बहुत खराब",
+    "addNote": "टिप्पणी जोड़ें (वैकल्पिक)",
+    "moodLogged": "मूड सफलतापूर्वक लॉग किया गया"
+  },
+  "hydration": {
+    "waterIntake": "पानी का सेवन",
+    "dailyGoal": "दैनिक लक्ष्य",
+    "addGlass": "गिलास जोड़ें",
+    "glasses": "गिलास",
+    "liters": "लीटर",
+    "goalReached": "लक्ष्य पूरा हुआ!",
+    "keepGoing": "जारी रखें!"
+  },
+  "gamification": {
+    "level": "स्तर",
+    "xp": "अनुभव अंक",
+    "streak": "दिनों की लकीर",
+    "achievements": "उपलब्धियां",
+    "streakSaved": "लकीर सहेजी गई!",
+    "freezesRemaining": "{{count}} फ्रीज़ शेष",
+    "freezesRemaining_plural": "{{count}} फ्रीज़ शेष",
+    "levelUp": "स्तर बढ़ा!",
+    "achievementUnlocked": "उपलब्धि अनलॉक हुई!"
+  },
+  "profile": {
+    "myProfile": "मेरी प्रोफ़ाइल",
+    "editProfile": "प्रोफ़ाइल संपादित करें",
+    "goals": "लक्ष्य",
+    "dailyCalorieGoal": "दैनिक कैलोरी लक्ष्य",
+    "proteinGoal": "प्रोटीन लक्ष्य",
+    "waterGoal": "पानी का लक्ष्य",
+    "height": "ऊंचाई",
+    "weight": "वजन",
+    "age": "आयु",
+    "activityLevel": "गतिविधि स्तर",
+    "signOut": "साइन आउट"
+  },
+  "insights": {
+    "moodInsights": "मूड अंतर्दृष्टि",
+    "weeklyTrends": "साप्ताहिक रुझान",
+    "mealMoodCorrelation": "भोजन-मूड सहसंबंध",
+    "viewInsights": "अंतर्दृष्टि देखें",
+    "noInsightsYet": "अभी पर्याप्त डेटा नहीं है",
+    "logMoreMeals": "अंतर्दृष्टि अनलॉक करने के लिए अधिक भोजन लॉग करें"
+  },
+  "errors": {
+    "networkError": "नेटवर्क त्रुटि। कृपया अपना कनेक्शन जांचें।",
+    "analysisFailedPhoto": "फोटो का विश्लेषण नहीं हो सका। स्पष्ट छवि आज़माएं।",
+    "analysisFailedText": "भोजन का विश्लेषण नहीं हो सका। अधिक विवरण जोड़ने का प्रयास करें।",
+    "authRequired": "जारी रखने के लिए कृपया साइन इन करें",
+    "sessionExpired": "आपका सत्र समाप्त हो गया। कृपया फिर से साइन इन करें।",
+    "serverError": "सर्वर त्रुटि। कृपया बाद में पुनः प्रयास करें।",
+    "timeoutError": "अनुरोध समय समाप्त हो गया। अपना कनेक्शन जांचें।",
+    "unknownError": "कुछ गलत हुआ। कृपया पुनः प्रयास करें।"
+  },
+  "success": {
+    "mealLogged": "भोजन सफलतापूर्वक लॉग किया गया!",
+    "moodLogged": "मूड सफलतापूर्वक लॉग किया गया!",
+    "waterLogged": "पानी सफलतापूर्वक लॉग किया गया!",
+    "goalUpdated": "लक्ष्य अपडेट किया गया!",
+    "profileUpdated": "प्रोफ़ाइल अपडेट की गई!",
+    "syncComplete": "क्लाउड के साथ समन्वयित"
+  },
+  "emptyStates": {
+    "noMealsYet": "अभी तक कोई भोजन लॉग नहीं किया गया",
+    "noMealsDescription": "अंतर्दृष्टि बनाना शुरू करने के लिए अपना पहला भोजन ट्रैक करें",
+    "noMoodLogsYet": "अभी तक कोई मूड लॉग नहीं",
+    "noMoodLogsDescription": "पैटर्न खोजने के लिए अपना मूड लॉग करें",
+    "noWaterYet": "आज कोई पानी लॉग नहीं किया गया",
+    "noWaterDescription": "हाइड्रेटेड रहें! अपना पहला गिलास लॉग करें।",
+    "noHistoryYet": "अभी तक कोई इतिहास नहीं",
+    "noHistoryDescription": "आपका भोजन इतिहास यहां दिखाई देगा"
+  },
+  "accessibility": {
+    "logMealButton": "भोजन लॉग बटन",
+    "takePictureButton": "फोटो लें बटन",
+    "voiceInputButton": "आवाज़ इनपुट बटन",
+    "scanBarcodeButton": "बारकोड स्कैन बटन",
+    "closeButton": "बंद करें बटन",
+    "deleteButton": "हटाएं बटन",
+    "editButton": "संपादित करें बटन",
+    "saveButton": "सहेजें बटन",
+    "refreshButton": "रीफ़्रेश बटन"
+  },
+  "settings": {
+    "language": "भाषा",
+    "notifications": "सूचनाएं",
+    "darkMode": "डार्क मोड",
+    "units": "इकाइयां",
+    "metric": "मीट्रिक (किलो, सेमी)",
+    "imperial": "इम्पीरियल (पाउंड, इंच)",
+    "privacy": "गोपनीयता",
+    "termsOfService": "सेवा की शर्तें",
+    "privacyPolicy": "गोपनीयता नीति",
+    "deleteAccount": "खाता हटाएं",
+    "appVersion": "ऐप संस्करण"
+  },
+  "legal": {
+    "privacyPolicy": "गोपनीयता नीति",
+    "termsOfService": "सेवा की शर्तें",
+    "dataCollection": "डेटा संग्रह",
+    "yourRights": "आपके अधिकार",
+    "contactUs": "हमसे संपर्क करें"
+  }
+}

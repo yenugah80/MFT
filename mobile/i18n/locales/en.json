@@ -1,0 +1,185 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "retry": "Try Again",
+    "refresh": "Refresh",
+    "synced": "Synced",
+    "syncing": "Syncing...",
+    "offline": "Offline"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "log": "Log",
+    "history": "History",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "welcome": "Welcome to Your Health Journey!",
+    "startLogging": "Start Logging",
+    "todaysCalories": "Today's Calories",
+    "nutritionScore": "Nutrition Score",
+    "weeklyAverage": "Weekly avg: {{calories}} kcal/day",
+    "focusMode": "Focus Mode Active",
+    "showingEssentials": "Showing essentials only"
+  },
+  "nutrition": {
+    "calories": "Calories",
+    "protein": "Protein",
+    "carbs": "Carbs",
+    "fat": "Fat",
+    "fiber": "Fiber",
+    "sugar": "Sugar",
+    "sodium": "Sodium",
+    "calcium": "Calcium",
+    "iron": "Iron",
+    "vitaminA": "Vitamin A",
+    "vitaminC": "Vitamin C",
+    "vitaminD": "Vitamin D",
+    "goal": "Goal",
+    "remaining": "Remaining",
+    "exceeded": "Exceeded"
+  },
+  "logging": {
+    "logMeal": "Log Meal",
+    "logWater": "Log Water",
+    "logMood": "Log Mood",
+    "textInput": "Describe your meal...",
+    "photoInput": "Take a photo",
+    "voiceInput": "Voice input",
+    "barcodeInput": "Scan barcode",
+    "mealType": {
+      "breakfast": "Breakfast",
+      "lunch": "Lunch",
+      "dinner": "Dinner",
+      "snack": "Snack"
+    },
+    "analyzing": "Analyzing...",
+    "analyzingFood": "Analyzing food...",
+    "analyzingPhoto": "Analyzing photo...",
+    "analyzingVoice": "Processing voice..."
+  },
+  "mood": {
+    "howAreYouFeeling": "How are you feeling?",
+    "great": "Great",
+    "good": "Good",
+    "okay": "Okay",
+    "bad": "Bad",
+    "terrible": "Terrible",
+    "addNote": "Add a note (optional)",
+    "moodLogged": "Mood logged successfully"
+  },
+  "hydration": {
+    "waterIntake": "Water Intake",
+    "dailyGoal": "Daily Goal",
+    "addGlass": "Add Glass",
+    "glasses": "glasses",
+    "liters": "liters",
+    "goalReached": "Goal reached!",
+    "keepGoing": "Keep going!"
+  },
+  "gamification": {
+    "level": "Level",
+    "xp": "XP",
+    "streak": "Day Streak",
+    "achievements": "Achievements",
+    "streakSaved": "Streak Saved!",
+    "freezesRemaining": "{{count}} freeze remaining",
+    "freezesRemaining_plural": "{{count}} freezes remaining",
+    "levelUp": "Level Up!",
+    "achievementUnlocked": "Achievement Unlocked!"
+  },
+  "profile": {
+    "myProfile": "My Profile",
+    "editProfile": "Edit Profile",
+    "goals": "Goals",
+    "dailyCalorieGoal": "Daily Calorie Goal",
+    "proteinGoal": "Protein Goal",
+    "waterGoal": "Water Goal",
+    "height": "Height",
+    "weight": "Weight",
+    "age": "Age",
+    "activityLevel": "Activity Level",
+    "signOut": "Sign Out"
+  },
+  "insights": {
+    "moodInsights": "Mood Insights",
+    "weeklyTrends": "Weekly Trends",
+    "mealMoodCorrelation": "Meal-Mood Correlation",
+    "viewInsights": "View Insights",
+    "noInsightsYet": "Not enough data yet",
+    "logMoreMeals": "Log more meals to unlock insights"
+  },
+  "errors": {
+    "networkError": "Network error. Please check your connection.",
+    "analysisFailedPhoto": "Could not analyze photo. Try a clearer image.",
+    "analysisFailedText": "Could not analyze meal. Try adding more details.",
+    "authRequired": "Please sign in to continue",
+    "sessionExpired": "Your session expired. Please sign in again.",
+    "serverError": "Server error. Please try again later.",
+    "timeoutError": "Request timed out. Check your connection.",
+    "unknownError": "Something went wrong. Please try again."
+  },
+  "success": {
+    "mealLogged": "Meal logged successfully!",
+    "moodLogged": "Mood logged successfully!",
+    "waterLogged": "Water logged successfully!",
+    "goalUpdated": "Goal updated!",
+    "profileUpdated": "Profile updated!",
+    "syncComplete": "Synced with cloud"
+  },
+  "emptyStates": {
+    "noMealsYet": "No meals logged yet",
+    "noMealsDescription": "Track your first meal to start building insights",
+    "noMoodLogsYet": "No mood logs yet",
+    "noMoodLogsDescription": "Log your mood to discover patterns",
+    "noWaterYet": "No water logged today",
+    "noWaterDescription": "Stay hydrated! Log your first glass.",
+    "noHistoryYet": "No history yet",
+    "noHistoryDescription": "Your meal history will appear here"
+  },
+  "accessibility": {
+    "logMealButton": "Log meal button",
+    "takePictureButton": "Take picture button",
+    "voiceInputButton": "Voice input button",
+    "scanBarcodeButton": "Scan barcode button",
+    "closeButton": "Close button",
+    "deleteButton": "Delete button",
+    "editButton": "Edit button",
+    "saveButton": "Save button",
+    "refreshButton": "Refresh button"
+  },
+  "settings": {
+    "language": "Language",
+    "notifications": "Notifications",
+    "darkMode": "Dark Mode",
+    "units": "Units",
+    "metric": "Metric (kg, cm)",
+    "imperial": "Imperial (lb, in)",
+    "privacy": "Privacy",
+    "termsOfService": "Terms of Service",
+    "privacyPolicy": "Privacy Policy",
+    "deleteAccount": "Delete Account",
+    "appVersion": "App Version"
+  },
+  "legal": {
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "dataCollection": "Data Collection",
+    "yourRights": "Your Rights",
+    "contactUs": "Contact Us"
+  }
+}

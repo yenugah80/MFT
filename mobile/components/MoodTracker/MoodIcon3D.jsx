@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useEffect, useState } from 'react';
-import { View, TouchableOpacity, Animated, StyleSheet, Text } from 'react-native';
+import { View, TouchableOpacity, Animated, StyleSheet, Text, Platform } from 'react-native';
 import LottieView from 'lottie-react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,6 +47,28 @@ const MOOD_EMOJI_FALLBACKS = {
   sad: '😢',
 };
 
+const FORCE_FALLBACK_MOODS = new Set();
+const ANDROID_LOTTIE_ALLOWLIST = new Set([
+  'happy',
+  'calm',
+  'focused',
+  'energized',
+  'neutral',
+  'tired',
+  'stressed',
+  'sad',
+]);
+
+const getLottieDurationMs = (source) => {
+  if (!source || typeof source !== 'object') return null;
+  if (typeof source.fr !== 'number' || typeof source.ip !== 'number' || typeof source.op !== 'number') {
+    return null;
+  }
+  const frameCount = source.op - source.ip;
+  if (frameCount <= 0 || source.fr <= 0) return null;
+  return Math.round((frameCount / source.fr) * 1000);
+};
+
 const MoodIcon3D = ({
   mood,
   selected = false,
@@ -57,12 +79,33 @@ const MoodIcon3D = ({
   const animationRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [useFallback, setUseFallback] = useState(false);
+  const wasSelectedRef = useRef(selected);
+  const animationFinishedRef = useRef(false);
+  const fallbackTimerRef = useRef(null);
 
   useEffect(() => {
+    if (wasSelectedRef.current === selected) return;
+    wasSelectedRef.current = selected;
     if (selected) {
-      // Play animation when selected
+      // Play animation immediately when selected
       if (animationRef.current && !useFallback) {
-        animationRef.current.play();
+        try {
+          animationRef.current.reset();
+          animationRef.current.play();
+          if (Platform.OS === 'android') {
+            const durationMs = getLottieDurationMs(lottieSource) || 1200;
+            animationFinishedRef.current = false;
+            if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+            fallbackTimerRef.current = setTimeout(() => {
+              if (!animationFinishedRef.current) {
+                setUseFallback(true);
+              }
+            }, durationMs + 200);
+          }
+        } catch (error) {
+          console.warn(`Failed to play ${mood} animation:`, error);
+          setUseFallback(true);
+        }
       }
 
       // Scale up animation
@@ -73,6 +116,11 @@ const MoodIcon3D = ({
         useNativeDriver: true,
       }).start();
     } else {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
+      animationFinishedRef.current = false;
       // Scale back to normal
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -80,23 +128,41 @@ const MoodIcon3D = ({
         friction: 20,
         useNativeDriver: true,
       }).start();
+
+      // Pause animation when not selected
+      if (animationRef.current && !useFallback) {
+        try {
+          animationRef.current.pause();
+        } catch (error) {
+          // Ignore pause errors
+        }
+      }
     }
-  }, [selected]);
+  }, [selected, useFallback, mood, scaleAnim, lottieSource]);
+
+  useEffect(() => {
+    return () => {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+      }
+    };
+  }, []);
 
   const handlePress = async () => {
+    if (selected) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (onSelect) {
       onSelect(mood);
     }
   };
 
-  const handleLottieError = (error) => {
-    console.warn(`Lottie failed to load for mood: ${mood}`, error);
-    setUseFallback(true);
-  };
-
   const moodColors = MOOD_PALETTE[mood];
   const label = mood.charAt(0).toUpperCase() + mood.slice(1);
+
+  const lottieSource = MOOD_LOTTIE_SOURCES[mood];
+  const forceFallback =
+    FORCE_FALLBACK_MOODS.has(mood) || (Platform.OS === 'android' && !ANDROID_LOTTIE_ALLOWLIST.has(mood));
+  const renderMode = Platform.OS === 'android' ? 'SOFTWARE' : 'AUTOMATIC';
 
   return (
     <TouchableOpacity
@@ -126,14 +192,19 @@ const MoodIcon3D = ({
 
         {/* Lottie animation or emoji fallback */}
         <View style={[styles.iconContainer, { width: size, height: size }]}>
-          {!useFallback ? (
+          {!forceFallback && !useFallback && lottieSource ? (
             <LottieView
               ref={animationRef}
-              source={MOOD_LOTTIE_SOURCES[mood]}
+              source={lottieSource}
               style={{ width: size, height: size }}
               loop={selected}
               autoPlay={false}
-              onAnimationFailure={handleLottieError}
+              speed={1.2}
+              resizeMode="cover"
+              renderMode={renderMode}
+              onAnimationFinish={() => {
+                animationFinishedRef.current = true;
+              }}
             />
           ) : (
             // Gradient emoji fallback
@@ -143,7 +214,7 @@ const MoodIcon3D = ({
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={[styles.fallbackEmoji, { fontSize: size * 0.6 }]}>
+              <Text style={[styles.fallbackEmoji, { fontSize: size * 0.65 }]}>
                 {MOOD_EMOJI_FALLBACKS[mood]}
               </Text>
             </LinearGradient>

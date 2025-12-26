@@ -1,0 +1,185 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "retry": "重试",
+    "refresh": "刷新",
+    "synced": "已同步",
+    "syncing": "同步中...",
+    "offline": "离线"
+  },
+  "navigation": {
+    "dashboard": "仪表板",
+    "log": "记录",
+    "history": "历史",
+    "profile": "个人资料",
+    "settings": "设置"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "早上好",
+      "afternoon": "下午好",
+      "evening": "晚上好"
+    },
+    "welcome": "欢迎开始您的健康之旅！",
+    "startLogging": "开始记录",
+    "todaysCalories": "今日卡路里",
+    "nutritionScore": "营养评分",
+    "weeklyAverage": "每周平均：{{calories}} 千卡/天",
+    "focusMode": "专注模式已激活",
+    "showingEssentials": "仅显示必要内容"
+  },
+  "nutrition": {
+    "calories": "卡路里",
+    "protein": "蛋白质",
+    "carbs": "碳水化合物",
+    "fat": "脂肪",
+    "fiber": "膳食纤维",
+    "sugar": "糖",
+    "sodium": "钠",
+    "calcium": "钙",
+    "iron": "铁",
+    "vitaminA": "维生素A",
+    "vitaminC": "维生素C",
+    "vitaminD": "维生素D",
+    "goal": "目标",
+    "remaining": "剩余",
+    "exceeded": "已超出"
+  },
+  "logging": {
+    "logMeal": "记录餐食",
+    "logWater": "记录饮水",
+    "logMood": "记录心情",
+    "textInput": "描述您的餐食...",
+    "photoInput": "拍照",
+    "voiceInput": "语音输入",
+    "barcodeInput": "扫描条形码",
+    "mealType": {
+      "breakfast": "早餐",
+      "lunch": "午餐",
+      "dinner": "晚餐",
+      "snack": "零食"
+    },
+    "analyzing": "分析中...",
+    "analyzingFood": "分析食物中...",
+    "analyzingPhoto": "分析照片中...",
+    "analyzingVoice": "处理语音中..."
+  },
+  "mood": {
+    "howAreYouFeeling": "您感觉怎么样？",
+    "great": "很好",
+    "good": "好",
+    "okay": "一般",
+    "bad": "不好",
+    "terrible": "糟糕",
+    "addNote": "添加备注（可选）",
+    "moodLogged": "心情记录成功"
+  },
+  "hydration": {
+    "waterIntake": "饮水量",
+    "dailyGoal": "每日目标",
+    "addGlass": "添加一杯",
+    "glasses": "杯",
+    "liters": "升",
+    "goalReached": "目标达成！",
+    "keepGoing": "继续加油！"
+  },
+  "gamification": {
+    "level": "等级",
+    "xp": "经验值",
+    "streak": "连续天数",
+    "achievements": "成就",
+    "streakSaved": "连续记录已保存！",
+    "freezesRemaining": "剩余{{count}}次冻结",
+    "freezesRemaining_plural": "剩余{{count}}次冻结",
+    "levelUp": "升级了！",
+    "achievementUnlocked": "成就解锁！"
+  },
+  "profile": {
+    "myProfile": "我的资料",
+    "editProfile": "编辑资料",
+    "goals": "目标",
+    "dailyCalorieGoal": "每日卡路里目标",
+    "proteinGoal": "蛋白质目标",
+    "waterGoal": "饮水目标",
+    "height": "身高",
+    "weight": "体重",
+    "age": "年龄",
+    "activityLevel": "活动水平",
+    "signOut": "退出登录"
+  },
+  "insights": {
+    "moodInsights": "心情洞察",
+    "weeklyTrends": "每周趋势",
+    "mealMoodCorrelation": "餐食-心情关联",
+    "viewInsights": "查看洞察",
+    "noInsightsYet": "数据还不够",
+    "logMoreMeals": "记录更多餐食以解锁洞察"
+  },
+  "errors": {
+    "networkError": "网络错误。请检查您的连接。",
+    "analysisFailedPhoto": "无法分析照片。请尝试更清晰的图片。",
+    "analysisFailedText": "无法分析餐食。请尝试添加更多详情。",
+    "authRequired": "请登录以继续",
+    "sessionExpired": "您的会话已过期。请重新登录。",
+    "serverError": "服务器错误。请稍后重试。",
+    "timeoutError": "请求超时。请检查您的连接。",
+    "unknownError": "出了点问题。请重试。"
+  },
+  "success": {
+    "mealLogged": "餐食记录成功！",
+    "moodLogged": "心情记录成功！",
+    "waterLogged": "饮水记录成功！",
+    "goalUpdated": "目标已更新！",
+    "profileUpdated": "资料已更新！",
+    "syncComplete": "已与云端同步"
+  },
+  "emptyStates": {
+    "noMealsYet": "还没有餐食记录",
+    "noMealsDescription": "记录您的第一餐以开始建立洞察",
+    "noMoodLogsYet": "还没有心情记录",
+    "noMoodLogsDescription": "记录您的心情以发现模式",
+    "noWaterYet": "今天还没有记录饮水",
+    "noWaterDescription": "保持水分！记录您的第一杯水。",
+    "noHistoryYet": "还没有历史记录",
+    "noHistoryDescription": "您的餐食历史将显示在这里"
+  },
+  "accessibility": {
+    "logMealButton": "记录餐食按钮",
+    "takePictureButton": "拍照按钮",
+    "voiceInputButton": "语音输入按钮",
+    "scanBarcodeButton": "扫描条形码按钮",
+    "closeButton": "关闭按钮",
+    "deleteButton": "删除按钮",
+    "editButton": "编辑按钮",
+    "saveButton": "保存按钮",
+    "refreshButton": "刷新按钮"
+  },
+  "settings": {
+    "language": "语言",
+    "notifications": "通知",
+    "darkMode": "深色模式",
+    "units": "单位",
+    "metric": "公制（千克、厘米）",
+    "imperial": "英制（磅、英寸）",
+    "privacy": "隐私",
+    "termsOfService": "服务条款",
+    "privacyPolicy": "隐私政策",
+    "deleteAccount": "删除账户",
+    "appVersion": "应用版本"
+  },
+  "legal": {
+    "privacyPolicy": "隐私政策",
+    "termsOfService": "服务条款",
+    "dataCollection": "数据收集",
+    "yourRights": "您的权利",
+    "contactUs": "联系我们"
+  }
+}

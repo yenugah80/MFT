@@ -50,7 +50,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
   const handleShare = async () => {
     try {
       const uri = await captureRef(viewShotRef, { format: 'png', quality: 0.9 });
-      const message = `🏆 I just hit Level ${level} (${rank}) on MyFoodTracker! #HealthGoals #LevelUp`;
+      const message = `🏆 I just hit Level ${level} (${rank}) on MFT! #HealthGoals #LevelUp`;
 
       if (Platform.OS === 'ios') {
         await Share.share({

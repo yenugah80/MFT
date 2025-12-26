@@ -39,14 +39,14 @@ const TOTAL_ANALYSIS_BUDGET_MS = 2000;
 /** USDA API timeout */
 const USDA_TIMEOUT_MS = 650;
 
-/** AI API timeout */
-const AI_TIMEOUT_MS = 1600;
+/** AI API timeout - Increased for enhanced 97% accuracy prompts */
+const AI_TIMEOUT_MS = 8000; // 8 seconds (was 1600ms)
 
 /** Open Food Facts timeout */
 const OPEN_FOOD_FACTS_TIMEOUT_MS = 1400;
 
-/** Image analysis timeout */
-const IMAGE_ANALYSIS_TIMEOUT_MS = 12000;
+/** Image analysis timeout - Increased for GPT-4o vision */
+const IMAGE_ANALYSIS_TIMEOUT_MS = 20000; // 20 seconds (was 12s)
 
 /** Auto-analysis debounce delay (after user stops typing) */
 const AUTO_ANALYSIS_DEBOUNCE_MS = 1500;
@@ -585,7 +585,7 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
   if (!searchTerm) return null;
 
   const headers = {
-    'User-Agent': 'MyFoodTracker/1.0 (+mobile-app)',
+    'User-Agent': 'MFT/1.0 (+mobile-app)',
     ...(OPEN_FOOD_FACTS_API_KEY ? { 'X-OpenFoodFacts-Api-Key': OPEN_FOOD_FACTS_API_KEY } : {}),
   };
 
@@ -1052,17 +1052,21 @@ export function useFoodAnalysis() {
       }
 
       // OCR pass: detect nutrition label text and resolve via text pipeline
+      // Note: OCR is optional - requires native module (@react-native-ml-kit/text-recognition)
+      // If unavailable, gracefully falls back to GPT-4 Vision analysis below
       setProgress(25);
       try {
         let MLKitOcr = null;
         try {
-          MLKitOcr = require('expo-mlkit-ocr');
+          // Try to import OCR module (optional dependency)
+          MLKitOcr = require('@react-native-ml-kit/text-recognition');
         } catch (importError) {
+          // OCR not installed - will use GPT-4 Vision fallback
           MLKitOcr = null;
         }
 
         if (!MLKitOcr?.detectFromUri) {
-          throw new Error('OCR module unavailable');
+          throw new Error('OCR module unavailable - using AI vision fallback');
         }
 
         const ocrBlocks = await MLKitOcr.detectFromUri(uri);
@@ -1116,8 +1120,10 @@ export function useFoodAnalysis() {
       try {
         base64 = await compressImage(uri);
       } catch (e) {
-        setError(e.message);
-        throw e;
+        const errorMsg = e.message || 'Image compression failed';
+        console.error('[useFoodAnalysis] Image compression error:', e);
+        setError(errorMsg);
+        throw new Error(errorMsg);
       }
 
       setProgress(60);
@@ -1137,7 +1143,17 @@ export function useFoodAnalysis() {
       );
 
       if (!res.ok) {
-        throw new Error(json?.error || 'Image analysis failed. Please try a clearer photo.');
+        const errorMessage = json?.error || json?.message || 'Image analysis failed';
+        const statusHint = res.status === 504 || res.status === 524
+          ? ' (Server timeout - try again on a faster connection)'
+          : res.status === 413
+          ? ' (Image too large - try a smaller photo)'
+          : res.status === 401
+          ? ' (Authentication failed - please sign in again)'
+          : '';
+
+        console.error(`[useFoodAnalysis] Image API error: ${res.status} - ${errorMessage}`);
+        throw new Error(`${errorMessage}${statusHint}`);
       }
 
       setProgress(95);
