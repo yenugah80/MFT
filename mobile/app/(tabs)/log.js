@@ -86,6 +86,7 @@ export default function LogScreen() {
   const [loggedMeal, setLoggedMeal] = useState(null);
   const [showHydrationModal, setShowHydrationModal] = useState(false);
   const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
+  const [hasManuallyClosedDetails, setHasManuallyClosedDetails] = useState(false);
 
   // Hooks
   const foodAnalysis = useFoodAnalysis();
@@ -149,13 +150,20 @@ export default function LogScreen() {
 
   /**
    * Auto-show analysis details screen when analysis completes
+   * Only for photo/voice/barcode - NOT for text input (prevents flickering)
    */
   useEffect(() => {
-    if (foodAnalysis.analysisResult && !foodAnalysis.isAnalyzing && !foodAnalysis.error) {
-      // Analysis completed successfully - show detailed results
+    if (
+      foodAnalysis.analysisResult &&
+      !foodAnalysis.isAnalyzing &&
+      !foodAnalysis.error &&
+      !hasManuallyClosedDetails &&
+      analysisSource !== 'text' // Don't auto-show for text to prevent flickering
+    ) {
+      // Analysis completed successfully via photo/voice/barcode - show detailed results
       setShowAnalysisDetails(true);
     }
-  }, [foodAnalysis.analysisResult, foodAnalysis.isAnalyzing, foodAnalysis.error]);
+  }, [foodAnalysis.analysisResult, foodAnalysis.isAnalyzing, foodAnalysis.error, analysisSource, hasManuallyClosedDetails]);
 
   /**
    * Handle photo from CameraModal
@@ -163,6 +171,7 @@ export default function LogScreen() {
   const handlePhotoFromCamera = async (imageUri) => {
     setSelectedImage(imageUri);
     setAnalysisSource('photo');
+    setHasManuallyClosedDetails(false); // Reset flag for new analysis
 
     try {
       await foodAnalysis.analyzePhoto(imageUri);
@@ -197,6 +206,7 @@ export default function LogScreen() {
         const imageUri = result.assets[0].uri;
         setSelectedImage(imageUri);
         setAnalysisSource('photo');
+        setHasManuallyClosedDetails(false); // Reset flag for new analysis
 
         // Analyze image
         await foodAnalysis.analyzePhoto(imageUri);
@@ -215,6 +225,7 @@ export default function LogScreen() {
     setAnalysisSource('voice');
     setAnalyzedFood(result);
     setShowVoiceModal(false);
+    setHasManuallyClosedDetails(false); // Reset flag for new analysis
   };
 
   /**
@@ -921,6 +932,30 @@ export default function LogScreen() {
               </>
             )}
 
+            {/* View Details Button - Manual trigger for text input */}
+            {foodAnalysis.analysisResult && (
+              <TouchableOpacity
+                style={styles.viewDetailsButton}
+                onPress={() => {
+                  setHasManuallyClosedDetails(false); // Reset flag
+                  setShowAnalysisDetails(true); // Show details screen
+                }}
+                activeOpacity={0.8}
+                accessibilityLabel="View detailed nutrition analysis"
+              >
+                <LinearGradient
+                  colors={['#6B4EFF', '#8B6EFF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.viewDetailsGradient}
+                >
+                  <Ionicons name="analytics" size={20} color="#FFFFFF" />
+                  <Text style={styles.viewDetailsText}>View Detailed Analysis</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
             {/* Share Button for Analysis Results */}
             {foodAnalysis.analysisResult && (
               <TouchableOpacity
@@ -1084,13 +1119,17 @@ export default function LogScreen() {
       {/* Advanced Analysis Details Screen */}
       <AnalysisDetailsScreen
         visible={showAnalysisDetails}
-        onClose={() => setShowAnalysisDetails(false)}
+        onClose={() => {
+          setShowAnalysisDetails(false);
+          setHasManuallyClosedDetails(true); // Prevent auto-reopen
+        }}
         analysisResult={foodAnalysis.analysisResult}
         imageUri={selectedImage}
         onSave={async () => {
           // Save the meal
           await handleSaveMeal();
           setShowAnalysisDetails(false);
+          setHasManuallyClosedDetails(false); // Reset for next analysis
         }}
         onEdit={() => {
           // Close details screen to allow editing
@@ -1729,6 +1768,33 @@ const styles = StyleSheet.create({
   },
   syncRetryText: {
     fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: fonts.display,
+  },
+
+  /* View Details Button */
+  viewDetailsButton: {
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  viewDetailsGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  viewDetailsText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: fonts.display,
