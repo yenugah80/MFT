@@ -60,12 +60,6 @@ const IMAGE_MAX_WIDTH_PX = 1024;
 /** Image compression quality (0-1) */
 const IMAGE_COMPRESSION_QUALITY = 0.7;
 
-/** Minimum confidence for USDA single-food detection */
-const USDA_CONFIDENCE_THRESHOLD = 0.78;
-
-/** Maximum words for single-food classification */
-const SINGLE_FOOD_MAX_WORDS = 3;
-
 /** Open Food Facts API */
 const OPEN_FOOD_FACTS_API_URL = 'https://world.openfoodfacts.org/api/v2/product/';
 const OPEN_FOOD_FACTS_SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
@@ -151,23 +145,6 @@ function looksLikeNutritionLabel(text) {
   if (!text || text.length < OCR_MIN_TEXT_LENGTH) return false;
   const lower = text.toLowerCase();
   return OCR_KEYWORDS.some((keyword) => lower.includes(keyword));
-}
-
-/**
- * Classify text as single food vs multi-item meal
- * @param {string} text - Input text
- * @returns {{isSingleFood: boolean}} Classification result
- */
-function classifyText(text) {
-  const normalized = text.toLowerCase().trim();
-  const wordCount = normalized.split(/\s+/).length;
-  const hasSeparators = /,|and|with|\+/.test(normalized);
-  const hasQuantities = /\d+\s*(g|gram|mg|ml|cup|tbsp|tsp|oz|lb|slice|piece|serving)/.test(normalized);
-
-  // Heuristic: Short text without separators or quantities = likely single food
-  return {
-    isSingleFood: wordCount <= SINGLE_FOOD_MAX_WORDS && !hasSeparators && !hasQuantities,
-  };
 }
 
 /**
@@ -941,9 +918,8 @@ export function useFoodAnalysis() {
         throw new Error('Authentication required');
       }
 
-      const intent = classifyText(text);
-
-      // Try USDA first for single foods
+      // Try backend resolve first (USDA → OFF → AI cascade)
+      // Backend handles both single and multi-food queries
       if (timeLeft() > 300) {
         setProgress(30);
 
@@ -956,25 +932,41 @@ export function useFoodAnalysis() {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`,
               },
-              body: JSON.stringify({ query: text }),
+              body: JSON.stringify({
+                mode: 'text',
+                query: text,
+                mealType: getMealTypeFromTime(),
+              }),
             },
             USDA_TIMEOUT_MS
           );
 
-          if (res.ok && json?.data) {
-            const confidence = json.confidence ?? 0.8;
-
-            if (confidence >= USDA_CONFIDENCE_THRESHOLD || intent.isSingleFood) {
+          // Backend returns {items: [...], totals, dataQuality}
+          if (res.ok && json?.items && Array.isArray(json.items) && json.items.length > 0) {
+            // Validate first item has required structure
+            const firstItem = json.items[0];
+            if (firstItem && firstItem.name && firstItem.macros) {
               setProgress(80);
-              return buildFoodLog({
-                inputText: text,
-                source: 'usda',
-                raw: json.data,
+
+              // Use backend's multi-item format directly
+              setAnalysisResult({
+                items: json.items.map(item => ({
+                  ...item,
+                  isEditing: false,
+                  editedPortion: null,
+                })),
+                totals: json.totals || calculateTotals(json.items),
               });
+
+              setProgress(100);
+              return; // Success - exit analyzeText
+            } else {
+              console.warn('[useFoodAnalysis] Invalid item structure from backend:', firstItem);
             }
           }
-        } catch {
-          // Silent fallback to AI
+        } catch (err) {
+          // Log for debugging but fall through to AI
+          console.warn('[useFoodAnalysis] Backend resolve error, using AI fallback:', err.message);
         }
       }
 
@@ -1364,6 +1356,25 @@ export function useFoodAnalysis() {
       analyzeTextUniversal(debouncedText);
     }
   }, [debouncedText, isAnalyzing, analyzeTextUniversal]);
+
+  // P0-2 FIX: Cleanup abort controller and debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any in-flight requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      // Clear debounce timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
+      console.log('[useFoodAnalysis] Cleanup: Aborted requests and cleared timers');
+    };
+  }, []); // Run only on unmount
 
   // ============================================================================
   // PUBLIC API

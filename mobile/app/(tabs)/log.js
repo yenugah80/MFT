@@ -45,6 +45,7 @@ import { VoiceModal } from '../../components/log/VoiceModal';
 import MoodLogger from '../../components/MoodLogger';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
 import HydrationTracker from '../../components/HydrationTracker';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 // Platform-safe professional fonts for nutrition UI
 const fonts = {
@@ -496,11 +497,22 @@ export default function LogScreen() {
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
 
+  // P0-4 FIX: Wrap entire screen with ErrorBoundary to prevent data loss
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <ErrorBoundary
+      onReset={() => {
+        // Reset all modals and state on error recovery
+        closeAllModals();
+        foodAnalysis.setAnalysisResult(null);
+        foodAnalysis.setInputText('');
+        setSelectedImage(null);
+        setAnalyzedFood(null);
+      }}
     >
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       {/* Modern Header with Gradient */}
       <LinearGradient
         colors={['#6B4EFF', '#8B6EFF']}
@@ -1138,6 +1150,7 @@ export default function LogScreen() {
         onShare={handleShare}
       />
     </KeyboardAvoidingView>
+  </ErrorBoundary>
   );
 }
 
