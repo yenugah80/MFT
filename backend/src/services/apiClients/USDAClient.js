@@ -75,13 +75,58 @@ class USDAClient extends BaseApiClient {
    * @returns {Promise<Array>} - Array of foods with normalized nutrition data
    */
   async searchByName(name) {
-    const foods = await this.searchFoods(name, 10);
+    // Fetch more results for filtering (was 10, now 20)
+    const foods = await this.searchFoods(name, 20);
 
     if (!foods || foods.length === 0) {
       return null;
     }
 
-    return foods.map((food) => {
+    // Filter out complex/prepared foods to prefer simple ingredients
+    const filtered = foods.filter((food) => {
+      const desc = food.description?.toLowerCase() || '';
+      const dataType = food.dataType || '';
+
+      // Exclude prepared/complex foods
+      const excludeKeywords = [
+        'sandwich', 'burger', 'nugget', 'tender', 'strip', 'patty',
+        'pot pie', 'casserole', 'stew', 'soup',
+        'fast food', 'restaurant', 'frozen meal', 'frozen entree',
+        'breaded', 'battered', 'crispy', 'fried, in coating',
+        'with sauce', 'with gravy', 'with dressing',
+        'pizza', 'burrito', 'taco', 'quesadilla',
+        'roll,', 'wrap,', // Comma ensures we exclude "egg roll" but not "dinner roll" if it's just "roll"
+      ];
+
+      const isComplex = excludeKeywords.some(keyword => desc.includes(keyword));
+      if (isComplex) {
+        console.log(`[USDA] Filtered out complex food: "${food.description}"`);
+        return false;
+      }
+
+      // Prefer SR Legacy (simple reference foods) over Branded when both available
+      // SR Legacy = Standard Reference foods (generic, well-documented)
+      // Branded = Packaged products (brand-specific)
+      if (dataType === 'Branded') {
+        const hasSRLegacy = foods.some(f => f.dataType === 'SR Legacy' && !excludeKeywords.some(kw => f.description?.toLowerCase().includes(kw)));
+        if (hasSRLegacy) {
+          console.log(`[USDA] Skipping branded food (SR Legacy available): "${food.description}"`);
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Use filtered results if any passed, otherwise fall back to original (prevent zero results)
+    const resultsToUse = filtered.length > 0 ? filtered : foods;
+
+    // Return top 5 results (was returning all 10, now filtered to 5)
+    const topResults = resultsToUse.slice(0, 5);
+
+    console.log(`[USDA] Search "${name}": ${foods.length} raw → ${filtered.length} filtered → ${topResults.length} returned`);
+
+    return topResults.map((food) => {
       const getNutrient = (nutrientName) => {
         const nutrient = food.foodNutrients?.find((n) => n.nutrientName === nutrientName);
         return nutrient ? nutrient.value : 0;

@@ -178,34 +178,48 @@ class OpenAIClient extends BaseApiClient {
 
 Your task is to parse meal descriptions with maximum accuracy (target: 97%+).
 
-**Critical Rules**:
-1. **Portion Context**:
+**CRITICAL RULES - READ CAREFULLY**:
+
+1. **DO NOT add cooking methods unless explicitly stated by user**:
+   - "chicken breast" → "chicken breast" (NOT "grilled chicken breast")
+   - "salmon" → "salmon" (NOT "baked salmon" or "raw salmon")
+   - "200g rice" → "rice" (DO NOT assume "cooked" or "dry")
+   - ONLY include cooking method if user explicitly says it: "grilled salmon" → "grilled salmon" ✓
+
+2. **DO NOT add varieties, qualifiers, or descriptors unless specified**:
+   - "apple" → "apple" (NOT "red apple", "medium apple", or "Fuji apple")
+   - "chicken" → "chicken" (NOT "chicken breast" unless user said "breast")
+   - "salmon" → "salmon" (NOT "Atlantic salmon" or "wild salmon")
+
+3. **Preserve EXACT user terminology**:
+   - If user says "breast" → use "breast" (not "breasts")
+   - If user says "steamed broccoli" → keep "steamed"
+   - If user says "scrambled eggs" → keep "scrambled"
+
+4. **Portion Context**:
    - "Large" coffee = 16oz (473ml), "Medium" = 12oz, "Small" = 8oz
    - "Large" meal = 1.5x standard, "Small" = 0.75x
-   - Restaurant portions = 1.5x home portions
    - "Bowl" = 2 cups, "Plate" = 1.5 cups
+   - Restaurant portions = 1.5x home portions
 
-2. **Standardize Units**:
+5. **Standardize Units**:
    - Prefer USDA standards: serving, cup, oz, g, ml, tbsp, tsp
    - "Piece" of chicken = 4oz (113g)
    - "Slice" of bread = 1oz (30g)
    - "Medium" apple = 182g
 
-3. **Cooking Methods** (preserve for nutrition):
-   - Include method: "grilled", "fried", "baked", "steamed", "raw"
-   - This affects final calorie calculation
+6. **Multi-word Foods**:
+   - Keep specific parts: "chicken breast" not just "chicken"
+   - Keep preparation if stated: "scrambled eggs" not just "eggs"
+   - But DO NOT add parts user didn't mention
 
-4. **Multi-word Foods**:
-   - Keep specific: "chicken breast" not just "chicken"
-   - Include preparation: "scrambled eggs" not just "eggs"
-
-5. **Confidence Scoring**:
+7. **Confidence Scoring**:
    - 0.9-1.0: Exact portions specified ("200g chicken")
    - 0.7-0.9: Standard portions implied ("1 chicken breast")
    - 0.5-0.7: Vague portions ("some rice", "a few carrots")
    - <0.5: Very ambiguous ("food", "meal")
 
-Return ONLY valid JSON.`,
+Return ONLY valid JSON. Extract ONLY what the user actually typed, no hallucinations.`,
       },
       {
         role: 'user',
@@ -215,38 +229,59 @@ Return JSON:
 {
   "foods": [
     {
-      "name": "specific food name with preparation method (lowercase)",
+      "name": "food name exactly as user described (lowercase)",
       "quantity": number,
       "unit": "serving|cup|oz|g|ml|tbsp|tsp|piece|slice",
       "confidence": 0.0-1.0,
-      "notes": "optional context like size/cooking method"
+      "notes": "optional context"
     }
   ]
 }
 
 **Examples**:
-- "2 scrambled eggs and whole wheat toast" →
-  [
-    {"name": "scrambled eggs", "quantity": 2, "unit": "serving", "confidence": 0.95},
-    {"name": "whole wheat toast", "quantity": 1, "unit": "slice", "confidence": 0.9}
-  ]
 
-- "Large grilled chicken breast with brown rice" →
-  [
-    {"name": "grilled chicken breast", "quantity": 6, "unit": "oz", "confidence": 0.85, "notes": "large portion = ~170g"},
-    {"name": "brown rice", "quantity": 1, "unit": "cup", "confidence": 0.75}
-  ]
+**Example 1** - User specifies cooking method:
+Input: "2 scrambled eggs and whole wheat toast"
+Output:
+[
+  {"name": "scrambled eggs", "quantity": 2, "unit": "serving", "confidence": 0.95},
+  {"name": "whole wheat toast", "quantity": 1, "unit": "slice", "confidence": 0.9}
+]
 
-- "300g steamed broccoli" →
-  [{"name": "steamed broccoli", "quantity": 300, "unit": "g", "confidence": 0.98}]
+**Example 2** - User specifies cooking method:
+Input: "Large grilled chicken breast with brown rice"
+Output:
+[
+  {"name": "grilled chicken breast", "quantity": 6, "unit": "oz", "confidence": 0.85, "notes": "large portion = ~170g"},
+  {"name": "brown rice", "quantity": 1, "unit": "cup", "confidence": 0.75}
+]
 
-- "Medium coffee with almond milk" →
-  [
-    {"name": "coffee", "quantity": 12, "unit": "oz", "confidence": 0.9},
-    {"name": "almond milk", "quantity": 2, "unit": "oz", "confidence": 0.7, "notes": "typical addition"}
-  ]
+**Example 3** - User specifies cooking method:
+Input: "300g steamed broccoli"
+Output:
+[{"name": "steamed broccoli", "quantity": 300, "unit": "g", "confidence": 0.98}]
 
-Now parse: "${query}"`,
+**Example 4** - User does NOT specify cooking method:
+Input: "chicken breast 200g"
+Output:
+[{"name": "chicken breast", "quantity": 200, "unit": "g", "confidence": 0.95}]
+⚠️ DO NOT output "grilled chicken breast" - user didn't say grilled!
+
+**Example 5** - User does NOT specify variety:
+Input: "salmon"
+Output:
+[{"name": "salmon", "quantity": 1, "unit": "serving", "confidence": 0.7}]
+⚠️ DO NOT output "Atlantic salmon" or "baked salmon" - user didn't specify!
+
+**Example 6** - Generic food:
+Input: "apple"
+Output:
+[{"name": "apple", "quantity": 1, "unit": "serving", "confidence": 0.75}]
+⚠️ DO NOT output "medium apple" or "red apple" - user didn't specify!
+
+Now parse: "${query}"
+
+REMEMBER: Extract ONLY what the user actually typed. Do not add cooking methods, varieties, or qualifiers.`,
       },
     ];
 

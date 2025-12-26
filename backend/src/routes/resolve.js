@@ -348,16 +348,149 @@ function fillMissingNutrients(item, usdaData) {
 }
 
 function selectBestUSDAMatch(results, query) {
-  // Simple keyword matching + nutrient completeness
-  return results.reduce((best, current) => {
-    const score = calculateMatchScore(current.description, query);
-    if (!best || score > best.matchScore) {
-      return { ...current, matchScore: score };
+  const queryLower = query.toLowerCase().trim();
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2); // Remove stop words ("a", "an", "or")
+
+  const scored = results.map((result) => {
+    const descLower = result.description.toLowerCase();
+    const descWords = descLower.split(/\s+/);
+
+    // ========== FACTOR 1: Exact Phrase Match (100 points) ==========
+    // "chicken breast" in "Chicken, broilers, breast, meat only" gets full score
+    const exactMatch = descLower.includes(queryLower) ? 100 : 0;
+
+    // ========== FACTOR 2: Word Order Similarity (max 40 points) ==========
+    // Prefer "chicken breast" over "breast of chicken"
+    let orderScore = 0;
+    for (let i = 0; i < queryWords.length - 1; i++) {
+      const word1 = queryWords[i];
+      const word2 = queryWords[i + 1];
+      const word1Idx = descWords.indexOf(word1);
+      const word2Idx = descWords.indexOf(word2);
+
+      if (word1Idx >= 0 && word2Idx >= 0) {
+        if (word2Idx === word1Idx + 1) {
+          // Consecutive words in exact order
+          orderScore += 20;
+        } else if (word2Idx > word1Idx) {
+          // Correct order but not consecutive
+          orderScore += 10;
+        }
+      }
     }
-    return best;
-  }, null);
+
+    // ========== FACTOR 3: Word Coverage (max 50 points) ==========
+    // How many query words appear in description?
+    const matchedWords = queryWords.filter(word => descWords.includes(word)).length;
+    const coverageScore = (matchedWords / queryWords.length) * 50;
+
+    // ========== FACTOR 4: Simplicity Bonus (max 30 points) ==========
+    // Prefer shorter, simpler descriptions
+    // "Chicken, breast, raw" (4 words) better than "Chicken breast sandwich with lettuce and mayo" (8 words)
+    const wordCount = descWords.length;
+    const simplicityScore = Math.max(0, 30 - wordCount * 2); // Penalize 2 points per word
+
+    // ========== FACTOR 5: Cooking Method Alignment (max 20 points or -10 penalty) ==========
+    const cookingMethods = ['grilled', 'fried', 'baked', 'roasted', 'steamed', 'boiled', 'raw', 'cooked'];
+    const cookingSynonyms = {
+      'grilled': ['grilled', 'broiled', 'barbecued'],
+      'baked': ['baked', 'roasted', 'oven'],
+      'fried': ['fried', 'deep-fried', 'pan-fried'],
+      'steamed': ['steamed'],
+      'boiled': ['boiled', 'simmered'],
+      'raw': ['raw', 'uncooked', 'fresh'],
+      'cooked': ['cooked', 'prepared', 'dry heat', 'moist heat'],
+    };
+
+    let queryMethod = null;
+    for (const method of cookingMethods) {
+      if (queryLower.includes(method)) {
+        queryMethod = method;
+        break;
+      }
+    }
+
+    let descMethod = null;
+    for (const [method, synonyms] of Object.entries(cookingSynonyms)) {
+      if (synonyms.some(syn => descLower.includes(syn))) {
+        descMethod = method;
+        break;
+      }
+    }
+
+    let methodScore = 0;
+    if (queryMethod && descMethod) {
+      // Both have cooking method
+      if (queryMethod === descMethod || cookingSynonyms[queryMethod]?.some(syn => descLower.includes(syn))) {
+        methodScore = 20; // Perfect match or synonym
+      } else {
+        methodScore = -10; // Mismatched methods (grilled vs fried)
+      }
+    } else if (!queryMethod && !descMethod) {
+      // Neither has method - prefer raw/generic foods
+      methodScore = 15;
+    } else if (!queryMethod && descMethod === 'raw') {
+      // User didn't specify method, description is raw - good default
+      methodScore = 10;
+    } else if (!queryMethod && descMethod) {
+      // User didn't specify method but desc has one (not raw)
+      methodScore = -5; // Slight penalty (user might want raw)
+    } else if (queryMethod && !descMethod) {
+      // User specified method but desc doesn't have it
+      methodScore = -10; // Penalty for missing method
+    }
+
+    // ========== FACTOR 6: Data Type Preference (max 10 points) ==========
+    // Prefer SR Legacy (Standard Reference) over Branded for generic foods
+    let dataTypeScore = 0;
+    if (result.dataType === 'SR Legacy' || result.dataType === 'Foundation') {
+      dataTypeScore = 10; // High-quality reference data
+    } else if (result.dataType === 'Survey (FNDDS)') {
+      dataTypeScore = 5; // Survey data
+    } else {
+      dataTypeScore = 0; // Branded or other
+    }
+
+    // ========== TOTAL SCORE ==========
+    const totalScore = exactMatch + orderScore + coverageScore + simplicityScore + methodScore + dataTypeScore;
+
+    return {
+      ...result,
+      matchScore: totalScore,
+      _debug: {
+        exactMatch,
+        orderScore,
+        coverageScore,
+        simplicityScore,
+        methodScore,
+        dataTypeScore,
+        total: totalScore
+      }
+    };
+  });
+
+  // Sort by score descending
+  scored.sort((a, b) => b.matchScore - a.matchScore);
+
+  const best = scored[0];
+
+  console.log(
+    `[Resolve] Best USDA match for "${query}": "${best.description}" ` +
+    `(score: ${best.matchScore.toFixed(1)}, breakdown: exact=${best._debug.exactMatch}, ` +
+    `order=${best._debug.orderScore}, coverage=${best._debug.coverageScore.toFixed(1)}, ` +
+    `simplicity=${best._debug.simplicityScore}, method=${best._debug.methodScore}, ` +
+    `dataType=${best._debug.dataTypeScore})`
+  );
+
+  // Log runner-ups for debugging
+  if (scored.length > 1) {
+    console.log(`[Resolve] Runner-up: "${scored[1].description}" (score: ${scored[1].matchScore.toFixed(1)})`);
+  }
+
+  return best;
 }
 
+// Legacy function kept for compatibility (not used with new algorithm)
 function calculateMatchScore(description, query) {
   const queryWords = query.toLowerCase().split(/\s+/);
   const descWords = description.toLowerCase().split(/\s+/);
