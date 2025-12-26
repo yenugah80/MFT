@@ -38,6 +38,7 @@ import apiClient from '../../services/apiClient';
 import { NutritionCard } from '../../components/log/NutritionCard';
 import { FoodItemsList } from '../../components/log/FoodItemsList';
 import BarcodeScannerModal from '../../components/BarcodeScannerModal';
+import AnalysisDetailsScreen from '../../components/log/AnalysisDetailsScreen';
 import CameraModal from '../../components/log/CameraModal';
 import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
@@ -84,6 +85,7 @@ export default function LogScreen() {
   const [showMealLogged, setShowMealLogged] = useState(false);
   const [loggedMeal, setLoggedMeal] = useState(null);
   const [showHydrationModal, setShowHydrationModal] = useState(false);
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
 
   // Hooks
   const foodAnalysis = useFoodAnalysis();
@@ -146,6 +148,16 @@ export default function LogScreen() {
   }, [focus, mealType, notify, router, closeAllModals]);
 
   /**
+   * Auto-show analysis details screen when analysis completes
+   */
+  useEffect(() => {
+    if (foodAnalysis.analysisResult && !foodAnalysis.isAnalyzing && !foodAnalysis.error) {
+      // Analysis completed successfully - show detailed results
+      setShowAnalysisDetails(true);
+    }
+  }, [foodAnalysis.analysisResult, foodAnalysis.isAnalyzing, foodAnalysis.error]);
+
+  /**
    * Handle photo from CameraModal
    */
   const handlePhotoFromCamera = async (imageUri) => {
@@ -153,11 +165,12 @@ export default function LogScreen() {
     setAnalysisSource('photo');
 
     try {
-      const analyzed = await foodAnalysis.analyzePhoto(imageUri);
-      setAnalyzedFood(analyzed);
+      await foodAnalysis.analyzePhoto(imageUri);
+      // Success - analysisResult will be set by the hook
     } catch (error) {
       console.error('[LogScreen] Photo analysis failed:', error);
-      notify.error('Photo analysis failed. Please try again.');
+      // Don't show toast - error is already displayed in foodAnalysis.error state
+      // The detailed error message from useFoodAnalysis will show in the error card
     }
   };
 
@@ -186,12 +199,12 @@ export default function LogScreen() {
         setAnalysisSource('photo');
 
         // Analyze image
-        const analyzed = await foodAnalysis.analyzePhoto(imageUri);
-        setAnalyzedFood(analyzed);
+        await foodAnalysis.analyzePhoto(imageUri);
+        // Success - analysisResult will be set by the hook
       }
     } catch (err) {
       console.error('[LogScreen] Photo error:', err);
-      notify.error(`Photo error: ${err.message}`);
+      // Detailed error already shown in foodAnalysis.error state
     }
   };
 
@@ -1067,6 +1080,24 @@ export default function LogScreen() {
           />
         )}
       </Modal>
+
+      {/* Advanced Analysis Details Screen */}
+      <AnalysisDetailsScreen
+        visible={showAnalysisDetails}
+        onClose={() => setShowAnalysisDetails(false)}
+        analysisResult={foodAnalysis.analysisResult}
+        imageUri={selectedImage}
+        onSave={async () => {
+          // Save the meal
+          await handleSaveMeal();
+          setShowAnalysisDetails(false);
+        }}
+        onEdit={() => {
+          // Close details screen to allow editing
+          setShowAnalysisDetails(false);
+        }}
+        onShare={handleShare}
+      />
     </KeyboardAvoidingView>
   );
 }
