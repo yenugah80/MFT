@@ -100,49 +100,72 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     return createErrorDraft(draftId, 'barcode', 'Product not found', mealType);
   }
 
+  // P0 FIX: Validate offProduct structure to prevent crashes
+  if (typeof offProduct !== 'object') {
+    console.error(`[Resolve] Invalid OFF product structure for barcode ${barcode}:`, offProduct);
+    return createErrorDraft(draftId, 'barcode', 'Invalid product data received', mealType);
+  }
+
+  // Validate required fields with safe defaults
+  const safeOffProduct = {
+    title: typeof offProduct.title === 'string' ? offProduct.title : 'Unknown Product',
+    servingSize: typeof offProduct.servingSize === 'string' ? offProduct.servingSize : '100g',
+    calories: Number.isFinite(offProduct.calories) ? Math.max(0, offProduct.calories) : 0,
+    protein: Number.isFinite(offProduct.protein) ? Math.max(0, offProduct.protein) : 0,
+    carbs: Number.isFinite(offProduct.carbs) ? Math.max(0, offProduct.carbs) : 0,
+    fat: Number.isFinite(offProduct.fat) ? Math.max(0, offProduct.fat) : 0,
+    micros: (offProduct.micros && typeof offProduct.micros === 'object') ? offProduct.micros : {},
+    ingredients: Array.isArray(offProduct.ingredients) ? offProduct.ingredients : [],
+    allergens: Array.isArray(offProduct.allergens) ? offProduct.allergens : [],
+    nutriscore: (offProduct.nutriscore && typeof offProduct.nutriscore === 'string') ? offProduct.nutriscore : 'UNKNOWN',
+    nutriscoreScore: Number.isFinite(offProduct.nutriscoreScore) ? offProduct.nutriscoreScore : null,
+    ecoscore: (offProduct.ecoscore && typeof offProduct.ecoscore === 'string') ? offProduct.ecoscore : 'UNKNOWN',
+    novaScore: Number.isFinite(offProduct.novaScore) ? offProduct.novaScore : null,
+  };
+
   sourceEvidence.push({
     source: 'OFF',
     sourceId: barcode,
     url: `https://world.openfoodfacts.org/product/${barcode}`,
     fetchedAt: new Date().toISOString(),
-    confidence: (offProduct.calories !== null && offProduct.protein !== null) ? 0.9 : 0.6,
-    fieldsProvided: ['macros', 'micros', offProduct.nutriscore !== 'UNKNOWN' ? 'nutriscore' : null].filter(Boolean)
+    confidence: (safeOffProduct.calories > 0 && safeOffProduct.protein >= 0) ? 0.9 : 0.6,
+    fieldsProvided: ['macros', 'micros', safeOffProduct.nutriscore !== 'UNKNOWN' ? 'nutriscore' : null].filter(Boolean)
   });
 
-  // Build item from transformed OFF data
+  // Build item from validated OFF data
   const item = {
     itemId: uuidv4(),
-    name: offProduct.title || 'Unknown Product',
+    name: safeOffProduct.title,
     portion: {
       amount: 1,
       unit: 'serving',
       gramsEquivalent: 100,
-      servingText: offProduct.servingSize || '100g',
+      servingText: safeOffProduct.servingSize,
       isEstimated: false
     },
     macros: {
-      calories_kcal: offProduct.calories || 0,
-      protein_g: offProduct.protein || 0,
-      carbs_g: offProduct.carbs || 0,
-      fat_g: offProduct.fat || 0,
+      calories_kcal: safeOffProduct.calories,
+      protein_g: safeOffProduct.protein,
+      carbs_g: safeOffProduct.carbs,
+      fat_g: safeOffProduct.fat,
       fiber_g: 0,
       sugar_g: 0,
       sodium_mg: 0
     },
-    micros: offProduct.micros || {},
-    ingredients: offProduct.ingredients?.map(i => i.name) || [],
-    allergens: offProduct.allergens || [],
+    micros: safeOffProduct.micros,
+    ingredients: safeOffProduct.ingredients.map(i => (typeof i === 'object' && i.name) ? i.name : String(i)).filter(Boolean),
+    allergens: safeOffProduct.allergens.filter(a => typeof a === 'string'),
     scores: {
-      nutriScore: offProduct.nutriscore && offProduct.nutriscore !== 'UNKNOWN' ? {
-        grade: offProduct.nutriscore,
-        score: offProduct.nutriscoreScore || null,
+      nutriScore: safeOffProduct.nutriscore !== 'UNKNOWN' ? {
+        grade: safeOffProduct.nutriscore,
+        score: safeOffProduct.nutriscoreScore,
         isEstimated: false
       } : undefined,
-      ecoScore: offProduct.ecoscore && offProduct.ecoscore !== 'UNKNOWN' ? {
-        grade: offProduct.ecoscore,
+      ecoScore: safeOffProduct.ecoscore !== 'UNKNOWN' ? {
+        grade: safeOffProduct.ecoscore,
         isEstimated: false
       } : undefined,
-      novaGroup: offProduct.novaScore || undefined
+      novaGroup: safeOffProduct.novaScore || undefined
     },
     sourceEvidence,
     flags: []
