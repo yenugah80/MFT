@@ -198,7 +198,7 @@ class SmartNutritionResolver {
           { role: 'system', content: prompt.system },
           { role: 'user', content: prompt.user },
         ],
-        { model: 'gpt-4o-mini', temperature: 0.3, maxRetries: 1 }
+        { model: 'gpt-4o-mini', temperature: 0.0, maxRetries: 1 } // Zero temp for deterministic batch results
       );
 
       // Validate estimates is an array
@@ -248,7 +248,7 @@ class SmartNutritionResolver {
       ],
       {
         model: 'gpt-4o-mini',
-        temperature: 0.3, // Low temperature for consistent estimates
+        temperature: 0.0, // Zero temperature for deterministic, precise nutrition facts
         maxTokens: 800,
         maxRetries: 1, // Retry once with repair prompt if JSON is malformed
       }

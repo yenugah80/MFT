@@ -96,7 +96,7 @@ Return ONLY the corrected JSON object. No text before or after.`
  * - Fails cleanly with typed errors
  */
 export async function safeJSONCompletion(messages, options = {}) {
-  const { maxRetries = 1, model = 'gpt-4o-mini', temperature = 0.3 } = options;
+  const { maxRetries = 1, model = 'gpt-4o-mini', temperature = 0.0 } = options;
 
   let attempt = 0;
   let lastError = null;
@@ -162,6 +162,9 @@ export async function safeJSONCompletion(messages, options = {}) {
           { role: 'system', content: repairPrompt.system },
           { role: 'user', content: repairPrompt.user },
         ];
+
+        // Use slightly higher temperature for repair (needs flexibility to understand and fix)
+        options.temperature = 0.2;
 
         continue;
       }
