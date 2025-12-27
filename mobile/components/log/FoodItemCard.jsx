@@ -164,6 +164,40 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
 
       {isExpanded && (
         <View style={styles.details}>
+          {/* Component Breakdown (for complex foods) */}
+          {item.isComplex && item.components && item.components.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>
+                🥘 Ingredient Breakdown
+              </Text>
+              <View style={styles.componentsNote}>
+                <Text style={styles.componentsNoteText}>
+                  Estimated ingredients. Tap any to adjust or remove.
+                </Text>
+              </View>
+              {item.components.map((component, index) => (
+                <View key={index} style={styles.componentRow}>
+                  <View style={styles.componentInfo}>
+                    <Text style={styles.componentName}>{component.name}</Text>
+                    <Text style={styles.componentPortion}>{component.portion}</Text>
+                  </View>
+                  <View style={styles.componentMacros}>
+                    <Text style={styles.componentCalories}>{component.calories} cal</Text>
+                    <Text style={styles.componentMacroText}>
+                      P:{component.protein}g C:{component.carbs}g F:{component.fat}g
+                    </Text>
+                  </View>
+                </View>
+              ))}
+              <View style={styles.infoNote}>
+                <Text style={styles.infoNoteIcon}>💡</Text>
+                <Text style={styles.infoNoteText}>
+                  {item._smartResolver?.limitation || 'Estimated values - may vary by brand/preparation'}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Detailed macros */}
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>Macronutrients</Text>
@@ -506,5 +540,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4338CA',
     lineHeight: 16,
+  },
+  // Component breakdown styles
+  componentsNote: {
+    backgroundColor: '#FEF3C7',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  componentsNoteText: {
+    fontSize: 11,
+    color: '#92400E',
+    textAlign: 'center',
+  },
+  componentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#6B4EFF',
+  },
+  componentInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  componentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  componentPortion: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  componentMacros: {
+    alignItems: 'flex-end',
+  },
+  componentCalories: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B4EFF',
+    marginBottom: 2,
+  },
+  componentMacroText: {
+    fontSize: 11,
+    color: '#6B7280',
   },
 });
