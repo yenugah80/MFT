@@ -181,15 +181,14 @@ class SmartNutritionResolver {
       // Use OpenAI batch estimation (single API call for multiple foods)
       const prompt = buildBatchNutritionEstimationPrompt(uncachedItems);
 
-      const response = await openaiClient.chatCompletionJSON(
+      // chatCompletionJSON already returns parsed JSON, not a string
+      const estimates = await openaiClient.chatCompletionJSON(
         [
           { role: 'system', content: prompt.system },
           { role: 'user', content: prompt.user },
         ],
         { model: 'gpt-4o-mini', temperature: 0.3 }
       );
-
-      const estimates = JSON.parse(response.content);
 
       // Cache results and return
       const results = estimates.map((estimate, i) => {
@@ -225,7 +224,8 @@ class SmartNutritionResolver {
   async _getOpenAIEstimation(foodQuery, portion) {
     const prompt = buildNutritionEstimationPrompt(foodQuery, portion);
 
-    const response = await openaiClient.chatCompletionJSON(
+    // chatCompletionJSON already returns parsed JSON, not a string
+    const estimation = await openaiClient.chatCompletionJSON(
       [
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
@@ -236,8 +236,6 @@ class SmartNutritionResolver {
         maxTokens: 800,
       }
     );
-
-    const estimation = JSON.parse(response.content);
 
     return {
       foodName: estimation.foodName,
