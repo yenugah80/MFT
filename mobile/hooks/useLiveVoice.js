@@ -21,7 +21,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Platform, Alert } from 'react-native';
 import { Audio } from 'expo-av';
 import { useAuth } from '@clerk/clerk-expo';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_URL } from '../constants/api';
 import { calculateNetCarbs } from '../types/foodLog';

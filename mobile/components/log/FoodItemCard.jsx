@@ -181,14 +181,30 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>Micronutrients</Text>
               <View style={styles.detailGrid}>
-                {Object.entries(item.micros).map(([key, value]) => (
-                  <DetailRow
-                    key={key}
-                    label={key.charAt(0).toUpperCase() + key.slice(1)}
-                    value={value}
-                  />
-                ))}
+                {Object.entries(item.micros).map(([key, value]) => {
+                  // Format value with unit
+                  const displayValue = typeof value === 'object' && value.value !== undefined
+                    ? `${value.value}${value.unit || ''}`
+                    : value;
+
+                  return (
+                    <DetailRow
+                      key={key}
+                      label={key.charAt(0).toUpperCase() + key.slice(1)}
+                      value={displayValue}
+                    />
+                  );
+                })}
               </View>
+              {/* Variance note for composite foods */}
+              {(/bowl|plate|cup|serving|meal|mix|homemade|cooked/i.test(item.name)) && (
+                <View style={styles.infoNote}>
+                  <Text style={styles.infoNoteIcon}>ℹ️</Text>
+                  <Text style={styles.infoNoteText}>
+                    Micronutrient values may vary based on ingredients and cooking methods
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -471,5 +487,24 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#92400E',
+  },
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#EEF2FF',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    gap: 8,
+  },
+  infoNoteIcon: {
+    fontSize: 14,
+    marginTop: 1,
+  },
+  infoNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#4338CA',
+    lineHeight: 16,
   },
 });

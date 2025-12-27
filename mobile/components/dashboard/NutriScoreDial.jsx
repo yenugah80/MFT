@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.text.secondary,
+    color: COLORS.text.primary,
     letterSpacing: TYPOGRAPHY.letterSpacing.wide,
     textTransform: 'uppercase',
   },

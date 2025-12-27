@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   LAST_SYNC: 'last-sync',
   HYDRATION_CELEBRATION: 'hydration-celebration-key',
   INSIGHTS_FILTER_DAYS: 'insights-filter-days',
+  THEME_PREFERENCE: 'theme-preference',
 };
 
 /**

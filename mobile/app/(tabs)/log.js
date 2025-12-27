@@ -33,6 +33,7 @@ import { useNotification } from '../../providers/NotificationProvider';
 import { useWaterLog } from '../../hooks/useWaterLog';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
+import { useTheme } from '../../providers/ThemeProvider';
 
 // Components
 import { NutritionCard } from '../../components/log/NutritionCard';
@@ -46,6 +47,8 @@ import MoodLogger from '../../components/MoodLogger';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
 import HydrationTracker from '../../components/HydrationTracker';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import AnimatedMeshGradient from '../../components/AnimatedMeshGradient';
+import ThemeTransition from '../../components/ThemeTransition';
 
 // Platform-safe professional fonts for nutrition UI
 const fonts = {
@@ -98,6 +101,7 @@ export default function LogScreen() {
   const router = useRouter();
   const { focus, mealType } = useLocalSearchParams();
   const { logWater, removeWater } = useWaterLog();
+  const { colors } = useTheme();
 
   // Fetch water data
   const { data: waterTodayData } = useQuery({
@@ -173,6 +177,9 @@ export default function LogScreen() {
     setSelectedImage(imageUri);
     setAnalysisSource('photo');
     setHasManuallyClosedDetails(false); // Reset flag for new analysis
+    // Clear any existing analysis results to prevent duplicate cards
+    setAnalyzedFood(null);
+    foodAnalysis.setInputText('');
 
     try {
       await foodAnalysis.analyzePhoto(imageUri);
@@ -208,6 +215,9 @@ export default function LogScreen() {
         setSelectedImage(imageUri);
         setAnalysisSource('photo');
         setHasManuallyClosedDetails(false); // Reset flag for new analysis
+        // Clear any existing analysis results to prevent duplicate cards
+        setAnalyzedFood(null);
+        foodAnalysis.setInputText('');
 
         // Analyze image
         await foodAnalysis.analyzePhoto(imageUri);
@@ -227,6 +237,9 @@ export default function LogScreen() {
     setAnalyzedFood(result);
     setShowVoiceModal(false);
     setHasManuallyClosedDetails(false); // Reset flag for new analysis
+    // Clear any existing analysis results to prevent duplicate cards
+    foodAnalysis.setAnalysisResult(null);
+    foodAnalysis.setInputText('');
   };
 
   /**
@@ -499,16 +512,22 @@ export default function LogScreen() {
 
   // P0-4 FIX: Wrap entire screen with ErrorBoundary to prevent data loss
   return (
-    <ErrorBoundary
-      onReset={() => {
-        // Reset all modals and state on error recovery
-        closeAllModals();
-        foodAnalysis.setAnalysisResult(null);
-        foodAnalysis.setInputText('');
-        setSelectedImage(null);
-        setAnalyzedFood(null);
-      }}
+    <AnimatedMeshGradient
+      colors={colors.background.gradient}
+      animationDuration={colors.background.animationDuration}
+      style={{ flex: 1 }}
     >
+      <ThemeTransition>
+        <ErrorBoundary
+          onReset={() => {
+            // Reset all modals and state on error recovery
+            closeAllModals();
+            foodAnalysis.setAnalysisResult(null);
+            foodAnalysis.setInputText('');
+            setSelectedImage(null);
+            setAnalyzedFood(null);
+          }}
+        >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1150,7 +1169,9 @@ export default function LogScreen() {
         onShare={handleShare}
       />
     </KeyboardAvoidingView>
-  </ErrorBoundary>
+        </ErrorBoundary>
+      </ThemeTransition>
+    </AnimatedMeshGradient>
   );
 }
 
@@ -1158,7 +1179,7 @@ export default function LogScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F9F7F4', // Warm off-white for reduced eye strain (was #F8F9FA)
   },
 
   /* Header with Gradient */

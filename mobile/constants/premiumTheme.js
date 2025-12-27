@@ -34,9 +34,18 @@ export const SURFACES = {
     success: ['#10B981', '#34D399'],
     warning: ['#F59E0B', '#FBBF24'],
     danger: ['#EF4444', '#F87171'],
-    purple: ['#8B5CF6', '#A78BFA'],
+    purple: ['#64748B', '#94A3B8'],  // Soft slate gradient (was overwhelming lavender)
     blue: ['#3B82F6', '#60A5FA'],
     pink: ['#EC4899', '#F472B6'],
+    // Modern Pastel Gradients
+    pastelPeach: ['#FFEEE8', '#FFE0D5'],
+    pastelLavender: ['#F3E8FF', '#E9D5FF'],
+    pastelMint: ['#DCFCE7', '#D1FAE5'],
+    pastelSky: ['#E0F2FE', '#DBEAFE'],
+    pastelRose: ['#FFE4E6', '#FECDD3'],
+    softPurple: ['#F5F3FF', '#EDE9FE'],
+    softBlue: ['#EFF6FF', '#DBEAFE'],
+    softGreen: ['#F0FDF4', '#DCFCE7'],
   },
 };
 
@@ -313,11 +322,11 @@ export const MOOD_PALETTE = {
     gradient: ['#4B5563', '#6B7280'],
   },
   tired: {
-    base: '#8B5CF6',
-    light: '#A78BFA',
-    dark: '#7C3AED',
-    bg: '#F5F3FF',
-    gradient: ['#8B5CF6', '#A78BFA'],
+    base: '#64748B',      // Soft slate blue (was overwhelming purple #8B5CF6)
+    light: '#94A3B8',     // Light slate
+    dark: '#475569',      // Darker slate
+    bg: '#F1F5F9',        // Soft blue-gray background (was lavender #F5F3FF)
+    gradient: ['#64748B', '#94A3B8'],
   },
   stressed: {
     base: '#F97316',
@@ -327,11 +336,11 @@ export const MOOD_PALETTE = {
     gradient: ['#F97316', '#FB923C'],
   },
   sad: {
-    base: '#6366F1',
-    light: '#818CF8',
-    dark: '#4F46E5',
-    bg: '#EEF2FF',
-    gradient: ['#6366F1', '#818CF8'],
+    base: '#0EA5E9',      // Calm sky blue (was bright indigo #6366F1)
+    light: '#38BDF8',     // Lighter sky blue
+    dark: '#0284C7',      // Deeper blue
+    bg: '#F0F9FF',        // Soft blue background (was lavender #EEF2FF)
+    gradient: ['#0EA5E9', '#38BDF8'],
   },
   // Future expansion (Phase 4+): angry, anxious, excited, relaxed
 };
@@ -359,7 +368,7 @@ export const ENERGY_PALETTE = {
     range: [3, 4],
   },
   veryLow: {
-    color: '#8B5CF6',
+    color: '#64748B',     // Soft slate blue (was overwhelming purple #8B5CF6)
     label: 'Very Low',
     range: [1, 2],
   },

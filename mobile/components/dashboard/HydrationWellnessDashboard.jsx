@@ -501,10 +501,10 @@ const WaveProgress = ({ percentage, size = 140 }) => {
 
   const getWaveColor = () => {
     if (normalizedPercentage >= 100) return ['#10B981', '#059669'];
-    if (normalizedPercentage >= 75) return ['#3B82F6', '#2563EB'];
-    if (normalizedPercentage >= 50) return ['#60A5FA', '#3B82F6'];
-    if (normalizedPercentage >= 25) return ['#93C5FD', '#60A5FA'];
-    return ['#DBEAFE', '#93C5FD'];
+    if (normalizedPercentage >= 75) return ['#2563EB', '#1D4ED8'];
+    if (normalizedPercentage >= 50) return ['#3B82F6', '#2563EB'];
+    if (normalizedPercentage >= 25) return ['#60A5FA', '#3B82F6'];
+    return ['#8594cfff', '#60A5FA'];
   };
 
   const [color1, color2] = getWaveColor();

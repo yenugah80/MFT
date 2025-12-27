@@ -23,8 +23,11 @@ import { useMoodTrends, calculateMoodStats } from "../hooks/useMoodTrends";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useNotification } from "../providers/NotificationProvider";
+import { useTheme } from "../providers/ThemeProvider";
 
 // Premium components
+import ThemeTransition from "./ThemeTransition";
+import ThemeSettingsModal from "./ThemeSettingsModal";
 import GlassCard from "./dashboard/GlassCard";
 import PremiumRing from "./dashboard/PremiumRing";
 import NutriScoreDial from "./dashboard/NutriScoreDial";
@@ -178,10 +181,10 @@ const CollapsibleSection = ({ title, icon, expanded, onToggle, children, badge }
       >
         <View style={styles.collapsibleLeft}>
           <LinearGradient
-            colors={expanded ? SURFACES.gradient.primary : ['#E5E7EB', '#D1D5DB']}
+            colors={expanded ? SURFACES.gradient.primary : SURFACES.gradient.softPurple}
             style={styles.collapsibleIconContainer}
           >
-            <Ionicons name={icon} size={20} color={expanded ? '#FFF' : TEXT.secondary} />
+            <Ionicons name={icon} size={20} color={expanded ? '#FFF' : BRAND.primary} />
           </LinearGradient>
           <Text style={styles.collapsibleTitle}>{title}</Text>
           {badge && (
@@ -255,6 +258,7 @@ export default function DashboardContent() {
   const notify = useNotification();
   const router = useRouter();
   const { user } = useUser();
+  const { theme, toggleTheme, colors } = useTheme();
 
   // Insights modal state
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
@@ -263,6 +267,7 @@ export default function DashboardContent() {
   const [insightsMessage, setInsightsMessage] = useState(null);
   const [insightsError, setInsightsError] = useState(null);
   const [proteinModalVisible, setProteinModalVisible] = useState(false);
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [insightsDays, setInsightsDays] = useState(30);
   const [insightsMeta, setInsightsMeta] = useState({
     moods: 0,
@@ -876,12 +881,7 @@ export default function DashboardContent() {
   // Loading state
   if (isLoading) {
     return (
-      <LinearGradient
-        colors={LUXURY_BACKGROUNDS.deepNavy.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
@@ -913,7 +913,7 @@ export default function DashboardContent() {
             <SkeletonCard height={120} />
           </View>
         </ScrollView>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -978,14 +978,9 @@ export default function DashboardContent() {
 
   return (
     <>
-      <LinearGradient
-        colors={LUXURY_BACKGROUNDS.deepNavy.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.container}
-      >
-
-        <ScrollView
+      <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
+        <ThemeTransition>
+          <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
           refreshControl={
@@ -1004,7 +999,7 @@ export default function DashboardContent() {
               accessibilityLabel="Go to Profile tab"
               accessibilityRole="button"
             >
-              <Ionicons name={ICONS.profile} size={20} color={LUXURY_TEXT.onLight.primary} />
+              <Ionicons name={ICONS.profile} size={20} color={TEXT.primary} />
             </TouchableOpacity>
             <View>
               <Text style={styles.headerTitle}>
@@ -1018,6 +1013,24 @@ export default function DashboardContent() {
 
           {/* Right side controls */}
           <View style={styles.headerRight}>
+            {/* Theme Toggle */}
+            <TouchableOpacity
+              style={styles.focusModeButton}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setThemeModalVisible(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open theme settings"
+              accessibilityHint="Choose between light, dark, and auto themes"
+            >
+              <Ionicons
+                name={theme === 'light' ? "moon" : "sunny"}
+                size={18}
+                color={TEXT.primary}
+              />
+            </TouchableOpacity>
+
             {/* Focus Mode Toggle */}
             <TouchableOpacity
               style={[styles.focusModeButton, focusMode && styles.focusModeButtonActive]}
@@ -1040,7 +1053,7 @@ export default function DashboardContent() {
               <Ionicons
                 name={focusMode ? "eye-off" : "eye"}
                 size={18}
-                color={focusMode ? LUXURY_TEXT.onLight.primary : LUXURY_TEXT.onLight.secondary}
+                color={focusMode ? TEXT.primary : TEXT.secondary}
               />
             </TouchableOpacity>
 
@@ -1328,7 +1341,8 @@ export default function DashboardContent() {
           )}
         </CollapsibleSection>
       </ScrollView>
-    </LinearGradient>
+        </ThemeTransition>
+      </View>
 
       {/* Modals */}
       <Modal
@@ -1540,10 +1554,15 @@ export default function DashboardContent() {
         </View>
       </Modal>
 
-      <StreakSavedModal 
+      <StreakSavedModal
         visible={streakSavedVisible}
         onClose={() => setStreakSavedVisible(false)}
         freezesLeft={gamification?.streakFreezes || 0}
+      />
+
+      <ThemeSettingsModal
+        visible={themeModalVisible}
+        onClose={() => setThemeModalVisible(false)}
       />
     </>
   );
@@ -1552,6 +1571,7 @@ export default function DashboardContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9F7F4', // Warm off-white background for consistency with log screen
   },
   shimmerOverlay: {
     position: 'absolute',
@@ -1577,7 +1597,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: SPACING[3],
     fontSize: TYPOGRAPHY.size.md,
-    color: LUXURY_TEXT.onLight.primary, // White for dark background
+    color: TEXT.primary, // Dark text for light background
   },
   errorIconContainer: {
     marginBottom: SPACING[4],
@@ -1586,13 +1606,13 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: LUXURY_TEXT.onLight.primary, // White for dark background
+    color: TEXT.primary, // Dark text for light background
     marginBottom: SPACING[2],
     textAlign: 'center',
   },
   errorText: {
     fontSize: TYPOGRAPHY.size.base,
-    color: LUXURY_TEXT.onLight.secondary, // Light white for dark background
+    color: TEXT.secondary, // Medium text for light background
     textAlign: 'center',
     marginBottom: SPACING[6],
     paddingHorizontal: SPACING[4],
@@ -1631,24 +1651,21 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)', // Glass effect for visibility on dark
+    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple tint (was white glass)
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(107, 78, 255, 0.15)',
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size['3xl'],
     fontWeight: TYPOGRAPHY.weight.extrabold,
-    color: LUXURY_TEXT.onLight.primary, // Pure white for luxury
+    color: TEXT.primary, // Dark text for light background
     marginBottom: SPACING[1],
-    textShadowColor: 'rgba(255, 215, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: LUXURY_TEXT.onLight.tertiary, // Light white
+    color: TEXT.secondary, // Medium text for light background
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   headerRight: {
@@ -1660,15 +1677,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple (was white glass)
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(107, 78, 255, 0.15)',
   },
   focusModeButtonActive: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)', // Gold tint when active
-    borderColor: 'rgba(255, 215, 0, 0.4)',
+    backgroundColor: 'rgba(107, 78, 255, 0.15)', // Stronger purple when active (was gold)
+    borderColor: 'rgba(107, 78, 255, 0.3)',
   },
   focusModeIndicator: {
     flexDirection: 'row',
@@ -1685,11 +1702,11 @@ const styles = StyleSheet.create({
   focusModeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: LUXURY_TEXT.onLight.primary,
+    color: TEXT.primary,
   },
   focusModeSubtext: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: LUXURY_TEXT.onLight.tertiary,
+    color: TEXT.tertiary,
     marginLeft: 'auto',
   },
   syncStatus: {
@@ -1698,10 +1715,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)', // Light glass on dark
+    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple tint
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(107, 78, 255, 0.15)',
   },
   syncDot: {
     width: 6,
@@ -1715,7 +1732,7 @@ const styles = StyleSheet.create({
   syncText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: LUXURY_TEXT.onLight.primary, // White text
+    color: TEXT.primary, // Dark text for light background
   },
 
   // Info card (calm, supportive tone - blue instead of orange/red)

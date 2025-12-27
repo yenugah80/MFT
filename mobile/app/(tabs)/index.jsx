@@ -1,302 +1,283 @@
-import { View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl, TextInput } from "react-native";
-import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
-import { MealAPI } from "../../services/mealAPI";
-import { homeStyles } from "../../assets/styles/home.styles";
-import { Image } from "expo-image";
-import { COLORS } from "../../constants/colors";
-import { Ionicons } from "@expo/vector-icons";
-import CategoryFilter from "../../components/CategoryFilter";
-import RecipeCard from "../../components/RecipeCard";
-import LoadingSpinner from "../../components/LoadingSpinner";
-import { useDebounce } from "../../hooks/useDebounce";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useUser } from '@clerk/clerk-expo';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const HomeScreen = () => {
+export default function HomeScreen() {
   const router = useRouter();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [recipes, setRecipes] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [featuredRecipe, setFeaturedRecipe] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
+  const { user } = useUser();
 
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-  const loadData = async () => {
-    if (!isLoaded || !isSignedIn) return;
-    try {
-      setLoading(true);
-      const token = await getToken();
-
-      const [apiCategories, randomMeals, featuredMeal] = await Promise.all([
-        MealAPI.getCategories(token),
-        MealAPI.getRandomMeals(12, token),
-        MealAPI.getRandomMeal(token),
-      ]);
-
-      const transformedCategories = apiCategories.map((cat, index) => ({
-        id: index + 1,
-        name: cat.strCategory,
-        image: cat.strCategoryThumb,
-        description: cat.strCategoryDescription,
-      }));
-
-      setCategories(transformedCategories);
-
-      if (!selectedCategory) setSelectedCategory(transformedCategories[0].name);
-
-      const transformedMeals = randomMeals
-        .map((meal) => MealAPI.transformMealData(meal))
-        .filter((meal) => meal !== null);
-
-      setRecipes(transformedMeals);
-
-      const transformedFeatured = MealAPI.transformMealData(featuredMeal);
-      setFeaturedRecipe(transformedFeatured);
-    } catch (error) {
-      console.log("Error loading the data", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCategoryData = async (category) => {
-    try {
-      const token = await getToken();
-      const meals = await MealAPI.filterByCategory(category, token);
-      const transformedMeals = meals
-        .map((meal) => MealAPI.transformMealData(meal))
-        .filter((meal) => meal !== null);
-      setRecipes(transformedMeals);
-    } catch (error) {
-      console.error("Error loading category data:", error);
-      setRecipes([]);
-    }
-  };
-
-  const handleCategorySelect = async (category) => {
-    setSelectedCategory(category);
-    setSearchQuery(""); // Clear search when selecting category
-    await loadCategoryData(category);
-  };
-
-  const performSearch = async (query) => {
-    if (!query.trim()) {
-      // If search is cleared, reload category data
-      if (selectedCategory) {
-        await loadCategoryData(selectedCategory);
-      }
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const token = await getToken();
-      const nameResults = await MealAPI.searchMealsByName(query, token);
-      let results = nameResults;
-
-      if (results.length === 0) {
-        const ingredientResults = await MealAPI.filterByIngredient(query, token);
-        results = ingredientResults;
-      }
-
-      const transformedMeals = results
-        .slice(0, 12)
-        .map((meal) => MealAPI.transformMealData(meal))
-        .filter((meal) => meal !== null);
-
-      setRecipes(transformedMeals);
-    } catch (error) {
-      console.error("Error searching:", error);
-      setRecipes([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setSearchQuery(""); // Clear search on refresh
-    await loadData();
-    setRefreshing(false);
-  };
-
-  useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      loadData();
-    }
-  }, [isLoaded, isSignedIn]);
-
-  useEffect(() => {
-    if (debouncedSearchQuery) {
-      performSearch(debouncedSearchQuery);
-    } else if (!loading) {
-      // Reload category when search is cleared
-      if (selectedCategory) {
-        loadCategoryData(selectedCategory);
-      }
-    }
-  }, [debouncedSearchQuery]);
-
-  if (loading && !refreshing) return <LoadingSpinner message="Loading delicions recipes..." />;
+  const quickActions = [
+    {
+      id: '1',
+      title: 'Log Food',
+      description: 'Track your meals',
+      icon: 'restaurant',
+      color: ['#F59E0B', '#F97316'],
+      route: '/log',
+    },
+    {
+      id: '2',
+      title: 'Track Activity',
+      description: 'Log your workouts',
+      icon: 'fitness',
+      color: ['#6366f1', '#8b5cf6'],
+      route: '/activity',
+    },
+    {
+      id: '3',
+      title: 'View Progress',
+      description: 'Check your stats',
+      icon: 'stats-chart',
+      color: ['#10B981', '#059669'],
+      route: '/dashboard',
+    },
+    {
+      id: '4',
+      title: 'Favorites',
+      description: 'Saved recipes',
+      icon: 'heart',
+      color: ['#EF4444', '#DC2626'],
+      route: '/favorites',
+    },
+  ];
 
   return (
-    <View style={homeStyles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-          />
-        }
-        contentContainerStyle={homeStyles.scrollContent}
-      >
-        <View style={homeStyles.tabHeader}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <LinearGradient
+          colors={['#6366f1', '#8b5cf6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <View>
+            <Text style={styles.greeting}>Hello,</Text>
+            <Text style={styles.userName}>{user?.firstName || 'There'}!</Text>
+          </View>
           <TouchableOpacity
-            style={homeStyles.backButton}
-            onPress={() => router.replace('/(tabs)/dashboard')}
-            accessibilityLabel="Go to Dashboard tab"
+            style={styles.profileButton}
+            onPress={() => router.push('/profile')}
           >
-            <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+            <Ionicons name="person-circle" size={48} color="#fff" />
           </TouchableOpacity>
-          <Text style={homeStyles.tabTitle}>Recipes</Text>
+        </LinearGradient>
+
+        {/* Welcome Message */}
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeTitle}>Welcome to MyFoodTracker</Text>
+          <Text style={styles.welcomeText}>
+            Track your nutrition, log your activities, and achieve your health goals
+          </Text>
         </View>
 
-        {/* SEARCH BAR */}
-        <View style={homeStyles.searchSection}>
-          <View style={homeStyles.searchContainer}>
-            <Ionicons
-              name="search"
-              size={20}
-              color={COLORS.textLight}
-              style={homeStyles.searchIcon}
-            />
-            <TextInput
-              style={homeStyles.searchInput}
-              placeholder="Search recipes, ingredients..."
-              placeholderTextColor={COLORS.textLight}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")} style={homeStyles.clearButton}>
-                <Ionicons name="close-circle" size={20} color={COLORS.textLight} />
+        {/* Quick Actions */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            {quickActions.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={styles.actionCard}
+                onPress={() => router.push(action.route)}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={action.color}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.actionGradient}
+                >
+                  <View style={styles.actionIcon}>
+                    <Ionicons name={action.icon} size={32} color="#fff" />
+                  </View>
+                  <Text style={styles.actionTitle}>{action.title}</Text>
+                  <Text style={styles.actionDescription}>{action.description}</Text>
+                </LinearGradient>
               </TouchableOpacity>
-            )}
+            ))}
           </View>
         </View>
 
-        {/*  ANIMAL ICONS (replaced PNG/JPGs with vector icons) */}
-        <View style={homeStyles.welcomeSection}>
-          <View style={{ width: 100, height: 100, justifyContent: "center", alignItems: "center" }}>
-            <Ionicons name="restaurant-outline" size={56} color={COLORS.primary} />
-          </View>
-          <View style={{ width: 100, height: 100, justifyContent: "center", alignItems: "center" }}>
-            <Ionicons name="fast-food-outline" size={56} color={COLORS.primary} />
-          </View>
-          <View style={{ width: 100, height: 100, justifyContent: "center", alignItems: "center" }}>
-            <Ionicons name="leaf-outline" size={56} color={COLORS.primary} />
-          </View>
-        </View>
+        {/* Features */}
+        <View style={styles.featuresSection}>
+          <Text style={styles.sectionTitle}>Features</Text>
 
-        {/* FEATURED SECTION */}
-        {featuredRecipe && (
-          <View style={homeStyles.featuredSection}>
-            <TouchableOpacity
-              style={homeStyles.featuredCard}
-              activeOpacity={0.9}
-              onPress={() => router.push(`/recipe/${featuredRecipe.id}`)}
-            >
-              <View style={homeStyles.featuredImageContainer}>
-                <Image
-                  source={{ uri: featuredRecipe.image }}
-                  style={homeStyles.featuredImage}
-                  contentFit="cover"
-                  transition={500}
-                />
-                <View style={homeStyles.featuredOverlay}>
-                  <View style={homeStyles.featuredBadge}>
-                    <Text style={homeStyles.featuredBadgeText}>Featured</Text>
-                  </View>
-
-                  <View style={homeStyles.featuredContent}>
-                    <Text style={homeStyles.featuredTitle} numberOfLines={2}>
-                      {featuredRecipe.title}
-                    </Text>
-
-                    <View style={homeStyles.featuredMeta}>
-                      <View style={homeStyles.metaItem}>
-                        <Ionicons name="time-outline" size={16} color={COLORS.white} />
-                        <Text style={homeStyles.metaText}>{featuredRecipe.cookTime}</Text>
-                      </View>
-                      <View style={homeStyles.metaItem}>
-                        <Ionicons name="people-outline" size={16} color={COLORS.white} />
-                        <Text style={homeStyles.metaText}>{featuredRecipe.servings}</Text>
-                      </View>
-                      {featuredRecipe.area && (
-                        <View style={homeStyles.metaItem}>
-                          <Ionicons name="location-outline" size={16} color={COLORS.white} />
-                          <Text style={homeStyles.metaText}>{featuredRecipe.area}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {categories.length > 0 && (
-          <CategoryFilter
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onSelectCategory={handleCategorySelect}
-          />
-        )}
-
-        <View style={homeStyles.recipesSection}>
-          <View style={homeStyles.sectionHeader}>
-            <Text style={homeStyles.sectionTitle}>
-              {searchQuery ? `Results for "${searchQuery}"` : selectedCategory}
-            </Text>
-            <Text style={homeStyles.resultsCount}>{recipes.length} recipes</Text>
-          </View>
-
-          {isSearching ? (
-            <View style={homeStyles.loadingContainer}>
-              <LoadingSpinner message="Searching recipes..." size="small" />
+          <View style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Ionicons name="nutrition" size={24} color="#6366f1" />
             </View>
-          ) : recipes.length > 0 ? (
-            <FlatList
-              data={recipes}
-              renderItem={({ item }) => <RecipeCard recipe={item} />}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={2}
-              columnWrapperStyle={homeStyles.row}
-              contentContainerStyle={homeStyles.recipesGrid}
-              scrollEnabled={false}
-              // ListEmptyComponent={}
-            />
-          ) : (
-            <View style={homeStyles.emptyState}>
-              <Ionicons name="restaurant-outline" size={64} color={COLORS.textLight} />
-              <Text style={homeStyles.emptyTitle}>No recipes found</Text>
-              <Text style={homeStyles.emptyDescription}>Try a different category</Text>
+            <View style={styles.featureContent}>
+              <Text style={styles.featureTitle}>Smart Food Tracking</Text>
+              <Text style={styles.featureText}>
+                Log meals with voice, text, or photos. Get instant nutritional analysis.
+              </Text>
             </View>
-          )}
+          </View>
+
+          <View style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Ionicons name="fitness" size={24} color="#10B981" />
+            </View>
+            <View style={styles.featureContent}>
+              <Text style={styles.featureTitle}>Activity Tracking</Text>
+              <Text style={styles.featureText}>
+                Track workouts, yoga sessions, and daily activities with calorie estimates.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Ionicons name="analytics" size={24} color="#F59E0B" />
+            </View>
+            <View style={styles.featureContent}>
+              <Text style={styles.featureTitle}>Progress Insights</Text>
+              <Text style={styles.featureText}>
+                View your daily stats, trends, and achieve your health goals.
+              </Text>
+            </View>
+          </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
-};
-export default HomeScreen;
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 32,
+  },
+  greeting: {
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  profileButton: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  welcomeSection: {
+    padding: 24,
+    paddingTop: 16,
+  },
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  welcomeText: {
+    fontSize: 16,
+    color: '#64748b',
+    lineHeight: 24,
+  },
+  actionsSection: {
+    padding: 24,
+    paddingTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  actionCard: {
+    width: '48%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  actionGradient: {
+    padding: 20,
+    minHeight: 160,
+    justifyContent: 'space-between',
+  },
+  actionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 12,
+  },
+  actionDescription: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+  },
+  featuresSection: {
+    padding: 24,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  featureCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  featureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureContent: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+});

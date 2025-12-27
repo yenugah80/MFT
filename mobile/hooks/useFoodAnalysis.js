@@ -42,8 +42,8 @@ const USDA_TIMEOUT_MS = 650;
 /** AI API timeout - Increased for enhanced 97% accuracy prompts */
 const AI_TIMEOUT_MS = 8000; // 8 seconds (was 1600ms)
 
-/** Open Food Facts timeout */
-const OPEN_FOOD_FACTS_TIMEOUT_MS = 1400;
+/** Open Food Facts timeout - Reduced for faster response */
+const OPEN_FOOD_FACTS_TIMEOUT_MS = 800; // 800ms (was 1400ms)
 
 /** Image analysis timeout - Increased for GPT-4o vision */
 const IMAGE_ANALYSIS_TIMEOUT_MS = 20000; // 20 seconds (was 12s)
@@ -53,6 +53,9 @@ const AUTO_ANALYSIS_DEBOUNCE_MS = 1500;
 
 /** Fade progress bar delay */
 const PROGRESS_FADE_DELAY_MS = 400;
+
+/** Rate limit cooldown period */
+const RATE_LIMIT_COOLDOWN_MS = 60000; // 1 minute
 
 /** Image compression width */
 const IMAGE_MAX_WIDTH_PX = 1024;
@@ -701,6 +704,7 @@ export function useFoodAnalysis() {
   const debounceTimerRef = useRef(null);
   const abortControllerRef = useRef(null);
   const barcodeCacheRef = useRef({});
+  const rateLimitedUntilRef = useRef(0); // Timestamp when rate limit cooldown expires
 
   // ============================================================================
   // TEXT ANALYSIS (Universal Entry Point)
@@ -716,29 +720,50 @@ export function useFoodAnalysis() {
   const analyzeTextUniversal = useCallback(async (text) => {
     if (!text?.trim()) return;
 
+    // Check if we're still in rate limit cooldown
+    const now = Date.now();
+    if (rateLimitedUntilRef.current > now) {
+      const remainingSeconds = Math.ceil((rateLimitedUntilRef.current - now) / 1000);
+      setError(`Rate limited. Please wait ${remainingSeconds}s before trying again.`);
+      console.log(`[useFoodAnalysis] Rate limited for ${remainingSeconds}s`);
+      return;
+    }
+
     try {
       setIsAnalyzing(true);
       setError(null);
       setProgress(10);
 
-      // 1. Try Open Food Facts first (fast, accurate for known products)
-      setProgress(20);
-      const offResult = await fetchFromOpenFoodFacts(text, 'text');
+      // Smart routing: Skip OFF for generic meal descriptions
+      const isGenericMeal = /\b(bowl|plate|cup|serving|meal|breakfast|lunch|dinner|snack)\b/i.test(text)
+        || /\b(of|with|and|,)\b/i.test(text) // Multi-item indicators
+        || text.split(' ').length > 4; // Long descriptions are usually meals
 
-      if (offResult) {
-        setAnalysisResult({
-          items: [{
-            ...offResult,
-            isEditing: false,
-            editedPortion: null,
-          }],
-          totals: calculateTotals([offResult]),
-        });
-        setProgress(100);
-        return;
+      if (!isGenericMeal) {
+        // 1. Try Open Food Facts first (fast, accurate for known products only)
+        setProgress(20);
+        try {
+          const offResult = await fetchFromOpenFoodFacts(text, 'text');
+
+          if (offResult) {
+            setAnalysisResult({
+              items: [{
+                ...offResult,
+                isEditing: false,
+                editedPortion: null,
+              }],
+              totals: calculateTotals([offResult]),
+            });
+            setProgress(100);
+            return;
+          }
+        } catch (error) {
+          // Silently fail and proceed to AI
+          console.log('[useFoodAnalysis] OFF lookup skipped:', error.message);
+        }
       }
 
-      // 2. Fallback to backend AI (handles multi-item meals)
+      // 2. Go to backend AI (handles multi-item meals and generic descriptions)
       // Cancel any in-flight requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -769,6 +794,15 @@ export function useFoodAnalysis() {
       });
 
       if (!response.ok) {
+        // Handle rate limiting (429 Too Many Requests)
+        if (response.status === 429) {
+          rateLimitedUntilRef.current = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+          const cooldownSeconds = RATE_LIMIT_COOLDOWN_MS / 1000;
+          const errorMsg = `Rate limited. Please wait ${cooldownSeconds}s before trying again.`;
+          console.log(`[useFoodAnalysis] Rate limited - cooldown for ${cooldownSeconds}s`);
+          throw new Error(errorMsg);
+        }
+
         const json = await response.json().catch(() => ({}));
         throw new Error(json?.error || 'Analysis failed');
       }

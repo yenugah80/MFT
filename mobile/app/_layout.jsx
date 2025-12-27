@@ -4,6 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
@@ -48,19 +49,21 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary onReset={handleErrorReset}>
-      <DatabaseInitializer>
-        <NotificationProvider>
-          <QueryProvider>
-            <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-              <ApiInitializer>
-                <SafeScreen>
-                  <Slot />
-                </SafeScreen>
-              </ApiInitializer>
-            </ClerkProvider>
-          </QueryProvider>
-        </NotificationProvider>
-      </DatabaseInitializer>
+      <ThemeProvider>
+        <DatabaseInitializer>
+          <NotificationProvider>
+            <QueryProvider>
+              <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+                <ApiInitializer>
+                  <SafeScreen>
+                    <Slot />
+                  </SafeScreen>
+                </ApiInitializer>
+              </ClerkProvider>
+            </QueryProvider>
+          </NotificationProvider>
+        </DatabaseInitializer>
+      </ThemeProvider>
       <Toast />
     </ErrorBoundary>
   );
