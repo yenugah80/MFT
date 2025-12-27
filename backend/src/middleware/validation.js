@@ -9,16 +9,6 @@ export const validate = (schema) => (req, res, next) => {
   }
 };
 
-export const favoritesSchema = z.object({
-  recipeId: z.number({ required_error: "recipeId is required" }),
-  title: z.string({ required_error: "title is required" }),
-  image: z.string().optional(),
-  cookTime: z.string().optional(),
-  // Accept either a string or a number for servings since the
-  // mobile client currently sends a numeric value (e.g. 4).
-  servings: z.union([z.string(), z.number()]).optional(),
-});
-
 export const profileBasicsSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email address"),

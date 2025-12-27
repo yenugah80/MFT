@@ -101,8 +101,8 @@ export default function ProfileScreen() {
           <View style={styles.headerLeft}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.replace('/(tabs)/favorites')}
-              accessibilityLabel="Go to Favorites tab"
+              onPress={() => router.replace('/(tabs)/dashboard')}
+              accessibilityLabel="Go to Dashboard tab"
             >
               <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
             </TouchableOpacity>

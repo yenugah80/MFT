@@ -34,14 +34,6 @@ export default function HomeScreen() {
       color: ['#10B981', '#059669'],
       route: '/dashboard',
     },
-    {
-      id: '4',
-      title: 'Favorites',
-      description: 'Saved recipes',
-      icon: 'heart',
-      color: ['#EF4444', '#DC2626'],
-      route: '/favorites',
-    },
   ];
 
   return (

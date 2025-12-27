@@ -51,7 +51,6 @@ mobile/
 ├── app/                         # Expo Router pages
 │   ├── (tabs)/                  # Tab navigation screens
 │   │   ├── dashboard.jsx        # Main dashboard
-│   │   └── favorites.jsx        # Favorites screen
 │   └── _layout.jsx              # Root layout with providers
 │
 ├── components/                  # Reusable components

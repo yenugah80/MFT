@@ -50,16 +50,6 @@ const TabsLayout = () => {
       />
 
       <Tabs.Screen
-        name="activity"
-        options={{
-          title: "Activity",
-          tabBarIcon: ({ color, size}) => (
-            <Ionicons name="fitness" size={size} color={color} />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
         name="log"
         options={{
           title: "Log",
@@ -70,11 +60,11 @@ const TabsLayout = () => {
       />
 
       <Tabs.Screen
-        name="favorites"
+        name="activity"
         options={{
-          title: "Favorites",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart" size={size} color={color} />
+          title: "Activity",
+          tabBarIcon: ({ color, size}) => (
+            <Ionicons name="fitness" size={size} color={color} />
           ),
         }}
       />

@@ -2,28 +2,6 @@
 import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, boolean, index, check, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-export const favoritesTable = pgTable(
-  "favorites",
-  {
-    id: serial("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    recipeId: integer("recipe_id").notNull(),
-    title: text("title").notNull(),
-    image: text("image"),
-    cookTime: text("cook_time"),
-    servings: text("servings"),
-    createdAt: timestamp("created_at").defaultNow(),
-  },
-  (table) => ({
-    userRecipeUniqueIdx: uniqueIndex("favorites_user_recipe_unique_idx").on(
-      table.userId,
-      table.recipeId
-    ),
-  })
-);
-
 // User profiles table - stores personal information
 export const profilesTable = pgTable(
   "profiles",

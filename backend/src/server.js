@@ -5,7 +5,6 @@ import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
 import { attachDb } from "./middleware/db.js";
 import {
-  favoritesTable,
   profilesTable,
   dietaryPreferencesTable,
   nutritionGoalsTable,
@@ -15,14 +14,13 @@ import {
   waterLogTable,
   moodLogTable
 } from "./db/schema.js";
-import { eq, and, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { FoodService } from "./services/foodService.js";
-import { validate, favoritesSchema, profileBasicsSchema, nutritionGoalsSchema, imageAnalysisSchema } from "./middleware/validation.js";
+import { validate, imageAnalysisSchema } from "./middleware/validation.js";
 import nutritionRouter from "./routes/nutrition.js";
 import foodRouter from "./routes/food.js";
 import resolveRouter from "./routes/resolve.js";
 import profileRouter from "./routes/profile.js";
-import favoritesRouter from "./routes/favorites.js";
 import loggingRouter from "./routes/logging.js";
 import moodRouter from "./routes/mood.js";
 import waterRouter from "./routes/water.js";
@@ -106,9 +104,6 @@ app.use("/api/food/resolve", resolveRouter);
 // Mount Profile Router (modularized)
 app.use("/api/profile", profileRouter);
 
-// Mount Favorites Router (modularized)
-app.use("/api/favorites", favoritesRouter);
-
 // Mount Logging Router (modularized)
 app.use("/api/log", loggingRouter);
 
@@ -128,8 +123,6 @@ app.use("/api/metrics", apiMetricsRouter);
 app.get("/api/health", (req, res) => {
   res.status(200).json({ success: true });
 });
-
-// (favorites endpoints removed, now handled by favoritesRouter)
 
 /* -------------------------------------------
    FOOD SEARCH ENDPOINT (BFF)
