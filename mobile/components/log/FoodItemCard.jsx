@@ -142,6 +142,37 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         </View>
       </View>
 
+      {/* Component Breakdown - ALWAYS VISIBLE for complex foods */}
+      {item.isComplex && item.components && item.components.length > 0 && (
+        <View style={styles.componentsSection}>
+          <Text style={styles.componentsSectionTitle}>
+            🥘 Ingredients Included:
+          </Text>
+          {item.components.slice(0, 3).map((component, index) => (
+            <View key={index} style={styles.componentRowCompact}>
+              <Text style={styles.componentNameCompact}>• {component.name}</Text>
+              <Text style={styles.componentCaloriesCompact}>{component.calories} cal</Text>
+            </View>
+          ))}
+          {item.components.length > 3 && (
+            <Text style={styles.showMoreComponents}>
+              + {item.components.length - 3} more (tap "Show details" below)
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Accuracy Disclaimer - ALWAYS VISIBLE for estimated foods */}
+      {item._smartResolver?.source?.includes('estimation') && (
+        <View style={styles.accuracyNote}>
+          <Text style={styles.accuracyNoteIcon}>💡</Text>
+          <Text style={styles.accuracyNoteText}>
+            Estimated nutrition. May vary by brand, cooking method, and portions.
+            {item.isComplex ? ' Adjust ingredients in details if needed.' : ''}
+          </Text>
+        </View>
+      )}
+
       {/* Confidence Badge */}
       {item.sourceEvidence?.[0] && (
         <View style={[styles.badge, { borderColor: confidenceColor }]}>
@@ -590,5 +621,63 @@ const styles = StyleSheet.create({
   componentMacroText: {
     fontSize: 11,
     color: '#6B7280',
+  },
+  // Compact component display (always visible)
+  componentsSection: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#10B981',
+  },
+  componentsSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  componentRowCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  componentNameCompact: {
+    fontSize: 13,
+    color: '#4B5563',
+    flex: 1,
+  },
+  componentCaloriesCompact: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#10B981',
+  },
+  showMoreComponents: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  // Accuracy disclaimer
+  accuracyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  accuracyNoteIcon: {
+    fontSize: 14,
+    marginTop: 1,
+  },
+  accuracyNoteText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#92400E',
+    lineHeight: 15,
   },
 });
