@@ -72,6 +72,8 @@ class SmartNutritionResolver {
           sourceConfidence: openAIResult.confidence,
           reason: `OpenAI estimation (${reason})`,
           limitation: openAIResult.confidence < 80 ? 'Estimated values - may vary by brand/preparation' : null,
+          components: openAIResult.components || [], // Pass through components
+          isComplex: openAIResult.isComplex || false,
           cacheKey,
         };
 
@@ -92,8 +94,10 @@ class SmartNutritionResolver {
           ...usdaResult,
           source: 'usda_verified',
           sourceConfidence: 95,
-          openaiBackup: openAIResult, // Keep OpenAI estimate as backup
+          openaiBackup: openAIResult, // Keep OpenAI estimate as backup (includes components)
           limitation: 'USDA data - may not match your specific brand',
+          components: [], // USDA doesn't have component breakdown
+          isComplex: false,
           cacheKey,
         };
 
@@ -111,6 +115,8 @@ class SmartNutritionResolver {
         sourceConfidence: openAIResult.confidence,
         reason: 'OpenAI estimation (USDA unavailable)',
         limitation: 'Estimated values - may not be exact',
+        components: openAIResult.components || [],
+        isComplex: openAIResult.isComplex || false,
         cacheKey,
       };
 
@@ -240,6 +246,8 @@ class SmartNutritionResolver {
       confidence: estimation.confidence,
       macros: estimation.macros,
       micros: estimation.micros || {},
+      components: estimation.components || [], // Component breakdown for complex foods
+      isComplex: estimation.isComplex || false, // Whether food has multiple components
       estimationMethod: estimation.estimationMethod,
       needsVerification: estimation.needsVerification,
     };

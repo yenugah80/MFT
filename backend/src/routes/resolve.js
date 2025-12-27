@@ -328,13 +328,17 @@ async function resolveGenericFood(parsedFood) {
       },
       macros: nutrition.macros,
       micros: nutrition.micros || {},
+      components: nutrition.components || [], // Component breakdown for complex foods
+      isComplex: nutrition.isComplex || false, // Whether food has multiple ingredients
       scores: {},
       sourceEvidence,
       flags,
       _smartResolver: {
         confidence: nutrition.confidence,
         source: nutrition.source,
-        cached: !!nutrition.cacheKey
+        cached: !!nutrition.cacheKey,
+        reason: nutrition.reason,
+        limitation: nutrition.limitation
       }
     };
 
