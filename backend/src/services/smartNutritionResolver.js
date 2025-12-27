@@ -9,9 +9,9 @@
  * 4. Cache results aggressively (24h TTL)
  */
 
-import { openaiClient } from './apiClients/OpenAIClient.js';
 import { usdaClient } from './apiClients/USDAClient.js';
 import { buildNutritionEstimationPrompt, buildBatchNutritionEstimationPrompt } from './apiClients/prompts/nutritionEstimation.js';
+import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
 
 // Aggressive caching (24 hours)
@@ -37,8 +37,8 @@ class SmartNutritionResolver {
   async resolveFood(foodQuery, portion = '1 serving') {
     this.stats.totalRequests++;
 
-    // Check cache first
-    const cacheKey = `nutrition:${foodQuery}:${portion}`.toLowerCase();
+    // Check cache first - use deterministic cache key
+    const cacheKey = getCacheKey('nutrition', foodQuery, portion);
     const cached = nutritionCache.get(cacheKey);
     if (cached) {
       console.log(`[SmartResolver] Cache hit for "${foodQuery}"`);
@@ -124,7 +124,18 @@ class SmartNutritionResolver {
       return result;
 
     } catch (error) {
-      console.error(`[SmartResolver] Failed to resolve nutrition for "${foodQuery}":`, error.message);
+      // Enhanced error handling for JSON validation failures
+      if (error instanceof JSONParseError) {
+        console.error(`[SmartResolver] ❌ JSON parsing failed for "${foodQuery}":`, error.message);
+        console.error(`[SmartResolver] Raw response (first 200 chars):`, error.rawResponse?.substring(0, 200));
+      } else if (error instanceof OpenAIValidationError) {
+        console.error(`[SmartResolver] ❌ OpenAI validation failed for "${foodQuery}":`, error.message);
+        console.error(`[SmartResolver] Details:`, JSON.stringify(error.details, null, 2));
+      } else {
+        console.error(`[SmartResolver] ❌ Failed to resolve nutrition for "${foodQuery}":`, error.message);
+      }
+
+      // CRITICAL: Never cache failed responses - throw immediately
       throw error;
     }
   }
@@ -161,16 +172,16 @@ class SmartNutritionResolver {
    * More efficient for meal logging
    */
   async resolveFoodsBatch(foodItems) {
-    // Filter out cached items
+    // Filter out cached items - use deterministic cache keys
     const uncachedItems = foodItems.filter(item => {
-      const cacheKey = `nutrition:${item.name}:${item.portion || '1 serving'}`.toLowerCase();
+      const cacheKey = getCacheKey('nutrition', item.name, item.portion || '1 serving');
       return !nutritionCache.has(cacheKey);
     });
 
     if (uncachedItems.length === 0) {
       console.log(`[SmartResolver] All ${foodItems.length} items from cache`);
       return foodItems.map(item => {
-        const cacheKey = `nutrition:${item.name}:${item.portion || '1 serving'}`.toLowerCase();
+        const cacheKey = getCacheKey('nutrition', item.name, item.portion || '1 serving');
         return nutritionCache.get(cacheKey);
       });
     }
@@ -181,19 +192,24 @@ class SmartNutritionResolver {
       // Use OpenAI batch estimation (single API call for multiple foods)
       const prompt = buildBatchNutritionEstimationPrompt(uncachedItems);
 
-      // chatCompletionJSON already returns parsed JSON, not a string
-      const estimates = await openaiClient.chatCompletionJSON(
+      // Use safe wrapper - validates JSON BEFORE caching
+      const estimates = await safeJSONCompletion(
         [
           { role: 'system', content: prompt.system },
           { role: 'user', content: prompt.user },
         ],
-        { model: 'gpt-4o-mini', temperature: 0.3 }
+        { model: 'gpt-4o-mini', temperature: 0.3, maxRetries: 1 }
       );
 
-      // Cache results and return
+      // Validate estimates is an array
+      if (!Array.isArray(estimates)) {
+        throw new OpenAIValidationError('Expected array of estimates', { type: typeof estimates });
+      }
+
+      // Cache results ONLY if validation passed
       const results = estimates.map((estimate, i) => {
         const item = uncachedItems[i];
-        const cacheKey = `nutrition:${item.name}:${item.portion || '1 serving'}`.toLowerCase();
+        const cacheKey = getCacheKey('nutrition', item.name, item.portion || '1 serving');
 
         const result = {
           ...estimate,
@@ -224,8 +240,8 @@ class SmartNutritionResolver {
   async _getOpenAIEstimation(foodQuery, portion) {
     const prompt = buildNutritionEstimationPrompt(foodQuery, portion);
 
-    // chatCompletionJSON already returns parsed JSON, not a string
-    const estimation = await openaiClient.chatCompletionJSON(
+    // Use safe wrapper - validates and sanitizes JSON BEFORE returning
+    const estimation = await safeJSONCompletion(
       [
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
@@ -234,20 +250,33 @@ class SmartNutritionResolver {
         model: 'gpt-4o-mini',
         temperature: 0.3, // Low temperature for consistent estimates
         maxTokens: 800,
+        maxRetries: 1, // Retry once with repair prompt if JSON is malformed
       }
     );
 
+    // Validate required fields exist
+    const required = ['foodName', 'macros', 'confidence'];
+    const missing = required.filter(field => !(field in estimation));
+
+    if (missing.length > 0) {
+      throw new OpenAIValidationError(
+        `Missing required fields: ${missing.join(', ')}`,
+        { estimation, missing }
+      );
+    }
+
+    // Return validated and structured response
     return {
       foodName: estimation.foodName,
-      portionSize: estimation.portionSize,
-      servingGrams: estimation.servingGrams,
+      portionSize: estimation.portionSize || portion,
+      servingGrams: estimation.servingGrams || 0,
       confidence: estimation.confidence,
       macros: estimation.macros,
       micros: estimation.micros || {},
       components: estimation.components || [], // Component breakdown for complex foods
       isComplex: estimation.isComplex || false, // Whether food has multiple components
-      estimationMethod: estimation.estimationMethod,
-      needsVerification: estimation.needsVerification,
+      estimationMethod: estimation.estimationMethod || 'OpenAI estimation',
+      needsVerification: estimation.needsVerification || false,
     };
   }
 
