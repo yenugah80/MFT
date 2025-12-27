@@ -29,7 +29,10 @@ class SmartNutritionResolver {
 
   /**
    * Resolve nutrition for a single food item
-   * OpenAI-first with USDA verification for low confidence
+   * OpenAI-first with optional USDA verification
+   *
+   * STRATEGY: Trust OpenAI for ingredient preservation (spinach stays spinach!)
+   * Only use USDA for generic foods where exact nutrient data is critical
    */
   async resolveFood(foodQuery, portion = '1 serving') {
     this.stats.totalRequests++;
@@ -44,18 +47,31 @@ class SmartNutritionResolver {
     }
 
     try {
-      // Step 1: Get OpenAI estimation (fast, always available)
+      // Step 1: Get OpenAI estimation (fast, always available, preserves ingredients)
       const openAIResult = await this._getOpenAIEstimation(foodQuery, portion);
 
-      // Step 2: If confidence is high, use it directly
-      if (openAIResult.confidence >= 80) {
-        console.log(`[SmartResolver] High confidence (${openAIResult.confidence}%) - Using OpenAI estimate for "${foodQuery}"`);
+      // Step 2: Check if this is an ingredient-specific food (protein/vegetable/grain)
+      const hasSpecificIngredient = this._hasSpecificIngredient(foodQuery);
+
+      // Step 3: Decide whether to trust OpenAI or verify with USDA
+      // For ingredient-specific foods: ALWAYS trust OpenAI (prevents "spinach" → "beef" errors)
+      // For generic foods: Use USDA if confidence < 60%
+      const shouldTrustOpenAI = hasSpecificIngredient || openAIResult.confidence >= 60;
+
+      if (shouldTrustOpenAI) {
+        const reason = hasSpecificIngredient
+          ? 'ingredient-specific food (preserving ingredients)'
+          : `confidence ${openAIResult.confidence}% >= 60%`;
+
+        console.log(`[SmartResolver] ✅ Using OpenAI - ${reason} for "${foodQuery}"`);
         this.stats.openaiEstimates++;
 
         const result = {
           ...openAIResult,
           source: 'openai_estimation',
           sourceConfidence: openAIResult.confidence,
+          reason: `OpenAI estimation (${reason})`,
+          limitation: openAIResult.confidence < 80 ? 'Estimated values - may vary by brand/preparation' : null,
           cacheKey,
         };
 
@@ -63,13 +79,13 @@ class SmartNutritionResolver {
         return result;
       }
 
-      // Step 3: Low confidence - verify with USDA if available
-      console.log(`[SmartResolver] Low confidence (${openAIResult.confidence}%) - Verifying with USDA for "${foodQuery}"`);
+      // Step 4: Low confidence + generic food - try USDA verification
+      console.log(`[SmartResolver] 🔍 Low confidence (${openAIResult.confidence}%) for generic food - Checking USDA for "${foodQuery}"`);
 
       const usdaResult = await this._getUSDAVerification(foodQuery);
 
       if (usdaResult) {
-        console.log(`[SmartResolver] USDA verification successful for "${foodQuery}"`);
+        console.log(`[SmartResolver] ✅ USDA verification successful for "${foodQuery}"`);
         this.stats.usdaVerifications++;
 
         const result = {
@@ -77,6 +93,7 @@ class SmartNutritionResolver {
           source: 'usda_verified',
           sourceConfidence: 95,
           openaiBackup: openAIResult, // Keep OpenAI estimate as backup
+          limitation: 'USDA data - may not match your specific brand',
           cacheKey,
         };
 
@@ -84,15 +101,16 @@ class SmartNutritionResolver {
         return result;
       }
 
-      // Step 4: USDA failed - use OpenAI estimate anyway
-      console.log(`[SmartResolver] USDA unavailable - Using OpenAI estimate despite low confidence for "${foodQuery}"`);
+      // Step 5: USDA failed - use OpenAI estimate
+      console.log(`[SmartResolver] ⚠️ USDA unavailable - Using OpenAI estimate for "${foodQuery}"`);
       this.stats.openaiEstimates++;
 
       const result = {
         ...openAIResult,
         source: 'openai_estimation_fallback',
         sourceConfidence: openAIResult.confidence,
-        warning: 'Estimated values - may not be exact',
+        reason: 'OpenAI estimation (USDA unavailable)',
+        limitation: 'Estimated values - may not be exact',
         cacheKey,
       };
 
@@ -103,6 +121,33 @@ class SmartNutritionResolver {
       console.error(`[SmartResolver] Failed to resolve nutrition for "${foodQuery}":`, error.message);
       throw error;
     }
+  }
+
+  /**
+   * Check if food query contains specific ingredients that should be preserved
+   * (e.g., "spinach curry" should stay spinach, not become "beef curry")
+   * @private
+   */
+  _hasSpecificIngredient(foodQuery) {
+    const query = foodQuery.toLowerCase();
+
+    const specificIngredients = [
+      // Proteins
+      'chicken', 'beef', 'pork', 'lamb', 'turkey', 'duck', 'fish', 'salmon', 'tuna',
+      'shrimp', 'crab', 'lobster', 'tofu', 'tempeh', 'seitan', 'eggs',
+
+      // Vegetables (especially leafy greens that are often substituted)
+      'spinach', 'kale', 'broccoli', 'cauliflower', 'cabbage', 'lettuce',
+      'zucchini', 'eggplant', 'mushroom', 'pepper', 'tomato',
+
+      // Grains/Starches
+      'rice', 'quinoa', 'pasta', 'noodles', 'bread', 'potato', 'sweet potato',
+
+      // Legumes
+      'chickpea', 'lentil', 'beans', 'peas',
+    ];
+
+    return specificIngredients.some(ingredient => query.includes(ingredient));
   }
 
   /**
@@ -236,8 +281,6 @@ class SmartNutritionResolver {
    * Get resolver statistics
    */
   getStats() {
-    const cacheStats = nutritionCache.getStats();
-
     return {
       ...this.stats,
       cacheSize: nutritionCache.keys().length,

@@ -19,24 +19,28 @@ User logs "chicken breast"
 
 ## ✅ New Architecture
 
-**Smart Resolution Flow:**
+**Smart Resolution Flow (OpenAI-First + Ingredient Preservation):**
 ```
-User logs "chicken breast"
+User logs "spinach curry"
 → Check cache (24h TTL)
 → If not cached:
-   → OpenAI estimates nutrition (confidence: 95%)
-   → If confidence >= 80%: Use OpenAI ✅
-   → If confidence < 80%: Verify with USDA
+   → OpenAI estimates nutrition (preserves "spinach")
+   → Check: Does it have specific ingredient? (spinach = YES)
+   → If has specific ingredient: Use OpenAI ✅ (prevents "spinach" → "beef" errors)
+   → If generic food + confidence >= 60%: Use OpenAI ✅
+   → If generic food + confidence < 60%: Check USDA
    → Cache result
-→ Return nutrition
+→ Return nutrition with transparency (source, confidence, limitations)
 ```
+
+**Key Improvement:** For ingredient-specific foods (spinach, chicken, tofu, etc.), we ALWAYS trust OpenAI to preserve the ingredient. This prevents USDA from returning "beef curry" when you log "spinach curry".
 
 ## 📊 Benefits
 
 ### 1. **Dramatically Reduced USDA Usage**
 - **Before:** 100% of requests hit USDA
-- **After:** ~10-20% of requests hit USDA (only low-confidence cases)
-- **Result:** No more rate limit issues
+- **After:** ~5-10% of requests hit USDA (only generic low-confidence foods)
+- **Result:** No more rate limit issues, no more ingredient substitution errors
 
 ### 2. **Aggressive Caching**
 - **24-hour cache** for all nutrition lookups
