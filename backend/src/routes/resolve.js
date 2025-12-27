@@ -432,9 +432,53 @@ function selectBestUSDAMatch(results, query) {
   const queryLower = query.toLowerCase().trim();
   const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2); // Remove stop words ("a", "an", "or")
 
+  // ========== INGREDIENT CONFLICT DETECTION (CRITICAL!) ==========
+  const mainIngredients = {
+    proteins: ['chicken', 'beef', 'pork', 'lamb', 'turkey', 'duck', 'fish', 'salmon', 'tuna', 'shrimp', 'tofu', 'tempeh', 'seitan'],
+    vegetables: ['spinach', 'broccoli', 'kale', 'lettuce', 'cabbage', 'cauliflower', 'carrot', 'potato', 'tomato', 'onion', 'pepper', 'mushroom', 'eggplant'],
+    grains: ['rice', 'wheat', 'quinoa', 'oats', 'barley', 'couscous']
+  };
+
+  // Find main ingredients in query
+  const queryIngredients = [];
+  for (const [category, ingredients] of Object.entries(mainIngredients)) {
+    for (const ingredient of ingredients) {
+      if (queryLower.includes(ingredient)) {
+        queryIngredients.push({ ingredient, category });
+      }
+    }
+  }
+
   const scored = results.map((result) => {
     const descLower = result.description.toLowerCase();
     const descWords = descLower.split(/\s+/);
+
+    // ========== CRITICAL: Check for ingredient conflicts ==========
+    let ingredientMismatch = false;
+    for (const queryIng of queryIngredients) {
+      // Check if description has a DIFFERENT ingredient from the same category
+      const conflictingIngredients = mainIngredients[queryIng.category].filter(ing => ing !== queryIng.ingredient);
+      for (const conflictIng of conflictingIngredients) {
+        if (descLower.includes(conflictIng)) {
+          console.log(`[Resolve] ❌ INGREDIENT MISMATCH: Query has "${queryIng.ingredient}" but result has "${conflictIng}" - "${result.description}"`);
+          ingredientMismatch = true;
+          break;
+        }
+      }
+      if (ingredientMismatch) break;
+    }
+
+    // If there's an ingredient mismatch, return very low score
+    if (ingredientMismatch) {
+      return {
+        ...result,
+        matchScore: -1000,
+        _debug: {
+          ingredientMismatch: true,
+          reason: 'Conflicting main ingredient (e.g., spinach vs beef)'
+        }
+      };
+    }
 
     // ========== FACTOR 1: Exact Phrase Match (100 points) ==========
     // "chicken breast" in "Chicken, broilers, breast, meat only" gets full score

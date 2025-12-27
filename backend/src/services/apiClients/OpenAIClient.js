@@ -180,40 +180,50 @@ Your task is to parse meal descriptions with maximum accuracy (target: 97%+).
 
 **CRITICAL RULES - READ CAREFULLY**:
 
-1. **DO NOT add cooking methods unless explicitly stated by user**:
+1. **⚠️ NEVER CHANGE THE MAIN INGREDIENT - THIS IS CRITICAL!**:
+   - "spinach curry" → "spinach curry" (NEVER change to "beef curry" or any other ingredient!)
+   - "chicken breast" → "chicken breast" (NEVER change to "turkey" or "beef")
+   - "apple" → "apple" (NEVER change to "orange" or other fruit)
+   - "tofu" → "tofu" (NEVER change to "chicken" or "meat")
+   - **IF USER SAYS SPINACH, OUTPUT SPINACH. IF USER SAYS BEEF, OUTPUT BEEF.**
+   - **DIETARY RESTRICTIONS MATTER**: Vegetarians logging "spinach" should NEVER get "beef"!
+
+2. **DO NOT add cooking methods unless explicitly stated by user**:
    - "chicken breast" → "chicken breast" (NOT "grilled chicken breast")
    - "salmon" → "salmon" (NOT "baked salmon" or "raw salmon")
    - "200g rice" → "rice" (DO NOT assume "cooked" or "dry")
    - ONLY include cooking method if user explicitly says it: "grilled salmon" → "grilled salmon" ✓
 
-2. **DO NOT add varieties, qualifiers, or descriptors unless specified**:
+3. **DO NOT add varieties, qualifiers, or descriptors unless specified**:
    - "apple" → "apple" (NOT "red apple", "medium apple", or "Fuji apple")
    - "chicken" → "chicken" (NOT "chicken breast" unless user said "breast")
    - "salmon" → "salmon" (NOT "Atlantic salmon" or "wild salmon")
 
-3. **Preserve EXACT user terminology**:
+4. **Preserve EXACT user terminology**:
    - If user says "breast" → use "breast" (not "breasts")
    - If user says "steamed broccoli" → keep "steamed"
    - If user says "scrambled eggs" → keep "scrambled"
+   - If user says "spinach" → OUTPUT "spinach" (NOT "beef" or any other ingredient!)
 
-4. **Portion Context**:
+5. **Portion Context**:
    - "Large" coffee = 16oz (473ml), "Medium" = 12oz, "Small" = 8oz
    - "Large" meal = 1.5x standard, "Small" = 0.75x
    - "Bowl" = 2 cups, "Plate" = 1.5 cups
    - Restaurant portions = 1.5x home portions
 
-5. **Standardize Units**:
+6. **Standardize Units**:
    - Prefer USDA standards: serving, cup, oz, g, ml, tbsp, tsp
    - "Piece" of chicken = 4oz (113g)
    - "Slice" of bread = 1oz (30g)
    - "Medium" apple = 182g
 
-6. **Multi-word Foods**:
+7. **Multi-word Foods**:
    - Keep specific parts: "chicken breast" not just "chicken"
    - Keep preparation if stated: "scrambled eggs" not just "eggs"
    - But DO NOT add parts user didn't mention
+   - NEVER substitute ingredients: "spinach curry" must stay "spinach curry"
 
-7. **Confidence Scoring**:
+8. **Confidence Scoring**:
    - 0.9-1.0: Exact portions specified ("200g chicken")
    - 0.7-0.9: Standard portions implied ("1 chicken breast")
    - 0.5-0.7: Vague portions ("some rice", "a few carrots")
@@ -278,6 +288,25 @@ Input: "apple"
 Output:
 [{"name": "apple", "quantity": 1, "unit": "serving", "confidence": 0.75}]
 ⚠️ DO NOT output "medium apple" or "red apple" - user didn't specify!
+
+**Example 7** - CRITICAL: Preserve specific ingredients:
+Input: "spinach curry with bowl of rice"
+Output:
+[
+  {"name": "spinach curry", "quantity": 1, "unit": "serving", "confidence": 0.85},
+  {"name": "rice", "quantity": 2, "unit": "cup", "confidence": 0.8, "notes": "bowl = ~2 cups"}
+]
+⚠️ CRITICAL: OUTPUT "spinach curry" - NEVER change to "beef curry" or any other ingredient!
+⚠️ User said SPINACH, so output SPINACH. This is critical for dietary restrictions!
+
+**Example 8** - Vegetarian meal preservation:
+Input: "tofu stir fry with vegetables"
+Output:
+[
+  {"name": "tofu stir fry", "quantity": 1, "unit": "serving", "confidence": 0.8},
+  {"name": "vegetables", "quantity": 1, "unit": "cup", "confidence": 0.7}
+]
+⚠️ NEVER change "tofu" to "chicken" or "beef" - preserve the exact ingredient!
 
 Now parse: "${query}"
 

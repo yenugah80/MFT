@@ -23,10 +23,13 @@ function getDevApiUrl() {
 }
 
 // Base API URL
-// Automatically uses platform-specific localhost in development
-export const API_URL = __DEV__
-  ? getDevApiUrl()
-  : 'https://myfoodtracker.onrender.com/api';
+// Always use production backend (comment out to use local backend in dev)
+export const API_URL = 'https://myfoodtracker.onrender.com/api';
+
+// Uncomment below to use local backend in development:
+// export const API_URL = __DEV__
+//   ? getDevApiUrl()
+//   : 'https://myfoodtracker.onrender.com/api';
 
 // Legacy export for backwards compatibility (profileAPI uses this without /api)
 // Derive from API_URL by removing /api suffix

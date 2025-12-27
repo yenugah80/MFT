@@ -46,16 +46,13 @@ export default function HomeScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          <View>
+          <View style={styles.headerContent}>
             <Text style={styles.greeting}>Hello,</Text>
             <Text style={styles.userName}>{user?.firstName || 'There'}!</Text>
+            <Text style={styles.headerSubtitle}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </Text>
           </View>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => router.push('/profile')}
-          >
-            <Ionicons name="person-circle" size={48} color="#fff" />
-          </TouchableOpacity>
         </LinearGradient>
 
         {/* Welcome Message */}
@@ -145,27 +142,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     padding: 24,
     paddingBottom: 32,
   },
+  headerContent: {
+    alignItems: 'flex-start',
+  },
   greeting: {
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 4,
+    fontWeight: '500',
   },
   userName: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
     color: '#fff',
+    marginBottom: 8,
   },
-  profileButton: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '500',
   },
   welcomeSection: {
     padding: 24,

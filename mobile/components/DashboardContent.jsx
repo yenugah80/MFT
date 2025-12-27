@@ -990,17 +990,6 @@ export default function DashboardContent() {
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.replace('/(tabs)/profile');
-              }}
-              accessibilityLabel="Go to Profile tab"
-              accessibilityRole="button"
-            >
-              <Ionicons name={ICONS.profile} size={20} color={TEXT.primary} />
-            </TouchableOpacity>
             <View>
               <Text style={styles.headerTitle}>
                 {getGreeting()}, {displayName}
@@ -1643,19 +1632,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[5],
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple tint (was white glass)
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    flex: 1,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size['3xl'],
