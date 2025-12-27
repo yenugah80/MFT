@@ -282,12 +282,15 @@ class SmartNutritionResolver {
       portionSize: estimation.portionSize || portion,
       servingGrams: estimation.servingGrams || 0,
       confidence: estimation.confidence,
+      estimationTier: estimation.estimationTier || 'standard', // simple, standard, or complex
+      validationPassed: estimation.validationPassed ?? true, // Macro validation status
       macros: estimation.macros,
       micros: estimation.micros || {},
       components: estimation.components || [], // Component breakdown for complex foods
       isComplex: estimation.isComplex || false, // Whether food has multiple components
       estimationMethod: estimation.estimationMethod || 'OpenAI estimation',
       needsVerification: estimation.needsVerification || false,
+      notes: estimation.notes || '', // Additional context or assumptions
     };
   }
 
