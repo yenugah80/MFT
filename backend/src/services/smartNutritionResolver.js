@@ -9,7 +9,7 @@
  * 4. Cache results aggressively (24h TTL)
  */
 
-import { openAIClient } from './apiClients/OpenAIClient.js';
+import { openaiClient } from './apiClients/OpenAIClient.js';
 import { usdaClient } from './apiClients/USDAClient.js';
 import { buildNutritionEstimationPrompt, buildBatchNutritionEstimationPrompt } from './apiClients/prompts/nutritionEstimation.js';
 import NodeCache from 'node-cache';
@@ -181,7 +181,7 @@ class SmartNutritionResolver {
       // Use OpenAI batch estimation (single API call for multiple foods)
       const prompt = buildBatchNutritionEstimationPrompt(uncachedItems);
 
-      const response = await openAIClient.chatCompletionJSON(
+      const response = await openaiClient.chatCompletionJSON(
         [
           { role: 'system', content: prompt.system },
           { role: 'user', content: prompt.user },
@@ -225,7 +225,7 @@ class SmartNutritionResolver {
   async _getOpenAIEstimation(foodQuery, portion) {
     const prompt = buildNutritionEstimationPrompt(foodQuery, portion);
 
-    const response = await openAIClient.chatCompletionJSON(
+    const response = await openaiClient.chatCompletionJSON(
       [
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
