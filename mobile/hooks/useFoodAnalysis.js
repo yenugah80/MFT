@@ -1389,7 +1389,8 @@ export function useFoodAnalysis() {
     if (debouncedText.trim() && !isAnalyzing) {
       analyzeTextUniversal(debouncedText);
     }
-  }, [debouncedText, isAnalyzing, analyzeTextUniversal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedText, isAnalyzing]); // Removed analyzeTextUniversal from deps - it's stable
 
   // P0-2 FIX: Cleanup abort controller and debounce timer on unmount
   useEffect(() => {
