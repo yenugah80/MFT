@@ -9,6 +9,7 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { FoodService } from "../services/foodService.js";
+import { smartNutritionResolver } from "../services/smartNutritionResolver.js";
 import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
@@ -278,59 +279,116 @@ async function resolvePhotoMode(imageBase64, draftId, mealType) {
 
 /**
  * RESOLVE GENERIC FOOD (text/photo parsed item)
- * Try USDA first, then OFF if packaged cue detected
+ * NEW: Uses Smart Nutrition Resolver (OpenAI-first with USDA verification)
  */
 async function resolveGenericFood(parsedFood) {
   const sourceEvidence = [];
   const itemId = uuidv4();
 
-  // Try USDA first (primary for generic foods)
-  const usdaResults = await FoodService.searchUSDAByName(parsedFood.name);
+  try {
+    // Build portion string for Smart Resolver
+    const portionStr = parsedFood.quantity && parsedFood.unit
+      ? `${parsedFood.quantity} ${parsedFood.unit}`
+      : '1 serving';
 
-  if (usdaResults && usdaResults.length > 0) {
-    const bestMatch = selectBestUSDAMatch(usdaResults, parsedFood.name);
+    // Use Smart Nutrition Resolver (OpenAI first, USDA verification for low confidence)
+    const nutrition = await smartNutritionResolver.resolveFood(parsedFood.name, portionStr);
 
+    // Build source evidence
     sourceEvidence.push({
-      source: 'USDA',
-      sourceId: bestMatch.fdcId,
-      confidence: bestMatch.matchScore,
+      source: nutrition.source,
+      sourceId: nutrition.fdcId || nutrition.estimationMethod || 'openai',
+      confidence: nutrition.sourceConfidence / 100, // Convert to 0-1 scale
       fetchedAt: new Date().toISOString(),
-      fieldsProvided: ['macros', 'micros']
+      fieldsProvided: ['macros', 'micros'],
+      method: nutrition.estimationMethod || nutrition.source
     });
+
+    // Build flags based on source and confidence
+    const flags = [];
+    if (!parsedFood.quantity) flags.push('portion_estimated');
+    if (nutrition.source.includes('estimation')) {
+      if (nutrition.sourceConfidence < 80) {
+        flags.push('estimated_nutrients_low_confidence');
+      } else {
+        flags.push('ai_estimated_nutrients');
+      }
+    }
+    if (nutrition.warning) flags.push('needs_verification');
 
     return {
       itemId,
-      name: bestMatch.description,
+      name: nutrition.foodName,
       portion: {
         amount: parsedFood.quantity || 1,
         unit: parsedFood.unit || 'serving',
-        gramsEquivalent: bestMatch.gramsPerServing,
-        servingText: bestMatch.servingText,
+        gramsEquivalent: nutrition.servingGrams || 100,
+        servingText: nutrition.portionSize,
         isEstimated: !parsedFood.quantity
       },
-      macros: bestMatch.macros,
-      micros: bestMatch.micros || {},
+      macros: nutrition.macros,
+      micros: nutrition.micros || {},
       scores: {},
       sourceEvidence,
-      flags: parsedFood.quantity ? [] : ['portion_estimated']
+      flags,
+      _smartResolver: {
+        confidence: nutrition.confidence,
+        source: nutrition.source,
+        cached: !!nutrition.cacheKey
+      }
+    };
+
+  } catch (error) {
+    console.error(`[Resolve] Smart resolver failed for "${parsedFood.name}":`, error.message);
+
+    // Fallback: Try old USDA method
+    const usdaResults = await FoodService.searchUSDAByName(parsedFood.name);
+
+    if (usdaResults && usdaResults.length > 0) {
+      const bestMatch = selectBestUSDAMatch(usdaResults, parsedFood.name);
+
+      sourceEvidence.push({
+        source: 'USDA_FALLBACK',
+        sourceId: bestMatch.fdcId,
+        confidence: bestMatch.matchScore,
+        fetchedAt: new Date().toISOString(),
+        fieldsProvided: ['macros', 'micros']
+      });
+
+      return {
+        itemId,
+        name: bestMatch.description,
+        portion: {
+          amount: parsedFood.quantity || 1,
+          unit: parsedFood.unit || 'serving',
+          gramsEquivalent: bestMatch.gramsPerServing,
+          servingText: bestMatch.servingText,
+          isEstimated: !parsedFood.quantity
+        },
+        macros: bestMatch.macros,
+        micros: bestMatch.micros || {},
+        scores: {},
+        sourceEvidence,
+        flags: parsedFood.quantity ? ['fallback_method'] : ['portion_estimated', 'fallback_method']
+      };
+    }
+
+    // Ultimate fallback: return empty with error flag
+    return {
+      itemId,
+      name: parsedFood.name,
+      portion: {
+        amount: parsedFood.quantity || 1,
+        unit: parsedFood.unit || 'serving',
+        isEstimated: true
+      },
+      macros: { calories_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      micros: {},
+      scores: {},
+      sourceEvidence,
+      flags: ['estimated_nutrients', 'portion_estimated', 'resolution_failed']
     };
   }
-
-  // Fallback: return with estimated flag
-  return {
-    itemId,
-    name: parsedFood.name,
-    portion: {
-      amount: parsedFood.quantity || 1,
-      unit: parsedFood.unit || 'serving',
-      isEstimated: true
-    },
-    macros: { calories_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-    micros: {},
-    scores: {},
-    sourceEvidence,
-    flags: ['estimated_nutrients', 'portion_estimated']
-  };
 }
 
 // ==================== HELPER FUNCTIONS ====================
