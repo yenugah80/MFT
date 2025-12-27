@@ -5,14 +5,20 @@
  * Strategy:
  * 1. OpenAI estimates nutrition (fast, no rate limits for estimates)
  * 2. If confidence >= 80% → Use OpenAI result
- * 3. If confidence < 80% → Verify with USDA (fallback)
+ * 3. If confidence < 80% → Verify with USDA (fallback) [CURRENTLY DISABLED - validating OpenAI-only]
  * 4. Cache results aggressively (24h TTL)
+ *
+ * USDA Verification: Disabled by default (set ENABLE_USDA_VERIFICATION=true to enable)
+ * Current strategy: Trust OpenAI entirely, monitor accuracy, re-enable USDA later if needed
  */
 
 import { usdaClient } from './apiClients/USDAClient.js';
 import { buildNutritionEstimationPrompt, buildBatchNutritionEstimationPrompt } from './apiClients/prompts/nutritionEstimation.js';
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
+
+// Feature flag for USDA verification (disabled by default)
+const ENABLE_USDA_VERIFICATION = process.env.ENABLE_USDA_VERIFICATION === 'true';
 
 // Aggressive caching (24 hours)
 const nutritionCache = new NodeCache({ stdTTL: 86400, checkperiod: 600 });
@@ -55,11 +61,15 @@ class SmartNutritionResolver {
 
       // Step 3: Decide whether to trust OpenAI or verify with USDA
       // For ingredient-specific foods: ALWAYS trust OpenAI (prevents "spinach" → "beef" errors)
-      // For generic foods: Use USDA if confidence < 60%
-      const shouldTrustOpenAI = hasSpecificIngredient || openAIResult.confidence >= 60;
+      // For generic foods: Use USDA if confidence < 60% (when USDA verification enabled)
+
+      // FEATURE FLAG: USDA verification disabled by default (validating OpenAI-only accuracy)
+      const shouldTrustOpenAI = !ENABLE_USDA_VERIFICATION || hasSpecificIngredient || openAIResult.confidence >= 60;
 
       if (shouldTrustOpenAI) {
-        const reason = hasSpecificIngredient
+        const reason = !ENABLE_USDA_VERIFICATION
+          ? 'USDA verification disabled (OpenAI-only mode)'
+          : hasSpecificIngredient
           ? 'ingredient-specific food (preserving ingredients)'
           : `confidence ${openAIResult.confidence}% >= 60%`;
 
@@ -82,6 +92,7 @@ class SmartNutritionResolver {
       }
 
       // Step 4: Low confidence + generic food - try USDA verification
+      // NOTE: This code path only executes when ENABLE_USDA_VERIFICATION=true
       console.log(`[SmartResolver] 🔍 Low confidence (${openAIResult.confidence}%) for generic food - Checking USDA for "${foodQuery}"`);
 
       const usdaResult = await this._getUSDAVerification(foodQuery);

@@ -16,7 +16,7 @@ import storage, { STORAGE_KEYS } from '../utils/storage';
 // ============================================================================
 
 const ANALYTICS_CONFIG = {
-  enabled: true, // Always enabled (logs to backend)
+  enabled: false, // Disabled - backend endpoint not implemented
   providers: {
     mixpanel: false,
     amplitude: false,
