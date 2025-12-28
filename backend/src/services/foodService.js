@@ -437,11 +437,43 @@ export const FoodService = {
   // ------------- AI: Voice Analysis -------------
 
   /**
-   * Analyze voice recording and return nutrition data
+   * Transcribe voice recording to text ONLY (step 1 of voice logging)
+   * audioBuffer: Buffer containing audio file (m4a, mp3, wav)
+   * options: { language: string }
+   *
+   * USES: gpt-4o-mini-transcribe for speech-to-text
+   * Returns: { transcript: string, confidence: number }
+   */
+  transcribeVoice: async (audioBuffer, options = {}) => {
+    try {
+      // Transcribe audio using gpt-4o-mini-transcribe
+      const transcription = await openaiClient.transcribeAudio(audioBuffer, options);
+
+      if (!transcription || !transcription.text) {
+        throw new Error('Transcription failed or empty');
+      }
+
+      console.log(`[FoodService] Transcribed: "${transcription.text}"`);
+
+      return {
+        transcript: transcription.text,
+        confidence: transcription.confidence || 0.9,
+      };
+
+    } catch (error) {
+      console.error(`[FoodService] Voice transcription failed:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Analyze voice recording and return nutrition data (LEGACY - combines transcribe + analyze)
    * audioBuffer: Buffer containing audio file (m4a, mp3, wav)
    * options: { language: string }
    *
    * USES: gpt-4o-mini-transcribe for speech-to-text + GPT-4o for nutrition extraction
+   *
+   * NOTE: Prefer using transcribeVoice() + existing nutrition estimation for better UX
    */
   analyzeVoice: async (audioBuffer, options = {}) => {
     try {

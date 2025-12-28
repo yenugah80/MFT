@@ -71,8 +71,61 @@ router.post("/analyze-image", async (req, res) => {
 });
 
 /**
+ * POST /api/food/transcribe-voice
+ * Transcribe a voice recording to text (step 1 of voice logging).
+ *
+ * Content-Type: multipart/form-data
+ * Body (form-data): {
+ *   audio: File (m4a, mp3, wav, etc.),
+ *   language?: string (e.g., 'en', default: 'en')
+ * }
+ *
+ * Returns: { transcript: string, confidence: number }
+ * Uses gpt-4o-mini-transcribe for speech-to-text ONLY
+ */
+router.post("/transcribe-voice", async (req, res) => {
+  try {
+    // Check if file was uploaded
+    if (!req.files || !req.files.audio) {
+      return res.status(400).json({ error: "Audio file required" });
+    }
+
+    const audioFile = req.files.audio;
+    const language = req.body.language || 'en';
+
+    // Validate file size (max 25MB as per OpenAI limits)
+    const maxSize = 25 * 1024 * 1024; // 25MB
+    if (audioFile.size > maxSize) {
+      return res.status(400).json({ error: "Audio file too large (max 25MB)" });
+    }
+
+    // Validate file type
+    const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/wav', 'audio/webm'];
+    if (!validTypes.some(type => audioFile.mimetype.includes(type))) {
+      return res.status(400).json({ error: "Invalid audio format. Supported: m4a, mp3, wav, webm" });
+    }
+
+    console.log(`[FoodTranscribeVoice] Transcribing audio: ${audioFile.name}, size: ${audioFile.size} bytes`);
+
+    // Transcribe voice using FoodService
+    const result = await FoodService.transcribeVoice(audioFile.data, { language });
+
+    if (!result || !result.transcript) {
+      return res.status(500).json({ error: "Transcription failed" });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("[FoodTranscribeVoice] Error:", error);
+    res.status(500).json({
+      error: error.message || "Transcription failed"
+    });
+  }
+});
+
+/**
  * POST /api/food/analyze-voice
- * Analyze a voice recording and extract nutrition data.
+ * Analyze a voice recording and extract nutrition data (LEGACY - does both transcribe + analyze).
  *
  * Content-Type: multipart/form-data
  * Body (form-data): {
@@ -81,6 +134,8 @@ router.post("/analyze-image", async (req, res) => {
  * }
  *
  * Uses gpt-4o-mini-transcribe for speech-to-text + GPT-4o for nutrition extraction
+ *
+ * NOTE: Prefer using /transcribe-voice + /analyze-text for better UX (allows user to confirm/edit transcript)
  */
 router.post("/analyze-voice", async (req, res) => {
   try {

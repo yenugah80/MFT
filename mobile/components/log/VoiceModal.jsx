@@ -8,10 +8,11 @@
  * - Animated waveform visualization (30 bars)
  * - Real-time volume metering
  * - Recording duration display with limit (60s)
- * - Transcription preview with edit capability
+ * - Transcription preview with edit capability (BEFORE nutrition analysis)
  * - Confidence score indicator
  * - Haptic feedback on actions
- * - State machine: idle → listening → processing → transcribed → success/error
+ * - Two-step flow: transcribe → user confirms → analyze nutrition
+ * - State machine: idle → listening → processing → transcribed → analyzing → success/error
  * - Premium Ionicons (no emojis)
  * - Unified theme integration
  *
@@ -196,6 +197,7 @@ export function VoiceModal({
     error,
     startRecording,
     stopRecording,
+    analyzeTranscript,
     cancelRecording,
     clearError,
   } = voiceHook;
@@ -251,10 +253,9 @@ export function VoiceModal({
       await triggerHaptic();
       const result = await stopRecording();
 
-      // Extract Whisper transcript (raw speech-to-text)
-      // Backend returns: transcript (from Whisper) + foodName (from GPT-4o)
-      setTranscription(result.transcript || result.foodName || 'Unknown food');
-      setConfidence(result.confidence ?? 0.7);
+      // Step 1 complete: Got transcription only (NO nutrition data yet!)
+      setTranscription(result.transcript || 'Unknown food');
+      setConfidence(result.confidence ?? 0.9);
       setState('transcribed');
     } catch (err) {
       console.error('[VoiceModal] Stop failed:', err);
@@ -269,20 +270,27 @@ export function VoiceModal({
   };
 
   const handleConfirm = async () => {
-    setState('success');
-    await triggerHaptic('success');
+    try {
+      // Show analyzing state
+      setState('analyzing');
+      await triggerHaptic();
 
-    // Delay to show success state, then close and return result
-    setTimeout(() => {
-      onComplete({
-        timestamp: Date.now(),
-        source: 'voice',
-        transcript: transcription, // Whisper transcript
-        foodName: transcription,   // Use edited transcript as food name
-        confidence: confidence ?? 0.7,
-      });
-      handleClose();
-    }, 800);
+      // Step 2: Analyze the confirmed/edited transcript
+      const nutritionResult = await analyzeTranscript(transcription);
+
+      // Show success state
+      setState('success');
+      await triggerHaptic('success');
+
+      // Delay to show success state, then close and return result
+      setTimeout(() => {
+        onComplete(nutritionResult);
+        handleClose();
+      }, 800);
+    } catch (err) {
+      console.error('[VoiceModal] Analysis failed:', err);
+      setState('error');
+    }
   };
 
   const handleClose = () => {
@@ -478,6 +486,21 @@ export function VoiceModal({
                     </>
                   )}
                 </View>
+              </>
+            )}
+
+            {/* ANALYZING STATE (NEW - Step 2) */}
+            {state === 'analyzing' && (
+              <>
+                <View style={styles.processingIndicator}>
+                  <Animated.View style={styles.spinningIcon}>
+                    <Ionicons name="nutrition" size={ICON_SIZES['4xl']} color={BRAND.primary} />
+                  </Animated.View>
+                </View>
+                <Text style={styles.statusText}>Analyzing Nutrition...</Text>
+                <Text style={styles.hint}>
+                  Calculating calories, protein, carbs, and more...
+                </Text>
               </>
             )}
 

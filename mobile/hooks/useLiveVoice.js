@@ -24,8 +24,6 @@ import { useAuth } from '@clerk/clerk-expo';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_URL } from '../constants/api';
-import { calculateNetCarbs } from '../types/foodLog';
-import { normalizeNutritionData, detectAggregatedData } from '../utils/nutritionNormalizer';
 
 // ============================================================================
 // CONSTANTS
@@ -279,7 +277,7 @@ export function useLiveVoice() {
   }, [hasPermission, requestPermissions, startMetering, startDurationTracking, stopIntervals]);
 
   // ─────────────────────────────────────────────
-  // Stop Recording + Upload with Retry
+  // Stop Recording + Upload for Transcription ONLY (Step 1)
   // ─────────────────────────────────────────────
   const stopRecording = useCallback(async () => {
     if (!recordingRef.current) {
@@ -329,14 +327,14 @@ export function useLiveVoice() {
         name: `voice-${Date.now()}.m4a`,
       });
 
-      console.log('[useLiveVoice] Uploading to backend for transcription and analysis...');
+      console.log('[useLiveVoice] Uploading to backend for transcription...');
 
-      // Upload with retry logic (using new gpt-4o-transcribe endpoint)
+      // Upload with retry logic (using NEW transcribe-only endpoint)
       let lastError = null;
       for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
         try {
           const response = await fetchWithTimeout(
-            `${API_URL}/food/analyze-voice`,
+            `${API_URL}/food/transcribe-voice`,
             {
               method: 'POST',
               headers: {
@@ -353,41 +351,20 @@ export function useLiveVoice() {
           }
 
           const data = await response.json();
-          console.log('[useLiveVoice] ✅ Voice analysis successful');
+          console.log('[useLiveVoice] ✅ Transcription successful');
 
           // Clean up audio file
           await FileSystem.deleteAsync(uri);
 
           // Validate response data
-          if (!data.foodName && !data.transcript) {
+          if (!data.transcript) {
             throw new Error('Could not understand the recording. Please try again.');
           }
 
-          // Detect if AI returned aggregated data (anti-pattern)
-          if (detectAggregatedData(data).isAggregated) {
-            console.warn('[useLiveVoice] ⚠️ Aggregated data detected from backend');
-          }
-
-          // Normalize nutrition data
-          const normalized = normalizeNutritionData(data);
-
-          // Return structured result
+          // Return transcription result (NO nutrition data yet!)
           return {
-            timestamp: Date.now(),
-            source: 'voice',
-            transcript: data.transcript || data.foodName || 'Voice input',
-            foodName: data.foodName || data.transcript || 'Voice logged food',
-            servingSize: data.servingSize || '1 serving',
-            calories: normalized.calories,
-            protein: normalized.protein,
-            carbs: normalized.carbs,
-            fat: normalized.fat,
-            fiber: normalized.fiber,
-            sugar: normalized.sugar,
-            netCarbs: calculateNetCarbs(normalized),
-            ingredients: data.ingredients || [],
-            confidence: data.confidence ?? 0.7,
-            model: data.model || 'gpt-4o', // Track which model was used
+            transcript: data.transcript,
+            confidence: data.confidence ?? 0.9,
           };
         } catch (err) {
           lastError = err;
@@ -411,12 +388,76 @@ export function useLiveVoice() {
 
     } catch (err) {
       console.error('[useLiveVoice] Stop recording error:', err);
-      setError(err.message || 'Voice analysis failed');
+      setError(err.message || 'Transcription failed');
       throw err;
     } finally {
       setIsProcessing(false);
     }
   }, [getToken, stopIntervals]);
+
+  // ─────────────────────────────────────────────
+  // Analyze Confirmed Transcript (Step 2 - After User Confirmation)
+  // ─────────────────────────────────────────────
+  const analyzeTranscript = useCallback(async (transcript) => {
+    try {
+      setIsProcessing(true);
+      setError(null);
+
+      // Get auth token
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please sign in again.');
+      }
+
+      console.log('[useLiveVoice] Analyzing confirmed transcript:', transcript);
+
+      // Call nutrition analysis API
+      const response = await fetchWithTimeout(
+        `${API_URL}/nutrition/recipe/parse`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ text: transcript }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[useLiveVoice] ✅ Nutrition analysis successful');
+
+      // Return nutrition data in expected format
+      return {
+        timestamp: Date.now(),
+        source: 'voice',
+        transcript,
+        foodName: data.foodName || transcript,
+        servingSize: data.servingSize || data.portion?.unit || '1 serving',
+        calories: data.calories || data.macros?.calories || 0,
+        protein: data.protein || data.macros?.protein || 0,
+        carbs: data.carbs || data.macros?.carbs || 0,
+        fat: data.fat || data.macros?.fat || 0,
+        fiber: data.fiber || data.macros?.fiber || 0,
+        sugar: data.sugar || data.macros?.sugar || 0,
+        netCarbs: data.netCarbs || (data.macros?.carbs || 0) - (data.macros?.fiber || 0),
+        ingredients: data.ingredients || [],
+        confidence: data.confidence ?? 0.7,
+        model: 'gpt-4o-mini',
+      };
+    } catch (err) {
+      console.error('[useLiveVoice] Transcript analysis error:', err);
+      setError(err.message || 'Nutrition analysis failed');
+      throw err;
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [getToken]);
 
   // ─────────────────────────────────────────────
   // Cancel Recording
@@ -467,6 +508,7 @@ export function useLiveVoice() {
     requestPermissions,
     startRecording,
     stopRecording,
+    analyzeTranscript, // NEW: Analyze confirmed transcript (step 2)
     cancelRecording,
     clearError: () => setError(null),
   };
