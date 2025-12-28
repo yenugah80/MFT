@@ -319,10 +319,10 @@ export function useLiveVoice() {
         throw new Error('Authentication required. Please sign in again.');
       }
 
-      // Prepare form data
+      // Prepare form data (React Native format)
       const formData = new FormData();
       formData.append('audio', {
-        uri,
+        uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
         type: 'audio/m4a',
         name: `voice-${Date.now()}.m4a`,
       });
@@ -339,7 +339,8 @@ export function useLiveVoice() {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${token}`,
-                // Note: Don't set Content-Type for FormData - browser sets it with boundary
+                Accept: 'application/json',
+                // Let FormData set Content-Type with boundary
               },
               body: formData,
             }
