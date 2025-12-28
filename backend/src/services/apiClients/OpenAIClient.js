@@ -12,6 +12,7 @@ import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
 import { buildImageAnalysisPrompt } from './prompts/nutritionAnalysis.js';
 import { normalizeNutritionAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
+import { canonicalize, validateExtraction } from '../canonicalIngredients.js';
 
 class OpenAIClient extends BaseApiClient {
   constructor() {
@@ -324,17 +325,47 @@ REMEMBER: Extract ONLY what the user actually typed. Do not add cooking methods,
         throw new Error('Invalid response format');
       }
 
-      return json.foods;
+      // PRODUCTION FIX: Validation + Canonicalization Pipeline
+      // Step 1: Validate extraction (ensure no ingredients were missed)
+      const validated = validateExtraction(query, json.foods);
+
+      // Step 2: Canonicalize each ingredient
+      const canonical = validated.map(item => {
+        const canonicalForm = canonicalize(item.name);
+        return {
+          ...item,
+          canonical: canonicalForm,
+          // Update name to canonical form for better nutrition lookup
+          name: canonicalForm.canonical,
+          preparation: canonicalForm.preparation,
+          // Use canonical portion if user didn't specify
+          quantity: item.quantity || canonicalForm.portion.amount,
+          unit: item.unit || canonicalForm.portion.unit,
+          confidence: Math.min(item.confidence || 0.5, canonicalForm.confidence),
+          originalInput: item.name, // Preserve what user typed
+        };
+      });
+
+      // Step 3: Log for monitoring
+      console.log(`[ParseText] Input: "${query}"`);
+      console.log(`[ParseText] Extracted: ${validated.length} items`);
+      console.log(`[ParseText] Canonical: ${canonical.map(c => `${c.name} (${c.preparation})`).join(', ')}`);
+
+      return canonical;
     } catch (error) {
       console.error(`[OpenAI] Parse failed for "${query}":`, error.message);
 
-      // Fallback: treat entire query as single food
+      // Fallback: treat entire query as single food with canonicalization
+      const canonicalForm = canonicalize(query);
       return [
         {
-          name: query,
-          quantity: 1,
-          unit: 'serving',
+          name: canonicalForm.canonical,
+          preparation: canonicalForm.preparation,
+          quantity: canonicalForm.portion.amount,
+          unit: canonicalForm.portion.unit,
           confidence: 0.5,
+          canonical: canonicalForm,
+          originalInput: query,
         },
       ];
     }
