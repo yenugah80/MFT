@@ -9,6 +9,7 @@
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import storage, { STORAGE_KEYS } from '../utils/storage';
 
 // ============================================================================
@@ -84,6 +85,9 @@ async function enrichEventProperties(properties) {
     getSessionData(),
     getUserPreferences(),
   ]);
+  const appVersion = Constants.expoConfig?.version
+    || Constants.manifest?.version
+    || 'unknown';
 
   return {
     ...properties,
@@ -107,7 +111,7 @@ async function enrichEventProperties(properties) {
     ...userPreferences,
 
     // App context
-    appVersion: '1.0.0', // TODO: Get from app.json or package.json
+    appVersion,
 
     // Category for filtering
     category: 'theme',
@@ -119,10 +123,33 @@ async function enrichEventProperties(properties) {
  */
 async function getSessionData() {
   try {
-    // TODO: Implement proper session tracking
+    const SESSION_KEY = 'theme-analytics-session';
+    const now = Date.now();
+    const session = await storage.getItem(SESSION_KEY);
+    const sessionTimeoutMs = 30 * 60 * 1000;
+
+    if (session?.id && session?.lastSeenAt && now - session.lastSeenAt < sessionTimeoutMs) {
+      const updatedSession = { ...session, lastSeenAt: now };
+      await storage.setItem(SESSION_KEY, updatedSession);
+      return {
+        sessionId: updatedSession.id,
+        sessionStart: new Date(updatedSession.startedAt).toISOString(),
+        sessionLastSeen: new Date(updatedSession.lastSeenAt).toISOString(),
+      };
+    }
+
+    const newSession = {
+      id: `session_${now}`,
+      startedAt: now,
+      lastSeenAt: now,
+    };
+
+    await storage.setItem(SESSION_KEY, newSession);
+
     return {
-      sessionId: 'session_' + Date.now(), // Placeholder
-      sessionStart: new Date().toISOString(),
+      sessionId: newSession.id,
+      sessionStart: new Date(newSession.startedAt).toISOString(),
+      sessionLastSeen: new Date(newSession.lastSeenAt).toISOString(),
     };
   } catch (error) {
     return {};
@@ -154,10 +181,7 @@ async function getUserPreferences() {
  */
 async function trackToMixpanel(eventName, properties) {
   try {
-    // TODO: Integrate with Mixpanel SDK
-    // Example:
-    // const Mixpanel = require('mixpanel-react-native').default;
-    // await Mixpanel.track(eventName, properties);
+    // Mixpanel integration intentionally disabled until configured.
 
     if (__DEV__) {
       console.log('[Mixpanel]', eventName, properties);
@@ -173,10 +197,7 @@ async function trackToMixpanel(eventName, properties) {
  */
 async function trackToAmplitude(eventName, properties) {
   try {
-    // TODO: Integrate with Amplitude SDK
-    // Example:
-    // import * as Amplitude from '@amplitude/analytics-react-native';
-    // await Amplitude.track(eventName, properties);
+    // Amplitude integration intentionally disabled until configured.
 
     if (__DEV__) {
       console.log('[Amplitude]', eventName, properties);
@@ -192,10 +213,7 @@ async function trackToAmplitude(eventName, properties) {
  */
 async function trackToFirebase(eventName, properties) {
   try {
-    // TODO: Integrate with Firebase Analytics
-    // Example:
-    // import analytics from '@react-native-firebase/analytics';
-    // await analytics().logEvent(eventName, properties);
+    // Firebase Analytics integration intentionally disabled until configured.
 
     if (__DEV__) {
       console.log('[Firebase]', eventName, properties);

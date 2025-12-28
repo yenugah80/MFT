@@ -22,11 +22,11 @@ export default function TermsOfServiceScreen() {
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.lastUpdated}>Last Updated: December 25, 2025</Text>
+        <Text style={styles.lastUpdated}>Last Updated: December 28, 2024</Text>
 
         <Section title="Acceptance of Terms">
           <Text style={styles.text}>
-            By accessing and using MFT ("the App"), you accept and agree to be
+            By accessing and using My-Food-Tracker ("the App"), you accept and agree to be
             bound by these Terms of Service. If you do not agree to these terms, please
             do not use the App.
           </Text>
@@ -34,7 +34,7 @@ export default function TermsOfServiceScreen() {
 
         <Section title="Description of Service">
           <Text style={styles.text}>
-            MFT provides nutrition tracking, meal logging, mood tracking, and
+            My-Food-Tracker provides nutrition tracking, meal logging, mood tracking, and
             health insights through AI-powered analysis. The App uses OpenAI's GPT-4 and
             Whisper AI to analyze food photos and voice inputs.
           </Text>
@@ -65,7 +65,7 @@ export default function TermsOfServiceScreen() {
 
         <Section title="Health Disclaimer">
           <Text style={styles.text}>
-            IMPORTANT: MFT is NOT a medical device and is NOT intended to
+            IMPORTANT: My-Food-Tracker is NOT a medical device and is NOT intended to
             diagnose, treat, cure, or prevent any disease.{'\n\n'}
 
             • The nutrition data provided is for informational purposes only{'\n'}
@@ -96,7 +96,7 @@ export default function TermsOfServiceScreen() {
         <Section title="Intellectual Property">
           <Text style={styles.text}>
             The App and its original content, features, and functionality are owned by
-            MFT and are protected by international copyright, trademark, patent,
+            My-Food-Tracker and are protected by international copyright, trademark, patent,
             trade secret, and other intellectual property laws.{'\n\n'}
 
             You retain ownership of the content you upload (photos, notes, etc.), but
@@ -196,7 +196,7 @@ export default function TermsOfServiceScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            By using MFT, you acknowledge that you have read, understood,
+            By using My-Food-Tracker, you acknowledge that you have read, understood,
             and agree to be bound by these Terms of Service.
           </Text>
         </View>

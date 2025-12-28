@@ -169,181 +169,41 @@ class OpenAIClient extends BaseApiClient {
 
   /**
    * Parse text query into structured food items
-   * Enhanced for 97%+ accuracy with context-aware portion estimation
+   *
+   * ARCHITECTURE: Minimal AI prompt + Code-based post-processing
+   * - AI does ONE thing: extract food items exactly as user typed
+   * - Code handles: canonicalization, portion defaults, nutrition lookup
+   * - This prevents prompt overload and LLM hallucinations
+   *
+   * Why this works better:
+   * 1. Short prompts = focused attention = fewer errors
+   * 2. Rules in code are deterministic, rules in prompts are probabilistic
+   * 3. Easier to debug, test, and iterate
    */
   async parseTextToFoods(query) {
+    // MINIMAL PROMPT: Extract what user typed, nothing more
     const messages = [
       {
         role: 'system',
-        content: `You are a professional nutritionist with expertise in food science, portion estimation, and USDA nutrition standards.
+        content: `Extract food items from text. Output EXACTLY what user typed - no changes, no assumptions.
 
-Your task is to parse meal descriptions with maximum accuracy (target: 97%+).
+Rules:
+1. Use exact words from input
+2. If quantity given (e.g., "2 eggs"), use it. Otherwise use 1.
+3. If unit given (e.g., "cup of rice"), use it. Otherwise use "serving".
 
-**CRITICAL RULES - READ CAREFULLY**:
-
-1. **⚠️ NEVER CHANGE THE MAIN INGREDIENT - THIS IS CRITICAL!**:
-   - "spinach curry" → "spinach curry" (NEVER change to "beef curry" or any other ingredient!)
-   - "chicken breast" → "chicken breast" (NEVER change to "turkey" or "beef")
-   - "apple" → "apple" (NEVER change to "orange" or other fruit)
-   - "tofu" → "tofu" (NEVER change to "chicken" or "meat")
-   - **IF USER SAYS SPINACH, OUTPUT SPINACH. IF USER SAYS BEEF, OUTPUT BEEF.**
-   - **DIETARY RESTRICTIONS MATTER**: Vegetarians logging "spinach" should NEVER get "beef"!
-
-2. **DO NOT add cooking methods unless explicitly stated by user**:
-   - "chicken breast" → "chicken breast" (NOT "grilled chicken breast")
-   - "salmon" → "salmon" (NOT "baked salmon" or "raw salmon")
-   - "200g rice" → "rice" (DO NOT assume "cooked" or "dry")
-   - ONLY include cooking method if user explicitly says it: "grilled salmon" → "grilled salmon" ✓
-
-3. **DO NOT add varieties, qualifiers, or descriptors unless specified**:
-   - "apple" → "apple" (NOT "red apple", "medium apple", or "Fuji apple")
-   - "chicken" → "chicken" (NOT "chicken breast" unless user said "breast")
-   - "salmon" → "salmon" (NOT "Atlantic salmon" or "wild salmon")
-
-4. **Preserve EXACT user terminology**:
-   - If user says "breast" → use "breast" (not "breasts")
-   - If user says "steamed broccoli" → keep "steamed"
-   - If user says "scrambled eggs" → keep "scrambled"
-   - If user says "spinach" → OUTPUT "spinach" (NOT "beef" or any other ingredient!)
-
-5. **Portion Context**:
-   - "Large" coffee = 16oz (473ml), "Medium" = 12oz, "Small" = 8oz
-   - "Large" meal = 1.5x standard, "Small" = 0.75x
-   - "Bowl" = 2 cups, "Plate" = 1.5 cups
-   - Restaurant portions = 1.5x home portions
-
-6. **Standardize Units**:
-   - Prefer USDA standards: serving, cup, oz, g, ml, tbsp, tsp
-   - "Piece" of chicken = 4oz (113g)
-   - "Slice" of bread = 1oz (30g)
-   - "Medium" apple = 182g
-
-7. **Multi-word Foods**:
-   - Keep specific parts: "chicken breast" not just "chicken"
-   - Keep preparation if stated: "scrambled eggs" not just "eggs"
-   - But DO NOT add parts user didn't mention
-   - NEVER substitute ingredients: "spinach curry" must stay "spinach curry"
-
-8. **Confidence Scoring**:
-   - 0.9-1.0: Exact portions specified ("200g chicken")
-   - 0.7-0.9: Standard portions implied ("1 chicken breast")
-   - 0.5-0.7: Vague portions ("some rice", "a few carrots")
-   - <0.5: Very ambiguous ("food", "meal")
-
-Return ONLY valid JSON. Extract ONLY what the user actually typed, no hallucinations.`,
+Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       },
       {
         role: 'user',
-        content: `Parse this meal description: "${query}"
-
-Return JSON:
-{
-  "foods": [
-    {
-      "name": "food name exactly as user described (lowercase)",
-      "quantity": number,
-      "unit": "serving|cup|oz|g|ml|tbsp|tsp|piece|slice",
-      "confidence": 0.0-1.0,
-      "notes": "optional context"
-    }
-  ]
-}
-
-**Examples**:
-
-**Example 1** - User specifies cooking method:
-Input: "2 scrambled eggs and whole wheat toast"
-Output:
-[
-  {"name": "scrambled eggs", "quantity": 2, "unit": "serving", "confidence": 0.95},
-  {"name": "whole wheat toast", "quantity": 1, "unit": "slice", "confidence": 0.9}
-]
-
-**Example 2** - User specifies cooking method:
-Input: "Large grilled chicken breast with brown rice"
-Output:
-[
-  {"name": "grilled chicken breast", "quantity": 6, "unit": "oz", "confidence": 0.85, "notes": "large portion = ~170g"},
-  {"name": "brown rice", "quantity": 1, "unit": "cup", "confidence": 0.75}
-]
-
-**Example 3** - User specifies cooking method:
-Input: "300g steamed broccoli"
-Output:
-[{"name": "steamed broccoli", "quantity": 300, "unit": "g", "confidence": 0.98}]
-
-**Example 4** - User does NOT specify cooking method:
-Input: "chicken breast 200g"
-Output:
-[{"name": "chicken breast", "quantity": 200, "unit": "g", "confidence": 0.95}]
-⚠️ DO NOT output "grilled chicken breast" - user didn't say grilled!
-
-**Example 5** - User does NOT specify variety:
-Input: "salmon"
-Output:
-[{"name": "salmon", "quantity": 1, "unit": "serving", "confidence": 0.7}]
-⚠️ DO NOT output "Atlantic salmon" or "baked salmon" - user didn't specify!
-
-**Example 6** - Generic food:
-Input: "apple"
-Output:
-[{"name": "apple", "quantity": 1, "unit": "serving", "confidence": 0.75}]
-⚠️ DO NOT output "medium apple" or "red apple" - user didn't specify!
-
-**Example 7** - CRITICAL: Preserve specific ingredients:
-Input: "spinach curry with bowl of rice"
-Output:
-[
-  {"name": "spinach curry", "quantity": 1, "unit": "serving", "confidence": 0.85},
-  {"name": "rice", "quantity": 2, "unit": "cup", "confidence": 0.8, "notes": "bowl = ~2 cups"}
-]
-⚠️ CRITICAL: OUTPUT "spinach curry" - NEVER change to "beef curry" or any other ingredient!
-⚠️ User said SPINACH, so output SPINACH. This is critical for dietary restrictions!
-
-**Example 8** - Vegetarian meal preservation:
-Input: "tofu stir fry with vegetables"
-Output:
-[
-  {"name": "tofu stir fry", "quantity": 1, "unit": "serving", "confidence": 0.8},
-  {"name": "vegetables", "quantity": 1, "unit": "cup", "confidence": 0.7}
-]
-⚠️ NEVER change "tofu" to "chicken" or "beef" - preserve the exact ingredient!
-
-**Example 9** - Indian cuisine (drumstick = moringa vegetable, NOT chicken):
-Input: "Had Indian drumstick curry along with cup of cooked rice"
-Output:
-[
-  {"name": "drumstick curry", "quantity": 1, "unit": "serving", "confidence": 0.85, "notes": "Indian drumstick = moringa vegetable curry"},
-  {"name": "cooked rice", "quantity": 1, "unit": "cup", "confidence": 0.9}
-]
-⚠️ CRITICAL: DO NOT extract "egg" or "chicken drumstick" - user said "drumstick curry" which is a vegetable dish!
-⚠️ ONLY extract ingredients the user EXPLICITLY mentioned. NO hallucinations!
-
-**Example 10** - Complex Indian meal:
-Input: "palak paneer, dal tadka, 2 rotis"
-Output:
-[
-  {"name": "palak paneer", "quantity": 1, "unit": "serving", "confidence": 0.85},
-  {"name": "dal tadka", "quantity": 1, "unit": "serving", "confidence": 0.85},
-  {"name": "roti", "quantity": 2, "unit": "piece", "confidence": 0.95}
-]
-
-Now parse: "${query}"
-
-🚨 CRITICAL RULES (MUST FOLLOW):
-1. Extract ONLY ingredients the user EXPLICITLY mentioned
-2. DO NOT invent, assume, or hallucinate ingredients
-3. If user says "drumstick curry" → output "drumstick curry" (NOT "egg", NOT "chicken")
-4. If user says "spinach" → output "spinach" (NOT "beef")
-5. Preserve EXACT food names - do not substitute or change ingredients
-6. When in doubt, use the EXACT words the user typed`,
+        content: query,
       },
     ];
 
     try {
       const json = await this.chatCompletionJSON(messages, {
-        temperature: 0.2, // Lower for more consistent, accurate parsing
-        maxTokens: 800, // Increased for detailed responses
+        temperature: 0.1, // Very low for deterministic extraction
+        maxTokens: 300, // Minimal - just food names and quantities
       });
 
       if (!json.foods || !Array.isArray(json.foods)) {

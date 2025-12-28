@@ -75,6 +75,8 @@ const MoodIcon3D = ({
   onSelect,
   size = 80,
   showLabel = true,
+  autoPlay = true,
+  loop = true,
 }) => {
   const animationRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -84,6 +86,7 @@ const MoodIcon3D = ({
   const fallbackTimerRef = useRef(null);
 
   useEffect(() => {
+    if (autoPlay) return;
     if (wasSelectedRef.current === selected) return;
     wasSelectedRef.current = selected;
     if (selected) {
@@ -139,6 +142,18 @@ const MoodIcon3D = ({
       }
     }
   }, [selected, useFallback, mood, scaleAnim, lottieSource]);
+
+  useEffect(() => {
+    if (!autoPlay) return;
+    if (animationRef.current && !useFallback) {
+      try {
+        animationRef.current.play();
+      } catch (error) {
+        console.warn(`Failed to autoplay ${mood} animation:`, error);
+        setUseFallback(true);
+      }
+    }
+  }, [autoPlay, useFallback, mood]);
 
   useEffect(() => {
     return () => {
@@ -197,8 +212,8 @@ const MoodIcon3D = ({
               ref={animationRef}
               source={lottieSource}
               style={{ width: size, height: size }}
-              loop={selected}
-              autoPlay={false}
+              loop={loop}
+              autoPlay={autoPlay}
               speed={1.2}
               resizeMode="cover"
               renderMode={renderMode}

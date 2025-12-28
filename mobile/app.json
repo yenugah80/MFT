@@ -1,16 +1,36 @@
 {
   "expo": {
-    "name": "MFT",
-    "slug": "mft",
+    "name": "My-Food-Tracker",
+    "slug": "my-food-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/styles/images/adaptive-icon.png",
-    "scheme": "mobile",
+    "scheme": "my-food-tracker",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.harikay.mobile"
+      "bundleIdentifier": "com.harikay.myfoodtracker",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "My-Food-Tracker needs camera access to photograph your meals for nutrition analysis.",
+        "NSMicrophoneUsageDescription": "My-Food-Tracker needs microphone access for voice meal logging.",
+        "NSPhotoLibraryUsageDescription": "My-Food-Tracker needs photo library access to select food photos for analysis.",
+        "NSPhotoLibraryAddUsageDescription": "My-Food-Tracker needs permission to save meal photos to your library.",
+        "CFBundleAllowMixedLocalizations": true
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +41,16 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.harikay.mobile"
+      "package": "com.harikay.myfoodtracker",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "output": "static",
@@ -32,25 +61,32 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera.",
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
+          "cameraPermission": "My-Food-Tracker needs camera access to photograph your meals for nutrition analysis.",
+          "microphonePermission": "My-Food-Tracker needs microphone access for voice meal logging."
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
+          "microphonePermission": "My-Food-Tracker needs microphone access for voice meal logging."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "My-Food-Tracker needs photo library access to select food photos for analysis.",
+          "cameraPermission": "My-Food-Tracker needs camera access to photograph your meals."
         }
       ],
       [
         "expo-splash-screen",
         {
-          "image": "./assets/styles/images/mural_signup.png",
+          "image": "./assets/styles/images/adaptive-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#1F2937"
           }
         }
       ],
@@ -63,7 +99,17 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": "https://myfoodtracker.onrender.com/api"
+      "apiUrl": "https://myfoodtracker.onrender.com/api",
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    },
+    "owner": "harikay",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/YOUR_EAS_PROJECT_ID"
     }
   }
 }

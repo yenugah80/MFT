@@ -1,28 +1,34 @@
-/**
- * useMoodInsights Hook
- * Fetches AI-powered mood insights from backend
- */
-
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
+import { aggregateMoodInsights } from '../utils/moodAggregation';
 
-/**
- * Hook for fetching AI-generated mood insights
- * @param {Object} options - Query options
- * @param {number} options.days - Number of days to analyze (default: 30)
- * @param {boolean} options.enabled - Whether to enable the query (default: true)
- * @returns {Object} - React Query result with insights data
- */
-export function useMoodInsights({ days = 30, enabled = true } = {}) {
+const DEFAULT_WINDOW_DAYS = 30;
+const DEFAULT_TREND_DAYS = 7;
+const MAX_HISTORY_LIMIT = 500;
+
+const buildHistoryUrl = (days) => {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const start = encodeURIComponent(startDate.toISOString());
+  const end = encodeURIComponent(endDate.toISOString());
+  return `/mood/history?startDate=${start}&endDate=${end}&limit=${MAX_HISTORY_LIMIT}`;
+};
+
+export const useMoodInsights = ({ windowDays = DEFAULT_WINDOW_DAYS, trendDays = DEFAULT_TREND_DAYS } = {}) => {
   return useQuery({
-    queryKey: ['moodInsights', days],
+    queryKey: ['moodInsights', windowDays, trendDays],
     queryFn: async () => {
-      const response = await apiClient.post('/mood/insights', { days });
-      return response.data;
+      const response = await apiClient.get(buildHistoryUrl(windowDays));
+      const logs = Array.isArray(response) ? response : [];
+      return aggregateMoodInsights({
+        logs,
+        windowDays,
+        trendDays,
+      });
     },
-    enabled,
-    staleTime: 60 * 60 * 1000, // 1 hour
-    cacheTime: 2 * 60 * 60 * 1000, // 2 hours
-    retry: 1, // Only retry once for AI insights
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
-}
+};

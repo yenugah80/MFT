@@ -50,7 +50,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
   const handleShare = async () => {
     try {
       const uri = await captureRef(viewShotRef, { format: 'png', quality: 0.9 });
-      const message = `🏆 I just hit Level ${level} (${rank}) on MFT! #HealthGoals #LevelUp`;
+      const message = `🏆 I just hit Level ${level} (${rank}) on My-Food-Tracker! #HealthGoals #LevelUp`;
 
       if (Platform.OS === 'ios') {
         await Share.share({
@@ -174,12 +174,12 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
   );
 };
 
-// Calculate next level XP requirement (exponential scaling)
+// Calculate next level XP requirement (aligned with backend level calculator)
 const getNextLevelXp = (currentLevel) => {
-  // Formula: Base XP * (level ^ 1.3)
-  // Level 1: 1000, Level 2: 2462, Level 3: 4327, Level 5: 9036, Level 10: 25119
+  // Formula: Base XP * ((level + 1) ^ 1.3)
+  // Level 1 → 2: 2462, Level 2 → 3: 4327, Level 4 → 5: 9036
   const baseXp = 1000;
-  return Math.floor(baseXp * Math.pow(currentLevel, 1.3));
+  return Math.floor(baseXp * Math.pow(currentLevel + 1, 1.3));
 };
 
 export default function PremiumAchievementsCard({
@@ -347,7 +347,7 @@ export default function PremiumAchievementsCard({
             {Math.round(safeXp)} / {safeTarget} XP
           </Text>
           <Text style={styles.totalXpText}>
-            Total: {xp.toLocaleString()} XP
+            {Math.max(0, Math.round(safeTarget - safeXp)).toLocaleString()} XP to Level {level + 1}
           </Text>
         </View>
 

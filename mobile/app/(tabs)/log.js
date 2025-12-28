@@ -262,7 +262,7 @@ export default function LogScreen() {
     }
 
     const { items, totals } = foodAnalysis.analysisResult;
-    let shareText = `My Meal Analysis from MFT:\n\n`;
+    let shareText = `My Meal Analysis from My-Food-Tracker:\n\n`;
 
     if (items.length === 1) {
       const item = items[0];

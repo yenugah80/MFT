@@ -118,7 +118,7 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
       const story = selectedDay.storyLine || (selectedDay.logged ? "Tracked my nutrition and wellness." : "No data logged.");
       const score = selectedDay.foodMoodScore ? `Daily Score: ${selectedDay.foodMoodScore}/100` : "";
       
-      const message = `📅 My Daily Wellness - ${dateStr}\n\n"${story}"\n\n${score}\n\nTracked with MFT 🥗`;
+      const message = `📅 My Daily Wellness - ${dateStr}\n\n"${story}"\n\n${score}\n\nTracked with My-Food-Tracker 🥗`;
       
       await Share.share({
         message,

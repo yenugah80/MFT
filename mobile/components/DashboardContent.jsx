@@ -13,13 +13,15 @@ import { View, ScrollView, Text, RefreshControl, StyleSheet, TouchableOpacity, M
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import * as Haptics from 'expo-haptics';
 
 // Hooks
 import { useDashboard } from "../hooks/useDashboard";
-import { useMoodTrends, calculateMoodStats } from "../hooks/useMoodTrends";
+import { useMoodTrends } from "../hooks/useMoodTrends";
+import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useNotification } from "../providers/NotificationProvider";
@@ -261,6 +263,7 @@ export default function DashboardContent() {
   const router = useRouter();
   const { user } = useUser();
   const { theme, toggleTheme, colors } = useTheme();
+  const queryClient = useQueryClient();
 
   // Insights modal state
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
@@ -292,15 +295,10 @@ export default function DashboardContent() {
 
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
+  const { data: moodInsightsData, isLoading: moodInsightsLoading } = useMoodInsights({ windowDays: 30, trendDays: 7 });
 
   // Water tracking hook
   const { markHydrationCelebration } = useWaterLog();
-
-  // Calculate mood stats from trend data
-  const moodStats = useMemo(() => {
-    if (!trendData?.data) return null;
-    return calculateMoodStats(trendData.data);
-  }, [trendData]);
 
   useEffect(() => {
     let isActive = true;
@@ -343,22 +341,7 @@ export default function DashboardContent() {
 
   const checkStreakReward = useCallback(async (currentStreak) => {
     try {
-      // Use apiClient for proper authentication
-      const response = await fetch('https://myfoodtracker.onrender.com/api/gamification/check-streak', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Note: Add auth token from your auth context/provider when available
-        },
-        credentials: 'include', // Include cookies for auth
-        body: JSON.stringify({ currentStreak })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to check streak reward');
-      }
-
-      const result = await response.json();
+      const result = await apiClient.post('/gamification/check-streak', { currentStreak });
       if (result.awarded) {
         notify.success(result.message);
         refetch(); // Refresh to show new freeze count
@@ -722,6 +705,11 @@ export default function DashboardContent() {
   const handleLogMood = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } });
+  };
+
+  const handleMoodLogged = async () => {
+    await refetch();
+    queryClient.invalidateQueries({ queryKey: ['moodInsights'] });
   };
 
   const loadMoodInsights = useCallback(async ({ days = insightsDays, forceRefresh = false } = {}) => {
@@ -1269,16 +1257,21 @@ export default function DashboardContent() {
             <View style={styles.wellnessDivider} />
 
             {/* MOOD */}
-              <EnhancedMoodCard
-                moodLogs={today.moodLogs}
-                trendData={trendData?.data || []}
-                stats={moodStats}
-                loading={false}
-                onLogMood={handleLogMood}
-                onViewInsights={handleViewInsights}
-                onPreviewInsights={handlePreviewInsights}
-                compact={true}
-              />
+            <EnhancedMoodCard
+              insights={moodInsightsData}
+              loading={moodInsightsLoading}
+              onOpenInsights={() => router.push('/insights/mood')}
+            />
+            <TouchableOpacity
+              style={styles.moodInsightsLink}
+              onPress={() => router.push('/insights/mood')}
+              accessibilityRole="button"
+              accessibilityLabel="View mood insights"
+              accessibilityHint="Opens your historical mood insights and recommendations"
+            >
+              <Ionicons name="analytics-outline" size={16} color={TEXT.secondary} />
+              <Text style={styles.moodInsightsText}>View mood insights</Text>
+            </TouchableOpacity>
 
             <View style={styles.wellnessDivider} />
 
@@ -1566,7 +1559,7 @@ export default function DashboardContent() {
         currentWater={parseLiters(today?.waterIntakeLiters || 0)}
         waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
         onWaterLogged={() => refetch()}
-        onMoodLogged={() => refetch()}
+        onMoodLogged={handleMoodLogged}
       />
     </>
   );
@@ -1700,6 +1693,25 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginLeft: 'auto',
+  },
+  moodInsightsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[2],
+    marginBottom: SPACING[3],
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.08)',
+    backgroundColor: 'rgba(248, 250, 252, 0.9)',
+    alignSelf: 'flex-start',
+  },
+  moodInsightsText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
   },
   syncStatus: {
     flexDirection: 'row',

@@ -16,10 +16,9 @@ const router = express.Router();
  */
 router.get('/', requireAuth, async (req, res) => {
   try {
-    // TODO: Add admin role check
-    // if (req.auth.role !== 'admin') {
-    //   return res.status(403).json({ error: 'Admin access required' });
-    // }
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
     const usdaMetrics = usdaClient.getMetrics();
     const openaiMetrics = openaiClient.getMetrics();
@@ -56,6 +55,10 @@ router.get('/', requireAuth, async (req, res) => {
  */
 router.post('/reset-circuit-breaker/:api', requireAuth, async (req, res) => {
   try {
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { api } = req.params;
 
     if (api === 'usda') {
@@ -79,6 +82,10 @@ router.post('/reset-circuit-breaker/:api', requireAuth, async (req, res) => {
  */
 router.post('/clear-cache/:api', requireAuth, async (req, res) => {
   try {
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { api } = req.params;
 
     if (api === 'usda') {
@@ -104,6 +111,26 @@ function calculateOverallSuccessRate(metricsArray) {
   if (total === 0) return '0%';
 
   return `${((successful / total) * 100).toFixed(2)}%`;
+}
+
+function isAdminRequest(req) {
+  const sessionClaims = req.auth?.sessionClaims || {};
+  const role = sessionClaims?.metadata?.role || sessionClaims?.publicMetadata?.role;
+
+  if (role === 'admin') {
+    return true;
+  }
+
+  const adminUserIds = (process.env.ADMIN_USER_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  if (adminUserIds.length === 0) {
+    return false;
+  }
+
+  return adminUserIds.includes(req.auth?.userId);
 }
 
 export default router;

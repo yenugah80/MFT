@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateWeeklyGoalProgress } from '../../utils/activityAnalytics';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const STORAGE_KEY = '@activity_log';
 
 /**
@@ -14,7 +12,6 @@ const STORAGE_KEY = '@activity_log';
  * Shows today's workout stats and weekly progress
  */
 export default function ActivitySummaryCard() {
-  const router = useRouter();
   const [todayActivities, setTodayActivities] = useState([]);
   const [allActivities, setAllActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,13 +63,9 @@ export default function ActivitySummaryCard() {
   const progressColor = getProgressColor(weeklyProgress.percentage);
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={() => router.push('/(tabs)/activity')}
-      activeOpacity={0.9}
-    >
+    <View style={styles.container}>
       <LinearGradient
-        colors={['#6366F1', '#8B5CF6']}
+        colors={['#0F3D5E', '#1F6F8B']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -83,12 +76,6 @@ export default function ActivitySummaryCard() {
             <Ionicons name="fitness" size={20} color="#fff" />
             <Text style={styles.title}>Activity</Text>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/activity')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
-          </TouchableOpacity>
         </View>
 
         {/* Today's Stats */}
@@ -168,20 +155,8 @@ export default function ActivitySummaryCard() {
           )}
         </View>
 
-        {/* View Insights Button */}
-        <TouchableOpacity
-          style={styles.viewInsightsButton}
-          onPress={() => {
-            router.push('/(tabs)/activity');
-            // Note: Would need to add logic to switch to insights mode
-          }}
-        >
-          <Ionicons name="analytics" size={16} color="#fff" />
-          <Text style={styles.viewInsightsText}>View Full Insights</Text>
-          <Ionicons name="arrow-forward" size={16} color="#fff" />
-        </TouchableOpacity>
       </LinearGradient>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -192,7 +167,7 @@ const styles = StyleSheet.create({
   gradient: {
     borderRadius: 20,
     padding: 20,
-    shadowColor: '#6366F1',
+    shadowColor: '#0F3D5E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -302,22 +277,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.9)',
     flex: 1,
-  },
-  viewInsightsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  viewInsightsText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
   },
 });

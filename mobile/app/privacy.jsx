@@ -22,11 +22,11 @@ export default function PrivacyPolicyScreen() {
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.lastUpdated}>Last Updated: December 25, 2025</Text>
+        <Text style={styles.lastUpdated}>Last Updated: December 28, 2024</Text>
 
         <Section title="Introduction">
           <Text style={styles.text}>
-            MFT ("we," "our," or "us") is committed to protecting your privacy.
+            My-Food-Tracker ("we," "our," or "us") is committed to protecting your privacy.
             This Privacy Policy explains how we collect, use, disclose, and safeguard your
             information when you use our mobile application.
           </Text>
@@ -147,7 +147,7 @@ export default function PrivacyPolicyScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            By using MFT, you acknowledge that you have read and understood
+            By using My-Food-Tracker, you acknowledge that you have read and understood
             this Privacy Policy.
           </Text>
         </View>

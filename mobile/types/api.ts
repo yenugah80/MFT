@@ -116,6 +116,8 @@ export interface MoodLog {
   energyLevel?: number; // 1-10 energy level
   mealContext?: Record<string, any>; // { mealIds: [123, 124], windowHours: 4 }
   clientEventId?: string; // For idempotency
+  dayKey?: string; // Stable local day bucket (YYYY-MM-DD)
+  timezoneOffset?: number; // Minutes offset at logging time
   loggedDate: string;
   createdAt: string;
 }
