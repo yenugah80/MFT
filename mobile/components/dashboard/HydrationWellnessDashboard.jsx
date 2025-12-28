@@ -896,7 +896,6 @@ export default function HydrationWellnessDashboard({
   };
   
   const [showConfetti, setShowConfetti] = useState(false);
-  const [hasCelebrated, setHasCelebrated] = useState(false);
   const [metricDeltaNote, setMetricDeltaNote] = useState(null);
   const [activeSection, setActiveSection] = useState('physical');
   const [showInsights, setShowInsights] = useState(false);
@@ -906,25 +905,23 @@ export default function HydrationWellnessDashboard({
   const lastSnapshotRef = useRef(null);
   const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 
-  // Single source of truth: use ONLY the prop to determine if celebration happened
+  // PRODUCTION FIX: Celebration logic - no state in deps to prevent infinite loops
+  // Uses ref-based guard (previousPercentageRef) + prop-based guard (celebratedTodayKey)
   useEffect(() => {
     const crossedGoal = previousPercentageRef.current < 100 && percentage >= 100;
     const alreadyCelebrated = celebratedTodayKey === todayKey;
-    if (crossedGoal && !hasCelebrated && !alreadyCelebrated) {
+
+    // Only celebrate if: (1) crossed 100% threshold, AND (2) haven't celebrated today
+    if (crossedGoal && !alreadyCelebrated) {
       setShowConfetti(true);
-      setHasCelebrated(true);
       if (onCelebrate) {
-        onCelebrate(todayKey);
+        onCelebrate(todayKey); // Notify parent to persist celebration
       }
       setTimeout(() => setShowConfetti(false), 4000);
     }
-    previousPercentageRef.current = percentage;
-  }, [percentage, hasCelebrated, celebratedTodayKey, onCelebrate, todayKey]);
 
-  useEffect(() => {
-    setHasCelebrated(false);
     previousPercentageRef.current = percentage;
-  }, [todayKey]);
+  }, [percentage, celebratedTodayKey, onCelebrate, todayKey]);
 
   useEffect(() => {
     if (streak < 0 || streak > 400) {
