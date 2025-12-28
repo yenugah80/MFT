@@ -1390,7 +1390,7 @@ export function useFoodAnalysis() {
       analyzeTextUniversal(debouncedText);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedText, isAnalyzing]); // Removed analyzeTextUniversal from deps - it's stable
+  }, [debouncedText]); // CRITICAL FIX: Don't include isAnalyzing - causes infinite loop when it toggles false→true→false
 
   // P0-2 FIX: Cleanup abort controller and debounce timer on unmount
   useEffect(() => {
