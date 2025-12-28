@@ -29,20 +29,18 @@ const TabsLayout = () => {
         },
       }}
     >
+      {/* Hidden index route - redirects to dashboard, not shown in tab bar */}
       <Tabs.Screen
-        name="dashboard"
+        name="index"
         options={{
-          title: "Dashboard",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid" size={size} color={color} />
-          ),
+          href: null, // Hides from tab bar
         }}
       />
 
       <Tabs.Screen
-        name="index"
+        name="dashboard"
         options={{
-          title: "Home",
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),

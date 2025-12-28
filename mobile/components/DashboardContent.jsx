@@ -43,6 +43,7 @@ import PremiumWeeklyTrends from "./dashboard/PremiumWeeklyTrends";
 import InsightsCard from "./dashboard/InsightsCard";
 import MacroBalanceCard from "./dashboard/MacroBalanceCard";
 import SkeletonCard, { SkeletonText, SkeletonCircle } from "./dashboard/SkeletonCard";
+import FloatingActionButton from "./FloatingActionButton";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -1552,6 +1553,14 @@ export default function DashboardContent() {
       <ThemeSettingsModal
         visible={themeModalVisible}
         onClose={() => setThemeModalVisible(false)}
+      />
+
+      {/* Floating Action Button - Quick Actions */}
+      <FloatingActionButton
+        currentWater={parseLiters(today?.waterIntakeLiters || 0)}
+        waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
+        onWaterLogged={() => refetch()}
+        onMoodLogged={() => refetch()}
       />
     </>
   );
