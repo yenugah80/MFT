@@ -25,6 +25,7 @@ import loggingRouter from "./routes/logging.js";
 import moodRouter from "./routes/mood.js";
 import waterRouter from "./routes/water.js";
 import apiMetricsRouter from "./routes/apiMetrics.js";
+import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
@@ -233,6 +234,9 @@ app.get("/api/food/filter", requireAuth, async (req, res) => {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Server is running on PORT:", PORT);
+
+  // Initialize daily streak check cron job
+  initStreakCronJob();
 });
 
 // Global Error Handler

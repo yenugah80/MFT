@@ -174,12 +174,15 @@ export default function LogScreen() {
    * Handle photo from CameraModal
    */
   const handlePhotoFromCamera = async (imageUri) => {
+    // CRITICAL: Clear ALL other results first to prevent duplicates
+    setAnalyzedFood(null);
+    foodAnalysis.setAnalysisResult(null);
+    foodAnalysis.setInputText('');
+
+    // Then set photo and analyze
     setSelectedImage(imageUri);
     setAnalysisSource('photo');
     setHasManuallyClosedDetails(false); // Reset flag for new analysis
-    // Clear any existing analysis results to prevent duplicate cards
-    setAnalyzedFood(null);
-    foodAnalysis.setInputText('');
 
     try {
       await foodAnalysis.analyzePhoto(imageUri);
@@ -212,12 +215,16 @@ export default function LogScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
+
+        // CRITICAL: Clear ALL other results first to prevent duplicates
+        setAnalyzedFood(null);
+        foodAnalysis.setAnalysisResult(null);
+        foodAnalysis.setInputText('');
+
+        // Then set photo and analyze
         setSelectedImage(imageUri);
         setAnalysisSource('photo');
         setHasManuallyClosedDetails(false); // Reset flag for new analysis
-        // Clear any existing analysis results to prevent duplicate cards
-        setAnalyzedFood(null);
-        foodAnalysis.setInputText('');
 
         // Analyze image
         await foodAnalysis.analyzePhoto(imageUri);
@@ -233,13 +240,16 @@ export default function LogScreen() {
    * Handle voice logging complete
    */
   const handleVoiceComplete = (result) => {
+    // CRITICAL: Clear ALL other results first to prevent duplicates
+    foodAnalysis.setAnalysisResult(null);
+    foodAnalysis.setInputText('');
+    setSelectedImage(null); // Also clear photo if any
+
+    // Then set voice result
     setAnalysisSource('voice');
     setAnalyzedFood(result);
     setShowVoiceModal(false);
     setHasManuallyClosedDetails(false); // Reset flag for new analysis
-    // Clear any existing analysis results to prevent duplicate cards
-    foodAnalysis.setAnalysisResult(null);
-    foodAnalysis.setInputText('');
   };
 
   /**

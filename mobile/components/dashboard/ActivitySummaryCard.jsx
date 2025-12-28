@@ -1,0 +1,323 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { calculateWeeklyGoalProgress } from '../../utils/activityAnalytics';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const STORAGE_KEY = '@activity_log';
+
+/**
+ * Activity Summary Card for Dashboard
+ * Shows today's workout stats and weekly progress
+ */
+export default function ActivitySummaryCard() {
+  const router = useRouter();
+  const [todayActivities, setTodayActivities] = useState([]);
+  const [allActivities, setAllActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadActivities();
+  }, []);
+
+  const loadActivities = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        const today = new Date().toDateString();
+
+        // Today's activities
+        const todaysData = data.filter(
+          (activity) => new Date(activity.timestamp).toDateString() === today
+        );
+        setTodayActivities(todaysData);
+
+        // Last 30 days for weekly progress
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const recentActivities = data.filter(
+          (activity) => new Date(activity.timestamp).getTime() >= thirtyDaysAgo
+        );
+        setAllActivities(recentActivities);
+      }
+    } catch (error) {
+      console.error('Error loading activities:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate stats
+  const todayCalories = todayActivities.reduce((sum, a) => sum + (a.calories || 0), 0);
+  const todayDuration = todayActivities.reduce((sum, a) => sum + (a.duration || 0), 0);
+  const weeklyProgress = calculateWeeklyGoalProgress(allActivities);
+
+  // Get progress color
+  const getProgressColor = (percentage) => {
+    if (percentage >= 100) return '#10B981';
+    if (percentage >= 80) return '#F59E0B';
+    if (percentage >= 50) return '#6366F1';
+    return '#94A3B8';
+  };
+
+  const progressColor = getProgressColor(weeklyProgress.percentage);
+
+  return (
+    <TouchableOpacity
+      style={styles.container}
+      onPress={() => router.push('/(tabs)/activity')}
+      activeOpacity={0.9}
+    >
+      <LinearGradient
+        colors={['#6366F1', '#8B5CF6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <Ionicons name="fitness" size={20} color="#fff" />
+            <Text style={styles.title}>Activity</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/activity')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Today's Stats */}
+        <View style={styles.todayStats}>
+          <View style={styles.statItem}>
+            <Ionicons name="flame" size={24} color="#FCD34D" />
+            <Text style={styles.statValue}>{Math.round(todayCalories)}</Text>
+            <Text style={styles.statLabel}>kcal today</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.statItem}>
+            <Ionicons name="time" size={24} color="#A5F3FC" />
+            <Text style={styles.statValue}>{todayDuration}</Text>
+            <Text style={styles.statLabel}>min active</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.statItem}>
+            <Ionicons name="barbell" size={24} color="#C7D2FE" />
+            <Text style={styles.statValue}>{todayActivities.length}</Text>
+            <Text style={styles.statLabel}>workout{todayActivities.length !== 1 ? 's' : ''}</Text>
+          </View>
+        </View>
+
+        {/* Weekly Progress */}
+        <View style={styles.weeklySection}>
+          <View style={styles.weeklyHeader}>
+            <Text style={styles.weeklyTitle}>Week Progress</Text>
+            <View style={[styles.progressBadge, { backgroundColor: progressColor + '30' }]}>
+              <Text style={[styles.progressPercentage, { color: progressColor }]}>
+                {Math.round(weeklyProgress.percentage)}%
+              </Text>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBarBg}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${Math.min(weeklyProgress.percentage, 100)}%`,
+                    backgroundColor: progressColor,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {weeklyProgress.calories} / {weeklyProgress.goal} kcal
+            </Text>
+          </View>
+
+          {/* Quick Insight */}
+          {weeklyProgress.percentage >= 100 ? (
+            <View style={styles.insightRow}>
+              <Ionicons name="trophy" size={16} color="#FCD34D" />
+              <Text style={styles.insightText}>Goal achieved! Keep it up! 🎉</Text>
+            </View>
+          ) : weeklyProgress.percentage >= 80 ? (
+            <View style={styles.insightRow}>
+              <Ionicons name="flame" size={16} color="#F59E0B" />
+              <Text style={styles.insightText}>
+                {weeklyProgress.remaining} kcal to go!
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.insightRow}>
+              <Ionicons name="trending-up" size={16} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.insightText}>
+                {weeklyProgress.workoutCount} / {weeklyProgress.workoutGoal} workouts this week
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* View Insights Button */}
+        <TouchableOpacity
+          style={styles.viewInsightsButton}
+          onPress={() => {
+            router.push('/(tabs)/activity');
+            // Note: Would need to add logic to switch to insights mode
+          }}
+        >
+          <Ionicons name="analytics" size={16} color="#fff" />
+          <Text style={styles.viewInsightsText}>View Full Insights</Text>
+          <Ionicons name="arrow-forward" size={16} color="#fff" />
+        </TouchableOpacity>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+  },
+  gradient: {
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  todayStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  statItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  divider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  weeklySection: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  weeklyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  weeklyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  progressBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  progressPercentage: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  progressBarContainer: {
+    marginBottom: 8,
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  insightText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    flex: 1,
+  },
+  viewInsightsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  viewInsightsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+});

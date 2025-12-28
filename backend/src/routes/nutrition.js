@@ -11,6 +11,8 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
+import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate } from "../services/gamificationRewardService.js";
+import { checkAchievements } from "../services/achievementService.js";
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -126,6 +128,67 @@ router.post("/log", async (req, res) => {
       console.log(`[NutritionLog] Duplicate prevented: clientEventId=${clientEventId}, food=${foodName}`);
     }
 
+    // === GAMIFICATION INTEGRATION ===
+    let gamificationResult = null;
+
+    if (isNewEntry) {
+      try {
+        // 1. Calculate and award XP
+        const { xp, mealNumber, dailyTotal } = await calculateMealXP(userId, safeLoggedDate, db);
+        const { newXP, newLevel, leveledUp, currentLevelXP, nextLevelXP, progressPercent } = await awardXP(userId, xp, 'meal_log', db);
+
+        // 2. Update streak
+        const { streak, streakIncremented, previousStreak } = await updateStreak(userId, safeLoggedDate, db);
+
+        // 3. Get last log date for achievement checking
+        const lastLogDate = previousStreak > 0 ? await getLastLogDate(userId, db) : null;
+
+        // 4. Check achievements
+        const totalMeals = await getTotalMealsLogged(userId, db);
+        const isWeekend = [0, 6].includes(new Date(safeLoggedDate).getDay());
+
+        const achievements = await checkAchievements(userId, {
+          totalMeals,
+          level: newLevel,
+          streak,
+          lastLogDate,
+          isWeekend,
+        }, db);
+
+        // 5. Prepare response
+        gamificationResult = {
+          xpEarned: xp,
+          mealNumber,
+          dailyXpTotal: dailyTotal,
+          totalXP: newXP,
+          level: newLevel,
+          leveledUp,
+          currentLevelXP,
+          nextLevelXP,
+          progressPercent,
+          streak,
+          streakIncremented,
+          achievementsUnlocked: achievements.map(a => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            icon: a.icon,
+            lottieSource: a.lottieSource,
+            xp: a.xp,
+            category: a.category,
+          })),
+        };
+
+        console.log(`[Gamification] User ${userId}: +${xp} XP (meal #${mealNumber}), Level ${newLevel}, Streak ${streak}${achievements.length > 0 ? `, ${achievements.length} achievements` : ''}`);
+
+      } catch (gamError) {
+        // NON-BLOCKING: Log but don't fail meal logging
+        console.error('[Gamification] Error processing rewards:', gamError);
+        gamificationResult = { error: 'Gamification processing failed' };
+      }
+    }
+    // === END GAMIFICATION INTEGRATION ===
+
     // 5. Fetch existing entry if duplicate (for consistent response)
     let entry = result[0] || null;
     if (!isNewEntry) {
@@ -172,6 +235,7 @@ router.post("/log", async (req, res) => {
         totalCarbs: 0,
         totalFats: 0,
       },
+      gamification: gamificationResult,
     });
 
   } catch (error) {

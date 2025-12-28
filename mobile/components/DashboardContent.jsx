@@ -34,6 +34,7 @@ import NutriScoreDial from "./dashboard/NutriScoreDial";
 import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
 import MealMoodCalendar from "./MealMoodCalendar";
 import HydrationWellnessDashboard from "./dashboard/HydrationWellnessDashboard";
+import ActivitySummaryCard from "./dashboard/ActivitySummaryCard";
 import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import NutritionOverviewCard from "./dashboard/NutritionOverviewCard";
@@ -1278,6 +1279,11 @@ export default function DashboardContent() {
                 onPreviewInsights={handlePreviewInsights}
                 compact={true}
               />
+
+            <View style={styles.wellnessDivider} />
+
+            {/* ACTIVITY SUMMARY */}
+            <ActivitySummaryCard />
           </View>
         </CollapsibleSection>
 

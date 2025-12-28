@@ -12,6 +12,7 @@ import {
   getExercisesByCategory,
   calculateCalories
 } from '../../services/exerciseDatabase';
+import ActivityInsightsView from '../../components/ActivityInsightsView';
 
 const STORAGE_KEY = '@activity_log';
 
@@ -21,6 +22,7 @@ const STORAGE_KEY = '@activity_log';
  */
 export default function ActivityScreen() {
   // State
+  const [viewMode, setViewMode] = useState('log'); // 'log' or 'insights'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -28,6 +30,7 @@ export default function ActivityScreen() {
   const [duration, setDuration] = useState('30');
   const [intensity, setIntensity] = useState('MODERATE');
   const [todayActivities, setTodayActivities] = useState([]);
+  const [allActivities, setAllActivities] = useState([]); // Last 30 days for insights
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -54,12 +57,20 @@ export default function ActivityScreen() {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
+
         // Filter to only today's activities
         const today = new Date().toDateString();
         const todaysData = data.filter(
           (activity) => new Date(activity.timestamp).toDateString() === today
         );
         setTodayActivities(todaysData);
+
+        // Load last 30 days for insights
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const recentActivities = data.filter(
+          (activity) => new Date(activity.timestamp).getTime() >= thirtyDaysAgo
+        );
+        setAllActivities(recentActivities);
       }
     } catch (error) {
       console.error('Error loading activities:', error);
@@ -68,7 +79,18 @@ export default function ActivityScreen() {
 
   const saveActivities = async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(todayActivities));
+      // Merge today's activities with all activities
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      let allData = stored ? JSON.parse(stored) : [];
+
+      // Remove today's old data and add new
+      const today = new Date().toDateString();
+      allData = allData.filter(
+        (activity) => new Date(activity.timestamp).toDateString() !== today
+      );
+      allData = [...allData, ...todayActivities];
+
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
     } catch (error) {
       console.error('Error saving activities:', error);
     }
@@ -111,7 +133,9 @@ export default function ActivityScreen() {
 
     const newActivity = {
       id: Date.now().toString(),
-      exercise: selectedExercise,
+      name: selectedExercise.name, // For analytics
+      exercise: selectedExercise, // For display (keep for backward compatibility)
+      category: selectedExercise.category, // For analytics breakdown
       duration: durationNum,
       intensity,
       calories,
@@ -119,6 +143,7 @@ export default function ActivityScreen() {
     };
 
     setTodayActivities(prev => [newActivity, ...prev]);
+    setAllActivities(prev => [newActivity, ...prev]); // Also update insights data
     setModalVisible(false);
     setDuration('30');
     setIntensity('MODERATE');
@@ -126,6 +151,16 @@ export default function ActivityScreen() {
 
   const handleDeleteActivity = (activityId) => {
     setTodayActivities(prev => prev.filter(a => a.id !== activityId));
+    setAllActivities(prev => prev.filter(a => a.id !== activityId));
+  };
+
+  const handleClearToday = () => {
+    // Clear today's activities from both states
+    const today = new Date().toDateString();
+    setTodayActivities([]);
+    setAllActivities(prev => prev.filter(
+      activity => new Date(activity.timestamp).toDateString() !== today
+    ));
   };
 
   const handleRefresh = async () => {
@@ -269,12 +304,48 @@ export default function ActivityScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Today's Activities */}
-      {todayActivities.length > 0 && (
+      {/* Mode Selector Pills */}
+      <View style={styles.modeSelector}>
+        <TouchableOpacity
+          style={[styles.modePill, viewMode === 'log' && styles.modePillActive]}
+          onPress={() => setViewMode('log')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={viewMode === 'log' ? 'barbell' : 'barbell-outline'}
+            size={18}
+            color={viewMode === 'log' ? '#fff' : '#64748b'}
+          />
+          <Text style={[styles.modePillText, viewMode === 'log' && styles.modePillTextActive]}>
+            Log Workout
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.modePill, viewMode === 'insights' && styles.modePillActive]}
+          onPress={() => setViewMode('insights')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={viewMode === 'insights' ? 'analytics' : 'analytics-outline'}
+            size={18}
+            color={viewMode === 'insights' ? '#fff' : '#64748b'}
+          />
+          <Text style={[styles.modePillText, viewMode === 'insights' && styles.modePillTextActive]}>
+            Insights
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Conditional Rendering Based on View Mode */}
+      {viewMode === 'log' ? (
+        <>
+          {/* Today's Activities */}
+          {todayActivities.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Today's Activities</Text>
-            <TouchableOpacity onPress={() => setTodayActivities([])}>
+            <TouchableOpacity onPress={handleClearToday}>
               <Text style={styles.clearAllText}>Clear All</Text>
             </TouchableOpacity>
           </View>
@@ -340,6 +411,13 @@ export default function ActivityScreen() {
         }
         ListEmptyComponent={renderEmptyState}
       />
+        </>
+      ) : (
+        <ActivityInsightsView
+          activities={allActivities}
+          onLogWorkout={() => setViewMode('log')}
+        />
+      )}
 
       {/* Log Exercise Modal */}
       <Modal
@@ -830,5 +908,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  // Mode Selector Styles
+  modeSelector: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  modePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  modePillActive: {
+    backgroundColor: '#6366f1',
+    borderColor: '#6366f1',
+  },
+  modePillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  modePillTextActive: {
+    color: '#fff',
+  },
+  // Insights View Styles
+  insightsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  insightsPlaceholder: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748b',
   },
 });

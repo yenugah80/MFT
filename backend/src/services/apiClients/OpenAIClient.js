@@ -309,9 +309,34 @@ Output:
 ]
 ⚠️ NEVER change "tofu" to "chicken" or "beef" - preserve the exact ingredient!
 
+**Example 9** - Indian cuisine (drumstick = moringa vegetable, NOT chicken):
+Input: "Had Indian drumstick curry along with cup of cooked rice"
+Output:
+[
+  {"name": "drumstick curry", "quantity": 1, "unit": "serving", "confidence": 0.85, "notes": "Indian drumstick = moringa vegetable curry"},
+  {"name": "cooked rice", "quantity": 1, "unit": "cup", "confidence": 0.9}
+]
+⚠️ CRITICAL: DO NOT extract "egg" or "chicken drumstick" - user said "drumstick curry" which is a vegetable dish!
+⚠️ ONLY extract ingredients the user EXPLICITLY mentioned. NO hallucinations!
+
+**Example 10** - Complex Indian meal:
+Input: "palak paneer, dal tadka, 2 rotis"
+Output:
+[
+  {"name": "palak paneer", "quantity": 1, "unit": "serving", "confidence": 0.85},
+  {"name": "dal tadka", "quantity": 1, "unit": "serving", "confidence": 0.85},
+  {"name": "roti", "quantity": 2, "unit": "piece", "confidence": 0.95}
+]
+
 Now parse: "${query}"
 
-REMEMBER: Extract ONLY what the user actually typed. Do not add cooking methods, varieties, or qualifiers.`,
+🚨 CRITICAL RULES (MUST FOLLOW):
+1. Extract ONLY ingredients the user EXPLICITLY mentioned
+2. DO NOT invent, assume, or hallucinate ingredients
+3. If user says "drumstick curry" → output "drumstick curry" (NOT "egg", NOT "chicken")
+4. If user says "spinach" → output "spinach" (NOT "beef")
+5. Preserve EXACT food names - do not substitute or change ingredients
+6. When in doubt, use the EXACT words the user typed`,
       },
     ];
 
@@ -327,7 +352,10 @@ REMEMBER: Extract ONLY what the user actually typed. Do not add cooking methods,
 
       // PRODUCTION FIX: Validation + Canonicalization Pipeline
       // Step 1: Validate extraction (ensure no ingredients were missed)
-      const validated = validateExtraction(query, json.foods);
+      // PERFORMANCE: Enable confidence-based validation skip (70-80% skip rate expected)
+      const validated = validateExtraction(query, json.foods, {
+        skipIfHighConfidence: true, // Skip validation when AI confidence >= 0.9
+      });
 
       // Step 2: Canonicalize each ingredient
       const canonical = validated.map(item => {
@@ -338,7 +366,12 @@ REMEMBER: Extract ONLY what the user actually typed. Do not add cooking methods,
           // Update name to canonical form for better nutrition lookup
           name: canonicalForm.canonical,
           preparation: canonicalForm.preparation,
-          // Use canonical portion if user didn't specify
+          // IMPORTANT: User portions ALWAYS take precedence
+          // Canonical portions are ONLY defaults when user doesn't specify
+          // Examples:
+          //   - User says "3 eggs" → uses 3 (user's choice) ✅
+          //   - User says "eggs" → uses 2 (canonical default) ✅
+          //   - User says "half cup rice" → uses 0.5 cup (user's choice) ✅
           quantity: item.quantity || canonicalForm.portion.amount,
           unit: item.unit || canonicalForm.portion.unit,
           confidence: Math.min(item.confidence || 0.5, canonicalForm.confidence),

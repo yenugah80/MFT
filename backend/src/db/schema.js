@@ -100,9 +100,12 @@ export const gamificationTable = pgTable(
     xp: integer("xp").default(0),
     level: integer("level").default(1),
     streak: integer("streak").default(0), // days
-    // TEMPORARILY COMMENTED OUT - Production DB doesn't have this column yet
-    // streakFreezes: integer("streak_freezes").default(0),
-    // lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
+    streakFreezes: integer("streak_freezes").default(0),
+    lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
+    lastStreakUpdatedAt: timestamp("last_streak_updated_at"),
+    totalMealsLogged: integer("total_meals_logged").default(0),
+    lastLogDate: timestamp("last_log_date"),
+    lastXpAwardedAt: timestamp("last_xp_awarded_at"),
     badges: json("badges").default([]), // Array of unlocked achievement badges
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -112,8 +115,30 @@ export const gamificationTable = pgTable(
     xpCheck: check("xp_check", sql`${table.xp} >= 0`),
     levelCheck: check("level_check", sql`${table.level} >= 1 AND ${table.level} <= 999`),
     streakCheck: check("streak_check", sql`${table.streak} >= 0`),
-    // TEMPORARILY COMMENTED OUT - Production DB doesn't have this column yet
-    // streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
+    streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
+    totalMealsCheck: check("total_meals_check", sql`${table.totalMealsLogged} >= 0`),
+  })
+);
+
+// Daily meal counts table - tracks meals logged per day for XP cap
+export const dailyMealCountsTable = pgTable(
+  "daily_meal_counts",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    date: timestamp("date").notNull(),
+    mealCount: integer("meal_count").default(0),
+    xpEarnedToday: integer("xp_earned_today").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userDateUniqueIdx: unique("daily_meal_counts_user_date_unique").on(table.userId, table.date),
+    userDateIdx: index("daily_meal_counts_user_date_idx").on(table.userId, table.date),
+    mealCountCheck: check("meal_count_check", sql`${table.mealCount} >= 0`),
+    xpCheck: check("daily_xp_check", sql`${table.xpEarnedToday} >= 0`),
   })
 );
 
@@ -333,9 +358,10 @@ export const achievementsTable = pgTable("achievements", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   description: text("description"),
-  icon: text("icon"), // emoji or icon identifier
+  icon: text("icon"), // emoji fallback
+  lottieSource: text("lottie_source"), // Lottie animation identifier (e.g., 'celebration', 'streak', 'success')
   requiredPoints: integer("required_points"), // XP needed for this achievement
-  category: text("category"), // 'consistency' | 'macro_master' | 'hydration' | 'streak' | 'xp_collector'
+  category: text("category"), // 'streak' | 'meal_count' | 'level' | 'nutrition' | 'recovery'
   createdAt: timestamp("created_at").defaultNow(),
 });
 
