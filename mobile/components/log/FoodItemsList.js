@@ -156,7 +156,10 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }
 
           {item.micros && Object.keys(item.micros).length > 0 && (
             <View style={styles.micronutrientsSection}>
-              <Text style={styles.micronutrientsTitle}>Micronutrients</Text>
+              <View style={styles.micronutrientsHeader}>
+                <Text style={styles.micronutrientsTitle}>Micronutrients</Text>
+                <Text style={styles.micronutrientsNote}>Estimated</Text>
+              </View>
               <View style={styles.micronutrientsGrid}>
                 {Object.entries(item.micros).map(([key, value]) => renderMicronutrient(key, value))}
               </View>
@@ -315,12 +318,22 @@ const styles = StyleSheet.create({
     borderTopColor: '#F3F4F6',
     paddingTop: 15,
   },
+  micronutrientsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
   micronutrientsTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 10,
     fontFamily: fonts.strong,
+  },
+  micronutrientsNote: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: fonts.regular,
   },
   micronutrientsGrid: {
     flexDirection: 'row',

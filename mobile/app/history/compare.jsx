@@ -134,14 +134,14 @@ export default function CompareScreen() {
               <View style={styles.winnerBanner}>
                 <Ionicons name="trophy-outline" size={20} color={SEMANTIC.success.base} />
                 <Text style={styles.winnerText}>
-                  Higher health score: {winner?.foodName || 'This item'}
+                  Higher nutrition balance: {winner?.foodName || 'This item'}
                 </Text>
-              </View>
-            ) : (
-              <View style={styles.neutralBanner}>
-                <Text style={styles.neutralText}>Similar overall health impact</Text>
-              </View>
-            )}
+                </View>
+              ) : (
+                <View style={styles.neutralBanner}>
+                  <Text style={styles.neutralText}>Similar overall nutrition balance</Text>
+                </View>
+              )}
 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
@@ -156,7 +156,7 @@ export default function CompareScreen() {
               </View>
 
               {renderComparisonRow(
-                'Health Score',
+                'Nutrition Balance',
                 scoreA !== null ? `${scoreA}/100` : '—',
                 scoreB !== null ? `${scoreB}/100` : '—',
                 showWinner

@@ -44,9 +44,9 @@ export default function AnalysisConfidence({
         <View style={styles.confidenceLeft}>
           <Ionicons name={confidenceIcon} size={32} color="#FFFFFF" />
           <View style={styles.confidenceText}>
-            <Text style={styles.confidenceTitle}>AI Confidence</Text>
+            <Text style={styles.confidenceTitle}>Estimate Strength</Text>
             <Text style={styles.confidenceSubtitle}>
-              {confidenceLevel === 'high' ? 'High Quality' : confidenceLevel === 'medium' ? 'Good Quality' : 'Please Review'}
+              {confidenceLevel === 'high' ? 'Strong estimate' : confidenceLevel === 'medium' ? 'Typical estimate' : 'Needs adjustment'}
             </Text>
           </View>
         </View>
@@ -59,31 +59,28 @@ export default function AnalysisConfidence({
       <View style={styles.attributionCard}>
         <View style={styles.attributionHeader}>
           <Ionicons name="information-circle-outline" size={18} color="#6B7280" />
-          <Text style={styles.attributionTitle}>How We Calculated This</Text>
+          <Text style={styles.attributionTitle}>How We Estimated This</Text>
         </View>
 
         <View style={styles.attributionList}>
           <AttributionItem
             icon="eye-outline"
-            text="GPT-4o Vision analyzed your food photo"
-            verified
+            text="Visual analysis for food identification"
           />
           <AttributionItem
-            icon="search-outline"
-            text="Cross-referenced with USDA FoodData Central"
-            verified
+            icon="nutrition-outline"
+            text="Typical portions and preparation"
           />
           <AttributionItem
-            icon="calculator-outline"
-            text="Portion size estimated using visual markers"
-            confidence={92}
+            icon="library-outline"
+            text="Public nutrition databases"
           />
         </View>
 
         <View style={styles.accuracyNote}>
           <Ionicons name="flask-outline" size={14} color="#6B4EFF" />
           <Text style={styles.accuracyText}>
-            Validated against registered dietitian estimates (±50 kcal margin)
+            Estimates are approximate and may vary by brand and preparation.
           </Text>
         </View>
       </View>
@@ -135,23 +132,15 @@ export default function AnalysisConfidence({
   );
 }
 
-function AttributionItem({ icon, text, verified, confidence }) {
+function AttributionItem({ icon, text }) {
   return (
     <View style={styles.attributionItem}>
       <Ionicons
         name={icon}
         size={16}
-        color={verified ? '#22C55E' : '#6B4EFF'}
+        color="#6B4EFF"
       />
       <Text style={styles.attributionItemText}>{text}</Text>
-      {verified && (
-        <View style={styles.verifiedBadge}>
-          <Ionicons name="checkmark" size={10} color="#FFFFFF" />
-        </View>
-      )}
-      {confidence && (
-        <Text style={styles.confidenceBadge}>{confidence}%</Text>
-      )}
     </View>
   );
 }

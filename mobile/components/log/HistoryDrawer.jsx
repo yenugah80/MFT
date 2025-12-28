@@ -124,12 +124,12 @@ function ComparisonModal({ visible, onClose, logs }) {
                 <Ionicons name="trophy-outline" size={18} color="#059669" />
               </View>
               <Text style={styles.healthierText}>
-                Higher health score: {winner.foodName || 'This item'}
+                Higher nutrition balance: {winner.foodName || 'This item'}
               </Text>
             </View>
           ) : (
             <View style={styles.neutralBanner}>
-              <Text style={styles.neutralText}>Similar overall health impact</Text>
+              <Text style={styles.neutralText}>Similar overall nutrition balance</Text>
             </View>
           )}
 
@@ -143,9 +143,9 @@ function ComparisonModal({ visible, onClose, logs }) {
             </View>
           </View>
 
-          {/* Health Score */}
+          {/* Nutrition Balance */}
           <ComparisonRow
-            label="Health Score"
+            label="Nutrition Balance"
             value1={score1 !== null ? `${score1}/100` : '—'}
             value2={score2 !== null ? `${score2}/100` : '—'}
             highlight={showWinner}

@@ -2,7 +2,7 @@
  * TodayScoreCard - The New Primary KPI
  *
  * Product Philosophy:
- * - NOT just a calorie counter - it's a holistic health score
+ * - NOT just a calorie counter - it's a holistic balance score
  * - Blends nutrition (40%), mood (35%), and hydration (25%)
  * - Every subline reinforces Food × Mood correlation
  * - Makes users feel progress beyond just eating

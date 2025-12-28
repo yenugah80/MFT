@@ -20,7 +20,10 @@ const MicrosCoverageSection = ({ micros, onViewAll }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Micronutrients</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Micronutrients</Text>
+        <Text style={styles.sectionNote}>Estimated</Text>
+      </View>
 
       {/* Coverage Ring */}
       <View style={styles.ringSection}>
@@ -94,11 +97,20 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 16,
+  },
+  sectionNote: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   ringSection: {
     flexDirection: 'row',

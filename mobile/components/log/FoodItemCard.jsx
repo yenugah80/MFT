@@ -146,7 +146,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
       {item.isComplex && item.components && item.components.length > 0 && (
         <View style={styles.componentsSection}>
           <Text style={styles.componentsSectionTitle}>
-            🥘 Ingredients Included:
+            🥘 Ingredients (estimated):
           </Text>
           {item.components.slice(0, 3).map((component, index) => (
             <View key={index} style={styles.componentRowCompact}>
@@ -168,7 +168,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
           <Text style={styles.accuracyNoteIcon}>💡</Text>
           <Text style={styles.accuracyNoteText}>
             Estimated nutrition. May vary by brand, cooking method, and portions.
-            {item.isComplex ? ' Adjust ingredients in details if needed.' : ''}
+            {item.isComplex ? ' Adjust ingredients if needed.' : ''}
           </Text>
         </View>
       )}
@@ -178,7 +178,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         <View style={[styles.badge, { borderColor: confidenceColor }]}>
           <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
           <Text style={styles.badgeText}>
-            {item.sourceEvidence[0].source === 'USDA' ? 'USDA' : 'AI'} • {Math.round(confidence * 100)}% match
+            {item.sourceEvidence[0].source === 'USDA' ? 'USDA' : 'AI estimate'} • {Math.round(confidence * 100)}%
           </Text>
         </View>
       )}
@@ -244,7 +244,10 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
           {/* Micronutrients */}
           {item.micros && Object.keys(item.micros).length > 0 && (
             <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>Micronutrients</Text>
+              <View style={styles.detailSectionHeader}>
+                <Text style={styles.detailSectionTitle}>Micronutrients</Text>
+                <Text style={styles.detailSectionNote}>Estimated</Text>
+              </View>
               <View style={styles.detailGrid}>
                 {Object.entries(item.micros).map(([key, value]) => {
                   // Format value with unit
@@ -279,7 +282,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
       {confidence < 0.6 && (
         <View style={styles.warning}>
           <Text style={styles.warningIcon}>⚠</Text>
-          <Text style={styles.warningText}>Low confidence - please verify accuracy</Text>
+          <Text style={styles.warningText}>Low estimate - consider adjusting</Text>
         </View>
       )}
     </View>
@@ -513,10 +516,20 @@ const styles = StyleSheet.create({
   detailSection: {
     marginBottom: 16,
   },
+  detailSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   detailSectionTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
+    marginBottom: 8,
+  },
+  detailSectionNote: {
+    fontSize: 12,
+    color: '#9CA3AF',
     marginBottom: 8,
   },
   detailGrid: {

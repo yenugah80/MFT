@@ -79,9 +79,9 @@ export default function TermsOfServiceScreen() {
           </Text>
         </Section>
 
-        <Section title="Data Accuracy">
+        <Section title="Estimate Quality">
           <Text style={styles.text}>
-            While we strive for accuracy in our nutrition analysis:{'\n\n'}
+            While we strive for reasonable estimates in our nutrition analysis:{'\n\n'}
 
             • AI estimates may have a margin of error{'\n'}
             • User-provided data may be inaccurate{'\n'}

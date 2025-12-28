@@ -58,7 +58,7 @@ export default function PrivacyPolicyScreen() {
             • Provide nutrition analysis and meal tracking{'\n'}
             • Generate personalized insights and recommendations{'\n'}
             • Sync your data across devices{'\n'}
-            • Improve our AI analysis accuracy{'\n'}
+            • Improve our AI estimation quality{'\n'}
             • Send you notifications (with your permission){'\n'}
             • Provide customer support{'\n'}
             • Comply with legal obligations

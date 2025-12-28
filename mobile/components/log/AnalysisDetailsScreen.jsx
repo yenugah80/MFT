@@ -197,7 +197,7 @@ const AnalysisDetailsScreen = ({
           ]}
         >
           <Text style={styles.evidenceBadgeText}>
-            {Math.round(evidence.confidence * 100)}% Confidence
+            {Math.round(evidence.confidence * 100)}% Estimate
           </Text>
         </View>
         <Ionicons
@@ -412,6 +412,7 @@ const AnalysisDetailsScreen = ({
                   <Text style={styles.sectionTitle}>
                     Micronutrients ({microEntries.length})
                   </Text>
+                  <Text style={styles.sectionNote}>Estimated</Text>
                 </View>
                 <Ionicons
                   name={expandedSections.micros ? 'chevron-up' : 'chevron-down'}
@@ -627,6 +628,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
+  },
+  sectionNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginLeft: SPACING[1],
   },
   itemCard: {
     backgroundColor: SURFACES.background.secondary,

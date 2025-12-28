@@ -1,7 +1,7 @@
 /**
  * NutriScore Component
  * Official Nutri-Score A-E grading system with historical trends
- * Weighted formula based on: calorie adherence, protein adequacy, hydration, micros coverage
+ * Weighted formula based on: calorie adherence, protein adequacy, hydration, meal consistency
  */
 
 import React from 'react';
@@ -65,18 +65,7 @@ function calculateDayScore(dayData, goals) {
     weights.push(0.2);
   }
 
-  // 4. Micro coverage (15% weight)
-  if (dayData.foodLogs && dayData.foodLogs.length > 0) {
-    const logsWithMicros = dayData.foodLogs.filter(log =>
-      log.micros && Object.keys(log.micros).length > 0
-    );
-    const microCoverageRatio = logsWithMicros.length / dayData.foodLogs.length;
-    const microScore = microCoverageRatio * 100;
-    scores.push(microScore);
-    weights.push(0.15);
-  }
-
-  // 5. Meal consistency (10% weight)
+  // 4. Meal consistency (25% weight)
   if (dayData.foodLogs && dayData.foodLogs.length > 0) {
     const mealCount = dayData.foodLogs.length;
     let consistencyScore = 0;
@@ -88,7 +77,7 @@ function calculateDayScore(dayData, goals) {
       consistencyScore = Math.max(60, 100 - ((mealCount - 5) * 10));
     }
     scores.push(consistencyScore);
-    weights.push(0.1);
+    weights.push(0.25);
   }
 
   if (scores.length === 0) return 0;
@@ -175,7 +164,6 @@ export function calculateNutriScore(data) {
       calories: 0, // Would need to recalculate individual components
       protein: 0,
       hydration: 0,
-      micros: 0,
       consistency: 0,
     },
     historical,
@@ -218,7 +206,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
       accessible={true}
       accessibilityRole="text"
       accessibilityLabel={`Nutrition grade: ${currentGrade}. Score: ${score} out of 100. ${message}`}
-      accessibilityHint="Your daily nutrition quality based on calories, protein, hydration, and micronutrients"
+      accessibilityHint="Your daily nutrition quality based on calories, protein, hydration, and meal consistency"
     >
       {/* Header */}
       {!compact && (

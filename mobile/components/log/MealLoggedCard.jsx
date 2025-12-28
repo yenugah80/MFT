@@ -70,9 +70,9 @@ const formatCalories = (value) => {
  * Get confidence color and label
  */
 const getConfidenceDisplay = (confidence) => {
-  if (confidence >= 0.9) return { color: SEMANTIC.success.base, label: 'High', icon: 'checkmark-circle' };
-  if (confidence >= 0.7) return { color: SEMANTIC.warning.base, label: 'Good', icon: 'information-circle' };
-  return { color: SEMANTIC.danger.base, label: 'Low', icon: 'warning' };
+  if (confidence >= 0.9) return { color: SEMANTIC.success.base, label: 'Strong estimate', icon: 'checkmark-circle' };
+  if (confidence >= 0.7) return { color: SEMANTIC.warning.base, label: 'Typical estimate', icon: 'information-circle' };
+  return { color: SEMANTIC.danger.base, label: 'Needs adjustment', icon: 'warning' };
 };
 
 /**
@@ -328,7 +328,10 @@ export default function MealLoggedCard({
         {/* ──────────────────────────────────────────── */}
         {importantMicros.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Key Micronutrients</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Key Micronutrients</Text>
+              <Text style={styles.sectionNote}>Estimated</Text>
+            </View>
             <View style={styles.microContainer}>
               {importantMicros.map(([name, data]) => (
                 <MicroRow
@@ -368,7 +371,7 @@ export default function MealLoggedCard({
                 size={ICON_SIZES.sm}
                 color={confidenceDisplay.color}
               />
-              <Text style={styles.metadataLabel}>Confidence</Text>
+              <Text style={styles.metadataLabel}>Estimate</Text>
               <Text style={[styles.metadataValue, { color: confidenceDisplay.color }]}>
                 {confidenceDisplay.label} ({Math.round(meal.confidence * 100)}%)
               </Text>
@@ -492,6 +495,11 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: SPACING[5],
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
@@ -499,6 +507,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[4],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  sectionNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
   },
 
   // ──────────────────────────────────────────────

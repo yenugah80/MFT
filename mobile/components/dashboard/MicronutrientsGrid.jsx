@@ -219,7 +219,10 @@ export default function MicronutrientsGrid({ micros = {}, showAll = false }) {
           <LinearGradient colors={SURFACES.gradient.info} style={styles.headerIcon}>
             <Ionicons name="flask" size={18} color="#FFF" />
           </LinearGradient>
-          <Text style={styles.headerTitle}>Micronutrients</Text>
+          <View>
+            <Text style={styles.headerTitle}>Micronutrients</Text>
+            <Text style={styles.headerNote}>Estimated</Text>
+          </View>
         </View>
         <Text style={styles.headerBadge}>
           {displayMicros.length} tracked
@@ -295,6 +298,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
+  },
+  headerNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
+    marginTop: 2,
   },
   headerBadge: {
     fontSize: TYPOGRAPHY.size.xs,

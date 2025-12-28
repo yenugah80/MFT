@@ -12,28 +12,28 @@ const ANALYSIS_STEPS = [
   {
     id: 1,
     icon: 'eye-outline',
-    text: 'Analyzing image with GPT-4o Vision',
+    text: 'Analyzing image',
     duration: 1500,
     color: '#6B4EFF',
   },
   {
     id: 2,
     icon: 'search-outline',
-    text: 'Identifying ingredients and portions',
+    text: 'Identifying foods and portions',
     duration: 2000,
     color: '#3B82F6',
   },
   {
     id: 3,
     icon: 'calculator-outline',
-    text: 'Calculating nutrition from USDA database',
+    text: 'Estimating nutrition from public data',
     duration: 1500,
     color: '#10B981',
   },
   {
     id: 4,
     icon: 'checkmark-circle-outline',
-    text: 'Validating quality',
+    text: 'Finalizing estimate',
     duration: 1000,
     color: '#22C55E',
   },
@@ -71,7 +71,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
       {/* Trust Badge */}
       <View style={styles.trustBadge}>
         <Ionicons name="shield-checkmark" size={20} color="#22C55E" />
-        <Text style={styles.trustText}>AI-Powered • High Quality • USDA Verified</Text>
+        <Text style={styles.trustText}>AI-assisted • Estimate in progress</Text>
       </View>
 
       {/* Progress Bar */}
@@ -144,9 +144,9 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
       <View style={styles.sourcesContainer}>
         <Text style={styles.sourcesTitle}>Data Sources:</Text>
         <View style={styles.sourcesList}>
-          <SourceBadge icon="flask-outline" text="USDA Database" color="#3B82F6" />
-          <SourceBadge icon="logo-openai" text="GPT-4o Vision" color="#10B981" />
-          <SourceBadge icon="shield-outline" text="300K+ Foods" color="#F59E0B" />
+          <SourceBadge icon="flask-outline" text="Public nutrition data" color="#3B82F6" />
+          <SourceBadge icon="eye-outline" text="Vision model" color="#10B981" />
+          <SourceBadge icon="library-outline" text="Common portion guides" color="#F59E0B" />
         </View>
       </View>
 
@@ -160,7 +160,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
         >
           <Ionicons name="analytics-outline" size={16} color="#FFFFFF" />
           <Text style={styles.confidenceText}>
-            High-quality analysis (Clinically informed)
+            Estimate ready for review
           </Text>
         </LinearGradient>
       </View>

@@ -39,7 +39,7 @@ const TOTAL_ANALYSIS_BUDGET_MS = 2000;
 /** USDA API timeout */
 const USDA_TIMEOUT_MS = 650;
 
-/** AI API timeout - Increased for enhanced 97% accuracy prompts */
+/** AI API timeout - Increased for enhanced estimation prompts */
 const AI_TIMEOUT_MS = 8000; // 8 seconds (was 1600ms)
 
 /** Open Food Facts timeout - Reduced for faster response */

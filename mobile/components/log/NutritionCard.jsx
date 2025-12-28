@@ -1,8 +1,7 @@
 /**
  * NutritionCard Component
- * Premium nutrition display with 97% AI accuracy, macro validation, and detailed insights
- * Enhanced to match billion-dollar apps (MyFitnessPal Premium, Cronometer)
- * Features: Confidence scoring, macro validation, health insights, transparency
+ * Nutrition display for estimated analysis
+ * Features: Estimate strength, macro consistency, and transparent assumptions
  */
 
 import React, { useState, useMemo } from 'react';
@@ -20,11 +19,11 @@ import {
  */
 function getConfidenceBadge(confidence) {
   const score = confidence || 0.7;
-  if (score >= 0.95) return { color: '#10B981', bg: '#D1FAE5', text: 'Very High', icon: '✓✓' };
-  if (score >= 0.85) return { color: '#3B82F6', bg: '#DBEAFE', text: 'High', icon: '✓' };
-  if (score >= 0.70) return { color: '#F59E0B', bg: '#FEF3C7', text: 'Good', icon: '~' };
-  if (score >= 0.50) return { color: '#F97316', bg: '#FFEDD5', text: 'Moderate', icon: '?' };
-  return { color: '#EF4444', bg: '#FEE2E2', text: 'Low', icon: '!' };
+  if (score >= 0.95) return { color: '#10B981', bg: '#D1FAE5', text: 'Strong estimate', icon: '✓✓' };
+  if (score >= 0.85) return { color: '#3B82F6', bg: '#DBEAFE', text: 'Typical estimate', icon: '✓' };
+  if (score >= 0.70) return { color: '#F59E0B', bg: '#FEF3C7', text: 'Reasonable estimate', icon: '~' };
+  if (score >= 0.50) return { color: '#F97316', bg: '#FFEDD5', text: 'Rough estimate', icon: '?' };
+  return { color: '#EF4444', bg: '#FEE2E2', text: 'Needs adjustment', icon: '!' };
 }
 
 /**
@@ -42,19 +41,24 @@ function getHealthScoreColor(score) {
  * Formula: Calories = (Protein × 4) + (Carbs × 4) + (Fat × 9)
  */
 function validateMacros(calories, protein, carbs, fat) {
+  if (!calories) {
+    return { level: null, message: null };
+  }
+
   const calculatedCalories = (protein * 4) + (carbs * 4) + (fat * 9);
   const difference = Math.abs(calories - calculatedCalories);
   const percentageOff = (difference / calories) * 100;
 
-  // Allow 10% variance (typical for estimation)
-  if (percentageOff <= 10) {
-    return { valid: true, message: null };
+  if (percentageOff > 30) {
+    return {
+      level: 'warn',
+      message: 'Macros and calories look inconsistent. Consider adjusting portions.',
+    };
   }
 
   return {
-    valid: false,
-    message: `Calorie estimate may vary by ${Math.round(percentageOff)}%. Calculated: ${Math.round(calculatedCalories)} cal`,
-    severity: percentageOff > 25 ? 'high' : 'medium',
+    level: 'info',
+    message: 'Calories are estimated from macros and typical preparation.',
   };
 }
 
@@ -174,6 +178,7 @@ function IngredientItem({ ingredient, onPress }) {
 export function NutritionCard({ foodLog, onSave, onCancel }) {
   const [showMicros, setShowMicros] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   if (!foodLog) return null;
@@ -238,7 +243,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
           )}
           {(portionGrams || servingSize) && (
             <Text style={styles.servingSize}>
-              {servingSize || `${portionGrams}g`}
+              {servingSize || `Approx. ${portionGrams}g`}
             </Text>
           )}
         </View>
@@ -248,15 +253,18 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
           <View style={styles.infoBox}>
             <Text style={styles.infoIcon}>ℹ️</Text>
             <Text style={styles.infoText}>
-              AI Confidence: <Text style={styles.infoBold}>{confidenceBadge.text}</Text>
-              {'\n'}Nutrition estimates based on visual analysis and USDA data.
+              Estimate quality: <Text style={styles.infoBold}>{confidenceBadge.text}</Text>
+              {'\n'}Based on typical preparation, common portions, and public nutrition data.
             </Text>
           </View>
         )}
 
-        {/* Health Score */}
+        {/* Nutrition Balance */}
         <View style={styles.healthScoreContainer}>
-          <Text style={styles.sectionTitle}>Health Score</Text>
+          <Text style={styles.sectionTitle}>Nutrition Balance (experimental)</Text>
+          <Text style={styles.healthScoreCaption}>
+            A rough indicator based on macros and guidelines.
+          </Text>
           <View style={styles.healthScoreBar}>
             <View
               style={[
@@ -279,11 +287,17 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
           <Text style={styles.caloriesLabel}>calories</Text>
         </View>
 
-        {/* Macro Validation Warning */}
-        {!macroValidation.valid && (
-          <View style={[styles.warningBox, macroValidation.severity === 'high' && styles.warningBoxHigh]}>
+        {/* Macro Consistency */}
+        {macroValidation.level === 'warn' && (
+          <View style={styles.warningBox}>
             <Text style={styles.warningIcon}>⚠️</Text>
             <Text style={styles.warningText}>{macroValidation.message}</Text>
+          </View>
+        )}
+        {macroValidation.level === 'info' && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoIcon}>ℹ️</Text>
+            <Text style={styles.infoText}>{macroValidation.message}</Text>
           </View>
         )}
 
@@ -315,7 +329,10 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
               style={styles.sectionHeader}
               onPress={() => setShowMicros(!showMicros)}
             >
-              <Text style={styles.sectionTitle}>Micronutrients</Text>
+              <View style={styles.sectionHeaderLeft}>
+                <Text style={styles.sectionTitle}>Micronutrients</Text>
+                <Text style={styles.estimatedLabel}>Estimated</Text>
+              </View>
               <Text style={styles.toggleIcon}>{showMicros ? '▼' : '▶'}</Text>
             </TouchableOpacity>
 
@@ -367,6 +384,9 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
 
             {showIngredients && (
               <View style={styles.ingredientsContainer}>
+                <Text style={styles.ingredientsNote}>
+                  Ingredients shown are representative, not exact.
+                </Text>
                 {ingredients.map((ingredient, idx) => (
                   <IngredientItem key={idx} ingredient={ingredient} />
                 ))}
@@ -375,18 +395,31 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
           </View>
         )}
 
-        {/* AI Analysis Notes - Transparency Section */}
-        {analysisNotes && (
-          <View style={styles.section}>
-            <View style={styles.analysisNotesHeader}>
-              <Text style={styles.analysisNotesIcon}>🔍</Text>
-              <Text style={styles.sectionTitle}>How We Analyzed This</Text>
+        {/* How We Estimated */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowAnalysis(!showAnalysis)}
+          >
+            <View style={styles.sectionHeaderLeft}>
+              <Text style={styles.sectionTitle}>How We Estimated This</Text>
+              <Text style={styles.estimatedLabel}>Summary</Text>
             </View>
+            <Text style={styles.toggleIcon}>{showAnalysis ? '▼' : '▶'}</Text>
+          </TouchableOpacity>
+          {showAnalysis && (
             <View style={styles.analysisNotesBox}>
-              <Text style={styles.analysisNotesText}>{analysisNotes}</Text>
+              <Text style={styles.analysisNotesText}>• Typical preparation</Text>
+              <Text style={styles.analysisNotesText}>• Common portions</Text>
+              <Text style={styles.analysisNotesText}>• Public nutrition databases</Text>
+              {analysisNotes ? (
+                <Text style={[styles.analysisNotesText, styles.analysisNotesDetail]}>
+                  {analysisNotes}
+                </Text>
+              ) : null}
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </ScrollView>
 
       {/* Actions */}
@@ -463,6 +496,11 @@ const styles = StyleSheet.create({
   healthScoreContainer: {
     marginBottom: 16,
   },
+  healthScoreCaption: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -512,6 +550,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  estimatedLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   toggleIcon: {
     fontSize: 12,
@@ -629,6 +676,10 @@ const styles = StyleSheet.create({
   },
   ingredientsContainer: {
     gap: 8,
+  },
+  ingredientsNote: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   ingredientItem: {
     backgroundColor: '#F9FAFB',
@@ -795,6 +846,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
     lineHeight: 19,
-    fontStyle: 'italic',
+    fontStyle: 'normal',
+  },
+  analysisNotesDetail: {
+    marginTop: 8,
+    fontStyle: 'normal',
   },
 });
