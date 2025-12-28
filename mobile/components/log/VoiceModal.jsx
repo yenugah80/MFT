@@ -25,7 +25,7 @@
  * />
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -211,44 +211,26 @@ export function VoiceModal({
   const [isEditing, setIsEditing] = useState(false);
 
   // ─────────────────────────────────────────────
-  // Sync state with hook
-  // ─────────────────────────────────────────────
-  useEffect(() => {
-    if (isRecording) {
-      setState('listening');
-    } else if (isProcessing) {
-      setState('processing');
-    } else if (error) {
-      setState('error');
-      triggerHaptic('error');
-    } else if (!visible) {
-      setState('idle');
-      setTranscription('');
-      setConfidence(null);
-      setIsEditing(false);
-    }
-  }, [isRecording, isProcessing, error, visible]);
-
-  // ─────────────────────────────────────────────
-  // Auto-stop at max duration
-  // ─────────────────────────────────────────────
-  useEffect(() => {
-    if (duration >= MAX_RECORDING_DURATION_MS && isRecording) {
-      handleStop();
-    }
-  }, [duration, isRecording]);
-
-  // ─────────────────────────────────────────────
-  // Handlers
+  // Handlers (Production-grade memoization)
   // ─────────────────────────────────────────────
 
-  const handleStart = async () => {
+  // Define handleClose FIRST (used by handleCancel and handleConfirm)
+  const handleClose = useCallback(() => {
+    clearError();
+    setState('idle');
+    setTranscription('');
+    setConfidence(null);
+    setIsEditing(false);
+    onClose();
+  }, [clearError, onClose]);
+
+  const handleStart = useCallback(async () => {
     clearError();
     await triggerHaptic();
     await startRecording();
-  };
+  }, [clearError, startRecording]);
 
-  const handleStop = async () => {
+  const handleStop = useCallback(async () => {
     try {
       await triggerHaptic();
       const result = await stopRecording();
@@ -261,15 +243,15 @@ export function VoiceModal({
       console.error('[VoiceModal] Stop failed:', err);
       setState('error');
     }
-  };
+  }, [stopRecording]);
 
-  const handleCancel = async () => {
+  const handleCancel = useCallback(async () => {
     await triggerHaptic();
     await cancelRecording();
     handleClose();
-  };
+  }, [cancelRecording, handleClose]);
 
-  const handleConfirm = async () => {
+  const handleConfirm = useCallback(async () => {
     try {
       // Show analyzing state
       setState('analyzing');
@@ -291,26 +273,45 @@ export function VoiceModal({
       console.error('[VoiceModal] Analysis failed:', err);
       setState('error');
     }
-  };
+  }, [analyzeTranscript, transcription, onComplete, handleClose]);
 
-  const handleClose = () => {
-    clearError();
-    setState('idle');
-    setTranscription('');
-    setConfidence(null);
-    setIsEditing(false);
-    onClose();
-  };
-
-  const handleEditTranscription = () => {
+  const handleEditTranscription = useCallback(() => {
     setIsEditing(true);
     triggerHaptic();
-  };
+  }, []);
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = useCallback(() => {
     setIsEditing(false);
     triggerHaptic();
-  };
+  }, []);
+
+  // ─────────────────────────────────────────────
+  // Effects
+  // ─────────────────────────────────────────────
+
+  // Sync state with hook
+  useEffect(() => {
+    if (isRecording) {
+      setState('listening');
+    } else if (isProcessing) {
+      setState('processing');
+    } else if (error) {
+      setState('error');
+      triggerHaptic('error');
+    } else if (!visible) {
+      setState('idle');
+      setTranscription('');
+      setConfidence(null);
+      setIsEditing(false);
+    }
+  }, [isRecording, isProcessing, error, visible]);
+
+  // Auto-stop at max duration (PRODUCTION FIX: handleStop now in deps)
+  useEffect(() => {
+    if (duration >= MAX_RECORDING_DURATION_MS && isRecording) {
+      handleStop();
+    }
+  }, [duration, isRecording, handleStop]);
 
   // ─────────────────────────────────────────────
   // Render duration with warning at 50s
