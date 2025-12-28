@@ -1,6 +1,10 @@
 import express from "express";
+import multer from "multer";
 import { FoodService } from "../services/foodService.js";
 import { requireAuth } from "../middleware/auth.js";
+
+// Configure Multer for audio file uploads
+const upload = multer({ dest: "uploads/" });
 
 const router = express.Router();
 
@@ -83,14 +87,14 @@ router.post("/analyze-image", async (req, res) => {
  * Returns: { transcript: string, confidence: number }
  * Uses gpt-4o-mini-transcribe for speech-to-text ONLY
  */
-router.post("/transcribe-voice", async (req, res) => {
+router.post("/transcribe-voice", upload.single('audio'), async (req, res) => {
   try {
     // Check if file was uploaded
-    if (!req.files || !req.files.audio) {
+    if (!req.file) {
       return res.status(400).json({ error: "Audio file required" });
     }
 
-    const audioFile = req.files.audio;
+    const audioFile = req.file;
     const language = req.body.language || 'en';
 
     // Validate file size (max 25MB as per OpenAI limits)
@@ -99,16 +103,17 @@ router.post("/transcribe-voice", async (req, res) => {
       return res.status(400).json({ error: "Audio file too large (max 25MB)" });
     }
 
-    // Validate file type
-    const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/wav', 'audio/webm'];
-    if (!validTypes.some(type => audioFile.mimetype.includes(type))) {
-      return res.status(400).json({ error: "Invalid audio format. Supported: m4a, mp3, wav, webm" });
-    }
+    console.log(`[FoodTranscribeVoice] Transcribing audio: ${audioFile.originalname}, size: ${audioFile.size} bytes`);
 
-    console.log(`[FoodTranscribeVoice] Transcribing audio: ${audioFile.name}, size: ${audioFile.size} bytes`);
+    // Read file buffer from disk (multer saves to disk)
+    const fs = await import('fs');
+    const audioBuffer = fs.readFileSync(audioFile.path);
 
     // Transcribe voice using FoodService
-    const result = await FoodService.transcribeVoice(audioFile.data, { language });
+    const result = await FoodService.transcribeVoice(audioBuffer, { language });
+
+    // Clean up temp file
+    fs.unlinkSync(audioFile.path);
 
     if (!result || !result.transcript) {
       return res.status(500).json({ error: "Transcription failed" });
@@ -137,14 +142,14 @@ router.post("/transcribe-voice", async (req, res) => {
  *
  * NOTE: Prefer using /transcribe-voice + /analyze-text for better UX (allows user to confirm/edit transcript)
  */
-router.post("/analyze-voice", async (req, res) => {
+router.post("/analyze-voice", upload.single('audio'), async (req, res) => {
   try {
     // Check if file was uploaded
-    if (!req.files || !req.files.audio) {
+    if (!req.file) {
       return res.status(400).json({ error: "Audio file required" });
     }
 
-    const audioFile = req.files.audio;
+    const audioFile = req.file;
     const language = req.body.language || 'en';
 
     // Validate file size (max 25MB as per OpenAI limits)
@@ -153,16 +158,17 @@ router.post("/analyze-voice", async (req, res) => {
       return res.status(400).json({ error: "Audio file too large (max 25MB)" });
     }
 
-    // Validate file type
-    const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/wav', 'audio/webm'];
-    if (!validTypes.some(type => audioFile.mimetype.includes(type))) {
-      return res.status(400).json({ error: "Invalid audio format. Supported: m4a, mp3, wav, webm" });
-    }
+    console.log(`[FoodAnalyzeVoice] Processing audio: ${audioFile.originalname}, size: ${audioFile.size} bytes`);
 
-    console.log(`[FoodAnalyzeVoice] Processing audio: ${audioFile.name}, size: ${audioFile.size} bytes`);
+    // Read file buffer from disk (multer saves to disk)
+    const fs = await import('fs');
+    const audioBuffer = fs.readFileSync(audioFile.path);
 
     // Analyze voice using FoodService
-    const result = await FoodService.analyzeVoice(audioFile.data, { language });
+    const result = await FoodService.analyzeVoice(audioBuffer, { language });
+
+    // Clean up temp file
+    fs.unlinkSync(audioFile.path);
 
     if (!result) {
       return res.status(500).json({ error: "Voice analysis failed" });
