@@ -115,6 +115,78 @@ Return JSON with ONLY high-confidence insights (>0.6):
 }
 
 /**
+ * Generate basic rule-based mood-only insights (no AI, no food dependency).
+ * Always returns something meaningful once moods exist.
+ * @param {Array} moods - Mood log entries
+ * @returns {Array} - Array of insight objects
+ */
+export function generateBasicMoodInsights(moods) {
+  if (!Array.isArray(moods) || moods.length === 0) return [];
+
+  const summary = summarizeMoods(moods);
+  const insights = [];
+  const avgMood = summary.averageIntensity;
+  const avgEnergy = summary.averageEnergy;
+  const dominantMood = summary.dominantMood;
+  const intensities = moods.map((m) => m.intensity || 5);
+  const minIntensity = Math.min(...intensities);
+  const maxIntensity = Math.max(...intensities);
+  const range = maxIntensity - minIntensity;
+
+  insights.push({
+    type: "Mood Summary",
+    title: "Average Mood So Far",
+    message: `Your average mood so far is ${avgMood}/10 based on recent entries.`,
+    confidence: 0.45,
+    suggestions: [
+      "Keep logging to refine this baseline",
+    ],
+    relatedData: { moodTrigger: dominantMood || "neutral" },
+  });
+
+  if (dominantMood) {
+    insights.push({
+      type: "Mood Summary",
+      title: "Most Common Mood",
+      message: `Your most common mood recently is ${dominantMood}.`,
+      confidence: 0.4,
+      suggestions: [
+        "Notice what tends to precede this mood",
+      ],
+      relatedData: { moodTrigger: dominantMood },
+    });
+  }
+
+  if (Number.isFinite(avgEnergy)) {
+    insights.push({
+      type: "Energy Pattern",
+      title: "Energy Baseline",
+      message: `Your average energy level is ${avgEnergy}/10.`,
+      confidence: 0.4,
+      suggestions: [
+        "Track energy alongside sleep or meals for clearer patterns",
+      ],
+      relatedData: { moodTrigger: dominantMood || "neutral" },
+    });
+  }
+
+  if (range >= 3) {
+    insights.push({
+      type: "Mood Variability",
+      title: "Mood Variability Detected",
+      message: "Your mood varies noticeably between entries. Consistent logging can reveal what drives the swings.",
+      confidence: 0.35,
+      suggestions: [
+        "Log mood at consistent times each day",
+      ],
+      relatedData: { moodTrigger: dominantMood || "neutral" },
+    });
+  }
+
+  return insights.slice(0, 4);
+}
+
+/**
  * Analyze mood-meal correlation after a new mood entry
  * This function updates the correlation cache table
  *

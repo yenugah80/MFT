@@ -11,7 +11,7 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
-import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate } from "../services/gamificationRewardService.js";
+import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification } from "../services/gamificationRewardService.js";
 import { checkAchievements } from "../services/achievementService.js";
 
 // Configure Multer for temporary file storage
@@ -948,6 +948,11 @@ router.get("/dashboard", async (req, res) => {
     });
 
     // Build response
+    let gamificationRow = gamification[0];
+    if (!gamificationRow) {
+      gamificationRow = await initializeGamification(userId, db);
+    }
+
     const dashboard = {
       today: {
         date: today,
@@ -967,12 +972,7 @@ router.get("/dashboard", async (req, res) => {
         hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
       goals: goals[0] || null,
-      gamification: gamification[0] || {
-        xp: 0,
-        level: 1,
-        streak: 0,
-        badges: [],
-      },
+      gamification: gamificationRow,
       trends: {
         weeklyAverages,
         weekSummaries: weekSummaries.map(s => ({

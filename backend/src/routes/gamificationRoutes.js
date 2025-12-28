@@ -1,6 +1,6 @@
 import express from 'express';
 import { checkAndAwardStreakFreeze } from '../services/gamificationService.js';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -9,7 +9,7 @@ const router = express.Router();
 router.post('/check-streak', requireAuth, async (req, res) => {
   try {
     const { currentStreak } = req.body;
-    const userId = req.user.id;
+    const userId = req.auth.userId;
 
     if (typeof currentStreak !== 'number') {
       return res.status(400).json({ error: 'currentStreak is required' });

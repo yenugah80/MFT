@@ -71,6 +71,7 @@ async function main() {
   try {
     // Run any pending migrations
     await runMigration('0017_add_lottie_animations.sql');
+    await runMigration('0018_add_mood_day_key.sql');
     console.log('\n🎉 All migrations completed successfully!');
     process.exit(0);
   } catch (error) {

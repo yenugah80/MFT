@@ -6,7 +6,9 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "drizzle:generate": "drizzle-kit generate",
-    "drizzle:migrate": "drizzle-kit migrate"
+    "drizzle:migrate": "drizzle-kit migrate",
+    "backfill:gamification": "node backfill-gamification.js",
+    "backfill:mood-day-key": "node backfill-mood-day-key.js"
   },
   "keywords": [],
   "author": "",

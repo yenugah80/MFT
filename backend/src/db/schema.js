@@ -419,6 +419,10 @@ export const moodLogTable = pgTable(
     // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
     clientEventId: text("client_event_id"),
 
+    // Timezone normalization (stable local-day bucket)
+    dayKey: text("day_key"), // YYYY-MM-DD at log time
+    timezoneOffset: integer("timezone_offset"), // minutes from UTC at log time
+
     loggedDate: timestamp("logged_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },

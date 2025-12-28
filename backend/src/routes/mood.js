@@ -3,8 +3,8 @@ import { db } from "../config/db.js";
 import { moodLogTable, foodLogTable } from "../db/schema.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
-import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
-import { generateMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
+import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC } from "../utils/timezone.js";
+import { generateMoodInsights, generateBasicMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
 
 const router = express.Router();
 
@@ -21,6 +21,7 @@ router.use(requireAuth);
 router.post("/log", async (req, res) => {
   try {
     const userId = req.auth.userId;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const {
       mood,
       intensity,
@@ -94,6 +95,11 @@ router.post("/log", async (req, res) => {
     };
 
     // Insert with idempotency protection via ON CONFLICT
+    const parsedLoggedDate = loggedDate ? new Date(loggedDate) : new Date();
+    const safeLoggedDate = Number.isNaN(parsedLoggedDate.getTime()) ? new Date() : parsedLoggedDate;
+    const localDay = getLocalDateUTC(offsetMinutes, safeLoggedDate);
+    const dayKey = localDay.toISOString().slice(0, 10);
+
     const result = await db.insert(moodLogTable).values({
       userId,
       mood: mood.toLowerCase(),
@@ -103,8 +109,10 @@ router.post("/log", async (req, res) => {
       mealContext,
       note: note || null,
       source: source || 'manual',
-      loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
+      loggedDate: safeLoggedDate,
       clientEventId,
+      dayKey,
+      timezoneOffset: Number.isFinite(offsetMinutes) ? offsetMinutes : null,
     }).onConflictDoNothing({ target: [moodLogTable.userId, moodLogTable.clientEventId] })
       .returning();
 
@@ -253,9 +261,24 @@ router.get("/trends", async (req, res) => {
     const aggregated = [];
     const dayMap = new Map();
 
+    const buildDayKey = (entry) => {
+      if (entry.dayKey) return entry.dayKey;
+      const date = new Date(entry.loggedDate);
+      if (Number.isNaN(date.getTime())) return null;
+      const offset = Number.isFinite(entry.timezoneOffset)
+        ? entry.timezoneOffset
+        : date.getTimezoneOffset();
+      const localMs = date.getTime() - offset * 60 * 1000;
+      const local = new Date(localMs);
+      const year = local.getUTCFullYear();
+      const month = String(local.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(local.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     moods.forEach(mood => {
-      const date = new Date(mood.loggedDate);
-      const dayKey = date.toISOString().split('T')[0];
+      const dayKey = buildDayKey(mood);
+      if (!dayKey) return;
 
       if (!dayMap.has(dayKey)) {
         dayMap.set(dayKey, {
@@ -370,12 +393,25 @@ router.post("/insights", async (req, res) => {
       )
       .orderBy(foodLogTable.loggedDate);
 
-    // ⚠️ CRITICAL: Guard AI insights (minimum data threshold)
-    if (moods.length < 10 || foodLogs.length < 10) {
+    const minThreshold = { moods: 10, meals: 10 };
+    const belowThreshold = moods.length < minThreshold.moods || foodLogs.length < minThreshold.meals;
+
+    if (belowThreshold) {
+      const basicInsights = generateBasicMoodInsights(moods);
+      const fallbackInsights = basicInsights.length > 0 ? basicInsights : [{
+        type: "Mood Summary",
+        title: "Early Signals",
+        message: "Keep logging to strengthen your mood baseline and reveal clearer patterns.",
+        confidence: 0.3,
+        suggestions: ["Log mood consistently for a few more days"],
+        relatedData: { moodTrigger: "neutral" },
+      }];
+
       return res.json({
-        insights: [],
-        message: 'Not enough data yet. Keep logging to unlock insights!',
-        minDataRequired: { moods: 10, meals: 10 },
+        insightTier: "basic",
+        insights: fallbackInsights,
+        message: "Early insights based on recent logs.",
+        minDataRequired: minThreshold,
         currentData: { moods: moods.length, meals: foodLogs.length },
       });
     }
@@ -384,6 +420,7 @@ router.post("/insights", async (req, res) => {
     const insights = await generateMoodInsights(userId, moods, foodLogs);
 
     const responseData = {
+      insightTier: "ai",
       insights,
       dataPoints: {
         moods: moods.length,
