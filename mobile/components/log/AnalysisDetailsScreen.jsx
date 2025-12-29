@@ -12,7 +12,7 @@
  * - Accessibility optimized
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -68,14 +68,79 @@ const AnalysisDetailsScreen = ({
     macros: true,
     micros: false,
     evidence: false,
+    ingredients: true,
   });
   const [showAllMicros, setShowAllMicros] = useState(false);
+  const prevIngredientsExpandedRef = useRef(false);
+  const chipAnimationsRef = useRef({});
 
   if (!analysisResult) return null;
 
   const { items = [], totals = {} } = analysisResult;
   const hasSingleItem = items.length === 1;
   const hasImage = !!imageUri;
+  const hasIngredients = items.some(
+    (item) => (item.ingredients && item.ingredients.length > 0) ||
+      (item.components && item.components.length > 0)
+  );
+
+  const chipGradients = [
+    ['#FDE68A', '#F59E0B'],
+    ['#A7F3D0', '#10B981'],
+    ['#BFDBFE', '#3B82F6'],
+    ['#FBCFE8', '#EC4899'],
+    ['#E9D5FF', '#8B5CF6'],
+  ];
+
+  const ingredientChips = useMemo(() => {
+    if (!hasIngredients) return [];
+    const chips = [];
+    items.forEach((item, index) => {
+      const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
+      ingredients.forEach((name, chipIndex) => {
+        chips.push({
+          key: `${item.itemId || index}-ing-${chipIndex}`,
+          name,
+        });
+      });
+    });
+    return chips;
+  }, [items, hasIngredients]);
+
+  useEffect(() => {
+    if (!hasIngredients) return;
+    const isExpanded = expandedSections.ingredients;
+    const wasExpanded = prevIngredientsExpandedRef.current;
+
+    if (isExpanded && !wasExpanded && ingredientChips.length > 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const animations = ingredientChips.map((chip, index) => {
+        if (!chipAnimationsRef.current[chip.key]) {
+          chipAnimationsRef.current[chip.key] = new Animated.Value(0);
+        } else {
+          chipAnimationsRef.current[chip.key].setValue(0);
+        }
+        return Animated.timing(chipAnimationsRef.current[chip.key], {
+          toValue: 1,
+          duration: 160,
+          delay: index * 35,
+          useNativeDriver: true,
+        });
+      });
+
+      Animated.stagger(35, animations).start();
+    }
+
+    if (!isExpanded) {
+      ingredientChips.forEach((chip) => {
+        if (chipAnimationsRef.current[chip.key]) {
+          chipAnimationsRef.current[chip.key].setValue(0);
+        }
+      });
+    }
+
+    prevIngredientsExpandedRef.current = isExpanded;
+  }, [expandedSections.ingredients, ingredientChips, hasIngredients]);
 
   /**
    * Toggle section expansion
@@ -463,6 +528,114 @@ const AnalysisDetailsScreen = ({
             </View>
           )}
 
+          {/* Ingredients & Components */}
+          {hasIngredients && (
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection('ingredients')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons
+                    name="layers"
+                    size={ICON_SIZES.md}
+                    color={SEMANTIC.warning.base}
+                  />
+                  <Text style={styles.sectionTitle}>Flavor Layers</Text>
+                  <Text style={styles.sectionNote}>Ingredients + components</Text>
+                </View>
+                <Ionicons
+                  name={expandedSections.ingredients ? 'chevron-up' : 'chevron-down'}
+                  size={ICON_SIZES.sm}
+                  color={TEXT.tertiary}
+                />
+              </TouchableOpacity>
+
+              {expandedSections.ingredients && (
+                <View style={styles.ingredientsContainer}>
+                  {items.map((item, index) => {
+                    const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
+                    const components = Array.isArray(item.components) ? item.components : [];
+
+                    if (ingredients.length === 0 && components.length === 0) {
+                      return null;
+                    }
+
+                    return (
+                      <View key={item.itemId || index} style={styles.ingredientsCard}>
+                        <View style={styles.ingredientsHeader}>
+                          <Text style={styles.ingredientsItemName}>{item.name}</Text>
+                          <Text style={styles.ingredientsMeta}>
+                            {ingredients.length} ingredients · {components.length} components
+                          </Text>
+                        </View>
+
+                        {ingredients.length > 0 && (
+                          <View style={styles.ingredientsChips}>
+                            {ingredients.map((name, chipIndex) => {
+                              const chipKey = `${item.itemId || index}-ing-${chipIndex}`;
+                              if (!chipAnimationsRef.current[chipKey]) {
+                                chipAnimationsRef.current[chipKey] = new Animated.Value(
+                                  expandedSections.ingredients ? 0 : 1
+                                );
+                              }
+                              const animValue = chipAnimationsRef.current[chipKey];
+                              const animatedStyle = {
+                                opacity: animValue,
+                                transform: [
+                                  {
+                                    translateY: animValue.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [6, 0],
+                                    }),
+                                  },
+                                ],
+                              };
+
+                              return (
+                                <Animated.View key={chipKey} style={animatedStyle}>
+                                  <LinearGradient
+                                    colors={chipGradients[chipIndex % chipGradients.length]}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.ingredientChip}
+                                  >
+                                    <Text style={styles.ingredientChipText}>{name}</Text>
+                                  </LinearGradient>
+                                </Animated.View>
+                              );
+                            })}
+                          </View>
+                        )}
+
+                        {components.length > 0 && (
+                          <View style={styles.componentsList}>
+                            {components.map((component, compIndex) => {
+                              const calories = Number.isFinite(component.calories)
+                                ? `${Math.round(component.calories)} kcal`
+                                : null;
+                              const portion = component.portion || calories || 'Estimated';
+                              return (
+                                <View
+                                  key={`${item.itemId || index}-comp-${compIndex}`}
+                                  style={styles.componentRow}
+                                >
+                                  <Text style={styles.componentName}>{component.name}</Text>
+                                  <Text style={styles.componentMeta}>{portion}</Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Source Evidence */}
           <View style={styles.section}>
             <TouchableOpacity
@@ -778,6 +951,72 @@ const styles = StyleSheet.create({
     padding: SPACING[3],
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  ingredientsContainer: {
+    gap: SPACING[3],
+  },
+  ingredientsCard: {
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  ingredientsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
+  },
+  ingredientsItemName: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+    flex: 1,
+  },
+  ingredientsMeta: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginLeft: SPACING[2],
+  },
+  ingredientsChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[2],
+    marginBottom: SPACING[2],
+  },
+  ingredientChip: {
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: RADIUS.full,
+  },
+  ingredientChipText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: '#1F2937',
+  },
+  componentsList: {
+    backgroundColor: SURFACES.background.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING[1],
+    paddingHorizontal: SPACING[2],
+  },
+  componentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING[1],
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  componentName: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  componentMeta: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
   },
   evidenceHeader: {
     flexDirection: 'row',

@@ -638,6 +638,25 @@ function calculateTotals(items) {
     totals.macros.protein_g += item.macros.protein_g || 0;
     totals.macros.carbs_g += item.macros.carbs_g || 0;
     totals.macros.fat_g += item.macros.fat_g || 0;
+
+    if (item.micros && typeof item.micros === 'object') {
+      Object.entries(item.micros).forEach(([key, value]) => {
+        let numValue;
+        if (typeof value === 'number') {
+          numValue = value;
+        } else if (typeof value === 'string') {
+          numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+        } else if (value && typeof value === 'object' && value.value !== undefined) {
+          numValue = typeof value.value === 'number'
+            ? value.value
+            : parseFloat(String(value.value).replace(/[^0-9.]/g, ''));
+        }
+
+        if (!isNaN(numValue) && numValue > 0) {
+          totals.micros[key] = (totals.micros[key] || 0) + numValue;
+        }
+      });
+    }
   });
 
   return totals;

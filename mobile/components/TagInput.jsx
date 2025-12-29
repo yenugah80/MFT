@@ -16,6 +16,7 @@ export default function TagInput({
   label,
 }) {
   const [input, setInput] = useState("");
+  const safeTags = Array.isArray(tags) ? tags : [];
 
   const handleAdd = () => {
     const trimmed = input.trim();
@@ -76,7 +77,7 @@ export default function TagInput({
       </View>
 
       <View style={profileStyles.tagRow}>
-        {tags.map((item, index) => (
+        {safeTags.map((item, index) => (
           <TouchableOpacity
             key={`${item}-${index}`}
             disabled={!editable}

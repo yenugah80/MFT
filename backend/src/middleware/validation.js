@@ -30,4 +30,6 @@ export const nutritionGoalsSchema = z.object({
 
 export const imageAnalysisSchema = z.object({
   image: z.string({ required_error: "Image base64 data is required" }),
+  highAccuracy: z.boolean().optional(),
+  includeIngredients: z.boolean().optional(),
 });

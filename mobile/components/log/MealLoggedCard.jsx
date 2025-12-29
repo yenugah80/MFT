@@ -27,6 +27,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import {
@@ -152,6 +153,72 @@ const MacroBar = ({ label, value, unit, color, goal, icon }) => {
 };
 
 // ============================================================================
+// COMPARISON BAR COMPONENT - Shows impact on daily goals
+// ============================================================================
+
+const ComparisonBar = ({ label, mealValue, dailyTotal, goal, unit, color, onViewTrends }) => {
+  const totalAfter = (dailyTotal || 0) + (mealValue || 0);
+  
+  const mealPct = goal ? Math.min((mealValue / goal) * 100, 100) : 0;
+  const totalBeforePct = goal ? Math.min((dailyTotal / goal) * 100, 100) : 0;
+
+  const [fillAnim] = useState(new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.spring(fillAnim, {
+      toValue: 1,
+      delay: 400, // Delay to start after main card animation
+      tension: 40,
+      friction: 8,
+      useNativeDriver: false,
+    }).start();
+  }, []);
+
+  return (
+    <View style={styles.comparisonBar}>
+      <View style={styles.comparisonHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={styles.comparisonLabel}>{label}</Text>
+          {onViewTrends && (
+            <TouchableOpacity onPress={() => {
+              Haptics.selectionAsync();
+              onViewTrends();
+            }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="stats-chart" size={14} color={TEXT.tertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <Text style={styles.comparisonValueText}>
+          {formatMacro(totalAfter)}<Text style={styles.comparisonUnit}> / {formatMacro(goal)} {unit}</Text>
+        </Text>
+      </View>
+      <View style={styles.comparisonTrack}>
+        {/* Daily Total Before */}
+        <Animated.View style={[styles.comparisonFill, { 
+          backgroundColor: `${color}40`, // Lighter shade for background
+          width: fillAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['0%', `${totalBeforePct}%`]
+          })
+        }]} />
+        {/* This Meal */}
+        <Animated.View style={[styles.comparisonFill, { 
+          position: 'absolute',
+          backgroundColor: color,
+          left: `${totalBeforePct}%`,
+          width: fillAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['0%', `${mealPct}%`]
+          })
+        }]} />
+        {/* Goal Marker */}
+        <View style={styles.goalMarker} />
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
 // MICRONUTRIENT ROW - Compact Data Display
 // ============================================================================
 
@@ -186,6 +253,9 @@ export default function MealLoggedCard({
   onShare,
   onClose,
   dailyGoals,
+  dailyTotals,
+  onViewTrends,
+  onSaveAsMeal,
 }) {
   const [scaleAnim] = useState(new Animated.Value(0.9));
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -213,10 +283,12 @@ export default function MealLoggedCard({
   const sourceLabel = getSourceLabel(meal.source);
 
   // Extract micronutrients (top 6 most important)
-  const importantMicros = meal.micros ? Object.entries(meal.micros)
-    .filter(([key, val]) => val && val.value > 0)
-    .slice(0, 6)
+  const microsEntries = meal.micros && typeof meal.micros === 'object'
+    ? Object.entries(meal.micros)
     : [];
+  const importantMicros = microsEntries
+    .filter(([, val]) => val && val.value > 0)
+    .slice(0, 6);
 
   return (
     <Animated.View
@@ -309,6 +381,54 @@ export default function MealLoggedCard({
         </View>
 
         {/* ──────────────────────────────────────────── */}
+        {/* IMPACT ON YOUR DAY - Comparison View */}
+        {/* ──────────────────────────────────────────── */}
+        {dailyTotals && dailyGoals && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Impact on Your Day</Text>
+            <View style={styles.comparisonContainer}>
+              <ComparisonBar 
+                label="Calories"
+                mealValue={meal.calories}
+                // Calculate the daily total *before* this meal was added
+                dailyTotal={(dailyTotals.totalCalories || 0) - (meal.calories || 0)}
+                goal={dailyGoals.dailyCalories}
+                unit="kcal"
+                color={SEMANTIC.info.base} // Using a neutral color for calories
+                onViewTrends={() => onViewTrends && onViewTrends('calories')}
+              />
+              <ComparisonBar 
+                label="Protein"
+                mealValue={meal.protein}
+                dailyTotal={(dailyTotals.totalProtein || 0) - (meal.protein || 0)}
+                goal={dailyGoals.proteinG}
+                unit="g"
+                color={MACRO_COLORS.protein.base}
+                onViewTrends={() => onViewTrends && onViewTrends('protein')}
+              />
+              <ComparisonBar 
+                label="Carbs"
+                mealValue={meal.carbs}
+                dailyTotal={(dailyTotals.totalCarbs || 0) - (meal.carbs || 0)}
+                goal={dailyGoals.carbsG}
+                unit="g"
+                color={MACRO_COLORS.carbs.base}
+                onViewTrends={() => onViewTrends && onViewTrends('carbs')}
+              />
+              <ComparisonBar 
+                label="Fat"
+                mealValue={meal.fat}
+                dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
+                goal={dailyGoals.fatG}
+                unit="g"
+                color={MACRO_COLORS.fat.base}
+                onViewTrends={() => onViewTrends && onViewTrends('fat')}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* ──────────────────────────────────────────── */}
         {/* NET CARBS - Important for low-carb diets */}
         {/* ──────────────────────────────────────────── */}
         {meal.netCarbs !== null && meal.netCarbs !== undefined && (
@@ -386,6 +506,11 @@ export default function MealLoggedCard({
           <TouchableOpacity style={styles.secondaryButton} onPress={onEdit}>
             <Ionicons name="create-outline" size={ICON_SIZES.md} color={BRAND.primary} />
             <Text style={styles.secondaryButtonText}>Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={onSaveAsMeal}>
+            <Ionicons name="bookmark-outline" size={ICON_SIZES.md} color={BRAND.primary} />
+            <Text style={styles.secondaryButtonText}>Save</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryButton} onPress={onShare}>
@@ -565,6 +690,55 @@ const styles = StyleSheet.create({
   macroFill: {
     height: '100%',
     borderRadius: RADIUS.full,
+  },
+
+  // ──────────────────────────────────────────────
+  // COMPARISON BARS
+  // ──────────────────────────────────────────────
+  comparisonContainer: {
+    backgroundColor: SURFACES.card.glass,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    gap: SPACING[4],
+  },
+  comparisonBar: {
+    gap: SPACING[2],
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  comparisonLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+  },
+  comparisonValueText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+  },
+  comparisonUnit: {
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
+  },
+  comparisonTrack: {
+    height: 10,
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.full,
+    position: 'relative',
+  },
+  comparisonFill: {
+    height: '100%',
+  },
+  goalMarker: {
+    position: 'absolute',
+    left: '100%',
+    top: -2,
+    bottom: -2,
+    width: 2,
+    backgroundColor: `${SEMANTIC.success.base}80`, // Semi-transparent
   },
 
   // ──────────────────────────────────────────────

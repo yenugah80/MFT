@@ -265,6 +265,10 @@ function buildFoodLog({ inputText, source, raw }) {
   // Normalize nutrition data
   const normalized = normalizeNutritionData(raw);
 
+  const fallbackName = typeof inputText === 'string' && ['photo', 'voice', 'barcode'].includes(inputText.toLowerCase())
+    ? 'Unknown Food'
+    : inputText;
+
   // Extract micronutrients with units
   const micros = {};
   Object.entries(normalized.micros || {}).forEach(([key, value]) => {
@@ -288,7 +292,7 @@ function buildFoodLog({ inputText, source, raw }) {
     timestamp: Date.now(),
     status: 'pending',
     source,
-    foodName: raw.foodName || raw.name || inputText || null,
+    foodName: raw.foodName || raw.title || raw.name || fallbackName || null,
     servingSize: raw.servingSize || null,
     calories: normalized.calories ?? null,
     protein: normalized.protein ?? null,
@@ -1163,7 +1167,11 @@ export function useFoodAnalysis() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ image: base64 }),
+          body: JSON.stringify({
+            image: base64,
+            highAccuracy: true,
+            includeIngredients: true,
+          }),
         },
         IMAGE_ANALYSIS_TIMEOUT_MS
       );

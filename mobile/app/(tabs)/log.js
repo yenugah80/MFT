@@ -74,6 +74,19 @@ const DAILY_VALUES = {
   potassium: 3500,
 };
 
+const COMMON_PORTION_UNITS = [
+  'g',
+  'oz',
+  'ml',
+  'cup',
+  'tbsp',
+  'tsp',
+  'serving',
+  'piece',
+  'slice',
+  'item',
+];
+
 export default function LogScreen() {
   // State
   const [selectedImage, setSelectedImage] = useState(null);
@@ -91,6 +104,8 @@ export default function LogScreen() {
   const [showHydrationModal, setShowHydrationModal] = useState(false);
   const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
   const [hasManuallyClosedDetails, setHasManuallyClosedDetails] = useState(false);
+  const [portionAmountDraft, setPortionAmountDraft] = useState('');
+  const [showPortionUnitPicker, setShowPortionUnitPicker] = useState(false);
 
   // Hooks
   const foodAnalysis = useFoodAnalysis();
@@ -261,7 +276,7 @@ export default function LogScreen() {
       return;
     }
 
-    const { items, totals } = foodAnalysis.analysisResult;
+    const { items = [], totals = {} } = foodAnalysis.analysisResult || {};
     let shareText = `My Meal Analysis from My-Food-Tracker:\n\n`;
 
     if (items.length === 1) {
@@ -285,7 +300,7 @@ export default function LogScreen() {
     shareText += `Net Carbs: ${totals.netCarbs?.toFixed(1) || 0}g\n`;
 
     // Add micronutrients to share text
-    if (Object.keys(totals.micros).length > 0) {
+    if (totals?.micros && Object.keys(totals.micros).length > 0) {
       shareText += `\n--- Micronutrients ---\n`;
       Object.entries(totals.micros).forEach(([key, micro]) => {
         const val = micro.value ? micro.value.toFixed(1) : '0';
@@ -394,9 +409,10 @@ export default function LogScreen() {
         await foodLog.addLog(foodLogData);
       }
 
-      notify.success(`${foodAnalysis.analysisResult.items.length} items logged!`);
+      const loggedCount = foodAnalysis.analysisResult?.items?.length || 0;
+      notify.success(`${loggedCount} items logged!`);
       setLoggedMeal({
-        foodName: `Meal (${foodAnalysis.analysisResult.items.length} items)`,
+        foodName: `Meal (${loggedCount} items)`,
         calories: totalCalories,
         protein: totalProtein,
         carbs: totalCarbs,
@@ -517,6 +533,20 @@ export default function LogScreen() {
       .filter(entry => Number.isFinite(entry.id))
       .sort((a, b) => b.timestamp - a.timestamp);
   }, [waterTodayData]);
+
+  const singleAnalysisItem = useMemo(() => {
+    const items = foodAnalysis.analysisResult?.items;
+    if (!items || items.length !== 1) return null;
+    return items[0];
+  }, [foodAnalysis.analysisResult]);
+
+  useEffect(() => {
+    if (!singleAnalysisItem) return;
+    const nextAmount = Number.isFinite(singleAnalysisItem.portion?.amount)
+      ? String(singleAnalysisItem.portion.amount)
+      : '1';
+    setPortionAmountDraft(nextAmount);
+  }, [singleAnalysisItem?.itemId, singleAnalysisItem?.portion?.amount]);
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
 
@@ -951,12 +981,85 @@ export default function LogScreen() {
         ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 ? (
           <View style={styles.resultsContainer}>
             {foodAnalysis.analysisResult.items.length === 1 ? (
-              <NutritionCard
-                foodLog={buildLegacyFoodLog(foodAnalysis.analysisResult.items[0])}
-                dailyValues={DAILY_VALUES} // Pass daily values
-                onSave={handleSaveSingleItem}
-                onCancel={handleCancel}
-              />
+              <>
+                <NutritionCard
+                  foodLog={buildLegacyFoodLog(foodAnalysis.analysisResult.items[0])}
+                  dailyValues={DAILY_VALUES} // Pass daily values
+                  onSave={handleSaveSingleItem}
+                  onCancel={handleCancel}
+                />
+
+                {singleAnalysisItem && (
+                  <View style={styles.singlePortionCard}>
+                    <View style={styles.singlePortionHeader}>
+                      <Text style={styles.singlePortionTitle}>Portion</Text>
+                      <Text style={styles.singlePortionSubtitle}>Adjust before saving</Text>
+                    </View>
+                    <View style={styles.singlePortionRow}>
+                      <TextInput
+                        style={styles.singlePortionInput}
+                        keyboardType="numeric"
+                        value={portionAmountDraft}
+                        onChangeText={(text) => {
+                          setPortionAmountDraft(text);
+                          const value = parseFloat(text);
+                          if (Number.isFinite(value) && value > 0) {
+                            foodAnalysis.updateItemQuantity(
+                              singleAnalysisItem.itemId,
+                              value,
+                              singleAnalysisItem.portion?.unit || 'serving'
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const value = parseFloat(portionAmountDraft);
+                          if (!Number.isFinite(value) || value <= 0) {
+                            const fallback = Number.isFinite(singleAnalysisItem.portion?.amount)
+                              ? singleAnalysisItem.portion.amount
+                              : 1;
+                            setPortionAmountDraft(String(fallback));
+                          }
+                        }}
+                      />
+                      <TouchableOpacity
+                        style={styles.singlePortionUnitButton}
+                        onPress={() => setShowPortionUnitPicker(true)}
+                      >
+                        <Text style={styles.singlePortionUnitText}>
+                          {singleAnalysisItem.portion?.unit || 'serving'}
+                        </Text>
+                        <Ionicons name="chevron-down-outline" size={14} color="#6B7280" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                <Modal visible={showPortionUnitPicker} transparent animationType="fade">
+                  <TouchableOpacity
+                    style={styles.portionModalOverlay}
+                    onPress={() => setShowPortionUnitPicker(false)}
+                  >
+                    <View style={styles.portionUnitPicker}>
+                      {COMMON_PORTION_UNITS.map((unit) => (
+                        <TouchableOpacity
+                          key={unit}
+                          style={styles.portionUnitOption}
+                          onPress={() => {
+                            const amount = parseFloat(portionAmountDraft);
+                            const fallback = Number.isFinite(amount) && amount > 0
+                              ? amount
+                              : (singleAnalysisItem?.portion?.amount || 1);
+                            foodAnalysis.updateItemQuantity(singleAnalysisItem.itemId, fallback, unit);
+                            setShowPortionUnitPicker(false);
+                          }}
+                        >
+                          <Text style={styles.portionUnitOptionText}>{unit}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </TouchableOpacity>
+                </Modal>
+              </>
             ) : (
               <>
                 <FoodItemsList
@@ -1722,6 +1825,87 @@ const styles = StyleSheet.create({
   /* Results Container */
   resultsContainer: {
     marginTop: 0,
+  },
+  singlePortionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  singlePortionHeader: {
+    marginBottom: 10,
+  },
+  singlePortionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    fontFamily: fonts.display,
+  },
+  singlePortionSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+    fontFamily: fonts.regular,
+  },
+  singlePortionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  singlePortionInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    fontFamily: fonts.strong,
+    color: '#111827',
+    backgroundColor: '#F9FAFB',
+  },
+  singlePortionUnitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  singlePortionUnitText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    fontFamily: fonts.strong,
+  },
+  portionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  portionUnitPicker: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 8,
+    overflow: 'hidden',
+  },
+  portionUnitOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+  },
+  portionUnitOptionText: {
+    fontSize: 15,
+    color: '#111827',
+    fontFamily: fonts.regular,
   },
 
   /* Error Card */

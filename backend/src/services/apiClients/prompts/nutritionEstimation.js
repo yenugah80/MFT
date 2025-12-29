@@ -29,9 +29,17 @@ OUTPUT SCHEMA:
   "micros": {
     "calcium": number,
     "iron": number,
+    "magnesium": number,
     "potassium": number,
+    "zinc": number,
+    "sodium": number,
     "vitamin_a": number,
-    "vitamin_c": number
+    "vitamin_c": number,
+    "vitamin_d": number,
+    "vitamin_e": number,
+    "vitamin_k": number,
+    "vitamin_b12": number,
+    "folate": number
   },
   "isComplex": boolean,
   "components": [
@@ -48,6 +56,7 @@ RULES:
 - Prefer plausible, typical estimates over exhaustive accuracy.
 - Calories should be broadly consistent with macros; small discrepancies are acceptable.
 - Micros are conservative estimates; if uncertain, prefer lower typical values.
+- Use mg for minerals and vitamin C/E, and µg for vitamins A/D/K/B12/folate.
 - servingGrams is approximate; round to a sensible value (e.g., nearest 5g).
 - If the dish is multi-ingredient, set isComplex=true and include a high-level component breakdown (2-5 items max).`;
 }

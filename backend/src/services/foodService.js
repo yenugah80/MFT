@@ -794,7 +794,9 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       ecoscore: "UNKNOWN",
       category: aiData.mealType || aiData.category || "General",
       servingSize: aiData.servingSize || "1 serving",
-      ingredients: [],
+      ingredients: Array.isArray(aiData.ingredients)
+        ? aiData.ingredients
+        : [],
       micros: aiData.micros || {
         calcium: "0mg",
         iron: "0mg",

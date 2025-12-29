@@ -30,23 +30,17 @@ import { useTheme } from "../providers/ThemeProvider";
 // Premium components
 import ThemeTransition from "./ThemeTransition";
 import ThemeSettingsModal from "./ThemeSettingsModal";
-import GlassCard from "./dashboard/GlassCard";
-import PremiumRing from "./dashboard/PremiumRing";
-import NutriScoreDial from "./dashboard/NutriScoreDial";
-import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
-import MealMoodCalendar from "./MealMoodCalendar";
-import HydrationWellnessDashboard from "./dashboard/HydrationWellnessDashboard";
-import ActivitySummaryCard from "./dashboard/ActivitySummaryCard";
 import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
-import NutritionOverviewCard from "./dashboard/NutritionOverviewCard";
-import MicronutrientsGrid from "./dashboard/MicronutrientsGrid";
-import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
-import PremiumWeeklyTrends from "./dashboard/PremiumWeeklyTrends";
-import InsightsCard from "./dashboard/InsightsCard";
-import MacroBalanceCard from "./dashboard/MacroBalanceCard";
 import SkeletonCard, { SkeletonText, SkeletonCircle } from "./dashboard/SkeletonCard";
 import FloatingActionButton from "./FloatingActionButton";
+import StreakSavedModal from "./dashboard/StreakSavedModal";
+import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
+import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
+import DashboardPrimaryCard from "./dashboard/DashboardPrimaryCard";
+import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
+import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
+import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -163,96 +157,6 @@ function getErrorDetails(error) {
   };
 }
 
-// ============================================================================
-// COLLAPSIBLE SECTION COMPONENT
-// ============================================================================
-const CollapsibleSection = ({ title, icon, expanded, onToggle, children, badge }) => {
-  const handleToggle = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onToggle();
-  };
-
-  return (
-    <View style={styles.collapsibleSection}>
-      <TouchableOpacity
-        style={styles.collapsibleHeader}
-        onPress={handleToggle}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={`${title} section`}
-        accessibilityHint={`${expanded ? 'Collapse' : 'Expand'} to ${expanded ? 'hide' : 'show'} ${title} details`}
-        accessibilityState={{ expanded }}
-      >
-        <View style={styles.collapsibleLeft}>
-          <LinearGradient
-            colors={expanded ? SURFACES.gradient.primary : SURFACES.gradient.softPurple}
-            style={styles.collapsibleIconContainer}
-          >
-            <Ionicons name={icon} size={20} color={expanded ? '#FFF' : BRAND.primary} />
-          </LinearGradient>
-          <Text style={styles.collapsibleTitle}>{title}</Text>
-          {badge && (
-            <View style={styles.collapsibleBadge}>
-              <Text style={styles.collapsibleBadgeText}>{badge}</Text>
-            </View>
-          )}
-        </View>
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={24}
-          color={TEXT.secondary}
-        />
-      </TouchableOpacity>
-
-      {expanded && <View style={styles.collapsibleContent}>{children}</View>}
-    </View>
-  );
-};
-
-// ============================================================================
-// STREAK SAVED MODAL
-// ============================================================================
-const StreakSavedModal = ({ visible, onClose, freezesLeft }) => {
-  if (!visible) return null;
-
-  return (
-    <Modal transparent visible={visible} animationType="fade">
-      <View style={styles.modalOverlay}>
-        <View style={styles.streakSavedCard}>
-          <LinearGradient
-            colors={['#EFF6FF', '#DBEAFE']}
-            style={styles.streakSavedGradient}
-          >
-            <View style={styles.freezeIconContainer}>
-              <Ionicons name="snow" size={48} color="#3B82F6" />
-            </View>
-            
-            <Text style={styles.streakSavedTitle}>Streak Saved!</Text>
-            <Text style={styles.streakSavedDesc}>
-              You missed a day, but your Streak Freeze kicked in to save your progress.
-            </Text>
-
-            <View style={styles.freezeCountBadge}>
-              <Ionicons name="snow" size={14} color="#2563EB" />
-              <Text style={styles.freezeCountText}>
-                {freezesLeft} {freezesLeft === 1 ? 'freeze' : 'freezes'} remaining
-              </Text>
-            </View>
-
-            <TouchableOpacity onPress={onClose} style={styles.savedButton}>
-              <LinearGradient
-                colors={SURFACES.gradient.blue}
-                style={styles.savedButtonGradient}
-              >
-                <Text style={styles.savedButtonText}>Keep Going</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -395,9 +299,12 @@ export default function DashboardContent() {
     if (!data?.today?.waterLogs) return [];
     return data.today.waterLogs.map((log) => {
       const hydrationLiters = parseLiters(log.hydrationLiters || log.amountLiters);
+      const rawLiters = parseLiters(log.amountLiters);
       return {
         timestamp: log.loggedDate,
         amountMl: Math.round(hydrationLiters * 1000),
+        rawAmountMl: Math.round(rawLiters * 1000),
+        type: log.beverageType || 'water',
       };
     });
   }, [data]);
@@ -430,6 +337,27 @@ export default function DashboardContent() {
   const aggregatedMicros = useMemo(() => {
     if (!uniqueFoodLogs.length) return {};
 
+    const parseMicroValue = (value) => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string') {
+        const parsed = parseFloat(value.replace(/[^0-9.]/g, ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+      if (value && typeof value === 'object') {
+        if (typeof value.value === 'number' && Number.isFinite(value.value)) {
+          return value.value;
+        }
+        if (typeof value.value === 'string') {
+          const parsed = parseFloat(value.value.replace(/[^0-9.]/g, ''));
+          return Number.isFinite(parsed) ? parsed : 0;
+        }
+        if (typeof value.amount === 'number' && Number.isFinite(value.amount)) {
+          return value.amount;
+        }
+      }
+      return 0;
+    };
+
     // Key mapping to normalize camelCase to snake_case (vitaminA -> vitamin_a)
     const keyMapping = {
       'vitaminA': 'vitamin_a',
@@ -459,7 +387,7 @@ export default function DashboardContent() {
         Object.entries(log.micros).forEach(([key, value]) => {
           // Normalize key (camelCase -> snake_case)
           const normalizedKey = keyMapping[key] || key;
-          const numValue = parseDecimal(value, 0);
+          const numValue = parseMicroValue(value);
           micros[normalizedKey] = (micros[normalizedKey] || 0) + numValue;
         });
       }
@@ -966,6 +894,8 @@ export default function DashboardContent() {
     return 'Good evening';
   };
 
+  const headerTitle = `${getGreeting()}, ${displayName}`;
+
   return (
     <>
       <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
@@ -977,83 +907,24 @@ export default function DashboardContent() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View>
-              <Text style={styles.headerTitle}>
-                {getGreeting()}, {displayName}
-              </Text>
-              <Text style={styles.headerSubtitle}>
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} · Today
-              </Text>
-            </View>
-          </View>
+        <DashboardHeaderSection
+          styles={styles}
+          headerTitle={headerTitle}
+          theme={theme}
+          focusMode={focusMode}
+          refreshing={refreshing}
+          onOpenTheme={() => setThemeModalVisible(true)}
+          onToggleFocusMode={() => {
+            const newFocusMode = !focusMode;
+            setFocusMode(newFocusMode);
 
-          {/* Right side controls */}
-          <View style={styles.headerRight}>
-            {/* Theme Toggle */}
-            <TouchableOpacity
-              style={styles.focusModeButton}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setThemeModalVisible(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open theme settings"
-              accessibilityHint="Choose between light, dark, and auto themes"
-            >
-              <Ionicons
-                name={theme === 'light' ? "moon" : "sunny"}
-                size={18}
-                color={TEXT.primary}
-              />
-            </TouchableOpacity>
-
-            {/* Focus Mode Toggle */}
-            <TouchableOpacity
-              style={[styles.focusModeButton, focusMode && styles.focusModeButtonActive]}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const newFocusMode = !focusMode;
-                setFocusMode(newFocusMode);
-
-                // Collapse all sections in focus mode
-                if (newFocusMode) {
-                  setNutritionExpanded(false);
-                  setWellnessExpanded(false);
-                  setProgressExpanded(false);
-                }
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={focusMode ? "Exit focus mode" : "Enter focus mode"}
-              accessibilityHint="Toggles simplified view to reduce information overload"
-            >
-              <Ionicons
-                name={focusMode ? "eye-off" : "eye"}
-                size={18}
-                color={focusMode ? TEXT.primary : TEXT.secondary}
-              />
-            </TouchableOpacity>
-
-            {/* Sync Status Indicator */}
-            <View style={styles.syncStatus}>
-              <View style={[styles.syncDot, refreshing && styles.syncDotActive]} />
-              <Text style={styles.syncText}>
-                {refreshing ? 'Syncing...' : 'Synced'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* FOCUS MODE INDICATOR */}
-        {focusMode && (
-          <View style={styles.focusModeIndicator}>
-            <Ionicons name="eye-off" size={16} color="#3B82F6" />
-            <Text style={styles.focusModeText}>Focus Mode Active</Text>
-            <Text style={styles.focusModeSubtext}>Showing essentials only</Text>
-          </View>
-        )}
+            if (newFocusMode) {
+              setNutritionExpanded(false);
+              setWellnessExpanded(false);
+              setProgressExpanded(false);
+            }
+          }}
+        />
 
         {/* FIRST-TIME USER EMPTY STATE */}
         {!hasAnyData && (
@@ -1068,267 +939,70 @@ export default function DashboardContent() {
           />
         )}
 
-        {/* SMART INSIGHTS - Contextual recommendations */}
-        {smartInsights.length > 0 && (
-          <InsightsCard
-            insights={smartInsights}
-            onActionPress={handleInsightAction}
-          />
-        )}
+        <DashboardInsightsSection
+          styles={styles}
+          smartInsights={smartInsights}
+          onInsightAction={handleInsightAction}
+          dataAnomalies={dataAnomalies}
+        />
 
-        {/* DATA INSIGHT (calm tone, not warning) */}
-        {dataAnomalies.length > 0 && (
-          <GlassCard style={styles.infoCard} padding="md">
-            <View style={styles.anomalyHeader}>
-              <View style={styles.iconContainer}>
-                <Ionicons
-                  name={dataAnomalies[0].icon || ICONS.info}
-                  size={ICON_SIZES.lg}
-                  color={BRAND.primary}
-                />
-              </View>
-              <View style={styles.anomalyTextContainer}>
-                <View style={styles.anomalyTitleRow}>
-                  <Text style={styles.infoTitle}>{dataAnomalies[0].metric} Check</Text>
-                  {dataAnomalies[0].percentageDiff !== undefined && (
-                    <View style={styles.percentageBadge}>
-                      <Text style={styles.percentageText}>
-                        {dataAnomalies[0].percentageDiff}%
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.infoMessage}>
-                  {dataAnomalies[0].message}
-                </Text>
-                {dataAnomalies[0].actionLabel && dataAnomalies[0].action && (
-                  <TouchableOpacity
-                    style={styles.anomalyActionButton}
-                    onPress={async () => {
-                      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      dataAnomalies[0].action();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={dataAnomalies[0].actionLabel}
-                  >
-                    <Text style={styles.anomalyActionText}>
-                      {dataAnomalies[0].actionLabel}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={14} color={BRAND.primary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </GlassCard>
-        )}
-
-        {/* PRIMARY KPI - Always visible */}
-        <GlassCard style={styles.primaryCard} padding="lg">
-          {today.foodLogs && today.foodLogs.length > 0 ? (
-            <View style={styles.primaryContent}>
-              <NutriScoreDial data={data} size={180} />
-              <Text style={styles.primaryHint}>
-                Based on calories, protein, hydration, and consistency
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.primaryContent}>
-              <PremiumRing
-                value={parseCalories(today.nutrition.totalCalories)}
-                goal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
-                label="Calories"
-                unit="kcal"
-                size={180}
-                strokeWidth={16}
-              />
-              {trends.weeklyAverages ? (
-                <Text style={styles.primaryHint}>
-                  {`Weekly avg: ${Math.round(parseCalories(trends.weeklyAverages.avgCalories))} kcal/day`}
-                </Text>
-              ) : (
-                <TouchableOpacity
-                  style={styles.primaryHintCta}
-                  onPress={async () => {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
-                  }}
-                  accessibilityLabel="Log your first meal"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="add-circle-outline" size={14} color={TEXT.secondary} />
-                  <Text style={styles.primaryHintCtaText}>Log your first meal to unlock your score</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </GlassCard>
+        <DashboardPrimaryCard
+          styles={styles}
+          today={today}
+          goals={goals}
+          trends={trends}
+          data={data}
+          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+        />
 
         {/* ============================================ */}
         {/* NUTRITION SECTION - Collapsible */}
         {/* ============================================ */}
-        <CollapsibleSection
-          title="Nutrition"
-          icon="nutrition"
+        <DashboardNutritionSection
+          styles={styles}
           expanded={nutritionExpanded}
           onToggle={() => setNutritionExpanded(!nutritionExpanded)}
-        >
-          {/* PROFESSIONAL NUTRITION OVERVIEW - Compact macros + calories */}
-          <View style={styles.sectionCard}>
-            <NutritionOverviewCard
-              calories={parseCalories(today.nutrition.totalCalories)}
-              calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
-              protein={parseMacro(today.nutrition.totalProtein)}
-              proteinGoal={parseGoal(goals?.proteinG, 150, 20, 500)}
-              carbs={parseMacro(today.nutrition.totalCarbs)}
-              carbsGoal={parseGoal(goals?.carbsG, 250, 50, 600)}
-              fat={parseMacro(today.nutrition.totalFats)}
-              fatGoal={parseGoal(goals?.fatsG, 65, 20, 200)}
-              fiber={parseDecimal(aggregatedMicros.fiber, 0)}
-              fiberGoal={30}
-              sugar={parseMacro(today.nutrition.totalSugars)}
-              sugarGoal={50}
-            />
-          </View>
-
-          {/* MACRO BALANCE ASSESSMENT */}
-          {macroAssessment && macroAssessment.quality !== 'none' && (
-            <MacroBalanceCard assessment={macroAssessment} />
-          )}
-
-          {/* PROFESSIONAL MICRONUTRIENTS GRID */}
-          <View style={styles.sectionCard}>
-            <MicronutrientsGrid micros={aggregatedMicros} showAll={false} />
-          </View>
-
-          {/* RECENT MEALS */}
-          {uniqueFoodLogs.length > 0 ? (
-            <GlassCard style={styles.sectionCard} padding="md">
-              <Text style={styles.sectionTitle}>Recent Meals</Text>
-              {uniqueFoodLogs.slice(0, 3).map((log) => (
-                <View key={log.id} style={styles.mealItem}>
-                  <View style={styles.mealDot} />
-                  <View style={styles.mealContent}>
-                    <Text style={styles.mealName}>{log.foodName}</Text>
-                    <Text style={styles.mealMeta}>
-                      {log.mealType} · {Math.round(parseCalories(log.calories))} kcal
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </GlassCard>
-          ) : (
-            <EmptyState
-              icon="restaurant"
-              title="No meals logged yet"
-              description="Track your first meal to start building your nutrition insights and discover patterns in your eating habits"
-              actionLabel="Log Your First Meal"
-              onAction={() => {
-                router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
-              }}
-              variant="compact"
-            />
-          )}
-        </CollapsibleSection>
+          today={today}
+          goals={goals}
+          aggregatedMicros={aggregatedMicros}
+          macroAssessment={macroAssessment}
+          uniqueFoodLogs={uniqueFoodLogs}
+          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+        />
 
         {/* ============================================ */}
         {/* WELLNESS SECTION - Collapsible */}
         {/* ============================================ */}
-        <CollapsibleSection
-          title="Wellness"
-          icon="heart"
+        <DashboardWellnessSection
+          styles={styles}
           expanded={wellnessExpanded}
           onToggle={() => setWellnessExpanded(!wellnessExpanded)}
-        >
-          {/* CONSOLIDATED WELLNESS SNAPSHOT - Vertical Stack */}
-          <View style={styles.wellnessStack}>
-            {/* HYDRATION */}
-            <HydrationWellnessDashboard
-              currentIntake={today.waterIntakeLiters || 0}
-              dailyGoal={goals?.waterLiters || 2.0}
-              streak={gamification?.streak || 0}
-              intakeEvents={hydrationEvents}
-              lastLoggedAt={hydrationLastLoggedAt}
-              celebratedTodayKey={hydrationCelebratedKey}
-              onCelebrate={handleHydrationCelebration}
-              onOpenFullTracker={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
-              compact={true}
-            />
-
-            <View style={styles.wellnessDivider} />
-
-            {/* MOOD */}
-            <EnhancedMoodCard
-              insights={moodInsightsData}
-              loading={moodInsightsLoading}
-              onOpenInsights={() => router.push('/insights/mood')}
-            />
-            <TouchableOpacity
-              style={styles.moodInsightsLink}
-              onPress={() => router.push('/insights/mood')}
-              accessibilityRole="button"
-              accessibilityLabel="View mood insights"
-              accessibilityHint="Opens your historical mood insights and recommendations"
-            >
-              <Ionicons name="analytics-outline" size={16} color={TEXT.secondary} />
-              <Text style={styles.moodInsightsText}>View mood insights</Text>
-            </TouchableOpacity>
-
-            <View style={styles.wellnessDivider} />
-
-            {/* ACTIVITY SUMMARY */}
-            <ActivitySummaryCard />
-          </View>
-        </CollapsibleSection>
+          today={today}
+          goals={goals}
+          gamification={gamification}
+          hydrationEvents={hydrationEvents}
+          hydrationLastLoggedAt={hydrationLastLoggedAt}
+          hydrationCelebratedKey={hydrationCelebratedKey}
+          onCelebrateHydration={handleHydrationCelebration}
+          moodInsightsData={moodInsightsData}
+          moodInsightsLoading={moodInsightsLoading}
+          onOpenMoodInsights={() => router.push('/insights/mood')}
+          onOpenHydrationTracker={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+        />
 
         {/* ============================================ */}
         {/* PROGRESS SECTION - Collapsible */}
         {/* ============================================ */}
-        <CollapsibleSection
-          title="Progress & Tracking"
-          icon="analytics"
+        <DashboardProgressSection
+          styles={styles}
           expanded={progressExpanded}
           onToggle={() => setProgressExpanded(!progressExpanded)}
-        >
-          {/* WEEKLY TRENDS */}
-          {trends.weeklyAverages && (
-            <View style={styles.sectionCard}>
-              <PremiumWeeklyTrends trends={trends} goals={goals} />
-            </View>
-          )}
-
-          {/* GAMIFICATION */}
-          <PremiumAchievementsCard
-            level={gamification?.level || 1}
-            xp={gamification?.xp || 0}
-            nextLevelXp={gamification?.nextLevelXp} // Let component calculate if not provided
-            streak={gamification?.streak || 0}
-            streakFreezes={gamification?.streakFreezes || 0}
-          />
-
-          {/* MEAL MOOD CALENDAR */}
-          <MealMoodCalendar
-            data={calendarData}
-            currentStreak={gamification?.streak || 0}
-          />
-
-          {/* RECENT WEIGHT */}
-          {recentWeight.length > 0 && (
-            <GlassCard style={styles.sectionCard} padding="md">
-              <Text style={styles.sectionTitle}>Weight Tracking</Text>
-              <View style={styles.weightContainer}>
-                <View style={styles.weightIconContainer}>
-                  <Ionicons name={ICONS.weight} size={ICON_SIZES['2xl']} color={BRAND.primary} />
-                </View>
-                <View style={styles.weightInfo}>
-                  <Text style={styles.weightValue}>{recentWeight[0].weightKg} kg</Text>
-                  <Text style={styles.weightDate}>
-                    {new Date(recentWeight[0].recordedDate).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            </GlassCard>
-          )}
-        </CollapsibleSection>
+          trends={trends}
+          goals={goals}
+          gamification={gamification}
+          calendarData={calendarData}
+          recentWeight={recentWeight}
+        />
       </ScrollView>
         </ThemeTransition>
       </View>
@@ -1547,6 +1221,7 @@ export default function DashboardContent() {
         visible={streakSavedVisible}
         onClose={() => setStreakSavedVisible(false)}
         freezesLeft={gamification?.streakFreezes || 0}
+        styles={styles}
       />
 
       <ThemeSettingsModal

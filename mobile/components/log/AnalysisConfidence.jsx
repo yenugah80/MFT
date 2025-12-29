@@ -125,7 +125,7 @@ export default function AnalysisConfidence({
       <View style={styles.disclaimer}>
         <Ionicons name="medical-outline" size={14} color="#9CA3AF" />
         <Text style={styles.disclaimerText}>
-          This is an AI estimate for informational purposes. Always consult a healthcare professional for medical advice.
+          This is an AI estimated result for informational purposes. Always consult a healthcare professional for medical advice.
         </Text>
       </View>
     </View>

@@ -8,6 +8,9 @@
  * - GPT-4o: $2.50/1M input tokens, $10.00/1M output tokens
  */
 
+import NodeCache from 'node-cache';
+import { createClient } from 'redis';
+import OpenAI, { toFile } from 'openai';
 import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
 import { buildImageAnalysisPrompt } from './prompts/nutritionAnalysis.js';
@@ -39,6 +42,16 @@ class OpenAIClient extends BaseApiClient {
 
     this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     this.maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 1000;
+    this.sdk = this.apiKey ? new OpenAI({ apiKey: this.apiKey }) : null;
+
+    // Cache specifically for nutrition estimation (24 hour TTL)
+    if (process.env.REDIS_URL) {
+      this.redisClient = createClient({ url: process.env.REDIS_URL });
+      this.redisClient.on('error', (err) => console.error('[Redis] Client Error', err));
+      this.redisClient.connect().catch(console.error);
+    } else {
+      this.nutritionCache = new NodeCache({ stdTTL: 86400, maxKeys: 5000 });
+    }
 
     // Cost tracking
     this.costs = {
@@ -110,7 +123,7 @@ class OpenAIClient extends BaseApiClient {
     // Generate cache key from messages (for identical requests)
     const cacheKey = options.disableCache
       ? null
-      : `chat:${model}:${JSON.stringify(messages).substring(0, 100)}`;
+      : `chat:${model}:${JSON.stringify(messages).substring(0, 500)}`; // Increased length to capture user query
 
     try {
       const data = await this.request(
@@ -191,6 +204,8 @@ Rules:
 1. Use exact words from input
 2. If quantity given (e.g., "2 eggs"), use it. Otherwise use 1.
 3. If unit given (e.g., "cup of rice"), use it. Otherwise use "serving".
+4. Treat named dishes as a single item (e.g., "chicken biryani", "pho", "ramen", "pad thai", "lasagna", "curry").
+5. Split into multiple items ONLY when the user clearly lists separate foods (commas, "and", "with", or separate clauses).
 
 Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       },
@@ -218,23 +233,37 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       });
 
       // Step 2: Canonicalize each ingredient
+      const complexDishRegex = /\b(curry|masala|biryani|saag|dal|gravy|fry)\b/i;
       const canonical = validated.map(item => {
         const canonicalForm = canonicalize(item.name);
+        const baseConfidence = item.confidence ?? 0.5;
+        const isComplex = complexDishRegex.test(item.name);
+        const confidenceLevel = isComplex
+          ? 'estimated'
+          : baseConfidence >= 0.85
+          ? 'typical'
+          : 'estimated';
+        const confidenceReason = isComplex
+          ? 'Complex dish with many variations'
+          : baseConfidence >= 0.85
+          ? 'Clear food mention'
+          : 'Limited detail in input';
+
         return {
           ...item,
           canonical: canonicalForm,
           // Update name to canonical form for better nutrition lookup
           name: canonicalForm.canonical,
-          preparation: canonicalForm.preparation,
-          // IMPORTANT: User portions ALWAYS take precedence
-          // Canonical portions are ONLY defaults when user doesn't specify
-          // Examples:
-          //   - User says "3 eggs" → uses 3 (user's choice) ✅
-          //   - User says "eggs" → uses 2 (canonical default) ✅
-          //   - User says "half cup rice" → uses 0.5 cup (user's choice) ✅
-          quantity: item.quantity || canonicalForm.portion.amount,
-          unit: item.unit || canonicalForm.portion.unit,
-          confidence: Math.min(item.confidence || 0.5, canonicalForm.confidence),
+          preparation: null,
+          quantity: item.quantity || 1,
+          unit: item.unit || 'serving',
+          confidence: baseConfidence,
+          confidenceLevel,
+          confidenceReason,
+          assumptions: isComplex
+            ? { oilLevel: 'moderate', proteinCut: 'average', cuisineStyle: 'home-style' }
+            : null,
+          isComplex,
           originalInput: item.name, // Preserve what user typed
         };
       });
@@ -242,7 +271,7 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       // Step 3: Log for monitoring
       console.log(`[ParseText] Input: "${query}"`);
       console.log(`[ParseText] Extracted: ${validated.length} items`);
-      console.log(`[ParseText] Canonical: ${canonical.map(c => `${c.name} (${c.preparation})`).join(', ')}`);
+      console.log(`[ParseText] Canonical: ${canonical.map(c => c.name).join(', ')}`);
 
       return canonical;
     } catch (error) {
@@ -253,14 +282,135 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       return [
         {
           name: canonicalForm.canonical,
-          preparation: canonicalForm.preparation,
-          quantity: canonicalForm.portion.amount,
-          unit: canonicalForm.portion.unit,
+          preparation: null,
+          quantity: 1,
+          unit: 'serving',
           confidence: 0.5,
           canonical: canonicalForm,
           originalInput: query,
         },
       ];
+    }
+  }
+
+  /**
+   * Parse text AND estimate nutrition for unknown foods
+   * Used as fallback when local dictionary lookup fails.
+   *
+   * Optimization:
+   * - Estimates specific macros (Cal, P, C, F)
+   * - Skips micros to save tokens and reduce noise
+   * - Returns structure compatible with app's food logging
+   */
+  async estimateNutritionForText(query, options = {}) {
+    const { mealType = 'general' } = options;
+    // CACHE CHECK: Avoid paying for the same "unknown" food twice
+    const cacheKey = `nutri_est:${query.toLowerCase().trim()}:${mealType}`;
+    
+    if (this.redisClient) {
+      try {
+        const cached = await this.redisClient.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (e) { console.error('[Redis] Read failed', e); }
+    } else {
+      const cached = this.nutritionCache.get(cacheKey);
+      if (cached) return cached;
+    }
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are a nutritionist API. Extract food items and estimate nutrition for a ${mealType} meal.
+
+Rules:
+1. Extract food name, quantity, and unit.
+2. Use the meal context (${mealType}) to infer typical portion sizes and preparation methods (e.g., breakfast eggs vs dinner curry).
+2. Estimate nutrition for the SPECIFIED quantity.
+3. Include macros: calories, protein (g), carbs (g), fat (g).
+4. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (IU), potassium (mg).
+5. Calculate a Health Score (0-100) and NutriScore (A-E) based on nutrient density, processing level (NOVA), and cooking method.
+   - Penalize for: frying, added sugars, high sodium, ultra-processing.
+   - Boost for: whole foods, fiber, vitamins, grilling/steaming.
+6. Provide a short "analysis" note explaining the score (e.g., "High protein but high sodium due to soy sauce").
+7. Identify the "cookingMethod" (e.g., "fried", "steamed", "raw").
+
+Return JSON:
+{
+  "foods": [
+    {
+      "name": "food name",
+      "quantity": number,
+      "unit": "unit",
+      "nutrition": {
+        "calories": number,
+        "protein": number,
+        "carbs": number,
+        "fat": number,
+        "micros": { "calcium": { "value": 10, "unit": "mg" } }
+      }
+      "healthScore": number,
+      "nutriScore": "A"|"B"|"C"|"D"|"E",
+      "cookingMethod": "string",
+      "analysis": "string"
+    }
+  ]
+}`,
+      },
+      {
+        role: 'user',
+        content: query,
+      },
+    ];
+
+    try {
+      const json = await this.chatCompletionJSON(messages, {
+        model: 'gpt-4o-mini', // COST OPTIMIZATION: Use mini for text estimation
+        temperature: 0.2,
+        maxTokens: 400, // Reduced token limit
+      });
+
+      if (!json.foods || !Array.isArray(json.foods)) {
+        return [];
+      }
+
+      // Map to application structure
+      const results = json.foods.map(item => ({
+        name: item.name,
+        quantity: item.quantity || 1,
+        unit: item.unit || 'serving',
+        confidence: 0.8,
+        notes: "AI Estimated Nutrition",
+        source: 'ai_estimate', // EXPLICIT DISCLAIMER
+        // Construct a synthetic canonical object with the estimated nutrition
+        canonical: {
+          canonical: item.name,
+          preparation: "unknown",
+          portion: { amount: item.quantity || 1, unit: item.unit || 'serving' },
+          nutrition: {
+            ...item.nutrition,
+            micros: item.nutrition.micros || {} // Ensure micros are passed
+          },
+          healthScore: item.healthScore,
+          nutriScore: item.nutriScore,
+          cookingMethod: item.cookingMethod,
+          analysis: item.analysis,
+          synonyms: []
+        },
+        isEstimated: true, // Internal flag for confidence logic
+        autoAdded: true
+      }));
+
+      // Save to cache
+      if (this.redisClient) {
+        this.redisClient.set(cacheKey, JSON.stringify(results), { EX: 86400 }).catch(e => console.error('[Redis] Write failed', e));
+      } else {
+        this.nutritionCache.set(cacheKey, results);
+      }
+      return results;
+
+    } catch (error) {
+      console.error(`[OpenAI] Nutrition estimation failed:`, error.message);
+      return [];
     }
   }
 
@@ -281,38 +431,24 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     const { language = 'en', temperature = 0 } = options;
 
     // Use gpt-4o-mini-transcribe for cost-efficient, high-quality speech-to-text
-    const model = 'gpt-4o-mini-transcribe';
+    const model = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
 
     try {
-      // Create form data for multipart upload
-      const FormData = (await import('form-data')).default;
-      const formData = new FormData();
-
-      formData.append('file', audioBuffer, {
-        filename: 'audio.m4a',
-        contentType: 'audio/m4a',
-      });
-      formData.append('model', model);
-      formData.append('language', language);
-      formData.append('temperature', temperature.toString());
-      formData.append('response_format', 'json'); // Returns JSON with text and metadata
-
-      // Make request with FormData headers
-      const response = await fetch(`${this.baseURL}/audio/transcriptions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          ...formData.getHeaders(),
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `Transcription failed: ${response.status}`);
+      if (!this.sdk) {
+        throw new Error('OpenAI SDK not initialized');
       }
 
-      const data = await response.json();
+      // Fix: Ensure correct MIME type and filename for OpenAI API
+      // The API can be picky about filenames matching content types
+      const file = await toFile(audioBuffer, 'audio.m4a', { type: 'audio/mp4' });
+      
+      const data = await this.sdk.audio.transcriptions.create({
+        file,
+        model,
+        language,
+        temperature,
+        response_format: 'json',
+      });
 
       // Track usage (approximate - audio transcription is priced differently)
       console.log(`[OpenAI] ${model} - Transcription completed`);

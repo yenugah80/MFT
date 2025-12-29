@@ -178,7 +178,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         <View style={[styles.badge, { borderColor: confidenceColor }]}>
           <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
           <Text style={styles.badgeText}>
-            {item.sourceEvidence[0].source === 'USDA' ? 'USDA' : 'AI estimate'} • {Math.round(confidence * 100)}%
+            {item.sourceEvidence[0].source === 'USDA' ? 'USDA' : 'AI estimated'} • {Math.round(confidence * 100)}%
           </Text>
         </View>
       )}

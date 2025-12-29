@@ -11,7 +11,7 @@
  * System prompt for food image analysis
  * SIMPLIFIED: Identify food, estimate macros, return JSON
  */
-export const NUTRITION_ANALYSIS_SYSTEM_PROMPT = `Identify food in images and estimate nutrition. Return JSON only.`;
+export const NUTRITION_ANALYSIS_SYSTEM_PROMPT = `Identify food in images and estimate nutrition. Return JSON only. Favor accurate identification for complex cuisines and multi-ingredient dishes.`;
 
 /**
  * User prompt for food image analysis
@@ -28,6 +28,23 @@ Return JSON:
   "carbs": number (grams),
   "fat": number (grams),
   "fiber": number (grams),
+  "sugar": number (grams),
+  "sodium": number (mg),
+  "micros": {
+    "calcium": number (mg),
+    "iron": number (mg),
+    "magnesium": number (mg),
+    "potassium": number (mg),
+    "zinc": number (mg),
+    "vitamin_a": number (µg),
+    "vitamin_c": number (mg),
+    "vitamin_d": number (µg),
+    "vitamin_e": number (mg),
+    "vitamin_k": number (µg),
+    "vitamin_b12": number (µg),
+    "folate": number (µg)
+  },
+  "ingredients": ["ingredient", "..."],
   "servingSize": "estimated portion",
   "confidence": 0.0-1.0
 }

@@ -18,7 +18,7 @@
  * - No boring icons - all premium gradients and effects
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -96,6 +96,97 @@ const calculateHealthImpact = (percentage) => {
     mood: Math.round(mood),
     focus: Math.round(focus),
     stressRelief: Math.round(stressRelief),
+  };
+};
+
+// ============================================================================
+// BEVERAGE MIX INSIGHTS
+// ============================================================================
+
+const BEVERAGE_PROFILE = {
+  water: {
+    label: 'Water',
+    color: '#3B82F6',
+  },
+  coffee: {
+    label: 'Coffee',
+    color: '#92400E',
+  },
+  tea: {
+    label: 'Tea',
+    color: '#059669',
+  },
+  juice: {
+    label: 'Juice',
+    color: '#F59E0B',
+  },
+  milk: {
+    label: 'Milk',
+    color: '#FBBF24',
+  },
+  electrolyte: {
+    label: 'Electrolyte',
+    color: '#0EA5E9',
+  },
+};
+
+const normalizeBeverageType = (type) => (type && BEVERAGE_PROFILE[type] ? type : 'water');
+
+const buildBeverageSummary = (events = []) => {
+  if (!Array.isArray(events) || events.length === 0) {
+    return { totalMl: 0, totals: {}, sorted: [] };
+  }
+
+  const totals = {};
+  let totalMl = 0;
+
+  events.forEach((event) => {
+    const amount = Number(event?.rawAmountMl ?? event?.amountMl) || 0;
+    if (amount <= 0) return;
+    const type = normalizeBeverageType(event?.type);
+    totals[type] = (totals[type] || 0) + amount;
+    totalMl += amount;
+  });
+
+  const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  return { totalMl, totals, sorted };
+};
+
+const getBeverageInsight = (summary) => {
+  if (!summary || summary.totalMl <= 0) return null;
+
+  const { totalMl, totals, sorted } = summary;
+  const topType = sorted[0]?.[0] || 'water';
+  const topShare = sorted[0] ? sorted[0][1] / totalMl : 0;
+
+  const caffeinatedMl = (totals.coffee || 0) + (totals.tea || 0);
+  const juiceMl = totals.juice || 0;
+  const electrolyteMl = totals.electrolyte || 0;
+
+  let note = null;
+  if (caffeinatedMl / totalMl >= 0.5) {
+    note = 'Caffeinated drinks dominate today. Add water to balance.';
+  } else if (juiceMl / totalMl >= 0.4) {
+    note = 'Juice contributes a lot today; it hydrates but can be high in sugar.';
+  } else if (electrolyteMl / totalMl >= 0.4) {
+    note = 'Electrolytes help after heavy sweat; water covers daily hydration.';
+  } else if (topType === 'water' && topShare >= 0.5) {
+    note = 'Water is your main base today, which supports steady hydration.';
+  } else if (topShare >= 0.5) {
+    note = `${BEVERAGE_PROFILE[topType].label} leads today. Consider mixing in more water.`;
+  }
+
+  const breakdown = sorted.slice(0, 4).map(([type, amount]) => ({
+    type,
+    label: BEVERAGE_PROFILE[type]?.label || 'Water',
+    color: BEVERAGE_PROFILE[type]?.color || '#3B82F6',
+    percent: Math.round((amount / totalMl) * 100),
+  }));
+
+  return {
+    topType,
+    breakdown,
+    note,
   };
 };
 
@@ -855,6 +946,8 @@ export default function HydrationWellnessDashboard({
   const goalMl = Math.round(safeGoal * 1000);
   const percentage = Math.min(calculatePercentage(currentMl, goalMl, 120), 120);
   const baseMetrics = calculateHealthImpact(percentage);
+  const beverageSummary = useMemo(() => buildBeverageSummary(intakeEvents), [intakeEvents]);
+  const beverageInsight = useMemo(() => getBeverageInsight(beverageSummary), [beverageSummary]);
 
   const smartAdvice = getSmartAdvice(percentage);
   const remaining = Math.max(goalMl - currentMl, 0);
@@ -1235,6 +1328,43 @@ export default function HydrationWellnessDashboard({
               color="#14B8A6"
               benefit="Better stress response"
             />
+
+            {beverageInsight && (
+              <View style={styles.beverageInsightCard}>
+                <LinearGradient
+                  colors={['#FFFFFF', '#F6FAFF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.beverageGradient}
+                >
+                  <View style={styles.beverageHeader}>
+                    <View style={styles.beverageIcon}>
+                      <Ionicons name="water" size={20} color={BRAND.primary} />
+                    </View>
+                    <View style={styles.beverageHeaderText}>
+                      <Text style={styles.beverageTitle}>Beverage Mix</Text>
+                      <Text style={styles.beverageSubtitle}>
+                        {BEVERAGE_PROFILE[beverageInsight.topType]?.label || 'Water'} leads today
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.beverageRows}>
+                    {beverageInsight.breakdown.map((item) => (
+                      <View key={item.type} style={styles.beverageRow}>
+                        <View style={[styles.beverageDot, { backgroundColor: item.color }]} />
+                        <Text style={styles.beverageLabel}>{item.label}</Text>
+                        <Text style={styles.beveragePercent}>{item.percent}%</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {beverageInsight.note && (
+                    <Text style={styles.beverageNote}>{beverageInsight.note}</Text>
+                  )}
+                </LinearGradient>
+              </View>
+            )}
           </>
         )}
       </View>
@@ -1739,6 +1869,70 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.muted,
     marginTop: SPACING[1],
+  },
+  beverageInsightCard: {
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    ...SHADOWS.sm,
+  },
+  beverageGradient: {
+    padding: SPACING[4],
+    gap: SPACING[3],
+  },
+  beverageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  beverageIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  beverageHeaderText: {
+    flex: 1,
+  },
+  beverageTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  beverageSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.muted,
+    marginTop: SPACING[1],
+  },
+  beverageRows: {
+    gap: SPACING[2],
+  },
+  beverageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  beverageDot: {
+    width: 10,
+    height: 10,
+    borderRadius: RADIUS.full,
+  },
+  beverageLabel: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.primary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  beveragePercent: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+  },
+  beverageNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
+    marginTop: SPACING[2],
   },
 
   // Full Tracker Button
