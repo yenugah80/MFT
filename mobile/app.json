@@ -7,7 +7,7 @@
     "icon": "./assets/styles/images/adaptive-icon.png",
     "scheme": "my-food-tracker",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.harikay.myfoodtracker",

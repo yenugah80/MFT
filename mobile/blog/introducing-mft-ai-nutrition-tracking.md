@@ -27,10 +27,24 @@ Unlike traditional calorie counters that rely on manual input or basic image rec
 **How It Works:**
 - **Snap a photo** of your meal, and our AI estimates ingredients, portion sizes, and cooking methods
 - **Speak your meal** using voice input for fast logging
+- **Instant transcript preview** - review the AI’s transcription before any nutrition analysis
 - **Text description** if you prefer typing - our AI understands context like "large bowl" or "homemade"
 - **Barcode scanning** for packaged foods with instant database lookup
 
 **The Result:** A confident first guess that feels smart, with easy adjustments when you want more control.
+
+---
+
+### 🎙️ Voice Transcription You Can Trust (New)
+
+Voice logging is only useful when it understands you. MFT now uses a **two-step confirmation flow** so your edited words are the ones analyzed for nutrition.
+
+**What’s New:**
+- **Transcribe first, analyze second** - you see the exact transcript before nutrition is calculated
+- **Edit anytime** - fix misheard words or add details like portions and sides
+- **Transparent progress** - clear “Analyzing Nutrition…” state after you confirm
+
+**Why It Matters:** If you say “chicken breast” and then change it to “chicken breast with rice and beans,” MFT analyzes the edited version. No more hidden mistakes, no more mismatched calories.
 
 ---
 
@@ -371,7 +385,7 @@ This is nutrition tracking, reimagined.
 
 ---
 
-*Last Updated: December 25, 2025*
+*Last Updated: December 29, 2025*
 *Reading Time: 12 minutes*
 *Word Count: 2,847 words*
 
@@ -408,7 +422,7 @@ This is nutrition tracking, reimagined.
     }
   },
   "datePublished": "2025-12-25",
-  "dateModified": "2025-12-25",
+  "dateModified": "2025-12-29",
   "description": "Discover MFT - an AI-powered nutrition tracking app with smart estimates, mood tracking, and gamification.",
   "mainEntityOfPage": {
     "@type": "WebPage",
