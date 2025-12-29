@@ -306,7 +306,7 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     const { mealType = 'general' } = options;
     // CACHE CHECK: Avoid paying for the same "unknown" food twice
     const cacheKey = `nutri_est:${query.toLowerCase().trim()}:${mealType}`;
-    
+
     if (this.redisClient) {
       try {
         const cached = await this.redisClient.get(cacheKey);
@@ -421,6 +421,8 @@ Return JSON:
    * @param {object} options - Transcription options
    * @param {string} options.language - Language code (e.g., 'en') for better accuracy
    * @param {number} options.temperature - Temperature for transcription (0-1, default 0)
+   * @param {string} options.filename - Original filename (helps OpenAI detect format)
+   * @param {string} options.mimeType - MIME type of the audio
    * @returns {Promise<{text: string, confidence: number}>}
    */
   async transcribeAudio(audioBuffer, options = {}) {
@@ -428,7 +430,12 @@ Return JSON:
       throw new Error('OpenAI API key not configured');
     }
 
-    const { language = 'en', temperature = 0 } = options;
+    const { 
+      language = 'en', 
+      temperature = 0,
+      filename = 'audio.m4a',
+      mimeType = 'audio/mp4'
+    } = options;
 
     // Use gpt-4o-mini-transcribe for cost-efficient, high-quality speech-to-text
     const model = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
@@ -438,9 +445,8 @@ Return JSON:
         throw new Error('OpenAI SDK not initialized');
       }
 
-      // Fix: Ensure correct MIME type and filename for OpenAI API
-      // The API can be picky about filenames matching content types
-      const file = await toFile(audioBuffer, 'audio.m4a', { type: 'audio/mp4' });
+      // Fix: Use dynamic filename/mimeType so OpenAI knows if it's wav/mp3/m4a
+      const file = await toFile(audioBuffer, filename, { type: mimeType });
       
       const data = await this.sdk.audio.transcriptions.create({
         file,

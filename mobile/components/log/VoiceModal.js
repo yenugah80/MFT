@@ -116,9 +116,9 @@ export const VoiceModal = ({ visible, onClose, onComplete, voiceHook }) => {
     const result = await stopRecording();
     if (result) {
       onComplete(result);
-    } else {
-      onClose();
     }
+    // If result is null (error), keep modal open so user sees the error message
+    // and can try again or cancel manually.
   };
 
   const handleStart = () => {
@@ -197,11 +197,26 @@ export const VoiceModal = ({ visible, onClose, onComplete, voiceHook }) => {
                 <Text style={styles.processingText}>{processingLabel}</Text>
               </View>
             ) : (
-              <Text style={styles.transcriptText}>
-                {isRecording 
-                  ? (transcript || "Listening...") 
-                  : "Say something like 'I had 2 eggs and toast'..."}
-              </Text>
+              <>
+                <Text style={styles.transcriptText}>
+                  {transcript || (isRecording ? "Listening..." : "Say something like 'I had 2 eggs and toast'...")}
+                </Text>
+                
+                {/* Clear Button */}
+                {transcript.length > 0 && (
+                  <TouchableOpacity 
+                    style={styles.clearButton}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      cancelRecording();
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="refresh-circle" size={20} color="#9CA3AF" />
+                    <Text style={styles.clearButtonText}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
 
@@ -371,6 +386,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#4B5563',
     lineHeight: 26,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    gap: 4,
+  },
+  clearButtonText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
   processingContainer: {
     alignItems: 'center',

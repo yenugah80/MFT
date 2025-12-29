@@ -35,7 +35,7 @@
       "ios": {
         "appleId": "APPLE_ID_HERE",
         "ascAppId": "ASC_APP_ID_HERE",
-        "appleTeamId": "APPLE_TEAM_ID_HERE"
+        "appleTeamId": "dev@my-food-tracker.com"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

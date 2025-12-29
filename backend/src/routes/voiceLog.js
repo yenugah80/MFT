@@ -13,6 +13,21 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+// Middleware to handle Multer errors gracefully (The 1% fix for upload stability)
+const uploadMiddleware = (req, res, next) => {
+  upload.single('audio')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: "Audio file too large. Limit is 10MB." });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(500).json({ error: "File upload failed." });
+    }
+    next();
+  });
+};
+
 // Helper to safely escape user input for Regex usage
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -175,17 +190,23 @@ router.post('/process', async (req, res) => {
  * Handle audio transcription + processing in one optimized request.
  * Accepts multipart/form-data with 'audio' file field.
  */
-router.post('/transcribe', upload.single('audio'), async (req, res) => {
+router.post('/transcribe', uploadMiddleware, async (req, res) => {
   try {
-    const mealType = req.body.mealType || 'general';
+    // VALIDATION: Whitelist meal types to prevent prompt injection or confusion
+    const VALID_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
+    const rawMealType = req.body.mealType || 'general';
+    const mealType = VALID_MEAL_TYPES.has(rawMealType) ? rawMealType : 'general';
 
     if (!req.file) {
       return res.status(400).json({ error: "No audio file provided. Ensure field name is 'audio'." });
     }
 
     // 1. Transcribe Audio (OpenAI Whisper)
-    // This is the bottleneck, usually takes 1-2s
-    const transcription = await openaiClient.transcribeAudio(req.file.buffer);
+    // Pass original filename/mimetype to help Whisper decode correctly (The 1% fix for format compatibility)
+    const transcription = await openaiClient.transcribeAudio(req.file.buffer, {
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype
+    });
     const text = transcription.text;
 
     if (!text) {
@@ -287,8 +308,9 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     res.json({ success: true, data: analysisResult, text });
 
   } catch (error) {
-    console.error("Transcription error:", error);
-    res.status(500).json({ error: error.message });
+    console.error("[VoiceLog] Transcription error:", error);
+    // SECURITY FIX: Don't leak internal error details to client in production
+    res.status(500).json({ error: "Unable to process voice log. Please try again." });
   }
 });
 
@@ -306,7 +328,8 @@ router.post('/report', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error("Report error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    // SECURITY FIX: Generic error message
+    res.status(500).json({ error: "Failed to submit report." });
   }
 });
 
