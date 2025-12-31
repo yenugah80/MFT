@@ -4,6 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUser } from '@clerk/clerk-expo';
+import useProfileForm from '../../hooks/useProfileForm';
+import ErrorBoundary from '../../components/ErrorBoundary';
 import {
   EXERCISES,
   EXERCISE_CATEGORIES,
@@ -20,7 +23,16 @@ const STORAGE_KEY = '@activity_log';
  * Activity & Fitness Tracker
  * Track exercises, yoga, and physical activities with persistence
  */
-export default function ActivityScreen() {
+function ActivityScreen() {
+  // Hooks - Get user profile for weight calculation
+  const { user } = useUser();
+  const { state: profileState } = useProfileForm(user);
+
+  // Get user's weight from profile, default to 70kg if not set
+  const userWeight = profileState?.savedProfile?.basics?.weightKg
+    ? parseFloat(profileState.savedProfile.basics.weightKg)
+    : 70;
+
   // State
   const [viewMode, setViewMode] = useState('log'); // 'log' or 'insights'
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,7 +141,7 @@ export default function ActivityScreen() {
     if (!selectedExercise || !duration) return;
 
     const durationNum = parseInt(duration);
-    const calories = calculateCalories(selectedExercise, durationNum, 70, intensity);
+    const calories = calculateCalories(selectedExercise, durationNum, userWeight, intensity);
 
     const newActivity = {
       id: Date.now().toString(),
@@ -478,7 +490,7 @@ export default function ActivityScreen() {
                 <View style={styles.caloriesPreview}>
                   <Ionicons name="flame" size={24} color="#F59E0B" />
                   <Text style={styles.caloriesPreviewText}>
-                    ~{calculateCalories(selectedExercise, parseInt(duration) || 0, 70, intensity)} calories burned
+                    ~{calculateCalories(selectedExercise, parseInt(duration) || 0, userWeight, intensity)} calories burned
                   </Text>
                 </View>
 
@@ -954,3 +966,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
 });
+
+// Export wrapped with ErrorBoundary for crash protection
+export default function ActivityScreenWithErrorBoundary() {
+  return (
+    <ErrorBoundary onReset={() => {}}>
+      <ActivityScreen />
+    </ErrorBoundary>
+  );
+}
