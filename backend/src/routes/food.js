@@ -183,4 +183,247 @@ router.post("/analyze-voice", upload.single('audio'), async (req, res) => {
   }
 });
 
+/**
+ * POST /api/food/analyze-multimodal
+ * Analyze food with optional voice description for better accuracy
+ *
+ * Body: {
+ *   image: string (base64),
+ *   voiceTranscript?: string (optional voice description),
+ *   cuisinePreference?: string (e.g., 'South Indian', 'American'),
+ *   region?: string (e.g., 'India', 'USA'),
+ *   cookingMethod?: string (e.g., 'fried', 'steamed', 'grilled'),
+ *   highAccuracy?: boolean (default: true for multimodal),
+ *   includeIngredients?: boolean (default: true)
+ * }
+ *
+ * Returns: {
+ *   items: [...food items with nutrition],
+ *   ingredients: [breakdown of individual ingredients],
+ *   multimodal: { hasVoice: boolean, voiceTranscript: string },
+ *   source: 'multimodal'
+ * }
+ */
+router.post("/analyze-multimodal", async (req, res) => {
+  try {
+    const {
+      image,
+      voiceTranscript = null,
+      cuisinePreference = null,
+      region = null,
+      cookingMethod = null,
+      highAccuracy = true, // Multimodal uses high accuracy by default
+      includeIngredients = true // Always include ingredients for multimodal
+    } = req.body;
+
+    if (!image) {
+      return res.status(400).json({ error: "Image required for multimodal analysis" });
+    }
+
+    console.log('[FoodMultimodal] Analyzing image with voice context:', {
+      hasVoice: !!voiceTranscript,
+      voiceLength: voiceTranscript?.length || 0,
+      cuisinePreference,
+      region
+    });
+
+    // Build custom instructions from voice context
+    let customInstructions = null;
+    if (voiceTranscript) {
+      customInstructions = `🎤 USER VOICE DESCRIPTION: "${voiceTranscript}"\n\n`;
+      customInstructions += `Use this voice context to refine your analysis:\n`;
+      customInstructions += `- User may mention ingredients ("with extra ghee", "no onions")\n`;
+      customInstructions += `- Cooking details ("deep fried", "air fried", "steamed")\n`;
+      customInstructions += `- Portion info ("large serving", "half portion")\n`;
+      customInstructions += `- Regional variations ("South Indian style", "restaurant style")\n\n`;
+      customInstructions += `Adjust nutrition estimates based on these details.`;
+    }
+
+    // Analyze image with regional and voice context
+    const result = await FoodService.analyzeImage(image, {
+      highAccuracy,
+      includeIngredients,
+      cuisinePreference,
+      region,
+      cookingMethod,
+      customInstructions, // Pass voice context to AI
+      voiceTranscript // Store for reference
+    });
+
+    if (!result) {
+      return res.status(500).json({ error: "Multimodal analysis failed" });
+    }
+
+    // Add multimodal metadata to response
+    result.multimodal = {
+      hasVoice: !!voiceTranscript,
+      voiceTranscript
+    };
+    result.source = 'multimodal';
+
+    res.json(result);
+  } catch (error) {
+    console.error("[FoodMultimodal] Error:", error);
+    res.status(500).json({ error: error.message || "Multimodal analysis failed" });
+  }
+});
+
+/**
+ * POST /api/food/verify-nutrition
+ * User confirms or corrects AI nutrition estimate to improve database accuracy
+ *
+ * Body: {
+ *   itemId: string (food item ID from AiEstimatedFood),
+ *   verified: boolean (true = user confirmed, false = user corrected),
+ *   corrections?: {
+ *     calories: number,
+ *     protein: number,
+ *     carbs: number,
+ *     fat: number
+ *   },
+ *   cuisine?: string,
+ *   region?: string
+ * }
+ *
+ * Returns: {
+ *   success: boolean,
+ *   newConfidence: number (0-1),
+ *   verificationCount: number,
+ *   correctionCount: number
+ * }
+ */
+router.post("/verify-nutrition", async (req, res) => {
+  try {
+    const {
+      itemId,
+      verified,
+      corrections = {},
+      cuisine = null,
+      region = null
+    } = req.body;
+
+    if (!itemId) {
+      return res.status(400).json({ error: "itemId required" });
+    }
+
+    if (verified === undefined || verified === null) {
+      return res.status(400).json({ error: "verified flag required" });
+    }
+
+    const userId = req.userId || req.auth?.sub; // Get user ID from auth
+    if (!userId) {
+      return res.status(401).json({ error: "User authentication required" });
+    }
+
+    console.log('[FoodVerification] User verification:', {
+      itemId,
+      userId,
+      verified,
+      hasCorrections: Object.keys(corrections).length > 0,
+      region
+    });
+
+    // Import AiEstimatedFood model
+    const { AiEstimatedFood } = await import("../models/AiEstimatedFood.js");
+
+    // Find the food item
+    const food = await AiEstimatedFood.findById(itemId);
+    if (!food) {
+      return res.status(404).json({ error: "Food item not found" });
+    }
+
+    // Add user verification record
+    const verificationRecord = {
+      userId,
+      verified,
+      corrections: verified ? {} : corrections, // Only store corrections if not verified
+      region: region || food.region,
+      cuisine: cuisine || food.cuisine,
+      timestamp: new Date()
+    };
+
+    food.userVerifications = food.userVerifications || [];
+    food.userVerifications.push(verificationRecord);
+
+    // Update counters
+    if (verified) {
+      food.verificationCount = (food.verificationCount || 0) + 1;
+    } else {
+      food.correctionCount = (food.correctionCount || 0) + 1;
+
+      // Apply corrections if significant (>10% difference from current estimate)
+      if (corrections && Object.keys(corrections).length > 0) {
+        const currentCals = food.nutrition?.calories || 0;
+        const correctedCals = corrections.calories || currentCals;
+
+        if (currentCals > 0 && Math.abs(correctedCals - currentCals) / currentCals > 0.1) {
+          // Update nutrition with corrections
+          food.nutrition = {
+            ...food.nutrition,
+            calories: corrections.calories || food.nutrition.calories,
+            protein: corrections.protein || food.nutrition.protein,
+            carbs: corrections.carbs || food.nutrition.carbs,
+            fat: corrections.fat || food.nutrition.fat
+          };
+        }
+      }
+    }
+
+    // Recalculate confidence based on verification ratio
+    const totalVerifications = food.verificationCount + food.correctionCount;
+    if (totalVerifications > 0) {
+      food.confidence = food.verificationCount / totalVerifications;
+    }
+
+    // Update regional accuracy tracking
+    if (region) {
+      const regionKey = region;
+      if (!food.regionalAccuracy) {
+        food.regionalAccuracy = new Map();
+      }
+
+      const regionStats = food.regionalAccuracy.get(regionKey) || {
+        verifiedCount: 0,
+        correctedCount: 0,
+        avgConfidence: food.confidence || 0
+      };
+
+      if (verified) {
+        regionStats.verifiedCount += 1;
+      } else {
+        regionStats.correctedCount += 1;
+      }
+
+      regionStats.avgConfidence = (
+        (regionStats.verifiedCount * food.confidence) +
+        (regionStats.correctedCount * 0.5)
+      ) / (regionStats.verifiedCount + regionStats.correctedCount);
+
+      food.regionalAccuracy.set(regionKey, regionStats);
+    }
+
+    // Save updated food item
+    await food.save();
+
+    console.log('[FoodVerification] Verification saved:', {
+      itemId,
+      newConfidence: food.confidence,
+      totalVerifications
+    });
+
+    res.json({
+      success: true,
+      newConfidence: food.confidence,
+      verificationCount: food.verificationCount,
+      correctionCount: food.correctionCount,
+      message: verified
+        ? 'Thank you for confirming! This helps improve accuracy for others.'
+        : 'Thank you for the correction! We\'ve updated the estimates.'
+    });
+  } catch (error) {
+    console.error("[FoodVerification] Error:", error);
+    res.status(500).json({ error: error.message || "Verification failed" });
+  }
+});
+
 export default router;

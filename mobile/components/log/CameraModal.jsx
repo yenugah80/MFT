@@ -423,9 +423,13 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
 
             {/* Preview Overlay */}
             <View style={styles.previewOverlay}>
-              {/* Header */}
+              {/* Header with Close Button */}
               <View style={styles.previewHeader}>
+                <TouchableOpacity style={styles.previewCloseButton} onPress={handleClose}>
+                  <Ionicons name="close" size={ICON_SIZES.lg} color={TEXT.white} />
+                </TouchableOpacity>
                 <Text style={styles.previewTitle}>Preview</Text>
+                <View style={styles.previewCloseButton} />
               </View>
 
               {/* Error Display */}
@@ -701,6 +705,16 @@ const styles = StyleSheet.create({
   previewHeader: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: SPACING[5],
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  previewCloseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   previewTitle: {
