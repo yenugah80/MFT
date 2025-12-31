@@ -42,7 +42,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as Speech from 'expo-speech'; // 🆕 FOR VOICE DESCRIPTION
+
+// Note: Voice description feature uses Alert.alert() (built-in)
+// No external speech module required - works offline
 
 import {
   BRAND,
