@@ -551,7 +551,7 @@ export default function DashboardContent() {
 
     // Check calories
     const totalCalories = parseCalories(data.today.nutrition.totalCalories);
-    const calorieGoal = parseGoal(data.goals.dailyCalories, 2000, 800, 10000);
+    const calorieGoal = parseGoal(data.goals?.dailyCalories, 2000, 800, 10000);
     const calorieState = detectDataState(
       totalCalories,
       calorieGoal,
@@ -576,7 +576,7 @@ export default function DashboardContent() {
 
     // Check protein
     const totalProtein = parseMacro(data.today.nutrition.totalProtein);
-    const proteinGoal = parseGoal(data.goals.proteinG, 150, 20, 500);
+    const proteinGoal = parseGoal(data.goals?.proteinG, 150, 20, 500);
     const proteinState = detectDataState(
       totalProtein,
       proteinGoal,
@@ -608,11 +608,11 @@ export default function DashboardContent() {
 
     return generateInsights({
       currentCalories: parseCalories(data.today.nutrition.totalCalories),
-      calorieGoal: parseGoal(data.goals.dailyCalories, 2000, 800, 10000),
+      calorieGoal: parseGoal(data.goals?.dailyCalories, 2000, 800, 10000),
       currentProtein: parseMacro(data.today.nutrition.totalProtein),
-      proteinGoal: parseGoal(data.goals.proteinG, 150, 20, 500),
+      proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
       currentHydration: parseLiters(data.today.waterIntakeLiters),
-      hydrationGoal: parseGoal(data.goals.waterLiters, 2.0, 0.5, 10),
+      hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
       streak: parseDecimal(data.gamification?.streak, 0),
       timeOfDay: new Date().getHours(),
     });

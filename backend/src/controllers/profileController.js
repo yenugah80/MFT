@@ -242,7 +242,11 @@ export async function getProfile(req, res) {
     const normalizedDietary = {
       preferences: Array.isArray(dietary?.preferences) ? dietary.preferences : [],
       allergies: Array.isArray(dietary?.allergies) ? dietary.allergies : [],
-      dislikes: Array.isArray(dietary?.dislikes) ? dietary.dislikes : []
+      dislikes: Array.isArray(dietary?.dislikes) ? dietary.dislikes : [],
+      // 🆕 INCLUDE REGIONAL CONTEXT FROM PROFILES TABLE
+      cuisinePreference: Array.isArray(profile?.cuisinePreference) ? profile.cuisinePreference : [],
+      region: profile?.region || null,
+      cookingStyle: profile?.cookingStyle || null
     };
 
     const normalizedGoals = {
@@ -326,7 +330,21 @@ export async function saveBasics(req, res) {
 export async function saveDietary(req, res) {
   try {
     const { userId } = req.auth;
-    const { preferences, allergies, dislikes } = req.body;
+    const { preferences, allergies, dislikes, cuisinePreference, region, cookingStyle } = req.body;
+
+    // 🆕 SAVE REGIONAL CONTEXT TO PROFILES TABLE
+    if (cuisinePreference || region || cookingStyle) {
+      await req.db
+        .update(profilesTable)
+        .set({
+          cuisinePreference: cuisinePreference || [],
+          region: region || null,
+          cookingStyle: cookingStyle || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(profilesTable.userId, userId));
+    }
+
     const existingDietary = await req.db
       .select()
       .from(dietaryPreferencesTable)

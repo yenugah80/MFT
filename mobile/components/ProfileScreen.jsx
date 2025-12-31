@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ScrollView, Picker } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ScrollView, Picker, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@clerk/clerk-expo';
+import { useQueryClient } from '@tanstack/react-query';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 export default function ProfileScreen({ navigation }) {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
   const [goal, setGoal] = useState('2000');
   // 🆕 REGIONAL CONTEXT STATE
   const [cuisinePreference, setCuisinePreference] = useState('');
   const [region, setRegion] = useState('');
   const [cookingStyle, setCookingStyle] = useState('');
+  // 🆕 LOADING STATE FOR BACKEND SAVE
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -33,9 +42,48 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const saveProfile = async () => {
+    setIsSaving(true);
     try {
+      const token = await getToken();
+
+      // Save daily calorie goal to backend
+      const basicsResponse = await fetch(`${API_URL}/profiles/basics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          dailyCalories: parseInt(goal) || 2000
+        })
+      });
+
+      if (!basicsResponse.ok) {
+        const error = await basicsResponse.json();
+        throw new Error(error.error || 'Failed to save daily goals');
+      }
+
+      // Save dietary preferences (regional context) to backend
+      const dietaryResponse = await fetch(`${API_URL}/profiles/dietary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          cuisinePreference: cuisinePreference ? [cuisinePreference] : [],
+          region: region || null,
+          cookingStyle: cookingStyle || null
+        })
+      });
+
+      if (!dietaryResponse.ok) {
+        const error = await dietaryResponse.json();
+        throw new Error(error.error || 'Failed to save dietary preferences');
+      }
+
+      // Also save to AsyncStorage for offline access
       await AsyncStorage.setItem('user_goal', goal);
-      // 🆕 SAVE REGIONAL PREFERENCES
       if (cuisinePreference) {
         await AsyncStorage.setItem('cuisine_preference', cuisinePreference);
       }
@@ -45,10 +93,17 @@ export default function ProfileScreen({ navigation }) {
       if (cookingStyle) {
         await AsyncStorage.setItem('cooking_style', cookingStyle);
       }
+
+      // Invalidate dashboard cache so it refreshes with new preferences
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
       Alert.alert('Success', 'Profile updated! Your food analysis will be tailored to your preferences.');
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Failed to save profile.');
+      console.error('Profile save error:', e);
+      Alert.alert('Error', e.message || 'Failed to save profile. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 

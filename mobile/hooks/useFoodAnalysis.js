@@ -724,12 +724,13 @@ export function useFoodAnalysis() {
   const analyzeTextUniversal = useCallback(async (text, options = {}) => {
     if (!text?.trim()) return;
 
-    // 🆕 EXTRACT REGIONAL CONTEXT FROM OPTIONS
+    // 🆕 EXTRACT REGIONAL CONTEXT AND USER GOALS FROM OPTIONS
     const {
       cuisinePreference = null,
       region = null,
       cookingMethod = null,
       voiceTranscript = null,
+      userGoals = null,
       source = 'text'
     } = options;
 
@@ -792,7 +793,7 @@ export function useFoodAnalysis() {
 
       setProgress(50);
 
-      // 🆕 PASS REGIONAL CONTEXT TO BACKEND FOR BETTER ANALYSIS
+      // 🆕 PASS REGIONAL CONTEXT AND USER GOALS TO BACKEND FOR PERSONALIZED ANALYSIS
       const response = await fetch(`${API_URL}/food/resolve`, {
         method: 'POST',
         headers: {
@@ -807,6 +808,8 @@ export function useFoodAnalysis() {
           cuisinePreference,
           region,
           cookingMethod,
+          // 🆕 USER GOALS (enables personalized macronutrient recommendations)
+          userGoals,
           // 🆕 VOICE CONTEXT (for voice and multimodal inputs)
           voiceTranscript,
           source, // 'text', 'voice', 'multimodal'
@@ -1179,10 +1182,11 @@ export function useFoodAnalysis() {
         throw new Error('Authentication required to analyze photo');
       }
 
-      // Get user profile for regional context
+      // Get user profile for regional context and goals
       let cuisinePreference = null;
       let region = null;
       let cookingMethod = null;
+      let userGoals = null;
       try {
         const profileRes = await fetch(`${API_URL}/profiles/me`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -1192,6 +1196,13 @@ export function useFoodAnalysis() {
           cuisinePreference = profile?.cuisinePreference?.[0] || null;
           region = profile?.region || null;
           cookingMethod = profile?.cookingStyle || null;
+          // Extract daily goals for personalized recommendations
+          userGoals = {
+            dailyCalories: profile?.goals?.dailyCalories || 2000,
+            proteinG: profile?.goals?.proteinG || 150,
+            carbsG: profile?.goals?.carbsG || 225,
+            fatsG: profile?.goals?.fatsG || 65
+          };
         }
       } catch (err) {
         console.warn('[useFoodAnalysis] Could not fetch user profile for regional context:', err.message);
@@ -1279,7 +1290,7 @@ export function useFoodAnalysis() {
         ? `${API_URL}/food/analyze-multimodal`
         : AI_IMAGE_ENDPOINT;
 
-      // Send to AI vision API with regional context
+      // Send to AI vision API with regional context and user goals
       const { res, json } = await fetchWithTimeout(
         analysisEndpoint,
         {
@@ -1296,6 +1307,8 @@ export function useFoodAnalysis() {
             cuisinePreference,
             region,
             cookingMethod,
+            // 🆕 USER GOALS (enables personalized macronutrient recommendations)
+            userGoals,
             // 🆕 VOICE CONTEXT (for multimodal input)
             voiceTranscript,
           }),
@@ -1490,10 +1503,11 @@ export function useFoodAnalysis() {
         throw new Error('Authentication required');
       }
 
-      // 🆕 GET USER PROFILE FOR REGIONAL CONTEXT
+      // 🆕 GET USER PROFILE FOR REGIONAL CONTEXT AND GOALS
       let cuisinePreference = null;
       let region = null;
       let cookingMethod = null;
+      let userGoals = null;
       try {
         const profileRes = await fetch(`${API_URL}/profiles/me`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -1503,16 +1517,24 @@ export function useFoodAnalysis() {
           cuisinePreference = profile?.cuisinePreference?.[0] || null;
           region = profile?.region || null;
           cookingMethod = profile?.cookingStyle || null;
+          // Extract daily goals for personalized recommendations
+          userGoals = {
+            dailyCalories: profile?.goals?.dailyCalories || 2000,
+            proteinG: profile?.goals?.proteinG || 150,
+            carbsG: profile?.goals?.carbsG || 225,
+            fatsG: profile?.goals?.fatsG || 65
+          };
         }
       } catch (err) {
         console.warn('[useFoodAnalysis] Could not fetch user profile for regional context:', err.message);
       }
 
-      // 🆕 PASS REGIONAL CONTEXT TO ANALYSIS
+      // 🆕 PASS REGIONAL CONTEXT AND GOALS TO ANALYSIS
       await analyzeTextUniversal(text, {
         cuisinePreference,
         region,
         cookingMethod,
+        userGoals,
         source: 'text'
       });
     } catch (err) {
