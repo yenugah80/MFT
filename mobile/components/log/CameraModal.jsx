@@ -325,6 +325,36 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
 
   const handleClose = async () => {
     await triggerHaptic();
+
+    // If in preview mode (photo captured), show confirmation
+    if (capturedPhoto) {
+      Alert.alert(
+        'Discard Photo?',
+        'This photo will be deleted and not analyzed.',
+        [
+          {
+            text: 'Keep Editing',
+            onPress: () => {
+              // Stay in preview
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Discard',
+            onPress: () => {
+              setCapturedPhoto(null);
+              setVoiceTranscript(null);
+              setError(null);
+              onClose();
+            },
+            style: 'destructive',
+          },
+        ]
+      );
+      return;
+    }
+
+    // If in camera view, close immediately
     onClose();
   };
 
