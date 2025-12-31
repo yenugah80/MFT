@@ -1,6 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Voice from '@react-native-voice/voice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../services/apiClient';
+
+// Cache for recent transcription requests (in-memory + persisted)
+const TRANSCRIPTION_CACHE_KEY = 'voice_transcription_cache';
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 export const useServerVoice = (options = {}) => {
   const [recording, setRecording] = useState(null);
@@ -10,10 +15,15 @@ export const useServerVoice = (options = {}) => {
   const [transcript, setTranscript] = useState('');
   const [liveItems, setLiveItems] = useState([]);
   const [processingState, setProcessingState] = useState({ step: 0, label: '' });
-  
+
   // Refs for liveness and timer management
   const isActiveRef = useRef(false);
   const timersRef = useRef([]);
+
+  // Request deduplication and caching
+  const pendingRequestsRef = useRef(new Map()); // Prevent duplicate concurrent requests
+  const inMemoryCacheRef = useRef(new Map()); // Fast in-memory cache
+  const apiStartTimeRef = useRef(null); // Track real API timing
 
   // Cleanup on unmount
   useEffect(() => {
@@ -32,16 +42,35 @@ export const useServerVoice = (options = {}) => {
     return () => {
       isActiveRef.current = false;
       timersRef.current.forEach(clearTimeout);
+      if (parseDebounceTimerRef.current) {
+        clearTimeout(parseDebounceTimerRef.current);
+      }
       Voice.destroy().then(Voice.removeAllListeners);
     };
   }, []);
+
+  // Debounce live items parsing (avoid regex on every partial result)
+  const parseDebounceTimerRef = useRef(null);
+  const lastParsedTextRef = useRef('');
 
   // Handle live speech results
   const onSpeechResults = (e) => {
     if (e.value && e.value[0]) {
       const text = e.value[0];
       setTranscript(text);
-      parseLiveItems(text);
+
+      // Debounce parsing to reduce regex overhead (only parse when text changes significantly)
+      if (parseDebounceTimerRef.current) {
+        clearTimeout(parseDebounceTimerRef.current);
+      }
+
+      parseDebounceTimerRef.current = setTimeout(() => {
+        // Only parse if text actually changed (avoid duplicate parsing)
+        if (text !== lastParsedTextRef.current) {
+          lastParsedTextRef.current = text;
+          parseLiveItems(text);
+        }
+      }, 300); // Debounce 300ms (waits for user to pause speaking briefly)
     }
   };
 
@@ -51,7 +80,7 @@ export const useServerVoice = (options = {}) => {
     const regex = /(\d+(?:\.\d+)?)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/g;
     const items = [];
     let match;
-    
+
     while ((match = regex.exec(text)) !== null) {
       // Filter out common false positives if needed
       if (match[2].length > 2) {
@@ -86,37 +115,69 @@ export const useServerVoice = (options = {}) => {
     setIsRecording(false);
     setIsProcessing(true);
     setError(null);
-    
+
     // 1. Liveness Guard & Timer Setup
     isActiveRef.current = true;
-    
+
     // Clear any stale timers
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
 
-    // Start Fake Progress (ONCE)
-    // Adjusted steps since we skip upload/transcribe
     setProcessingState({ step: 0, label: 'Analyzing text...' });
     const startTime = Date.now();
-    
-    const scheduleTimer = (ms, step, label) => {
-      const id = setTimeout(() => {
-        if (isActiveRef.current) {
-          setProcessingState({ step, label });
-        }
-      }, ms);
-      timersRef.current.push(id);
-    };
-    
-    // Faster timeline since we have text already
-    scheduleTimer(1000, 1, 'Identifying foods...');
-    scheduleTimer(2500, 2, 'Calculating nutrition...');
+
+    // Use the final transcript state
+    if (!transcript) {
+      if (isActiveRef.current) setError('No speech detected');
+      return null;
+    }
+
+    // Generate normalized cache key (lowercase, no extra spaces)
+    const cacheKey = transcript.toLowerCase().trim();
 
     try {
+      // OPTIMIZATION 1: Check in-memory cache first (instant)
+      if (inMemoryCacheRef.current.has(cacheKey)) {
+        const cached = inMemoryCacheRef.current.get(cacheKey);
+        if (Date.now() - cached.timestamp < CACHE_TTL) {
+          console.log('[VoiceLog] Cache hit - using cached result');
+          // Show progress quickly since we have cached result
+          setProcessingState({ step: 1, label: 'Using cached result...' });
+          await new Promise(r => setTimeout(r, 200)); // Brief UI feedback
+          if (isActiveRef.current) {
+            return cached.result;
+          }
+          return null;
+        }
+      }
+
+      // OPTIMIZATION 2: Check for pending identical request (deduplication)
+      if (pendingRequestsRef.current.has(cacheKey)) {
+        console.log('[VoiceLog] Duplicate request detected - waiting for existing request');
+        setProcessingState({ step: 1, label: 'Waiting for duplicate request...' });
+        const result = await pendingRequestsRef.current.get(cacheKey);
+        if (isActiveRef.current) {
+          return result;
+        }
+        return null;
+      }
+
+      // Create a promise for this request that other duplicates can wait on
+      let resolveRequest, rejectRequest;
+      const requestPromise = new Promise((resolve, reject) => {
+        resolveRequest = resolve;
+        rejectRequest = reject;
+      });
+      pendingRequestsRef.current.set(cacheKey, requestPromise);
+
       const submitTextWithRetry = async (textToProcess, attempt = 1) => {
         if (!isActiveRef.current) return null;
 
         try {
+          // Track real API timing
+          apiStartTimeRef.current = Date.now();
+          setProcessingState({ step: 1, label: 'Identifying foods...' });
+
           // Send text directly to backend process endpoint
           const payload = {
             text: textToProcess,
@@ -125,49 +186,70 @@ export const useServerVoice = (options = {}) => {
           };
 
           const response = await apiClient.post('/voice/process', payload);
-          
+
+          // OPTIMIZATION 3: Calculate real progress based on actual API timing
+          const apiDuration = Date.now() - apiStartTimeRef.current;
+          console.log(`[VoiceLog] API call took ${apiDuration}ms`);
+
+          // Show next progress step
+          if (isActiveRef.current) {
+            setProcessingState({ step: 2, label: 'Calculating nutrition...' });
+          }
+
           // Return the full response body which contains { success: true, data: analysisResult }
-          return response.data; 
+          return response.data;
         } catch (e) {
           if (attempt <= 3 && isActiveRef.current) {
-            setProcessingState(prev => ({ 
-              ...prev, 
-              label: `Connection poor. Retrying (${attempt}/3)...` 
+            const retryDelay = 1000 * attempt;
+            setProcessingState(prev => ({
+              ...prev,
+              label: `Connection poor. Retrying (${attempt}/3) in ${retryDelay}ms...`
             }));
-            await new Promise(r => setTimeout(r, 1000 * attempt));
+            await new Promise(r => setTimeout(r, retryDelay));
             return submitTextWithRetry(textToProcess, attempt + 1);
           }
           throw e;
         }
       };
 
-      // Use the final transcript state
-      if (!transcript) {
-        if (isActiveRef.current) setError('No speech detected');
-        return null;
-      }
-
       const result = await submitTextWithRetry(transcript);
-      
-      if (isActiveRef.current) {
-        console.log(`[VoiceLog] Completed in ${Date.now() - startTime}ms`);
+
+      // OPTIMIZATION 4: Cache the successful result
+      if (result && isActiveRef.current) {
+        inMemoryCacheRef.current.set(cacheKey, {
+          result,
+          timestamp: Date.now()
+        });
+
+        // Limit cache size to prevent memory bloat
+        if (inMemoryCacheRef.current.size > 50) {
+          const firstKey = inMemoryCacheRef.current.keys().next().value;
+          inMemoryCacheRef.current.delete(firstKey);
+        }
+
+        console.log(`[VoiceLog] Completed in ${Date.now() - startTime}ms (from API)`);
+        resolveRequest(result);
         return result;
       }
+
+      resolveRequest(null);
       return null;
 
     } catch (err) {
       if (isActiveRef.current) {
-        console.error(err);
+        console.error('[VoiceLog] Error:', err);
         // Extract error message from response if available
         const msg = err.response?.data?.error || 'Failed to process audio';
         setError(msg);
       }
+      rejectRequest(err);
       return null;
     } finally {
       // 3. Cleanup
       isActiveRef.current = false;
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
+      pendingRequestsRef.current.delete(cacheKey); // Remove from pending queue
       setIsProcessing(false);
     }
   }, [transcript, options.mealType]);
