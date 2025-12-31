@@ -1218,6 +1218,10 @@ export default function LogScreen() {
                 console.error('Share failed:', error);
               }
             }}
+            onViewHistory={() => {
+              setShowMealLogged(false);
+              router.push({ pathname: '/history', params: { from: 'log' } });
+            }}
             onClose={() => {
               setShowMealLogged(false);
               setLoggedMeal(null);

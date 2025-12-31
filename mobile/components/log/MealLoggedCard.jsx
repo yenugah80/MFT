@@ -256,6 +256,7 @@ export default function MealLoggedCard({
   dailyTotals,
   onViewTrends,
   onSaveAsMeal,
+  onViewHistory,
 }) {
   const [scaleAnim] = useState(new Animated.Value(0.9));
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -517,8 +518,21 @@ export default function MealLoggedCard({
             <Ionicons name="share-outline" size={ICON_SIZES.md} color={BRAND.primary} />
             <Text style={styles.secondaryButtonText}>Share</Text>
           </TouchableOpacity>
+        </View>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={onClose}>
+        {/* Bottom Action Row - History & Done */}
+        <View style={styles.bottomActions}>
+          {onViewHistory && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={onViewHistory}>
+              <Ionicons name="time-outline" size={ICON_SIZES.md} color={BRAND.primary} />
+              <Text style={styles.secondaryButtonText}>History</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.primaryButton, onViewHistory && { flex: 1 }]}
+            onPress={onClose}
+          >
             <LinearGradient
               colors={SURFACES.gradient.primary}
               start={{ x: 0, y: 0 }}
@@ -843,6 +857,11 @@ const styles = StyleSheet.create({
   // ACTIONS
   // ──────────────────────────────────────────────
   actions: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+    marginBottom: SPACING[3],
+  },
+  bottomActions: {
     flexDirection: 'row',
     gap: SPACING[3],
   },
