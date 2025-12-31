@@ -294,6 +294,36 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
   }
 
   /**
+   * Detect dish complexity for smart model routing
+   * @param {string} text - Food query
+   * @returns {'simple'|'complex'|'regional'} Complexity level
+   *
+   * Regional dishes are detected so we use GPT-4o for better accuracy
+   * Simple foods use gpt-4o-mini for cost optimization
+   */
+  detectDishComplexity(text) {
+    const regionalDishes = /\b(masala|biryani|curry|tikka|dosa|idli|sambar|korma|vindaloo|tandoori|dal|saag|chutney|raita|roti|naan|kebab|shawarma|falafel|pad thai|pho|ramen|sushi|enchilada|tacos|taco|burrito|quesadilla|paella|risotto|carbonara|tiramisu)\b/i;
+    const simpleFoods = /\b(egg|eggs|rice|bread|milk|banana|apple|chicken breast|water|toast|cereal|yogurt|cheese|butter|oil)\b/i;
+
+    if (regionalDishes.test(text)) return 'regional';
+    if (simpleFoods.test(text)) return 'simple';
+    const wordCount = text.split(/\s+/).length;
+    return wordCount > 3 ? 'complex' : 'simple';
+  }
+
+  /**
+   * Choose optimal OpenAI model based on complexity
+   * Simple → gpt-4o-mini ($0.15/1M input tokens) - cost optimized
+   * Complex/Regional → gpt-4o ($2.50/1M input tokens) - better accuracy
+   *
+   * @param {string} complexity - Complexity level from detectDishComplexity
+   * @returns {string} OpenAI model name
+   */
+  chooseModel(complexity) {
+    return complexity === 'simple' ? 'gpt-4o-mini' : 'gpt-4o';
+  }
+
+  /**
    * Parse text AND estimate nutrition for unknown foods
    * Used as fallback when local dictionary lookup fails.
    *
@@ -301,11 +331,23 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
    * - Estimates specific macros (Cal, P, C, F)
    * - Skips micros to save tokens and reduce noise
    * - Returns structure compatible with app's food logging
+   * - Uses smart model routing for cost optimization (PHASE 2 ENHANCEMENT)
    */
   async estimateNutritionForText(query, options = {}) {
-    const { mealType = 'general' } = options;
-    // CACHE CHECK: Avoid paying for the same "unknown" food twice
-    const cacheKey = `nutri_est:${query.toLowerCase().trim()}:${mealType}`;
+    const {
+      mealType = 'general',
+      cuisinePreference = null,
+      region = null,
+      cookingMethod = null
+    } = options;
+
+    // 🆕 SMART MODEL ROUTING: Detect complexity and choose optimal model
+    const complexity = this.detectDishComplexity(query);
+    const model = this.chooseModel(complexity);
+    console.log(`[AI] Query: "${query}" → Complexity: ${complexity} → Model: ${model}`);
+
+    // 🆕 REGIONAL CACHE KEY: Include cuisine and region for better cache hits
+    const cacheKey = `nutri_est:${query.toLowerCase().trim()}:${mealType}:${cuisinePreference || 'any'}:${region || 'any'}`;
 
     if (this.redisClient) {
       try {
@@ -320,19 +362,32 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     const messages = [
       {
         role: 'system',
-        content: `You are a nutritionist API. Extract food items and estimate nutrition for a ${mealType} meal.
+        content: `You are a nutritionist API specializing in ${cuisinePreference || 'global'} cuisine.
+
+🌍 REGIONAL CONTEXT:
+- Cuisine: ${cuisinePreference || 'Not specified'}
+- Region: ${region || 'Not specified'}
+- Cooking Style: ${cookingMethod || 'typical preparation'}
+- Meal Type: ${mealType}
+
+📏 PORTION GUIDANCE (REGIONAL):
+- South Indian: Larger rice/grain portions (1.5-2 cups), smaller protein portions, coconut-based curries with oil
+- American: Larger protein portions (6-8oz), moderate carbs, butter/cream-based sauces
 
 Rules:
-1. Extract food name, quantity, and unit.
-2. Use the meal context (${mealType}) to infer typical portion sizes and preparation methods (e.g., breakfast eggs vs dinner curry).
-2. Estimate nutrition for the SPECIFIED quantity.
-3. Include macros: calories, protein (g), carbs (g), fat (g).
-4. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (IU), potassium (mg).
-5. Calculate a Health Score (0-100) and NutriScore (A-E) based on nutrient density, processing level (NOVA), and cooking method.
-   - Penalize for: frying, added sugars, high sodium, ultra-processing.
-   - Boost for: whole foods, fiber, vitamins, grilling/steaming.
-6. Provide a short "analysis" note explaining the score (e.g., "High protein but high sodium due to soy sauce").
-7. Identify the "cookingMethod" (e.g., "fried", "steamed", "raw").
+1. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
+2. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
+3. Estimate nutrition for the SPECIFIED quantity and cooking method
+4. Include macros: calories, protein (g), carbs (g), fat (g)
+5. 🆕 Include detailed INGREDIENTS breakdown (what makes up this dish)
+6. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (µg), potassium (mg)
+7. Calculate Health Score (0-100) and NutriScore (A-E) based on:
+   - Nutrient density, processing level (NOVA), cooking method
+   - Penalize: frying (+30-50% cal), added sugars, high sodium, ultra-processing
+   - Boost: whole foods, fiber, vitamins, healthy prep (steamed/grilled)
+8. Identify the "cookingMethod" (fried, steamed, grilled, boiled, baked, raw)
+9. Identify the "cuisine" (South Indian, American, Italian, etc.)
+10. Provide a short analysis note explaining the score
 
 Return JSON:
 {
@@ -341,17 +396,22 @@ Return JSON:
       "name": "food name",
       "quantity": number,
       "unit": "unit",
+      "cuisine": "South Indian" | "American" | "Other",
+      "cookingMethod": "fried" | "steamed" | "grilled" | "boiled" | "baked" | "raw",
       "nutrition": {
         "calories": number,
         "protein": number,
         "carbs": number,
         "fat": number,
-        "micros": { "calcium": { "value": 10, "unit": "mg" } }
-      }
-      "healthScore": number,
+        "micros": { "calcium": { "value": 10, "unit": "mg" }, "iron": { "value": 2, "unit": "mg" } }
+      },
+      "🆕 ingredients": [
+        { "name": "rice", "amount": "1 cup", "calories": 200, "protein": 4, "carbs": 45, "fat": 0 },
+        { "name": "dal", "amount": "0.5 cup", "calories": 115, "protein": 9, "carbs": 20, "fat": 0 }
+      ],
+      "healthScore": number (0-100),
       "nutriScore": "A"|"B"|"C"|"D"|"E",
-      "cookingMethod": "string",
-      "analysis": "string"
+      "analysis": "string explaining score"
     }
   ]
 }`,
@@ -364,9 +424,9 @@ Return JSON:
 
     try {
       const json = await this.chatCompletionJSON(messages, {
-        model: 'gpt-4o-mini', // COST OPTIMIZATION: Use mini for text estimation
+        model, // 🆕 DYNAMIC MODEL SELECTION: Uses detectDishComplexity + chooseModel
         temperature: 0.2,
-        maxTokens: 400, // Reduced token limit
+        maxTokens: complexity === 'simple' ? 300 : 600, // Simple foods need fewer tokens
       });
 
       if (!json.foods || !Array.isArray(json.foods)) {

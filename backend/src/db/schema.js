@@ -15,6 +15,10 @@ export const profilesTable = pgTable(
     weightKg: decimal("weight_kg", { precision: 5, scale: 2 }),
     heightCm: integer("height_cm"),
     activityLevel: text("activity_level"), // 'sedentary' | 'light' | 'moderate' | 'active' | 'athlete'
+    // 🆕 REGIONAL SUPPORT (for food analysis personalization)
+    cuisinePreference: json("cuisine_preference").default([]), // ['South Indian', 'American']
+    region: text("region"), // 'India', 'USA', 'UK', etc.
+    cookingStyle: text("cooking_style"), // 'home-style', 'restaurant'
     notifications: json("notifications").default({}),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -173,6 +177,17 @@ export const foodLogTable = pgTable(
     barcode: text("barcode"),
     imageUrl: text("image_url"), // URL of the photo if scanned
 
+    // 🆕 REGIONAL SUPPORT & MULTIMODAL FIELDS
+    cuisine: text("cuisine"), // 'South Indian', 'American', etc.
+    cookingMethod: text("cooking_method"), // 'fried', 'steamed', 'grilled'
+    ingredientsBreakdown: json("ingredients_breakdown").default([]), // Detailed ingredient breakdown
+    voiceTranscript: text("voice_transcript"), // Original voice transcript if from voice log
+    multimodalSource: json("multimodal_source").default({}), // Track if photo + voice combined
+
+    // AI METADATA
+    aiModel: text("ai_model"), // 'gpt-4o', 'gpt-4o-mini', 'local_dictionary'
+    aiConfidence: decimal("ai_confidence", { precision: 3, scale: 2 }), // 0.00 to 1.00
+
     loggedDate: timestamp("logged_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -194,6 +209,9 @@ export const foodLogTable = pgTable(
     nutriscoreCheck: check("nutriscore_check", sql`${table.nutriscore} IS NULL OR ${table.nutriscore} IN ('A', 'B', 'C', 'D', 'E')`),
     ecoscoreCheck: check("ecoscore_check", sql`${table.ecoscore} IS NULL OR ${table.ecoscore} IN ('A', 'B', 'C', 'D', 'E')`),
     novaScoreCheck: check("nova_score_check", sql`${table.novaScore} IS NULL OR (${table.novaScore} >= 1 AND ${table.novaScore} <= 4)`),
+    // 🆕 Regional field constraints
+    cookingMethodCheck: check("cooking_method_check", sql`${table.cookingMethod} IS NULL OR ${table.cookingMethod} IN ('fried', 'steamed', 'grilled', 'boiled', 'baked', 'raw')`),
+    aiConfidenceCheck: check("ai_confidence_check", sql`${table.aiConfidence} IS NULL OR (${table.aiConfidence} >= 0 AND ${table.aiConfidence} <= 1)`),
   })
 );
 
