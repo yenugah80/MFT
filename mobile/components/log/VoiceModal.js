@@ -92,14 +92,13 @@ export const VoiceModal = ({ visible, onClose, onComplete, voiceHook }) => {
 
   const playSound = async (type) => {
     try {
-      // FIXED: Use local assets for App Store compliance and reliability
-      const source = type === 'start' 
-        ? require('../../assets/sounds/start.mp3') 
-        : require('../../assets/sounds/stop.mp3');
-      
+      const source = type === 'start'
+        ? require('../../assets/sounds/beep.mp3')
+        : require('../../assets/sounds/click.wav');
+
       const { sound } = await Audio.Sound.createAsync(source);
       await sound.playAsync();
-      
+
       // Cleanup
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.didJustFinish) {
