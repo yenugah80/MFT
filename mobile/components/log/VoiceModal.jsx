@@ -25,7 +25,7 @@
  * />
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -75,6 +75,8 @@ function WaveformVisualizer({ volume, isActive }) {
   );
 
   useEffect(() => {
+    let animationRef = null;
+
     if (!isActive) {
       // Reset bars
       bars.forEach(bar => {
@@ -101,7 +103,15 @@ function WaveformVisualizer({ volume, isActive }) {
       });
     });
 
-    Animated.parallel(animations).start();
+    animationRef = Animated.parallel(animations);
+    animationRef.start();
+
+    // FIXED: Cleanup animations on unmount or when dependencies change
+    return () => {
+      if (animationRef) {
+        animationRef.stop();
+      }
+    };
   }, [volume, isActive, bars]);
 
   return (
@@ -203,12 +213,16 @@ export function VoiceModal({
   } = voiceHook;
 
   // ─────────────────────────────────────────────
-  // State
+  // State & Refs
   // ─────────────────────────────────────────────
   const [state, setState] = useState('idle'); // idle | listening | processing | transcribed | success | error
   const [transcription, setTranscription] = useState('');
   const [confidence, setConfidence] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // FIXED: Prevent duplicate submissions
+
+  // FIXED: Track timeout for cleanup
+  const successTimeoutRef = useRef(null);
 
   // ─────────────────────────────────────────────
   // Handlers (Production-grade memoization)
@@ -252,7 +266,14 @@ export function VoiceModal({
   }, [cancelRecording, handleClose]);
 
   const handleConfirm = useCallback(async () => {
+    // FIXED: Prevent duplicate submissions
+    if (isSubmitting) {
+      console.warn('[VoiceModal] Already submitting, ignoring duplicate call');
+      return;
+    }
+
     try {
+      setIsSubmitting(true);
       // Show analyzing state
       setState('analyzing');
       await triggerHaptic();
@@ -264,16 +285,17 @@ export function VoiceModal({
       setState('success');
       await triggerHaptic('success');
 
-      // Delay to show success state, then close and return result
-      setTimeout(() => {
+      // FIXED: Store timeout ref for cleanup and delay to show success state
+      successTimeoutRef.current = setTimeout(() => {
         onComplete(nutritionResult);
         handleClose();
       }, 800);
     } catch (err) {
       console.error('[VoiceModal] Analysis failed:', err);
       setState('error');
+      setIsSubmitting(false);
     }
-  }, [analyzeTranscript, transcription, onComplete, handleClose]);
+  }, [analyzeTranscript, transcription, onComplete, handleClose, isSubmitting]);
 
   const handleEditTranscription = useCallback(() => {
     setIsEditing(true);
@@ -312,6 +334,16 @@ export function VoiceModal({
       handleStop();
     }
   }, [duration, isRecording, handleStop]);
+
+  // FIXED: Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // ─────────────────────────────────────────────
   // Render duration with warning at 50s
