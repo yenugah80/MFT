@@ -74,9 +74,8 @@ const AnalysisDetailsScreen = ({
   const prevIngredientsExpandedRef = useRef(false);
   const chipAnimationsRef = useRef({});
 
-  if (!analysisResult) return null;
-
-  const { items = [], totals = {} } = analysisResult;
+  // 🆕 FIX: Use nullish coalescing instead of early return to maintain hook order
+  const { items = [], totals = {} } = analysisResult || {};
   const hasSingleItem = items.length === 1;
   const hasImage = !!imageUri;
   const hasIngredients = items.some(
@@ -292,6 +291,11 @@ const AnalysisDetailsScreen = ({
   const micros = totals.micros || {};
   const microEntries = Object.entries(micros);
   const displayedMicros = showAllMicros ? microEntries : microEntries.slice(0, 5);
+
+  // 🆕 FIX: Return null in JSX instead of early return to maintain hook order
+  if (!analysisResult) {
+    return null;
+  }
 
   return (
     <Modal
