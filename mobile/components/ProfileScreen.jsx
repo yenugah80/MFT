@@ -192,8 +192,18 @@ export default function ProfileScreen({ navigation }) {
         </Text>
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={saveProfile}>
-        <Text style={styles.saveButtonText}>Save Profile</Text>
+      <TouchableOpacity
+        style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+        onPress={saveProfile}
+        disabled={isSaving}
+        activeOpacity={isSaving ? 1 : 0.7}
+      >
+        {isSaving && (
+          <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+        )}
+        <Text style={styles.saveButtonText}>
+          {isSaving ? 'Saving...' : 'Save Profile'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -226,6 +236,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  saveButton: { backgroundColor: '#333', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 30, marginBottom: 20 },
+  saveButton: { backgroundColor: '#333', padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginTop: 30, marginBottom: 20 },
+  saveButtonDisabled: { backgroundColor: '#666', opacity: 0.7 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
