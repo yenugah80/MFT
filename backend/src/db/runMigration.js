@@ -72,6 +72,9 @@ async function main() {
     // Run any pending migrations
     await runMigration('0017_add_lottie_animations.sql');
     await runMigration('0018_add_mood_day_key.sql');
+    // 🆕 Regional multimodal food analysis support
+    await runMigration('0019_add_regional_context.sql');
+    await runMigration('0020_add_multimodal_analysis.sql');
     console.log('\n🎉 All migrations completed successfully!');
     process.exit(0);
   } catch (error) {
