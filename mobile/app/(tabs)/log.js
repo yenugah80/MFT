@@ -36,6 +36,9 @@ import { useWaterLog } from '../../hooks/useWaterLog';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { useTheme } from '../../providers/ThemeProvider';
+import useProfileForm from '../../hooks/useProfileForm';
+import { useUser } from '@clerk/clerk-expo';
+import { calculateDailyTargets } from '../../utils/nutritionTargets';
 
 // Components
 import { NutritionCard } from '../../components/log/NutritionCard';
@@ -46,6 +49,7 @@ import AnalysisDetailsScreen from '../../components/log/AnalysisDetailsScreen';
 import CameraModal from '../../components/log/CameraModal';
 import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
+import LogInputSection from '../../components/log/LogInputSection';
 import MoodLogger from '../../components/MoodLogger';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
 import HydrationTracker from '../../components/HydrationTracker';
@@ -65,24 +69,16 @@ const fonts = {
   regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
 };
 
-// Daily nutrition values for percentage calculations
-const DAILY_VALUES = {
-  calories: 2000,
-  protein: 50,
-  carbs: 275,
-  fat: 78,
-  fiber: 28,
-  sugar: 50,
-  sodium: 2300,
-  calcium: 1000,
-  iron: 18,
-  vitaminA: 900,
-  vitaminC: 90,
-  vitaminD: 20,
-  potassium: 3500,
-};
-
 export default function LogScreen() {
+  // Hooks - Get user profile for personalized nutrition targets
+  const { user } = useUser();
+  const { state: profileState } = useProfileForm(user);
+
+  // Calculate personalized daily targets based on user's nutrition goals
+  const DAILY_VALUES = useMemo(() => {
+    return calculateDailyTargets(profileState?.savedProfile?.goals);
+  }, [profileState?.savedProfile?.goals]);
+
   // State
   const [selectedImage, setSelectedImage] = useState(null);
   const [analyzedFood, setAnalyzedFood] = useState(null);
