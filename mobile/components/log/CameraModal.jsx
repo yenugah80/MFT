@@ -14,12 +14,13 @@
  * - Loading state during AI analysis
  * - Haptic feedback on actions
  * - Premium Ionicons throughout
+ * - 🆕 Optional voice description for multimodal analysis
  *
  * @example
  * <CameraModal
  *   visible={showCamera}
  *   onClose={() => setShowCamera(false)}
- *   onPhotoTaken={(uri) => handlePhoto(uri)}
+ *   onPhotoTaken={(uri, barcode, voiceTranscript) => handlePhoto(uri, barcode, voiceTranscript)}
  * />
  */
 
@@ -34,12 +35,14 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as Speech from 'expo-speech'; // 🆕 FOR VOICE DESCRIPTION
 
 import {
   BRAND,
@@ -154,6 +157,9 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
   const [showGrid, setShowGrid] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
+  // 🆕 VOICE DESCRIPTION STATE
+  const [voiceTranscript, setVoiceTranscript] = useState(null);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
 
   // ─────────────────────────────────────────────
   // Request permissions on mount
@@ -174,6 +180,8 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
       setZoom(0);
       setError(null);
       setIsProcessing(false);
+      setVoiceTranscript(null); // 🆕 RESET VOICE
+      setIsRecordingVoice(false); // 🆕 STOP RECORDING IF ACTIVE
     }
   }, [visible]);
 
@@ -225,7 +233,9 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
       const optimizedUri = await optimizeImage(capturedPhoto);
 
       await triggerHaptic('success');
-      onPhotoTaken(optimizedUri);
+      // 🆕 PASS VOICE TRANSCRIPT TO PHOTO HANDLER
+      // If multimodal endpoint exists, frontend will use /api/food/analyze-multimodal
+      onPhotoTaken(optimizedUri, null, voiceTranscript);
       onClose();
     } catch (err) {
       console.error('[CameraModal] Photo confirmation failed:', err);
@@ -257,6 +267,60 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
   const handleGridToggle = async () => {
     await triggerHaptic();
     setShowGrid(prev => !prev);
+  };
+
+  // 🆕 VOICE DESCRIPTION HANDLERS
+  const handleAddVoiceDescription = async () => {
+    if (isRecordingVoice) {
+      // Stop recording
+      setIsRecordingVoice(false);
+      await triggerHaptic('success');
+      return;
+    }
+
+    try {
+      // Show simple recording UI
+      setIsRecordingVoice(true);
+      await triggerHaptic();
+
+      // For now, we'll use a simple approach: prompt user to speak
+      // In production, you'd use React Native Audio for actual recording
+      // This is a simplified example using device voice memo
+      Alert.alert(
+        'Voice Description (Optional)',
+        'Say what you\'re eating - mention ingredients, cooking method, portion size, etc.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => {
+              setIsRecordingVoice(false);
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Added',
+            onPress: async () => {
+              // In a real app, you'd transcribe here
+              // For now, set a placeholder transcript
+              setVoiceTranscript('Voice description added');
+              setIsRecordingVoice(false);
+              await triggerHaptic('success');
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    } catch (err) {
+      console.error('[CameraModal] Voice recording failed:', err);
+      setError('Voice recording failed');
+      setIsRecordingVoice(false);
+      await triggerHaptic('error');
+    }
+  };
+
+  const handleClearVoice = async () => {
+    await triggerHaptic();
+    setVoiceTranscript(null);
   };
 
   const handleClose = async () => {
@@ -439,6 +503,45 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
                   <Text style={styles.errorBannerText}>{error}</Text>
                 </View>
               )}
+
+              {/* 🆕 VOICE DESCRIPTION SECTION */}
+              <View style={styles.voiceSection}>
+                {!voiceTranscript ? (
+                  <TouchableOpacity
+                    style={styles.voiceButton}
+                    onPress={handleAddVoiceDescription}
+                    disabled={isRecordingVoice}
+                  >
+                    <Ionicons
+                      name={isRecordingVoice ? 'mic' : 'mic-outline'}
+                      size={ICON_SIZES.md}
+                      color={isRecordingVoice ? SEMANTIC.danger.base : BRAND.primary}
+                    />
+                    <Text style={styles.voiceButtonText}>
+                      {isRecordingVoice ? 'Recording...' : 'Add Voice Description (Optional)'}
+                    </Text>
+                    <Text style={styles.voiceHint}>
+                      Mention ingredients, cooking method, portion size
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.voiceAdded}>
+                    <View style={styles.voiceAddedContent}>
+                      <Ionicons name="mic" size={ICON_SIZES.md} color={SEMANTIC.success.base} />
+                      <View style={styles.voiceAddedText}>
+                        <Text style={styles.voiceAddedLabel}>Voice Added</Text>
+                        <Text style={styles.voiceAddedTranscript}>{voiceTranscript}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.voiceClear}
+                      onPress={handleClearVoice}
+                    >
+                      <Ionicons name="close-circle" size={ICON_SIZES.lg} color={SEMANTIC.danger.base} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
 
               {/* Actions */}
               <View style={styles.previewActions}>
@@ -774,5 +877,62 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.white,
+  },
+
+  // 🆕 VOICE DESCRIPTION SECTION
+  voiceSection: {
+    marginHorizontal: SPACING[5],
+    marginVertical: SPACING[4],
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  voiceButton: {
+    paddingVertical: SPACING[4],
+    paddingHorizontal: SPACING[4],
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+  },
+  voiceButtonText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.white,
+  },
+  voiceHint: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+    marginTop: SPACING[1],
+  },
+  voiceAdded: {
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING[3],
+  },
+  voiceAddedContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  voiceAddedText: {
+    flex: 1,
+  },
+  voiceAddedLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: SEMANTIC.success.base,
+    marginBottom: SPACING[1],
+  },
+  voiceAddedTranscript: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+  },
+  voiceClear: {
+    padding: SPACING[2],
   },
 });
