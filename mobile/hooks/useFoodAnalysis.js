@@ -721,8 +721,17 @@ export function useFoodAnalysis() {
    * @param {string} text - Food description
    * @returns {Promise<void>}
    */
-  const analyzeTextUniversal = useCallback(async (text) => {
+  const analyzeTextUniversal = useCallback(async (text, options = {}) => {
     if (!text?.trim()) return;
+
+    // 🆕 EXTRACT REGIONAL CONTEXT FROM OPTIONS
+    const {
+      cuisinePreference = null,
+      region = null,
+      cookingMethod = null,
+      voiceTranscript = null,
+      source = 'text'
+    } = options;
 
     // Check if we're still in rate limit cooldown
     const now = Date.now();
@@ -783,6 +792,7 @@ export function useFoodAnalysis() {
 
       setProgress(50);
 
+      // 🆕 PASS REGIONAL CONTEXT TO BACKEND FOR BETTER ANALYSIS
       const response = await fetch(`${API_URL}/food/resolve`, {
         method: 'POST',
         headers: {
@@ -793,6 +803,13 @@ export function useFoodAnalysis() {
           mode: 'text',
           query: text,
           mealType: getMealTypeFromTime(), // Time-based detection
+          // 🆕 REGIONAL CONTEXT (enables cost optimization and better portion sizing)
+          cuisinePreference,
+          region,
+          cookingMethod,
+          // 🆕 VOICE CONTEXT (for voice and multimodal inputs)
+          voiceTranscript,
+          source, // 'text', 'voice', 'multimodal'
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -870,12 +887,39 @@ export function useFoodAnalysis() {
         throw new Error('Authentication required to analyze barcode');
       }
 
+      // Get user profile for regional context
+      let cuisinePreference = null;
+      let region = null;
+      let cookingMethod = null;
+      try {
+        const profileRes = await fetch(`${API_URL}/profiles/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          cuisinePreference = profile?.cuisinePreference?.[0] || null;
+          region = profile?.region || null;
+          cookingMethod = profile?.cookingStyle || null;
+        }
+      } catch (err) {
+        console.warn('[useFoodAnalysis] Could not fetch user profile for regional context:', err.message);
+      }
+
       let productItem = null;
 
       // 1. Try backend BFF (cached products + USDA)
       try {
         setProgress(25);
-        const res = await fetch(`${BACKEND_BARCODE_ENDPOINT}/${encodeURIComponent(code)}`, {
+        // 🆕 INCLUDE REGIONAL CONTEXT IN BARCODE LOOKUP
+        const queryParams = new URLSearchParams();
+        if (cuisinePreference) queryParams.append('cuisinePreference', cuisinePreference);
+        if (region) queryParams.append('region', region);
+        if (cookingMethod) queryParams.append('cookingMethod', cookingMethod);
+        const barcodeLookupUrl = queryParams.toString()
+          ? `${BACKEND_BARCODE_ENDPOINT}/${encodeURIComponent(code)}?${queryParams.toString()}`
+          : `${BACKEND_BARCODE_ENDPOINT}/${encodeURIComponent(code)}`;
+
+        const res = await fetch(barcodeLookupUrl, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -927,6 +971,59 @@ export function useFoodAnalysis() {
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
   }, [getToken]);
+
+  // ============================================================================
+  // VOICE ANALYSIS (with Regional Context)
+  // ============================================================================
+
+  /**
+   * Analyze voice transcript with regional context
+   * @param {string} transcript - Voice transcription text
+   * @param {Object} options - Optional voice-specific options
+   * @returns {Promise<void>}
+   */
+  const analyzeVoice = useCallback(async (transcript, options = {}) => {
+    if (!transcript?.trim()) {
+      throw new Error('Voice transcript is required for analysis');
+    }
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Authentication required for voice analysis');
+      }
+
+      // Get user profile for regional context
+      const profileRes = await fetch(`${API_URL}/profiles/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!profileRes.ok) {
+        console.warn('[useFoodAnalysis] Could not fetch user profile for regional context');
+      }
+
+      const profile = await profileRes.json().catch(() => ({}));
+
+      // Extract regional context from user profile
+      const cuisinePreference = profile?.cuisinePreference?.[0] || null;
+      const region = profile?.region || null;
+      const cookingMethod = profile?.cookingStyle || null;
+
+      // Call analyzeTextUniversal with voice context and regional options
+      await analyzeTextUniversal(transcript, {
+        ...options,
+        cuisinePreference,
+        region,
+        cookingMethod,
+        voiceTranscript: transcript,
+        source: 'voice'
+      });
+    } catch (err) {
+      const errorMsg = err.message || 'Voice analysis failed. Please try again.';
+      setError(errorMsg);
+      throw err;
+    }
+  }, [getToken, analyzeTextUniversal]);
 
   // ============================================================================
   // LEGACY TEXT ANALYSIS (For backwards compatibility)
@@ -1059,9 +1156,10 @@ export function useFoodAnalysis() {
    * Analyze photo with AI vision
    * @param {string} uri - Image URI
    * @param {string|null} barcode - Optional barcode from photo
+   * @param {string|null} voiceTranscript - Optional voice description of photo
    * @returns {Promise<void>}
    */
-  const analyzePhoto = useCallback(async (uri, barcode = null) => {
+  const analyzePhoto = useCallback(async (uri, barcode = null, voiceTranscript = null) => {
     // If barcode detected, use barcode analysis
     if (barcode) {
       return analyzeBarcode(barcode);
@@ -1079,6 +1177,24 @@ export function useFoodAnalysis() {
       const token = await getToken();
       if (!token) {
         throw new Error('Authentication required to analyze photo');
+      }
+
+      // Get user profile for regional context
+      let cuisinePreference = null;
+      let region = null;
+      let cookingMethod = null;
+      try {
+        const profileRes = await fetch(`${API_URL}/profiles/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          cuisinePreference = profile?.cuisinePreference?.[0] || null;
+          region = profile?.region || null;
+          cookingMethod = profile?.cookingStyle || null;
+        }
+      } catch (err) {
+        console.warn('[useFoodAnalysis] Could not fetch user profile for regional context:', err.message);
       }
 
       // OCR pass: detect nutrition label text and resolve via text pipeline
@@ -1158,9 +1274,14 @@ export function useFoodAnalysis() {
 
       setProgress(60);
 
-      // Send to AI vision API
+      // 🆕 Use multimodal endpoint if voice transcript provided, otherwise regular image endpoint
+      const analysisEndpoint = voiceTranscript
+        ? `${API_URL}/food/analyze-multimodal`
+        : AI_IMAGE_ENDPOINT;
+
+      // Send to AI vision API with regional context
       const { res, json } = await fetchWithTimeout(
-        AI_IMAGE_ENDPOINT,
+        analysisEndpoint,
         {
           method: 'POST',
           headers: {
@@ -1171,6 +1292,12 @@ export function useFoodAnalysis() {
             image: base64,
             highAccuracy: true,
             includeIngredients: true,
+            // 🆕 REGIONAL CONTEXT (enables better portion sizing and model selection)
+            cuisinePreference,
+            region,
+            cookingMethod,
+            // 🆕 VOICE CONTEXT (for multimodal input)
+            voiceTranscript,
           }),
         },
         IMAGE_ANALYSIS_TIMEOUT_MS
@@ -1356,8 +1483,44 @@ export function useFoodAnalysis() {
       setError('Please describe your meal to analyze');
       return;
     }
-    await analyzeTextUniversal(text);
-  }, [inputText, analyzeTextUniversal]);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // 🆕 GET USER PROFILE FOR REGIONAL CONTEXT
+      let cuisinePreference = null;
+      let region = null;
+      let cookingMethod = null;
+      try {
+        const profileRes = await fetch(`${API_URL}/profiles/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          cuisinePreference = profile?.cuisinePreference?.[0] || null;
+          region = profile?.region || null;
+          cookingMethod = profile?.cookingStyle || null;
+        }
+      } catch (err) {
+        console.warn('[useFoodAnalysis] Could not fetch user profile for regional context:', err.message);
+      }
+
+      // 🆕 PASS REGIONAL CONTEXT TO ANALYSIS
+      await analyzeTextUniversal(text, {
+        cuisinePreference,
+        region,
+        cookingMethod,
+        source: 'text'
+      });
+    } catch (err) {
+      const errorMsg = err.message || 'Analysis failed. Please try again.';
+      setError(errorMsg);
+      console.error('[useFoodAnalysis] runAnalysis error:', err);
+    }
+  }, [inputText, analyzeTextUniversal, getToken]);
 
   /**
    * Clear error state
@@ -1395,7 +1558,45 @@ export function useFoodAnalysis() {
   // Trigger analysis when debounced text changes
   useEffect(() => {
     if (debouncedText.trim() && !isAnalyzing) {
-      analyzeTextUniversal(debouncedText);
+      // 🆕 GET USER PROFILE FOR REGIONAL CONTEXT IN AUTO-ANALYSIS
+      const performAutoAnalysis = async () => {
+        try {
+          const token = await getToken();
+          if (!token) {
+            console.warn('[useFoodAnalysis] No token for auto-analysis');
+            return;
+          }
+
+          let cuisinePreference = null;
+          let region = null;
+          let cookingMethod = null;
+          try {
+            const profileRes = await fetch(`${API_URL}/profiles/me`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (profileRes.ok) {
+              const profile = await profileRes.json();
+              cuisinePreference = profile?.cuisinePreference?.[0] || null;
+              region = profile?.region || null;
+              cookingMethod = profile?.cookingStyle || null;
+            }
+          } catch (err) {
+            console.warn('[useFoodAnalysis] Could not fetch profile for auto-analysis:', err.message);
+          }
+
+          // 🆕 PASS REGIONAL CONTEXT TO AUTO-ANALYSIS
+          await analyzeTextUniversal(debouncedText, {
+            cuisinePreference,
+            region,
+            cookingMethod,
+            source: 'text_auto'
+          });
+        } catch (err) {
+          console.warn('[useFoodAnalysis] Auto-analysis error:', err.message);
+        }
+      };
+
+      performAutoAnalysis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedText]); // CRITICAL FIX: Don't include isAnalyzing - causes infinite loop when it toggles false→true→false
@@ -1424,6 +1625,9 @@ export function useFoodAnalysis() {
   // ============================================================================
 
   return {
+    // 🆕 VOICE ANALYSIS WITH REGIONAL CONTEXT
+    analyzeVoice,
+
     // Legacy single-item analysis (backwards compatibility)
     analyzeText,
     analyzePhoto,

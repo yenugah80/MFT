@@ -253,48 +253,44 @@ export default function LogScreen() {
 
   /**
    * Handle voice logging complete
+   * 🆕 Now routes through analyzeVoice for regional context processing
    */
-  const handleVoiceComplete = (serverResult) => {
+  const handleVoiceComplete = async (serverResult) => {
     if (!serverResult) return;
 
-    // 1. Show Confirmation of Transcription (Optimistic UI)
-    // In a real app, you might show a specific modal here. 
-    // For now, we assume the user checks the transcription in the result card.
-    // If the transcription is wrong, they can hit "Edit" on the card or "Retry".
-    
-    // 2. Map Server Response to UI State
-    // Server returns: { transcription: "...", items: [...], total_calories: ... }
-    
-    // CRITICAL: Clear ALL other results first to prevent duplicates
-    resetForNewAnalysis();
-    foodAnalysis.setInputText(serverResult.transcription || ''); // Show what was heard
-    setSelectedImage(null); // Also clear photo if any
+    try {
+      // Extract transcription from server result
+      const transcript = serverResult.transcription || '';
 
-    // Then set voice result and source
-    setAnalysisSource('voice');
-    setShowVoiceModal(false);
+      if (!transcript.trim()) {
+        console.warn('[log] Empty transcription received from voice');
+        return;
+      }
 
-    // P0 FIX: Use server-provided analysisResult directly
-    // No more client-side guessing or remapping
-    if (serverResult.data && serverResult.data.items) {
-      const { items } = serverResult.data;
+      // 🆕 ROUTE THROUGH analyzeVoice TO GET REGIONAL CONTEXT
+      // This ensures voice inputs are processed with:
+      // - User's cuisine preference
+      // - User's region
+      // - Cooking style
+      // - Smart model routing for cost optimization
+      // - Ingredients breakdown extraction
+      resetForNewAnalysis();
+      setSelectedImage(null); // Clear any photo
+      setAnalysisSource('voice');
+      setShowVoiceModal(false);
 
-      // Calculate totals for the meal
-      const totals = items.reduce((acc, item) => ({
-        macros: {
-          calories_kcal: (acc.macros.calories_kcal || 0) + (item.macros.calories_kcal || 0),
-          protein_g: (acc.macros.protein_g || 0) + (item.macros.protein_g || 0),
-          carbs_g: (acc.macros.carbs_g || 0) + (item.macros.carbs_g || 0),
-          fat_g: (acc.macros.fat_g || 0) + (item.macros.fat_g || 0),
-        },
-        micros: {} // Totals calculation for micros can be added here if needed
-      }), { macros: {} });
+      // Show what was heard as input text
+      foodAnalysis.setInputText(transcript);
 
-      // Update the analysis state to trigger the List View UI
-      foodAnalysis.setAnalysisResult({ items, totals });
+      // Analyze with regional context through the new analyzeVoice method
+      await foodAnalysis.analyzeVoice(transcript, {
+        mealType: getMealTypeFromTime?.() || 'general'
+      });
+
       setAnalyzedFood(null); // Clear single-item state to prefer list view
-    } else {
-      setAnalyzedFood(null);
+    } catch (err) {
+      console.error('[log] Voice analysis failed:', err.message);
+      // Error is handled by foodAnalysis.error state
     }
   };
 
