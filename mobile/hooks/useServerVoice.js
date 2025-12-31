@@ -152,6 +152,7 @@ export const useServerVoice = (options = {}) => {
       }
 
       // OPTIMIZATION 2: Check for pending identical request (deduplication)
+      // BEFORE creating our own promise
       if (pendingRequestsRef.current.has(cacheKey)) {
         console.log('[VoiceLog] Duplicate request detected - waiting for existing request');
         setProcessingState({ step: 1, label: 'Waiting for duplicate request...' });
@@ -162,7 +163,9 @@ export const useServerVoice = (options = {}) => {
         return null;
       }
 
-      // Create a promise for this request that other duplicates can wait on
+      // Create a promise for THIS request that other duplicates can wait on
+      // IMPORTANT: Only create AFTER checking cache and duplicates
+      // so that resolveRequest/rejectRequest are always defined for this request
       let resolveRequest, rejectRequest;
       const requestPromise = new Promise((resolve, reject) => {
         resolveRequest = resolve;
