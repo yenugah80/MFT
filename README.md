@@ -16,6 +16,7 @@
 - [Scientific Foundation](#scientific-foundation)
 - [Limitations & Disclaimers](#limitations--disclaimers)
 - [Getting Started](#getting-started)
+- [Expo SDK 54 - Architecture Notes](#expo-sdk-54---architecture-notes)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 
@@ -566,6 +567,25 @@ OPEN_FOOD_FACTS_API=...
   }
 }
 ```
+
+---
+
+## Expo SDK 54 - Architecture Notes
+
+This project intentionally runs Expo SDK 54 with New Architecture disabled.
+
+### Why New Architecture is disabled
+- React Native 0.81 on macOS 15 (Xcode 15+) can trigger `Coroutine.h` and C++20 toolchain issues.
+- `react-native-worklets` has been removed.
+- `react-native-reanimated` stays on 3.x.
+- This configuration is known to build successfully on iOS and Android.
+
+### Important
+- Do not enable `RCT_NEW_ARCH_ENABLED`.
+- Do not upgrade `react-native-reanimated` to v4+.
+- Do not blindly apply `expo-doctor` version suggestions.
+
+If upgrading Expo SDK or React Native in the future, re-evaluate New Architecture in an isolated branch.
 
 ---
 
