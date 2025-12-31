@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { convertUnit } from '../../constants/dailyValues'; // Import the unit conversion helper
+import { IngredientsBreakdown } from './IngredientsBreakdown'; // 🆕 INGREDIENTS DISPLAY
 
 // Assuming fonts are defined globally or passed as props
 const fonts = {
@@ -163,6 +164,13 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }
               <View style={styles.micronutrientsGrid}>
                 {Object.entries(item.micros).map(([key, value]) => renderMicronutrient(key, value))}
               </View>
+            </View>
+          )}
+
+          {/* 🆕 INGREDIENTS BREAKDOWN - Shows individual ingredient nutrition from AI analysis */}
+          {item.ingredients && item.ingredients.length > 0 && (
+            <View style={styles.ingredientsSection}>
+              <IngredientsBreakdown ingredients={item.ingredients} />
             </View>
           )}
         </View>
@@ -371,5 +379,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#4B5563',
     fontFamily: fonts.regular,
+  },
+
+  // 🆕 INGREDIENTS SECTION
+  ingredientsSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
 });
