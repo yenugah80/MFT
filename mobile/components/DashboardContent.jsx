@@ -38,6 +38,8 @@ import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
 import DashboardPrimaryCard from "./dashboard/DashboardPrimaryCard";
+import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
+import SmartRecommendationsCard from "./dashboard/SmartRecommendationsCard";
 import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
@@ -197,6 +199,11 @@ export default function DashboardContent() {
   // Focus mode state - simplifies view to reduce cognitive load
   const [focusMode, setFocusMode] = useState(false);
 
+  // Recommendations state
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
   const { data: moodInsightsData, isLoading: moodInsightsLoading } = useMoodInsights({ windowDays: 30, trendDays: 7 });
@@ -235,6 +242,36 @@ export default function DashboardContent() {
       refetch();
     }, [refetch])
   );
+
+  // Load recommendations and user profile when dashboard data is available
+  const loadRecommendationsData = useCallback(async () => {
+    if (!data || isLoading) return;
+
+    setRecommendationsLoading(true);
+    try {
+      // Fetch user profile for personalization
+      const profileResponse = await apiClient.get('/profile/me');
+      if (profileResponse) {
+        setUserProfile(profileResponse);
+      }
+
+      // Fetch recommendations from backend
+      const recommendationsResponse = await apiClient.get('/recommendations');
+      if (recommendationsResponse?.recommendations) {
+        setRecommendations(recommendationsResponse.recommendations);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Failed to load recommendations:', error);
+      // Fail silently - recommendations are not critical to dashboard
+      setRecommendations([]);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }, [data, isLoading]);
+
+  useEffect(() => {
+    loadRecommendationsData();
+  }, [loadRecommendationsData]);
 
   // ============================================================================
   // GAMIFICATION LOGIC
@@ -956,6 +993,14 @@ export default function DashboardContent() {
         />
 
         {/* ============================================ */}
+        {/* REMAINING BUDGET CARD - Shows remaining nutrition budget */}
+        {/* ============================================ */}
+        <RemainingBudgetCard
+          today={today}
+          goals={goals}
+        />
+
+        {/* ============================================ */}
         {/* NUTRITION SECTION - Collapsible */}
         {/* ============================================ */}
         <DashboardNutritionSection
@@ -968,6 +1013,20 @@ export default function DashboardContent() {
           macroAssessment={macroAssessment}
           uniqueFoodLogs={uniqueFoodLogs}
           onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+        />
+
+        {/* ============================================ */}
+        {/* SMART RECOMMENDATIONS CARD - AI-powered suggestions */}
+        {/* ============================================ */}
+        <SmartRecommendationsCard
+          today={today}
+          goals={goals}
+          userProfile={userProfile}
+          recommendations={recommendations}
+          isLoading={recommendationsLoading}
+          onSelectRecommendation={(rec) => {
+            router.push({ pathname: '/(tabs)/log', params: { focus: 'meal', suggestion: rec.foodName } });
+          }}
         />
 
         {/* ============================================ */}

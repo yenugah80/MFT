@@ -26,6 +26,7 @@ import moodRouter from "./routes/mood.js";
 import waterRouter from "./routes/water.js";
 import apiMetricsRouter from "./routes/apiMetrics.js";
 import gamificationRouter from "./routes/gamificationRoutes.js";
+import recommendationsRouter from "./routes/recommendations.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 
 const app = express();
@@ -120,6 +121,9 @@ app.use("/api/metrics", apiMetricsRouter);
 
 // Mount Gamification Router
 app.use("/api/gamification", gamificationRouter);
+
+// Mount Recommendations Router
+app.use("/api/recommendations", recommendationsRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES
