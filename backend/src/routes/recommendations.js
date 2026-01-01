@@ -4,20 +4,25 @@
  * - User's remaining budget (calories, macros)
  * - Time of day
  * - Regional preferences
- * - Meal history
+ * - Meal history and recommendation acceptance patterns
+ * - User mood correlations
  */
 
 import express from 'express';
 import { requireAuth } from '@clerk/express';
-import { OpenAIClient } from '../services/apiClients/OpenAIClient.js';
+import { and, eq, gte, desc } from 'drizzle-orm';
+import { db } from '../config/db.js';
+import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { getProfile } from '../controllers/profileController.js';
+import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
+import { generateRecipeInstructions } from '../services/recipeService.js';
+import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
 
 const router = express.Router();
-const openAI = new OpenAIClient();
 
 /**
  * GET /api/recommendations
- * Get personalized food recommendations
+ * Get personalized food recommendations with history awareness
  */
 router.get('/', requireAuth(), async (req, res) => {
   try {
@@ -49,34 +54,40 @@ router.get('/', requireAuth(), async (req, res) => {
       water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
     };
 
-    // Determine recommendation type based on budget
-    const getRecommendationType = () => {
-      if (remainingBudget.protein > 50) return 'PROTEIN_BOOST';
-      if (remainingBudget.calories < 200) return 'LIGHT_SNACK';
-      if (remainingBudget.water > 1) return 'HYDRATION';
-      if (profile?.dietary?.cuisinePreference?.[0]) return 'REGIONAL_PICK';
-      return 'BALANCED_MEAL';
-    };
+    // Analyze recommendation history for personalization
+    const history = await analyzeRecommendationHistory(db, userId);
 
-    const recType = getRecommendationType();
+    // Determine recommendation type based on budget AND history
+    const recType = determineRecommendationType(remainingBudget, profile, history);
+
+    // Get meal type based on current hour
     const hour = new Date().getHours();
-    let mealType = 'snack';
-    if (hour >= 5 && hour < 11) mealType = 'breakfast';
-    else if (hour >= 11 && hour < 15) mealType = 'lunch';
-    else if (hour >= 17 && hour < 22) mealType = 'dinner';
+    const mealType = getMealType(hour);
 
-    // Generate recommendations using OpenAI
-    const recommendations = await generateRecommendations(
+    // Generate recommendations with enhanced AI
+    const recommendations = await generateEnhancedRecommendations(
       recType,
       mealType,
       remainingBudget,
       profile,
+      history,
       parseInt(limit)
     );
 
+    // Enrich with micronutrients and recipes
+    const enrichedRecommendations = await enrichRecommendations(recommendations);
+
+    // Save recommendations to history
+    await saveRecommendationsToHistory(db, userId, enrichedRecommendations, {
+      recType,
+      mealType,
+      remainingBudget,
+      hour
+    });
+
     res.json({
       success: true,
-      recommendations,
+      recommendations: enrichedRecommendations,
       remainingBudget,
       recommendationType: recType,
       mealType,
@@ -89,17 +100,302 @@ router.get('/', requireAuth(), async (req, res) => {
 });
 
 /**
- * Generate recommendations using AI
+ * GET /api/recommendations/:id
+ * Get detailed recommendation by ID
  */
-async function generateRecommendations(
+router.get('/:id', requireAuth(), async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { id } = req.params;
+
+    const recommendation = await db
+      .select()
+      .from(recommendationsHistoryTable)
+      .where(and(
+        eq(recommendationsHistoryTable.recommendationId, id),
+        eq(recommendationsHistoryTable.userId, userId)
+      ))
+      .limit(1);
+
+    if (!recommendation.length) {
+      return res.status(404).json({ error: 'Recommendation not found' });
+    }
+
+    // Mark as viewed
+    await db
+      .update(recommendationsHistoryTable)
+      .set({
+        interactionStatus: 'viewed',
+        viewedAt: new Date()
+      })
+      .where(eq(recommendationsHistoryTable.id, recommendation[0].id));
+
+    res.json(recommendation[0]);
+  } catch (error) {
+    console.error('[Recommendations] Get detail error:', error);
+    res.status(500).json({ error: 'Failed to fetch recommendation' });
+  }
+});
+
+/**
+ * POST /api/recommendations/:id/track
+ * Track user interaction with recommendation
+ */
+router.post('/:id/track', requireAuth(), async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { id } = req.params;
+    const { action, reason } = req.body;
+
+    const validActions = ['view', 'accept', 'reject', 'customize'];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    const updateData = {
+      interactionStatus: action === 'accept' ? 'accepted' :
+                         action === 'reject' ? 'rejected' :
+                         action === 'customize' ? 'customized' : 'viewed',
+      interactedAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    if (action === 'reject' && reason) {
+      updateData.rejectionReason = reason;
+    }
+
+    if (action === 'view') {
+      updateData.viewedAt = new Date();
+    }
+
+    await db
+      .update(recommendationsHistoryTable)
+      .set(updateData)
+      .where(and(
+        eq(recommendationsHistoryTable.recommendationId, id),
+        eq(recommendationsHistoryTable.userId, userId)
+      ));
+
+    res.json({ success: true, action });
+  } catch (error) {
+    console.error('[Recommendations] Track error:', error);
+    res.status(500).json({ error: 'Failed to track interaction' });
+  }
+});
+
+/**
+ * POST /api/recommendations/:id/accept
+ * Accept recommendation and add to food log
+ */
+router.post('/:id/accept', requireAuth(), async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { id } = req.params;
+    const { portion, mealType } = req.body;
+
+    // Fetch recommendation
+    const [rec] = await db
+      .select()
+      .from(recommendationsHistoryTable)
+      .where(and(
+        eq(recommendationsHistoryTable.recommendationId, id),
+        eq(recommendationsHistoryTable.userId, userId)
+      ))
+      .limit(1);
+
+    if (!rec) {
+      return res.status(404).json({ error: 'Recommendation not found' });
+    }
+
+    // Add to food log
+    const [foodLog] = await db
+      .insert(foodLogTable)
+      .values({
+        userId,
+        foodName: rec.foodName,
+        calories: rec.calories,
+        protein: rec.protein,
+        carbs: rec.carbs,
+        fats: rec.fats,
+        servingSize: portion || rec.portion,
+        mealType: mealType || rec.mealType,
+        micros: rec.micros,
+        sourceMeta: { source: 'recommendation', recId: id },
+        loggedDate: new Date()
+      })
+      .returning();
+
+    // Update recommendation history
+    await db
+      .update(recommendationsHistoryTable)
+      .set({
+        interactionStatus: 'accepted',
+        wasLogged: true,
+        loggedFoodId: foodLog.id,
+        loggedAt: new Date(),
+        interactedAt: new Date()
+      })
+      .where(eq(recommendationsHistoryTable.id, rec.id));
+
+    res.json({
+      success: true,
+      foodLog,
+      message: 'Added to food log'
+    });
+  } catch (error) {
+    console.error('[Recommendations] Accept error:', error);
+    res.status(500).json({ error: 'Failed to accept recommendation' });
+  }
+});
+
+/**
+ * GET /api/recommendations/history/list
+ * Get user's recommendation history with filters
+ */
+router.get('/history/list', requireAuth(), async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { days = 30, status, type, limit = 50 } = req.query;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+
+    let query = db
+      .select()
+      .from(recommendationsHistoryTable)
+      .where(and(
+        eq(recommendationsHistoryTable.userId, userId),
+        gte(recommendationsHistoryTable.shownAt, startDate)
+      ));
+
+    if (status) {
+      query = query.where(eq(recommendationsHistoryTable.interactionStatus, status));
+    }
+
+    if (type) {
+      query = query.where(eq(recommendationsHistoryTable.recommendationType, type));
+    }
+
+    const history = await query
+      .orderBy(desc(recommendationsHistoryTable.shownAt))
+      .limit(parseInt(limit));
+
+    // Calculate stats
+    const stats = {
+      total: history.length,
+      accepted: history.filter(r => r.interactionStatus === 'accepted').length,
+      rejected: history.filter(r => r.interactionStatus === 'rejected').length,
+      viewed: history.filter(r => r.interactionStatus === 'viewed').length,
+      acceptanceRate: 0
+    };
+
+    if (stats.total > 0) {
+      stats.acceptanceRate = ((stats.accepted / stats.total) * 100).toFixed(1);
+    }
+
+    res.json({ history, stats });
+  } catch (error) {
+    console.error('[Recommendations] History error:', error);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+/**
+ * Analyze user's recommendation history to improve personalization
+ */
+async function analyzeRecommendationHistory(db, userId) {
+  try {
+    const history = await db
+      .select()
+      .from(recommendationsHistoryTable)
+      .where(eq(recommendationsHistoryTable.userId, userId))
+      .limit(100);
+
+    if (!history.length) {
+      return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [] };
+    }
+
+    // Calculate acceptance patterns
+    const accepted = history.filter(r => r.interactionStatus === 'accepted');
+    const acceptanceRate = (accepted.length / history.length);
+
+    // Find preferred recommendation types
+    const typeCount = {};
+    for (const rec of accepted) {
+      typeCount[rec.recommendationType] = (typeCount[rec.recommendationType] || 0) + 1;
+    }
+    const preferredTypes = Object.entries(typeCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([type]) => type);
+
+    // Find preferred foods
+    const foodCount = {};
+    for (const rec of accepted) {
+      foodCount[rec.foodName] = (foodCount[rec.foodName] || 0) + 1;
+    }
+    const preferredFoods = Object.entries(foodCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([food]) => food);
+
+    return {
+      acceptanceRate,
+      preferredTypes,
+      preferredFoods,
+      totalRecommendations: history.length
+    };
+  } catch (error) {
+    console.error('[Recommendations] History analysis error:', error);
+    return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [] };
+  }
+}
+
+/**
+ * Determine recommendation type with history awareness
+ */
+function determineRecommendationType(remainingBudget, profile, history) {
+  // If user has strong preference based on history, respect it
+  if (history.preferredTypes?.length > 0) {
+    return history.preferredTypes[0];
+  }
+
+  // Otherwise use budget-based logic
+  if (remainingBudget.protein > 50) return 'PROTEIN_BOOST';
+  if (remainingBudget.calories < 200) return 'LIGHT_SNACK';
+  if (remainingBudget.water > 1) return 'HYDRATION';
+  if (profile?.dietary?.cuisinePreference?.[0]) return 'REGIONAL_PICK';
+  return 'BALANCED_MEAL';
+}
+
+/**
+ * Get meal type based on current hour
+ */
+function getMealType(hour) {
+  if (hour >= 5 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 15) return 'lunch';
+  if (hour >= 15 && hour < 17) return 'snack';
+  if (hour >= 17 && hour < 22) return 'dinner';
+  return 'snack';
+}
+
+/**
+ * Generate recommendations with enhanced AI using history
+ */
+async function generateEnhancedRecommendations(
   recType,
   mealType,
   remainingBudget,
   profile,
+  history,
   limit
 ) {
   const cuisinePreference = profile?.dietary?.cuisinePreference?.[0] || 'General';
   const region = profile?.dietary?.region || 'General';
+
+  // Build personalization context
+  const personalizationContext = history.preferredFoods?.length > 0 ?
+    `User previously accepted: ${history.preferredFoods.join(', ')}\n` : '';
 
   const prompt = `You are a personalized nutrition recommendation system.
 
@@ -111,6 +407,7 @@ User Profile:
 - Cuisine Preference: ${cuisinePreference}
 - Region: ${region}
 - Meal Type: ${mealType}
+${personalizationContext}
 
 Recommendation Type: ${recType}
 
@@ -133,7 +430,7 @@ For each recommendation include:
 Return as JSON array with objects: { foodName, portion, calories, protein, carbs, fats, reason, tips }`;
 
   try {
-    const response = await openAI.chatCompletionJSON(
+    const response = await openaiClient.chatCompletionJSON(
       [{ role: 'user', content: prompt }],
       { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 1000 }
     );
@@ -144,16 +441,136 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
     return recommendations.map((rec, idx) => ({
       id: `rec-${Date.now()}-${idx}`,
       title: getTitleForType(recType),
+      fiber: rec.fiber || 0,
+      sugar: rec.sugar || 0,
       ...rec,
       color: getColorForType(recType),
       rank: idx + 1,
-      timeToAdd: Math.max(5, 15 - idx * 2), // Minutes to log
+      timeToAdd: Math.max(5, 15 - idx * 2),
     }));
   } catch (error) {
     console.error('[Recommendations] AI generation failed:', error);
-    // Return fallback recommendations
     return getFallbackRecommendations(recType, mealType, remainingBudget, limit);
   }
+}
+
+/**
+ * Enrich recommendations with micronutrients and recipes
+ */
+async function enrichRecommendations(recommendations) {
+  const enriched = await Promise.all(
+    recommendations.map(async (rec) => {
+      try {
+        // Estimate micronutrients
+        const micros = await estimateMicronutrients(
+          rec.foodName,
+          rec.portion,
+          {
+            calories: rec.calories,
+            protein: rec.protein,
+            carbs: rec.carbs,
+            fats: rec.fats
+          }
+        );
+
+        // Get significant micronutrients (>10% DV)
+        const significantMicros = getSignificantMicronutrients(micros);
+
+        // Generate recipe instructions
+        const recipe = await generateRecipeInstructions(rec.foodName, rec.portion);
+
+        return {
+          ...rec,
+          micros: significantMicros,
+          prepTimeMinutes: recipe.prepTimeMinutes,
+          cookTimeMinutes: recipe.cookTimeMinutes,
+          recipeInstructions: recipe.instructions,
+          difficulty: recipe.difficulty
+        };
+      } catch (error) {
+        console.error('[Recommendations] Enrichment error for:', rec.foodName, error);
+        // Return recommendation without enrichment if error occurs
+        return rec;
+      }
+    })
+  );
+
+  return enriched;
+}
+
+/**
+ * Save recommendations to history table for tracking
+ */
+async function saveRecommendationsToHistory(db, userId, recommendations, context) {
+  try {
+    const hour = context.hour;
+    const remainingBudget = context.remainingBudget;
+
+    for (const rec of recommendations) {
+      await db.insert(recommendationsHistoryTable).values({
+        userId,
+        recommendationId: rec.id,
+        foodName: rec.foodName,
+        portion: rec.portion,
+        calories: rec.calories,
+        protein: rec.protein,
+        carbs: rec.carbs,
+        fats: rec.fats,
+        fiber: rec.fiber || 0,
+        sugar: rec.sugar || 0,
+        micros: rec.micros || {},
+        recommendationType: context.recType,
+        reason: rec.reason,
+        tips: rec.tips,
+        prepTimeMinutes: rec.prepTimeMinutes || 10,
+        recipeInstructions: rec.recipeInstructions || '',
+        mealType: context.mealType,
+        timeOfDay: hour,
+        remainingCalories: remainingBudget.calories,
+        remainingProtein: remainingBudget.protein,
+        remainingCarbs: remainingBudget.carbs,
+        remainingFats: remainingBudget.fats,
+        interactionStatus: 'shown',
+        aiGenerated: true,
+        aiModel: 'gpt-4o-mini',
+        aiConfidence: 0.85,
+        personalizationScore: calculatePersonalizationScore(rec, remainingBudget),
+        createdAt: new Date()
+      }).catch(err => {
+        // Ignore constraint violations (duplicate recommendations)
+        if (!err.message.includes('unique')) {
+          throw err;
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[Recommendations] Failed to save history:', error);
+    // Don't fail the request if history saving fails
+  }
+}
+
+/**
+ * Calculate personalization score (0.00 - 1.00)
+ */
+function calculatePersonalizationScore(recommendation, remainingBudget) {
+  let score = 0.5; // Base score
+
+  // Adjust based on calorie fit
+  if (recommendation.calories <= remainingBudget.calories * 0.8) {
+    score += 0.2;
+  }
+
+  // Adjust based on protein fit
+  if (recommendation.protein > 15 && recommendation.protein <= remainingBudget.protein * 0.8) {
+    score += 0.2;
+  }
+
+  // Adjust based on macro balance
+  if (recommendation.carbs > 0 && recommendation.fats > 0) {
+    score += 0.1;
+  }
+
+  return Math.min(1.0, score);
 }
 
 /**

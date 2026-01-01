@@ -26,6 +26,7 @@ export const SURFACES = {
     glass: 'rgba(255, 255, 255, 0.9)',
     glassDark: 'rgba(107, 78, 255, 0.05)',
     overlay: 'rgba(0, 0, 0, 0.5)',
+    border: 'rgba(107, 78, 255, 0.1)',
   },
   gradient: {
     primary: ['#6B4EFF', '#8B6EFF'],

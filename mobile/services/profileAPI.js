@@ -1,5 +1,5 @@
 // File: mobile/services/profileAPI.js
-// Production-grade Profile API service with comprehensive error handling
+// Production-grade Profile API service with comprehensive error handling & auto token refresh
 
 import { API_URL } from "../constants/api";
 
@@ -32,23 +32,63 @@ const parseErrorResponse = async (response) => {
 };
 
 /**
+ * Helper to refresh token and retry a request (auto token refresh)
+ * @param {Function} getToken - Callback to get fresh token from Clerk
+ * @param {Function} requestFn - Async function that makes the API request
+ * @returns {Promise<Response>} Response from the API request
+ */
+const refreshTokenAndRetry = async (getToken, requestFn) => {
+  try {
+    // Get a fresh token
+    const freshToken = await getToken({ template: "backend", skipCache: true });
+
+    if (!freshToken) {
+      console.warn('[ProfileAPI] Failed to refresh token');
+      return null;
+    }
+
+    console.log('[ProfileAPI] Token refreshed, retrying request...');
+
+    // Retry the request with fresh token
+    return await requestFn(freshToken);
+  } catch (error) {
+    console.error('[ProfileAPI] Token refresh failed:', error.message);
+    return null;
+  }
+};
+
+/**
  * Fetch complete user profile from database
  * @param {string} token - Clerk auth token
+ * @param {Function} getToken - Optional callback to refresh token on 401
  * @returns {Promise<Object|null>} Profile data with basics, dietary, goals, gamification
  * @throws {ProfileAPIError} On network or server errors
  */
-export const fetchUserProfile = async (token) => {
+export const fetchUserProfile = async (token, getToken = null) => {
   try {
     if (!token) {
       throw new ProfileAPIError("Authentication token is required", 401);
     }
 
-    const response = await fetch(`${API_URL}/profile/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-    });
+    const makeRequest = async (currentToken) => {
+      return fetch(`${API_URL}/profile/me`, {
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+          'Accept': 'application/json'
+        },
+      });
+    };
+
+    let response = await makeRequest(token);
+
+    // Auto-refresh on 401 if getToken callback is provided
+    if (response.status === 401 && getToken) {
+      console.warn('[ProfileAPI] Received 401, attempting token refresh...');
+      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
+      if (retryResponse) {
+        response = retryResponse;
+      }
+    }
 
     // Handle 404 - profile doesn't exist yet
     if (response.status === 404) {
@@ -103,10 +143,11 @@ export const fetchUserProfile = async (token) => {
  * Save personal information (basics section)
  * @param {string} token - Clerk auth token
  * @param {Object} basicsData - { fullName, email, gender, age, weightKg, heightCm, activityLevel }
+ * @param {Function} getToken - Optional callback to refresh token on 401
  * @returns {Promise<Object>} Updated profile basics
  * @throws {ProfileAPIError} On validation or server errors
  */
-export const saveProfileBasics = async (token, basicsData) => {
+export const saveProfileBasics = async (token, basicsData, getToken = null) => {
   try {
     if (!token) {
       throw new ProfileAPIError("Authentication token is required", 401);
@@ -116,15 +157,28 @@ export const saveProfileBasics = async (token, basicsData) => {
       throw new ProfileAPIError("Invalid profile data", 400);
     }
 
-    const response = await fetch(`${API_URL}/profile/basics`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(basicsData),
-    });
+    const makeRequest = async (currentToken) => {
+      return fetch(`${API_URL}/profile/basics`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(basicsData),
+      });
+    };
+
+    let response = await makeRequest(token);
+
+    // Auto-refresh on 401 if getToken callback is provided
+    if (response.status === 401 && getToken) {
+      console.warn('[ProfileAPI] Received 401, attempting token refresh...');
+      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
+      if (retryResponse) {
+        response = retryResponse;
+      }
+    }
 
     if (!response.ok) {
       const errorData = await parseErrorResponse(response);
@@ -160,24 +214,38 @@ export const saveProfileBasics = async (token, basicsData) => {
  * Save dietary preferences
  * @param {string} token - Clerk auth token
  * @param {Object} dietaryData - { preferences[], allergies[], dislikes[] }
+ * @param {Function} getToken - Optional callback to refresh token on 401
  * @returns {Promise<Object>} Updated dietary preferences
  * @throws {ProfileAPIError} On validation or server errors
  */
-export const saveDietaryPreferences = async (token, dietaryData) => {
+export const saveDietaryPreferences = async (token, dietaryData, getToken = null) => {
   try {
     if (!token) {
       throw new ProfileAPIError("Authentication token is required", 401);
     }
 
-    const response = await fetch(`${API_URL}/profile/dietary`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(dietaryData),
-    });
+    const makeRequest = async (currentToken) => {
+      return fetch(`${API_URL}/profile/dietary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(dietaryData),
+      });
+    };
+
+    let response = await makeRequest(token);
+
+    // Auto-refresh on 401 if getToken callback is provided
+    if (response.status === 401 && getToken) {
+      console.warn('[ProfileAPI] Received 401, attempting token refresh...');
+      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
+      if (retryResponse) {
+        response = retryResponse;
+      }
+    }
 
     if (!response.ok) {
       const errorData = await parseErrorResponse(response);
@@ -209,24 +277,38 @@ export const saveDietaryPreferences = async (token, dietaryData) => {
  * Save nutrition goals
  * @param {string} token - Clerk auth token
  * @param {Object} goalsData - { primaryGoal, dailyCalories, proteinG, carbsG, fatsG, waterLiters }
+ * @param {Function} getToken - Optional callback to refresh token on 401
  * @returns {Promise<Object>} Updated nutrition goals
  * @throws {ProfileAPIError} On validation or server errors
  */
-export const saveNutritionGoals = async (token, goalsData) => {
+export const saveNutritionGoals = async (token, goalsData, getToken = null) => {
   try {
     if (!token) {
       throw new ProfileAPIError("Authentication token is required", 401);
     }
 
-    const response = await fetch(`${API_URL}/nutrition/goals`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(goalsData),
-    });
+    const makeRequest = async (currentToken) => {
+      return fetch(`${API_URL}/nutrition/goals`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(goalsData),
+      });
+    };
+
+    let response = await makeRequest(token);
+
+    // Auto-refresh on 401 if getToken callback is provided
+    if (response.status === 401 && getToken) {
+      console.warn('[ProfileAPI] Received 401, attempting token refresh...');
+      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
+      if (retryResponse) {
+        response = retryResponse;
+      }
+    }
 
     if (!response.ok) {
       const errorData = await parseErrorResponse(response);
@@ -258,24 +340,38 @@ export const saveNutritionGoals = async (token, goalsData) => {
  * Save gamification stats (XP, level, badges)
  * @param {string} token - Clerk auth token
  * @param {Object} gamificationData - { xp, level, streak, badges[] }
+ * @param {Function} getToken - Optional callback to refresh token on 401
  * @returns {Promise<Object>} Updated gamification stats
  * @throws {ProfileAPIError} On validation or server errors
  */
-export const saveGamificationStats = async (token, gamificationData) => {
+export const saveGamificationStats = async (token, gamificationData, getToken = null) => {
   try {
     if (!token) {
       throw new ProfileAPIError("Authentication token is required", 401);
     }
 
-    const response = await fetch(`${API_URL}/profile/gamification`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(gamificationData),
-    });
+    const makeRequest = async (currentToken) => {
+      return fetch(`${API_URL}/profile/gamification`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(gamificationData),
+      });
+    };
+
+    let response = await makeRequest(token);
+
+    // Auto-refresh on 401 if getToken callback is provided
+    if (response.status === 401 && getToken) {
+      console.warn('[ProfileAPI] Received 401, attempting token refresh...');
+      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
+      if (retryResponse) {
+        response = retryResponse;
+      }
+    }
 
     if (!response.ok) {
       const errorData = await parseErrorResponse(response);

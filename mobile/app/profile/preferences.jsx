@@ -34,14 +34,24 @@ export default function PreferencesScreen() {
   }, []);
 
   const persistPreferences = async (nextState) => {
+    // Store old state for rollback on error
+    const oldState = { autoAnalyze, hapticFeedback, metricUnits };
+
+    // Optimistic update
     setIsSaving(true);
     setAutoAnalyze(nextState.autoAnalyze);
     setHapticFeedback(nextState.hapticFeedback);
     setMetricUnits(nextState.metricUnits);
+
     try {
       await apiClient.post("/profile/preferences", { preferences: nextState });
+      console.log("[PreferencesScreen] Settings saved successfully");
     } catch (error) {
       console.error("[PreferencesScreen] Failed to save settings", error);
+      // Rollback on error
+      setAutoAnalyze(oldState.autoAnalyze);
+      setHapticFeedback(oldState.hapticFeedback);
+      setMetricUnits(oldState.metricUnits);
     } finally {
       setIsSaving(false);
     }

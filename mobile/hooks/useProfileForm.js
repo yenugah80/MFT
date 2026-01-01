@@ -160,8 +160,8 @@ export default function useProfileForm(user) {
 
   // Helper to bootstrap profile (runs only once)
   const bootstrapProfile = async (user, token) => {
-    // Try to fetch profile
-    const profile = await fetchUserProfile(token);
+    // Try to fetch profile with auto-refresh support
+    const profile = await fetchUserProfile(token, getToken);
     if (profile) {
       return profile;
     }
@@ -174,7 +174,7 @@ export default function useProfileForm(user) {
         email: user.primaryEmailAddress?.emailAddress || "",
       },
     };
-    await saveProfileBasics(token, sanitizeBasicsForApi(profileWithUser.basics));
+    await saveProfileBasics(token, sanitizeBasicsForApi(profileWithUser.basics), getToken);
     return profileWithUser;
   };
 
@@ -267,7 +267,7 @@ export default function useProfileForm(user) {
     async (section) => {
       // Validate
       const errors = validateSection(section, state.draft[section]);
-      
+
       if (hasValidationErrors(errors)) {
         dispatch({ type: ACTIONS.SET_ERROR, payload: errors });
         Alert.alert(
@@ -282,19 +282,19 @@ export default function useProfileForm(user) {
       try {
         const token = await getToken({ template: "backend" });
         const dataToSave = state.draft[section];
-        
+
         switch (section) {
           case 'basics':
-            await saveProfileBasics(token, sanitizeBasicsForApi(dataToSave));
+            await saveProfileBasics(token, sanitizeBasicsForApi(dataToSave), getToken);
             break;
           case 'dietary':
-            await saveDietaryPreferences(token, sanitizeDietaryForApi(dataToSave));
+            await saveDietaryPreferences(token, sanitizeDietaryForApi(dataToSave), getToken);
             break;
           case 'goals':
-            await saveNutritionGoals(token, sanitizeGoalsForApi(dataToSave));
+            await saveNutritionGoals(token, sanitizeGoalsForApi(dataToSave), getToken);
             break;
           case 'gamification':
-            await saveGamificationStats(token, dataToSave);
+            await saveGamificationStats(token, dataToSave, getToken);
             break;
           default:
             throw new Error(`Unknown section: ${section}`);
@@ -310,15 +310,8 @@ export default function useProfileForm(user) {
       } catch (error) {
         console.error("Save section error:", error);
 
-        // Detect 401 Unauthorized (Stale Token)
-        if (error.message && error.message.includes('401')) {
-          Alert.alert(
-            "Session Expired", 
-            "Your security keys have changed. Please Sign Out and Sign In again to refresh your session."
-          );
-        } else {
-          Alert.alert("Error", "Failed to save profile. Please try again.");
-        }
+        // Auto token refresh handles 401 automatically, so this is a real error
+        Alert.alert("Error", error.message || "Failed to save profile. Please try again.");
 
         dispatch({
           type: ACTIONS.SAVE_SECTION_ERROR,

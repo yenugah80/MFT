@@ -84,6 +84,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
     shadowColor: BRAND.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

@@ -1,5 +1,15 @@
 {
-  "ios": {
-    "bundleIdentifier": "com.harikay.myfoodtracker-main"
+  "expo": {
+    "name": "My-Food-Tracker",
+    "slug": "my-food-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./mobile/assets/styles/images/adaptive-icon.png",
+    "scheme": "my-food-tracker",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "bundleIdentifier": "com.harikay.myfoodtracker-main"
+    }
   }
 }

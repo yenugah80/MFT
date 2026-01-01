@@ -40,6 +40,7 @@ import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
 import DashboardPrimaryCard from "./dashboard/DashboardPrimaryCard";
 import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
 import SmartRecommendationsCard from "./dashboard/SmartRecommendationsCard";
+import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
 import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
@@ -204,6 +205,11 @@ export default function DashboardContent() {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
 
+  // Recommendation detail modal state
+  const [selectedRecommendation, setSelectedRecommendation] = useState(null);
+  const [recommendationModalVisible, setRecommendationModalVisible] = useState(false);
+  const [acceptingRecommendation, setAcceptingRecommendation] = useState(false);
+
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
   const { data: moodInsightsData, isLoading: moodInsightsLoading } = useMoodInsights({ windowDays: 30, trendDays: 7 });
@@ -268,6 +274,62 @@ export default function DashboardContent() {
       setRecommendationsLoading(false);
     }
   }, [data, isLoading]);
+
+  // Track recommendation view interaction
+  const trackRecommendationView = useCallback(async (recommendationId) => {
+    try {
+      await apiClient.post(`/recommendations/${recommendationId}/track`, {
+        action: 'view'
+      });
+    } catch (error) {
+      console.error('[Dashboard] Failed to track recommendation view:', error);
+      // Fail silently - tracking is not critical
+    }
+  }, []);
+
+  // Accept recommendation and add to food log
+  const handleAcceptRecommendation = useCallback(async (recommendation) => {
+    try {
+      setAcceptingRecommendation(true);
+
+      const response = await apiClient.post(
+        `/recommendations/${recommendation.id}/accept`,
+        {
+          portion: recommendation.portion,
+          mealType: recommendation.mealType
+        }
+      );
+
+      notify.success('Added to food log!');
+      setRecommendationModalVisible(false);
+      setSelectedRecommendation(null);
+
+      // Refresh dashboard to show updated nutrition
+      await refetch();
+    } catch (error) {
+      console.error('[Dashboard] Failed to accept recommendation:', error);
+      notify.error(error?.response?.data?.error || 'Failed to add to log');
+    } finally {
+      setAcceptingRecommendation(false);
+    }
+  }, [refetch, notify]);
+
+  // Reject recommendation
+  const handleRejectRecommendation = useCallback(async (recommendation, reason) => {
+    try {
+      await apiClient.post(`/recommendations/${recommendation.id}/track`, {
+        action: 'reject',
+        reason
+      });
+
+      notify.info('Thanks for the feedback!');
+      setRecommendationModalVisible(false);
+      setSelectedRecommendation(null);
+    } catch (error) {
+      console.error('[Dashboard] Failed to reject recommendation:', error);
+      // Fail silently - rejection tracking is not critical
+    }
+  }, [notify]);
 
   useEffect(() => {
     loadRecommendationsData();
@@ -1025,8 +1087,12 @@ export default function DashboardContent() {
           recommendations={recommendations}
           isLoading={recommendationsLoading}
           onSelectRecommendation={(rec) => {
-            router.push({ pathname: '/(tabs)/log', params: { focus: 'meal', suggestion: rec.foodName } });
+            setSelectedRecommendation(rec);
+            setRecommendationModalVisible(true);
+            // Track view interaction
+            trackRecommendationView(rec.id);
           }}
+          onRefresh={loadRecommendationsData}
         />
 
         {/* ============================================ */}
@@ -1294,6 +1360,22 @@ export default function DashboardContent() {
         waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
         onWaterLogged={() => refetch()}
         onMoodLogged={handleMoodLogged}
+      />
+
+      {/* Recommendation Detail Modal */}
+      <RecommendationDetailModal
+        visible={recommendationModalVisible}
+        recommendation={selectedRecommendation}
+        onClose={() => {
+          setRecommendationModalVisible(false);
+          setSelectedRecommendation(null);
+        }}
+        onAccept={handleAcceptRecommendation}
+        onReject={handleRejectRecommendation}
+        onSaveForLater={(rec) => {
+          notify.info('Saved for later!');
+          setRecommendationModalVisible(false);
+        }}
       />
     </>
   );

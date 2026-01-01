@@ -163,6 +163,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     borderRadius: RADIUS['2xl'],
     padding: SPACING[5],
+    backgroundColor: '#FFFFFF',
     ...Platform.select({
       ios: {
         shadowColor: '#000',

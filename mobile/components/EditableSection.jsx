@@ -1,10 +1,14 @@
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { useEffect, useRef, useState } from "react";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../constants/premiumTheme";
+import SaveSuccessAnimation from "./profile/SaveSuccessAnimation";
+import { createFadeSlideAnimation, ANIMATION_TIMING } from "../utils/profileAnimations";
 
 /**
- * EditableSection Component - Premium Version
+ * EditableSection Component - Premium Version with Animations
  * Wrapper for profile sections with edit/save/cancel actions
  */
 export default function EditableSection({
@@ -16,8 +20,65 @@ export default function EditableSection({
   children,
   isSaving = false,
 }) {
+  const contentAnim = useRef(createFadeSlideAnimation(20, ANIMATION_TIMING.normal)).current;
+  const [showSuccess, setShowSuccess] = useState(false);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Trigger animation when entering edit mode
+  useEffect(() => {
+    if (isEditing) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      contentAnim.start();
+    }
+  }, [isEditing]);
+
+  const handleSave = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await onSave?.();
+      setShowSuccess(true);
+    } catch (error) {
+      // Show shake animation on error
+      Animated.sequence([
+        Animated.timing(shakeAnim, {
+          toValue: 10,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnim, {
+          toValue: -10,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnim, {
+          toValue: 0,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const handleCancel = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onCancel?.();
+  };
+
+  const handleToggleEdit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onToggleEdit?.();
+  };
+
   return (
-    <View style={styles.card}>
+    <Animated.View
+      style={[
+        styles.card,
+        {
+          transform: [{ translateX: shakeAnim }],
+        },
+      ]}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
 
@@ -26,7 +87,7 @@ export default function EditableSection({
             <>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={onCancel}
+                onPress={handleCancel}
                 disabled={isSaving}
                 activeOpacity={0.7}
               >
@@ -34,7 +95,7 @@ export default function EditableSection({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveButton}
-                onPress={onSave}
+                onPress={handleSave}
                 disabled={isSaving}
                 activeOpacity={0.8}
               >
@@ -58,7 +119,7 @@ export default function EditableSection({
           ) : (
             <TouchableOpacity
               style={styles.editButton}
-              onPress={onToggleEdit}
+              onPress={handleToggleEdit}
               activeOpacity={0.7}
             >
               <Ionicons name="create-outline" size={ICON_SIZES.sm} color={BRAND.primary} />
@@ -68,10 +129,26 @@ export default function EditableSection({
         </View>
       </View>
 
-      <View style={styles.content}>
-        {children}
-      </View>
-    </View>
+      {isEditing && (
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: contentAnim.opacityValue,
+              transform: [{ translateY: contentAnim.slideValue }],
+            },
+          ]}
+        >
+          {children}
+        </Animated.View>
+      )}
+      {!isEditing && <View style={styles.content}>{children}</View>}
+
+      <SaveSuccessAnimation
+        visible={showSuccess}
+        onComplete={() => setShowSuccess(false)}
+      />
+    </Animated.View>
   );
 }
 

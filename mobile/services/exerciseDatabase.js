@@ -223,7 +223,7 @@ export const EXERCISES = [
     id: 'hiking',
     name: 'Hiking',
     category: EXERCISE_CATEGORIES.WALKING,
-    icon: 'mountain',
+    icon: 'walk',
     caloriesPer30Min: 210,
     description: 'Trail hiking with elevation',
     met: 6.0,

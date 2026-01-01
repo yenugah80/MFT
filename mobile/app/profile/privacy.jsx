@@ -34,14 +34,24 @@ export default function PrivacyScreen() {
   }, []);
 
   const persistPrivacy = async (nextState) => {
+    // Store old state for rollback on error
+    const oldState = { shareInsights, analytics, biometricLock };
+
+    // Optimistic update
     setIsSaving(true);
     setShareInsights(nextState.shareInsights);
     setAnalytics(nextState.analytics);
     setBiometricLock(nextState.biometricLock);
+
     try {
       await apiClient.post("/profile/privacy", { privacy: nextState });
+      console.log("[PrivacyScreen] Settings saved successfully");
     } catch (error) {
       console.error("[PrivacyScreen] Failed to save settings", error);
+      // Rollback on error
+      setShareInsights(oldState.shareInsights);
+      setAnalytics(oldState.analytics);
+      setBiometricLock(oldState.biometricLock);
     } finally {
       setIsSaving(false);
     }

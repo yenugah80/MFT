@@ -36,15 +36,26 @@ export default function NotificationsScreen() {
   }, []);
 
   const persistNotifications = async (nextState) => {
+    // Store old state for rollback on error
+    const oldState = { dailyReminder, hydrationNudges, insightDrops, streakCelebrations };
+
+    // Optimistic update
     setIsSaving(true);
     setDailyReminder(nextState.dailyReminder);
     setHydrationNudges(nextState.hydrationNudges);
     setInsightDrops(nextState.insightDrops);
     setStreakCelebrations(nextState.streakCelebrations);
+
     try {
       await apiClient.post("/profile/notifications", { notifications: nextState });
+      console.log("[NotificationsScreen] Settings saved successfully");
     } catch (error) {
       console.error("[NotificationsScreen] Failed to save settings", error);
+      // Rollback on error
+      setDailyReminder(oldState.dailyReminder);
+      setHydrationNudges(oldState.hydrationNudges);
+      setInsightDrops(oldState.insightDrops);
+      setStreakCelebrations(oldState.streakCelebrations);
     } finally {
       setIsSaving(false);
     }

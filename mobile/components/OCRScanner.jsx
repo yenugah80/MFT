@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as MLKitOcr from 'expo-mlkit-ocr';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NutritionCard from './NutritionCard';
-import { API_CONFIG } from '../config/apiConfig';
+import { API_URL } from '../constants/api';
 
 export default function OCRScanner({ navigation }) {
   const [image, setImage] = useState(null);
@@ -96,7 +96,7 @@ export default function OCRScanner({ navigation }) {
   const handleAnalyze = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ANALYZE_OCR}`, {
+      const response = await fetch(`${API_URL}/analyze-ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

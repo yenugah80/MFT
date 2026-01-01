@@ -1,9 +1,10 @@
 /**
  * SmartRecommendationsCard - AI-powered personalized food recommendations
  * Based on remaining budget, time of day, and user preferences
+ * Enhanced with animations, pull-to-refresh, and loading states
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,9 +12,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Animated,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { BRAND, SURFACES, TEXT, SPACING, SHADOWS } from '../../constants/premiumTheme';
 
 const RECOMMENDATION_TYPES = {
@@ -56,8 +60,31 @@ export default function SmartRecommendationsCard({
   recommendations = [],
   isLoading = false,
   onSelectRecommendation,
+  onRefresh,
 }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const fadeAnims = useRef(recommendations.map(() => new Animated.Value(0))).current;
+
   const nutrition = today?.nutrition || {};
+
+  // Animate cards on load
+  useEffect(() => {
+    if (!isLoading && recommendations.length > 0) {
+      // Staggered animation for each card
+      Animated.stagger(80,
+        fadeAnims.slice(0, recommendations.length).map(anim =>
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true
+          })
+        )
+      ).start();
+    } else if (recommendations.length === 0) {
+      // Reset animations if no recommendations
+      fadeAnims.forEach(anim => anim.setValue(0));
+    }
+  }, [isLoading, recommendations.length]);
 
   // Determine primary recommendation based on remaining budget
   const primaryRecommendation = useMemo(() => {
@@ -73,6 +100,24 @@ export default function SmartRecommendationsCard({
     return RECOMMENDATION_TYPES.BALANCED_MEAL;
   }, [nutrition, goals, today, userProfile]);
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      if (onRefresh) {
+        await onRefresh();
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (error) {
+      console.error('[SmartRecommendationsCard] Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const getTimeOfDayMessage = () => {
     const hour = new Date().getHours();
     if (hour < 12) return '🌅 Breakfast recommendations';
@@ -82,41 +127,58 @@ export default function SmartRecommendationsCard({
   };
 
   const RecommendationItem = ({ rec, index }) => (
-    <TouchableOpacity
-      key={index}
-      style={styles.recCard}
-      onPress={() => onSelectRecommendation?.(rec)}
-      activeOpacity={0.8}
+    <Animated.View
+      style={[
+        styles.recCardWrapper,
+        {
+          opacity: fadeAnims[index] || 0,
+          transform: [{
+            translateY: (fadeAnims[index] || new Animated.Value(0)).interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })
+          }]
+        }
+      ]}
     >
-      <LinearGradient
-        colors={rec.color || primaryRecommendation.color}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.recGradient}
+      <TouchableOpacity
+        style={styles.recCard}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onSelectRecommendation?.(rec);
+        }}
+        activeOpacity={0.8}
       >
-        <View style={styles.recContent}>
-          <View style={styles.recHeader}>
-            <Text style={styles.recTitle}>{rec.title}</Text>
-            <Ionicons name="chevron-forward" size={20} color={TEXT.white} />
+        <LinearGradient
+          colors={rec.color || primaryRecommendation.color}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.recGradient}
+        >
+          <View style={styles.recContent}>
+            <View style={styles.recHeader}>
+              <Text style={styles.recTitle}>{rec.title}</Text>
+              <Ionicons name="chevron-forward" size={20} color={TEXT.white} />
+            </View>
+
+            <Text style={styles.recFoodName}>{rec.foodName}</Text>
+
+            <View style={styles.recNutrition}>
+              <Text style={styles.recNutritionItem}>
+                <Ionicons name="flame-outline" size={12} /> {rec.calories} cal
+              </Text>
+              <Text style={styles.recNutritionItem}>
+                <Ionicons name="barbell-outline" size={12} /> {rec.protein}g protein
+              </Text>
+            </View>
+
+            {rec.reason && (
+              <Text style={styles.recReason}>💡 {rec.reason}</Text>
+            )}
           </View>
-
-          <Text style={styles.recFoodName}>{rec.foodName}</Text>
-
-          <View style={styles.recNutrition}>
-            <Text style={styles.recNutritionItem}>
-              <Ionicons name="flame-outline" size={12} /> {rec.calories} cal
-            </Text>
-            <Text style={styles.recNutritionItem}>
-              <Ionicons name="barbell-outline" size={12} /> {rec.protein}g protein
-            </Text>
-          </View>
-
-          {rec.reason && (
-            <Text style={styles.recReason}>💡 {rec.reason}</Text>
-          )}
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   if (isLoading) {
@@ -132,9 +194,34 @@ export default function SmartRecommendationsCard({
 
   return (
     <View style={styles.container}>
+      {/* Header with refresh button */}
       <View style={styles.headerSection}>
-        <Ionicons name="sparkles-outline" size={24} color={BRAND.primary} />
-        <Text style={styles.sectionTitle}>Smart Recommendations</Text>
+        <View style={styles.headerLeft}>
+          <Ionicons name="sparkles-outline" size={24} color={BRAND.primary} />
+          <Text style={styles.sectionTitle}>Smart Recommendations</Text>
+        </View>
+        <TouchableOpacity
+          onPress={handleRefresh}
+          disabled={refreshing || isLoading}
+          style={styles.refreshButton}
+          activeOpacity={0.6}
+        >
+          <Animated.View
+            style={[
+              refreshing && {
+                transform: [{
+                  rotate: refreshing ? '360deg' : '0deg'
+                }]
+              }
+            ]}
+          >
+            <MaterialIcons
+              name="refresh"
+              size={20}
+              color={refreshing ? BRAND.primary : TEXT.secondary}
+            />
+          </Animated.View>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.timeMessage}>{getTimeOfDayMessage()}</Text>
@@ -144,16 +231,24 @@ export default function SmartRecommendationsCard({
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={BRAND.primary}
+          />
+        }
       >
         {recommendations && recommendations.length > 0 ? (
           recommendations.map((rec, index) => (
-            <RecommendationItem key={index} rec={rec} index={index} />
+            <RecommendationItem key={rec.id || index} rec={rec} index={index} />
           ))
         ) : (
           // Default recommendations if none provided
           <>
             <RecommendationItem
               rec={{
+                id: 'default-1',
                 title: primaryRecommendation.title,
                 foodName: 'Grilled Chicken Breast',
                 calories: 165,
@@ -165,6 +260,7 @@ export default function SmartRecommendationsCard({
             />
             <RecommendationItem
               rec={{
+                id: 'default-2',
                 title: '🥗 Balanced Meal',
                 foodName: 'Quinoa Buddha Bowl',
                 calories: 280,
@@ -176,6 +272,7 @@ export default function SmartRecommendationsCard({
             />
             <RecommendationItem
               rec={{
+                id: 'default-3',
                 title: '🍎 Light Snack',
                 foodName: 'Greek Yogurt',
                 calories: 100,
@@ -230,14 +327,24 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.md,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: TEXT.primary,
     marginLeft: SPACING.sm,
+  },
+  refreshButton: {
+    padding: SPACING.sm,
+    marginLeft: SPACING.md,
   },
   timeMessage: {
     fontSize: 13,
@@ -249,8 +356,11 @@ const styles = StyleSheet.create({
     paddingRight: SPACING.md,
     gap: SPACING.md,
   },
-  recCard: {
+  recCardWrapper: {
     width: 280,
+  },
+  recCard: {
+    width: '100%',
     borderRadius: 14,
     overflow: 'hidden',
     ...SHADOWS.md,

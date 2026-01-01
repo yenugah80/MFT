@@ -457,6 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     shadowColor: '#EF4444',
     // shadowColor: isRecording ? '#EF4444' : '#6B4EFF', // You could animate this color
     shadowOffset: { width: 0, height: 4 },

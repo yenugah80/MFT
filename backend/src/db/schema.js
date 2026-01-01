@@ -487,3 +487,75 @@ export const activityLevelsTable = pgTable("activity_levels", {
   updatedAt: timestamp("updated_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Recommendations history table - tracks all recommendations shown and user interactions
+export const recommendationsHistoryTable = pgTable(
+  "recommendations_history",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    recommendationId: text("recommendation_id").notNull().unique(),
+
+    // Recommendation Content
+    foodName: text("food_name").notNull(),
+    portion: text("portion"),
+    calories: integer("calories").notNull(),
+    protein: integer("protein").notNull(),
+    carbs: integer("carbs").notNull(),
+    fats: integer("fats").notNull(),
+    fiber: integer("fiber").default(0),
+    sugar: integer("sugar").default(0),
+
+    // Micronutrients (JSON for flexibility)
+    micros: json("micros").default({}),
+
+    // Recommendation Metadata
+    recommendationType: text("recommendation_type").notNull(), // PROTEIN_BOOST, LIGHT_SNACK, HYDRATION, REGIONAL_PICK, BALANCED_MEAL
+    reason: text("reason"),
+    tips: text("tips"),
+    prepTimeMinutes: integer("prep_time_minutes"),
+    recipeInstructions: text("recipe_instructions"),
+
+    // Context at Time of Recommendation
+    mealType: text("meal_type"), // breakfast, lunch, dinner, snack
+    timeOfDay: integer("time_of_day"), // Hour of day (0-23)
+    remainingCalories: integer("remaining_calories"),
+    remainingProtein: integer("remaining_protein"),
+    remainingCarbs: integer("remaining_carbs"),
+    remainingFats: integer("remaining_fats"),
+
+    // User Interaction Tracking
+    interactionStatus: text("interaction_status").default("shown"), // shown, viewed, accepted, rejected, customized
+    shownAt: timestamp("shown_at").defaultNow(),
+    viewedAt: timestamp("viewed_at"),
+    interactedAt: timestamp("interacted_at"),
+    rejectionReason: text("rejection_reason"),
+    customizedPortion: text("customized_portion"),
+
+    // Outcome Tracking
+    wasLogged: boolean("was_logged").default(false),
+    loggedFoodId: integer("logged_food_id"),
+    loggedAt: timestamp("logged_at"),
+
+    // AI Metadata
+    aiGenerated: boolean("ai_generated").default(true),
+    aiModel: text("ai_model").default("gpt-4o-mini"),
+    aiConfidence: decimal("ai_confidence", { precision: 3, scale: 2 }),
+
+    // Personalization Score (calculated by backend)
+    personalizationScore: decimal("personalization_score", { precision: 3, scale: 2 }), // 0.00-1.00
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    // Indexes for efficient querying
+    userIdIdx: index("idx_rec_history_user_id").on(table.userId),
+    recommendationIdIdx: index("idx_rec_history_recommendation_id").on(table.recommendationId),
+    userStatusIdx: index("idx_rec_history_user_status").on(table.userId, table.interactionStatus),
+    shownAtIdx: index("idx_rec_history_shown_at").on(table.shownAt),
+    mealTypeIdx: index("idx_rec_history_meal_type").on(table.mealType),
+    recTypeIdx: index("idx_rec_history_rec_type").on(table.recommendationType),
+  })
+);
