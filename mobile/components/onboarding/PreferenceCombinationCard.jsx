@@ -91,19 +91,22 @@ export default function PreferenceCombinationCard({
                   Dietary
                 </Text>
                 <View style={styles.tags}>
-                  {dietaryPrefs.map((pref) => (
-                    <LinearGradient
-                      key={pref}
-                      colors={['#DBEAFE', '#BFDBFE']}
-                      style={styles.tag}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      <Text style={[styles.tagText, { color: '#1E40AF' }]}>
-                        {typeof pref === 'string' ? pref.replace(/([A-Z])/g, ' $1').trim() : pref.id}
-                      </Text>
-                    </LinearGradient>
-                  ))}
+                  {dietaryPrefs.map((pref) => {
+                    const prefId = typeof pref === 'string' ? pref : pref.id;
+                    return (
+                      <LinearGradient
+                        key={prefId}
+                        colors={['#DBEAFE', '#BFDBFE']}
+                        style={styles.tag}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Text style={[styles.tagText, { color: '#1E40AF' }]}>
+                          {prefId.replace(/([A-Z_])/g, ' $1').trim()}
+                        </Text>
+                      </LinearGradient>
+                    );
+                  })}
                 </View>
               </View>
             )}
@@ -115,19 +118,22 @@ export default function PreferenceCombinationCard({
                   Cuisines
                 </Text>
                 <View style={styles.tags}>
-                  {cuisinePrefs.map((cuisine) => (
-                    <LinearGradient
-                      key={cuisine}
-                      colors={['#FEF3C7', '#FCD34D']}
-                      style={styles.tag}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      <Text style={[styles.tagText, { color: '#92400E' }]}>
-                        {typeof cuisine === 'string' ? cuisine.replace(/([A-Z])/g, ' $1').trim() : cuisine.id}
-                      </Text>
-                    </LinearGradient>
-                  ))}
+                  {cuisinePrefs.map((cuisine) => {
+                    const cuisineId = typeof cuisine === 'string' ? cuisine : cuisine.id;
+                    return (
+                      <LinearGradient
+                        key={cuisineId}
+                        colors={['#FEF3C7', '#FCD34D']}
+                        style={styles.tag}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Text style={[styles.tagText, { color: '#92400E' }]}>
+                          {cuisineId.replace(/([A-Z_])/g, ' $1').trim()}
+                        </Text>
+                      </LinearGradient>
+                    );
+                  })}
                 </View>
               </View>
             )}

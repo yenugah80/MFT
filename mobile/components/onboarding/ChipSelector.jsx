@@ -23,6 +23,17 @@ const ChipSelector = ({
   multiSelect = true,
   renderLabel,
 }) => {
+  // Helper to extract ID from string or object format
+  const getItemId = (item) => {
+    if (!item) return '';
+    return typeof item === 'string' ? item : (item.id || '');
+  };
+
+  // Helper to check if an item is selected (handles both string and object formats)
+  const isItemSelected = (itemId) => {
+    return selectedItems.some(selected => getItemId(selected) === itemId);
+  };
+
   // Use useState to ensure animScales updates when items change
   const [animScales] = React.useState(() =>
     items.reduce((acc, item) => {
@@ -44,15 +55,15 @@ const ChipSelector = ({
     let newSelection;
 
     if (multiSelect) {
-      // Multi-select mode
-      if (selectedItems.includes(itemId)) {
-        newSelection = selectedItems.filter((id) => id !== itemId);
+      // Multi-select mode - filter by ID comparison
+      if (isItemSelected(itemId)) {
+        newSelection = selectedItems.filter((item) => getItemId(item) !== itemId);
       } else {
         newSelection = [...selectedItems, itemId];
       }
     } else {
       // Single-select mode
-      newSelection = selectedItems.includes(itemId) ? [] : [itemId];
+      newSelection = isItemSelected(itemId) ? [] : [itemId];
     }
 
     onSelectionChange(newSelection);
@@ -75,7 +86,7 @@ const ChipSelector = ({
   };
 
   const renderChip = ({ item }) => {
-    const isSelected = selectedItems.includes(item.id);
+    const isSelected = isItemSelected(item.id);
     const scale = animScales[item.id] || new Animated.Value(1);
     const itemColor = item.color || BRAND.primary;
 

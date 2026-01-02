@@ -501,22 +501,28 @@ const Step3Screen = () => {
           </Text>
 
           <View style={styles.slidersContainer}>
-            {currentSection.selectedItems.map((item) => {
-              const itemId = typeof item === 'string' ? item : item.id;
-              const key = `${currentSection.id}-${itemId}`;
-              const currentStrength = strengthValues[key] || 3;
+            {/* Deduplicate items by ID to prevent duplicate key errors */}
+            {currentSection.selectedItems
+              .filter((item, index, self) => {
+                const itemId = typeof item === 'string' ? item : item.id;
+                return self.findIndex(i => (typeof i === 'string' ? i : i.id) === itemId) === index;
+              })
+              .map((item) => {
+                const itemId = typeof item === 'string' ? item : item.id;
+                const key = `${currentSection.id}-${itemId}`;
+                const currentStrength = strengthValues[key] || 3;
 
-              return (
-                <PreferenceStrengthSelector
-                  key={key}
-                  preferenceId={itemId}
-                  preferenceLabel={typeof item === 'string' ? item : item.label}
-                  currentStrength={currentStrength}
-                  onStrengthChange={(strength) => handleStrengthChange(itemId, strength)}
-                  showDescription={true}
-                />
-              );
-            })}
+                return (
+                  <PreferenceStrengthSelector
+                    key={key}
+                    preferenceId={itemId}
+                    preferenceLabel={typeof item === 'string' ? item : item.label}
+                    currentStrength={currentStrength}
+                    onStrengthChange={(strength) => handleStrengthChange(itemId, strength)}
+                    showDescription={true}
+                  />
+                );
+              })}
           </View>
         </View>
       )}
