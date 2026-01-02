@@ -126,6 +126,7 @@ const Step3Screen = () => {
     {
       id: 'dietary',
       label: 'Dietary Style',
+      shortDesc: 'Choose how you eat',
       description: 'How do you prefer to eat?',
       icon: 'leaf-outline',
       bgGradientStart: '#F0FDF4',
@@ -142,6 +143,7 @@ const Step3Screen = () => {
     {
       id: 'allergies',
       label: 'Allergies',
+      shortDesc: 'Foods to avoid',
       description: 'Foods to safely avoid',
       icon: 'alert-circle-outline',
       bgGradientStart: '#FEF2F2',
@@ -159,6 +161,7 @@ const Step3Screen = () => {
     {
       id: 'cuisine',
       label: 'Cuisine Preferences',
+      shortDesc: 'Favorite cuisines',
       description: 'Favorite cooking styles',
       icon: 'restaurant-outline',
       bgGradientStart: '#FFFBF0',
@@ -224,6 +227,7 @@ const Step3Screen = () => {
       <View style={styles.tabsContainer}>
         {sections.map((section, index) => {
           const isActive = activeSection === index;
+          const selectedCount = section.selectedItems.length;
           return (
             <Pressable
               key={section.id}
@@ -234,12 +238,12 @@ const Step3Screen = () => {
                 !isActive && styles.tabInactive,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={section.label}
+              accessibilityLabel={`${section.label}. ${section.shortDesc}. ${selectedCount} items selected.`}
               accessibilityState={{ selected: isActive }}
             >
               <Ionicons
                 name={section.icon}
-                size={18}
+                size={22}
                 color={isActive ? section.accentColor : TEXT.secondary}
                 style={styles.tabIcon}
               />
@@ -252,6 +256,24 @@ const Step3Screen = () => {
               >
                 {section.label}
               </Text>
+              <Text
+                style={[
+                  styles.tabSubtitle,
+                  !isActive && styles.tabSubtitleInactive,
+                ]}
+              >
+                {section.shortDesc}
+              </Text>
+              {selectedCount > 0 && (
+                <View
+                  style={[
+                    styles.selectionBadge,
+                    { backgroundColor: section.accentColor }
+                  ]}
+                >
+                  <Text style={styles.badgeText}>{selectedCount}</Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -472,11 +494,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 60,
+    minHeight: 90,
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
     borderBottomColor: 'transparent',
     flexDirection: 'column',
     gap: SPACING[1],
+    position: 'relative',
   },
 
   tabActive: {
@@ -495,7 +518,7 @@ const styles = StyleSheet.create({
 
   tabLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
   },
 
@@ -505,6 +528,38 @@ const styles = StyleSheet.create({
 
   tabLabelInactive: {
     color: TEXT.secondary,
+  },
+
+  tabSubtitle: {
+    fontSize: 10,
+    fontWeight: '500',
+    textAlign: 'center',
+    color: TEXT.primary,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+
+  tabSubtitleInactive: {
+    color: TEXT.secondary,
+    opacity: 0.6,
+  },
+
+  selectionBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
   },
 
   /* ===== CONTENT ===== */
