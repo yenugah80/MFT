@@ -9,7 +9,7 @@
  * - Smooth animations and haptic feedback
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,6 +17,7 @@ import {
   Text,
   AccessibilityInfo,
   Animated,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,6 +47,44 @@ import {
 } from '../../constants/onboardingConfig';
 import { TEXT, SEMANTIC, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
 
+/**
+ * Utility Functions - Data Normalization
+ * Standardizes preference data structure (Fix #2)
+ */
+const normalizePreference = (pref) => {
+  try {
+    if (typeof pref === 'string') {
+      return { id: pref, strength: 3 };
+    }
+    return pref || { id: '', strength: 3 };
+  } catch (err) {
+    console.error('[normalizePreference] Error normalizing preference:', err);
+    return { id: '', strength: 3 };
+  }
+};
+
+const normalizePreferences = (prefs) => {
+  try {
+    return (prefs || []).map(normalizePreference);
+  } catch (err) {
+    console.error('[normalizePreferences] Error normalizing preferences:', err);
+    return [];
+  }
+};
+
+/**
+ * Get sample dish ID - handles both string and object formats (Fix #6)
+ */
+const getSampleDishId = (firstPref) => {
+  try {
+    if (!firstPref) return null;
+    return typeof firstPref === 'string' ? firstPref : (firstPref?.id || null);
+  } catch (err) {
+    console.error('[getSampleDishId] Error getting sample dish ID:', err);
+    return null;
+  }
+};
+
 const Step3Screen = () => {
   const {
     step,
@@ -58,7 +97,8 @@ const Step3Screen = () => {
 
   // State
   const [activeSection, setActiveSection] = useState(0);
-  const [fadeAnims] = useState([0, 1, 2].map(() => new Animated.Value(0)));
+  const fadeAnimsRef = useRef([0, 1, 2].map(() => new Animated.Value(0))); // Fix #3/#8: useRef instead of useState
+  const fadeAnims = fadeAnimsRef.current;
   const [smartSuggestedCuisines, setSmartSuggestedCuisines] = useState([]);
   const [preferenceCombination, setPreferenceCombination] = useState(null);
   const [strengthValues, setStrengthValues] = useState({});
@@ -70,23 +110,29 @@ const Step3Screen = () => {
     }
   }, [step, setStep]);
 
-  // Initialize strength values from step3Data
+  // Initialize strength values from step3Data (Fix #2: normalize data structure)
   useEffect(() => {
     const initialStrengths = {};
 
-    // Dietary preferences
+    // Dietary preferences - normalize to object format
     if (step3Data.dietaryPreferences) {
-      step3Data.dietaryPreferences.forEach(pref => {
-        const key = `dietary-${typeof pref === 'string' ? pref : pref.id}`;
-        initialStrengths[key] = typeof pref === 'object' ? pref.strength : 3;
+      const normalized = normalizePreferences(step3Data.dietaryPreferences);
+      normalized.forEach(pref => {
+        if (pref.id) { // Fix #12: null safety
+          const key = `dietary-${pref.id}`;
+          initialStrengths[key] = pref.strength || 3;
+        }
       });
     }
 
-    // Cuisine preferences
+    // Cuisine preferences - normalize to object format
     if (step3Data.cuisinePreferences) {
-      step3Data.cuisinePreferences.forEach(cuisine => {
-        const key = `cuisine-${typeof cuisine === 'string' ? cuisine : cuisine.id}`;
-        initialStrengths[key] = typeof cuisine === 'object' ? cuisine.strength : 3;
+      const normalized = normalizePreferences(step3Data.cuisinePreferences);
+      normalized.forEach(cuisine => {
+        if (cuisine.id) { // Fix #12: null safety
+          const key = `cuisine-${cuisine.id}`;
+          initialStrengths[key] = cuisine.strength || 3;
+        }
       });
     }
 
@@ -121,8 +167,8 @@ const Step3Screen = () => {
     }).start();
   }, [activeSection]);
 
-  // Section configuration
-  const sections = [
+  // Section configuration (Fix #4: memoized to prevent recreation on every render)
+  const sections = useMemo(() => [
     {
       id: 'dietary',
       label: 'Dietary Style',
@@ -134,9 +180,14 @@ const Step3Screen = () => {
       borderColor: '#10B981',
       accentColor: '#10B981',
       items: DIETARY_PREFERENCES,
-      selectedItems: step3Data.dietaryPreferences || [],
+      selectedItems: normalizePreferences(step3Data.dietaryPreferences), // Fix #2: normalize data
       onSelect: (selected) => {
-        updateStepData('step3', { dietaryPreferences: selected });
+        // Convert selected items to normalized objects with strength
+        const normalized = selected.map(item => ({
+          id: typeof item === 'string' ? item : item.id,
+          strength: 3 // New selections default to 3
+        }));
+        updateStepData('step3', { dietaryPreferences: normalized });
       },
       showStrengthSliders: true
     },
@@ -169,25 +220,52 @@ const Step3Screen = () => {
       borderColor: '#F97316',
       accentColor: '#F97316',
       items: CUISINE_PREFERENCES,
-      selectedItems: step3Data.cuisinePreferences || [],
+      selectedItems: normalizePreferences(step3Data.cuisinePreferences), // Fix #2: normalize data
       onSelect: (selected) => {
-        updateStepData('step3', { cuisinePreferences: selected });
+        // Convert selected items to normalized objects with strength
+        const normalized = selected.map(item => ({
+          id: typeof item === 'string' ? item : item.id,
+          strength: 3 // New selections default to 3
+        }));
+        updateStepData('step3', { cuisinePreferences: normalized });
       },
       showStrengthSliders: true,
       smartSuggested: smartSuggestedCuisines
     }
-  ];
+  ], [step3Data, smartSuggestedCuisines, updateStepData]); // Fix #4: memoized dependencies
 
   const currentSection = sections[activeSection];
 
   const handleStrengthChange = useCallback((itemId, strength) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const key = `${currentSection.id}-${itemId}`;
+
+    // Update local state for UI
     setStrengthValues(prev => ({
       ...prev,
       [key]: strength
     }));
-  }, [currentSection.id]);
+
+    // Fix #1: Persist strength to step3Data
+    if (currentSection.id === 'dietary' || currentSection.id === 'cuisine') {
+      const dataKey = currentSection.id === 'dietary' ? 'dietaryPreferences' : 'cuisinePreferences';
+      const currentItems = step3Data[dataKey] || [];
+
+      // Convert items to objects with strength values (Fix #2, #10)
+      const updatedItems = currentItems.map(item => {
+        const itemIdStr = typeof item === 'string' ? item : item.id;
+        return {
+          id: itemIdStr,
+          strength: itemIdStr === itemId ? strength : (typeof item === 'object' ? item.strength : 3)
+        };
+      });
+
+      // Save to parent context
+      updateStepData('step3', {
+        [dataKey]: updatedItems
+      });
+    }
+  }, [currentSection.id, step3Data, updateStepData]);
 
   const handleSectionChange = useCallback((index) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -204,12 +282,43 @@ const Step3Screen = () => {
   };
 
   const handleContinue = () => {
+    // Fix #5: Validate that user has selected dietary preferences
+    const hasDietaryPrefs = step3Data.dietaryPreferences && step3Data.dietaryPreferences.length > 0;
+    if (!hasDietaryPrefs) {
+      Alert.alert(
+        'Dietary Preferences Required',
+        'Please select at least one dietary preference to continue.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
+    // Fix #1: Preserve strength data before continuing
+    const dietaryPrefs = (step3Data.dietaryPreferences || []).map(item => ({
+      id: typeof item === 'string' ? item : item.id,
+      strength: strengthValues[`dietary-${typeof item === 'string' ? item : item.id}`] || 3
+    }));
+
+    const cuisinePrefs = (step3Data.cuisinePreferences || []).map(item => ({
+      id: typeof item === 'string' ? item : item.id,
+      strength: strengthValues[`cuisine-${typeof item === 'string' ? item : item.id}`] || 3
+    }));
+
+    // Ensure final data has all strength values persisted
+    updateStepData('step3', {
+      dietaryPreferences: dietaryPrefs,
+      cuisinePreferences: cuisinePrefs
+    });
+
     goToNextStep();
   };
 
+  // Fix #7: Add step to dependencies for accessibility
   useEffect(() => {
-    AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step3);
-  }, []);
+    if (step === 3) {
+      AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step3);
+    }
+  }, [step]);
 
   return (
     <OnboardingLayout
@@ -238,7 +347,9 @@ const Step3Screen = () => {
                 !isActive && styles.tabInactive,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`${section.label}. ${section.shortDesc}. ${selectedCount} items selected.`}
+              // Fix #11: Improved accessibility labels
+              accessibilityLabel={`${section.label} tab. ${section.shortDesc}. ${selectedCount} ${selectedCount === 1 ? 'item' : 'items'} selected.`}
+              accessibilityHint={`${section.label} section: ${section.description}`}
               accessibilityState={{ selected: isActive }}
             >
               <Ionicons
@@ -417,9 +528,12 @@ const Step3Screen = () => {
           dietaryPrefs={step3Data.dietaryPreferences || []}
           cuisinePrefs={step3Data.cuisinePreferences || []}
           sampleDishes={
-            step3Data.dietaryPreferences?.[0] && SAMPLE_DISHES[step3Data.dietaryPreferences[0]]
-              ? SAMPLE_DISHES[step3Data.dietaryPreferences[0]]
-              : []
+            (() => {
+              // Fix #6: Handle both string and object formats for first dietary preference
+              const firstPref = step3Data.dietaryPreferences?.[0];
+              const dishId = getSampleDishId(firstPref);
+              return dishId && SAMPLE_DISHES[dishId] ? SAMPLE_DISHES[dishId] : [];
+            })()
           }
         />
       )}
