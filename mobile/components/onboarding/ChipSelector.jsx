@@ -101,6 +101,11 @@ const ChipSelector = ({
           ]}
         >
           <View style={styles.chipContent}>
+            {/* Display emoji if available */}
+            {item.emoji && (
+              <Text style={styles.chipEmoji}>{item.emoji}</Text>
+            )}
+            {/* Display label or custom render */}
             <Text
               style={[
                 styles.chipLabel,
@@ -174,6 +179,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[2],
     justifyContent: 'center',
+  },
+  chipEmoji: {
+    fontSize: 20,
+    marginRight: SPACING[1],
   },
   chipLabel: {
     fontSize: 14,
