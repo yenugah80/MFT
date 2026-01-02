@@ -68,11 +68,17 @@ export const getSmartCuisineSuggestions = (selectedDietaryPrefs) => {
 
 /**
  * Generate explanation for preference combination
- * @param {Array<string>} dietaryPrefs - Selected dietary preferences
- * @param {Array<string>} cuisinePrefs - Selected cuisine preferences
+ * @param {Array<string|Object>} dietaryPrefs - Selected dietary preferences (string or {id, strength})
+ * @param {Array<string|Object>} cuisinePrefs - Selected cuisine preferences (string or {id, strength})
  * @returns {Object} - { title, description }
  */
 export const getPreferenceCombinationExplanation = (dietaryPrefs, cuisinePrefs) => {
+  // Helper to extract ID from string or object format
+  const getPreferenceId = (pref) => {
+    if (!pref) return '';
+    return typeof pref === 'string' ? pref : (pref.id || '');
+  };
+
   if (!dietaryPrefs || dietaryPrefs.length === 0) {
     return {
       title: 'Flexible eating',
@@ -81,8 +87,8 @@ export const getPreferenceCombinationExplanation = (dietaryPrefs, cuisinePrefs) 
   }
 
   if (dietaryPrefs.length === 1 && cuisinePrefs.length === 1) {
-    const diet = dietaryPrefs[0];
-    const cuisine = cuisinePrefs[0];
+    const diet = getPreferenceId(dietaryPrefs[0]);
+    const cuisine = getPreferenceId(cuisinePrefs[0]);
     const relationship = PREFERENCE_RELATIONSHIPS[diet];
 
     if (relationship && relationship.cuisines.includes(cuisine)) {
@@ -99,7 +105,7 @@ export const getPreferenceCombinationExplanation = (dietaryPrefs, cuisinePrefs) 
   }
 
   if (dietaryPrefs.length === 1) {
-    const diet = dietaryPrefs[0];
+    const diet = getPreferenceId(dietaryPrefs[0]);
     const relationship = PREFERENCE_RELATIONSHIPS[diet];
     return {
       title: `${diet.charAt(0).toUpperCase() + diet.slice(1)} + Multiple Cuisines`,
