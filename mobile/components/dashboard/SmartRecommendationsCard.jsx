@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { BRAND, SURFACES, TEXT, SPACING, SHADOWS } from '../../constants/premiumTheme';
+import { InlineWarningBadge } from '../recommendations/WarningBadge';
 
 const RECOMMENDATION_TYPES = {
   PROTEIN_BOOST: {
@@ -171,6 +172,13 @@ export default function SmartRecommendationsCard({
                 <Ionicons name="barbell-outline" size={12} /> {rec.protein}g protein
               </Text>
             </View>
+
+            {/* Phase 5: Warning badges for dietary issues */}
+            {rec.warningBadge && (
+              <View style={styles.badgeContainer}>
+                <InlineWarningBadge type={rec.warningBadge} />
+              </View>
+            )}
 
             {rec.reason && (
               <Text style={styles.recReason}>💡 {rec.reason}</Text>
@@ -402,6 +410,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     fontStyle: 'italic',
+    marginTop: SPACING.sm,
+  },
+  badgeContainer: {
     marginTop: SPACING.sm,
   },
   quickActionsContainer: {

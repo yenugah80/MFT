@@ -8,6 +8,7 @@ import {
   saveDietary,
   saveGoals,
   saveGamification,
+  completeOnboarding,
   getNotifications,
   saveNotifications,
   getPrivacySettings,
@@ -29,6 +30,7 @@ router.get("/me", getProfile);
 router.post("/basics", saveBasics);
 router.post("/dietary", saveDietary);
 router.post("/goals", saveGoals);
+router.post("/onboarding-complete", completeOnboarding);
 
 // Notification preferences
 router.get("/notifications", getNotifications);

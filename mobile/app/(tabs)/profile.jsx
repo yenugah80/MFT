@@ -22,6 +22,11 @@ import DietarySection from "../../components/profile/DietarySection";
 import GoalsSection from "../../components/profile/GoalsSection";
 import AccountActions from "../../components/profile/AccountActions";
 
+// Phase 4: Profile Analytics Components
+import CuisinePreferencesSection from "../../components/profile/CuisinePreferencesSection";
+import ComplianceHistoryChart from "../../components/profile/ComplianceHistoryChart";
+import RecommendationStatsCard from "../../components/profile/RecommendationStatsCard";
+
 // Premium theme
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, ICONS } from "../../constants/premiumTheme";
 
@@ -148,6 +153,48 @@ export default function ProfileScreen() {
           status={state.status}
         />
 
+        {/* ============================================ */}
+        {/* PHASE 4: PROFILE ANALYTICS SECTION */}
+        {/* ============================================ */}
+
+        {/* Cuisine Preferences with Strength Indicators */}
+        {profile.dietary?.cuisinePreferences && profile.dietary.cuisinePreferences.length > 0 && (
+          <View style={styles.analyticsSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="restaurant" size={20} color={BRAND.purple[600]} />
+              <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
+                Cuisine Preferences
+              </Text>
+            </View>
+            <CuisinePreferencesSection
+              preferences={profile.dietary.cuisinePreferences}
+              isEditing={false}
+            />
+          </View>
+        )}
+
+        {/* Compliance History Chart - 30-day trend */}
+        <View style={styles.analyticsSection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="trending-up" size={20} color={BRAND.purple[600]} />
+            <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
+              Compliance History
+            </Text>
+          </View>
+          <ComplianceHistoryChart />
+        </View>
+
+        {/* Recommendation Acceptance Analytics */}
+        <View style={styles.analyticsSection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="checkmark-circle" size={20} color={BRAND.purple[600]} />
+            <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
+              Recommendations
+            </Text>
+          </View>
+          <RecommendationStatsCard />
+        </View>
+
         {/* Account */}
         <AccountActions onSignOut={handleSignOut} />
       </ScrollView>
@@ -228,5 +275,21 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: TYPOGRAPHY.weight.medium,
+  },
+
+  // Phase 4: Analytics sections
+  analyticsSection: {
+    marginBottom: SPACING[6],
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+    paddingHorizontal: SPACING[1],
+  },
+  sectionTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
 });

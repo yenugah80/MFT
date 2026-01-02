@@ -45,7 +45,12 @@ const initialState = {
   },
   status: 'idle', // 'idle' | 'loading' | 'saving' | 'error'
   error: null,
-  validationErrors: {},
+  validationErrors: {
+    basics: {},
+    dietary: {},
+    goals: {},
+    gamification: {},
+  },
 };
 
 // Reducer
@@ -104,7 +109,10 @@ function profileReducer(state, action) {
           [section]: false,
         },
         status: 'idle',
-        validationErrors: {},
+        validationErrors: {
+          ...state.validationErrors,
+          [section]: {},
+        },
       };
     }
 
@@ -127,15 +135,23 @@ function profileReducer(state, action) {
           ...state.editing,
           [section]: false,
         },
-        validationErrors: {},
+        validationErrors: {
+          ...state.validationErrors,
+          [section]: {},
+        },
       };
     }
 
-    case ACTIONS.SET_ERROR:
+    case ACTIONS.SET_ERROR: {
+      const { section, errors } = action.payload;
       return {
         ...state,
-        validationErrors: action.payload,
+        validationErrors: {
+          ...state.validationErrors,
+          [section]: errors,
+        },
       };
+    }
 
     case ACTIONS.CLEAR_ERROR:
       return {
@@ -202,7 +218,18 @@ export default function useProfileForm(user) {
 
         if (!token) {
           console.error('[Profile] Failed to get token after retries');
-          // Don't mark as bootstrapped - will retry on next render
+          // Mark as bootstrapped to prevent infinite retries, dispatch default profile
+          hasBootstrappedRef.current = true;
+          dispatch({
+            type: ACTIONS.LOAD_PROFILE,
+            payload: {
+              ...DEFAULT_PROFILE,
+              basics: {
+                ...DEFAULT_PROFILE.basics,
+                fullName: user.fullName || "",
+              },
+            },
+          });
           return;
         }
 
@@ -269,7 +296,7 @@ export default function useProfileForm(user) {
       const errors = validateSection(section, state.draft[section]);
 
       if (hasValidationErrors(errors)) {
-        dispatch({ type: ACTIONS.SET_ERROR, payload: errors });
+        dispatch({ type: ACTIONS.SET_ERROR, payload: { section, errors } });
         Alert.alert(
           "Validation Error",
           Object.values(errors)[0]

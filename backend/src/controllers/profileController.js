@@ -207,11 +207,50 @@ export async function getProfile(req, res) {
       }
     };
 
-    // Load profile
-    const [profile] = await req.db
-      .select()
-      .from(profilesTable)
-      .where(eq(profilesTable.userId, userId));
+    // Load profile (with safe error handling for missing columns)
+    let profile;
+    try {
+      const profileResult = await req.db
+        .select()
+        .from(profilesTable)
+        .where(eq(profilesTable.userId, userId));
+      profile = profileResult[0] || null;
+    } catch (err) {
+      // Column doesn't exist (PostgreSQL error code 42703)
+      if (err && err.code === "42703") {
+        console.warn(`⚠️ Some profile columns missing, attempting partial select:`, err.message);
+        // Try with partial select (without new columns that might not exist)
+        try {
+          const profileResult = await req.db
+            .select({
+              id: profilesTable.id,
+              userId: profilesTable.userId,
+              fullName: profilesTable.fullName,
+              email: profilesTable.email,
+              gender: profilesTable.gender,
+              age: profilesTable.age,
+              weightKg: profilesTable.weightKg,
+              heightCm: profilesTable.heightCm,
+              activityLevel: profilesTable.activityLevel,
+              cuisinePreference: profilesTable.cuisinePreference,
+              region: profilesTable.region,
+              cookingStyle: profilesTable.cookingStyle,
+              notifications: profilesTable.notifications,
+              createdAt: profilesTable.createdAt,
+              updatedAt: profilesTable.updatedAt,
+            })
+            .from(profilesTable)
+            .where(eq(profilesTable.userId, userId));
+          profile = profileResult[0] || null;
+          console.log('✅ Partial profile load successful');
+        } catch (partialErr) {
+          console.error('❌ Even partial profile load failed:', partialErr);
+          throw err; // Throw original error
+        }
+      } else {
+        throw err; // Re-throw if not a missing column error
+      }
+    }
 
     if (!profile) {
       console.log(`⚠️ Profile not found for user ${userId}`);
@@ -238,6 +277,9 @@ export async function getProfile(req, res) {
       heightCm: profile.heightCm ?? null,
       activityLevel: profile.activityLevel || ""
     };
+
+    // Include onboarding completion status
+    const onboardingCompletedAt = profile.onboardingCompletedAt || null;
 
     const normalizedDietary = {
       preferences: Array.isArray(dietary?.preferences) ? dietary.preferences : [],
@@ -269,7 +311,8 @@ export async function getProfile(req, res) {
       basics,
       dietary: normalizedDietary,
       goals: normalizedGoals,
-      gamification: normalizedGamification
+      gamification: normalizedGamification,
+      onboardingCompletedAt
     });
   } catch (error) {
     console.error("❌ Error fetching profile:", error);
@@ -280,8 +323,29 @@ export async function getProfile(req, res) {
 export async function saveBasics(req, res) {
   try {
     const { userId } = req.auth;
-    const { fullName, email, gender, age, weightKg, heightCm, activityLevel } = req.body;
+    let { fullName, email, gender, age, weightKg, heightCm, activityLevel } = req.body;
     await ensureProfilesTableShape();
+
+    // Validate gender if provided
+    const validGenders = ['female', 'male', 'other'];
+    if (gender && !validGenders.includes(gender)) {
+      return res.status(400).json({
+        error: 'Invalid gender value',
+        message: `Gender must be one of: ${validGenders.join(', ')}`,
+        received: gender,
+      });
+    }
+
+    // Validate activity level if provided
+    const validActivityLevels = ['sedentary', 'lightly_active', 'moderate', 'very_active', 'extremely_active'];
+    if (activityLevel && !validActivityLevels.includes(activityLevel)) {
+      return res.status(400).json({
+        error: 'Invalid activity level value',
+        message: `Activity level must be one of: ${validActivityLevels.join(', ')}`,
+        received: activityLevel,
+      });
+    }
+
     // Map camelCase to snake_case for DB columns
     const upserted = await req.db
       .insert(profilesTable)
@@ -332,6 +396,36 @@ export async function saveDietary(req, res) {
     const { userId } = req.auth;
     const { preferences, allergies, dislikes, cuisinePreference, region, cookingStyle } = req.body;
 
+    // Validate that array fields are actually arrays
+    if (preferences && !Array.isArray(preferences)) {
+      return res.status(400).json({
+        error: 'Invalid input',
+        message: 'preferences must be an array',
+        received: typeof preferences,
+      });
+    }
+    if (allergies && !Array.isArray(allergies)) {
+      return res.status(400).json({
+        error: 'Invalid input',
+        message: 'allergies must be an array',
+        received: typeof allergies,
+      });
+    }
+    if (dislikes && !Array.isArray(dislikes)) {
+      return res.status(400).json({
+        error: 'Invalid input',
+        message: 'dislikes must be an array',
+        received: typeof dislikes,
+      });
+    }
+    if (cuisinePreference && !Array.isArray(cuisinePreference)) {
+      return res.status(400).json({
+        error: 'Invalid input',
+        message: 'cuisinePreference must be an array',
+        received: typeof cuisinePreference,
+      });
+    }
+
     // 🆕 SAVE REGIONAL CONTEXT TO PROFILES TABLE
     if (cuisinePreference || region || cookingStyle) {
       await req.db
@@ -345,35 +439,26 @@ export async function saveDietary(req, res) {
         .where(eq(profilesTable.userId, userId));
     }
 
-    const existingDietary = await req.db
-      .select()
-      .from(dietaryPreferencesTable)
-      .where(eq(dietaryPreferencesTable.userId, userId));
-    let dietaryRow;
-    if (existingDietary.length > 0) {
-      const updated = await req.db
-        .update(dietaryPreferencesTable)
-        .set({
+    // Use atomic upsert to avoid race condition (check-then-act)
+    const dietaryResult = await req.db
+      .insert(dietaryPreferencesTable)
+      .values({
+        userId,
+        preferences: preferences || [],
+        allergies: allergies || [],
+        dislikes: dislikes || [],
+      })
+      .onConflictDoUpdate({
+        target: dietaryPreferencesTable.userId,
+        set: {
           preferences: preferences || [],
           allergies: allergies || [],
           dislikes: dislikes || [],
           updatedAt: new Date(),
-        })
-        .where(eq(dietaryPreferencesTable.userId, userId))
-        .returning();
-      dietaryRow = updated[0];
-    } else {
-      const created = await req.db
-        .insert(dietaryPreferencesTable)
-        .values({
-          userId,
-          preferences: preferences || [],
-          allergies: allergies || [],
-          dislikes: dislikes || [],
-        })
-        .returning();
-      dietaryRow = created[0];
-    }
+        },
+      })
+      .returning();
+    const dietaryRow = dietaryResult[0];
     const dietary = {
       preferences: Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [],
       allergies: Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [],
@@ -409,15 +494,112 @@ export async function saveGoals(req, res) {
       primaryGoal = 'maintain';
     }
 
-    const existingGoals = await req.db
-      .select()
-      .from(nutritionGoalsTable)
-      .where(eq(nutritionGoalsTable.userId, userId));
-    let goalsRow;
-    if (existingGoals.length > 0) {
-      const updated = await req.db
-        .update(nutritionGoalsTable)
-        .set({
+    // Validate numeric fields
+    if (dailyCalories !== undefined && dailyCalories !== null && dailyCalories !== '') {
+      const caloriesNum = parseInt(dailyCalories, 10);
+      if (isNaN(caloriesNum)) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'dailyCalories must be a valid number',
+          received: dailyCalories,
+        });
+      }
+      if (caloriesNum < 500 || caloriesNum > 10000) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'dailyCalories must be between 500 and 10,000',
+          received: caloriesNum,
+        });
+      }
+    }
+
+    if (proteinG !== undefined && proteinG !== null && proteinG !== '') {
+      const proteinNum = parseInt(proteinG, 10);
+      if (isNaN(proteinNum)) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'proteinG must be a valid number',
+          received: proteinG,
+        });
+      }
+      if (proteinNum < 0 || proteinNum > 500) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'proteinG must be between 0 and 500',
+          received: proteinNum,
+        });
+      }
+    }
+
+    if (carbsG !== undefined && carbsG !== null && carbsG !== '') {
+      const carbsNum = parseInt(carbsG, 10);
+      if (isNaN(carbsNum)) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'carbsG must be a valid number',
+          received: carbsG,
+        });
+      }
+      if (carbsNum < 0 || carbsNum > 1000) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'carbsG must be between 0 and 1,000',
+          received: carbsNum,
+        });
+      }
+    }
+
+    if (fatsG !== undefined && fatsG !== null && fatsG !== '') {
+      const fatsNum = parseInt(fatsG, 10);
+      if (isNaN(fatsNum)) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'fatsG must be a valid number',
+          received: fatsG,
+        });
+      }
+      if (fatsNum < 0 || fatsNum > 300) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'fatsG must be between 0 and 300',
+          received: fatsNum,
+        });
+      }
+    }
+
+    if (waterLiters !== undefined && waterLiters !== null && waterLiters !== '') {
+      const waterNum = parseFloat(waterLiters);
+      if (isNaN(waterNum)) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'waterLiters must be a valid number',
+          received: waterLiters,
+        });
+      }
+      if (waterNum < 0 || waterNum > 10) {
+        return res.status(400).json({
+          error: 'Invalid input',
+          message: 'waterLiters must be between 0 and 10',
+          received: waterNum,
+        });
+      }
+    }
+
+    // Use atomic upsert to avoid race condition (check-then-act)
+    const goalsResult = await req.db
+      .insert(nutritionGoalsTable)
+      .values({
+        userId,
+        primaryGoal,
+        dailyCalories: dailyCalories ? parseInt(dailyCalories, 10) : null,
+        proteinG: proteinG ? parseInt(proteinG, 10) : null,
+        carbsG: carbsG ? parseInt(carbsG, 10) : null,
+        fatsG: fatsG ? parseInt(fatsG, 10) : null,
+        waterLiters: waterLiters ? parseFloat(waterLiters) : null,
+      })
+      .onConflictDoUpdate({
+        target: nutritionGoalsTable.userId,
+        set: {
           primaryGoal,
           dailyCalories: dailyCalories ? parseInt(dailyCalories, 10) : null,
           proteinG: proteinG ? parseInt(proteinG, 10) : null,
@@ -425,25 +607,10 @@ export async function saveGoals(req, res) {
           fatsG: fatsG ? parseInt(fatsG, 10) : null,
           waterLiters: waterLiters ? parseFloat(waterLiters) : null,
           updatedAt: new Date(),
-        })
-        .where(eq(nutritionGoalsTable.userId, userId))
-        .returning();
-      goalsRow = updated[0];
-    } else {
-      const created = await req.db
-        .insert(nutritionGoalsTable)
-        .values({
-          userId,
-          primaryGoal,
-          dailyCalories: dailyCalories ? parseInt(dailyCalories, 10) : null,
-          proteinG: proteinG ? parseInt(proteinG, 10) : null,
-          carbsG: carbsG ? parseInt(carbsG, 10) : null,
-          fatsG: fatsG ? parseInt(fatsG, 10) : null,
-          waterLiters: waterLiters ? parseFloat(waterLiters) : null,
-        })
-        .returning();
-      goalsRow = created[0];
-    }
+        },
+      })
+      .returning();
+    const goalsRow = goalsResult[0];
     const goals = {
       primaryGoal: goalsRow?.primaryGoal || "",
       dailyCalories: goalsRow?.dailyCalories ?? null,
@@ -463,37 +630,28 @@ export async function saveGamification(req, res) {
   try {
     const { userId } = req.auth;
     const { xp, level, streak, badges } = req.body;
-    const existingGamification = await req.db
-      .select()
-      .from(gamificationTable)
-      .where(eq(gamificationTable.userId, userId));
-    let gamificationRow;
-    if (existingGamification.length > 0) {
-      const updated = await req.db
-        .update(gamificationTable)
-        .set({
+    // Use atomic upsert to avoid race condition (check-then-act)
+    const gamificationResult = await req.db
+      .insert(gamificationTable)
+      .values({
+        userId,
+        xp: xp || 0,
+        level: level || 1,
+        streak: streak || 0,
+        badges: badges || [],
+      })
+      .onConflictDoUpdate({
+        target: gamificationTable.userId,
+        set: {
           xp: xp || 0,
           level: level || 1,
           streak: streak || 0,
           badges: badges || [],
           updatedAt: new Date(),
-        })
-        .where(eq(gamificationTable.userId, userId))
-        .returning();
-      gamificationRow = updated[0];
-    } else {
-      const created = await req.db
-        .insert(gamificationTable)
-        .values({
-          userId,
-          xp: xp || 0,
-          level: level || 1,
-          streak: streak || 0,
-          badges: badges || [],
-        })
-        .returning();
-      gamificationRow = created[0];
-    }
+        },
+      })
+      .returning();
+    const gamificationRow = gamificationResult[0];
     const gamification = {
       xp: gamificationRow?.xp ?? 0,
       level: gamificationRow?.level ?? 1,
@@ -503,6 +661,48 @@ export async function saveGamification(req, res) {
     res.status(200).json(gamification);
   } catch (error) {
     console.log("Error saving gamification stats", error);
+    sendDevError(res, error);
+  }
+}
+
+/**
+ * Mark onboarding as complete for the user
+ * Called when user finishes the 4-step onboarding flow
+ * Sets onboarding_completed_at timestamp to current time
+ */
+export async function completeOnboarding(req, res) {
+  try {
+    const { userId } = req.auth;
+
+    // Ensure schema is up to date
+    await ensureProfilesTableShape();
+
+    // Update profile with onboarding completion timestamp
+    const updated = await req.db
+      .update(profilesTable)
+      .set({
+        onboardingCompletedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(profilesTable.userId, userId))
+      .returning();
+
+    if (!updated[0]) {
+      return res.status(404).json({
+        error: "Profile not found",
+        hint: "User profile must exist before marking onboarding complete"
+      });
+    }
+
+    const profile = updated[0];
+    res.status(200).json({
+      success: true,
+      message: "Onboarding completed successfully",
+      onboardingCompletedAt: profile.onboardingCompletedAt,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("❌ Error completing onboarding:", error);
     sendDevError(res, error);
   }
 }

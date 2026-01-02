@@ -42,8 +42,13 @@ export async function initDatabase() {
   try {
     console.log('[Database] Initializing schema...');
 
-    // Enable WAL mode for better concurrency
-    db.execSync(`PRAGMA journal_mode = WAL;`);
+    // Enable WAL mode for better concurrency (with error handling)
+    try {
+      db.execSync(`PRAGMA journal_mode = WAL;`);
+    } catch (walErr) {
+      // WAL mode might fail if database is locked - continue with default mode
+      console.warn('[Database] ⚠️ WAL mode not available (database may be locked), continuing with default mode');
+    }
 
     // Create tables
     db.execSync(`

@@ -45,6 +45,11 @@ import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 
+// Phase 3: Dashboard Enhancements - Preference-based insights
+import DietaryComplianceCard from "./dashboard/DietaryComplianceCard";
+import AllergenWarningCard from "./dashboard/AllergenWarningCard";
+import CuisineDiversityCard from "./dashboard/CuisineDiversityCard";
+
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
 import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
@@ -54,6 +59,9 @@ import { LUXURY_BACKGROUNDS, LUXURY_TEXT } from "../constants/luxuryTheme";
 import { calculateFoodMoodScore, generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
 import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
 import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
+import { calculateDietaryComplianceScore } from "../utils/complianceCalculations";
+import { scanMealsForAllergens } from "../utils/allergenDetection";
+import { calculateCuisineDiversity } from "../utils/cuisineDiversity";
 import apiClient from "../services/apiClient";
 import storage, { STORAGE_KEYS } from "../utils/storage";
 
@@ -210,6 +218,11 @@ export default function DashboardContent() {
   const [recommendationModalVisible, setRecommendationModalVisible] = useState(false);
   const [acceptingRecommendation, setAcceptingRecommendation] = useState(false);
 
+  // Phase 3: Preference-based insights state
+  const [complianceScore, setComplianceScore] = useState(null);
+  const [allergenWarnings, setAllergenWarnings] = useState([]);
+  const [cuisineDiversity, setCuisineDiversity] = useState(null);
+
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
   const { data: moodInsightsData, isLoading: moodInsightsLoading } = useMoodInsights({ windowDays: 30, trendDays: 7 });
@@ -274,6 +287,51 @@ export default function DashboardContent() {
       setRecommendationsLoading(false);
     }
   }, [data, isLoading]);
+
+  // Phase 3: Calculate preference-based insights when data loads
+  useEffect(() => {
+    if (!data || isLoading) return;
+
+    try {
+      // Calculate dietary compliance score from today's meals
+      if (data?.today?.foodLogs && userProfile?.dietary) {
+        const score = calculateDietaryComplianceScore(
+          data.today.foodLogs,
+          userProfile.dietary
+        );
+        setComplianceScore(score);
+      }
+
+      // Scan meals for allergen warnings
+      if (data?.today?.foodLogs && userProfile?.dietary?.allergies) {
+        const warnings = scanMealsForAllergens(
+          data.today.foodLogs,
+          userProfile.dietary.allergies
+        );
+        setAllergenWarnings(warnings);
+      }
+
+      // Calculate cuisine diversity from this week's meals
+      // Note: We'll use available data from trends or fetch separately if needed
+      if (data?.trends?.weekSummaries && data.trends.weekSummaries.length > 0) {
+        // Reconstruct meals array from week summaries for diversity calculation
+        const weeksMeals = data.trends.weekSummaries.reduce((acc, summary) => {
+          if (summary.foodLogs) {
+            return [...acc, ...summary.foodLogs];
+          }
+          return acc;
+        }, []);
+
+        if (weeksMeals.length > 0) {
+          const diversity = calculateCuisineDiversity(weeksMeals);
+          setCuisineDiversity(diversity);
+        }
+      }
+    } catch (error) {
+      console.error('[Dashboard Phase 3] Error calculating insights:', error);
+      // Fail silently - these are secondary metrics
+    }
+  }, [data, isLoading, userProfile]);
 
   // Track recommendation view interaction
   const trackRecommendationView = useCallback(async (recommendationId) => {
@@ -1044,6 +1102,31 @@ export default function DashboardContent() {
           onInsightAction={handleInsightAction}
           dataAnomalies={dataAnomalies}
         />
+
+        {/* ============================================ */}
+        {/* PHASE 3: PREFERENCE-BASED INSIGHTS CARDS */}
+        {/* ============================================ */}
+
+        {/* Allergen Warning Card - Urgent alerts */}
+        {allergenWarnings.length > 0 && (
+          <AllergenWarningCard warnings={allergenWarnings} />
+        )}
+
+        {/* Dietary Compliance Card - Shows preference adherence */}
+        {complianceScore !== null && (
+          <DietaryComplianceCard
+            score={complianceScore}
+            todaysMeals={data?.today?.foodLogs}
+          />
+        )}
+
+        {/* Cuisine Diversity Card - Tracking variety */}
+        {cuisineDiversity && (
+          <CuisineDiversityCard
+            diversity={cuisineDiversity}
+            userPreferences={userProfile?.dietary}
+          />
+        )}
 
         <DashboardPrimaryCard
           styles={styles}

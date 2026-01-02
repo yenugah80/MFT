@@ -3,15 +3,15 @@
  * Shows a checkmark popup when profile changes are saved
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ANIMATION_TIMING } from '../../utils/profileAnimations';
 
 export default function SaveSuccessAnimation({ visible, onComplete }) {
-  const scaleAnim = new Animated.Value(0);
-  const opacityAnim = new Animated.Value(1);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!visible) return;

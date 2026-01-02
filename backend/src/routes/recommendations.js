@@ -301,6 +301,73 @@ router.get('/history/list', requireAuth(), async (req, res) => {
 });
 
 /**
+ * GET /api/recommendations/stats/acceptance-by-preference
+ * Get acceptance rate broken down by recommendation type
+ * Used for profile analytics showing user preferences
+ */
+router.get('/stats/acceptance-by-preference', requireAuth(), async (req, res) => {
+  try {
+    const { userId } = req.auth;
+
+    // Fetch all recommendations shown to this user
+    const history = await db
+      .select()
+      .from(recommendationsHistoryTable)
+      .where(eq(recommendationsHistoryTable.userId, userId))
+      .limit(500);
+
+    if (history.length === 0) {
+      return res.json({
+        success: true,
+        stats: {
+          acceptanceRate: 0,
+          byPreferenceType: {},
+          totalShown: 0,
+          totalAccepted: 0
+        }
+      });
+    }
+
+    // Calculate overall acceptance rate
+    const totalAccepted = history.filter(r => r.interactionStatus === 'accepted').length;
+    const totalShown = history.length;
+    const overallAcceptanceRate = Math.round((totalAccepted / totalShown) * 100);
+
+    // Break down by recommendation type
+    const byType = {};
+    history.forEach(rec => {
+      const type = rec.recommendationType || 'UNKNOWN';
+      if (!byType[type]) {
+        byType[type] = { shown: 0, accepted: 0 };
+      }
+      byType[type].shown++;
+      if (rec.interactionStatus === 'accepted') {
+        byType[type].accepted++;
+      }
+    });
+
+    // Convert to percentage format
+    const byPreferenceType = {};
+    Object.entries(byType).forEach(([type, data]) => {
+      byPreferenceType[type] = Math.round((data.accepted / data.shown) * 100);
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        acceptanceRate: overallAcceptanceRate,
+        byPreferenceType,
+        totalShown,
+        totalAccepted
+      }
+    });
+  } catch (error) {
+    console.error('[Recommendations] Stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+/**
  * Analyze user's recommendation history to improve personalization
  */
 async function analyzeRecommendationHistory(db, userId) {
@@ -381,6 +448,7 @@ function getMealType(hour) {
 
 /**
  * Generate recommendations with enhanced AI using history
+ * CRITICAL: Now includes allergen filtering and dietary preference support
  */
 async function generateEnhancedRecommendations(
   recType,
@@ -393,9 +461,24 @@ async function generateEnhancedRecommendations(
   const cuisinePreference = profile?.dietary?.cuisinePreference?.[0] || 'General';
   const region = profile?.dietary?.region || 'General';
 
+  // 🆕 CRITICAL: Extract dietary restrictions
+  const allergies = profile?.dietary?.allergies || [];
+  const dietaryPreferences = profile?.dietary?.preferences || [];
+  const dislikes = profile?.dietary?.dislikes || [];
+
   // Build personalization context
   const personalizationContext = history.preferredFoods?.length > 0 ?
     `User previously accepted: ${history.preferredFoods.join(', ')}\n` : '';
+
+  // 🆕 Add strict allergen exclusion to prompt
+  const allergenExclusion = allergies.length > 0 ?
+    `\n⚠️ CRITICAL - NEVER recommend foods containing these allergens: ${allergies.join(', ')}
+This is a safety requirement. Exclude any food that might contain these ingredients.` : '';
+
+  // 🆕 Add dietary preference guidance (flexible - can be overridden with warning)
+  const dietaryGuidance = dietaryPreferences.length > 0 ?
+    `\nUser dietary preferences: ${dietaryPreferences.join(', ')}
+Prioritize foods matching these preferences when possible. If suggesting foods that don't match these preferences, mark them with "dietCompliant: false" and provide brief explanation.` : '';
 
   const prompt = `You are a personalized nutrition recommendation system.
 
@@ -407,7 +490,7 @@ User Profile:
 - Cuisine Preference: ${cuisinePreference}
 - Region: ${region}
 - Meal Type: ${mealType}
-${personalizationContext}
+${personalizationContext}${allergenExclusion}${dietaryGuidance}
 
 Recommendation Type: ${recType}
 
@@ -416,6 +499,8 @@ Generate ${limit} specific food recommendations that:
 2. Match their cuisine and regional preferences
 3. Are appropriate for the meal type (${mealType})
 4. Have clear nutritional benefits based on their needs
+5. 🆕 NEVER contain allergens (${allergies.join(', ') || 'none'})
+6. 🆕 PREFER foods matching dietary preferences (${dietaryPreferences.join(', ') || 'none'})
 
 For each recommendation include:
 - Food name
@@ -426,19 +511,46 @@ For each recommendation include:
 - Fats (g)
 - Brief reason why it's recommended
 - Preparation tips
+- 🆕 allergenFree: boolean (MUST be true - critical for safety)
+- 🆕 dietCompliant: boolean (matches user dietary preferences)
+- 🆕 warningBadge: null OR { text: "reason", type: "dietary" | "dislike" } (only if not compliant)
 
-Return as JSON array with objects: { foodName, portion, calories, protein, carbs, fats, reason, tips }`;
+Return as JSON array with objects: { foodName, portion, calories, protein, carbs, fats, reason, tips, allergenFree, dietCompliant, warningBadge }`;
 
   try {
     const response = await openaiClient.chatCompletionJSON(
       [{ role: 'user', content: prompt }],
-      { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 1000 }
+      { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 1500 }
     );
 
     const recommendations = response.recommendations || [];
 
-    // Enrich with additional metadata
-    return recommendations.map((rec, idx) => ({
+    // 🆕 CRITICAL: Server-side allergen filter (defense in depth)
+    const safeRecommendations = recommendations.filter(rec => {
+      // Check AI marked as allergen-free
+      if (rec.allergenFree === false) {
+        console.warn(`[Recommendations] Filtered out ${rec.foodName} - AI marked as not allergen-free`);
+        return false;
+      }
+
+      // Check food name doesn't contain allergen keywords
+      const foodNameLower = rec.foodName.toLowerCase();
+      const containsAllergen = allergies.some(allergen =>
+        foodNameLower.includes(allergen.toLowerCase())
+      );
+
+      if (containsAllergen) {
+        console.warn(`[Recommendations] Filtered out ${rec.foodName} - contains allergen keyword`);
+        return false;
+      }
+
+      return true;
+    });
+
+    console.log(`[Recommendations] Safety filter: ${recommendations.length} → ${safeRecommendations.length} recommendations`);
+
+    // 🆕 Enrich with warning badges and ensure safe structure
+    const enrichedRecommendations = safeRecommendations.map((rec, idx) => ({
       id: `rec-${Date.now()}-${idx}`,
       title: getTitleForType(recType),
       fiber: rec.fiber || 0,
@@ -447,10 +559,23 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
       color: getColorForType(recType),
       rank: idx + 1,
       timeToAdd: Math.max(5, 15 - idx * 2),
+      // 🆕 Ensure warning badge is properly structured
+      warningBadge: rec.warningBadge || (
+        !rec.dietCompliant && dietaryPreferences.length > 0
+          ? { text: 'Not in your diet preferences', type: 'dietary' }
+          : null
+      )
     }));
+
+    return enrichedRecommendations;
   } catch (error) {
     console.error('[Recommendations] AI generation failed:', error);
-    return getFallbackRecommendations(recType, mealType, remainingBudget, limit);
+    return getFallbackRecommendations(recType, mealType, remainingBudget, limit)
+      .filter(rec => {
+        // Also filter fallback recommendations for allergen safety
+        const foodNameLower = rec.foodName.toLowerCase();
+        return !allergies.some(a => foodNameLower.includes(a.toLowerCase()));
+      });
   }
 }
 

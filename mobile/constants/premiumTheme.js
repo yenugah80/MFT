@@ -146,9 +146,10 @@ export const RADIUS = {
   full: 9999,
 };
 
-// PREMIUM SHADOWS
+// PREMIUM SHADOWS (with backgroundColor for efficient rendering)
 export const SHADOWS = {
   sm: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -156,6 +157,7 @@ export const SHADOWS = {
     elevation: 2,
   },
   md: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -163,6 +165,7 @@ export const SHADOWS = {
     elevation: 4,
   },
   lg: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
@@ -170,14 +173,16 @@ export const SHADOWS = {
     elevation: 6,
   },
   xl: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
   },
-  // Colored glows
+  // Colored glows (for non-white backgrounds, override backgroundColor if needed)
   success: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -185,6 +190,7 @@ export const SHADOWS = {
     elevation: 4,
   },
   warning: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#F59E0B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -192,6 +198,7 @@ export const SHADOWS = {
     elevation: 4,
   },
   danger: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#EF4444',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -199,6 +206,7 @@ export const SHADOWS = {
     elevation: 4,
   },
   info: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,

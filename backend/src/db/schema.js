@@ -20,6 +20,7 @@ export const profilesTable = pgTable(
     region: text("region"), // 'India', 'USA', 'UK', etc.
     cookingStyle: text("cooking_style"), // 'home-style', 'restaurant'
     notifications: json("notifications").default({}),
+    onboardingCompletedAt: timestamp("onboarding_completed_at"), // Timestamp when onboarding was completed
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },

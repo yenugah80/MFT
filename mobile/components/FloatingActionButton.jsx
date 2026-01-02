@@ -339,6 +339,7 @@ const styles = StyleSheet.create({
   },
 
   menuButton: {
+    backgroundColor: '#FFFFFF',
     width: MENU_ITEM_SIZE,
     height: MENU_ITEM_SIZE,
     borderRadius: MENU_ITEM_SIZE / 2,
@@ -369,6 +370,7 @@ const styles = StyleSheet.create({
   },
 
   fab: {
+    backgroundColor: '#FFFFFF',
     width: FAB_SIZE,
     height: FAB_SIZE,
     borderRadius: FAB_SIZE / 2,

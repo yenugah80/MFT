@@ -10,6 +10,13 @@ import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
 import Toast from "react-native-toast-message";
 import "@/i18n/config"; // Initialize i18n
+import { LogBox } from 'react-native';
+
+// Suppress known deprecation warnings
+LogBox.ignoreLogs([
+  'Expo AV has been deprecated',
+  'The app is running using the Legacy Architecture',
+]);
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 

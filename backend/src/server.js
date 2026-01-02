@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import { FoodService } from "./services/foodService.js";
 import { validate, imageAnalysisSchema } from "./middleware/validation.js";
 import nutritionRouter from "./routes/nutrition.js";
+import complianceRouter from "./routes/compliance.js";
 import foodRouter from "./routes/food.js";
 import resolveRouter from "./routes/resolve.js";
 import profileRouter from "./routes/profile.js";
@@ -47,6 +48,9 @@ export async function ensureProfilesTableShape() {
     );
     await db.execute(
       sql`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "notifications" jsonb DEFAULT '{}'::jsonb;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "onboarding_completed_at" TIMESTAMP;`
     );
     // Safely alter column type - may fail if already correct type
     try {
@@ -97,6 +101,9 @@ app.get("/health", (req, res) => {
 
 // Mount Nutrition Router (History, Logging, AI Analysis)
 app.use("/api/nutrition", nutritionRouter);
+
+// Mount Compliance Router (Dietary compliance tracking)
+app.use("/api/nutrition", complianceRouter);
 
 // Mount Food Router (Search, Barcode)
 app.use("/api/food", foodRouter);
@@ -240,8 +247,18 @@ app.get("/api/food/filter", requireAuth, async (req, res) => {
 
 // (logging endpoints removed, now handled by loggingRouter)
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
   console.log("Server is running on PORT:", PORT);
+
+  // Initialize database schema on startup
+  console.log('📦 Initializing database schema...');
+  try {
+    await ensureProfilesTableShape();
+    console.log('✅ Database initialized successfully');
+  } catch (err) {
+    console.error('⚠️ Database initialization warning:', err.message);
+    // Continue running even if init fails - tables might already exist
+  }
 
   // Initialize daily streak check cron job
   initStreakCronJob();

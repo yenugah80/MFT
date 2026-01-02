@@ -212,12 +212,13 @@ export const DARK_TEXT = {
 };
 
 // ============================================================================
-// SHADOWS & GLOWS (Premium Depth)
+// SHADOWS & GLOWS (Premium Depth) - with backgroundColor for efficient rendering
 // ============================================================================
 
 export const DARK_SHADOWS = {
   // Glass card shadows (subtle)
   glass: {
+    backgroundColor: '#1A1F3A',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -227,6 +228,7 @@ export const DARK_SHADOWS = {
 
   // Elevated cards
   elevated: {
+    backgroundColor: '#1A1F3A',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
@@ -236,6 +238,7 @@ export const DARK_SHADOWS = {
 
   // Floating elements (FAB, modals)
   floating: {
+    backgroundColor: '#1A1F3A',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.5,
@@ -245,6 +248,7 @@ export const DARK_SHADOWS = {
 
   // Brand glow (for primary buttons)
   brandGlow: {
+    backgroundColor: '#1A1F3A',
     shadowColor: '#7C66FF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
@@ -254,6 +258,7 @@ export const DARK_SHADOWS = {
 
   // Success glow
   successGlow: {
+    backgroundColor: '#1A1F3A',
     shadowColor: '#0FD97A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -263,6 +268,7 @@ export const DARK_SHADOWS = {
 
   // Danger glow
   dangerGlow: {
+    backgroundColor: '#1A1F3A',
     shadowColor: '#FF453A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,

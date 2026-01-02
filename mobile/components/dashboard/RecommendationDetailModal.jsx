@@ -35,6 +35,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { MultipleWarnings } from '../recommendations/WarningBadge';
 
 // Daily values for micronutrient calculations (FDA standards)
 const DAILY_VALUES = {
@@ -257,6 +258,13 @@ export default function RecommendationDetailModal({
             <View style={styles.reasonBadge}>
               <MaterialIcons name="lightbulb" size={16} color={COLORS.primary} />
               <Text style={styles.reasonText}>{recommendation.reason}</Text>
+            </View>
+          )}
+
+          {/* Phase 5: Warning Badges for Dietary Issues */}
+          {recommendation.warnings && recommendation.warnings.length > 0 && (
+            <View style={styles.warningSection}>
+              <MultipleWarnings warnings={recommendation.warnings} maxDisplay={3} />
             </View>
           )}
 
@@ -689,6 +697,10 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '500',
     flex: 1,
+  },
+  warningSection: {
+    marginBottom: SPACING.lg,
+    paddingHorizontal: SPACING.sm,
   },
   portionSection: {
     marginBottom: SPACING.xl,

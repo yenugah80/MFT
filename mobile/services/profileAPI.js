@@ -288,7 +288,7 @@ export const saveNutritionGoals = async (token, goalsData, getToken = null) => {
     }
 
     const makeRequest = async (currentToken) => {
-      return fetch(`${API_URL}/nutrition/goals`, {
+      return fetch(`${API_URL}/profile/goals`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

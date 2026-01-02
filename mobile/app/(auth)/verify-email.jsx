@@ -1,5 +1,6 @@
 import { useSignUp, useAuth } from "@clerk/clerk-expo";
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -10,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authStyles } from "../../assets/styles/auth.styles";
 import { Image } from "expo-image";
 import { COLORS } from "../../constants/colors";
@@ -17,6 +19,7 @@ import { useRef } from "react";
 import { saveProfileBasics } from "../../services/profileAPI";
 
 const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
+  const router = useRouter();
   const { isLoaded, signUp, setActive } = useSignUp();
   const { getToken } = useAuth();
   const [code, setCode] = useState("");
@@ -82,6 +85,17 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
               email: email
             });
             console.log("Profile created successfully in backend");
+
+            // Clear any stale onboarding drafts for fresh start
+            try {
+              await AsyncStorage.removeItem('@onboarding_draft');
+              await AsyncStorage.removeItem('@onboarding_current_step');
+            } catch (storageErr) {
+              console.warn("Could not clear onboarding draft:", storageErr);
+            }
+
+            // Redirect to onboarding flow
+            router.replace("/onboarding/step-1");
           } else {
             console.warn("Could not get token to create backend profile after retries");
             Alert.alert("Profile Error", "Account created but failed to initialize profile. Please contact support.");

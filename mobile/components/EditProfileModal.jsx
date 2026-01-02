@@ -65,12 +65,18 @@ const EditProfileModal = ({
   const validate = () => {
     const newErrors = {};
     if (!formData.fullName?.trim()) newErrors.fullName = "Name is required";
+    if (formData.email && !isValidEmail(formData.email)) newErrors.email = "Please enter a valid email";
     if (formData.age && isNaN(formData.age)) newErrors.age = "Age must be a number";
     if (formData.weightKg && isNaN(formData.weightKg)) newErrors.weightKg = "Weight must be a number";
     if (formData.heightCm && isNaN(formData.heightCm)) newErrors.heightCm = "Height must be a number";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   const handleSave = async () => {

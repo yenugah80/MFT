@@ -1,7 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import Voice from '@react-native-voice/voice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../services/apiClient';
+
+// Stub Voice module for Expo Go compatibility
+// Voice recognition requires a development build
+let Voice = null;
+try {
+  Voice = require('@react-native-voice/voice').default;
+} catch (e) {
+  console.warn('[useServerVoice] Voice module not available (native module requires development build)');
+}
 
 // Cache for recent transcription requests (in-memory + persisted)
 const TRANSCRIPTION_CACHE_KEY = 'voice_transcription_cache';
@@ -27,17 +35,19 @@ export const useServerVoice = (options = {}) => {
 
   // Cleanup on unmount
   useEffect(() => {
-    // Setup Voice listeners
-    Voice.onSpeechStart = () => setIsRecording(true);
-    Voice.onSpeechEnd = () => setIsRecording(false);
-    Voice.onSpeechError = (e) => {
-      // Ignore "No speech detected" error (code 7) to avoid UI noise
-      if (e.error?.message?.includes('7') || e.error?.code === '7') return;
-      setError(e.error?.message);
-      setIsRecording(false);
-    };
-    Voice.onSpeechResults = onSpeechResults;
-    Voice.onSpeechPartialResults = onSpeechResults;
+    // Setup Voice listeners (only if Voice module is available)
+    if (Voice) {
+      Voice.onSpeechStart = () => setIsRecording(true);
+      Voice.onSpeechEnd = () => setIsRecording(false);
+      Voice.onSpeechError = (e) => {
+        // Ignore "No speech detected" error (code 7) to avoid UI noise
+        if (e.error?.message?.includes('7') || e.error?.code === '7') return;
+        setError(e.error?.message);
+        setIsRecording(false);
+      };
+      Voice.onSpeechResults = onSpeechResults;
+      Voice.onSpeechPartialResults = onSpeechResults;
+    }
 
     return () => {
       isActiveRef.current = false;
@@ -45,7 +55,9 @@ export const useServerVoice = (options = {}) => {
       if (parseDebounceTimerRef.current) {
         clearTimeout(parseDebounceTimerRef.current);
       }
-      Voice.destroy().then(Voice.removeAllListeners);
+      if (Voice) {
+        Voice.destroy().then(() => Voice.removeAllListeners());
+      }
     };
   }, []);
 
@@ -97,6 +109,10 @@ export const useServerVoice = (options = {}) => {
 
   const startRecording = useCallback(async () => {
     try {
+      if (!Voice) {
+        setError('Voice recording not available (requires development build)');
+        return;
+      }
       setError(null);
       setTranscript('');
       setLiveItems([]);
@@ -109,7 +125,9 @@ export const useServerVoice = (options = {}) => {
 
   const stopAndUpload = useCallback(async () => {
     try {
-      await Voice.stop();
+      if (Voice) {
+        await Voice.stop();
+      }
     } catch (e) {}
 
     setIsRecording(false);
@@ -266,10 +284,12 @@ export const useServerVoice = (options = {}) => {
     timersRef.current = [];
     
     // 3. Stop recording if active
-    try {
-      await Voice.stop();
-      await Voice.destroy();
-    } catch (e) {}
+    if (Voice) {
+      try {
+        await Voice.stop();
+        await Voice.destroy();
+      } catch (e) {}
+    }
     
     // 4. Reset state
     setIsRecording(false);

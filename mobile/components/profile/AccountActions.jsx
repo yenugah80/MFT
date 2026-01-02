@@ -55,7 +55,7 @@ export default function AccountActions({ onSignOut }) {
         <TouchableOpacity
           style={styles.settingRow}
           activeOpacity={0.7}
-          onPress={() => router.push("/privacy")}
+          onPress={() => router.push("/profile/privacy")}
         >
           <View style={[styles.iconContainer, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
             <Ionicons name="shield-checkmark-outline" size={ICON_SIZES.sm} color={SEMANTIC.success.base} />
@@ -67,7 +67,7 @@ export default function AccountActions({ onSignOut }) {
         <TouchableOpacity
           style={[styles.settingRow, { borderBottomWidth: 0 }]}
           activeOpacity={0.7}
-          onPress={() => router.push("/terms")}
+          onPress={() => router.push("/profile/terms")}
         >
           <View style={[styles.iconContainer, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
             <Ionicons name="document-text-outline" size={ICON_SIZES.sm} color={SEMANTIC.success.base} />

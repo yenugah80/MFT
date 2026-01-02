@@ -34,7 +34,7 @@ export default function GoalsSection({ goals, isEditing, toggleEdit, saveSection
           <TextInput
             style={profileStyles.inputBox}
             value={goals.dailyCalories?.toString() || ""}
-            onChangeText={(t) => updateField("goals", "dailyCalories", t)}
+            onChangeText={(t) => updateField("goals", "dailyCalories", parseInt(t, 10) || 0)}
             keyboardType="numeric"
             placeholder="e.g. 2000"
           />
@@ -44,7 +44,7 @@ export default function GoalsSection({ goals, isEditing, toggleEdit, saveSection
               <TextInput
                 style={profileStyles.inputBox}
                 value={goals.proteinG?.toString() || ""}
-                onChangeText={(t) => updateField("goals", "proteinG", t)}
+                onChangeText={(t) => updateField("goals", "proteinG", parseInt(t, 10) || 0)}
                 keyboardType="numeric"
                 placeholder="0"
               />
@@ -54,7 +54,7 @@ export default function GoalsSection({ goals, isEditing, toggleEdit, saveSection
               <TextInput
                 style={profileStyles.inputBox}
                 value={goals.carbsG?.toString() || ""}
-                onChangeText={(t) => updateField("goals", "carbsG", t)}
+                onChangeText={(t) => updateField("goals", "carbsG", parseInt(t, 10) || 0)}
                 keyboardType="numeric"
                 placeholder="0"
               />
@@ -64,7 +64,7 @@ export default function GoalsSection({ goals, isEditing, toggleEdit, saveSection
               <TextInput
                 style={profileStyles.inputBox}
                 value={goals.fatsG?.toString() || ""}
-                onChangeText={(t) => updateField("goals", "fatsG", t)}
+                onChangeText={(t) => updateField("goals", "fatsG", parseInt(t, 10) || 0)}
                 keyboardType="numeric"
                 placeholder="0"
               />
@@ -74,8 +74,8 @@ export default function GoalsSection({ goals, isEditing, toggleEdit, saveSection
           <TextInput
             style={profileStyles.inputBox}
             value={goals.waterLiters?.toString() || ""}
-            onChangeText={(t) => updateField("goals", "waterLiters", t)}
-            keyboardType="numeric"
+            onChangeText={(t) => updateField("goals", "waterLiters", parseFloat(t) || 0)}
+            keyboardType="decimal-pad"
             placeholder="e.g. 2.5"
           />
         </View>
