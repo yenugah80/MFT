@@ -2,31 +2,24 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 /**
- * Get the correct localhost URL based on platform
- * - iOS Simulator: localhost works
- * - Android Emulator: needs 10.0.2.2 (special localhost)
- * - Physical Device: uses EXPO_PUBLIC_API_URL or warns user
+ * Get the correct API URL based on environment
+ * - Always prefer custom EXPO_PUBLIC_API_URL if set
+ * - In production: use Render backend
+ * - In development: use Render backend (NOT localhost)
  */
-function getDevApiUrl() {
+function getApiUrl() {
   // If user provided custom URL, use it (highest priority)
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Android emulator needs special localhost address
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5001/api';
-  }
-
-  // iOS Simulator can use localhost
-  return 'http://localhost:5001/api';
+  // Always use Render backend (both dev and production)
+  return 'https://myfoodtracker.onrender.com/api';
 }
 
 // Base API URL
-// Use local backend in development, production backend in release
-export const API_URL = __DEV__
-  ? getDevApiUrl()
-  : 'https://myfoodtracker.onrender.com/api';
+// Use Render backend in both development and production for consistency
+export const API_URL = getApiUrl();
 
 // Legacy export for backwards compatibility (profileAPI uses this without /api)
 // Derive from API_URL by removing /api suffix
@@ -37,15 +30,13 @@ export const isPhysicalDevice = Constants.isDevice;
 
 // Log API configuration in development for debugging
 if (__DEV__) {
-  console.log(`[API Config] Mode: ${process.env.EXPO_PUBLIC_API_URL ? 'Custom' : 'Local'} | Platform: ${Platform.OS}`);
-  console.log('[API Config] Using API URL:', API_URL);
-  console.log('[API Config] Physical device:', isPhysicalDevice);
+  const mode = process.env.EXPO_PUBLIC_API_URL ? 'Custom' : 'Render Backend';
+  console.log(`[API Config] 🚀 Mode: ${mode} | Platform: ${Platform.OS}`);
+  console.log(`[API Config] 📡 Using API URL: ${API_URL}`);
+  console.log(`[API Config] 📱 Physical device: ${isPhysicalDevice}`);
+  console.log(`[API Config] ✅ All requests will use Render backend (no localhost in dev mode)`);
 
-  if (isPhysicalDevice && !process.env.EXPO_PUBLIC_API_URL) {
-    console.warn(
-      '[API Config] ⚠️  Running on physical device without EXPO_PUBLIC_API_URL set!\n' +
-      'Add EXPO_PUBLIC_API_URL to your .env file with your computer\'s IP address.\n' +
-      'Example: EXPO_PUBLIC_API_URL=http://192.168.1.100:5001/api'
-    );
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    console.log(`[API Config] 🔧 Custom API URL detected: ${process.env.EXPO_PUBLIC_API_URL}`);
   }
 }
