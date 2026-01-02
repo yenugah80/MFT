@@ -161,7 +161,7 @@ export default function ProfileScreen() {
         {profile.dietary?.cuisinePreferences && profile.dietary.cuisinePreferences.length > 0 && (
           <View style={styles.analyticsSection}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="restaurant" size={20} color={BRAND.purple[600]} />
+              <Ionicons name="restaurant" size={20} color="#8B5CF6" />
               <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
                 Cuisine Preferences
               </Text>
@@ -176,7 +176,7 @@ export default function ProfileScreen() {
         {/* Compliance History Chart - 30-day trend */}
         <View style={styles.analyticsSection}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="trending-up" size={20} color={BRAND.purple[600]} />
+            <Ionicons name="trending-up" size={20} color="#8B5CF6" />
             <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
               Compliance History
             </Text>
@@ -187,7 +187,7 @@ export default function ProfileScreen() {
         {/* Recommendation Acceptance Analytics */}
         <View style={styles.analyticsSection}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="checkmark-circle" size={20} color={BRAND.purple[600]} />
+            <Ionicons name="checkmark-circle" size={20} color="#8B5CF6" />
             <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
               Recommendations
             </Text>

@@ -76,7 +76,7 @@ export default function CuisinePreferencesSection({ preferences = [], isEditing 
         style={styles.cuisineChip}
       >
         <LinearGradient
-          colors={isExpanded ? [BRAND.purple[50], BRAND.purple[100]] : [SURFACES.card.background.default, SURFACES.card.background.elevated]}
+          colors={isExpanded ? ['#F3E8FF', '#E9D5FF'] : [SURFACES.card.background.default, SURFACES.card.background.elevated]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.chipGradient}
@@ -120,7 +120,7 @@ export default function CuisinePreferencesSection({ preferences = [], isEditing 
             <Ionicons
               name="chevron-up"
               size={20}
-              color={BRAND.purple[600]}
+              color="#8B5CF6"
             />
           )}
           {!isExpanded && (

@@ -38,7 +38,7 @@ export default function ComplianceHistoryChart() {
             datasets: [
               {
                 data: scores,
-                color: () => BRAND.purple[500],
+                color: () => '#A78BFA',
                 strokeWidth: 2,
               },
             ],
@@ -59,7 +59,7 @@ export default function ComplianceHistoryChart() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={BRAND.purple[500]} />
+        <ActivityIndicator size="large" color="#A78BFA" />
         <Text style={[styles.loadingText, { color: TEXT.secondary }]}>
           Loading compliance history...
         </Text>
@@ -119,12 +119,12 @@ export default function ComplianceHistoryChart() {
             backgroundColor: 'transparent',
             backgroundGradientFrom: 'transparent',
             backgroundGradientTo: 'transparent',
-            color: () => BRAND.purple[200],
+            color: () => '#E9D5FF',
             strokeWidth: 2,
             propsForDots: {
               r: '4',
               strokeWidth: '2',
-              stroke: BRAND.purple[500],
+              stroke: '#A78BFA',
             },
             propsForLabels: {
               fontSize: 12,
@@ -149,7 +149,7 @@ export default function ComplianceHistoryChart() {
           <Text style={[styles.statLabel, { color: TEXT.secondary }]}>
             Current Streak
           </Text>
-          <Text style={[styles.statValue, { color: BRAND.purple[600] }]}>
+          <Text style={[styles.statValue, { color: '#8B5CF6' }]}>
             7 days
           </Text>
         </View>
@@ -157,7 +157,7 @@ export default function ComplianceHistoryChart() {
           <Text style={[styles.statLabel, { color: TEXT.secondary }]}>
             Average Score
           </Text>
-          <Text style={[styles.statValue, { color: BRAND.purple[600] }]}>
+          <Text style={[styles.statValue, { color: '#8B5CF6' }]}>
             82%
           </Text>
         </View>
@@ -165,7 +165,7 @@ export default function ComplianceHistoryChart() {
           <Text style={[styles.statLabel, { color: TEXT.secondary }]}>
             Best Day
           </Text>
-          <Text style={[styles.statValue, { color: BRAND.purple[600] }]}>
+          <Text style={[styles.statValue, { color: '#8B5CF6' }]}>
             95%
           </Text>
         </View>

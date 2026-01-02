@@ -79,7 +79,7 @@ export default function RecommendationStatsCard() {
             cx="60"
             cy="60"
             r={CIRCLE_RADIUS}
-            stroke={BRAND.purple[500]}
+            stroke="#A78BFA"
             strokeWidth="8"
             fill="none"
             strokeDasharray={CIRCLE_CIRCUMFERENCE}
@@ -92,7 +92,7 @@ export default function RecommendationStatsCard() {
         </Svg>
 
         <View style={styles.progressText}>
-          <Text style={[styles.progressValue, { color: BRAND.purple[600] }]}>
+          <Text style={[styles.progressValue, { color: '#8B5CF6' }]}>
             {stats?.acceptanceRate || 0}%
           </Text>
           <Text style={[styles.progressLabel, { color: TEXT.secondary }]}>
@@ -120,7 +120,7 @@ export default function RecommendationStatsCard() {
               <Text style={[styles.typeName, { color: TEXT.primary }]}>
                 {type.replace(/_/g, ' ').charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')}
               </Text>
-              <Text style={[styles.typeRate, { color: BRAND.purple[600] }]}>
+              <Text style={[styles.typeRate, { color: '#8B5CF6' }]}>
                 {Math.round(data.acceptanceRate || 0)}%
               </Text>
             </View>
@@ -146,10 +146,10 @@ export default function RecommendationStatsCard() {
 
   const getTypeColor = (type) => {
     const colorMap = {
-      dietary: BRAND.purple[500],
-      cuisine: BRAND.orange[500],
-      trending: BRAND.blue[500],
-      default: BRAND.green[500],
+      dietary: '#A78BFA',
+      cuisine: '#F97316',
+      trending: '#3B82F6',
+      default: '#10B981',
     };
     return colorMap[type] || colorMap.default;
   };
@@ -157,7 +157,7 @@ export default function RecommendationStatsCard() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={BRAND.purple[500]} />
+        <ActivityIndicator size="large" color="#A78BFA" />
         <Text style={[styles.loadingText, { color: TEXT.secondary }]}>
           Loading recommendation stats...
         </Text>

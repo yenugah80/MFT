@@ -99,7 +99,7 @@ export default function PreferenceCombinationCard({
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Text style={[styles.tagText, { color: BRAND.blue[700] }]}>
+                      <Text style={[styles.tagText, { color: '#1E40AF' }]}>
                         {typeof pref === 'string' ? pref.replace(/([A-Z])/g, ' $1').trim() : pref.id}
                       </Text>
                     </LinearGradient>
