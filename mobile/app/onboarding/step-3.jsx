@@ -240,10 +240,13 @@ const Step3Screen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const key = `${currentSection.id}-${itemId}`;
 
+    // 🆕 Clamp strength to 1-5 range (fail-fast validation)
+    const clampedStrength = Math.max(1, Math.min(5, strength));
+
     // Update local state for UI
     setStrengthValues(prev => ({
       ...prev,
-      [key]: strength
+      [key]: clampedStrength
     }));
 
     // Fix #1: Persist strength to step3Data
@@ -256,7 +259,7 @@ const Step3Screen = () => {
         const itemIdStr = typeof item === 'string' ? item : item.id;
         return {
           id: itemIdStr,
-          strength: itemIdStr === itemId ? strength : (typeof item === 'object' ? item.strength : 3)
+          strength: itemIdStr === itemId ? clampedStrength : (typeof item === 'object' ? item.strength : 3)
         };
       });
 

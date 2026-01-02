@@ -517,6 +517,13 @@ export const recommendationsHistoryTable = pgTable(
     prepTimeMinutes: integer("prep_time_minutes"),
     recipeInstructions: text("recipe_instructions"),
 
+    // Preference Strength Tracking (NEW)
+    preferenceStrengthMatch: integer("preference_strength_match"), // 1-5, how well matches user preferences
+    dietCompliant: boolean("diet_compliant"), // Complies with dietary preferences
+    allergenFree: boolean("allergen_free"), // Free of user's allergens
+    warningBadge: json("warning_badge"), // {type: string, message: string} - e.g., {type: "allergen_mismatch", message: "Contains peanuts"}
+
+
     // Context at Time of Recommendation
     mealType: text("meal_type"), // breakfast, lunch, dinner, snack
     timeOfDay: integer("time_of_day"), // Hour of day (0-23)
@@ -558,5 +565,7 @@ export const recommendationsHistoryTable = pgTable(
     shownAtIdx: index("idx_rec_history_shown_at").on(table.shownAt),
     mealTypeIdx: index("idx_rec_history_meal_type").on(table.mealType),
     recTypeIdx: index("idx_rec_history_rec_type").on(table.recommendationType),
+    strengthMatchIdx: index("idx_rec_history_strength_match").on(table.preferenceStrengthMatch), // NEW: For analytics
+    dietCompliantIdx: index("idx_rec_history_diet_compliant").on(table.dietCompliant), // NEW: For compliance tracking
   })
 );

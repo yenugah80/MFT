@@ -436,6 +436,95 @@ function determineRecommendationType(remainingBudget, profile, history) {
 }
 
 /**
+ * Improved allergen detection that avoids false positives
+ * Uses word boundaries and allergen-specific patterns instead of simple substring matching
+ *
+ * IMPROVEMENTS OVER SUBSTRING MATCHING:
+ * - "nut" allergen: Won't match "coconut", "donut", "peanut butter" (uses word boundary)
+ * - "milk" allergen: Won't match "milkshake" as ingredient when whole food match needed
+ * - "fish" allergen: Won't match "jellyfish" or "starfish"
+ * - "tree nuts": Matches almonds, cashews, walnuts, etc.
+ */
+function improvedAllergenCheck(foodName, allergies) {
+  if (!allergies || allergies.length === 0) return false;
+
+  const foodNameLower = foodName.toLowerCase();
+
+  // Define allergen-specific patterns for precise matching
+  const allergenPatterns = {
+    'nut': {
+      // Match standalone "nut", "nuts", "peanut", "almond", etc. but NOT "coconut", "donut"
+      pattern: /\b(nut|nuts|almond|walnut|cashew|pecan|pistachio|macadamia|hazelnut|chestnut|peanut)\b/i,
+      exceptions: ['coconut', 'donut', 'peanut butter'] // These are handled separately if needed
+    },
+    'milk': {
+      pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose)\b/i
+    },
+    'fish': {
+      pattern: /\b(fish|salmon|tuna|cod|haddock|halibut|anchovy|trout)\b/i,
+      exceptions: ['jellyfish', 'starfish']
+    },
+    'shellfish': {
+      pattern: /\b(shrimp|prawn|crab|lobster|oyster|clam|mussel|scallop)\b/i
+    },
+    'egg': {
+      pattern: /\b(egg|eggs|mayonnaise)\b/i
+    },
+    'soy': {
+      pattern: /\b(soy|soybean|tofu|tempeh|edamame|miso)\b/i
+    },
+    'wheat': {
+      pattern: /\b(wheat|bread|pasta|flour|barley)\b/i,
+      exceptions: ['buckwheat'] // Not actually wheat
+    },
+    'peanut': {
+      pattern: /\b(peanut)\b/i
+    },
+    'tree nut': {
+      pattern: /\b(almond|walnut|cashew|pecan|pistachio|macadamia)\b/i
+    },
+    'sesame': {
+      pattern: /\b(sesame|tahini)\b/i
+    },
+    'mustard': {
+      pattern: /\b(mustard)\b/i
+    },
+    'celery': {
+      pattern: /\b(celery)\b/i
+    }
+  };
+
+  for (const allergen of allergies) {
+    const allergenLower = allergen.toLowerCase().trim();
+
+    // Check if we have a pattern for this allergen
+    const patternConfig = allergenPatterns[allergenLower];
+    if (patternConfig && patternConfig.pattern) {
+      if (patternConfig.pattern.test(foodName)) {
+        // Check exceptions (for false positives)
+        if (patternConfig.exceptions && patternConfig.exceptions.some(ex =>
+          foodNameLower.includes(ex.toLowerCase())
+        )) {
+          continue; // Skip this allergen, it's an exception
+        }
+        console.log(`[Allergen] Food "${foodName}" matches allergen "${allergen}" (pattern match)`);
+        return true;
+      }
+    } else {
+      // Fallback: For allergens without patterns, use safer substring matching
+      // but require it to be a standalone word (not part of another word)
+      const words = foodNameLower.split(/[\s,-]/);
+      if (words.includes(allergenLower)) {
+        console.log(`[Allergen] Food "${foodName}" matches allergen "${allergen}" (word match)`);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Get meal type based on current hour
  */
 function getMealType(hour) {
@@ -598,7 +687,7 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
 
     const recommendations = response.recommendations || [];
 
-    // 🆕 CRITICAL: Server-side allergen filter (defense in depth)
+    // 🆕 CRITICAL: Server-side allergen filter (defense in depth) - now using improved pattern matching
     const safeRecommendations = recommendations.filter(rec => {
       // Check AI marked as allergen-free
       if (rec.allergenFree === false) {
@@ -606,14 +695,11 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
         return false;
       }
 
-      // Check food name doesn't contain allergen keywords
-      const foodNameLower = rec.foodName.toLowerCase();
-      const containsAllergen = allergies.some(allergen =>
-        foodNameLower.includes(allergen.toLowerCase())
-      );
+      // Check food name using improved allergen detection (avoids false positives)
+      const containsAllergen = improvedAllergenCheck(rec.foodName, allergies);
 
       if (containsAllergen) {
-        console.warn(`[Recommendations] Filtered out ${rec.foodName} - contains allergen keyword`);
+        console.warn(`[Recommendations] Filtered out ${rec.foodName} - contains allergen (improved pattern)`);
         return false;
       }
 
@@ -645,9 +731,8 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
     console.error('[Recommendations] AI generation failed:', error);
     return getFallbackRecommendations(recType, mealType, remainingBudget, limit)
       .filter(rec => {
-        // Also filter fallback recommendations for allergen safety
-        const foodNameLower = rec.foodName.toLowerCase();
-        return !allergies.some(a => foodNameLower.includes(a.toLowerCase()));
+        // Also filter fallback recommendations for allergen safety (using improved pattern matching)
+        return !improvedAllergenCheck(rec.foodName, allergies);
       });
   }
 }
@@ -733,6 +818,11 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
         aiModel: 'gpt-4o-mini',
         aiConfidence: 0.85,
         personalizationScore: calculatePersonalizationScore(rec, remainingBudget),
+        // NEW: Preference strength tracking fields
+        preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
+        dietCompliant: rec.dietCompliant !== false,
+        allergenFree: rec.allergenFree !== false,
+        warningBadge: rec.warningBadge || null,
         createdAt: new Date()
       }).catch(err => {
         // Ignore constraint violations (duplicate recommendations)

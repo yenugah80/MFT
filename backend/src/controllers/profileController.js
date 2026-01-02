@@ -10,6 +10,19 @@ import { sendDevError } from "../utils/sendDevError.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
+// Valid preference IDs (must match mobile/constants/onboardingConfig.js)
+const VALID_DIETARY_PREFERENCES = [
+  'balanced', 'vegan', 'keto', 'vegetarian', 'pescatarian', 'paleo', 'low_carb', 'gluten_free'
+];
+
+const VALID_ALLERGIES = [
+  'nuts', 'dairy', 'eggs', 'shellfish', 'soy', 'wheat', 'fish', 'peanuts'
+];
+
+const VALID_CUISINE_PREFERENCES = [
+  'mediterranean', 'asian', 'mexican', 'indian', 'american', 'italian', 'middle_eastern', 'african'
+];
+
 // --- Notification Preferences ---
 export async function getNotifications(req, res) {
   try {
@@ -468,6 +481,40 @@ export async function saveDietary(req, res) {
     const normalizedCuisine = normalizePreferences(cuisinePreference);
     const normalizedAllergies = normalizeStringArray(allergies);
     const normalizedDislikes = normalizeStringArray(dislikes);
+
+    // 🆕 Validate preference IDs against known enums
+    const invalidDietaryPrefs = normalizedPreferences.filter(
+      pref => !VALID_DIETARY_PREFERENCES.includes(pref.id)
+    );
+    if (invalidDietaryPrefs.length > 0) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: `Invalid dietary preference ID(s): ${invalidDietaryPrefs.map(p => p.id).join(', ')}`,
+        validOptions: VALID_DIETARY_PREFERENCES,
+      });
+    }
+
+    const invalidCuisinePrefs = normalizedCuisine.filter(
+      pref => !VALID_CUISINE_PREFERENCES.includes(pref.id)
+    );
+    if (invalidCuisinePrefs.length > 0) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: `Invalid cuisine preference ID(s): ${invalidCuisinePrefs.map(p => p.id).join(', ')}`,
+        validOptions: VALID_CUISINE_PREFERENCES,
+      });
+    }
+
+    const invalidAllergies = normalizedAllergies.filter(
+      allergy => !VALID_ALLERGIES.includes(allergy)
+    );
+    if (invalidAllergies.length > 0) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: `Invalid allergy ID(s): ${invalidAllergies.join(', ')}`,
+        validOptions: VALID_ALLERGIES,
+      });
+    }
 
     // Ensure at least one dietary preference
     if (normalizedPreferences.length === 0 && normalizedCuisine.length === 0) {
