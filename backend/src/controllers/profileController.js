@@ -391,6 +391,43 @@ export async function saveBasics(req, res) {
   }
 }
 
+/**
+ * Normalize preference items - converts strings to {id, strength} objects
+ * or validates existing objects
+ */
+function normalizePreference(item) {
+  if (typeof item === 'string') {
+    return { id: item, strength: 3 };
+  }
+  if (typeof item === 'object' && item !== null && item.id) {
+    const strength = typeof item.strength === 'number' ? item.strength : 3;
+    // Clamp strength to 1-5 range
+    const validStrength = Math.max(1, Math.min(5, strength));
+    return { id: item.id, strength: validStrength };
+  }
+  return null;
+}
+
+/**
+ * Normalize array of preferences, filtering out invalid items
+ */
+function normalizePreferences(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map(normalizePreference)
+    .filter(item => item !== null);
+}
+
+/**
+ * Normalize allergies and dislikes (simple string arrays)
+ */
+function normalizeStringArray(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter(item => typeof item === 'string' && item.trim())
+    .map(item => item.trim());
+}
+
 export async function saveDietary(req, res) {
   try {
     const { userId } = req.auth;
@@ -426,12 +463,26 @@ export async function saveDietary(req, res) {
       });
     }
 
+    // Normalize and validate preference data (with strength support)
+    const normalizedPreferences = normalizePreferences(preferences);
+    const normalizedCuisine = normalizePreferences(cuisinePreference);
+    const normalizedAllergies = normalizeStringArray(allergies);
+    const normalizedDislikes = normalizeStringArray(dislikes);
+
+    // Ensure at least one dietary preference
+    if (normalizedPreferences.length === 0 && normalizedCuisine.length === 0) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'At least one dietary preference or cuisine preference is required',
+      });
+    }
+
     // 🆕 SAVE REGIONAL CONTEXT TO PROFILES TABLE
-    if (cuisinePreference || region || cookingStyle) {
+    if (normalizedCuisine.length > 0 || region || cookingStyle) {
       await req.db
         .update(profilesTable)
         .set({
-          cuisinePreference: cuisinePreference || [],
+          cuisinePreference: normalizedCuisine,
           region: region || null,
           cookingStyle: cookingStyle || null,
           updatedAt: new Date(),
@@ -444,26 +495,36 @@ export async function saveDietary(req, res) {
       .insert(dietaryPreferencesTable)
       .values({
         userId,
-        preferences: preferences || [],
-        allergies: allergies || [],
-        dislikes: dislikes || [],
+        preferences: normalizedPreferences,
+        allergies: normalizedAllergies,
+        dislikes: normalizedDislikes,
       })
       .onConflictDoUpdate({
         target: dietaryPreferencesTable.userId,
         set: {
-          preferences: preferences || [],
-          allergies: allergies || [],
-          dislikes: dislikes || [],
+          preferences: normalizedPreferences,
+          allergies: normalizedAllergies,
+          dislikes: normalizedDislikes,
           updatedAt: new Date(),
         },
       })
       .returning();
+
     const dietaryRow = dietaryResult[0];
     const dietary = {
       preferences: Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [],
       allergies: Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [],
-      dislikes: Array.isArray(dietaryRow?.dislikes) ? dietaryRow.dislikes : []
+      dislikes: Array.isArray(dietaryRow?.dislikes) ? dietaryRow.dislikes : [],
+      cuisinePreference: normalizedCuisine,
     };
+
+    console.log('[saveDietary] Successfully saved dietary preferences:', {
+      userId,
+      preferencesCount: dietary.preferences.length,
+      allergiesCount: dietary.allergies.length,
+      cuisineCount: dietary.cuisinePreference.length,
+    });
+
     res.status(200).json(dietary);
   } catch (error) {
     console.log("Error saving dietary preferences", error);

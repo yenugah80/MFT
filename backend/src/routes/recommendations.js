@@ -450,6 +450,47 @@ function getMealType(hour) {
  * Generate recommendations with enhanced AI using history
  * CRITICAL: Now includes allergen filtering and dietary preference support
  */
+/**
+ * Extract and format dietary preferences with strength weighting
+ * Converts {id, strength} objects to weighted preference strings
+ */
+function formatDietaryPreferencesWithStrength(preferences) {
+  if (!Array.isArray(preferences)) return '';
+
+  const formatted = preferences
+    .filter(p => p && p.id)
+    .map(p => {
+      const strength = typeof p.strength === 'number' ? p.strength : 3;
+      const strengthLabel = {
+        1: '(open to it)',
+        2: '(prefer)',
+        3: '(normal)',
+        4: '(really prefer)',
+        5: '(essential)'
+      }[strength] || '(normal)';
+      return `${p.id} ${strengthLabel}`;
+    });
+
+  return formatted.join(', ');
+}
+
+/**
+ * Extract preference IDs and build weighting context
+ */
+function buildPreferenceContext(preferences) {
+  if (!Array.isArray(preferences)) return { ids: '', strengths: {} };
+
+  const strengths = {};
+  const ids = preferences
+    .filter(p => p && p.id)
+    .map(p => {
+      strengths[p.id] = p.strength || 3;
+      return p.id;
+    });
+
+  return { ids: ids.join(', '), strengths };
+}
+
 async function generateEnhancedRecommendations(
   recType,
   mealType,
@@ -458,13 +499,33 @@ async function generateEnhancedRecommendations(
   history,
   limit
 ) {
-  const cuisinePreference = profile?.dietary?.cuisinePreference?.[0] || 'General';
+  // Extract cuisine preference (support both string and object format)
+  let cuisinePreference = 'General';
+  if (profile?.dietary?.cuisinePreference) {
+    const cuisines = profile.dietary.cuisinePreference;
+    if (Array.isArray(cuisines) && cuisines.length > 0) {
+      const firstCuisine = cuisines[0];
+      cuisinePreference = (typeof firstCuisine === 'string')
+        ? firstCuisine
+        : (firstCuisine.id || 'General');
+    }
+  }
+
   const region = profile?.dietary?.region || 'General';
 
-  // 🆕 CRITICAL: Extract dietary restrictions
+  // 🆕 CRITICAL: Extract dietary restrictions with strength values
   const allergies = profile?.dietary?.allergies || [];
   const dietaryPreferences = profile?.dietary?.preferences || [];
   const dislikes = profile?.dietary?.dislikes || [];
+
+  // Format dietary preferences with strength levels for the AI
+  const dietaryFormattedWithStrength = formatDietaryPreferencesWithStrength(dietaryPreferences);
+  const dietaryPreferenceIds = dietaryPreferences
+    .filter(p => p && p.id)
+    .map(p => p.id);
+
+  // Build preference context for strength weighting
+  const preferenceContext = buildPreferenceContext(dietaryPreferences);
 
   // Build personalization context
   const personalizationContext = history.preferredFoods?.length > 0 ?
@@ -475,10 +536,20 @@ async function generateEnhancedRecommendations(
     `\n⚠️ CRITICAL - NEVER recommend foods containing these allergens: ${allergies.join(', ')}
 This is a safety requirement. Exclude any food that might contain these ingredients.` : '';
 
-  // 🆕 Add dietary preference guidance (flexible - can be overridden with warning)
-  const dietaryGuidance = dietaryPreferences.length > 0 ?
-    `\nUser dietary preferences: ${dietaryPreferences.join(', ')}
-Prioritize foods matching these preferences when possible. If suggesting foods that don't match these preferences, mark them with "dietCompliant: false" and provide brief explanation.` : '';
+  // 🆕 Add dietary preference guidance with strength levels (flexible - can be overridden with warning)
+  const dietaryGuidance = dietaryPreferenceIds.length > 0 ?
+    `\nUser dietary preferences (ordered by importance):
+${dietaryFormattedWithStrength}
+
+Priority weighting:
+- Essential (5): MUST prioritize these preferences
+- Really prefer (4): Strongly prioritize when possible
+- Normal (3): Standard consideration
+- Prefer (2): When available
+- Open to it (1): Flexible alternative
+
+Strongly prioritize "Essential (5)" preferences, then "Really prefer (4)", then others.
+If suggesting foods that don't match high-priority preferences, mark them with "dietCompliant: false".` : '';
 
   const prompt = `You are a personalized nutrition recommendation system.
 
@@ -500,7 +571,8 @@ Generate ${limit} specific food recommendations that:
 3. Are appropriate for the meal type (${mealType})
 4. Have clear nutritional benefits based on their needs
 5. 🆕 NEVER contain allergens (${allergies.join(', ') || 'none'})
-6. 🆕 PREFER foods matching dietary preferences (${dietaryPreferences.join(', ') || 'none'})
+6. 🆕 STRONGLY PREFER foods matching essential/high-priority dietary preferences
+7. 🆕 WEIGHT recommendations by preference strength (5=essential, 4=strong, 3=normal, 2=lighter, 1=flexible)
 
 For each recommendation include:
 - Food name
@@ -512,10 +584,11 @@ For each recommendation include:
 - Brief reason why it's recommended
 - Preparation tips
 - 🆕 allergenFree: boolean (MUST be true - critical for safety)
-- 🆕 dietCompliant: boolean (matches user dietary preferences)
-- 🆕 warningBadge: null OR { text: "reason", type: "dietary" | "dislike" } (only if not compliant)
+- 🆕 dietCompliant: boolean (matches user dietary preferences, especially essential ones)
+- 🆕 preferenceStrengthMatch: number (1-5, how well it matches user's priority preferences)
+- 🆕 warningBadge: null OR { text: "reason", type: "dietary" | "dislike" | "low-priority" } (only if not compliant or low match)
 
-Return as JSON array with objects: { foodName, portion, calories, protein, carbs, fats, reason, tips, allergenFree, dietCompliant, warningBadge }`;
+Return as JSON array with objects: { foodName, portion, calories, protein, carbs, fats, reason, tips, allergenFree, dietCompliant, preferenceStrengthMatch, warningBadge }`;
 
   try {
     const response = await openaiClient.chatCompletionJSON(
