@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
+import OnboardingGuard from "@/components/OnboardingGuard";
 import Toast from "react-native-toast-message";
 import "@/i18n/config"; // Initialize i18n
 import { LogBox } from 'react-native';
@@ -113,7 +114,9 @@ export default function RootLayout() {
               <NotificationProvider>
                 <ApiInitializer>
                   <SafeScreen>
-                    <Slot />
+                    <OnboardingGuard>
+                      <Slot />
+                    </OnboardingGuard>
                   </SafeScreen>
                 </ApiInitializer>
               </NotificationProvider>

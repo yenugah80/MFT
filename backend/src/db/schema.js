@@ -24,6 +24,10 @@ export const profilesTable = pgTable(
     premiumTier: text("premium_tier").default("free"), // 'free' | 'premium' | 'enterprise'
     subscriptionStartedAt: timestamp("subscription_started_at"),
     subscriptionEndsAt: timestamp("subscription_ends_at"),
+    // 🆕 DATA SHARING CONSENT (GDPR Compliance)
+    openaiDataSharingConsent: boolean("openai_data_sharing_consent").default(false), // Explicit consent to share with OpenAI
+    openaiConsentGivenAt: timestamp("openai_consent_given_at"), // When user gave consent
+    openaiConsentRevokedAt: timestamp("openai_consent_revoked_at"), // When user revoked consent (audit trail)
     notifications: json("notifications").default({}),
     onboardingCompletedAt: timestamp("onboarding_completed_at"), // Timestamp when onboarding was completed
     createdAt: timestamp("created_at").defaultNow(),
@@ -64,7 +68,6 @@ export const dietaryPreferencesTable = pgTable("dietary_preferences", {
   id: serial("id").primaryKey(),
   userId: text("user_id")
     .notNull()
-    .unique()
     .references(() => profilesTable.userId, { onDelete: "cascade" }),
   preferences: json("preferences").default([]), // Array of dietary preferences like ['Vegan', 'Gluten-free']
   allergies: json("allergies").default([]), // Array of allergies
@@ -80,7 +83,6 @@ export const nutritionGoalsTable = pgTable(
     id: serial("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .unique()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
     primaryGoal: text("primary_goal"), // 'lose' | 'maintain' | 'gain'
     dailyCalories: integer("daily_calories"),
@@ -109,7 +111,6 @@ export const gamificationTable = pgTable(
     id: serial("id").primaryKey(),
     userId: text("user_id")
       .notNull()
-      .unique()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
     xp: integer("xp").default(0),
     level: integer("level").default(1),
@@ -173,7 +174,10 @@ export const foodLogTable = pgTable(
     mealType: text("meal_type"), // 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
     // Idempotency support (PHASE 1 - STEP 1: Nullable for migration)
-    clientEventId: text("client_event_id"), // NULLABLE initially for backfill
+    clientEventId: text("client_event_id")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),  // Auto-generate UUID for idempotency
     sourceMeta: json("source_meta").default({}), // Track logging source (text/photo/voice/barcode)
 
     // Enhanced fields for AI/Scanner features
@@ -209,8 +213,6 @@ export const foodLogTable = pgTable(
     // Composite index for user + date queries (most common)
     userDateIdx: index("food_log_user_date_idx").on(table.userId, table.loggedDate),
     // CHECK constraints for nutrition values
-    // Unique constraint for idempotency support
-    userClientEventIdUnique: unique("food_log_user_id_client_event_id_unique").on(table.userId, table.clientEventId),
     caloriesCheck: check("food_calories_check", sql`${table.calories} IS NULL OR (${table.calories} >= 0 AND ${table.calories} <= 10000)`),
     proteinCheck: check("food_protein_check", sql`${table.protein} IS NULL OR (${table.protein} >= 0 AND ${table.protein} <= 500)`),
     carbsCheck: check("food_carbs_check", sql`${table.carbs} IS NULL OR (${table.carbs} >= 0 AND ${table.carbs} <= 1000)`),
@@ -466,7 +468,9 @@ export const recommendationsHistoryTable = pgTable(
   "recommendations_history",
   {
     id: serial("id").primaryKey(),
-    userId: text("user_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
     recommendationId: text("recommendation_id").notNull().unique(),
 
     // Recommendation Content

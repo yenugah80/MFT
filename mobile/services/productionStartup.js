@@ -15,7 +15,6 @@
 import { initializeNativeModules } from './nativeModulesManager';
 import { validateEnvironment, isEnvironmentValid } from './environmentValidation';
 import { detectAvailableFeatures } from './featureDetection';
-import { checkAllPermissions } from './iosPermissionsHandler';
 import { initAnalytics } from './analytics';
 import { setupGlobalErrorHandler } from './crashReporting';
 
@@ -64,12 +63,14 @@ export async function runProductionStartup() {
     });
 
     // Stage 4: Permission Checking
+    // NOTE: Permissions are now checked on-demand (when user tries to use camera/mic)
+    // We skip checking at startup to avoid React hooks being called outside components
     await runStage('permissions', async () => {
-      await checkAllPermissions();
+      console.debug('[ProductionStartup] Permissions will be requested on-demand');
     });
 
     // Stage 5: Error Handling Setup
-    await runStage('errorHandling', async () => {
+    await runStage('errorHandling', () => {
       setupGlobalErrorHandler();
     });
 

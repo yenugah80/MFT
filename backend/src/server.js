@@ -31,6 +31,7 @@ import gamificationRouter from "./routes/gamificationRoutes.js";
 import recommendationsRouter from "./routes/recommendations.js";
 import analyticsRouter from "./routes/analytics.js";
 import adminStrategyRouter from "./routes/admin/strategy.js";
+import consentRouter from "./routes/consent.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 
 const app = express();
@@ -140,12 +141,39 @@ export async function ensureRecommendationsHistoryTable() {
 }
 
 
-// CORS configuration – allow Authorization header for Expo Web and mobile
+// CORS configuration – restrict to trusted origins only (security fix)
+// Allow your frontend domains and mobile app deep links
+const ALLOWED_ORIGINS = [
+  // Production frontend
+  process.env.CORS_ORIGIN || 'https://yourdomain.com',
+  // Development/Testing
+  ...(process.env.NODE_ENV === 'development' ? [
+    'http://localhost:3000',
+    'http://localhost:8081',
+    'http://localhost:19000',  // Expo dev
+    'http://localhost:19001',  // Expo dev
+  ] : []),
+  // Expo hosted app (add your actual Expo project slug)
+  process.env.EXPO_APP_URL || 'https://yourapp.expo.dev',
+];
+
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl requests)
+      if (!origin) return callback(null, true);
+
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,  // Allow cookies/credentials
+    maxAge: 3600,       // Cache CORS preflight for 1 hour
   })
 );
 app.use(express.json({ limit: "50mb" }));
@@ -210,13 +238,13 @@ app.use("/api", analyticsRouter);
 // Mount Admin Strategy Router (Strategic Hybrid Parsing Monitoring)
 app.use("/api/admin/strategy", adminStrategyRouter);
 
+// Mount Consent Router (GDPR-compliant data sharing management)
+app.use("/api/consent", consentRouter);
+
 /* -------------------------------------------
    EXISTING ROUTES
 -------------------------------------------- */
-
-app.get("/api/health", (req, res) => {
-  res.status(200).json({ success: true });
-});
+// Note: Consolidated health check endpoint above at /health
 
 /* -------------------------------------------
    FOOD SEARCH ENDPOINT (BFF)

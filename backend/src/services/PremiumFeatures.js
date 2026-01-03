@@ -84,6 +84,7 @@ class PremiumFeaturesService {
 
   /**
    * Get user's tier and features
+   * Validates that premium subscription is still active
    * @param {string} userId - User ID
    * @returns {Promise<{tier: string, features: object}>}
    */
@@ -99,14 +100,20 @@ class PremiumFeaturesService {
         return { tier: 'free', features: USER_TIERS.free.features };
       }
 
-      // TODO: Link to subscription table in future
-      // For now, check if user has premium subscription flag
-      const tier = user[0].isPremium ? 'premium' : 'free';
+      // Check if user is premium AND subscription hasn't expired
+      const now = new Date();
+      const isPremiumActive =
+        user[0].isPremium &&
+        (!user[0].subscriptionEndsAt || user[0].subscriptionEndsAt > now);
+
+      const tier = isPremiumActive ? 'premium' : 'free';
 
       return {
         tier,
         features: USER_TIERS[tier].features,
         userId,
+        subscriptionActive: isPremiumActive,
+        subscriptionEndsAt: user[0].subscriptionEndsAt,
       };
     } catch (err) {
       console.error('[PremiumFeatures] Error getting user tier:', err);
@@ -117,6 +124,7 @@ class PremiumFeaturesService {
 
   /**
    * Determine which parsing engine to use based on user tier
+   * STRATEGIC: Respects explicit user consent for GDPR compliance
    * @param {string} userId - User ID
    * @returns {Promise<string>} - 'rule-based' or 'ai-powered'
    */
@@ -132,15 +140,49 @@ class PremiumFeaturesService {
       return 'rule-based';
     }
 
-    // Get user tier and use accordingly
+    // Get user tier and check consent
     const userTier = await this.getUserTier(userId);
     const engine = userTier.features.ingredientParsing;
+
+    // CRITICAL: Check explicit consent if OpenAI is intended
+    if (engine === 'ai-powered') {
+      const hasConsent = await this._hasOpenAIConsent(userId);
+
+      if (!hasConsent) {
+        console.log(
+          `[PremiumFeatures] Premium user ${userId} lacks OpenAI consent. Falling back to rule-based.`
+        );
+        return 'rule-based';
+      }
+    }
 
     console.log(
       `[PremiumFeatures] Using ${engine} engine for ${userTier.tier} user ${userId}`
     );
 
     return engine;
+  }
+
+  /**
+   * Check if user has explicit consent to share data with OpenAI
+   * @private
+   * @param {string} userId - User ID
+   * @returns {Promise<boolean>}
+   */
+  async _hasOpenAIConsent(userId) {
+    try {
+      const user = await db.select()
+        .from(profilesTable)
+        .where(eq(profilesTable.userId, userId))
+        .limit(1);
+
+      if (!user[0]) return false;
+      return user[0].openaiDataSharingConsent === true;
+    } catch (err) {
+      console.error('[PremiumFeatures] Error checking OpenAI consent:', err);
+      // Default to NO consent for safety
+      return false;
+    }
   }
 
   /**
@@ -272,6 +314,71 @@ class PremiumFeaturesService {
    */
   getFeatureFlags() {
     return FEATURE_FLAGS;
+  }
+
+  /**
+   * Set OpenAI data sharing consent for a user
+   * GDPR-compliant: Stores explicit consent with timestamp
+   * @param {string} userId - User ID
+   * @param {boolean} consent - True to allow, false to revoke
+   * @returns {Promise<boolean>} - Updated consent status
+   */
+  async setOpenAIConsent(userId, consent) {
+    try {
+      const now = new Date();
+
+      // ATOMIC: Wrap update in transaction to ensure consistency
+      const result = await db.transaction(async (tx) => {
+        return await tx.update(profilesTable)
+          .set({
+            openaiDataSharingConsent: consent,
+            openaiConsentGivenAt: consent ? now : undefined,
+            openaiConsentRevokedAt: !consent ? now : undefined,
+          })
+          .where(eq(profilesTable.userId, userId))
+          .returning();
+      });
+
+      const timestamp = consent ? now : null;
+
+      console.log('[PremiumFeatures] Consent updated:', {
+        userId,
+        consent,
+        timestamp: timestamp?.toISOString(),
+      });
+
+      return result[0]?.openaiDataSharingConsent || false;
+    } catch (err) {
+      console.error('[PremiumFeatures] Error setting OpenAI consent:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Get user's consent status and history
+   * @param {string} userId - User ID
+   * @returns {Promise<object>} - Consent status and metadata
+   */
+  async getOpenAIConsentStatus(userId) {
+    try {
+      const user = await db.select()
+        .from(profilesTable)
+        .where(eq(profilesTable.userId, userId))
+        .limit(1);
+
+      if (!user[0]) {
+        return { hasConsent: false, consentGivenAt: null };
+      }
+
+      return {
+        hasConsent: user[0].openaiDataSharingConsent === true,
+        consentGivenAt: user[0].openaiConsentGivenAt,
+        tier: user[0].isPremium ? 'premium' : 'free',
+      };
+    } catch (err) {
+      console.error('[PremiumFeatures] Error getting consent status:', err);
+      return { hasConsent: false, consentGivenAt: null };
+    }
   }
 }
 

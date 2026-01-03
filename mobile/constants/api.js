@@ -3,14 +3,15 @@ import Constants from 'expo-constants';
 
 /**
  * Get the correct API URL based on environment
- * - Always prefer custom EXPO_PUBLIC_API_URL if set
+ * - Always prefer custom EXPO_PUBLIC_API_BASE_URL if set
  * - In production: use Render backend
  * - In development: use Render backend (NOT localhost)
  */
 function getApiUrl() {
   // If user provided custom URL, use it (highest priority)
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+  // NOTE: Variable name is EXPO_PUBLIC_API_BASE_URL (matches environmentValidation.js)
+  if (process.env.EXPO_PUBLIC_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_API_BASE_URL;
   }
 
   // Always use Render backend (both dev and production)
@@ -30,13 +31,13 @@ export const isPhysicalDevice = Constants.isDevice;
 
 // Log API configuration in development for debugging
 if (__DEV__) {
-  const mode = process.env.EXPO_PUBLIC_API_URL ? 'Custom' : 'Render Backend';
+  const mode = process.env.EXPO_PUBLIC_API_BASE_URL ? 'Custom' : 'Render Backend';
   console.log(`[API Config] 🚀 Mode: ${mode} | Platform: ${Platform.OS}`);
   console.log(`[API Config] 📡 Using API URL: ${API_URL}`);
   console.log(`[API Config] 📱 Physical device: ${isPhysicalDevice}`);
-  console.log(`[API Config] ✅ All requests will use Render backend (no localhost in dev mode)`);
+  console.log(`[API Config] ✅ All requests will use configured backend`);
 
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    console.log(`[API Config] 🔧 Custom API URL detected: ${process.env.EXPO_PUBLIC_API_URL}`);
+  if (process.env.EXPO_PUBLIC_API_BASE_URL) {
+    console.log(`[API Config] 🔧 Custom API URL detected: ${process.env.EXPO_PUBLIC_API_BASE_URL}`);
   }
 }
