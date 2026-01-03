@@ -271,14 +271,29 @@ export default function DashboardContent() {
         setUserProfile(profileResponse);
       }
 
-      // Fetch recommendations from backend
-      const recommendationsResponse = await apiClient.get('/recommendations');
-      if (recommendationsResponse?.recommendations) {
-        setRecommendations(recommendationsResponse.recommendations);
+      // Fetch recommendations from backend (non-critical, short timeout)
+      try {
+        // Use a race condition with short timeout since recommendations aren't critical
+        const recommendationsPromise = apiClient.get('/recommendations');
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Recommendations timeout - skipping')), 3000)
+        );
+        const recommendationsResponse = await Promise.race([recommendationsPromise, timeoutPromise]);
+
+        if (recommendationsResponse?.recommendations) {
+          setRecommendations(recommendationsResponse.recommendations);
+        }
+      } catch (error) {
+        // Skip recommendations on timeout or error - they're not critical
+        if (error.message.includes('timeout')) {
+          console.log('[Dashboard] Recommendations took too long, skipping');
+        } else {
+          console.debug('[Dashboard] Recommendations unavailable:', error.message);
+        }
+        setRecommendations([]);
       }
     } catch (error) {
-      console.error('[Dashboard] Failed to load recommendations:', error);
-      // Fail silently - recommendations are not critical to dashboard
+      console.error('[Dashboard] Failed to load dashboard data:', error);
       setRecommendations([]);
     } finally {
       setRecommendationsLoading(false);

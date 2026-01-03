@@ -7,21 +7,64 @@
  * - Push token registration with backend
  * - Local notification scheduling for reminders
  * - Notification category handling
+ * - Works in development environments without full native builds
  */
 
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import { Platform } from 'react-native'; // eslint-disable-line no-unused-vars
-import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import apiClient from './apiClient';
 
-// Configure notification handler (how to show when app is foregrounded)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+// Lazy-load all native modules to prevent import-time crashes
+let Device = null;
+let Constants = null;
+let Notifications = null;
+let NativeModulesFailed = {};
+
+// Helper to safely load native modules
+async function loadNativeModules() {
+  // Load expo-device
+  try {
+    Device = await import('expo-device');
+  } catch (error) {
+    NativeModulesFailed['expo-device'] = error.message;
+    console.warn('[PushNotifications] expo-device not available:', error.message);
+    Device = { isDevice: false }; // Stub
+  }
+
+  // Load expo-constants
+  try {
+    Constants = await import('expo-constants');
+  } catch (error) {
+    NativeModulesFailed['expo-constants'] = error.message;
+    console.warn('[PushNotifications] expo-constants not available:', error.message);
+    Constants = { expoConfig: {} }; // Stub
+  }
+
+  // Load expo-notifications
+  try {
+    Notifications = await import('expo-notifications');
+
+    // Configure notification handler
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+    } catch (err) {
+      console.warn('[PushNotifications] Could not set handler:', err.message);
+    }
+  } catch (error) {
+    NativeModulesFailed['expo-notifications'] = error.message;
+    console.warn('[PushNotifications] expo-notifications not available:', error.message);
+    Notifications = null; // Will be checked before use
+  }
+}
+
+// Load modules in background without blocking
+loadNativeModules().catch(err => {
+  console.warn('[PushNotifications] Error loading native modules:', err.message);
 });
 
 /**
@@ -39,7 +82,11 @@ export const NOTIFICATION_CATEGORIES = {
  * Check if push notifications are available on this device
  */
 export async function isPushNotificationsAvailable() {
-  if (!Device.isDevice) {
+  if (!Notifications) {
+    return false;
+  }
+
+  if (!Device?.isDevice) {
     console.log('[PushNotifications] Not a physical device - push not available');
     return false;
   }
@@ -56,8 +103,17 @@ export async function isPushNotificationsAvailable() {
  * @returns {'granted' | 'denied' | 'undetermined'}
  */
 export async function getNotificationPermissionStatus() {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status;
+  if (!Notifications) {
+    return 'undetermined';
+  }
+
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status;
+  } catch (error) {
+    console.warn('[PushNotifications] Could not get permission status:', error.message);
+    return 'undetermined';
+  }
 }
 
 /**
@@ -65,6 +121,11 @@ export async function getNotificationPermissionStatus() {
  * @returns {boolean} Whether permissions were granted
  */
 export async function requestNotificationPermissions() {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Notifications module not available');
+    return false;
+  }
+
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
 
@@ -99,20 +160,33 @@ export async function getExpoPushToken() {
       return null;
     }
 
+    if (!Notifications) {
+      console.warn('[PushNotifications] Notifications module not available');
+      return null;
+    }
+
     // Get project ID from constants
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
 
     if (!projectId) {
       console.warn('[PushNotifications] No project ID found in app config');
-      // Try without projectId for development
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: projectId || undefined,
-    });
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: projectId || undefined,
+      });
 
-    console.log('[PushNotifications] Got token:', tokenData.data);
-    return tokenData.data;
+      console.log('[PushNotifications] Got token:', tokenData.data);
+      return tokenData.data;
+    } catch (nativeError) {
+      // Handle native module not found gracefully
+      if (nativeError.message?.includes('ExpoPushTokenManager') || nativeError.message?.includes('Cannot find native module')) {
+        console.warn('[PushNotifications] Native push module not available - running in development?');
+        return null;
+      }
+      throw nativeError;
+    }
   } catch (error) {
     console.error('[PushNotifications] Error getting push token:', error);
     return null;
@@ -181,9 +255,11 @@ export async function setupPushNotifications() {
       return result;
     }
 
-    // Get push token
+    // Get push token - may be null if native module unavailable
     const token = await getExpoPushToken();
     if (!token) {
+      console.log('[PushNotifications] Push token unavailable (expected in dev)');
+      result.permissionStatus = permissionGranted ? 'granted' : 'denied';
       return result;
     }
 
@@ -193,9 +269,13 @@ export async function setupPushNotifications() {
     const registered = await registerPushTokenWithBackend(token);
     result.success = registered;
 
-    // Set up Android notification channel
+    // Set up Android notification channel - also handle gracefully
     if (Platform.OS === 'android') {
-      await setupAndroidNotificationChannels();
+      try {
+        await setupAndroidNotificationChannels();
+      } catch (channelError) {
+        console.warn('[PushNotifications] Failed to setup Android notification channels:', channelError);
+      }
     }
 
     return result;
@@ -209,33 +289,42 @@ export async function setupPushNotifications() {
  * Set up Android notification channels
  */
 async function setupAndroidNotificationChannels() {
-  await Notifications.setNotificationChannelAsync('default', {
-    name: 'Default',
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#6B4EFF',
-  });
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot setup channels - module not available');
+    return;
+  }
 
-  await Notifications.setNotificationChannelAsync('reminders', {
-    name: 'Daily Reminders',
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250],
-    lightColor: '#6B4EFF',
-  });
+  try {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#6B4EFF',
+    });
 
-  await Notifications.setNotificationChannelAsync('hydration', {
-    name: 'Hydration Nudges',
-    importance: Notifications.AndroidImportance.DEFAULT,
-    vibrationPattern: [0, 100],
-    lightColor: '#3B82F6',
-  });
+    await Notifications.setNotificationChannelAsync('reminders', {
+      name: 'Daily Reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250],
+      lightColor: '#6B4EFF',
+    });
 
-  await Notifications.setNotificationChannelAsync('insights', {
-    name: 'Insights & Achievements',
-    importance: Notifications.AndroidImportance.DEFAULT,
-    vibrationPattern: [0, 100, 100, 100],
-    lightColor: '#10B981',
-  });
+    await Notifications.setNotificationChannelAsync('hydration', {
+      name: 'Hydration Nudges',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 100],
+      lightColor: '#3B82F6',
+    });
+
+    await Notifications.setNotificationChannelAsync('insights', {
+      name: 'Insights & Achievements',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 100, 100, 100],
+      lightColor: '#10B981',
+    });
+  } catch (error) {
+    console.warn('[PushNotifications] Error setting up Android notification channels:', error);
+  }
 }
 
 // ============== Local Notification Scheduling ==============
@@ -246,8 +335,12 @@ async function setupAndroidNotificationChannels() {
  * @param {number} minute - Minute (0-59)
  */
 export async function scheduleDailyReminder(hour = 12, minute = 0) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot schedule - module not available');
+    return null;
+  }
+
   try {
-    // Cancel existing daily reminders first
     await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
 
     const identifier = await Notifications.scheduleNotificationAsync({
@@ -277,8 +370,12 @@ export async function scheduleDailyReminder(hour = 12, minute = 0) {
  * @param {number[]} hours - Array of hours to remind (e.g., [10, 14, 18])
  */
 export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot schedule - module not available');
+    return [];
+  }
+
   try {
-    // Cancel existing hydration reminders
     await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
 
     const identifiers = [];
@@ -318,6 +415,10 @@ export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
  * @param {string} category - The notification category to cancel
  */
 export async function cancelScheduledNotifications(category) {
+  if (!Notifications) {
+    return;
+  }
+
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     const toCancel = scheduled.filter(
@@ -338,6 +439,10 @@ export async function cancelScheduledNotifications(category) {
  * Cancel all scheduled notifications
  */
 export async function cancelAllScheduledNotifications() {
+  if (!Notifications) {
+    return;
+  }
+
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
     console.log('[PushNotifications] All scheduled notifications cancelled');
@@ -351,6 +456,11 @@ export async function cancelAllScheduledNotifications() {
  * @param {object} options - Notification options
  */
 export async function showLocalNotification({ title, body, data = {} }) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot show notification - module not available');
+    return null;
+  }
+
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
       content: {
@@ -371,6 +481,10 @@ export async function showLocalNotification({ title, body, data = {} }) {
  * Get the badge count
  */
 export async function getBadgeCount() {
+  if (!Notifications) {
+    return 0;
+  }
+
   try {
     return await Notifications.getBadgeCountAsync();
   } catch (error) {
@@ -383,6 +497,10 @@ export async function getBadgeCount() {
  * @param {number} count
  */
 export async function setBadgeCount(count) {
+  if (!Notifications) {
+    return;
+  }
+
   try {
     await Notifications.setBadgeCountAsync(count);
   } catch (error) {
@@ -398,5 +516,12 @@ export async function clearBadgeCount() {
 }
 
 // Export notification event listeners for use in components
-export const addNotificationReceivedListener = Notifications.addNotificationReceivedListener;
-export const addNotificationResponseReceivedListener = Notifications.addNotificationResponseReceivedListener;
+export const addNotificationReceivedListener = (callback) => {
+  if (!Notifications) return { remove: () => {} };
+  return Notifications.addNotificationReceivedListener(callback);
+};
+
+export const addNotificationResponseReceivedListener = (callback) => {
+  if (!Notifications) return { remove: () => {} };
+  return Notifications.addNotificationResponseReceivedListener(callback);
+};

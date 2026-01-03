@@ -32,9 +32,30 @@ let crashQueue = [];
 let isProcessingQueue = false;
 
 /**
+ * Check if error should be ignored (expected development errors)
+ */
+const isIgnorableError = (error) => {
+  const message = error?.message || String(error);
+  const ignorableErrors = [
+    'Cannot find native module',
+    'ExpoPushTokenManager',
+    'ExpoDevice',
+    'ExpoHaptics',
+    'Notifications.setNotificationHandler is not a function',
+  ];
+  return ignorableErrors.some(pattern => message.includes(pattern));
+};
+
+/**
  * Report a crash/error to the backend
  */
 export const reportCrash = async (error, errorInfo = {}, context = {}) => {
+  // Ignore expected development errors
+  if (isIgnorableError(error)) {
+    console.debug('[CrashReporting] Ignoring expected development error:', error?.message);
+    return;
+  }
+
   const crashReport = {
     timestamp: new Date().toISOString(),
     error: {

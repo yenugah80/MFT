@@ -14,13 +14,24 @@ import "@/i18n/config"; // Initialize i18n
 import { LogBox } from 'react-native';
 
 // Analytics & Crash Reporting (FREE - uses your backend)
-import { initAnalytics, cleanupAnalytics } from "@/services/analytics";
-import { setupGlobalErrorHandler } from "@/services/crashReporting";
+import { cleanupAnalytics } from "@/services/analytics";
 
-// Suppress known deprecation warnings
+// Production startup utilities
+import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
+
+// Suppress known deprecation warnings & expected development errors
 LogBox.ignoreLogs([
   'Expo AV has been deprecated',
   'The app is running using the Legacy Architecture',
+  // Native module errors (expected in dev without native build)
+  'Cannot find native module \'ExpoPushTokenManager\'',
+  'Cannot find native module \'ExpoDevice\'',
+  'Cannot find native module \'ExpoHaptics\'',
+  'Cannot find native module \'ExpoCamera\'',
+  'Cannot find native module \'ExpoAV\'',
+  // Expected in development
+  'Non-serializable values were found in the navigation state',
+  'Sending `onAnimatedValueUpdate` with no listeners registered',
 ]);
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -57,14 +68,33 @@ export default function RootLayout() {
 
   // Initialize analytics & crash reporting on app start
   useEffect(() => {
-    // Set up global error handler for unhandled JS errors
-    setupGlobalErrorHandler();
+    let isMounted = true;
 
-    // Initialize analytics session
-    initAnalytics();
+    const initializeApp = async () => {
+      try {
+        // Run complete production startup sequence
+        const startupResult = await runProductionStartup();
+
+        if (!isMounted) return;
+
+        if (startupResult.success) {
+          console.debug('[AppLayout] ✓ Production startup completed successfully');
+        } else {
+          console.error('[AppLayout] ✗ Production startup had errors:', startupResult.error);
+          // App will still run with degraded features, but log the report
+          console.debug('[AppLayout] Startup report:', getStartupReport());
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('[AppLayout] Startup initialization failed:', error);
+      }
+    };
+
+    initializeApp();
 
     // Cleanup on unmount
     return () => {
+      isMounted = false;
       cleanupAnalytics();
     };
   }, []);

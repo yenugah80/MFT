@@ -114,10 +114,11 @@ export const NotificationProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('[NotificationProvider] Push setup error:', error);
+      // Graceful degradation - don't crash if native module unavailable
       setPushStatus((prev) => ({
         ...prev,
         initialized: true,
-        error: error.message,
+        error: 'Push notifications unavailable on this device',
       }));
     }
   }, [isSignedIn]);

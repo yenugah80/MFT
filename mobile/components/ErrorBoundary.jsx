@@ -3,6 +3,21 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { reportCrash } from '../services/crashReporting';
 
+/**
+ * Check if error is an expected development error that should be ignored
+ */
+const isExpectedDevError = (error) => {
+  const message = error?.message || String(error);
+  const expectedErrors = [
+    'Cannot find native module',
+    'ExpoPushTokenManager',
+    'ExpoDevice',
+    'ExpoHaptics',
+    'Notifications.setNotificationHandler is not a function',
+  ];
+  return expectedErrors.some(pattern => message.includes(pattern));
+};
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -14,12 +29,22 @@ class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    // Update state so the next render will show the fallback UI
+    // Ignore expected development errors - don't show error UI
+    if (isExpectedDevError(error)) {
+      return { hasError: false };
+    }
+    // Update state so the next render will show the fallback UI for real errors
     return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    // Log error details
+    // Ignore expected development errors silently
+    if (isExpectedDevError(error)) {
+      console.debug('[ErrorBoundary] Ignoring expected development error:', error.message);
+      return;
+    }
+
+    // Log error details for real errors
     console.error('ErrorBoundary caught an error:', error, errorInfo);
 
     this.setState({
