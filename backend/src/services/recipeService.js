@@ -2,16 +2,58 @@
  * Recipe Service
  * Generates cooking instructions and prep time estimates for recommended foods
  * Uses AI to create realistic, safe recipes
+ *
+ * Features:
+ * - In-memory caching with 24-hour TTL
+ * - Graceful fallback to default recipes on errors
+ * - Input validation and sanitization
  */
 
 import OpenAI from 'openai';
 import { ENV } from '../config/env.js';
+import { logError, createServiceLogger } from '../utils/logger.js';
+
+const logger = createServiceLogger('[RecipeService]');
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: ENV?.OPENAI_API_KEY || process.env.OPENAI_API_KEY,
   timeout: parseInt(process.env.OPENAI_TIMEOUT_MS) || 30000,
 });
+
+// In-memory cache for recipes (24-hour TTL)
+const RECIPE_CACHE = new Map();
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Get cache key for a recipe
+ */
+function getCacheKey(foodName, portion) {
+  return `${foodName.toLowerCase()}:${portion.toLowerCase()}`;
+}
+
+/**
+ * Check if value is in cache and not expired
+ */
+function getFromCache(key) {
+  const cached = RECIPE_CACHE.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > CACHE_TTL) {
+    RECIPE_CACHE.delete(key);
+    return null;
+  }
+  return cached.data;
+}
+
+/**
+ * Set value in cache with timestamp
+ */
+function setInCache(key, data) {
+  RECIPE_CACHE.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+}
 
 /**
  * Generate recipe instructions for a food
@@ -22,6 +64,14 @@ const openai = new OpenAI({
  */
 export async function generateRecipeInstructions(foodName, portion, ingredients = []) {
   try {
+    const cacheKey = getCacheKey(foodName, portion);
+
+    // Check cache first
+    const cached = getFromCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const ingredientList = ingredients.length > 0 ?
       `Ingredients: ${ingredients.join(', ')}\n` :
       '';
@@ -62,7 +112,7 @@ Return ONLY valid JSON (no markdown):
     // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.log('[RecipeService] AI response did not contain valid JSON');
+      logger.debug('AI response did not contain valid JSON');
       return getDefaultRecipe(foodName);
     }
 
@@ -71,10 +121,12 @@ Return ONLY valid JSON (no markdown):
     // Validate and clean recipe data
     const validated = validateRecipeData(recipe);
 
-    console.log(`[RecipeService] Generated recipe for: ${foodName}`);
+    // Cache successful generation
+    setInCache(cacheKey, validated);
+    logger.debug(`Generated recipe for "${foodName}"`);
     return validated;
   } catch (error) {
-    console.error('[RecipeService] Recipe generation error:', error.message);
+    logError('[RecipeService]', error, `generating recipe for "${foodName}"`);
     return getDefaultRecipe(foodName);
   }
 }

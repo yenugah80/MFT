@@ -7,12 +7,50 @@
 import OpenAI from 'openai';
 import axios from 'axios';
 import { ENV } from '../config/env.js';
+import { logError, createServiceLogger } from '../utils/logger.js';
+
+const logger = createServiceLogger('[MicronutrientService]');
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: ENV?.OPENAI_API_KEY || process.env.OPENAI_API_KEY,
   timeout: parseInt(process.env.OPENAI_TIMEOUT_MS) || 30000,
 });
+
+// In-memory cache for micronutrient estimates (24-hour TTL)
+const ESTIMATION_CACHE = new Map();
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const USDA_NOT_FOUND_CACHE = new Set(); // Track foods not found in USDA
+
+/**
+ * Get cache key for a food
+ */
+function getCacheKey(foodName, portion) {
+  return `${foodName.toLowerCase()}:${portion.toLowerCase()}`;
+}
+
+/**
+ * Check if value is in cache and not expired
+ */
+function getFromCache(key) {
+  const cached = ESTIMATION_CACHE.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > CACHE_TTL) {
+    ESTIMATION_CACHE.delete(key);
+    return null;
+  }
+  return cached.data;
+}
+
+/**
+ * Set value in cache with timestamp
+ */
+function setInCache(key, data) {
+  ESTIMATION_CACHE.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+}
 
 // Micronutrients definition with daily values (FDA/NIH standards)
 export const MICRONUTRIENTS = {
@@ -55,16 +93,32 @@ export const MICRONUTRIENTS = {
  */
 export async function estimateMicronutrients(foodName, portion, macros) {
   try {
-    // Try USDA database first (fastest, most accurate)
-    const usdaData = await tryUSDAEstimation(foodName, portion);
-    if (usdaData && Object.keys(usdaData).length > 0) {
-      return usdaData;
+    const cacheKey = getCacheKey(foodName, portion);
+
+    // Check if already cached
+    const cached = getFromCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Skip USDA if we know it wasn't found before
+    let usdaData = {};
+    if (!USDA_NOT_FOUND_CACHE.has(foodName.toLowerCase())) {
+      usdaData = await tryUSDAEstimation(foodName, portion);
+      if (usdaData && Object.keys(usdaData).length > 0) {
+        setInCache(cacheKey, usdaData);
+        return usdaData;
+      }
     }
 
     // Fallback to AI estimation
-    return await tryAIEstimation(foodName, portion, macros);
+    const aiData = await tryAIEstimation(foodName, portion, macros);
+    if (aiData && Object.keys(aiData).length > 0) {
+      setInCache(cacheKey, aiData);
+    }
+    return aiData;
   } catch (error) {
-    console.error('[MicronutrientService] Estimation error:', error);
+    logError('[MicronutrientService]', error, `estimating micronutrients for "${foodName}"`, true);
     // Return empty object on error - better to have partial data than fail
     return {};
   }
@@ -77,7 +131,7 @@ async function tryUSDAEstimation(foodName, portion) {
   try {
     const USDA_API_KEY = process.env.USDA_API_KEY;
     if (!USDA_API_KEY) {
-      console.log('[MicronutrientService] USDA API key not configured, skipping USDA lookup');
+      console.debug('[MicronutrientService] USDA API key not configured, skipping USDA lookup');
       return {};
     }
 
@@ -88,7 +142,8 @@ async function tryUSDAEstimation(foodName, portion) {
     const foods = searchResponse.data.foods;
 
     if (!foods || foods.length === 0) {
-      console.log(`[MicronutrientService] No USDA match found for: ${foodName}`);
+      console.debug(`[MicronutrientService] USDA: No match found for "${foodName}" - will use AI estimation`);
+      USDA_NOT_FOUND_CACHE.add(foodName.toLowerCase());
       return {};
     }
 
@@ -128,10 +183,17 @@ async function tryUSDAEstimation(foodName, portion) {
       else if (nutrientName.includes('selenium')) micros.selenium = Math.round(nutrient.amount);
     }
 
-    console.log(`[MicronutrientService] USDA lookup successful for: ${foodName}, found ${Object.keys(micros).length} nutrients`);
+    logger.debug(`USDA found ${Object.keys(micros).length} nutrients for "${foodName}"`);
     return micros;
   } catch (error) {
-    console.error('[MicronutrientService] USDA estimation failed:', error.message);
+    // 404 errors are expected when USDA doesn't have the food - track and move to AI
+    if (error.response?.status === 404) {
+      logger.debug(`USDA: "${foodName}" not in database - will use AI estimation`);
+      USDA_NOT_FOUND_CACHE.add(foodName.toLowerCase());
+      return {};
+    }
+    // Log real errors appropriately
+    logError('[MicronutrientService]', error, `USDA lookup for "${foodName}"`);
     return {};
   }
 }
@@ -193,10 +255,10 @@ Only include nutrients where you have reasonable confidence.`;
       }
     }
 
-    console.log(`[MicronutrientService] AI estimation for: ${foodName}, estimated ${Object.keys(validMicros).length} nutrients`);
+    logger.debug(`AI estimated ${Object.keys(validMicros).length} nutrients for "${foodName}"`);
     return validMicros;
   } catch (error) {
-    console.error('[MicronutrientService] AI estimation failed:', error.message);
+    logError('[MicronutrientService]', error, `AI estimation for "${foodName}"`);
     return {};
   }
 }
