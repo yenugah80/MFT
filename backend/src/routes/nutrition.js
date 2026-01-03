@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../config/db.js";
-import { foodLogTable, recipesTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable } from "../db/schema.js";
+import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable } from "../db/schema.js";
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC } from "../utils/timezone.js";

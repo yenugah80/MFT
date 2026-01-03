@@ -242,43 +242,6 @@ export const barcodeProductsTable = pgTable(
   })
 );
 
-// Recipes table - for parsed or saved recipes
-export const recipesTable = pgTable(
-  "recipes",
-  {
-    id: serial("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    description: text("description"),
-    instructions: text("instructions"),
-    ingredients: json("ingredients").default([]), // [{name: "flour", amount: "1 cup"}]
-
-    // Nutrition per serving
-    calories: integer("calories"),
-    protein: integer("protein"),
-    carbs: integer("carbs"),
-    fats: integer("fats"),
-
-    prepTimeMinutes: integer("prep_time_minutes"),
-    cookTimeMinutes: integer("cook_time_minutes"),
-    servings: integer("servings").default(1),
-
-    tags: json("tags").default([]), // ['vegan', 'gluten-free']
-    imageUrl: text("image_url"),
-
-    createdAt: timestamp("created_at").defaultNow(),
-    updatedAt: timestamp("updated_at").defaultNow(),
-  },
-  (table) => ({
-    // CHECK constraints
-    servingsCheck: check("servings_check", sql`${table.servings} >= 1 AND ${table.servings} <= 100`),
-    prepTimeCheck: check("prep_time_check", sql`${table.prepTimeMinutes} IS NULL OR (${table.prepTimeMinutes} >= 0 AND ${table.prepTimeMinutes} <= 1440)`),
-    cookTimeCheck: check("cook_time_check", sql`${table.cookTimeMinutes} IS NULL OR (${table.cookTimeMinutes} >= 0 AND ${table.cookTimeMinutes} <= 1440)`),
-  })
-);
-
 // Daily nutrition summary table
 export const dailyNutritionSummaryTable = pgTable(
   "daily_nutrition_summary",
