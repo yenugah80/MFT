@@ -132,8 +132,8 @@ async function checkAudioRecording() {
  */
 async function checkTextToSpeech() {
   try {
-    const TTS = await Modules.tts();
-    return !!TTS && typeof TTS.speak === 'function';
+    const Speech = await Modules.speech();
+    return !!Speech && typeof Speech.speak === 'function';
   } catch {
     return false;
   }

@@ -27,7 +27,7 @@ const moduleImportMap = {
   haptics: () => import('expo-haptics'),
   camera: () => import('expo-camera'),
   av: () => import('expo-av'),
-  tts: () => import('expo-tts'),
+  speech: () => import('expo-speech'),
   'mlkit-ocr': () => import('expo-mlkit-ocr'),
   'image-picker': () => import('expo-image-picker'),
   'image-manipulator': () => import('expo-image-manipulator'),
@@ -76,7 +76,7 @@ function getStub(moduleName) {
     haptics: { selectionAsync: () => {}, notificationAsync: () => {} },
     camera: { CameraView: null, useCameraPermissions: () => [{ granted: false }] },
     av: { Audio: { Recording: {} }, Video: {} },
-    tts: { speak: () => Promise.resolve() },
+    speech: { speak: () => Promise.resolve(), stop: () => Promise.resolve() },
     'mlkit-ocr': { recognizeFromURI: () => Promise.resolve(null) },
     'image-picker': { launchCameraAsync: () => Promise.resolve({ cancelled: true }), launchImageLibraryAsync: () => Promise.resolve({ cancelled: true }) },
     'image-manipulator': { manipulateAsync: () => Promise.resolve({ uri: null }) },
@@ -189,9 +189,9 @@ export const Modules = {
     return getModule('av');
   },
 
-  // Text-to-Speech
-  async tts() {
-    return getModule('tts');
+  // Text-to-Speech (via expo-speech)
+  async speech() {
+    return getModule('speech');
   },
 
   // ML Kit OCR
