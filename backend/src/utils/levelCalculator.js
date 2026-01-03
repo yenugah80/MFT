@@ -19,6 +19,11 @@ export function getXPForLevel(level) {
  * @returns {Object} Level information
  */
 export function calculateLevel(totalXP) {
+  // Guard against invalid input
+  if (totalXP == null || isNaN(totalXP) || totalXP < 0) {
+    totalXP = 0;
+  }
+
   let level = 1;
   let cumulativeXP = 0;
 

@@ -3,5 +3,12 @@
     "stylelint.validate": ["css", "scss", "less"],
     "css.validate": false,
     "scss.validate": false,
-    "less.validate": false
+    "less.validate": false,
+    "eslint.workingDirectories": [
+        {
+            "directory": "mobile",
+            "changeProcessCWD": true
+        }
+    ],
+    "typescript.tsserver.projectRoot": "mobile"
 }

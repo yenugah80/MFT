@@ -26,7 +26,7 @@ export async function logMeal(req, res) {
     if (!foodName) {
       return res.status(400).json({ error: "foodName is required" });
     }
-    const [inserted] = await req.db
+    const result = await req.db
       .insert(foodLogTable)
       .values({
         userId,
@@ -50,7 +50,11 @@ export async function logMeal(req, res) {
         source,
       })
       .returning();
-    res.status(201).json(inserted);
+
+    if (!result || result.length === 0) {
+      return res.status(500).json({ error: "Failed to insert meal log" });
+    }
+    res.status(201).json(result[0]);
   } catch (err) {
     console.error("Error logging meal", err);
     res.status(500).json({ error: "Something went wrong" });
@@ -65,14 +69,18 @@ export async function logWater(req, res) {
     if (Number.isNaN(parsed) || parsed <= 0) {
       return res.status(400).json({ error: "amountLiters must be a positive number" });
     }
-    const [inserted] = await req.db
+    const result = await req.db
       .insert(waterLogTable)
       .values({
         userId,
         amountLiters: parsed,
       })
       .returning();
-    res.status(201).json(inserted);
+
+    if (!result || result.length === 0) {
+      return res.status(500).json({ error: "Failed to insert water log" });
+    }
+    res.status(201).json(result[0]);
   } catch (err) {
     console.error("Error logging water", err);
     res.status(500).json({ error: "Something went wrong" });
@@ -86,7 +94,7 @@ export async function logMood(req, res) {
     if (!mood) {
       return res.status(400).json({ error: "mood is required" });
     }
-    const [inserted] = await req.db
+    const result = await req.db
       .insert(moodLogTable)
       .values({
         userId,
@@ -95,7 +103,11 @@ export async function logMood(req, res) {
         source,
       })
       .returning();
-    res.status(201).json(inserted);
+
+    if (!result || result.length === 0) {
+      return res.status(500).json({ error: "Failed to insert mood log" });
+    }
+    res.status(201).json(result[0]);
   } catch (err) {
     console.error("Error logging mood", err);
     res.status(500).json({ error: "Something went wrong" });

@@ -1,5 +1,7 @@
 # MFT (My Food Tracker) - Evidence-Based Nutrition & Wellness Platform
 
+<!-- markdownlint-disable MD022 MD032 MD031 MD040 MD026 MD034 -->
+
 > **Mission:** Empower individuals to understand the relationship between nutrition, hydration, mood, and overall wellness through transparent AI technology and evidence-based insights.
 
 **Not Another Diet App.** MFT is a research-backed platform that helps you discover patterns in your own health data, without prescriptive diets or unsustainable restrictions.
@@ -46,18 +48,22 @@ MFT is a cross-platform mobile application (iOS/Android) that:
 ## Core Philosophy
 
 ### 1. **Education Over Engagement**
+
 We prioritize helping users **understand** their health data, not just logging it compulsively.
 
 **Example:** Instead of "You're 200 calories under goal!" we say:
 > "You're at 1,800 of 2,000 calories. Chronic undereating can impact metabolism and energy levels. Consider a balanced dinner with protein, complex carbs, and healthy fats."
 
 ### 2. **Transparency Over Black Boxes**
+
 Every algorithm, score, and recommendation shows:
+
 - How it's calculated
 - Why it matters
 - What scientific evidence supports it
 
 **Example:** NutriScore A-E grading shows exact breakdown:
+
 - Calorie adherence (30%)
 - Protein adequacy (25%)
 - Hydration (20%)
@@ -65,12 +71,14 @@ Every algorithm, score, and recommendation shows:
 - Meal consistency (10%)
 
 ### 3. **Privacy as Default**
+
 - **Offline-first** - All data stored locally, syncs when you choose
 - **No third-party trackers** - No analytics SDKs beyond crash reporting
 - **Encrypted** - E2E encryption for cloud sync
 - **GDPR/CCPA compliant** - Export/delete your data anytime
 
 ### 4. **Science-Backed, Not Trend-Backed**
+
 - Nutritional recommendations based on USDA dietary guidelines
 - Mood correlations acknowledge individual variance
 - AI accuracy claims are measurable and reproducible
@@ -455,7 +463,7 @@ All research papers cited in-app are linked to PubMed or journal websites.
 
 **Micronutrient Tracking:**
 - Vitamins/minerals are estimates, not lab-tested values
-- Use as directional guidance (e.g., "low iron intake this week")
+- Use as directional guidance (e.g., low iron intake this week)
 - Blood work is the only way to confirm deficiencies
 
 **Mood Correlations:**
@@ -504,7 +512,7 @@ All research papers cited in-app are linked to PubMed or journal websites.
    - Optional: Add dietary restrictions (vegan, gluten-free, etc.)
 
 3. **Log Your First Meal:**
-   - Tap "+" button
+   - Tap the + button
    - Choose input method (photo, voice, text, barcode)
    - Review AI analysis and adjust if needed
    - Save to dashboard
@@ -559,14 +567,9 @@ OPEN_FOOD_FACTS_API=...
 ```
 
 **Mobile (app.json/environment):**
-```json
-{
-  "extra": {
-    "apiBaseUrl": "http://localhost:3000",
-    "clerkPublishableKey": "pk_..."
-  }
-}
-```
+
+- `extra.apiBaseUrl`: `http://localhost:3000`
+- `extra.clerkPublishableKey`: your Clerk publishable key (e.g., `pk_test_key`)
 
 ---
 
@@ -705,7 +708,7 @@ Mobile: Re-render dashboard with new data
 
 ### Q1 2026
 - [ ] **Automatic Correlation Insights Card** (P0 - Critical)
-- [ ] **Educational "Learn" Section** (P0 - Trust Builder)
+- [ ] **Educational 'Learn' Section** (P0 - Trust Builder)
 - [ ] **Transparent Scoring Breakdown** (P0 - Credibility)
 - [ ] **Stress Management Toolkit** (P1 - Wellness)
 - [ ] **Apple Health Integration** (P1 - Ecosystem)

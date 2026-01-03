@@ -21,7 +21,7 @@ import NodeCache from 'node-cache';
 const ENABLE_USDA_VERIFICATION = process.env.ENABLE_USDA_VERIFICATION === 'true';
 
 // Aggressive caching (24 hours)
-const nutritionCache = new NodeCache({ stdTTL: 86400, checkperiod: 600 });
+const nutritionCache = new NodeCache({ stdTTL: 86400, checkperiod: 600, maxKeys: 5000 });
 
 class SmartNutritionResolver {
   constructor() {

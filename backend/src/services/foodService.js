@@ -235,7 +235,7 @@ export const FoodService = {
 
       let combinedResults = [...meals, ...products, ...foods];
 
-      if (combinedResults.length === 0 && OPENAI_API_KEY) {
+      if (combinedResults.length === 0 && hasOpenAI()) {
         console.log("[FoodService] No results in standard APIs. Falling back to OpenAI.");
         const aiResult = await FoodService.generateFoodDetailsAI(query);
         if (aiResult) {
