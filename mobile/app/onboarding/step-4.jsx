@@ -55,7 +55,7 @@ const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, de
         friction: 8,
       }),
     ]).start();
-  }, []);
+  }, [delay]);
 
   return (
     <Animated.View
@@ -106,7 +106,7 @@ const WaterCard = ({ value, onEdit, delay = 0 }) => {
       delay,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [delay]);
 
   return (
     <Animated.View style={[styles.waterCard, { opacity: fadeAnim }]}>
@@ -195,14 +195,14 @@ const Step4Screen = () => {
         }),
       ]).start();
     }
-  }, [calculatedGoals]);
+  }, [calculatedGoals, heroFadeAnim, heroScaleAnim, buttonSlideAnim]);
 
   // Show error if calculation fails
   useEffect(() => {
     if (error && editingGoal !== 'saving') {
       Alert.alert('Error', error, [{ text: 'OK', onPress: () => {} }]);
     }
-  }, [error]);
+  }, [error, editingGoal]);
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step4);

@@ -26,7 +26,7 @@ export default function TermsOfServiceScreen() {
 
         <Section title="Acceptance of Terms">
           <Text style={styles.text}>
-            By accessing and using My-Food-Tracker ("the App"), you accept and agree to be
+            By accessing and using My-Food-Tracker (&quot;the App&quot;), you accept and agree to be
             bound by these Terms of Service. If you do not agree to these terms, please
             do not use the App.
           </Text>
@@ -132,7 +132,7 @@ export default function TermsOfServiceScreen() {
           <Text style={styles.text}>
             TO THE MAXIMUM EXTENT PERMITTED BY LAW:{'\n\n'}
 
-            • We provide the App "AS IS" without warranties{'\n'}
+            • We provide the App &quot;AS IS&quot; without warranties{'\n'}
             • We are not liable for any indirect, incidental, or consequential damages{'\n'}
             • Our total liability shall not exceed the amount you paid us in the last 12 months{'\n'}
             • We are not responsible for third-party services (OpenAI, Clerk, etc.)
@@ -154,7 +154,7 @@ export default function TermsOfServiceScreen() {
         <Section title="Changes to Terms">
           <Text style={styles.text}>
             We reserve the right to modify these Terms at any time. We will notify you
-            of any changes by updating the "Last Updated" date. Continued use of the App
+            of any changes by updating the &quot;Last Updated&quot; date. Continued use of the App
             after changes constitutes acceptance of the updated Terms.
           </Text>
         </Section>

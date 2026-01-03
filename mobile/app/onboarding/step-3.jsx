@@ -163,7 +163,7 @@ const Step3Screen = () => {
       duration: 300,
       useNativeDriver: true
     }).start();
-  }, [activeSection]);
+  }, [activeSection, fadeAnims]);
 
   // Section configuration (Fix #4: memoized to prevent recreation on every render)
   const sections = useMemo(() => [

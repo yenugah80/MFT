@@ -64,17 +64,23 @@ export const accountSettingsTable = pgTable(
 );
 
 // Dietary preferences table
-export const dietaryPreferencesTable = pgTable("dietary_preferences", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => profilesTable.userId, { onDelete: "cascade" }),
-  preferences: json("preferences").default([]), // Array of dietary preferences like ['Vegan', 'Gluten-free']
-  allergies: json("allergies").default([]), // Array of allergies
-  dislikes: json("dislikes").default([]), // Array of foods user dislikes
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+export const dietaryPreferencesTable = pgTable(
+  "dietary_preferences",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    preferences: json("preferences").default([]), // Array of dietary preferences like ['Vegan', 'Gluten-free']
+    allergies: json("allergies").default([]), // Array of allergies
+    dislikes: json("dislikes").default([]), // Array of foods user dislikes
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userIdUnique: unique("dietary_preferences_user_id_unique").on(table.userId),
+  })
+);
 
 // Nutrition goals table
 export const nutritionGoalsTable = pgTable(
@@ -94,6 +100,7 @@ export const nutritionGoalsTable = pgTable(
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => ({
+    userIdUnique: unique("nutrition_goals_user_id_unique").on(table.userId),
     // CHECK constraints for nutrition goals
     primaryGoalCheck: check("primary_goal_check", sql`${table.primaryGoal} IS NULL OR ${table.primaryGoal} IN ('lose', 'maintain', 'gain')`),
     caloriesCheck: check("calories_check", sql`${table.dailyCalories} IS NULL OR (${table.dailyCalories} >= 800 AND ${table.dailyCalories} <= 10000)`),
@@ -126,6 +133,7 @@ export const gamificationTable = pgTable(
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => ({
+    userIdUnique: unique("gamification_user_id_unique").on(table.userId),
     // CHECK constraints for gamification
     xpCheck: check("xp_check", sql`${table.xp} >= 0`),
     levelCheck: check("level_check", sql`${table.level} >= 1 AND ${table.level} <= 999`),

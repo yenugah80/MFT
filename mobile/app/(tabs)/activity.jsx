@@ -55,16 +55,16 @@ function ActivityScreen() {
       duration: 600,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [loadActivities, fadeAnim]);
 
   // Save activities whenever they change
   useEffect(() => {
     if (todayActivities.length > 0) {
       saveActivities();
     }
-  }, [todayActivities]);
+  }, [todayActivities, saveActivities]);
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
@@ -87,9 +87,9 @@ function ActivityScreen() {
     } catch (error) {
       console.error('Error loading activities:', error);
     }
-  };
+  }, []);
 
-  const saveActivities = async () => {
+  const saveActivities = useCallback(async () => {
     try {
       // Merge today's activities with all activities
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -106,7 +106,7 @@ function ActivityScreen() {
     } catch (error) {
       console.error('Error saving activities:', error);
     }
-  };
+  }, [todayActivities]);
 
   // Get filtered exercises
   const getFilteredExercises = () => {

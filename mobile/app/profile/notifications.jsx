@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 
 import SafeScreen from '../../components/SafeScreen';
 import { useNotification } from '../../providers/NotificationProvider';
+import apiClient from '../../services/apiClient';
 import {
   BRAND,
   SURFACES,

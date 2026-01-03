@@ -135,7 +135,7 @@ const OCR_KEYWORDS = ['calories', 'protein', 'carb', 'fat', 'serving', 'nutritio
  * Detect meal type based on current time
  * @returns {'breakfast'|'lunch'|'dinner'|'snack'} Meal type
  */
-function getMealTypeFromTime() {
+export function getMealTypeFromTime() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 11) return 'breakfast';
   if (hour >= 11 && hour < 15) return 'lunch';

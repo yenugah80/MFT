@@ -26,7 +26,7 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="Introduction">
           <Text style={styles.text}>
-            My-Food-Tracker ("we," "our," or "us") is committed to protecting your privacy.
+            My-Food-Tracker (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
             This Privacy Policy explains how we collect, use, disclose, and safeguard your
             information when you use our mobile application.
           </Text>
@@ -129,7 +129,7 @@ export default function PrivacyPolicyScreen() {
         <Section title="Changes to This Policy">
           <Text style={styles.text}>
             We may update this Privacy Policy from time to time. We will notify you of any
-            changes by updating the "Last Updated" date. Continued use of the app after
+            changes by updating the &quot;Last Updated&quot; date. Continued use of the app after
             changes constitutes acceptance of the updated policy.
           </Text>
         </Section>

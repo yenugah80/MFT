@@ -26,7 +26,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Hooks
-import { useFoodAnalysis } from '../../hooks/useFoodAnalysis';
+import { useFoodAnalysis, getMealTypeFromTime } from '../../hooks/useFoodAnalysis';
 // SWITCHED: Using Instant Voice (On-Device) for immediate feedback
 import { useServerVoice } from '../../hooks/useServerVoice';
 import { useFoodLog } from '../../hooks/useFoodLog';
@@ -283,7 +283,7 @@ export default function LogScreen() {
 
       // Analyze with regional context through the new analyzeVoice method
       await foodAnalysis.analyzeVoice(transcript, {
-        mealType: getMealTypeFromTime?.() || 'general'
+        mealType: getMealTypeFromTime()
       });
 
       setAnalyzedFood(null); // Clear single-item state to prefer list view
