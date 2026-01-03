@@ -18,6 +18,24 @@ const NativeModulesState = {
 };
 
 /**
+ * Module import map (required for Metro bundler compatibility)
+ */
+const moduleImportMap = {
+  notifications: () => import('expo-notifications'),
+  device: () => import('expo-device'),
+  constants: () => import('expo-constants'),
+  haptics: () => import('expo-haptics'),
+  camera: () => import('expo-camera'),
+  av: () => import('expo-av'),
+  tts: () => import('expo-tts'),
+  'mlkit-ocr': () => import('expo-mlkit-ocr'),
+  'image-picker': () => import('expo-image-picker'),
+  'image-manipulator': () => import('expo-image-manipulator'),
+  'secure-store': () => import('expo-secure-store'),
+  localization: () => import('expo-localization'),
+};
+
+/**
  * Safely load a native module with fallback
  */
 async function loadModule(moduleName, fallbackValue = null) {
@@ -26,7 +44,12 @@ async function loadModule(moduleName, fallbackValue = null) {
       return NativeModulesState.modules[moduleName];
     }
 
-    const module = await import(`expo-${moduleName.toLowerCase()}`);
+    const moduleLoader = moduleImportMap[moduleName.toLowerCase()];
+    if (!moduleLoader) {
+      throw new Error(`Module ${moduleName} not in import map`);
+    }
+
+    const module = await moduleLoader();
     NativeModulesState.modules[moduleName] = module;
     return module;
   } catch (error) {
