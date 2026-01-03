@@ -450,35 +450,49 @@ export async function saveBasics(req, res) {
       });
     }
 
-    // Map camelCase to snake_case for DB columns
-    const upserted = await req.db
-      .insert(profilesTable)
-      .values({
-        userId,
-        fullName,
-        email,
-        gender,
-        age: age ? parseInt(age, 10) : null,
-        weightKg: weightKg ? parseFloat(weightKg) : null,
-        heightCm: heightCm ? parseInt(heightCm, 10) : null,
-        activityLevel,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: profilesTable.userId,
-        set: {
-          fullName,
-          email,
-          gender,
-          age: age ? parseInt(age, 10) : null,
-          weightKg: weightKg ? parseFloat(weightKg) : null,
-          heightCm: heightCm ? parseInt(heightCm, 10) : null,
-          activityLevel,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    const basicsRow = upserted[0];
+    // 🆕 IDEMPOTENT: Check if profile already exists before creating
+    // This prevents duplicate profile creation if saveBasics is called multiple times
+    const existing = await req.db
+      .select({ id: profilesTable.id })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    const profileData = {
+      fullName,
+      email,
+      gender,
+      age: age ? parseInt(age, 10) : null,
+      weightKg: weightKg ? parseFloat(weightKg) : null,
+      heightCm: heightCm ? parseInt(heightCm, 10) : null,
+      activityLevel,
+      updatedAt: new Date(),
+    };
+
+    let basicsRow;
+    if (existing.length > 0) {
+      // Profile exists - UPDATE only
+      const updated = await req.db
+        .update(profilesTable)
+        .set(profileData)
+        .where(eq(profilesTable.userId, userId))
+        .returning();
+      basicsRow = updated[0];
+      console.log(`[saveBasics] ✅ UPDATED profile for user ${userId}`);
+    } else {
+      // Profile doesn't exist - CREATE only
+      const created = await req.db
+        .insert(profilesTable)
+        .values({
+          userId,
+          ...profileData,
+          createdAt: new Date(), // Only set on creation
+        })
+        .returning();
+      basicsRow = created[0];
+      console.log(`[saveBasics] ✅ CREATED profile for user ${userId}`);
+    }
+
     const basics = {
       fullName: basicsRow.fullName || "",
       email: basicsRow.email || "",
@@ -490,7 +504,11 @@ export async function saveBasics(req, res) {
     };
     res.status(200).json(basics);
   } catch (error) {
-    console.log("Error saving profile basics", error);
+    console.error('[saveBasics] ❌ Error saving profile basics:', {
+      userId: req.auth?.userId,
+      error: error.message,
+      code: error.code,
+    });
     sendDevError(res, error);
   }
 }
@@ -615,38 +633,44 @@ export async function saveDietary(req, res) {
       });
     }
 
-    // 🆕 SAVE REGIONAL CONTEXT TO PROFILES TABLE
-    if (normalizedCuisine.length > 0 || region || cookingStyle) {
-      await req.db
-        .update(profilesTable)
-        .set({
-          cuisinePreference: normalizedCuisine,
-          region: region || null,
-          cookingStyle: cookingStyle || null,
-          updatedAt: new Date(),
-        })
-        .where(eq(profilesTable.userId, userId));
-    }
+    // 🆕 ATOMIC TRANSACTION: Both updates must succeed or both fail
+    // Wrap in transaction to ensure consistency
+    const dietaryResult = await req.db.transaction(async (tx) => {
+      // Update regional context in profiles table
+      if (normalizedCuisine.length > 0 || region || cookingStyle) {
+        await tx
+          .update(profilesTable)
+          .set({
+            cuisinePreference: normalizedCuisine,
+            region: region || null,
+            cookingStyle: cookingStyle || null,
+            updatedAt: new Date(),
+          })
+          .where(eq(profilesTable.userId, userId));
+      }
 
-    // Use atomic upsert to avoid race condition (check-then-act)
-    const dietaryResult = await req.db
-      .insert(dietaryPreferencesTable)
-      .values({
-        userId,
-        preferences: normalizedPreferences,
-        allergies: normalizedAllergies,
-        dislikes: normalizedDislikes,
-      })
-      .onConflictDoUpdate({
-        target: dietaryPreferencesTable.userId,
-        set: {
+      // Update dietary preferences (atomic upsert)
+      const result = await tx
+        .insert(dietaryPreferencesTable)
+        .values({
+          userId,
           preferences: normalizedPreferences,
           allergies: normalizedAllergies,
           dislikes: normalizedDislikes,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: dietaryPreferencesTable.userId,
+          set: {
+            preferences: normalizedPreferences,
+            allergies: normalizedAllergies,
+            dislikes: normalizedDislikes,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+
+      return result;
+    });
 
     const dietaryRow = dietaryResult[0];
     const dietary = {
@@ -656,7 +680,7 @@ export async function saveDietary(req, res) {
       cuisinePreference: normalizedCuisine,
     };
 
-    console.log('[saveDietary] Successfully saved dietary preferences:', {
+    console.log('[saveDietary] ✅ Successfully saved dietary preferences in atomic transaction:', {
       userId,
       preferencesCount: dietary.preferences.length,
       allergiesCount: dietary.allergies.length,
@@ -665,7 +689,11 @@ export async function saveDietary(req, res) {
 
     res.status(200).json(dietary);
   } catch (error) {
-    console.log("Error saving dietary preferences", error);
+    console.error('[saveDietary] ❌ Error saving dietary preferences:', {
+      userId: req.auth?.userId,
+      error: error.message,
+      code: error.code,
+    });
     sendDevError(res, error);
   }
 }

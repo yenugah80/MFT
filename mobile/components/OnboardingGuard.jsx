@@ -33,13 +33,15 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
 import apiClient from '@/services/apiClient';
 
 const OnboardingGuard = ({ children }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+  const [error, setError] = useState(null); // 🆕 Track error state for display
+  const [retryCount, setRetryCount] = useState(0); // 🆕 Track retry attempts
 
   useEffect(() => {
     // Only check when auth is loaded and user is signed in
@@ -50,11 +52,19 @@ const OnboardingGuard = ({ children }) => {
 
     const checkOnboardingStatus = async () => {
       try {
+        // Clear any previous error state before checking
+        setError(null);
+
         // Fetch complete profile from backend to check onboarding status
         // GET /profile returns: { basics, dietary, goals, gamification, onboardingCompletedAt }
         const profileResponse = await apiClient.get('/profile');
 
-        if (profileResponse && profileResponse.onboardingCompletedAt) {
+        // 🆕 EXPLICIT VALIDATION: Ensure response is valid
+        if (!profileResponse) {
+          throw new Error('Backend returned empty profile response - please try again');
+        }
+
+        if (profileResponse.onboardingCompletedAt) {
           // ✅ User has completed onboarding - they are a returning user
           console.log('[OnboardingGuard] ✅ Returning user detected. Onboarding completed at:', profileResponse.onboardingCompletedAt);
 
@@ -79,38 +89,87 @@ const OnboardingGuard = ({ children }) => {
           setIsCheckingOnboarding(false);
         }
       } catch (error) {
-        // API call failed - check offline strategy
-        // This allows app to work when backend is temporarily unavailable
-        console.error('[OnboardingGuard] ⚠️ Failed to fetch profile from /profile endpoint:', {
-          message: error?.message,
-          status: error?.response?.status,
+        // 🆕 EXPLICIT ERROR HANDLING: Log and display real error
+        const errorMessage = error?.response?.data?.error || error?.message || 'Failed to fetch profile';
+        const errorStatus = error?.response?.status;
+
+        console.error('[OnboardingGuard] ❌ Profile fetch failed:', {
+          message: errorMessage,
+          status: errorStatus,
+          details: error?.response?.data,
           endpoint: '/profile'
+        });
+
+        // 🆕 Store error for UI display
+        setError({
+          message: errorMessage,
+          status: errorStatus,
+          canRetry: true
         });
 
         // Fallback: Check AsyncStorage for onboarding draft
         // If user has a draft, they were in onboarding and should continue
-        // If no draft, assume new user (safest default when offline)
+        // If no draft, show error but allow manual retry
         try {
           const savedDraft = await AsyncStorage.getItem('@onboarding_draft');
           if (savedDraft) {
             // User has a draft - they were resuming onboarding
             console.log('[OnboardingGuard] ✅ Found onboarding draft in AsyncStorage - user can resume');
+            setError(null); // Clear error if we can recover with draft
             setIsCheckingOnboarding(false);
           } else {
-            // No draft found - new user (safest assumption when API unavailable)
-            console.log('[OnboardingGuard] 🆕 No draft found - treating as new user (offline fallback)');
-            setIsCheckingOnboarding(false);
+            // No draft found - show error to user
+            console.log('[OnboardingGuard] 🔴 No draft found and API unavailable - showing error to user');
+            // Keep error state for user to see
           }
         } catch (storageError) {
           console.warn('[OnboardingGuard] AsyncStorage error:', storageError?.message);
-          // Even AsyncStorage failed - allow to proceed (safest path)
-          setIsCheckingOnboarding(false);
+          // Even AsyncStorage failed - show error to user
         }
       }
     };
 
     checkOnboardingStatus();
-  }, [isLoaded, isSignedIn, router]);
+  }, [isLoaded, isSignedIn, router, retryCount]); // 🆕 Added retryCount dependency
+
+  // 🆕 Retry handler
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+  };
+
+  // 🆕 Show error state with retry option
+  if (error && !isCheckingOnboarding) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: '#DC2626' }}>
+          ❌ Backend Connection Error
+        </Text>
+        <Text style={{ fontSize: 14, marginBottom: 15, textAlign: 'center', color: '#666' }}>
+          {error.message}
+        </Text>
+        {error.status && (
+          <Text style={{ fontSize: 12, marginBottom: 20, color: '#999' }}>
+            Status Code: {error.status}
+          </Text>
+        )}
+        <TouchableOpacity
+          onPress={handleRetry}
+          style={{
+            backgroundColor: '#0066CC',
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 5,
+            marginBottom: 10,
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold' }}>Retry</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 12, color: '#999', marginTop: 10 }}>
+          Check your internet connection and try again
+        </Text>
+      </View>
+    );
+  }
 
   // Show loading while checking onboarding status
   if (isCheckingOnboarding) {
