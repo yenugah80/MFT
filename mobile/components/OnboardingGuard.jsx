@@ -29,7 +29,7 @@
  * - All timestamps validated before redirect
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,8 +40,11 @@ const OnboardingGuard = ({ children }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
-  const [error, setError] = useState(null); // 🆕 Track error state for display
-  const [retryCount, setRetryCount] = useState(0); // 🆕 Track retry attempts
+  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // 🆕 PREVENT DUPLICATE CHECKS: Track if check is already in progress
+  const isCheckingRef = useRef(false);
 
   useEffect(() => {
     // Only check when auth is loaded and user is signed in
@@ -51,6 +54,14 @@ const OnboardingGuard = ({ children }) => {
     }
 
     const checkOnboardingStatus = async () => {
+      // 🆕 GUARD: Don't check if already checking (prevents duplicate API calls)
+      if (isCheckingRef.current) {
+        console.log('[OnboardingGuard] ⏭️ Check already in progress, skipping duplicate');
+        return;
+      }
+
+      isCheckingRef.current = true;
+
       try {
         // Clear any previous error state before checking
         setError(null);
@@ -126,14 +137,19 @@ const OnboardingGuard = ({ children }) => {
           console.warn('[OnboardingGuard] AsyncStorage error:', storageError?.message);
           // Even AsyncStorage failed - show error to user
         }
+      } finally {
+        // 🆕 IMPORTANT: Reset flag only after async work is done
+        isCheckingRef.current = false;
       }
     };
 
     checkOnboardingStatus();
-  }, [isLoaded, isSignedIn, router, retryCount]); // 🆕 Added retryCount dependency
+    // 🆕 FIXED: Only depend on isLoaded, isSignedIn, retryCount (not router)
+  }, [isLoaded, isSignedIn, retryCount]);
 
   // 🆕 Retry handler
   const handleRetry = () => {
+    isCheckingRef.current = false; // Reset flag before retry
     setRetryCount(prev => prev + 1);
   };
 

@@ -517,11 +517,17 @@ export async function clearBadgeCount() {
 
 // Export notification event listeners for use in components
 export const addNotificationReceivedListener = (callback) => {
-  if (!Notifications) return { remove: () => {} };
+  if (!Notifications || typeof Notifications.addNotificationReceivedListener !== 'function') {
+    console.warn('[PushNotifications] addNotificationReceivedListener not available');
+    return { remove: () => {} };
+  }
   return Notifications.addNotificationReceivedListener(callback);
 };
 
 export const addNotificationResponseReceivedListener = (callback) => {
-  if (!Notifications) return { remove: () => {} };
+  if (!Notifications || typeof Notifications.addNotificationResponseReceivedListener !== 'function') {
+    console.warn('[PushNotifications] addNotificationResponseReceivedListener not available');
+    return { remove: () => {} };
+  }
   return Notifications.addNotificationResponseReceivedListener(callback);
 };
