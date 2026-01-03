@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { clerkMiddleware } from "@clerk/express";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -71,6 +72,71 @@ export async function ensureProfilesTableShape() {
   }
 }
 
+// Ensure the recommendations_history table exists
+let recommendationsTableEnsured = false;
+export async function ensureRecommendationsHistoryTable() {
+  if (recommendationsTableEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "recommendations_history" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "recommendation_id" TEXT NOT NULL UNIQUE,
+        "food_name" TEXT NOT NULL,
+        "portion" TEXT,
+        "calories" INTEGER NOT NULL,
+        "protein" INTEGER NOT NULL,
+        "carbs" INTEGER NOT NULL,
+        "fats" INTEGER NOT NULL,
+        "fiber" INTEGER DEFAULT 0,
+        "sugar" INTEGER DEFAULT 0,
+        "micros" JSONB DEFAULT '{}',
+        "recommendation_type" TEXT NOT NULL,
+        "reason" TEXT,
+        "tips" TEXT,
+        "prep_time_minutes" INTEGER,
+        "recipe_instructions" TEXT,
+        "preference_strength_match" INTEGER,
+        "diet_compliant" BOOLEAN,
+        "allergen_free" BOOLEAN,
+        "warning_badge" JSONB,
+        "meal_type" TEXT,
+        "time_of_day" INTEGER,
+        "remaining_calories" INTEGER,
+        "remaining_protein" INTEGER,
+        "remaining_carbs" INTEGER,
+        "remaining_fats" INTEGER,
+        "interaction_status" TEXT DEFAULT 'shown',
+        "shown_at" TIMESTAMP DEFAULT NOW(),
+        "viewed_at" TIMESTAMP,
+        "interacted_at" TIMESTAMP,
+        "rejection_reason" TEXT,
+        "customized_portion" TEXT,
+        "was_logged" BOOLEAN DEFAULT FALSE,
+        "logged_food_id" INTEGER,
+        "logged_at" TIMESTAMP,
+        "ai_generated" BOOLEAN DEFAULT TRUE,
+        "ai_model" TEXT DEFAULT 'gpt-4o-mini',
+        "ai_confidence" DECIMAL(3,2),
+        "personalization_score" DECIMAL(3,2),
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // Create indexes if they don't exist
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_history_user_id" ON "recommendations_history" ("user_id");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_history_recommendation_id" ON "recommendations_history" ("recommendation_id");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_history_user_status" ON "recommendations_history" ("user_id", "interaction_status");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_history_shown_at" ON "recommendations_history" ("shown_at");`);
+
+    recommendationsTableEnsured = true;
+    console.log('✅ Recommendations history table verified');
+  } catch (err) {
+    console.error('❌ Failed to ensure recommendations_history table:', err);
+  }
+}
+
 
 // CORS configuration – allow Authorization header for Expo Web and mobile
 app.use(
@@ -82,6 +148,10 @@ app.use(
 );
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
+app.use(clerkMiddleware());
+
 app.use(attachDb);
 
 /* -------------------------------------------
@@ -254,6 +324,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   console.log('📦 Initializing database schema...');
   try {
     await ensureProfilesTableShape();
+    await ensureRecommendationsHistoryTable();
     console.log('✅ Database initialized successfully');
   } catch (err) {
     console.error('⚠️ Database initialization warning:', err.message);
