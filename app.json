@@ -9,7 +9,16 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
-      "bundleIdentifier": "com.harikay.myfoodtracker-main"
+      "bundleIdentifier": "com.harikay.myfoodtracker-main",
+      "buildNumber": "1",
+      "supportsTabletMode": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera access is required to scan barcodes and take food photos",
+        "NSPhotoLibraryUsageDescription": "Photo library access is required to select food images from your device",
+        "NSMicrophoneUsageDescription": "Microphone access is required for voice food logging feature",
+        "NSLocalNetworkUsageDescription": "Local network access for enhanced connectivity",
+        "UIRequiredDeviceCapabilities": ["armv7"]
+      }
     }
   }
 }
