@@ -1,27 +1,44 @@
 import { eq } from "drizzle-orm";
 import { activityLevelsTable } from "../db/schema.js";
+import errors from "../utils/errorResponse.js";
 
 export async function getActivityLevels(req, res) {
   try {
     const levels = await req.db.select().from(activityLevelsTable);
     res.status(200).json(levels);
   } catch (error) {
-    console.log("Error fetching activity levels", error);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[ActivityController] Error fetching activity levels:", error);
+    return errors.internal(res, "Failed to fetch activity levels");
   }
 }
 
 export async function createActivityLevel(req, res) {
   try {
-    // In a real app, check for admin role here
     const { key, label, desc, factor } = req.body;
-    const created = await req.db.insert(activityLevelsTable).values({
-      key, label, desc, factor
-    }).returning();
-    res.status(201).json(created[0]);
+
+    // Validate required fields
+    if (!key) return errors.missingField(res, "key");
+    if (!label) return errors.missingField(res, "label");
+
+    const result = await req.db
+      .insert(activityLevelsTable)
+      .values({ key, label, desc, factor })
+      .returning();
+
+    if (!result || result.length === 0) {
+      return errors.database(res, "create activity level");
+    }
+
+    res.status(201).json(result[0]);
   } catch (error) {
-    console.log("Error creating activity level", error);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[ActivityController] Error creating activity level:", error);
+
+    // Handle unique constraint violation
+    if (error.code === '23505') {
+      return errors.conflict(res, "Activity level with this key already exists");
+    }
+
+    return errors.internal(res, "Failed to create activity level");
   }
 }
 
@@ -29,24 +46,48 @@ export async function updateActivityLevel(req, res) {
   try {
     const { id } = req.params;
     const { key, label, desc, factor } = req.body;
-    const updated = await req.db.update(activityLevelsTable)
+
+    if (!id || isNaN(parseInt(id))) {
+      return errors.invalidValue(res, "id", "must be a valid number");
+    }
+
+    const result = await req.db
+      .update(activityLevelsTable)
       .set({ key, label, desc, factor, updatedAt: new Date() })
       .where(eq(activityLevelsTable.id, parseInt(id)))
       .returning();
-    res.status(200).json(updated[0]);
+
+    if (!result || result.length === 0) {
+      return errors.notFound(res, "Activity level");
+    }
+
+    res.status(200).json(result[0]);
   } catch (error) {
-    console.log("Error updating activity level", error);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[ActivityController] Error updating activity level:", error);
+    return errors.internal(res, "Failed to update activity level");
   }
 }
 
 export async function deleteActivityLevel(req, res) {
   try {
     const { id } = req.params;
-    await req.db.delete(activityLevelsTable).where(eq(activityLevelsTable.id, parseInt(id)));
-    res.status(200).json({ success: true });
+
+    if (!id || isNaN(parseInt(id))) {
+      return errors.invalidValue(res, "id", "must be a valid number");
+    }
+
+    const result = await req.db
+      .delete(activityLevelsTable)
+      .where(eq(activityLevelsTable.id, parseInt(id)))
+      .returning();
+
+    if (!result || result.length === 0) {
+      return errors.notFound(res, "Activity level");
+    }
+
+    res.status(200).json({ success: true, deleted: result[0] });
   } catch (error) {
-    console.log("Error deleting activity level", error);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[ActivityController] Error deleting activity level:", error);
+    return errors.internal(res, "Failed to delete activity level");
   }
 }

@@ -1,4 +1,5 @@
 import { foodLogTable, waterLogTable, moodLogTable } from "../db/schema.js";
+import errors from "../utils/errorResponse.js";
 
 export async function logMeal(req, res) {
   try {
@@ -23,9 +24,11 @@ export async function logMeal(req, res) {
       loggedDate,
       source,
     } = req.body;
+
     if (!foodName) {
-      return res.status(400).json({ error: "foodName is required" });
+      return errors.missingField(res, "foodName");
     }
+
     const result = await req.db
       .insert(foodLogTable)
       .values({
@@ -52,12 +55,13 @@ export async function logMeal(req, res) {
       .returning();
 
     if (!result || result.length === 0) {
-      return res.status(500).json({ error: "Failed to insert meal log" });
+      return errors.database(res, "insert meal log");
     }
+
     res.status(201).json(result[0]);
   } catch (err) {
-    console.error("Error logging meal", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[LoggingController] Error logging meal:", err);
+    return errors.internal(res, "Failed to log meal");
   }
 }
 
@@ -66,9 +70,11 @@ export async function logWater(req, res) {
     const { userId } = req.auth;
     const { amountLiters } = req.body;
     const parsed = parseFloat(amountLiters);
+
     if (Number.isNaN(parsed) || parsed <= 0) {
-      return res.status(400).json({ error: "amountLiters must be a positive number" });
+      return errors.invalidValue(res, "amountLiters", "must be a positive number");
     }
+
     const result = await req.db
       .insert(waterLogTable)
       .values({
@@ -78,12 +84,13 @@ export async function logWater(req, res) {
       .returning();
 
     if (!result || result.length === 0) {
-      return res.status(500).json({ error: "Failed to insert water log" });
+      return errors.database(res, "insert water log");
     }
+
     res.status(201).json(result[0]);
   } catch (err) {
-    console.error("Error logging water", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[LoggingController] Error logging water:", err);
+    return errors.internal(res, "Failed to log water intake");
   }
 }
 
@@ -91,9 +98,11 @@ export async function logMood(req, res) {
   try {
     const { userId } = req.auth;
     const { mood, note, source } = req.body;
+
     if (!mood) {
-      return res.status(400).json({ error: "mood is required" });
+      return errors.missingField(res, "mood");
     }
+
     const result = await req.db
       .insert(moodLogTable)
       .values({
@@ -105,11 +114,12 @@ export async function logMood(req, res) {
       .returning();
 
     if (!result || result.length === 0) {
-      return res.status(500).json({ error: "Failed to insert mood log" });
+      return errors.database(res, "insert mood log");
     }
+
     res.status(201).json(result[0]);
   } catch (err) {
-    console.error("Error logging mood", err);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("[LoggingController] Error logging mood:", err);
+    return errors.internal(res, "Failed to log mood");
   }
 }
