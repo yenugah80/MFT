@@ -1,4 +1,22 @@
 {
-  "compilerOptions": {},
-  "extends": "expo/tsconfig.base"
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true
+  },
+  "include": [
+    "mobile/**/*",
+    "backend/src/**/*",
+    "my-worker/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "mobile/node_modules",
+    "backend/node_modules",
+    "my-worker/node_modules",
+    "**/dist",
+    "**/.expo"
+  ]
 }

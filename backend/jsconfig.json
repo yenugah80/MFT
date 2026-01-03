@@ -7,7 +7,6 @@
     "allowJs": true,
     "checkJs": false,
     "baseUrl": ".",
-    "rootDir": "./src",
     "paths": {
       "@/*": ["./src/*"],
       "@routes/*": ["./src/routes/*"],
@@ -34,8 +33,7 @@
   "include": [
     "src/**/*.js",
     "src/**/*.mjs",
-    "*.js",
-    "*.mjs"
+    "drizzle.config.js"
   ],
   "exclude": [
     "node_modules",
