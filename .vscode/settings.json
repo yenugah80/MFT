@@ -1,9 +1,11 @@
 {
     "claudeCode.useTerminal": true,
+
     "stylelint.validate": ["css", "scss", "less"],
     "css.validate": false,
     "scss.validate": false,
     "less.validate": false,
+
     "eslint.workingDirectories": [
         {
             "directory": "mobile",
@@ -12,14 +14,27 @@
         {
             "directory": "backend",
             "changeProcessCWD": true
+        },
+        {
+            "directory": "my-worker",
+            "changeProcessCWD": true
         }
     ],
+
     "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[jsx]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
     },
     "[json]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
-    }
+    },
+
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "typescript.surveys.enabled": false
 }
