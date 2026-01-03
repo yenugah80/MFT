@@ -11,7 +11,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { premiumFeaturesService } from '../services/PremiumFeatures.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -38,7 +38,7 @@ const consentLimiter = rateLimit({
  * GET /api/consent/status
  * Get user's current consent status
  */
-router.get('/status', authMiddleware, async (req, res) => {
+router.get('/status', requireAuth, async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -67,7 +67,7 @@ router.get('/status', authMiddleware, async (req, res) => {
  *   "purpose": "ai-food-analysis"  // Purpose of data sharing
  * }
  */
-router.post('/give-openai-consent', authMiddleware, consentLimiter, async (req, res) => {
+router.post('/give-openai-consent', requireAuth, consentLimiter, async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -127,7 +127,7 @@ router.post('/give-openai-consent', authMiddleware, consentLimiter, async (req, 
  * User revokes consent to share data with OpenAI
  * Premium features will fall back to rule-based parsing
  */
-router.post('/revoke-openai-consent', authMiddleware, consentLimiter, async (req, res) => {
+router.post('/revoke-openai-consent', requireAuth, consentLimiter, async (req, res) => {
   try {
     const userId = req.auth.userId;
 

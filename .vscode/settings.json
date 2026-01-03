@@ -8,7 +8,18 @@
         {
             "directory": "mobile",
             "changeProcessCWD": true
+        },
+        {
+            "directory": "backend",
+            "changeProcessCWD": true
         }
     ],
-    "typescript.tsserver.projectRoot": "mobile"
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[json]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    }
 }
