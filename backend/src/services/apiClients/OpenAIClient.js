@@ -68,6 +68,127 @@ class OpenAIClient extends BaseApiClient {
   }
 
   /**
+   * Categorize ingredient for intelligent grouping
+   * @private
+   */
+  _categorizeIngredient(name) {
+    const lower = name.toLowerCase();
+
+    // Spices and seasonings
+    if (/salt|pepper|cumin|coriander|turmeric|paprika|chili|garlic powder|ginger powder|cinnamon|cardamom|cloves|nutmeg/.test(lower)) {
+      return 'spices';
+    }
+
+    // Sauces
+    if (/sauce|dressing|gravy|paste|oil|butter|ghee|mayo|mustard/.test(lower)) {
+      return 'sauces';
+    }
+
+    // Proteins
+    if (/chicken|beef|pork|fish|tofu|egg|shrimp|lamb|turkey|duck|salmon/.test(lower)) {
+      return 'proteins';
+    }
+
+    // Carbs
+    if (/rice|pasta|noodle|bread|potato|tortilla|roti|naan|couscous/.test(lower)) {
+      return 'carbs';
+    }
+
+    // Vegetables
+    if (/onion|tomato|spinach|broccoli|carrot|pepper|lettuce|cucumber|zucchini|mushroom|garlic|ginger/.test(lower)) {
+      return 'vegetables';
+    }
+
+    return 'other';
+  }
+
+  /**
+   * Intelligently collapse ingredients when 20+ items
+   * @private
+   */
+  _intelligentCollapse(ingredients) {
+    const categorized = {
+      proteins: [],
+      carbs: [],
+      vegetables: [],
+      spices: [],
+      sauces: [],
+      other: []
+    };
+
+    // Categorize each ingredient
+    for (const item of ingredients) {
+      const category = this._categorizeIngredient(item.name);
+      categorized[category].push(item);
+    }
+
+    const collapsed = [];
+
+    // Keep proteins separate (critical for nutrition)
+    collapsed.push(...categorized.proteins);
+
+    // Keep carbs separate
+    collapsed.push(...categorized.carbs);
+
+    // Keep major vegetables, collapse if too many
+    if (categorized.vegetables.length > 5) {
+      const totalVegCalories = categorized.vegetables.reduce((sum, v) => sum + (v.calories || 0), 0);
+      collapsed.push({
+        name: "mixed vegetables",
+        display_name: `${categorized.vegetables.length} vegetables`,
+        quantity: 1,
+        unit: "portion",
+        confidence: 0.7,
+        collapsed_items: categorized.vegetables,
+        is_collapsed_group: true,
+        calories: totalVegCalories
+      });
+    } else {
+      collapsed.push(...categorized.vegetables);
+    }
+
+    // Merge all spices into one
+    if (categorized.spices.length > 0) {
+      const totalSpiceCalories = categorized.spices.reduce((sum, s) => sum + (s.calories || 0), 0);
+      collapsed.push({
+        name: "spices and seasonings",
+        display_name: `${categorized.spices.length} spices`,
+        quantity: 1,
+        unit: "blend",
+        confidence: 0.8,
+        collapsed_items: categorized.spices,
+        is_collapsed_group: true,
+        calories: totalSpiceCalories
+      });
+    }
+
+    // Merge sauces if multiple
+    if (categorized.sauces.length > 2) {
+      const totalSauceCalories = categorized.sauces.reduce((sum, s) => sum + (s.calories || 0), 0);
+      collapsed.push({
+        name: "sauce blend",
+        display_name: `${categorized.sauces.length} sauces`,
+        quantity: 1,
+        unit: "mixture",
+        confidence: 0.75,
+        collapsed_items: categorized.sauces,
+        is_collapsed_group: true,
+        calories: totalSauceCalories
+      });
+    } else {
+      collapsed.push(...categorized.sauces);
+    }
+
+    // Keep other items
+    collapsed.push(...categorized.other);
+
+    return {
+      items: collapsed,
+      categories: Object.keys(categorized).filter(k => categorized[k].length > 0)
+    };
+  }
+
+  /**
    * Check if OpenAI is available
    */
   isAvailable() {
@@ -268,12 +389,32 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
         };
       });
 
-      // Step 3: Log for monitoring
-      console.log(`[ParseText] Input: "${query}"`);
-      console.log(`[ParseText] Extracted: ${validated.length} items`);
-      console.log(`[ParseText] Canonical: ${canonical.map(c => c.name).join(', ')}`);
+      // Step 3: Intelligent collapsing for 20+ items
+      let finalItems = canonical;
+      let long_ingredient_list = false;
+      let ui_message = null;
 
-      return canonical;
+      if (canonical.length > 20) {
+        console.log(`[ParseText] 🔄 Collapsing ${canonical.length} items...`);
+        const collapsed = this._intelligentCollapse(canonical);
+        finalItems = collapsed.items;
+        long_ingredient_list = true;
+        ui_message = "This looks like a complex recipe. Ingredients were grouped for clarity.";
+
+        console.log(`[ParseText] 📦 Collapsed: ${canonical.length} → ${finalItems.length} items`);
+      }
+
+      // Step 4: Log for monitoring
+      console.log(`[ParseText] Input: "${query}"`);
+      console.log(`[ParseText] Extracted: ${canonical.length} items`);
+      console.log(`[ParseText] Final: ${finalItems.map(c => c.name).join(', ')}`);
+
+      // Attach metadata for UI
+      return finalItems.map(item => ({
+        ...item,
+        long_ingredient_list,
+        ui_message
+      }));
     } catch (error) {
       console.error(`[OpenAI] Parse failed for "${query}":`, error.message);
 

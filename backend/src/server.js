@@ -30,6 +30,7 @@ import apiMetricsRouter from "./routes/apiMetrics.js";
 import gamificationRouter from "./routes/gamificationRoutes.js";
 import recommendationsRouter from "./routes/recommendations.js";
 import analyticsRouter from "./routes/analytics.js";
+import adminStrategyRouter from "./routes/admin/strategy.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 
 const app = express();
@@ -205,6 +206,9 @@ app.use("/api/recommendations", recommendationsRouter);
 
 // Mount Analytics & Crash Reporting Router (FREE - no external service)
 app.use("/api", analyticsRouter);
+
+// Mount Admin Strategy Router (Strategic Hybrid Parsing Monitoring)
+app.use("/api/admin/strategy", adminStrategyRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

@@ -96,11 +96,77 @@ const CANONICAL_INDEX = (() => {
 })();
 
 /**
+ * Extract preparation method from text
+ * Examples: "scrambled eggs" → "scrambled", "mashed potatoes" → "mashed"
+ * @param {string} text - Input text
+ * @returns {string|null} Preparation method or null
+ */
+function extractPreparation(text) {
+  const preparationMethods = [
+    'scrambled', 'fried', 'boiled', 'poached', 'grilled', 'baked',
+    'roasted', 'steamed', 'sautéed', 'sauteed', 'mashed', 'raw',
+    'cooked', 'fresh', 'canned', 'frozen'
+  ];
+
+  const lower = text.toLowerCase();
+  for (const method of preparationMethods) {
+    if (lower.includes(method)) {
+      return method;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract modifiers from text
+ * Examples: "eggs with cheese" → ["with cheese"], "chicken topped with sauce" → ["topped with sauce"]
+ * @param {string} text - Input text
+ * @returns {Array} List of modifiers
+ */
+function extractModifiers(text) {
+  const modifierPatterns = [
+    /with\s+([^,]+?)(?:\sand\s|,|\s|$)/gi,
+    /topped with\s+([^,]+?)(?:\sand\s|,|\s|$)/gi,
+  ];
+
+  const modifiers = [];
+  for (const pattern of modifierPatterns) {
+    const matches = [...text.matchAll(pattern)];
+    for (const match of matches) {
+      const mod = match[1].trim();
+      if (mod && !modifiers.includes(mod)) {
+        modifiers.push(mod);
+      }
+    }
+  }
+  return modifiers;
+}
+
+/**
+ * Extract base ingredient by removing preparation and modifiers
+ * Example: "scrambled eggs with onions" → "eggs"
+ * @param {string} text - Input text
+ * @returns {string} Base ingredient name
+ */
+function extractBaseIngredient(text) {
+  let base = text;
+
+  // Remove preparation methods
+  base = base.replace(/\b(scrambled|fried|boiled|grilled|baked|roasted|steamed|sautéed|sauteed|mashed)\b/gi, '');
+
+  // Remove modifiers
+  base = base.replace(/\bwith\s+[^,]+/gi, '');
+  base = base.replace(/\btopped with\s+[^,]+/gi, '');
+
+  return base.trim();
+}
+
+/**
  * Canonicalize user input to standard form
  * OPTIMIZED: Uses LRU cache for <1ms cache hits (target >80% hit rate)
  *
- * @param {string} userInput - What user typed (e.g., "eggs", "rice")
- * @returns {Object} Canonical identity (no prep/portion assumptions)
+ * @param {string} userInput - What user typed (e.g., "scrambled eggs with onions")
+ * @returns {Object} Canonical identity with both display and lookup names
  */
 export function canonicalize(userInput) {
   // FIX: Remove punctuation so "eggs." matches "eggs"
@@ -116,12 +182,32 @@ export function canonicalize(userInput) {
   // PERFORMANCE: Track lookup time for monitoring
   const startTime = performance.now();
 
+  // NEW: Extract components from user input
+  const preparation = extractPreparation(userInput);
+  const modifiers = extractModifiers(userInput);
+  const baseIngredient = extractBaseIngredient(normalized);
+
   let result;
 
-  // Exact match
-  if (CANONICAL_FORMS[normalized]) {
-    const base = CANONICAL_FORMS[normalized];
+  // Exact match on base ingredient
+  if (CANONICAL_FORMS[baseIngredient]) {
+    const base = CANONICAL_FORMS[baseIngredient];
     result = {
+      // USER-FACING (what they typed)
+      display_name: userInput.trim(),
+
+      // INTERNAL (for nutrition lookups)
+      canonical_name: base.canonical,
+      base_ingredient: baseIngredient,
+      preparation: preparation,
+      modifiers: modifiers,
+
+      // METADATA
+      portion_source: 'default',
+      portion_confidence: 'estimated',
+      user_adjustment_count: 0,
+
+      // EXISTING FIELDS (preserve)
       canonical: base.canonical,
       synonyms: base.synonyms || [],
       category: base.category || "unknown",
@@ -129,13 +215,13 @@ export function canonicalize(userInput) {
       originalInput: userInput,
       matchType: "exact",
       confidenceLevel: "typical",
-      confidenceReason: "Exact match",
+      confidenceReason: "Exact match on base ingredient",
       cacheHit: false,
     };
   } else {
     // OPTIMIZED: Use Inverted Index to find candidates instead of scanning all forms
     // This reduces complexity from O(N) to O(M) where M is number of candidates
-    const inputWords = normalized.split(/[^a-z0-9]+/);
+    const inputWords = baseIngredient.split(/[^a-z0-9]+/).filter(w => w);
     const candidates = new Set();
 
     for (const word of inputWords) {
@@ -151,8 +237,23 @@ export function canonicalize(userInput) {
     for (const key of candidates) {
       const value = CANONICAL_FORMS[key];
       // Removed 'syn.includes(normalized)' to prevent short inputs matching long synonyms (e.g. "pan" -> "pancake")
-      if (value.synonyms.some((syn) => normalized.includes(syn))) {
+      if (value.synonyms.some((syn) => baseIngredient.includes(syn))) {
         result = {
+          // USER-FACING
+          display_name: userInput.trim(),
+
+          // INTERNAL
+          canonical_name: value.canonical,
+          base_ingredient: key,
+          preparation: preparation,
+          modifiers: modifiers,
+
+          // METADATA
+          portion_source: 'default',
+          portion_confidence: 'estimated',
+          user_adjustment_count: 0,
+
+          // EXISTING
           canonical: value.canonical,
           synonyms: value.synonyms || [],
           category: value.category || "unknown",
@@ -160,7 +261,7 @@ export function canonicalize(userInput) {
           originalInput: userInput,
           matchType: "synonym",
           confidenceLevel: "estimated",
-          confidenceReason: "Synonym match",
+          confidenceReason: "Synonym match on base ingredient",
           cacheHit: false,
         };
         found = true;
@@ -171,10 +272,25 @@ export function canonicalize(userInput) {
     // Fallback: Use as-is with low confidence
     if (!found) {
       // NEW: Generate suggestions for "Did you mean?"
-      const suggestions = getSuggestions(normalized);
+      const suggestions = getSuggestions(baseIngredient);
 
       result = {
-        canonical: userInput,
+        // USER-FACING
+        display_name: userInput.trim(),
+
+        // INTERNAL
+        canonical_name: userInput.trim(),
+        base_ingredient: baseIngredient,
+        preparation: preparation,
+        modifiers: modifiers,
+
+        // METADATA
+        portion_source: 'default',
+        portion_confidence: 'estimated',
+        user_adjustment_count: 0,
+
+        // EXISTING
+        canonical: userInput.trim(),
         synonyms: [],
         category: "unknown",
         cuisineHints: [],

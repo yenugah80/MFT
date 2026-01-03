@@ -26,6 +26,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
   const [amount, setAmount] = useState(item.portion?.amount?.toString() || '1');
   const [unit, setUnit] = useState(item.portion?.unit || 'g');
   const [unitPickerVisible, setUnitPickerVisible] = useState(false);
+  const [showCollapsedItems, setShowCollapsedItems] = useState(false);
 
   if (!item) return null;
 
@@ -50,7 +51,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.foodName} numberOfLines={2}>
-          {item.name}
+          {item.display_name || item.name}
         </Text>
         <TouchableOpacity
           onPress={onRemove}
@@ -62,50 +63,77 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         </TouchableOpacity>
       </View>
 
-      {/* Portion Editor */}
+      {/* Portion Editor with Source Badge */}
       <View style={styles.portionRow}>
-        {editingQuantity ? (
-          <View style={styles.editingRow}>
-            <TextInput
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              style={styles.quantityInput}
-              placeholder="Amount (e.g., 150)"
+        <View style={styles.portionContainer}>
+          {editingQuantity ? (
+            <View style={styles.editingRow}>
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+                style={styles.quantityInput}
+                placeholder="Amount (e.g., 150)"
+                accessible
+                accessibilityLabel="Quantity amount"
+              />
+              <TouchableOpacity
+                style={styles.unitButton}
+                onPress={() => setUnitPickerVisible(!unitPickerVisible)}
+              >
+                <Text style={styles.unitButtonText}>{unit}</Text>
+                <Text style={styles.unitButtonArrow}>▼</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={handleApplyQuantity}
+              >
+                <Text style={styles.applyButtonText}>✓</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancelEdit}
+              >
+                <Text style={styles.cancelButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.portionButton}
+              onPress={() => setEditingQuantity(true)}
               accessible
-              accessibilityLabel="Quantity amount"
-            />
-            <TouchableOpacity
-              style={styles.unitButton}
-              onPress={() => setUnitPickerVisible(!unitPickerVisible)}
+              accessibilityLabel="Edit portion size"
             >
-              <Text style={styles.unitButtonText}>{unit}</Text>
-              <Text style={styles.unitButtonArrow}>▼</Text>
+              <Text style={styles.portionText}>
+                {item.portion?.amount}{item.portion?.unit} • Tap to edit
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={handleApplyQuantity}
-            >
-              <Text style={styles.applyButtonText}>✓</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancelEdit}
-            >
-              <Text style={styles.cancelButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.portionButton}
-            onPress={() => setEditingQuantity(true)}
-            accessible
-            accessibilityLabel="Edit portion size"
+          )}
+        </View>
+
+        {/* Portion Source Badge */}
+        {item.portion_source && (
+          <View
+            style={[
+              styles.portionSourceBadge,
+              item.portion_source === 'estimated' && styles.estimatedBadge,
+              item.portion_source === 'user_specified' && styles.userSpecifiedBadge,
+              item.portion_source === 'learned' && styles.learnedBadge,
+            ]}
           >
-            <Text style={styles.portionText}>
-              {item.portion?.amount}{item.portion?.unit} • Tap to edit
+            <Text
+              style={[
+                styles.portionSourceText,
+                item.portion_source === 'estimated' && styles.estimatedText,
+                item.portion_source === 'user_specified' && styles.userSpecifiedText,
+                item.portion_source === 'learned' && styles.learnedText,
+              ]}
+            >
+              {item.portion_source === 'estimated' && '📊 Estimated'}
+              {item.portion_source === 'user_specified' && '✓ You set'}
+              {item.portion_source === 'learned' && '🎯 Your usual'}
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -126,6 +154,47 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+      )}
+
+      {/* Complex Recipe Warning */}
+      {item.long_ingredient_list && (
+        <View style={styles.complexRecipeWarning}>
+          <Text style={styles.complexRecipeIcon}>ℹ️</Text>
+          <Text style={styles.complexRecipeText}>
+            {item.ui_message || 'This looks like a complex recipe. Ingredients were grouped for clarity.'}
+          </Text>
+        </View>
+      )}
+
+      {/* Collapsed Group Expansion */}
+      {item.is_collapsed_group && item.collapsed_items && item.collapsed_items.length > 0 && (
+        <View style={styles.collapsedGroupSection}>
+          <TouchableOpacity
+            style={styles.collapsedGroupHeader}
+            onPress={() => setShowCollapsedItems(!showCollapsedItems)}
+          >
+            <Text style={styles.collapsedGroupToggle}>
+              {showCollapsedItems ? '▼' : '▶'}
+            </Text>
+            <Text style={styles.collapsedGroupTitle}>
+              {item.collapsed_items.length} items grouped
+            </Text>
+          </TouchableOpacity>
+
+          {showCollapsedItems && (
+            <View style={styles.collapsedItemsList}>
+              {item.collapsed_items.map((subItem, idx) => (
+                <View key={idx} style={styles.collapsedItem}>
+                  <Text style={styles.collapsedItemName}>• {subItem.name}</Text>
+                  <Text style={styles.collapsedItemDetail}>
+                    {subItem.quantity} {subItem.unit}
+                    {subItem.calories_kcal ? ` • ${Math.round(subItem.calories_kcal)} cal` : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -340,6 +409,12 @@ const styles = StyleSheet.create({
   },
   portionRow: {
     marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  portionContainer: {
+    flex: 1,
   },
   portionButton: {
     backgroundColor: '#F3F4F6',
@@ -692,5 +767,108 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#92400E',
     lineHeight: 15,
+  },
+  // Portion source badge styles
+  portionSourceBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  estimatedBadge: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FBBF24',
+  },
+  userSpecifiedBadge: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  learnedBadge: {
+    backgroundColor: '#DBEAFE',
+    borderWidth: 1,
+    borderColor: '#7DD3FC',
+  },
+  portionSourceText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  estimatedText: {
+    color: '#92400E',
+  },
+  userSpecifiedText: {
+    color: '#15803D',
+  },
+  learnedText: {
+    color: '#0369A1',
+  },
+  // Complex recipe warning
+  complexRecipeWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#E0F2FE',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0284C7',
+  },
+  complexRecipeIcon: {
+    fontSize: 14,
+    marginTop: 1,
+  },
+  complexRecipeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0C4A6E',
+    lineHeight: 16,
+  },
+  // Collapsed group styles
+  collapsedGroupSection: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#8B5CF6',
+    overflow: 'hidden',
+  },
+  collapsedGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  collapsedGroupToggle: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  collapsedGroupTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  collapsedItemsList: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  collapsedItem: {
+    marginBottom: 8,
+  },
+  collapsedItemName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  collapsedItemDetail: {
+    fontSize: 11,
+    color: '#6B7280',
   },
 });

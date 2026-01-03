@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../config/db.js";
-import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable } from "../db/schema.js";
+import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable, userPortionPreferencesTable } from "../db/schema.js";
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC } from "../utils/timezone.js";
@@ -1045,5 +1045,135 @@ router.post("/goals", async (req, res) => {
     });
   }
 });
+
+/**
+ * PATCH /api/nutrition/log/:id/portion
+ * Track portion adjustments and update learning preferences
+ * Part of Phase 5: User Portion Learning
+ */
+router.patch("/log/:id/portion", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { id } = req.params;
+    const { portionAmount, portionUnit, canonicalName } = req.body;
+
+    if (!portionAmount || !portionUnit) {
+      return res.status(400).json({
+        error: "portionAmount and portionUnit are required",
+      });
+    }
+
+    // Update the food log entry
+    const [updatedLog] = await db
+      .update(foodLogTable)
+      .set({
+        servingSize: `${portionAmount} ${portionUnit}`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(foodLogTable.id, parseInt(id)), eq(foodLogTable.userId, userId)))
+      .returning();
+
+    if (!updatedLog) {
+      return res.status(404).json({
+        error: "Food log entry not found",
+      });
+    }
+
+    // Track the portion adjustment in learning table
+    if (canonicalName) {
+      await _trackPortionAdjustment(userId, canonicalName, portionAmount, portionUnit);
+    }
+
+    res.json({
+      success: true,
+      foodLog: updatedLog,
+    });
+  } catch (err) {
+    console.error("[NutritionPortion] Error:", err);
+    res.status(500).json({
+      error: "Failed to update portion",
+      details: err.message,
+    });
+  }
+});
+
+/**
+ * Helper: Track portion adjustment and update learning preferences
+ * Implements the learning algorithm:
+ * - After 5 adjustments, confidence = 1.0 (100% precise)
+ * - Uses confidence to weight portion suggestions
+ */
+async function _trackPortionAdjustment(userId, canonicalName, portionAmount, portionUnit) {
+  try {
+    // Check if preference already exists
+    const existing = await db
+      .select()
+      .from(userPortionPreferencesTable)
+      .where(
+        and(
+          eq(userPortionPreferencesTable.userId, userId),
+          eq(userPortionPreferencesTable.canonicalName, canonicalName)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing preference
+      const currentPreference = existing[0];
+      const newAdjustmentCount = currentPreference.adjustmentCount + 1;
+
+      // Confidence grows: after 5 adjustments, reach max (1.0)
+      // 0.2 → 0.4 → 0.6 → 0.8 → 1.0
+      const newConfidenceScore = Math.min(newAdjustmentCount * 0.2, 1.0);
+
+      // Average the portion with previous preference
+      const avgAmount =
+        (parseFloat(currentPreference.preferredPortionAmount) * currentPreference.adjustmentCount +
+          parseFloat(portionAmount)) /
+        newAdjustmentCount;
+
+      await db
+        .update(userPortionPreferencesTable)
+        .set({
+          preferredPortionAmount: parseFloat(avgAmount.toFixed(2)),
+          preferredPortionUnit: portionUnit,
+          adjustmentCount: newAdjustmentCount,
+          confidenceScore: parseFloat(newConfidenceScore.toFixed(2)),
+          totalLoggingCount: currentPreference.totalLoggingCount + 1,
+          lastUsed: new Date(),
+          lastAdjustedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(userPortionPreferencesTable.id, currentPreference.id));
+
+      console.log(
+        `[PortionLearning] Updated ${canonicalName} for user ${userId}: ` +
+        `${newAdjustmentCount} adjustments, confidence: ${(newConfidenceScore * 100).toFixed(0)}%`
+      );
+    } else {
+      // Create new preference
+      await db
+        .insert(userPortionPreferencesTable)
+        .values({
+          userId,
+          canonicalName,
+          preferredPortionAmount: parseFloat(portionAmount),
+          preferredPortionUnit: portionUnit,
+          adjustmentCount: 1,
+          confidenceScore: 0.2, // 20% confidence on first adjustment
+          totalLoggingCount: 1,
+          lastUsed: new Date(),
+          lastAdjustedAt: new Date(),
+        });
+
+      console.log(
+        `[PortionLearning] Created new preference for ${canonicalName} for user ${userId}`
+      );
+    }
+  } catch (err) {
+    // Log error but don't fail the request
+    console.error("[PortionLearning] Error tracking adjustment:", err);
+  }
+}
 
 export default router;

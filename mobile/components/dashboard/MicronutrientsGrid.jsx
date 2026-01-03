@@ -216,7 +216,7 @@ export default function MicronutrientsGrid({ micros = {}, showAll = false }) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <LinearGradient colors={SURFACES.gradient.info} style={styles.headerIcon}>
+          <LinearGradient colors={SURFACES.gradient.blue} style={styles.headerIcon}>
             <Ionicons name="flask" size={18} color="#FFF" />
           </LinearGradient>
           <View>

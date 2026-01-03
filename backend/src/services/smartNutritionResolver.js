@@ -34,13 +34,23 @@ class SmartNutritionResolver {
   }
 
   /**
+   * Calculate portion confidence level
+   * @private
+   */
+  _calculatePortionConfidence(portion, source) {
+    if (source === 'learned') return 'precise';
+    if (source === 'user_specified') return 'typical';
+    return 'estimated';
+  }
+
+  /**
    * Resolve nutrition for a single food item
    * OpenAI-first with optional USDA verification
    *
    * STRATEGY: Trust OpenAI for ingredient preservation (spinach stays spinach!)
    * Only use USDA for generic foods where exact nutrient data is critical
    */
-  async resolveFood(foodQuery, portion = '1 serving') {
+  async resolveFood(foodQuery, portion = '1 serving', userId = null) {
     this.stats.totalRequests++;
 
     // Check cache first - use deterministic cache key
@@ -52,9 +62,24 @@ class SmartNutritionResolver {
       return cached;
     }
 
+    // NEW: Check for learned user preferences
+    let portionToUse = portion;
+    let portionSource = 'default';
+
+    if (userId && !portion) {
+      const learned = await this._getLearnedPortion(userId, foodQuery);
+      if (learned) {
+        portionToUse = learned.portion;
+        portionSource = 'learned';
+        console.log(`[SmartResolver] 🎯 Using learned portion for ${foodQuery}: ${portionToUse}`);
+      }
+    } else if (portion !== '1 serving') {
+      portionSource = 'user_specified';
+    }
+
     try {
       // Step 1: Get OpenAI estimation (fast, always available, preserves ingredients)
-      const openAIResult = await this._getOpenAIEstimation(foodQuery, portion);
+      const openAIResult = await this._getOpenAIEstimation(foodQuery, portionToUse);
 
       // Step 2: Check if this is an ingredient-specific food (protein/vegetable/grain)
       const hasSpecificIngredient = this._hasSpecificIngredient(foodQuery);
@@ -76,6 +101,8 @@ class SmartNutritionResolver {
         console.log(`[SmartResolver] ✅ Using OpenAI - ${reason} for "${foodQuery}"`);
         this.stats.openaiEstimates++;
 
+        const portionConfidence = this._calculatePortionConfidence(portionToUse, portionSource);
+
         const result = {
           ...openAIResult,
           source: 'openai_estimation',
@@ -84,6 +111,11 @@ class SmartNutritionResolver {
           limitation: openAIResult.confidence < 80 ? 'Estimated values - may vary by brand/preparation' : null,
           components: openAIResult.components || [], // Pass through components
           isComplex: openAIResult.isComplex || false,
+          // NEW: Portion tracking
+          portion_source: portionSource,
+          portion_confidence: portionConfidence,
+          user_adjustment_count: 0,
+          can_learn: userId !== null,
           cacheKey,
         };
 
@@ -343,6 +375,60 @@ class SmartNutritionResolver {
         ? ((this.stats.usdaVerifications / this.stats.totalRequests) * 100).toFixed(1) + '%'
         : '0%',
     };
+  }
+
+  /**
+   * Get learned portion for user
+   * Phase 5 will implement database storage
+   * For now, this returns null (allows framework to work before DB implementation)
+   * @private
+   */
+  async _getLearnedPortion(userId, foodName) {
+    try {
+      // Import here to avoid circular dependency issues
+      const { db } = await import('../config/db.js');
+      const { userPortionPreferencesTable } = await import('../db/schema.js');
+      const { eq, and } = await import('drizzle-orm');
+
+      // Normalize food name for lookup
+      const normalizedName = foodName.toLowerCase().trim();
+
+      // Query user's learned portion preferences
+      const preferences = await db
+        .select()
+        .from(userPortionPreferencesTable)
+        .where(
+          and(
+            eq(userPortionPreferencesTable.userId, userId),
+            // Match by canonical_name (normalized)
+            eq(userPortionPreferencesTable.canonicalName, normalizedName)
+          )
+        )
+        .limit(1);
+
+      if (preferences.length === 0) {
+        return null; // No learned preference, use system defaults
+      }
+
+      const pref = preferences[0];
+
+      // Only return learned preference if confidence is high enough (> 40%)
+      // This prevents low-confidence preferences from overriding user input
+      if (parseFloat(pref.confidenceScore) >= 0.4) {
+        return {
+          portion: `${pref.preferredPortionAmount} ${pref.preferredPortionUnit}`,
+          confidence: parseFloat(pref.confidenceScore),
+          adjustmentCount: pref.adjustmentCount,
+          lastUsed: pref.lastUsed,
+        };
+      }
+
+      return null;
+    } catch (err) {
+      // Log error but don't fail - fall back to system defaults
+      console.error('[SmartResolver] Error retrieving learned portion:', err.message);
+      return null;
+    }
   }
 
   /**

@@ -10,6 +10,8 @@ import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { FoodService } from "../services/foodService.js";
 import { smartNutritionResolver } from "../services/smartNutritionResolver.js";
+import { strategicFoodParser } from "../services/StrategicFoodParser.js";
+import { premiumFeaturesService } from "../services/PremiumFeatures.js";
 import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
@@ -33,6 +35,7 @@ router.use(requireAuth);
  */
 router.post("/", async (req, res) => {
   try {
+    const userId = req.auth.userId;
     const { mode, query, barcode, imageBase64, mealType, userContext } = req.body;
 
     // Validation
@@ -57,7 +60,8 @@ router.post("/", async (req, res) => {
         if (!query) {
           return res.status(400).json({ error: "query required for text/voice mode" });
         }
-        resolvedDraft = await resolveTextMode(query, draftId, mealType);
+        // NEW: Pass userId to enable tier-based routing
+        resolvedDraft = await resolveTextMode(query, draftId, mealType, userId);
         break;
 
       case 'photo':
@@ -204,34 +208,80 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
 
 /**
  * TEXT MODE RESOLVER
- * Pipeline: OpenAI parse → USDA search → OFF search → Best match selection
+ * NEW: Uses StrategicFoodParser with hybrid routing (rule-based vs AI)
+ * Pipeline: StrategicFoodParser route → USDA search → OFF search → Best match selection
  */
-async function resolveTextMode(query, draftId, mealType) {
-  // Step 1: Parse text with OpenAI
-  const parsedFoods = await FoodService.parseTextToFoods(query);
+async function resolveTextMode(query, draftId, mealType, userId) {
+  try {
+    // Step 1: Parse text with StrategicFoodParser (handles hybrid routing based on user tier)
+    const parseResult = await strategicFoodParser.parseFood(query, userId);
 
-  if (!parsedFoods || parsedFoods.length === 0) {
-    return createErrorDraft(draftId, 'text', 'Could not parse food from text', mealType);
+    if (!parseResult.success || !parseResult.items || parseResult.items.length === 0) {
+      console.log(`[Resolve] Strategic parser returned: success=${parseResult.success}, items=${parseResult.items?.length || 0}`);
+      return createErrorDraft(draftId, 'text', parseResult.message || 'Could not parse food from text', mealType);
+    }
+
+    console.log(`[Resolve] ✅ Parsed with ${parseResult.engine} engine: ${parseResult.items.length} items, confidence=${parseResult.confidence.toFixed(2)}`);
+
+    // Step 2: Resolve each food
+    const items = [];
+    for (const parsedFood of parseResult.items) {
+      const resolvedItem = await resolveGenericFood(parsedFood);
+      items.push(resolvedItem);
+    }
+
+    const dataQuality = assessDataQuality(items);
+
+    // Step 3: Add strategic parsing metadata to response
+    return {
+      draftId,
+      mode: 'text',
+      mealType,
+      items,
+      totals: calculateTotals(items),
+      dataQuality,
+      uiHints: generateUIHints(items, dataQuality),
+      // NEW: Strategic parsing metadata
+      strategicParsing: {
+        engine: parseResult.engine,
+        confidence: parseResult.confidence,
+        cost: parseResult.cost,
+        message: parseResult.message,
+        userTier: parseResult.userTier
+      }
+    };
+  } catch (error) {
+    console.error(`[Resolve] Strategic parser error: ${error.message}`);
+    // Fallback to legacy parsing
+    const parsedFoods = await FoodService.parseTextToFoods(query);
+
+    if (!parsedFoods || parsedFoods.length === 0) {
+      return createErrorDraft(draftId, 'text', 'Could not parse food from text (fallback)', mealType);
+    }
+
+    const items = [];
+    for (const parsedFood of parsedFoods) {
+      const resolvedItem = await resolveGenericFood(parsedFood);
+      items.push(resolvedItem);
+    }
+
+    const dataQuality = assessDataQuality(items);
+
+    return {
+      draftId,
+      mode: 'text',
+      mealType,
+      items,
+      totals: calculateTotals(items),
+      dataQuality,
+      uiHints: generateUIHints(items, dataQuality),
+      strategicParsing: {
+        engine: 'fallback_legacy',
+        confidence: 0.5,
+        message: 'Used legacy parsing due to strategic parser error'
+      }
+    };
   }
-
-  // Step 2: Resolve each food
-  const items = [];
-  for (const parsedFood of parsedFoods) {
-    const resolvedItem = await resolveGenericFood(parsedFood);
-    items.push(resolvedItem);
-  }
-
-  const dataQuality = assessDataQuality(items);
-
-  return {
-    draftId,
-    mode: 'text',
-    mealType,
-    items,
-    totals: calculateTotals(items),
-    dataQuality,
-    uiHints: generateUIHints(items, dataQuality)
-  };
 }
 
 /**

@@ -19,6 +19,11 @@ export const profilesTable = pgTable(
     cuisinePreference: json("cuisine_preference").default([]), // ['South Indian', 'American']
     region: text("region"), // 'India', 'USA', 'UK', etc.
     cookingStyle: text("cooking_style"), // 'home-style', 'restaurant'
+    // 🆕 PREMIUM FEATURES (Strategic Hybrid Parsing)
+    isPremium: boolean("is_premium").default(false), // Premium subscription status for feature access
+    premiumTier: text("premium_tier").default("free"), // 'free' | 'premium' | 'enterprise'
+    subscriptionStartedAt: timestamp("subscription_started_at"),
+    subscriptionEndsAt: timestamp("subscription_ends_at"),
     notifications: json("notifications").default({}),
     onboardingCompletedAt: timestamp("onboarding_completed_at"), // Timestamp when onboarding was completed
     createdAt: timestamp("created_at").defaultNow(),
@@ -30,6 +35,7 @@ export const profilesTable = pgTable(
     weightCheck: check("weight_check", sql`${table.weightKg} IS NULL OR (${table.weightKg} > 20 AND ${table.weightKg} < 500)`),
     heightCheck: check("height_check", sql`${table.heightCm} IS NULL OR (${table.heightCm} > 50 AND ${table.heightCm} < 300)`),
     genderCheck: check("gender_check", sql`${table.gender} IS NULL OR ${table.gender} IN ('female', 'male', 'other')`),
+    premiumTierCheck: check("premium_tier_check", sql`${table.premiumTier} IN ('free', 'premium', 'enterprise')`),
   })
 );
 
@@ -533,5 +539,64 @@ export const recommendationsHistoryTable = pgTable(
     recTypeIdx: index("idx_rec_history_rec_type").on(table.recommendationType),
     strengthMatchIdx: index("idx_rec_history_strength_match").on(table.preferenceStrengthMatch), // NEW: For analytics
     dietCompliantIdx: index("idx_rec_history_diet_compliant").on(table.dietCompliant), // NEW: For compliance tracking
+  })
+);
+
+// User portion preferences table - stores learned portion preferences per food
+export const userPortionPreferencesTable = pgTable(
+  "user_portion_preferences",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Food identification
+    canonicalName: text("canonical_name").notNull(), // Normalized food name for lookup
+    displayName: text("display_name"), // Display name as user typed it
+
+    // Learned portion
+    preferredPortionAmount: decimal("preferred_portion_amount", { precision: 8, scale: 2 }).notNull(),
+    preferredPortionUnit: text("preferred_portion_unit").notNull(), // 'g', 'ml', 'cup', 'serving', etc.
+
+    // Learning metadata
+    confidenceScore: decimal("confidence_score", { precision: 3, scale: 2 }).default("0.5"), // 0.00-1.00, grows with adjustments
+    adjustmentCount: integer("adjustment_count").default(0), // Number of times user adjusted this food
+    totalLoggingCount: integer("total_logging_count").default(0), // Total times this food was logged
+
+    // Timestamps for learning
+    lastUsed: timestamp("last_used").defaultNow(),
+    lastAdjustedAt: timestamp("last_adjusted_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    // Unique constraint: one preference per user per food
+    userCanonicalNameUnique: unique("user_portion_pref_user_canonical_unique").on(
+      table.userId,
+      table.canonicalName
+    ),
+    // Indexes for efficient querying
+    userIdIdx: index("user_portion_pref_user_id_idx").on(table.userId),
+    canonicalNameIdx: index("user_portion_pref_canonical_idx").on(table.canonicalName),
+    confidenceScoreIdx: index("user_portion_pref_confidence_idx").on(table.confidenceScore),
+    lastUsedIdx: index("user_portion_pref_last_used_idx").on(table.lastUsed),
+    // CHECK constraints
+    confidenceScoreCheck: check(
+      "confidence_score_check",
+      sql`${table.confidenceScore} >= 0 AND ${table.confidenceScore} <= 1`
+    ),
+    adjustmentCountCheck: check(
+      "adjustment_count_check",
+      sql`${table.adjustmentCount} >= 0`
+    ),
+    totalLoggingCountCheck: check(
+      "total_logging_count_check",
+      sql`${table.totalLoggingCount} >= 0`
+    ),
+    portionAmountCheck: check(
+      "portion_amount_check",
+      sql`${table.preferredPortionAmount} > 0 AND ${table.preferredPortionAmount} <= 9999`
+    ),
   })
 );
