@@ -9,8 +9,7 @@
  * - Error handling and notifications
  */
 
-import { useState, useCallback, useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+import { useState, useCallback } from 'react';
 import apiClient from '../services/apiClient';
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes

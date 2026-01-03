@@ -11,7 +11,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform } from 'react-native'; // eslint-disable-line no-unused-vars
 import Constants from 'expo-constants';
 import apiClient from './apiClient';
 
