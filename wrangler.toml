@@ -9,7 +9,7 @@ compatibility_date = "2025-01-01"
 enabled = true
 
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/13 * * * *"]
 
 # Environment variables (set these in Cloudflare dashboard)
 # BACKEND_URL = "https://myfoodtracker.onrender.com/health"
