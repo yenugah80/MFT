@@ -34,11 +34,12 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
-import apiClient from '@/services/apiClient';
+import { useProfileContext } from '@/providers/ProfileProvider';
 
 const OnboardingGuard = ({ children }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
+  const { onboardingComplete, isLoading: profileLoading, error: profileError, refetchProfile } = useProfileContext();
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -54,103 +55,76 @@ const OnboardingGuard = ({ children }) => {
     }
 
     const checkOnboardingStatus = async () => {
-      // 🆕 GUARD: Don't check if already checking (prevents duplicate API calls)
-      if (isCheckingRef.current) {
-        console.log('[OnboardingGuard] ⏭️ Check already in progress, skipping duplicate');
+      // Profile is loading from ProfileProvider - wait for it
+      if (profileLoading) {
+        console.log('[OnboardingGuard] ⏳ Waiting for profile from context...');
         return;
       }
 
-      isCheckingRef.current = true;
+      // Profile fetch failed - handle error
+      if (profileError) {
+        console.error('[OnboardingGuard] ❌ Profile fetch error from context:', profileError);
 
-      try {
-        // Clear any previous error state before checking
-        setError(null);
-
-        // Fetch complete profile from backend to check onboarding status
-        // GET /profile returns: { basics, dietary, goals, gamification, onboardingCompletedAt }
-        const profileResponse = await apiClient.get('/profile');
-
-        // 🆕 EXPLICIT VALIDATION: Ensure response is valid
-        if (!profileResponse) {
-          throw new Error('Backend returned empty profile response - please try again');
-        }
-
-        if (profileResponse.onboardingCompletedAt) {
-          // ✅ User has completed onboarding - they are a returning user
-          console.log('[OnboardingGuard] ✅ Returning user detected. Onboarding completed at:', profileResponse.onboardingCompletedAt);
-
-          // Clear any stale onboarding draft data
-          try {
-            await AsyncStorage.removeItem('@onboarding_draft');
-            await AsyncStorage.removeItem('@onboarding_current_step');
-            console.log('[OnboardingGuard] Cleared onboarding draft data');
-          } catch (error) {
-            console.warn('[OnboardingGuard] Failed to clear onboarding draft:', error);
-          }
-
-          // Unconditionally redirect returning users to dashboard
-          // This prevents them from accessing onboarding routes
-          console.log('[OnboardingGuard] Redirecting returning user to dashboard');
-          setTimeout(() => {
-            router.replace('/(tabs)/dashboard');
-          }, 100);
-        } else {
-          // ✅ User needs to complete onboarding - they are a new user
-          console.log('[OnboardingGuard] 🆕 New user detected. Onboarding is required');
-          setIsCheckingOnboarding(false);
-        }
-      } catch (error) {
-        // 🆕 EXPLICIT ERROR HANDLING: Log and display real error
-        const errorMessage = error?.response?.data?.error || error?.message || 'Failed to fetch profile';
-        const errorStatus = error?.response?.status;
-
-        console.error('[OnboardingGuard] ❌ Profile fetch failed:', {
-          message: errorMessage,
-          status: errorStatus,
-          details: error?.response?.data,
-          endpoint: '/profile'
-        });
-
-        // 🆕 Store error for UI display
-        setError({
-          message: errorMessage,
-          status: errorStatus,
-          canRetry: true
-        });
-
-        // Fallback: Check AsyncStorage for onboarding draft
-        // If user has a draft, they were in onboarding and should continue
-        // If no draft, show error but allow manual retry
+        // Try to recover with AsyncStorage draft
         try {
           const savedDraft = await AsyncStorage.getItem('@onboarding_draft');
           if (savedDraft) {
-            // User has a draft - they were resuming onboarding
             console.log('[OnboardingGuard] ✅ Found onboarding draft in AsyncStorage - user can resume');
-            setError(null); // Clear error if we can recover with draft
+            setError(null);
             setIsCheckingOnboarding(false);
           } else {
-            // No draft found - show error to user
-            console.log('[OnboardingGuard] 🔴 No draft found and API unavailable - showing error to user');
-            // Keep error state for user to see
+            console.log('[OnboardingGuard] 🔴 No draft found and profile unavailable');
+            setError({
+              message: 'Unable to load profile. Please check your connection.',
+              status: profileError?.status,
+              canRetry: true
+            });
           }
         } catch (storageError) {
           console.warn('[OnboardingGuard] AsyncStorage error:', storageError?.message);
-          // Even AsyncStorage failed - show error to user
+          setError({
+            message: 'Unable to load profile. Please check your connection.',
+            canRetry: true
+          });
         }
-      } finally {
-        // 🆕 IMPORTANT: Reset flag only after async work is done
-        isCheckingRef.current = false;
+        return;
+      }
+
+      // Profile loaded successfully - check onboarding status
+      if (onboardingComplete === false) {
+        // ✅ User needs to complete onboarding - they are a new user
+        console.log('[OnboardingGuard] 🆕 New user detected. Onboarding is required');
+        setIsCheckingOnboarding(false);
+        setError(null);
+      } else if (onboardingComplete === true) {
+        // ✅ User has completed onboarding - they are a returning user
+        console.log('[OnboardingGuard] ✅ Returning user detected');
+
+        // Clear any stale onboarding draft data
+        try {
+          await AsyncStorage.removeItem('@onboarding_draft');
+          await AsyncStorage.removeItem('@onboarding_current_step');
+          console.log('[OnboardingGuard] Cleared onboarding draft data');
+        } catch (error) {
+          console.warn('[OnboardingGuard] Failed to clear onboarding draft:', error);
+        }
+
+        // Unconditionally redirect returning users to dashboard
+        console.log('[OnboardingGuard] Redirecting returning user to dashboard');
+        setTimeout(() => {
+          router.replace('/(tabs)/dashboard');
+        }, 100);
       }
     };
 
     checkOnboardingStatus();
-    // 🆕 FIXED: Only depend on isLoaded, isSignedIn, retryCount (not router)
-  }, [isLoaded, isSignedIn, retryCount]);
+    // Depend on profile context values and retry count
+  }, [isLoaded, isSignedIn, profileLoading, profileError, onboardingComplete, retryCount]);
 
-  // 🆕 Retry handler
+  // Retry handler - refetch profile from context
   const handleRetry = () => {
-    isCheckingRef.current = false; // Reset flag before retry
-    setRetryCount(prev => prev + 1);
+    setError(null); // Clear error state
+    refetchProfile(); // Trigger profile refetch from ProfileProvider
   };
 
   // 🆕 Show error state with retry option

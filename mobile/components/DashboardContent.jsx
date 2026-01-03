@@ -25,6 +25,7 @@ import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useNotification } from "../providers/NotificationProvider";
+import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
 
 // Premium components
@@ -170,6 +171,7 @@ function getErrorDetails(error) {
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
   const { logs: localFoodLogs } = useFoodLog(); // Get local SQLite logs
+  const { profile: contextProfile } = useProfileContext(); // Get profile from context (eliminates duplicate /profile/me fetch)
   const [refreshing, setRefreshing] = useState(false);
   const [streakSavedVisible, setStreakSavedVisible] = useState(false);
   const notify = useNotification();
@@ -253,24 +255,21 @@ export default function DashboardContent() {
     setRefreshing(false);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-    }, [refetch])
-  );
+  // Note: useFocusEffect manual refetch removed - React Query handles staleness automatically
+  // Data will refetch if >30s old (respects staleTime configuration)
 
-  // Load recommendations and user profile when dashboard data is available
+  // Load recommendations when dashboard data is available
+  // Profile is fetched from ProfileProvider context (eliminates duplicate /profile/me API call)
   const loadRecommendationsData = useCallback(async () => {
     if (!data || isLoading) return;
 
+    // Use profile from context instead of fetching
+    if (contextProfile) {
+      setUserProfile(contextProfile);
+    }
+
     setRecommendationsLoading(true);
     try {
-      // Fetch user profile for personalization
-      const profileResponse = await apiClient.get('/profile/me');
-      if (profileResponse) {
-        setUserProfile(profileResponse);
-      }
-
       // Fetch recommendations from backend (non-critical, short timeout)
       try {
         // Use a race condition with short timeout since recommendations aren't critical
@@ -293,12 +292,12 @@ export default function DashboardContent() {
         setRecommendations([]);
       }
     } catch (error) {
-      console.error('[Dashboard] Failed to load dashboard data:', error);
+      console.error('[Dashboard] Failed to load recommendations:', error);
       setRecommendations([]);
     } finally {
       setRecommendationsLoading(false);
     }
-  }, [data, isLoading]);
+  }, [data, isLoading, contextProfile]);
 
   // Phase 3: Scan for allergen warnings (urgent alerts stay on Dashboard)
   // Note: complianceScore and cuisineDiversity calculations moved to Profile > MyInsightsSection

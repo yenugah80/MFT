@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
+import { ProfileProvider } from "@/providers/ProfileProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -110,15 +111,17 @@ export default function RootLayout() {
         <DatabaseInitializer>
           <QueryProvider>
             <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-              {/* NotificationProvider must be INSIDE ClerkProvider to access useAuth */}
+              {/* NotificationProvider & ProfileProvider must be INSIDE ClerkProvider to access useAuth */}
               <NotificationProvider>
-                <ApiInitializer>
-                  <SafeScreen>
-                    <OnboardingGuard>
-                      <Slot />
-                    </OnboardingGuard>
-                  </SafeScreen>
-                </ApiInitializer>
+                <ProfileProvider>
+                  <ApiInitializer>
+                    <SafeScreen>
+                      <OnboardingGuard>
+                        <Slot />
+                      </OnboardingGuard>
+                    </SafeScreen>
+                  </ApiInitializer>
+                </ProfileProvider>
               </NotificationProvider>
             </ClerkProvider>
           </QueryProvider>

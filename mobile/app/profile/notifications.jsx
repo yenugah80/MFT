@@ -39,7 +39,6 @@ import {
   SHADOWS,
   SEMANTIC_ACTIONS,
 } from '../../constants/premiumTheme';
-import apiClient from '../../services/apiClient';
 import {
   requestNotificationPermissions,
   getNotificationPermissionStatus,
@@ -281,46 +280,30 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const notify = useNotification();
 
-  const [settings, setSettings] = useState({
-    dailyReminder: true,
-    hydrationNudges: true,
-    insightDrops: true,
-    streakCelebrations: true,
-  });
+  // Initialize settings from NotificationProvider context (eliminates duplicate API fetch)
+  const [settings, setSettings] = useState(() => notify.push.preferences);
   const [permissionStatus, setPermissionStatus] = useState('undetermined');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
-  // Load settings on mount
+  // Load permission status on mount (no duplicate API fetch for preferences)
   useEffect(() => {
     let isMounted = true;
 
-    const loadData = async () => {
+    const loadPermissionStatus = async () => {
       try {
-        // Load permission status
         const status = await getNotificationPermissionStatus();
         if (!isMounted) return;
         setPermissionStatus(status);
-
-        // Load notification preferences
-        const data = await apiClient.get('/profile/notifications');
-        if (!isMounted) return;
-
-        setSettings({
-          dailyReminder: data?.dailyReminder !== false,
-          hydrationNudges: data?.hydrationNudges !== false,
-          insightDrops: data?.insightDrops !== false,
-          streakCelebrations: data?.streakCelebrations !== false,
-        });
       } catch (error) {
-        console.error('[NotificationsScreen] Failed to load:', error);
+        console.error('[NotificationsScreen] Failed to load permission status:', error);
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
 
-    loadData();
+    loadPermissionStatus();
     return () => { isMounted = false; };
   }, []);
 
