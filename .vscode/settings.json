@@ -1,0 +1,7 @@
+{
+    "claudeCode.useTerminal": true,
+    "stylelint.validate": ["css", "scss", "less"],
+    "css.validate": false,
+    "scss.validate": false,
+    "less.validate": false
+}

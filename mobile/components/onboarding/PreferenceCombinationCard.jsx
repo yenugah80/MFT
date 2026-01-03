@@ -84,16 +84,17 @@ export default function PreferenceCombinationCard({
         {/* Preference Tags */}
         {(dietaryPrefs.length > 0 || cuisinePrefs.length > 0) && (
           <View style={styles.tagsContainer}>
-            {/* Dietary Preferences */}
+            {/* Dietary Preferences - deduplicated */}
             {dietaryPrefs.length > 0 && (
               <View style={styles.tagGroup}>
                 <Text style={[styles.tagGroupLabel, { color: TEXT.tertiary }]}>
                   Dietary
                 </Text>
                 <View style={styles.tags}>
-                  {dietaryPrefs.map((pref) => {
-                    const prefId = typeof pref === 'string' ? pref : pref.id;
-                    return (
+                  {dietaryPrefs
+                    .map((pref) => typeof pref === 'string' ? pref : pref.id)
+                    .filter((id, index, self) => id && self.indexOf(id) === index)
+                    .map((prefId) => (
                       <LinearGradient
                         key={prefId}
                         colors={['#DBEAFE', '#BFDBFE']}
@@ -105,22 +106,22 @@ export default function PreferenceCombinationCard({
                           {prefId.replace(/([A-Z_])/g, ' $1').trim()}
                         </Text>
                       </LinearGradient>
-                    );
-                  })}
+                    ))}
                 </View>
               </View>
             )}
 
-            {/* Cuisine Preferences */}
+            {/* Cuisine Preferences - deduplicated */}
             {cuisinePrefs.length > 0 && (
               <View style={styles.tagGroup}>
                 <Text style={[styles.tagGroupLabel, { color: TEXT.tertiary }]}>
                   Cuisines
                 </Text>
                 <View style={styles.tags}>
-                  {cuisinePrefs.map((cuisine) => {
-                    const cuisineId = typeof cuisine === 'string' ? cuisine : cuisine.id;
-                    return (
+                  {cuisinePrefs
+                    .map((cuisine) => typeof cuisine === 'string' ? cuisine : cuisine.id)
+                    .filter((id, index, self) => id && self.indexOf(id) === index)
+                    .map((cuisineId) => (
                       <LinearGradient
                         key={cuisineId}
                         colors={['#FEF3C7', '#FCD34D']}
@@ -132,8 +133,7 @@ export default function PreferenceCombinationCard({
                           {cuisineId.replace(/([A-Z_])/g, ' $1').trim()}
                         </Text>
                       </LinearGradient>
-                    );
-                  })}
+                    ))}
                 </View>
               </View>
             )}

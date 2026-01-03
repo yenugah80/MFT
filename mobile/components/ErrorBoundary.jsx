@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { reportCrash } from '../services/crashReporting';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -26,8 +27,11 @@ class ErrorBoundary extends React.Component {
       errorInfo,
     });
 
-    // You can also log to an error reporting service here
-    // e.g., Sentry.captureException(error);
+    // Report crash to backend (FREE - no external service needed)
+    reportCrash(error, errorInfo, {
+      type: 'react_error_boundary',
+      screen: this.props.screenName || 'unknown',
+    });
   }
 
   resetError = () => {

@@ -45,6 +45,9 @@ export const accountSettingsTable = pgTable(
     privacy: json("privacy").default({}),
     notifications: json("notifications").default({}),
     preferences: json("preferences").default({}),
+    // Push notification token from Expo
+    expoPushToken: text("expo_push_token"),
+    pushTokenUpdatedAt: timestamp("push_token_updated_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   }

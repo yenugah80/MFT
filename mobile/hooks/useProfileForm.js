@@ -28,6 +28,7 @@ const ACTIONS = {
   SAVE_SECTION_START: 'SAVE_SECTION_START',
   SAVE_SECTION_SUCCESS: 'SAVE_SECTION_SUCCESS',
   SAVE_SECTION_ERROR: 'SAVE_SECTION_ERROR',
+  SAVE_FIELD_SUCCESS: 'SAVE_FIELD_SUCCESS', // NEW: For inline single-field saves
   CANCEL_EDIT: 'CANCEL_EDIT',
   SET_ERROR: 'SET_ERROR',
   CLEAR_ERROR: 'CLEAR_ERROR',
@@ -159,6 +160,28 @@ function profileReducer(state, action) {
         error: null,
         validationErrors: {},
       };
+
+    case ACTIONS.SAVE_FIELD_SUCCESS: {
+      const { section, field, value } = action.payload;
+      return {
+        ...state,
+        savedProfile: {
+          ...state.savedProfile,
+          [section]: {
+            ...state.savedProfile[section],
+            [field]: value,
+          },
+        },
+        draft: {
+          ...state.draft,
+          [section]: {
+            ...state.draft[section],
+            [field]: value,
+          },
+        },
+        status: 'idle',
+      };
+    }
 
     default:
       return state;
@@ -355,11 +378,64 @@ export default function useProfileForm(user) {
     dispatch({ type: ACTIONS.CANCEL_EDIT, payload: { section } });
   }, []);
 
+  // Save individual field (for inline editing)
+  const saveField = useCallback(
+    async (section, field, value) => {
+      dispatch({ type: ACTIONS.SAVE_SECTION_START });
+
+      try {
+        const token = await getToken({ template: "backend" });
+
+        // Build the data object with the updated field
+        const currentSectionData = state.draft[section];
+        const updatedData = {
+          ...currentSectionData,
+          [field]: value,
+        };
+
+        // Call appropriate API based on section
+        switch (section) {
+          case 'basics':
+            await saveProfileBasics(token, sanitizeBasicsForApi(updatedData), getToken);
+            break;
+          case 'dietary':
+            await saveDietaryPreferences(token, sanitizeDietaryForApi(updatedData), getToken);
+            break;
+          case 'goals':
+            await saveNutritionGoals(token, sanitizeGoalsForApi(updatedData), getToken);
+            break;
+          case 'gamification':
+            await saveGamificationStats(token, updatedData, getToken);
+            break;
+          default:
+            throw new Error(`Unknown section: ${section}`);
+        }
+
+        dispatch({
+          type: ACTIONS.SAVE_FIELD_SUCCESS,
+          payload: { section, field, value },
+        });
+
+        return true;
+      } catch (error) {
+        console.error("Save field error:", error);
+
+        dispatch({
+          type: ACTIONS.SAVE_SECTION_ERROR,
+          payload: error.message || "Failed to save",
+        });
+        return false;
+      }
+    },
+    [state.draft, getToken]
+  );
+
   return {
     state,
     updateField,
     toggleEdit,
     saveSection,
+    saveField,
     cancelEdit,
   };
 }

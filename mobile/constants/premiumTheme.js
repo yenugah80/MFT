@@ -88,6 +88,30 @@ export const SEMANTIC = {
   },
 };
 
+// SEMANTIC ACTION COLORS - For CTAs and interactive elements
+export const SEMANTIC_ACTIONS = {
+  primary: '#6B4EFF',     // Main actions (submit, confirm)
+  success: '#10B981',     // Goal achieved, positive actions
+  warning: '#F59E0B',     // Approaching limit, caution
+  danger: '#EF4444',      // Over limit, delete actions
+  info: '#3B82F6',        // Insights, informational
+  muted: '#6B7280',       // Disabled, inactive
+};
+
+// CELEBRATION COLORS - For achievements and celebrations
+export const CELEBRATION = {
+  confetti: ['#6B4EFF', '#FF6B9D', '#00D9FF', '#10B981', '#F59E0B'],
+  glow: 'rgba(107, 78, 255, 0.3)',
+  sparkle: '#FFD700',
+  streak: {
+    bronze: '#CD7F32',
+    silver: '#C0C0C0',
+    gold: '#FFD700',
+    platinum: '#E5E4E2',
+    diamond: '#B9F2FF',
+  },
+};
+
 // TYPOGRAPHY
 export const TYPOGRAPHY = {
   size: {
@@ -543,6 +567,8 @@ export const PREMIUM_THEME = {
   SURFACES,
   TEXT,
   SEMANTIC,
+  SEMANTIC_ACTIONS,
+  CELEBRATION,
   TYPOGRAPHY,
   SPACING,
   RADIUS,

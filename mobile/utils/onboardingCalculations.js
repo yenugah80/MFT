@@ -189,35 +189,36 @@ export const calculateNutritionTargets = (userData) => {
 export const validateNutritionTargets = (targets) => {
   const errors = {};
 
-  if (!targets.dailyCalories || targets.dailyCalories < 800 || targets.dailyCalories > 10000) {
-    errors.dailyCalories = 'Calories must be between 800 and 10,000';
+  // Use proper number checks (typeof) to allow 0 as a valid value
+  // Min 500 matches backend validation (profileController.js line 615)
+  const calories = targets.dailyCalories;
+  if (typeof calories !== 'number' || isNaN(calories) || calories < 500 || calories > 10000) {
+    errors.dailyCalories = 'Calories must be between 500 and 10,000';
   }
 
-  if (!targets.proteinG || targets.proteinG < 0 || targets.proteinG > 500) {
+  const protein = targets.proteinG;
+  if (typeof protein !== 'number' || isNaN(protein) || protein < 0 || protein > 500) {
     errors.proteinG = 'Protein must be between 0 and 500g';
   }
 
-  if (!targets.carbsG || targets.carbsG < 0 || targets.carbsG > 1000) {
+  const carbs = targets.carbsG;
+  if (typeof carbs !== 'number' || isNaN(carbs) || carbs < 0 || carbs > 1000) {
     errors.carbsG = 'Carbs must be between 0 and 1,000g';
   }
 
-  if (!targets.fatsG || targets.fatsG < 0 || targets.fatsG > 300) {
+  const fats = targets.fatsG;
+  if (typeof fats !== 'number' || isNaN(fats) || fats < 0 || fats > 300) {
     errors.fatsG = 'Fats must be between 0 and 300g';
   }
 
-  if (!targets.waterLiters || targets.waterLiters < 0 || targets.waterLiters > 20) {
-    errors.waterLiters = 'Water must be between 0 and 20 liters';
+  const water = targets.waterLiters;
+  if (typeof water !== 'number' || isNaN(water) || water < 0.5 || water > 10) {
+    errors.waterLiters = 'Water must be between 0.5 and 10 liters';
   }
 
-  // Check if macros add up to calories (within 20% tolerance)
-  const calculatedCalories =
-    (targets.proteinG * 4) + (targets.carbsG * 4) + (targets.fatsG * 9);
-  const caloriesDiff = Math.abs(calculatedCalories - targets.dailyCalories);
-  const tolerance = targets.dailyCalories * 0.2;
-
-  if (caloriesDiff > tolerance) {
-    errors.macros = 'Macros do not balance with calorie target. Please adjust.';
-  }
+  // Note: We don't enforce strict macro-calorie balance here
+  // Users may want to customize targets that don't perfectly match
+  // The app will show both values and users can adjust as needed
 
   return {
     isValid: Object.keys(errors).length === 0,
@@ -247,9 +248,7 @@ export const getActivityLevelDescription = (activityLevel) => {
  * @param {object} userData - Original user data
  * @returns {object} { calorieContext, proteinContext }
  */
-export const getGoalContext = (targets, userData) => {
-  const { primaryGoal, bmr, tdee } = targets;
-
+export const getGoalContext = (_targets, userData) => {
   let calorieContext = 'Based on your height, weight, age, and activity level';
   let proteinContext = '';
 

@@ -23,6 +23,97 @@ const VALID_CUISINE_PREFERENCES = [
   'mediterranean', 'asian', 'mexican', 'indian', 'american', 'italian', 'middle_eastern', 'african'
 ];
 
+// --- Push Token Management ---
+export async function savePushToken(req, res) {
+  try {
+    const { userId } = req.auth;
+    const { expoPushToken } = req.body;
+
+    if (!expoPushToken || typeof expoPushToken !== 'string') {
+      return res.status(400).json({ error: 'Invalid push token' });
+    }
+
+    // Validate Expo push token format
+    if (!expoPushToken.startsWith('ExponentPushToken[') && !expoPushToken.startsWith('ExpoPushToken[')) {
+      return res.status(400).json({
+        error: 'Invalid Expo push token format',
+        hint: 'Token should start with ExponentPushToken[ or ExpoPushToken['
+      });
+    }
+
+    const updated = await req.db
+      .insert(accountSettingsTable)
+      .values({
+        userId,
+        expoPushToken,
+        pushTokenUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: {
+          expoPushToken,
+          pushTokenUpdatedAt: new Date(),
+          updatedAt: new Date()
+        },
+      })
+      .returning({ expoPushToken: accountSettingsTable.expoPushToken });
+
+    console.log(`[savePushToken] Saved push token for user ${userId}`);
+    res.status(200).json({
+      success: true,
+      tokenRegistered: true,
+      expoPushToken: updated[0]?.expoPushToken
+    });
+  } catch (error) {
+    console.error('[savePushToken] Error saving push token:', error);
+    sendDevError(res, error);
+  }
+}
+
+export async function deletePushToken(req, res) {
+  try {
+    const { userId } = req.auth;
+
+    await req.db
+      .update(accountSettingsTable)
+      .set({
+        expoPushToken: null,
+        pushTokenUpdatedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(accountSettingsTable.userId, userId));
+
+    console.log(`[deletePushToken] Removed push token for user ${userId}`);
+    res.status(200).json({ success: true, tokenRegistered: false });
+  } catch (error) {
+    console.error('[deletePushToken] Error removing push token:', error);
+    sendDevError(res, error);
+  }
+}
+
+export async function getPushTokenStatus(req, res) {
+  try {
+    const { userId } = req.auth;
+
+    const [settings] = await req.db
+      .select({
+        expoPushToken: accountSettingsTable.expoPushToken,
+        pushTokenUpdatedAt: accountSettingsTable.pushTokenUpdatedAt
+      })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId));
+
+    res.status(200).json({
+      tokenRegistered: !!settings?.expoPushToken,
+      lastUpdated: settings?.pushTokenUpdatedAt || null
+    });
+  } catch (error) {
+    console.error('[getPushTokenStatus] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
 // --- Notification Preferences ---
 export async function getNotifications(req, res) {
   try {

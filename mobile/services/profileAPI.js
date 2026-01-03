@@ -36,6 +36,7 @@ const parseErrorResponse = async (response) => {
  * @param {Function} getToken - Callback to get fresh token from Clerk
  * @param {Function} requestFn - Async function that makes the API request
  * @returns {Promise<Response>} Response from the API request
+ * @throws {ProfileAPIError} If token refresh fails
  */
 const refreshTokenAndRetry = async (getToken, requestFn) => {
   try {
@@ -44,7 +45,7 @@ const refreshTokenAndRetry = async (getToken, requestFn) => {
 
     if (!freshToken) {
       console.warn('[ProfileAPI] Failed to refresh token');
-      return null;
+      throw new ProfileAPIError('Session expired. Please sign in again.', 401);
     }
 
     console.log('[ProfileAPI] Token refreshed, retrying request...');
@@ -53,7 +54,10 @@ const refreshTokenAndRetry = async (getToken, requestFn) => {
     return await requestFn(freshToken);
   } catch (error) {
     console.error('[ProfileAPI] Token refresh failed:', error.message);
-    return null;
+    if (error instanceof ProfileAPIError) {
+      throw error;
+    }
+    throw new ProfileAPIError('Authentication failed. Please sign in again.', 401);
   }
 };
 
@@ -82,12 +86,10 @@ export const fetchUserProfile = async (token, getToken = null) => {
     let response = await makeRequest(token);
 
     // Auto-refresh on 401 if getToken callback is provided
+    // Note: refreshTokenAndRetry now throws on failure instead of returning null
     if (response.status === 401 && getToken) {
       console.warn('[ProfileAPI] Received 401, attempting token refresh...');
-      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
-      if (retryResponse) {
-        response = retryResponse;
-      }
+      response = await refreshTokenAndRetry(getToken, makeRequest);
     }
 
     // Handle 404 - profile doesn't exist yet
@@ -174,10 +176,7 @@ export const saveProfileBasics = async (token, basicsData, getToken = null) => {
     // Auto-refresh on 401 if getToken callback is provided
     if (response.status === 401 && getToken) {
       console.warn('[ProfileAPI] Received 401, attempting token refresh...');
-      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
-      if (retryResponse) {
-        response = retryResponse;
-      }
+      response = await refreshTokenAndRetry(getToken, makeRequest);
     }
 
     if (!response.ok) {
@@ -241,10 +240,7 @@ export const saveDietaryPreferences = async (token, dietaryData, getToken = null
     // Auto-refresh on 401 if getToken callback is provided
     if (response.status === 401 && getToken) {
       console.warn('[ProfileAPI] Received 401, attempting token refresh...');
-      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
-      if (retryResponse) {
-        response = retryResponse;
-      }
+      response = await refreshTokenAndRetry(getToken, makeRequest);
     }
 
     if (!response.ok) {
@@ -304,10 +300,7 @@ export const saveNutritionGoals = async (token, goalsData, getToken = null) => {
     // Auto-refresh on 401 if getToken callback is provided
     if (response.status === 401 && getToken) {
       console.warn('[ProfileAPI] Received 401, attempting token refresh...');
-      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
-      if (retryResponse) {
-        response = retryResponse;
-      }
+      response = await refreshTokenAndRetry(getToken, makeRequest);
     }
 
     if (!response.ok) {
@@ -367,10 +360,7 @@ export const saveGamificationStats = async (token, gamificationData, getToken = 
     // Auto-refresh on 401 if getToken callback is provided
     if (response.status === 401 && getToken) {
       console.warn('[ProfileAPI] Received 401, attempting token refresh...');
-      const retryResponse = await refreshTokenAndRetry(getToken, makeRequest);
-      if (retryResponse) {
-        response = retryResponse;
-      }
+      response = await refreshTokenAndRetry(getToken, makeRequest);
     }
 
     if (!response.ok) {

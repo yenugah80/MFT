@@ -65,9 +65,9 @@ const TabsLayout = () => {
     );
   }
 
-  // Redirect to onboarding if not completed
+  // Redirect to onboarding if not completed (index route handles step resume)
   if (!onboardingComplete) {
-    return <Redirect href="/onboarding/step-1" />;
+    return <Redirect href="/onboarding" />;
   }
 
   return (

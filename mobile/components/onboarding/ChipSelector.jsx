@@ -112,6 +112,9 @@ const ChipSelector = ({
           ]}
         >
           <View style={styles.chipContent}>
+            {item.emoji && (
+              <Text style={styles.chipEmoji}>{item.emoji}</Text>
+            )}
             <Text
               style={[
                 styles.chipLabel,
@@ -186,12 +189,15 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     justifyContent: 'center',
   },
+  chipEmoji: {
+    fontSize: 18,
+  },
   chipLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: TEXT.primary,
     textAlign: 'center',
-    flex: 1,
+    flexShrink: 1,
   },
   chipLabelSelected: {
     fontWeight: '700',

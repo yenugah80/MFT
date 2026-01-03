@@ -9,13 +9,14 @@ import {
   StyleSheet,
   Pressable,
   Text,
+  TextInput,
   AccessibilityInfo,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import OnboardingLayout from '../../components/onboarding/OnboardingLayout';
 import MetricInput from '../../components/onboarding/MetricInput';
-import { useOnboarding } from '../../hooks/useOnboarding';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 import {
   ACTIVITY_LEVELS,
   GENDERS,
@@ -27,32 +28,20 @@ import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, SEMANTIC } from '../..
 
 const Step2Screen = () => {
   const {
-    step,
     step2Data,
     updateStepData,
     goToNextStep,
     goToPreviousStep,
-    setStep,
   } = useOnboarding();
 
-  const [errors, setErrors] = React.useState({});
-
-  // Ensure step is synchronized to 2 when this screen loads
-  React.useEffect(() => {
-    if (step !== 2) {
-      console.log('[Step 2] Screen loaded - syncing hook state to step 2 (was:', step, ')');
-      setStep(2);
-    }
-  }, [step, setStep]);
-
-  // Validation logic
-  const isFormValid = useMemo(() => {
-    const newErrors = {};
+  // Validation logic - pure memoized computation, no state needed
+  const { errors, isFormValid } = useMemo(() => {
+    const validationErrors = {};
 
     // Validate age
     if (!step2Data.age || parseFloat(step2Data.age) < VALIDATION_RANGES.age.min ||
         parseFloat(step2Data.age) > VALIDATION_RANGES.age.max) {
-      newErrors.age = `Age must be between ${VALIDATION_RANGES.age.min} and ${VALIDATION_RANGES.age.max}`;
+      validationErrors.age = `Age must be between ${VALIDATION_RANGES.age.min} and ${VALIDATION_RANGES.age.max}`;
     }
 
     // Validate weight
@@ -62,17 +51,17 @@ const Step2Screen = () => {
       const maxWeight = step2Data.weightUnit === 'kg' ? VALIDATION_RANGES.weight.max : VALIDATION_RANGES.weightLbs.max;
 
       if (weight < minWeight || weight > maxWeight) {
-        newErrors.weight = `Weight must be between ${minWeight} and ${maxWeight} ${step2Data.weightUnit}`;
+        validationErrors.weight = `Weight must be between ${minWeight} and ${maxWeight} ${step2Data.weightUnit}`;
       }
     } else {
-      newErrors.weight = 'Weight is required';
+      validationErrors.weight = 'Weight is required';
     }
 
     // Validate height
     if (step2Data.heightUnit === 'cm') {
       if (!step2Data.height || parseFloat(step2Data.height) < VALIDATION_RANGES.height.min ||
           parseFloat(step2Data.height) > VALIDATION_RANGES.height.max) {
-        newErrors.height = `Height must be between ${VALIDATION_RANGES.height.min} and ${VALIDATION_RANGES.height.max} cm`;
+        validationErrors.height = `Height must be between ${VALIDATION_RANGES.height.min} and ${VALIDATION_RANGES.height.max} cm`;
       }
     } else {
       // Feet + inches
@@ -81,22 +70,24 @@ const Step2Screen = () => {
 
       if (feet < VALIDATION_RANGES.heightFeet.min || feet > VALIDATION_RANGES.heightFeet.max ||
           inches < 0 || inches > 11) {
-        newErrors.height = 'Please enter a valid height';
+        validationErrors.height = 'Please enter a valid height';
       }
     }
 
     // Validate gender (required for accurate BMR calculations)
     if (!step2Data.gender) {
-      newErrors.gender = 'Gender is required for accurate health calculations';
+      validationErrors.gender = 'Gender is required for accurate health calculations';
     }
 
     // Validate activity level
     if (!step2Data.activityLevel) {
-      newErrors.activityLevel = 'Activity level is required';
+      validationErrors.activityLevel = 'Activity level is required';
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return {
+      errors: validationErrors,
+      isFormValid: Object.keys(validationErrors).length === 0,
+    };
   }, [step2Data]);
 
   const handleContinue = () => {
@@ -112,6 +103,7 @@ const Step2Screen = () => {
     }
   };
 
+  // Announce screen for accessibility on mount
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step2);
   }, []);
@@ -181,21 +173,48 @@ const Step2Screen = () => {
           <View style={styles.heightFtInContainer}>
             <Text style={styles.label}>{ONBOARDING_COPY.step2.heightLabel}</Text>
             <View style={styles.ftInRow}>
-              <MetricInput
-                value={step2Data.heightFeet}
-                onChangeValue={(value) => updateStepData('step2', { heightFeet: value })}
-                placeholder="5"
-                keyboardType="number-pad"
-              />
-              <Text style={styles.ftInSeparator}>ft</Text>
-              <MetricInput
-                value={step2Data.heightInches}
-                onChangeValue={(value) => updateStepData('step2', { heightInches: value })}
-                placeholder="10"
-                keyboardType="number-pad"
-              />
-              <Text style={styles.ftInSeparator}>in</Text>
+              {/* Feet Input */}
+              <View style={styles.ftInInputWrapper}>
+                <TextInput
+                  style={styles.ftInInput}
+                  value={step2Data.heightFeet}
+                  onChangeText={(text) => {
+                    const cleaned = text.replace(/[^0-9]/g, '');
+                    updateStepData('step2', { heightFeet: cleaned });
+                  }}
+                  placeholder="5"
+                  placeholderTextColor={TEXT.muted}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  selectTextOnFocus
+                />
+                <Text style={styles.ftInLabel}>ft</Text>
+              </View>
+
+              {/* Inches Input */}
+              <View style={styles.ftInInputWrapper}>
+                <TextInput
+                  style={styles.ftInInput}
+                  value={step2Data.heightInches}
+                  onChangeText={(text) => {
+                    const cleaned = text.replace(/[^0-9]/g, '');
+                    // Limit inches to 0-11
+                    const num = parseInt(cleaned, 10);
+                    if (cleaned === '' || (num >= 0 && num <= 11)) {
+                      updateStepData('step2', { heightInches: cleaned });
+                    }
+                  }}
+                  placeholder="10"
+                  placeholderTextColor={TEXT.muted}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  selectTextOnFocus
+                />
+                <Text style={styles.ftInLabel}>in</Text>
+              </View>
             </View>
+
+            {/* Unit Toggle */}
             <View style={styles.unitToggleContainer}>
               <Pressable
                 style={[
@@ -226,6 +245,10 @@ const Step2Screen = () => {
                 </Text>
               </Pressable>
             </View>
+
+            {errors.height && (
+              <Text style={styles.errorText}>{errors.height}</Text>
+            )}
           </View>
         )}
       </LinearGradient>
@@ -473,13 +496,34 @@ const styles = StyleSheet.create({
   ftInRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[2],
+    gap: SPACING[4],
+    marginBottom: SPACING[3],
   },
-  ftInSeparator: {
-    fontSize: 13,
+  ftInInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: SURFACES.card.border,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+  },
+  ftInInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '700',
+    color: TEXT.primary,
+    textAlign: 'center',
+    minHeight: 44,
+    paddingVertical: SPACING[2],
+  },
+  ftInLabel: {
+    fontSize: 14,
     fontWeight: '600',
     color: BRAND.primary,
+    marginLeft: SPACING[2],
   },
 
   // ===== PREMIUM UNIT TOGGLE =====

@@ -46,9 +46,8 @@ import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 
 // Phase 3: Dashboard Enhancements - Preference-based insights
-import DietaryComplianceCard from "./dashboard/DietaryComplianceCard";
+// Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
 import AllergenWarningCard from "./dashboard/AllergenWarningCard";
-import CuisineDiversityCard from "./dashboard/CuisineDiversityCard";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -59,9 +58,8 @@ import { LUXURY_BACKGROUNDS, LUXURY_TEXT } from "../constants/luxuryTheme";
 import { calculateFoodMoodScore, generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
 import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
 import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
-import { calculateDietaryComplianceScore } from "../utils/complianceCalculations";
 import { scanMealsForAllergens } from "../utils/allergenDetection";
-import { calculateCuisineDiversity } from "../utils/cuisineDiversity";
+// Note: calculateDietaryComplianceScore and calculateCuisineDiversity moved to Profile > MyInsightsSection
 import apiClient from "../services/apiClient";
 import storage, { STORAGE_KEYS } from "../utils/storage";
 
@@ -219,9 +217,8 @@ export default function DashboardContent() {
   const [acceptingRecommendation, setAcceptingRecommendation] = useState(false);
 
   // Phase 3: Preference-based insights state
-  const [complianceScore, setComplianceScore] = useState(null);
+  // Note: complianceScore and cuisineDiversity moved to Profile > MyInsightsSection
   const [allergenWarnings, setAllergenWarnings] = useState([]);
-  const [cuisineDiversity, setCuisineDiversity] = useState(null);
 
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
@@ -288,21 +285,13 @@ export default function DashboardContent() {
     }
   }, [data, isLoading]);
 
-  // Phase 3: Calculate preference-based insights when data loads
+  // Phase 3: Scan for allergen warnings (urgent alerts stay on Dashboard)
+  // Note: complianceScore and cuisineDiversity calculations moved to Profile > MyInsightsSection
   useEffect(() => {
     if (!data || isLoading) return;
 
     try {
-      // Calculate dietary compliance score from today's meals
-      if (data?.today?.foodLogs && userProfile?.dietary) {
-        const score = calculateDietaryComplianceScore(
-          data.today.foodLogs,
-          userProfile.dietary
-        );
-        setComplianceScore(score);
-      }
-
-      // Scan meals for allergen warnings
+      // Scan meals for allergen warnings - these are urgent and stay on Dashboard
       if (data?.today?.foodLogs && userProfile?.dietary?.allergies) {
         const warnings = scanMealsForAllergens(
           data.today.foodLogs,
@@ -310,26 +299,9 @@ export default function DashboardContent() {
         );
         setAllergenWarnings(warnings);
       }
-
-      // Calculate cuisine diversity from this week's meals
-      // Note: We'll use available data from trends or fetch separately if needed
-      if (data?.trends?.weekSummaries && data.trends.weekSummaries.length > 0) {
-        // Reconstruct meals array from week summaries for diversity calculation
-        const weeksMeals = data.trends.weekSummaries.reduce((acc, summary) => {
-          if (summary.foodLogs) {
-            return [...acc, ...summary.foodLogs];
-          }
-          return acc;
-        }, []);
-
-        if (weeksMeals.length > 0) {
-          const diversity = calculateCuisineDiversity(weeksMeals);
-          setCuisineDiversity(diversity);
-        }
-      }
     } catch (error) {
-      console.error('[Dashboard Phase 3] Error calculating insights:', error);
-      // Fail silently - these are secondary metrics
+      console.error('[Dashboard Phase 3] Error scanning allergens:', error);
+      // Fail silently - allergen detection is secondary
     }
   }, [data, isLoading, userProfile]);
 
@@ -1104,28 +1076,13 @@ export default function DashboardContent() {
         />
 
         {/* ============================================ */}
-        {/* PHASE 3: PREFERENCE-BASED INSIGHTS CARDS */}
+        {/* PHASE 3: URGENT ALERTS ONLY */}
+        {/* Note: DietaryComplianceCard & CuisineDiversityCard moved to Profile > MyInsightsSection */}
         {/* ============================================ */}
 
-        {/* Allergen Warning Card - Urgent alerts */}
+        {/* Allergen Warning Card - Urgent alerts stay on Dashboard */}
         {allergenWarnings.length > 0 && (
           <AllergenWarningCard warnings={allergenWarnings} />
-        )}
-
-        {/* Dietary Compliance Card - Shows preference adherence */}
-        {complianceScore !== null && (
-          <DietaryComplianceCard
-            score={complianceScore}
-            todaysMeals={data?.today?.foodLogs}
-          />
-        )}
-
-        {/* Cuisine Diversity Card - Tracking variety */}
-        {cuisineDiversity && (
-          <CuisineDiversityCard
-            diversity={cuisineDiversity}
-            userPreferences={userProfile?.dietary}
-          />
         )}
 
         <DashboardPrimaryCard
@@ -1195,7 +1152,7 @@ export default function DashboardContent() {
           moodInsightsData={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           onOpenMoodInsights={() => router.push('/insights/mood')}
-          onOpenHydrationTracker={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
         />
 
         {/* ============================================ */}

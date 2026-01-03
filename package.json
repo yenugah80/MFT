@@ -1,5 +1,7 @@
 {
-  "main": "index.js",
+  "name": "MyFoodTracker-main",
+  "version": "1.0.0",
+  "private": true,
   "dependencies": {
     "@react-native-voice/voice": "^3.2.4",
     "expo-haptics": "^15.0.8",
@@ -14,8 +16,6 @@
     "@types/react": "~19.1.10",
     "typescript": "~5.9.2"
   },
-  "name": "MyFoodTracker-main",
-  "version": "1.0.0",
   "scripts": {
     "dev:backend": "npm --prefix backend run dev",
     "dev:mobile": "npm --prefix mobile start -- --clear",

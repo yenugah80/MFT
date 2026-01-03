@@ -1,71 +1,79 @@
 /**
  * Onboarding Stack Navigator
  * Navigation container for the 4-step onboarding flow
+ * Includes error boundary for graceful error recovery
  */
 
-import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { useOnboarding } from '../../hooks/useOnboarding';
+import React, { useCallback } from 'react';
+import { Stack, useRouter } from 'expo-router';
+import { OnboardingProvider } from '../../contexts/OnboardingContext';
+import OnboardingErrorBoundary from '../../components/onboarding/OnboardingErrorBoundary';
 
-export default function OnboardingLayout() {
-  const { setStep } = useOnboarding();
+function OnboardingStack() {
+  const router = useRouter();
 
-  // Reset to step 1 when entering the onboarding stack
-  useEffect(() => {
-    console.log('[OnboardingLayout] Onboarding flow started, resetting to step 1');
-    setStep(1);
-  }, [setStep]);
+  const handleRestart = useCallback(() => {
+    router.replace('/onboarding/step-1');
+  }, [router]);
+
+  const handleGoBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/onboarding/step-1');
+    }
+  }, [router]);
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animationEnabled: true,
-        animationTypeForReplace: false,
-        presentation: 'card',
-        cardStyle: {
-          opacity: 1,
-        },
-        transitionSpec: {
-          open: {
-            animation: 'timing',
-            config: {
-              duration: 300,
-            },
-          },
-          close: {
-            animation: 'timing',
-            config: {
-              duration: 300,
-            },
-          },
-        },
-      }}
+    <OnboardingErrorBoundary
+      onRestart={handleRestart}
+      onGoBack={handleGoBack}
     >
-      <Stack.Screen
-        name="step-1"
-        options={{
-          title: 'Welcome',
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
         }}
-      />
-      <Stack.Screen
-        name="step-2"
-        options={{
-          title: 'Basics',
-        }}
-      />
-      <Stack.Screen
-        name="step-3"
-        options={{
-          title: 'Preferences',
-        }}
-      />
-      <Stack.Screen
-        name="step-4"
-        options={{
-          title: 'Goals',
-        }}
-      />
-    </Stack>
+      >
+        <Stack.Screen
+          name="index"
+          options={{
+            title: 'Loading',
+          }}
+        />
+        <Stack.Screen
+          name="step-1"
+          options={{
+            title: 'Welcome',
+          }}
+        />
+        <Stack.Screen
+          name="step-2"
+          options={{
+            title: 'Basics',
+          }}
+        />
+        <Stack.Screen
+          name="step-3"
+          options={{
+            title: 'Preferences',
+          }}
+        />
+        <Stack.Screen
+          name="step-4"
+          options={{
+            title: 'Goals',
+          }}
+        />
+      </Stack>
+    </OnboardingErrorBoundary>
+  );
+}
+
+export default function OnboardingLayout() {
+  return (
+    <OnboardingProvider>
+      <OnboardingStack />
+    </OnboardingProvider>
   );
 }

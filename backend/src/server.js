@@ -29,6 +29,7 @@ import waterRouter from "./routes/water.js";
 import apiMetricsRouter from "./routes/apiMetrics.js";
 import gamificationRouter from "./routes/gamificationRoutes.js";
 import recommendationsRouter from "./routes/recommendations.js";
+import analyticsRouter from "./routes/analytics.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 
 const app = express();
@@ -201,6 +202,9 @@ app.use("/api/gamification", gamificationRouter);
 
 // Mount Recommendations Router
 app.use("/api/recommendations", recommendationsRouter);
+
+// Mount Analytics & Crash Reporting Router (FREE - no external service)
+app.use("/api", analyticsRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

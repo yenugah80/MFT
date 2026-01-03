@@ -229,9 +229,10 @@ async function trackToFirebase(eventName, properties) {
 async function trackToBackend(eventName, properties) {
   try {
     // Send to backend /api/analytics endpoint
-    const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+    // Import at top of file would be cleaner, but keeping local to minimize changes
+    const { API_URL } = require('../constants/api');
 
-    await fetch(`${API_URL}/api/analytics`, {
+    await fetch(`${API_URL}/analytics`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

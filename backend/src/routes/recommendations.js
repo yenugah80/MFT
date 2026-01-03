@@ -290,7 +290,8 @@ router.get('/history/list', requireAuth(), async (req, res) => {
     };
 
     if (stats.total > 0) {
-      stats.acceptanceRate = ((stats.accepted / stats.total) * 100).toFixed(1);
+      // Return decimal (0-1) for consistency across all endpoints
+      stats.acceptanceRate = stats.accepted / stats.total;
     }
 
     res.json({ history, stats });
@@ -328,38 +329,34 @@ router.get('/stats/acceptance-by-preference', requireAuth(), async (req, res) =>
       });
     }
 
-    // Calculate overall acceptance rate
+    // Calculate overall acceptance rate (decimal 0-1 for consistency)
     const totalAccepted = history.filter(r => r.interactionStatus === 'accepted').length;
     const totalShown = history.length;
-    const overallAcceptanceRate = Math.round((totalAccepted / totalShown) * 100);
+    const overallAcceptanceRate = totalAccepted / totalShown;
 
-    // Break down by recommendation type
+    // Break down by recommendation type with full stats
     const byType = {};
     history.forEach(rec => {
       const type = rec.recommendationType || 'UNKNOWN';
       if (!byType[type]) {
-        byType[type] = { shown: 0, accepted: 0 };
+        byType[type] = { total: 0, accepted: 0 };
       }
-      byType[type].shown++;
+      byType[type].total++;
       if (rec.interactionStatus === 'accepted') {
         byType[type].accepted++;
       }
     });
 
-    // Convert to percentage format
-    const byPreferenceType = {};
+    // Add acceptance rate to each type
     Object.entries(byType).forEach(([type, data]) => {
-      byPreferenceType[type] = Math.round((data.accepted / data.shown) * 100);
+      data.acceptanceRate = data.total > 0 ? (data.accepted / data.total) : 0;
     });
 
     res.json({
-      success: true,
-      stats: {
-        acceptanceRate: overallAcceptanceRate,
-        byPreferenceType,
-        totalShown,
-        totalAccepted
-      }
+      acceptanceRate: overallAcceptanceRate,
+      byType,
+      totalShown,
+      totalAccepted
     });
   } catch (error) {
     console.error('[Recommendations] Stats error:', error);
@@ -819,9 +816,10 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
         aiConfidence: 0.85,
         personalizationScore: calculatePersonalizationScore(rec, remainingBudget),
         // NEW: Preference strength tracking fields
+        // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
         preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
-        dietCompliant: rec.dietCompliant !== false,
-        allergenFree: rec.allergenFree !== false,
+        dietCompliant: rec.dietCompliant === true, // Only true if explicitly marked true
+        allergenFree: rec.allergenFree === true,   // Safety: default to false unless confirmed safe
         warningBadge: rec.warningBadge || null,
         createdAt: new Date()
       }).catch(err => {

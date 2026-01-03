@@ -1,9 +1,9 @@
 /**
- * useOnboarding Hook
- * Manages the entire onboarding questionnaire flow with draft persistence
+ * OnboardingContext
+ * Provides shared onboarding state across all step screens
  */
 
-import { useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
@@ -16,6 +16,7 @@ import {
   saveDietaryPreferences,
   saveNutritionGoals,
 } from '../services/profileAPI';
+import { API_URL } from '../constants/api';
 
 // Action types
 const ACTIONS = {
@@ -64,10 +65,10 @@ const initialState = {
     },
   },
   calculatedGoals: null,
-  status: 'idle', // 'idle' | 'loading' | 'saving' | 'error'
+  status: 'idle',
   error: null,
-  savedSteps: 0, // Track which steps have been saved to backend (0-4)
-  isFirstLoad: true, // Track if this is the first load of the app session
+  savedSteps: 0,
+  isLoaded: false,
 };
 
 // Reducer
@@ -79,6 +80,7 @@ function onboardingReducer(state, action) {
         draft: action.payload.draft,
         step: action.payload.step,
         status: 'idle',
+        isLoaded: true,
       };
 
     case ACTIONS.SET_STEP:
@@ -106,10 +108,9 @@ function onboardingReducer(state, action) {
       const { step2 } = state.draft;
 
       try {
-        // Convert height/weight to consistent units (kg, cm)
         let weightKg = parseFloat(step2.weight);
         if (isNaN(weightKg)) {
-          throw new Error('Invalid weight value - must be a number');
+          throw new Error('Invalid weight value');
         }
         if (step2.weightUnit === 'lbs') {
           weightKg = weightKg / 2.20462;
@@ -120,16 +121,16 @@ function onboardingReducer(state, action) {
           const feet = parseFloat(step2.heightFeet);
           const inches = parseFloat(step2.heightInches);
           if (isNaN(feet) || isNaN(inches)) {
-            throw new Error('Invalid height value - feet and inches must be numbers');
+            throw new Error('Invalid height value');
           }
           heightCm = feet * 30.48 + inches * 2.54;
         } else if (isNaN(heightCm)) {
-          throw new Error('Invalid height value - must be a number');
+          throw new Error('Invalid height value');
         }
 
         const age = parseInt(step2.age, 10);
         if (isNaN(age)) {
-          throw new Error('Invalid age value - must be a number');
+          throw new Error('Invalid age value');
         }
 
         const calculated = calculateNutritionTargets({
@@ -224,7 +225,7 @@ function onboardingReducer(state, action) {
     case ACTIONS.RESET:
       return {
         ...initialState,
-        isFirstLoad: false, // Mark that we've already loaded once
+        isLoaded: true,
       };
 
     default:
@@ -232,7 +233,11 @@ function onboardingReducer(state, action) {
   }
 }
 
-export const useOnboarding = () => {
+// Create Context
+const OnboardingContext = createContext(null);
+
+// Provider Component
+export function OnboardingProvider({ children }) {
   const [state, dispatch] = useReducer(onboardingReducer, initialState);
   const { getToken, user } = useAuth();
   const router = useRouter();
@@ -252,34 +257,24 @@ export const useOnboarding = () => {
             const draft = JSON.parse(savedDraft);
             let step = savedStep ? parseInt(savedStep, 10) : 1;
 
-            // Validate step is within valid range (1-4)
             if (step < 1 || step > 4 || isNaN(step)) {
-              console.warn('[useOnboarding] Invalid saved step:', step, '- resetting to 1');
               step = 1;
-              dispatch({ type: ACTIONS.RESET });
             }
-            // Smart reset: If draft is stuck at max step (4), reset for fresh start
-            else if (step === 4) {
-              console.warn('[useOnboarding] Detected stale draft at max step 4, resetting to step 1');
-              dispatch({ type: ACTIONS.RESET });
-            }
-            // Normal case: Load the saved draft
-            else {
-              console.log('[useOnboarding] Resuming onboarding from step:', step);
-              dispatch({
-                type: ACTIONS.LOAD_DRAFT,
-                payload: { draft, step },
-              });
-            }
+
+            dispatch({
+              type: ACTIONS.LOAD_DRAFT,
+              payload: { draft, step },
+            });
           } catch (parseError) {
-            console.warn('[useOnboarding] Failed to parse saved draft, resetting:', parseError);
+            console.warn('[OnboardingContext] Failed to parse saved draft:', parseError);
             dispatch({ type: ACTIONS.RESET });
           }
         } else {
-          console.log('[useOnboarding] No saved draft found, starting fresh');
+          dispatch({ type: ACTIONS.RESET });
         }
       } catch (error) {
-        console.warn('[useOnboarding] Error loading draft from AsyncStorage:', error);
+        console.warn('[OnboardingContext] Error loading draft:', error);
+        dispatch({ type: ACTIONS.RESET });
       }
 
       hasLoadedDraft.current = true;
@@ -290,19 +285,19 @@ export const useOnboarding = () => {
 
   // Save draft to AsyncStorage whenever it changes
   useEffect(() => {
-    if (!hasLoadedDraft.current) return;
+    if (!state.isLoaded) return;
 
     const saveDraft = async () => {
       try {
         await AsyncStorage.setItem('@onboarding_draft', JSON.stringify(state.draft));
         await AsyncStorage.setItem('@onboarding_current_step', state.step.toString());
       } catch (error) {
-        console.warn('[useOnboarding] Error saving draft:', error);
+        console.warn('[OnboardingContext] Error saving draft:', error);
       }
     };
 
     saveDraft();
-  }, [state.draft, state.step]);
+  }, [state.draft, state.step, state.isLoaded]);
 
   const updateStepData = useCallback((step, data) => {
     dispatch({
@@ -316,34 +311,20 @@ export const useOnboarding = () => {
   }, []);
 
   const goToNextStep = useCallback(() => {
-    console.log('[useOnboarding] goToNextStep called, current state.step:', state.step);
     if (state.step < 4) {
       const nextStep = state.step + 1;
-      console.log('[useOnboarding] Setting step to:', nextStep);
-      setStep(nextStep);
-      // Navigate using absolute path to avoid route resolution conflicts
-      setTimeout(() => {
-        const routePath = `/onboarding/step-${nextStep}`;
-        console.log('[useOnboarding] Navigating to:', routePath);
-        router.push(routePath);
-      }, 100); // Small delay to let state update
-    } else {
-      console.warn('[useOnboarding] Already at max step (4), not navigating');
+      dispatch({ type: ACTIONS.SET_STEP, payload: nextStep });
+      router.replace(`/onboarding/step-${nextStep}`);
     }
-  }, [state.step, setStep, router]);
+  }, [state.step, router]);
 
   const goToPreviousStep = useCallback(() => {
     if (state.step > 1) {
       const previousStep = state.step - 1;
-      setStep(previousStep);
-      // Navigate using absolute path to avoid route resolution conflicts
-      setTimeout(() => {
-        const routePath = `/onboarding/step-${previousStep}`;
-        console.log('[useOnboarding] Navigating to:', routePath);
-        router.push(routePath);
-      }, 100); // Small delay to let state update
+      dispatch({ type: ACTIONS.SET_STEP, payload: previousStep });
+      router.replace(`/onboarding/step-${previousStep}`);
     }
-  }, [state.step, setStep, router]);
+  }, [state.step, router]);
 
   const calculateGoals = useCallback(() => {
     dispatch({ type: ACTIONS.CALCULATE_GOALS });
@@ -367,10 +348,9 @@ export const useOnboarding = () => {
 
       const { draft } = state;
 
-      // Convert weight/height to standard units for API (with validation)
       let weightKg = parseFloat(draft.step2.weight);
       if (isNaN(weightKg)) {
-        throw new Error('Invalid weight value - must be a number');
+        throw new Error('Invalid weight value');
       }
       if (draft.step2.weightUnit === 'lbs') {
         weightKg = weightKg / 2.20462;
@@ -381,71 +361,84 @@ export const useOnboarding = () => {
         const feet = parseFloat(draft.step2.heightFeet);
         const inches = parseFloat(draft.step2.heightInches);
         if (isNaN(feet) || isNaN(inches)) {
-          throw new Error('Invalid height value - feet and inches must be numbers');
+          throw new Error('Invalid height value');
         }
         heightCm = feet * 30.48 + inches * 2.54;
       } else if (isNaN(heightCm)) {
-        throw new Error('Invalid height value - must be a number');
+        throw new Error('Invalid height value');
       }
 
       const age = parseInt(draft.step2.age, 10);
       if (isNaN(age)) {
-        throw new Error('Invalid age value - must be a number');
+        throw new Error('Invalid age value');
       }
 
-      // Step 1: Save basics (with auto token refresh on 401)
-      // Get user's full name from Clerk
       const fullName = user?.firstName && user?.lastName
         ? `${user.firstName} ${user.lastName}`.trim()
         : user?.firstName || user?.emailAddresses?.[0]?.emailAddress || '';
 
-      await saveProfileBasics(
-        token,
-        {
-          fullName,
-          age,
-          weightKg: Math.round(weightKg * 100) / 100,
-          heightCm: Math.round(heightCm),
-          gender: draft.step2.gender,
-          activityLevel: draft.step2.activityLevel,
-        },
-        getToken
-      );
+      // Step 1: Save profile basics
+      try {
+        await saveProfileBasics(
+          token,
+          {
+            fullName,
+            age,
+            weightKg: Math.round(weightKg * 100) / 100,
+            heightCm: Math.round(heightCm),
+            gender: draft.step2.gender,
+            activityLevel: draft.step2.activityLevel,
+          },
+          getToken
+        );
+      } catch (profileError) {
+        console.error('[OnboardingContext] Profile basics error:', profileError);
+        throw new Error(profileError.details?.message || profileError.message || 'Failed to save profile information');
+      }
 
-      // Step 2: Save dietary preferences (with auto token refresh on 401)
-      await saveDietaryPreferences(
-        token,
-        {
-          preferences: draft.step3.dietaryPreferences.length > 0
-            ? draft.step3.dietaryPreferences
-            : ['Balanced'],
-          allergies: draft.step3.allergies,
-          dislikes: [],
-          cuisinePreference: draft.step3.cuisinePreferences.length > 0
-            ? draft.step3.cuisinePreferences
-            : ['Mediterranean', 'American'],
-        },
-        getToken
-      );
+      // Step 2: Save dietary preferences
+      try {
+        await saveDietaryPreferences(
+          token,
+          {
+            preferences: draft.step3.dietaryPreferences.length > 0
+              ? draft.step3.dietaryPreferences
+              : ['balanced'],
+            allergies: draft.step3.allergies,
+            dislikes: [],
+            cuisinePreference: draft.step3.cuisinePreferences.length > 0
+              ? draft.step3.cuisinePreferences
+              : ['mediterranean', 'american'],
+          },
+          getToken
+        );
+      } catch (dietaryError) {
+        console.error('[OnboardingContext] Dietary preferences error:', dietaryError);
+        throw new Error(dietaryError.details?.message || dietaryError.message || 'Failed to save dietary preferences');
+      }
 
-      // Step 3: Save nutrition goals (with auto token refresh on 401)
-      await saveNutritionGoals(
-        token,
-        {
-          primaryGoal: draft.step1.primaryGoal,
-          dailyCalories: draft.step4.dailyCalories,
-          proteinG: draft.step4.proteinG,
-          carbsG: draft.step4.carbsG,
-          fatsG: draft.step4.fatsG,
-          waterLiters: draft.step4.waterLiters,
-        },
-        getToken
-      );
+      // Step 3: Save nutrition goals
+      try {
+        await saveNutritionGoals(
+          token,
+          {
+            primaryGoal: draft.step1.primaryGoal,
+            dailyCalories: draft.step4.dailyCalories,
+            proteinG: draft.step4.proteinG,
+            carbsG: draft.step4.carbsG,
+            fatsG: draft.step4.fatsG,
+            waterLiters: draft.step4.waterLiters,
+          },
+          getToken
+        );
+      } catch (goalsError) {
+        console.error('[OnboardingContext] Nutrition goals error:', goalsError);
+        throw new Error(goalsError.details?.message || goalsError.message || 'Failed to save nutrition goals');
+      }
 
       // Step 4: Mark onboarding as complete
-      // This endpoint will be created in the backend
       const completeResponse = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/profile/onboarding-complete`,
+        `${API_URL}/profile/onboarding-complete`,
         {
           method: 'POST',
           headers: {
@@ -457,19 +450,14 @@ export const useOnboarding = () => {
 
       if (!completeResponse.ok) {
         const errorData = await completeResponse.json();
-        throw new Error(errorData.message || 'Failed to mark onboarding as complete');
+        throw new Error(errorData.message || 'Failed to complete onboarding');
       }
 
-      // Verify response contains onboarding completion timestamp
       const completeData = await completeResponse.json();
-      if (!completeData.onboardingCompletedAt) {
-        console.warn('⚠️ Backend did not return onboardingCompletedAt timestamp');
-      }
       if (completeData.success !== true) {
         throw new Error('Backend did not confirm onboarding completion');
       }
 
-      // Clear draft from AsyncStorage ONLY after verifying backend confirmation
       await AsyncStorage.removeItem('@onboarding_draft');
       await AsyncStorage.removeItem('@onboarding_current_step');
 
@@ -478,16 +466,15 @@ export const useOnboarding = () => {
         payload: 4,
       });
 
-      // Navigate to dashboard
       router.replace('/(tabs)/dashboard');
     } catch (error) {
-      console.error('[useOnboarding] Error completing onboarding:', error);
+      console.error('[OnboardingContext] Error completing onboarding:', error);
       dispatch({
         type: ACTIONS.SAVE_ERROR,
-        payload: error.message || 'Failed to complete onboarding. Please try again.',
+        payload: error.message || 'Failed to complete onboarding.',
       });
     }
-  }, [state.draft, getToken, router]);
+  }, [state.draft, getToken, router, user]);
 
   const resetOnboarding = useCallback(async () => {
     try {
@@ -495,7 +482,7 @@ export const useOnboarding = () => {
       await AsyncStorage.removeItem('@onboarding_current_step');
       dispatch({ type: ACTIONS.RESET });
     } catch (error) {
-      console.warn('[useOnboarding] Error resetting onboarding:', error);
+      console.warn('[OnboardingContext] Error resetting:', error);
     }
   }, []);
 
@@ -503,7 +490,7 @@ export const useOnboarding = () => {
     dispatch({ type: ACTIONS.CLEAR_ERROR });
   }, []);
 
-  return {
+  const value = {
     // State
     step: state.step,
     draft: state.draft,
@@ -511,7 +498,7 @@ export const useOnboarding = () => {
     status: state.status,
     error: state.error,
     isSaving: state.status === 'saving',
-    isLoading: state.status === 'loading',
+    isLoading: !state.isLoaded,
 
     // Step data
     step1Data: state.draft.step1,
@@ -530,4 +517,19 @@ export const useOnboarding = () => {
     resetOnboarding,
     clearError,
   };
-};
+
+  return (
+    <OnboardingContext.Provider value={value}>
+      {children}
+    </OnboardingContext.Provider>
+  );
+}
+
+// Hook to use the context
+export function useOnboarding() {
+  const context = useContext(OnboardingContext);
+  if (!context) {
+    throw new Error('useOnboarding must be used within an OnboardingProvider');
+  }
+  return context;
+}

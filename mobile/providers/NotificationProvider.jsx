@@ -1,15 +1,39 @@
+/**
+ * NotificationProvider - Unified Notification System
+ *
+ * Features:
+ * - In-app toast notifications with animations
+ * - Modal confirmations
+ * - Push notification registration and handling
+ * - Notification preference syncing
+ * - Background notification listeners
+ */
+
 import React, {
   createContext,
   useContext,
   useState,
   useCallback,
   useEffect,
+  useRef,
 } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, AppState } from 'react-native';
+import { useAuth } from '@clerk/clerk-expo';
 
 import Toast from '../components/notifications/Toast';
 import Modal from '../components/notifications/Modal';
 import { setNotifyInstance } from '../utils/notify';
+import {
+  setupPushNotifications,
+  addNotificationReceivedListener,
+  addNotificationResponseReceivedListener,
+  scheduleDailyReminder,
+  scheduleHydrationReminders,
+  cancelScheduledNotifications,
+  NOTIFICATION_CATEGORIES,
+  getNotificationPermissionStatus,
+} from '../services/pushNotifications';
+import apiClient from '../services/apiClient';
 
 const NotificationContext = createContext(null);
 
@@ -22,9 +46,27 @@ export const useNotification = () => {
 };
 
 export const NotificationProvider = ({ children }) => {
+  const { isSignedIn } = useAuth();
   const [toasts, setToasts] = useState([]);
   const [modal, setModal] = useState(null);
+  const [pushStatus, setPushStatus] = useState({
+    initialized: false,
+    permissionStatus: 'undetermined',
+    token: null,
+    error: null,
+  });
+  const [preferences, setPreferences] = useState({
+    dailyReminder: true,
+    hydrationNudges: true,
+    insightDrops: true,
+    streakCelebrations: true,
+  });
 
+  const notificationListener = useRef();
+  const responseListener = useRef();
+  const appStateRef = useRef(AppState.currentState);
+
+  // ============== Toast Management ==============
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
@@ -43,6 +85,7 @@ export const NotificationProvider = ({ children }) => {
     return id;
   }, [removeToast]);
 
+  // ============== Modal Management ==============
   const showModal = useCallback((config) => {
     setModal(config);
   }, []);
@@ -51,6 +94,150 @@ export const NotificationProvider = ({ children }) => {
     setModal(null);
   }, []);
 
+  // ============== Push Notification Setup ==============
+  const initializePushNotifications = useCallback(async () => {
+    if (!isSignedIn) return;
+
+    try {
+      const result = await setupPushNotifications();
+
+      setPushStatus({
+        initialized: true,
+        permissionStatus: result.permissionStatus,
+        token: result.token,
+        error: result.success ? null : 'Failed to register token',
+      });
+
+      // If successful, sync notification schedules with preferences
+      if (result.success) {
+        await syncNotificationSchedules();
+      }
+    } catch (error) {
+      console.error('[NotificationProvider] Push setup error:', error);
+      setPushStatus((prev) => ({
+        ...prev,
+        initialized: true,
+        error: error.message,
+      }));
+    }
+  }, [isSignedIn]);
+
+  // Sync notification schedules with user preferences
+  const syncNotificationSchedules = useCallback(async () => {
+    try {
+      // Fetch current preferences from backend
+      const data = await apiClient.get('/profile/notifications');
+      const prefs = {
+        dailyReminder: data?.dailyReminder !== false,
+        hydrationNudges: data?.hydrationNudges !== false,
+        insightDrops: data?.insightDrops !== false,
+        streakCelebrations: data?.streakCelebrations !== false,
+      };
+
+      setPreferences(prefs);
+
+      // Schedule or cancel based on preferences
+      if (prefs.dailyReminder) {
+        await scheduleDailyReminder(12, 0); // Noon reminder
+      } else {
+        await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
+      }
+
+      if (prefs.hydrationNudges) {
+        await scheduleHydrationReminders([10, 14, 18]); // 10am, 2pm, 6pm
+      } else {
+        await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
+      }
+
+      console.log('[NotificationProvider] Notification schedules synced');
+    } catch (error) {
+      console.error('[NotificationProvider] Failed to sync schedules:', error);
+    }
+  }, []);
+
+  // Update preferences and sync schedules
+  const updateNotificationPreferences = useCallback(async (newPrefs) => {
+    setPreferences(newPrefs);
+    await syncNotificationSchedules();
+  }, [syncNotificationSchedules]);
+
+  // Check permission status
+  const checkPermissionStatus = useCallback(async () => {
+    const status = await getNotificationPermissionStatus();
+    setPushStatus((prev) => ({
+      ...prev,
+      permissionStatus: status,
+    }));
+    return status;
+  }, []);
+
+  // ============== Effects ==============
+
+  // Initialize push notifications when signed in
+  useEffect(() => {
+    if (isSignedIn && !pushStatus.initialized) {
+      initializePushNotifications();
+    }
+  }, [isSignedIn, pushStatus.initialized, initializePushNotifications]);
+
+  // Set up notification listeners
+  useEffect(() => {
+    // Listener for notifications received while app is foregrounded
+    notificationListener.current = addNotificationReceivedListener((notification) => {
+      console.log('[NotificationProvider] Notification received:', notification);
+
+      // Show as toast if app is in foreground
+      const { title, body } = notification.request.content;
+      addToast({
+        type: 'info',
+        message: body || title,
+        title: title,
+        duration: 4000,
+      });
+    });
+
+    // Listener for user interaction with notifications
+    responseListener.current = addNotificationResponseReceivedListener((response) => {
+      console.log('[NotificationProvider] Notification tapped:', response);
+
+      const data = response.notification.request.content.data;
+      // Handle navigation based on notification category
+      if (data?.category === NOTIFICATION_CATEGORIES.DAILY_REMINDER) {
+        // Could navigate to food log screen
+      } else if (data?.category === NOTIFICATION_CATEGORIES.HYDRATION_NUDGE) {
+        // Could navigate to water log screen
+      }
+    });
+
+    return () => {
+      if (notificationListener.current) {
+        notificationListener.current.remove();
+      }
+      if (responseListener.current) {
+        responseListener.current.remove();
+      }
+    };
+  }, [addToast]);
+
+  // Handle app state changes (re-check permissions when app comes to foreground)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App has come to foreground - recheck permission status
+        checkPermissionStatus();
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [checkPermissionStatus]);
+
+  // ============== Notify API ==============
   const notify = {
     success: (message, options = {}) =>
       addToast({ type: 'success', message, ...options }),
@@ -75,9 +262,19 @@ export const NotificationProvider = ({ children }) => {
       if (id) removeToast(id);
       else setToasts([]);
     },
+
+    // Push notification status and controls
+    push: {
+      status: pushStatus,
+      preferences,
+      initialize: initializePushNotifications,
+      checkPermission: checkPermissionStatus,
+      updatePreferences: updateNotificationPreferences,
+      syncSchedules: syncNotificationSchedules,
+    },
   };
 
-  // expose notify globally (safe, no cycle)
+  // Expose notify globally
   useEffect(() => {
     setNotifyInstance(notify);
   }, [notify]);
@@ -130,3 +327,5 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
   },
 });
+
+export default NotificationProvider;

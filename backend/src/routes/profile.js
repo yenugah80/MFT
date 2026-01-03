@@ -14,7 +14,10 @@ import {
   getPrivacySettings,
   savePrivacySettings,
   getPreferences,
-  savePreferences
+  savePreferences,
+  savePushToken,
+  deletePushToken,
+  getPushTokenStatus
 } from "../controllers/profileController.js";
 
 const router = express.Router();
@@ -35,6 +38,11 @@ router.post("/onboarding-complete", completeOnboarding);
 // Notification preferences
 router.get("/notifications", getNotifications);
 router.post("/notifications", saveNotifications);
+
+// Push notification token management
+router.get("/push-token/status", getPushTokenStatus);
+router.post("/push-token", savePushToken);
+router.delete("/push-token", deletePushToken);
 
 // Privacy settings
 router.get("/privacy", getPrivacySettings);

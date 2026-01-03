@@ -118,11 +118,11 @@ export const VALIDATION_RANGES = {
   height: { min: 100, max: 250 }, // cm
   heightFeet: { min: 3, max: 8 },
   heightInches: { min: 0, max: 11 },
-  calories: { min: 800, max: 10000 }, // Matches backend database constraint
+  calories: { min: 500, max: 10000 }, // Matches backend (profileController.js line 615)
   protein: { min: 0, max: 500 },
   carbs: { min: 0, max: 1000 },
   fats: { min: 0, max: 300 },
-  water: { min: 0, max: 10 }, // liters (matches backend max constraint)
+  water: { min: 0.5, max: 10 }, // liters (0.5 min for practical hydration)
 };
 
 // Default values

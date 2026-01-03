@@ -49,12 +49,13 @@ router.post("/log", async (req, res) => {
     const hydrationLiters = parseFloat(amountLiters) * hydrationFactor;
 
     // Insert with idempotency protection via ON CONFLICT
+    // Drizzle ORM handles decimal conversion automatically - pass numbers directly
     const result = await db.insert(waterLogTable).values({
       userId,
-      amountLiters: amountLiters.toString(), // Store as string (decimal in DB)
+      amountLiters: parseFloat(amountLiters),
       beverageType: normalizedType,
-      hydrationFactor: hydrationFactor.toString(),
-      hydrationLiters: hydrationLiters.toFixed(1),
+      hydrationFactor: hydrationFactor,
+      hydrationLiters: parseFloat(hydrationLiters.toFixed(1)),
       loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
       clientEventId,
     }).onConflictDoNothing({ target: [waterLogTable.userId, waterLogTable.clientEventId] })

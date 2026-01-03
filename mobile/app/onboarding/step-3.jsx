@@ -30,7 +30,7 @@ import PreferenceStrengthSelector from '../../components/onboarding/PreferenceSt
 import PreferenceCombinationCard from '../../components/onboarding/PreferenceCombinationCard';
 
 // Hooks
-import { useOnboarding } from '../../hooks/useOnboarding';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 
 // Utils & Config
 import {
@@ -65,7 +65,14 @@ const normalizePreference = (pref) => {
 
 const normalizePreferences = (prefs) => {
   try {
-    return (prefs || []).map(normalizePreference);
+    const normalized = (prefs || []).map(normalizePreference);
+    // Deduplicate by id to prevent duplicate key errors
+    const seen = new Set();
+    return normalized.filter(item => {
+      if (!item.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
   } catch (err) {
     console.error('[normalizePreferences] Error normalizing preferences:', err);
     return [];
@@ -87,28 +94,19 @@ const getSampleDishId = (firstPref) => {
 
 const Step3Screen = () => {
   const {
-    step,
     step3Data,
     updateStepData,
     goToNextStep,
     goToPreviousStep,
-    setStep,
   } = useOnboarding();
 
   // State
   const [activeSection, setActiveSection] = useState(0);
-  const fadeAnimsRef = useRef([0, 1, 2].map(() => new Animated.Value(0))); // Fix #3/#8: useRef instead of useState
+  const fadeAnimsRef = useRef([0, 1, 2].map(() => new Animated.Value(0)));
   const fadeAnims = fadeAnimsRef.current;
   const [smartSuggestedCuisines, setSmartSuggestedCuisines] = useState([]);
   const [preferenceCombination, setPreferenceCombination] = useState(null);
   const [strengthValues, setStrengthValues] = useState({});
-
-  // Sync step on mount
-  useEffect(() => {
-    if (step !== 3) {
-      setStep(3);
-    }
-  }, [step, setStep]);
 
   // Initialize strength values from step3Data (Fix #2: normalize data structure)
   useEffect(() => {
@@ -316,12 +314,10 @@ const Step3Screen = () => {
     goToNextStep();
   };
 
-  // Fix #7: Add step to dependencies for accessibility
+  // Accessibility announcement on mount
   useEffect(() => {
-    if (step === 3) {
-      AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step3);
-    }
-  }, [step]);
+    AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step3);
+  }, []);
 
   return (
     <OnboardingLayout
@@ -568,31 +564,45 @@ const Step3Screen = () => {
         <Pressable
           onPress={goToPreviousStep}
           style={({ pressed }) => [
-            styles.secondaryButton,
-            pressed && styles.secondaryButtonPressed,
+            styles.buttonWrapper,
+            pressed && styles.buttonPressed,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={18} color={TEXT.primary} />
-          <Text style={[styles.secondaryButtonText, { color: TEXT.primary }]}>
-            {ONBOARDING_COPY.step3.backBtn || 'Back'}
-          </Text>
+          <LinearGradient
+            colors={['#E5E7EB', '#D1D5DB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.secondaryButton}
+          >
+            <Ionicons name="arrow-back" size={18} color="#374151" />
+            <Text style={styles.secondaryButtonText}>
+              {ONBOARDING_COPY.step3.backBtn || 'Back'}
+            </Text>
+          </LinearGradient>
         </Pressable>
 
         <Pressable
           onPress={handleContinue}
           style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.primaryButtonPressed,
+            styles.buttonWrapper,
+            pressed && styles.buttonPressed,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Continue to next step"
         >
-          <Text style={styles.primaryButtonText}>
-            {ONBOARDING_COPY.step3.continueBtn || 'Continue'}
-          </Text>
-          <Ionicons name="arrow-forward" size={18} color="white" />
+          <LinearGradient
+            colors={['#3B82F6', '#2563EB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.primaryButton}
+          >
+            <Text style={styles.primaryButtonText}>
+              {ONBOARDING_COPY.step3.continueBtn || 'Continue'}
+            </Text>
+            <Ionicons name="arrow-forward" size={18} color="white" />
+          </LinearGradient>
         </Pressable>
       </View>
     </OnboardingLayout>
@@ -836,44 +846,42 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[2],
   },
 
-  secondaryButton: {
+  buttonWrapper: {
     flex: 1,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    ...SHADOWS.md,
+  },
+
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+
+  secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING[3],
     paddingHorizontal: SPACING[3],
     borderRadius: RADIUS.lg,
-    borderWidth: 2,
-    borderColor: '#3B82F6',
-    backgroundColor: 'transparent',
     gap: SPACING[2],
-  },
-
-  secondaryButtonPressed: {
-    opacity: 0.7,
   },
 
   secondaryButtonText: {
     fontSize: 14,
     fontWeight: '700',
+    color: '#374151',
   },
 
   primaryButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING[3],
     paddingHorizontal: SPACING[3],
     borderRadius: RADIUS.lg,
-    backgroundColor: '#3B82F6',
     gap: SPACING[2],
-    ...SHADOWS.md,
-  },
-
-  primaryButtonPressed: {
-    opacity: 0.85,
   },
 
   primaryButtonText: {

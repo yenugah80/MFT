@@ -6,6 +6,14 @@ import { gamificationTable } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { normalizeDateUTC, addDaysUTC } from "../utils/timezone.js";
 import { calculateLevel, checkLevelUp } from "../utils/levelCalculator.js";
+import {
+  sendStreakCelebration,
+  sendUserNotification,
+  NOTIFICATION_TYPES,
+} from "./pushNotificationService.js";
+
+// Streak milestones that trigger celebrations
+const STREAK_MILESTONES = [7, 14, 30, 50, 100, 150, 200, 365];
 
 /**
  * Calculate XP to award for a meal log
@@ -128,6 +136,18 @@ export async function awardXP(userId, xp, source = "meal_log", dbConn = db) {
 
     console.log(`[GamificationReward] User ${userId}: +${xp} XP from ${source} (${currentXP} → ${newXP}, Level ${levelUpInfo.oldLevel} → ${levelInfo.level})`);
 
+    // Send push notification for level up
+    if (levelUpInfo.leveledUp) {
+      sendUserNotification(dbConn, userId, NOTIFICATION_TYPES.GOAL_ACHIEVED, {
+        title: `🎉 Level ${levelInfo.level}!`,
+        body: `Congratulations! You've reached Level ${levelInfo.level}. Keep up the great work!`,
+        data: { type: 'level_up', newLevel: levelInfo.level, screen: 'profile' },
+        channelId: 'insights',
+      }).catch((err) => {
+        console.error(`[GamificationReward] Failed to send level-up notification:`, err);
+      });
+    }
+
     return {
       newXP,
       newLevel: levelInfo.level,
@@ -240,10 +260,19 @@ export async function updateStreak(userId, date, dbConn = db) {
       console.log(`[GamificationReward] User ${userId}: Streak ${currentStreak} → ${newStreak} ${streakIncremented ? '⬆️' : '🔄'}`);
     }
 
+    // Send push notification for streak milestones
+    if (streakIncremented && STREAK_MILESTONES.includes(newStreak)) {
+      // Fire and forget - don't block the response
+      sendStreakCelebration(dbConn, userId, newStreak).catch((err) => {
+        console.error(`[GamificationReward] Failed to send streak notification:`, err);
+      });
+    }
+
     return {
       streak: newStreak,
       streakIncremented,
       previousStreak: currentStreak,
+      isMilestone: STREAK_MILESTONES.includes(newStreak),
     };
   } catch (error) {
     console.error("[GamificationReward] Error updating streak:", error);

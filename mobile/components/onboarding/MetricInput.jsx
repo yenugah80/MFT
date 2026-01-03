@@ -74,6 +74,10 @@ const MetricInput = ({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             maxLength={10}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="done"
+            selectTextOnFocus
           />
         </View>
 
@@ -155,7 +159,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: TEXT.primary,
-    paddingVertical: 0,
+    paddingVertical: 4,
+    minHeight: 28,
   },
   unitContainer: {
     flexDirection: 'row',

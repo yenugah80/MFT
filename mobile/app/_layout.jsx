@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
@@ -11,6 +12,10 @@ import DatabaseInitializer from "@/components/DatabaseInitializer";
 import Toast from "react-native-toast-message";
 import "@/i18n/config"; // Initialize i18n
 import { LogBox } from 'react-native';
+
+// Analytics & Crash Reporting (FREE - uses your backend)
+import { initAnalytics, cleanupAnalytics } from "@/services/analytics";
+import { setupGlobalErrorHandler } from "@/services/crashReporting";
 
 // Suppress known deprecation warnings
 LogBox.ignoreLogs([
@@ -39,7 +44,7 @@ const tokenCache = {
 
 // Debug logging to verify environment variables
 console.log("🔑 Clerk Key loaded:", publishableKey ? "✅ YES" : "❌ NO");
-console.log("🌐 API URL:", process.env.EXPO_PUBLIC_API_URL || "Not set, using fallback");
+// Note: API_URL is configured in constants/api.js - defaults to Render backend
 
 if (!publishableKey) {
   throw new Error(
@@ -50,6 +55,20 @@ if (!publishableKey) {
 export default function RootLayout() {
   const router = useRouter();
 
+  // Initialize analytics & crash reporting on app start
+  useEffect(() => {
+    // Set up global error handler for unhandled JS errors
+    setupGlobalErrorHandler();
+
+    // Initialize analytics session
+    initAnalytics();
+
+    // Cleanup on unmount
+    return () => {
+      cleanupAnalytics();
+    };
+  }, []);
+
   const handleErrorReset = () => {
     router.replace('/(tabs)/dashboard');
   };
@@ -58,17 +77,18 @@ export default function RootLayout() {
     <ErrorBoundary onReset={handleErrorReset}>
       <ThemeProvider>
         <DatabaseInitializer>
-          <NotificationProvider>
-            <QueryProvider>
-              <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+          <QueryProvider>
+            <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+              {/* NotificationProvider must be INSIDE ClerkProvider to access useAuth */}
+              <NotificationProvider>
                 <ApiInitializer>
                   <SafeScreen>
                     <Slot />
                   </SafeScreen>
                 </ApiInitializer>
-              </ClerkProvider>
-            </QueryProvider>
-          </NotificationProvider>
+              </NotificationProvider>
+            </ClerkProvider>
+          </QueryProvider>
         </DatabaseInitializer>
       </ThemeProvider>
       <Toast />

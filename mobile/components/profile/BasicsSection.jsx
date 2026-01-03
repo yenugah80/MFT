@@ -1,9 +1,16 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from 'expo-linear-gradient';
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../../constants/premiumTheme";
+import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../../constants/premiumTheme";
 
-export default function BasicsSection({ basics, user, onEdit }) {
+/**
+ * BasicsSection - Premium Profile Header
+ *
+ * Displays avatar, name, and email only.
+ * Personal metrics (age, weight, height, etc.) are now in MetricsGridSection
+ * with inline editing support.
+ */
+export default function BasicsSection({ basics, user }) {
   return (
     <View style={styles.card}>
       <View style={styles.profileSection}>
@@ -43,19 +50,6 @@ export default function BasicsSection({ basics, user, onEdit }) {
           {user?.primaryEmailAddress?.emailAddress || ""}
         </Text>
       </View>
-
-      {/* Edit Button with Gradient */}
-      <TouchableOpacity style={styles.editButton} onPress={onEdit} activeOpacity={0.8}>
-        <LinearGradient
-          colors={SURFACES.gradient.primary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.editButtonGradient}
-        >
-          <Ionicons name="create-outline" size={ICON_SIZES.sm} color="#FFFFFF" />
-          <Text style={styles.editButtonText}>Edit Personal Info</Text>
-        </LinearGradient>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -72,7 +66,6 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     alignItems: 'center',
-    marginBottom: SPACING[5],
   },
   avatarContainer: {
     marginBottom: SPACING[4],
@@ -118,22 +111,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
     textAlign: 'center',
-  },
-  editButton: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    alignSelf: 'center',
-  },
-  editButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[6],
-  },
-  editButtonText: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#FFFFFF',
   },
 });

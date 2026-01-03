@@ -8,11 +8,11 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import BackButton from './BackButton';
 import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
 
@@ -135,6 +135,8 @@ const OnboardingContent = ({
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         >
           {children}
         </ScrollView>
@@ -184,11 +186,10 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 8,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: '#EDEAFF', // Solid color for shadow efficiency
     borderRadius: RADIUS.full,
     overflow: 'hidden',
     marginBottom: SPACING[2],
-    ...SHADOWS.sm,
   },
   progressBar: {
     height: '100%',

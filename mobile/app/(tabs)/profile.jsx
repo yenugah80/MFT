@@ -1,13 +1,15 @@
 /**
- * ProfileScreen - Premium Redesign
- * Glossy, trendy UI matching Dashboard and Log
- * - Ionicons throughout
- * - LinearGradient header
- * - Premium card styling
+ * ProfileScreen - Premium Redesign v2
+ *
+ * Features:
+ * - Inline editable metrics grid (MetricsGridSection)
+ * - Collapsible analytics section (MyInsightsSection)
+ * - Premium glassmorphism styling
+ * - Haptic feedback on all interactions
  */
 
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity } from "react-native";
-import { useState, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { useUser, useClerk } from "@clerk/clerk-expo";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,24 +18,22 @@ import { useRouter } from "expo-router";
 import SafeScreen from "../../components/SafeScreen";
 import useProfileForm from "../../hooks/useProfileForm";
 
-import EditProfileModal from "../../components/EditProfileModal";
+// Profile sections
 import BasicsSection from "../../components/profile/BasicsSection";
+import MetricsGridSection from "../../components/profile/MetricsGridSection";
 import DietarySection from "../../components/profile/DietarySection";
 import GoalsSection from "../../components/profile/GoalsSection";
+import MyInsightsSection from "../../components/profile/MyInsightsSection";
 import AccountActions from "../../components/profile/AccountActions";
 
-// Phase 4: Profile Analytics Components
-import CuisinePreferencesSection from "../../components/profile/CuisinePreferencesSection";
-import ComplianceHistoryChart from "../../components/profile/ComplianceHistoryChart";
-import RecommendationStatsCard from "../../components/profile/RecommendationStatsCard";
-
 // Premium theme
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, ICONS } from "../../constants/premiumTheme";
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, ICON_SIZES, ICONS } from "../../constants/premiumTheme";
 
 /**
  * ProfileScreen
- * - Identity & preferences only
- * - Daily metrics live in Dashboard
+ * - Identity & preferences with inline editing
+ * - Collapsible analytics section
+ * - Daily metrics moved to Dashboard
  */
 export default function ProfileScreen() {
   const router = useRouter();
@@ -45,31 +45,23 @@ export default function ProfileScreen() {
     updateField,
     toggleEdit,
     saveSection,
+    saveField,
     cancelEdit,
   } = useProfileForm(user);
 
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isSavingField, setIsSavingField] = useState(false);
   const profile = state?.draft;
-  const formData = useMemo(() => profile?.basics ?? {}, [profile]);
 
-  const openEditModal = () => {
-    if (isUpdating) return;
-    setIsEditModalVisible(true);
-  };
-
-  const closeEditModal = () => {
-    if (isUpdating) return;
-    setIsEditModalVisible(false);
-  };
-
-  const handleSaveProfile = async () => {
-    if (isUpdating) return;
-    setIsUpdating(true);
-    const ok = await saveSection("basics");
-    if (ok) closeEditModal();
-    setIsUpdating(false);
-  };
+  // Handle inline field save for MetricsGridSection
+  const handleFieldSave = useCallback(async (field, value) => {
+    setIsSavingField(true);
+    try {
+      const success = await saveField('basics', field, value);
+      return success;
+    } finally {
+      setIsSavingField(false);
+    }
+  }, [saveField]);
 
   const handleSignOut = async () => {
     try {
@@ -123,12 +115,19 @@ export default function ProfileScreen() {
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Basics */}
+        {/* Profile Header - Avatar + Name + Email */}
         <BasicsSection
           basics={profile.basics}
           user={user}
-          onEdit={openEditModal}
+        />
+
+        {/* Personal Metrics Grid - Inline Editable */}
+        <MetricsGridSection
+          basics={profile.basics}
+          onFieldSave={handleFieldSave}
+          isSaving={isSavingField}
         />
 
         {/* Dietary Preferences */}
@@ -153,63 +152,15 @@ export default function ProfileScreen() {
           status={state.status}
         />
 
-        {/* ============================================ */}
-        {/* PHASE 4: PROFILE ANALYTICS SECTION */}
-        {/* ============================================ */}
-
-        {/* Cuisine Preferences with Strength Indicators */}
-        {profile.dietary?.cuisinePreferences && profile.dietary.cuisinePreferences.length > 0 && (
-          <View style={styles.analyticsSection}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="restaurant" size={20} color="#8B5CF6" />
-              <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
-                Cuisine Preferences
-              </Text>
-            </View>
-            <CuisinePreferencesSection
-              preferences={profile.dietary.cuisinePreferences}
-              isEditing={false}
-            />
-          </View>
-        )}
-
-        {/* Compliance History Chart - 30-day trend */}
-        <View style={styles.analyticsSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="trending-up" size={20} color="#8B5CF6" />
-            <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
-              Compliance History
-            </Text>
-          </View>
-          <ComplianceHistoryChart />
-        </View>
-
-        {/* Recommendation Acceptance Analytics */}
-        <View style={styles.analyticsSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="checkmark-circle" size={20} color="#8B5CF6" />
-            <Text style={[styles.sectionTitle, { color: TEXT.primary }]}>
-              Recommendations
-            </Text>
-          </View>
-          <RecommendationStatsCard />
-        </View>
+        {/* My Insights - Collapsible Analytics Section */}
+        <MyInsightsSection
+          cuisinePreferences={profile.dietary?.cuisinePreferences || []}
+          userPreferences={profile.dietary}
+        />
 
         {/* Account */}
         <AccountActions onSignOut={handleSignOut} />
       </ScrollView>
-
-      {/* Edit Basics Modal */}
-      <EditProfileModal
-        visible={isEditModalVisible}
-        onClose={closeEditModal}
-        formData={formData}
-        updateFormField={(field, value) =>
-          updateField("basics", field, value)
-        }
-        onSave={handleSaveProfile}
-        isUpdating={isUpdating}
-      />
     </SafeScreen>
   );
 }
@@ -275,21 +226,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: TYPOGRAPHY.weight.medium,
-  },
-
-  // Phase 4: Analytics sections
-  analyticsSection: {
-    marginBottom: SPACING[6],
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[3],
-    paddingHorizontal: SPACING[1],
-  },
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
   },
 });

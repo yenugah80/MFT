@@ -2,9 +2,14 @@
  * Recommendation Stats Card
  * Shows user's recommendation acceptance analytics and breakdown by type
  * Displays circular progress, acceptance rate, and type distribution
+ *
+ * Features:
+ * - 10s loading timeout
+ * - Defensive theme fallbacks
+ * - Graceful error handling
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,43 +21,77 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import apiClient from '../../services/apiClient';
-import { BRAND, TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SHADOWS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';
+
+// Defensive fallbacks for theme values
+const FALLBACK = {
+  primary: '#6B4EFF',
+  secondary: '#4B5563',
+  tertiary: '#6B7280',
+  muted: '#9CA3AF',
+  gradient: ['#F5F3FF', '#EDE9FE'],
+};
 
 const CIRCLE_RADIUS = 45;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
+const LOADING_TIMEOUT = 10000; // 10 seconds
 
 export default function RecommendationStatsCard() {
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const progressAnim = new Animated.Value(0);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
+
     const loadStats = async () => {
       setIsLoading(true);
+      setError(null);
+
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), LOADING_TIMEOUT)
+      );
+
       try {
-        const response = await apiClient.get('/recommendations/stats/acceptance-by-preference');
+        // Race between API call and timeout
+        const response = await Promise.race([
+          apiClient.get('/recommendations/stats/acceptance-by-preference'),
+          timeoutPromise,
+        ]);
+
+        if (!isMounted.current) return;
+
         if (response) {
           setStats(response);
 
-          // Animate progress circle
+          // Animate progress circle (convert decimal 0-1 to percentage 0-100)
           Animated.timing(progressAnim, {
-            toValue: response.acceptanceRate || 0,
+            toValue: (response.acceptanceRate || 0) * 100,
             duration: 1500,
             useNativeDriver: false,
           }).start();
-
-          setError(null);
         }
       } catch (err) {
+        if (!isMounted.current) return;
         console.error('[RecommendationStatsCard] Failed to load stats:', err);
-        setError('Failed to load recommendation stats');
+        setError(err.message === 'Request timeout'
+          ? 'Loading took too long. Please try again.'
+          : 'Unable to load stats');
       } finally {
-        setIsLoading(false);
+        if (isMounted.current) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadStats();
+
+    return () => {
+      isMounted.current = false;
+    };
   }, [progressAnim]);
 
   const renderProgressCircle = () => {
@@ -93,7 +132,7 @@ export default function RecommendationStatsCard() {
 
         <View style={styles.progressText}>
           <Text style={[styles.progressValue, { color: '#8B5CF6' }]}>
-            {stats?.acceptanceRate || 0}%
+            {Math.round((stats?.acceptanceRate || 0) * 100)}%
           </Text>
           <Text style={[styles.progressLabel, { color: TEXT.secondary }]}>
             Acceptance
@@ -121,7 +160,7 @@ export default function RecommendationStatsCard() {
                 {type.replace(/_/g, ' ').charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')}
               </Text>
               <Text style={[styles.typeRate, { color: '#8B5CF6' }]}>
-                {Math.round(data.acceptanceRate || 0)}%
+                {Math.round((data.acceptanceRate || 0) * 100)}%
               </Text>
             </View>
             <View style={styles.progressBar}>
@@ -194,7 +233,7 @@ export default function RecommendationStatsCard() {
 
   return (
     <LinearGradient
-      colors={[SURFACES.card.background.default, SURFACES.card.background.elevated]}
+      colors={SURFACES.gradient.softPurple}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -232,10 +271,10 @@ export default function RecommendationStatsCard() {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    ...SHADOWS.medium,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    ...SHADOWS.md,
   },
   header: {
     marginBottom: 16,
@@ -344,12 +383,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   errorContainer: {
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-    ...SHADOWS.medium,
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
+    ...SHADOWS.md,
   },
   errorText: {
     fontSize: 14,
