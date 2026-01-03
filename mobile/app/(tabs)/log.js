@@ -60,7 +60,6 @@ import { QuickActionsBar } from '../../components/log/QuickActionsBar';
 import { HealthAnalysisModal } from '../../components/log/HealthAnalysisModal';
 import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 import { RecentFoodsList } from '../../components/log/RecentFoodsList';
-import { FavoriteMealsList } from '../../components/log/FavoriteMealsList';
 
 // Platform-safe professional fonts for nutrition UI
 const fonts = {
@@ -87,7 +86,7 @@ export default function LogScreen() {
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
   const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
-  const [inputMode, setInputMode] = useState('text'); // 'text', 'photo', 'voice', 'recent', 'favorites'
+  const [inputMode, setInputMode] = useState('text'); // 'text', 'photo', 'voice', 'recent'
   const [analysisSource, setAnalysisSource] = useState('text');
   const [isTextFocused, setIsTextFocused] = useState(false);
   const [showMealLogged, setShowMealLogged] = useState(false);
@@ -564,8 +563,6 @@ export default function LogScreen() {
       foodAnalysis.setInputText('');
     } else if (inputMode === 'recent') {
       // Keep recent tab active
-    } else if (inputMode === 'favorites') {
-      // Keep favorites tab active
     } else {
       // For voice or others, clear everything
       setSelectedImage(null);
@@ -618,49 +615,6 @@ export default function LogScreen() {
   const handleViewTrends = (nutrient) => {
     setSelectedTrendNutrient(nutrient);
     setShowTrendsModal(true);
-  };
-
-  const handleSaveAsMeal = async () => {
-    if (!loggedMeal) return;
-
-    const saveMeal = async (name) => {
-      try {
-        // Construct payload from loggedMeal analysis
-        const payload = {
-          name: name || loggedMeal.foodName || "My Saved Meal",
-          items: loggedMeal.originalAnalysis?.items?.map(item => ({
-            name: item.name,
-            quantity: item.portion?.amount || 1,
-            unit: item.portion?.unit || 'serving',
-            calories: item.macros?.calories_kcal,
-            protein: item.macros?.protein_g,
-            carbs: item.macros?.carbs_g,
-            fat: item.macros?.fat_g,
-            fiber: item.macros?.fiber_g,
-            sugar: item.macros?.sugar_g,
-            sodium: item.macros?.sodium_mg,
-            micros: item.micros
-          })) || [], 
-          totals: {
-            calories: loggedMeal.calories,
-            protein: loggedMeal.protein,
-            carbs: loggedMeal.carbs,
-            fat: loggedMeal.fat,
-            fiber: loggedMeal.fiber,
-            sugar: loggedMeal.sugar,
-            sodium: loggedMeal.sodium
-          }
-        };
-
-        await apiClient.post('/savedMeals/save', payload);
-        notify.success('Meal saved to favorites!');
-      } catch (error) {
-        console.error('Failed to save meal template:', error);
-        notify.error('Failed to save meal template');
-      }
-    };
-
-    Alert.prompt("Save Meal", "Enter a name for this meal:", text => saveMeal(text));
   };
 
   const handleSelectRecentFood = (foodItem) => {
@@ -1203,7 +1157,6 @@ export default function LogScreen() {
               fiberG: dashboardData?.goals?.fiberG || 30,
             }}
             onViewTrends={handleViewTrends}
-            onSaveAsMeal={handleSaveAsMeal}
             onEdit={handleEditLoggedMeal}
             onShare={async () => {
               try {

@@ -255,7 +255,6 @@ export default function MealLoggedCard({
   dailyGoals,
   dailyTotals,
   onViewTrends,
-  onSaveAsMeal,
   onViewHistory,
 }) {
   const [scaleAnim] = useState(new Animated.Value(0.9));
@@ -507,11 +506,6 @@ export default function MealLoggedCard({
           <TouchableOpacity style={styles.secondaryButton} onPress={onEdit}>
             <Ionicons name="create-outline" size={ICON_SIZES.md} color={BRAND.primary} />
             <Text style={styles.secondaryButtonText}>Edit</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton} onPress={onSaveAsMeal}>
-            <Ionicons name="bookmark-outline" size={ICON_SIZES.md} color={BRAND.primary} />
-            <Text style={styles.secondaryButtonText}>Save</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryButton} onPress={onShare}>
