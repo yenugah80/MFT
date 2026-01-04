@@ -39,14 +39,15 @@ export function useRecommendations() {
     queryFn: async () => {
       try {
         const response = await apiClient.get('/recommendations', {
-          params: { limit: 5 }
+          params: { limit: 5 },
+          _timeout: 15000 // 15s timeout for recommendations endpoint (complex AI processing)
         });
         return response.data?.recommendations || [];
       } catch (err) {
         // Distinguish timeout from other errors
         const isTimeout = err.message === 'Request timeout';
         const errorMessage = isTimeout
-          ? 'Request took too long (10s) - try again'
+          ? 'Request took too long (15s) - try again'
           : err?.response?.data?.error || 'Failed to load recommendations';
 
         console.error('[useRecommendations] Fetch error:', err);

@@ -23,13 +23,16 @@ const RETRY_CONFIG = {
 };
 
 /**
- * Fetch with timeout
+ * Fetch with timeout (supports per-request timeout)
  */
-const fetchWithTimeout = (url, options, timeout = RETRY_CONFIG.timeout) => {
+const fetchWithTimeout = (url, options, timeout = null) => {
+  // Use custom timeout from options, or fall back to default
+  const requestTimeout = timeout || options?._timeout || RETRY_CONFIG.timeout;
+
   return Promise.race([
     fetch(url, options),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout')), timeout)
+      setTimeout(() => reject(new Error('Request timeout')), requestTimeout)
     ),
   ]);
 };
@@ -132,7 +135,9 @@ class ApiClient {
         console.log(`[API] ${options.method || 'GET'} ${fullUrl}`);
       }
 
-      const response = await fetchWithTimeout(fullUrl, options);
+      // Extract custom timeout from options
+      const timeout = options._timeout;
+      const response = await fetchWithTimeout(fullUrl, options, timeout);
 
       if (__DEV__) {
         console.log(`[API] ${response.status} ${fullUrl}`);

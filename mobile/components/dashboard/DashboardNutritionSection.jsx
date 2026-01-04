@@ -2,10 +2,9 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import CollapsibleSection from './CollapsibleSection';
 import GlassCard from './GlassCard';
-import MicronutrientsGrid from './MicronutrientsGrid';
 import MacroBalanceCard from './MacroBalanceCard';
 import EmptyState from '../EmptyState';
-import { parseCalories, parseGoal, parseMacro, parseDecimal } from '../../utils/safeNumbers';
+import { parseCalories } from '../../utils/safeNumbers';
 
 export default function DashboardNutritionSection({
   styles,
@@ -30,10 +29,6 @@ export default function DashboardNutritionSection({
       {macroAssessment && macroAssessment.quality !== 'none' && (
         <MacroBalanceCard assessment={macroAssessment} />
       )}
-
-      <View style={styles.sectionCard}>
-        <MicronutrientsGrid micros={aggregatedMicros} showAll={false} />
-      </View>
 
       {uniqueFoodLogs.length > 0 ? (
         <GlassCard style={styles.sectionCard} padding="md">
