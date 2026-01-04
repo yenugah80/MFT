@@ -5,6 +5,7 @@ import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
 import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../utils/schemaGuards.js";
+import { errors, ErrorCodes } from "../utils/errorResponse.js";
 
 const router = express.Router();
 
@@ -30,16 +31,16 @@ router.post("/log", async (req, res) => {
     const { amountLiters, loggedDate, clientEventId, beverageType } = req.body;
 
     if (!amountLiters || amountLiters <= 0) {
-      return res.status(400).json({ error: "Amount must be greater than 0" });
+      return errors.invalidValue(res, 'amountLiters', 'must be greater than 0');
     }
 
     if (amountLiters > 5) {
-      return res.status(400).json({ error: "Amount seems unrealistic (max 5L per entry)" });
+      return errors.invalidValue(res, 'amountLiters', 'must be 5 liters or less');
     }
 
     // Validate clientEventId for idempotency
     if (!clientEventId) {
-      return res.status(400).json({ error: "clientEventId is required for idempotency" });
+      return errors.missingField(res, 'clientEventId');
     }
 
     const normalizedType = typeof beverageType === "string"
@@ -79,7 +80,7 @@ router.post("/log", async (req, res) => {
       if (!entry) {
         // Edge case: conflict detected but can't find entry
         console.error("[WaterLog] CRITICAL: Conflict detected but entry not found");
-        return res.status(500).json({ error: "Internal consistency error" });
+        return errors.internal(res, 'Internal consistency error');
       }
     } else {
       entry = result[0];
@@ -89,7 +90,7 @@ router.post("/log", async (req, res) => {
     res.json({ entry, wasDuplicate: !isNewEntry });
   } catch (error) {
     console.error("[WaterLog] Error:", error);
-    res.status(500).json({ error: "Failed to log water" });
+    errors.internal(res, 'Failed to log water');
   }
 });
 
@@ -130,7 +131,7 @@ router.get("/today", async (req, res) => {
     });
   } catch (error) {
     console.error("[WaterToday] Error:", error);
-    res.status(500).json({ error: "Failed to fetch today's water intake" });
+    errors.internal(res, 'Failed to fetch today\'s water intake');
   }
 });
 
@@ -165,7 +166,7 @@ router.get("/history", async (req, res) => {
     res.json(history);
   } catch (error) {
     console.error("[WaterHistory] Error:", error);
-    res.status(500).json({ error: "Failed to fetch water history" });
+    errors.internal(res, 'Failed to fetch water history');
   }
 });
 
@@ -180,12 +181,12 @@ router.post("/celebration", async (req, res) => {
     const { dateKey } = req.body;
 
     if (!dateKey || typeof dateKey !== "string") {
-      return res.status(400).json({ error: "dateKey is required (YYYY-MM-DD)" });
+      return errors.missingField(res, 'dateKey');
     }
 
     const [year, month, day] = dateKey.split("-").map((value) => parseInt(value, 10));
     if (!year || !month || !day) {
-      return res.status(400).json({ error: "dateKey must be in YYYY-MM-DD format" });
+      return errors.invalidFormat(res, 'dateKey', 'YYYY-MM-DD');
     }
 
     const date = new Date(year, month - 1, day);
@@ -212,7 +213,7 @@ router.post("/celebration", async (req, res) => {
     res.json({ hydrationCelebratedAt: row?.hydrationCelebratedAt || celebratedAt });
   } catch (error) {
     console.error("[WaterCelebration] Error:", error);
-    res.status(500).json({ error: "Failed to persist hydration celebration" });
+    errors.internal(res, 'Failed to persist hydration celebration');
   }
 });
 
@@ -236,13 +237,13 @@ router.delete("/:id", async (req, res) => {
       .returning();
 
     if (!deleted) {
-      return res.status(404).json({ error: "Water log not found" });
+      return errors.notFound(res, 'Water log');
     }
 
     res.json({ message: "Water log deleted", deleted });
   } catch (error) {
     console.error("[WaterDelete] Error:", error);
-    res.status(500).json({ error: "Failed to delete water log" });
+    errors.internal(res, 'Failed to delete water log');
   }
 });
 

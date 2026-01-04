@@ -118,7 +118,7 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     calories: Number.isFinite(offProduct.calories) ? Math.max(0, offProduct.calories) : 0,
     protein: Number.isFinite(offProduct.protein) ? Math.max(0, offProduct.protein) : 0,
     carbs: Number.isFinite(offProduct.carbs) ? Math.max(0, offProduct.carbs) : 0,
-    fat: Number.isFinite(offProduct.fat) ? Math.max(0, offProduct.fat) : 0,
+    fat: Number.isFinite(offProduct.fats || offProduct.fat) ? Math.max(0, offProduct.fats || offProduct.fat) : 0,
     micros: (offProduct.micros && typeof offProduct.micros === 'object') ? offProduct.micros : {},
     ingredients: Array.isArray(offProduct.ingredients) ? offProduct.ingredients : [],
     allergens: Array.isArray(offProduct.allergens) ? offProduct.allergens : [],

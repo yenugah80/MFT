@@ -163,7 +163,7 @@ router.post('/process', async (req, res) => {
           calories_kcal: item.nutrition?.calories || 0,
           protein_g: item.nutrition?.protein_g || item.nutrition?.protein || 0,
           carbs_g: item.nutrition?.carbs_g || item.nutrition?.carbs || 0,
-          fat_g: item.nutrition?.fat_g || item.nutrition?.fat || 0,
+          fat_g: item.nutrition?.fats || item.nutrition?.fat_g || item.nutrition?.fat || 0,
           fiber_g: item.nutrition?.fiber_g || 0,
           sugar_g: item.nutrition?.sugar_g || 0,
           sodium_mg: item.nutrition?.sodium_mg || 0
@@ -289,7 +289,7 @@ router.post('/transcribe', uploadMiddleware, async (req, res) => {
           calories_kcal: item.nutrition?.calories || 0,
           protein_g: item.nutrition?.protein_g || item.nutrition?.protein || 0,
           carbs_g: item.nutrition?.carbs_g || item.nutrition?.carbs || 0,
-          fat_g: item.nutrition?.fat_g || item.nutrition?.fat || 0,
+          fat_g: item.nutrition?.fats || item.nutrition?.fat_g || item.nutrition?.fat || 0,
           fiber_g: item.nutrition?.fiber_g || 0,
           sugar_g: item.nutrition?.sugar_g || 0,
           sodium_mg: item.nutrition?.sodium_mg || 0

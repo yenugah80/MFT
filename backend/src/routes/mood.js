@@ -5,6 +5,7 @@ import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC } from "../utils/timezone.js";
 import { generateMoodInsights, generateBasicMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
+import { errors, ErrorCodes } from "../utils/errorResponse.js";
 
 const router = express.Router();
 
@@ -34,34 +35,31 @@ router.post("/log", async (req, res) => {
     } = req.body;
 
     if (!mood) {
-      return res.status(400).json({ error: "Mood is required" });
+      return errors.missingField(res, 'Mood');
     }
 
     // Validate clientEventId for idempotency
     if (!clientEventId) {
-      return res.status(400).json({ error: "clientEventId is required for idempotency" });
+      return errors.missingField(res, 'clientEventId');
     }
 
     // Validate mood value (8 core moods)
     const validMoods = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
     if (!validMoods.includes(mood.toLowerCase())) {
-      return res.status(400).json({
-        error: "Invalid mood",
-        validMoods
-      });
+      return errors.invalidValue(res, 'mood', `must be one of: ${validMoods.join(', ')}`);
     }
 
     // Validate intensity and energyLevel (1-10)
     if (intensity && (intensity < 1 || intensity > 10)) {
-      return res.status(400).json({ error: "Intensity must be between 1 and 10" });
+      return errors.invalidValue(res, 'intensity', 'must be between 1 and 10');
     }
     if (energyLevel && (energyLevel < 1 || energyLevel > 10)) {
-      return res.status(400).json({ error: "Energy level must be between 1 and 10" });
+      return errors.invalidValue(res, 'energyLevel', 'must be between 1 and 10');
     }
 
     // Validate note length (max 200 characters)
     if (note && note.length > 200) {
-      return res.status(400).json({ error: "Note must be 200 characters or less" });
+      return errors.invalidValue(res, 'note', 'must be 200 characters or less');
     }
 
     // Validate tags schema (optional but strict when provided)
@@ -133,7 +131,7 @@ router.post("/log", async (req, res) => {
 
       if (!entry) {
         console.error("[MoodLog] CRITICAL: Conflict detected but entry not found");
-        return res.status(500).json({ error: "Internal consistency error" });
+        return errors.internal(res, 'Internal consistency error');
       }
     } else {
       entry = result[0];
@@ -163,7 +161,7 @@ router.post("/log", async (req, res) => {
     });
   } catch (error) {
     console.error("[MoodLog] Error:", error);
-    res.status(500).json({ error: "Failed to log mood" });
+    errors.internal(res, 'Failed to log mood');
   }
 });
 
@@ -197,7 +195,7 @@ router.get("/history", async (req, res) => {
     res.json(history);
   } catch (error) {
     console.error("[MoodHistory] Error:", error);
-    res.status(500).json({ error: "Failed to fetch mood history" });
+    errors.internal(res, 'Failed to fetch mood history');
   }
 });
 
@@ -227,7 +225,7 @@ router.get("/today", async (req, res) => {
     res.json(moods);
   } catch (error) {
     console.error("[MoodToday] Error:", error);
-    res.status(500).json({ error: "Failed to fetch today's moods" });
+    errors.internal(res, 'Failed to fetch today\'s moods');
   }
 });
 
@@ -339,7 +337,7 @@ router.get("/trends", async (req, res) => {
     });
   } catch (error) {
     console.error("[MoodTrends] Error:", error);
-    res.status(500).json({ error: "Failed to fetch mood trends" });
+    errors.internal(res, 'Failed to fetch mood trends');
   }
 });
 
@@ -440,7 +438,7 @@ router.post("/insights", async (req, res) => {
     res.json(responseData);
   } catch (error) {
     console.error("[MoodInsights] Error:", error);
-    res.status(500).json({ error: "Failed to generate mood insights" });
+    errors.internal(res, 'Failed to generate mood insights');
   }
 });
 

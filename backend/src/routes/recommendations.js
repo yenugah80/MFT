@@ -9,11 +9,13 @@
  */
 
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { requireAuth } from '@clerk/express';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
-import { getProfile } from '../controllers/profileController.js';
+import { getProfileData } from '../services/profileService.js';
+import { getDashboardData } from '../services/dashboardService.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
 import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
 // CRITICAL FIX: Use standardized error responses
@@ -82,17 +84,29 @@ router.get('/', requireAuth(), async (req, res) => {
       mealType,
       parseInt(limit),
       async () => {
-        // Fetch user profile for personalization
-        const profileRes = await fetch(`${process.env.API_URL}/profiles/me`, {
-          headers: { Authorization: req.headers.authorization },
-        });
-        const profile = profileRes.ok ? await profileRes.json() : null;
+        // CRITICAL FIX: Use service functions instead of HTTP calls
+        // This avoids network overhead, serialization/deserialization,
+        // and bypasses middleware duplication
+        let profile;
+        let dashboard;
 
-        // Fetch today's nutrition data
-        const dashboardRes = await fetch(`${process.env.API_URL}/nutrition/dashboard`, {
-          headers: { Authorization: req.headers.authorization },
-        });
-        const dashboard = dashboardRes.ok ? await dashboardRes.json() : null;
+        try {
+          // Fetch user profile directly from database
+          profile = await getProfileData(db, userId);
+        } catch (err) {
+          console.error('[Recommendations] Failed to fetch profile:', err);
+          profile = null;
+        }
+
+        try {
+          // Fetch today's nutrition data directly from database
+          // Pass offsetMinutes from request headers if available
+          const offsetMinutes = req.headers['x-timezone-offset'] ? parseInt(req.headers['x-timezone-offset']) : 0;
+          dashboard = await getDashboardData(db, userId, offsetMinutes);
+        } catch (err) {
+          console.error('[Recommendations] Failed to fetch dashboard:', err);
+          dashboard = null;
+        }
 
         // Calculate remaining budget
         const goals = profile?.goals || {};
@@ -131,7 +145,9 @@ router.get('/', requireAuth(), async (req, res) => {
           recType,
           mealType,
           remainingBudget,
-          hour
+          hour,
+          allergies,
+          dietaryPreferences
         });
 
         return {
@@ -174,7 +190,7 @@ router.get('/:id', requireAuth(), async (req, res) => {
       .limit(1);
 
     if (!recommendation.length) {
-      return res.status(404).json({ error: 'Recommendation not found' });
+      return errors.notFound(res, 'Recommendation');
     }
 
     // Mark as viewed
@@ -189,7 +205,7 @@ router.get('/:id', requireAuth(), async (req, res) => {
     res.json(recommendation[0]);
   } catch (error) {
     console.error('[Recommendations] Get detail error:', error);
-    res.status(500).json({ error: 'Failed to fetch recommendation' });
+    errors.internal(res, 'Failed to fetch recommendation');
   }
 });
 
@@ -205,7 +221,7 @@ router.post('/:id/track', requireAuth(), async (req, res) => {
 
     const validActions = ['view', 'accept', 'reject', 'customize'];
     if (!validActions.includes(action)) {
-      return res.status(400).json({ error: 'Invalid action' });
+      return errors.invalidValue(res, 'action', `must be one of: ${validActions.join(', ')}`);
     }
 
     const updateData = {
@@ -235,7 +251,7 @@ router.post('/:id/track', requireAuth(), async (req, res) => {
     res.json({ success: true, action });
   } catch (error) {
     console.error('[Recommendations] Track error:', error);
-    res.status(500).json({ error: 'Failed to track interaction' });
+    errors.internal(res, 'Failed to track interaction');
   }
 });
 
@@ -260,7 +276,7 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
       .limit(1);
 
     if (!rec) {
-      return res.status(404).json({ error: 'Recommendation not found' });
+      return errors.notFound(res, 'Recommendation');
     }
 
     // Add to food log
@@ -300,7 +316,7 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
     });
   } catch (error) {
     console.error('[Recommendations] Accept error:', error);
-    res.status(500).json({ error: 'Failed to accept recommendation' });
+    errors.internal(res, 'Failed to accept recommendation');
   }
 });
 
@@ -353,7 +369,7 @@ router.get('/history/list', requireAuth(), async (req, res) => {
     res.json({ history, stats });
   } catch (error) {
     console.error('[Recommendations] History error:', error);
-    res.status(500).json({ error: 'Failed to fetch history' });
+    errors.internal(res, 'Failed to fetch history');
   }
 });
 
@@ -416,7 +432,7 @@ router.get('/stats/acceptance-by-preference', requireAuth(), async (req, res) =>
     });
   } catch (error) {
     console.error('[Recommendations] Stats error:', error);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    errors.internal(res, 'Failed to fetch stats');
   }
 });
 
@@ -470,21 +486,61 @@ async function analyzeRecommendationHistory(db, userId) {
     return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [] };
   }
 }
-
 /**
- * Determine recommendation type with history awareness
+ * CRITICAL FIX #4: Improved recommendation type determination
+ * Balances user history preferences with budget needs
+ * Prevents over-reliance on history which can lead to recommendation fatigue
  */
 function determineRecommendationType(remainingBudget, profile, history) {
-  // If user has strong preference based on history, respect it
-  if (history.preferredTypes?.length > 0) {
-    return history.preferredTypes[0];
+  // Require sufficient history to influence recommendation (at least 5 recommendations with >50% acceptance)
+  const hasStrongHistory =
+    history.totalRecommendations >= 5 &&
+    history.acceptanceRate > 0.5 &&
+    history.preferredTypes?.length > 0;
+
+  // Budget-based primary logic (highest priority)
+  // These are immediate nutritional needs
+  if (remainingBudget.calories < 150) {
+    // Very low calories remaining - suggest light snack
+    return 'LIGHT_SNACK';
   }
 
-  // Otherwise use budget-based logic
-  if (remainingBudget.protein > 50) return 'PROTEIN_BOOST';
-  if (remainingBudget.calories < 200) return 'LIGHT_SNACK';
-  if (remainingBudget.water > 1) return 'HYDRATION';
-  if (profile?.dietary?.cuisinePreference?.[0]) return 'REGIONAL_PICK';
+  if (remainingBudget.protein > 80) {
+    // High protein remaining - prioritize protein boost
+    return 'PROTEIN_BOOST';
+  }
+
+  if (remainingBudget.water > 1.5) {
+    // High water remaining - suggest hydration
+    return 'HYDRATION';
+  }
+
+  // Secondary logic: Use history preferences ONLY if they exist AND are strong
+  // This prevents users from getting stuck in repetitive recommendations
+  if (hasStrongHistory) {
+    // Add some variance even with strong preferences (rotate through top 2-3 preferred types)
+    // This prevents recommendation fatigue
+    const preferredType = history.preferredTypes[0];
+    // 80% use preferred type, 20% suggest variety from other top types
+    if (Math.random() < 0.8) {
+      return preferredType;
+    }
+    // Return alternate type if available
+    if (history.preferredTypes.length > 1) {
+      return history.preferredTypes[1];
+    }
+  }
+
+  // Tertiary logic: Profile-based preferences
+  if (profile?.dietary?.cuisinePreference?.[0]) {
+    const cuisineId = profile.dietary.cuisinePreference[0].id || profile.dietary.cuisinePreference[0];
+    // Translate cuisine to recommendation type when appropriate
+    if (cuisineId === 'indian' || cuisineId === 'asian') {
+      return 'REGIONAL_PICK';
+    }
+  }
+
+  // Fallback: Balanced meal is safest default
   return 'BALANCED_MEAL';
 }
 
@@ -740,8 +796,71 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
 
     const recommendations = response.recommendations || [];
 
+    // CRITICAL FIX #3: Validate AI output against schema bounds
+    // Prevents invalid nutrition data from being used
+    const validateRecommendation = (rec) => {
+      if (!rec || typeof rec !== 'object') return false;
+
+      // Required string fields
+      if (!rec.foodName || typeof rec.foodName !== 'string' || rec.foodName.trim().length === 0) {
+        console.warn('[Recommendations] Validation: Missing or invalid foodName', rec.foodName);
+        return false;
+      }
+
+      // Nutrition values must be numbers within reasonable bounds
+      const calories = Number(rec.calories);
+      const protein = Number(rec.protein || 0);
+      const carbs = Number(rec.carbs || 0);
+      const fats = Number(rec.fats || 0);
+
+      // Check if all values are valid numbers
+      if (isNaN(calories) || isNaN(protein) || isNaN(carbs) || isNaN(fats)) {
+        console.warn('[Recommendations] Validation: Non-numeric nutrition values', { calories, protein, carbs, fats });
+        return false;
+      }
+
+      // Validate bounds (reasonable single-meal ranges)
+      const NUTRITION_BOUNDS = {
+        calories: { min: 0, max: 2000 },
+        protein: { min: 0, max: 150 },
+        carbs: { min: 0, max: 300 },
+        fats: { min: 0, max: 100 },
+      };
+
+      if (calories < NUTRITION_BOUNDS.calories.min || calories > NUTRITION_BOUNDS.calories.max) {
+        console.warn(`[Recommendations] Validation: Calories out of bounds: ${calories} (expected 0-2000)`);
+        return false;
+      }
+
+      if (protein < NUTRITION_BOUNDS.protein.min || protein > NUTRITION_BOUNDS.protein.max) {
+        console.warn(`[Recommendations] Validation: Protein out of bounds: ${protein}g (expected 0-150g)`);
+        return false;
+      }
+
+      if (carbs < NUTRITION_BOUNDS.carbs.min || carbs > NUTRITION_BOUNDS.carbs.max) {
+        console.warn(`[Recommendations] Validation: Carbs out of bounds: ${carbs}g (expected 0-300g)`);
+        return false;
+      }
+
+      if (fats < NUTRITION_BOUNDS.fats.min || fats > NUTRITION_BOUNDS.fats.max) {
+        console.warn(`[Recommendations] Validation: Fats out of bounds: ${fats}g (expected 0-100g)`);
+        return false;
+      }
+
+      return true;
+    };
+
+    // Filter recommendations by schema validation first
+    const validatedRecommendations = recommendations.filter(rec => validateRecommendation(rec));
+
+    if (validatedRecommendations.length < recommendations.length) {
+      console.warn(
+        `[Recommendations] Schema validation: ${recommendations.length} → ${validatedRecommendations.length} recommendations passed validation`
+      );
+    }
+
     // 🆕 CRITICAL: Server-side allergen filter (defense in depth) - now using improved pattern matching
-    const safeRecommendations = recommendations.filter(rec => {
+    const safeRecommendations = validatedRecommendations.filter(rec => {
       // Check AI marked as allergen-free
       if (rec.allergenFree === false) {
         console.warn(`[Recommendations] Filtered out ${rec.foodName} - AI marked as not allergen-free`);
@@ -762,8 +881,9 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
     console.log(`[Recommendations] Safety filter: ${recommendations.length} → ${safeRecommendations.length} recommendations`);
 
     // 🆕 Enrich with warning badges and ensure safe structure
+    // CRITICAL FIX: Use UUID instead of Date.now() to prevent ID collisions
     const enrichedRecommendations = safeRecommendations.map((rec, idx) => ({
-      id: `rec-${Date.now()}-${idx}`,
+      id: `rec-${randomUUID()}`,
       title: getTitleForType(recType),
       fiber: rec.fiber || 0,
       sugar: rec.sugar || 0,
@@ -844,58 +964,142 @@ async function enrichRecommendations(recommendations) {
 /**
  * Save recommendations to history table for tracking
  */
+/**
+ * CRITICAL FIX #5: Batch database writes instead of sequential loop
+ * Improves performance by writing all recommendations in one operation
+ * instead of N sequential inserts
+ */
 async function saveRecommendationsToHistory(db, userId, recommendations, context) {
   try {
     const hour = context.hour;
     const remainingBudget = context.remainingBudget;
+    const allergies = context.allergies || [];
+    const dietaryPreferences = context.dietaryPreferences || [];
 
-    for (const rec of recommendations) {
-      await db.insert(recommendationsHistoryTable).values({
-        userId,
-        recommendationId: rec.id,
-        foodName: rec.foodName,
-        portion: rec.portion,
-        calories: rec.calories,
-        protein: rec.protein,
-        carbs: rec.carbs,
-        fats: rec.fats,
-        fiber: rec.fiber || 0,
-        sugar: rec.sugar || 0,
-        micros: rec.micros || {},
-        recommendationType: context.recType,
-        reason: rec.reason,
-        tips: rec.tips,
-        prepTimeMinutes: rec.prepTimeMinutes || 10,
-        recipeInstructions: rec.recipeInstructions || '',
-        mealType: context.mealType,
-        timeOfDay: hour,
-        remainingCalories: remainingBudget.calories,
-        remainingProtein: remainingBudget.protein,
-        remainingCarbs: remainingBudget.carbs,
-        remainingFats: remainingBudget.fats,
-        interactionStatus: 'shown',
-        aiGenerated: true,
-        aiModel: 'gpt-4o-mini',
-        aiConfidence: 0.85,
-        personalizationScore: calculatePersonalizationScore(rec, remainingBudget),
-        // NEW: Preference strength tracking fields
-        // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
-        preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
-        dietCompliant: rec.dietCompliant === true, // Only true if explicitly marked true
-        allergenFree: rec.allergenFree === true,   // Safety: default to false unless confirmed safe
-        warningBadge: rec.warningBadge || null,
-        createdAt: new Date()
-      }).catch(err => {
-        // Ignore constraint violations (duplicate recommendations)
-        if (!err.message.includes('unique')) {
+    // Prepare all values first
+    const valuesToInsert = recommendations.map(rec => ({
+      userId,
+      recommendationId: rec.id,
+      foodName: rec.foodName,
+      portion: rec.portion,
+      calories: rec.calories,
+      protein: rec.protein,
+      carbs: rec.carbs,
+      fats: rec.fats,
+      fiber: rec.fiber || 0,
+      sugar: rec.sugar || 0,
+      micros: rec.micros || {},
+      recommendationType: context.recType,
+      reason: rec.reason,
+      tips: rec.tips,
+      prepTimeMinutes: rec.prepTimeMinutes || 10,
+      recipeInstructions: rec.recipeInstructions || '',
+      mealType: context.mealType,
+      timeOfDay: hour,
+      remainingCalories: remainingBudget.calories,
+      remainingProtein: remainingBudget.protein,
+      remainingCarbs: remainingBudget.carbs,
+      remainingFats: remainingBudget.fats,
+      interactionStatus: 'shown',
+      aiGenerated: true,
+      aiModel: 'gpt-4o-mini',
+      aiConfidence: calculateAIConfidence(rec, allergies, dietaryPreferences),
+      personalizationScore: calculatePersonalizationScore(rec, remainingBudget),
+      // NEW: Preference strength tracking fields
+      // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
+      preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
+      dietCompliant: rec.dietCompliant === true, // Only true if explicitly marked true
+      allergenFree: rec.allergenFree === true,   // Safety: default to false unless confirmed safe
+      warningBadge: rec.warningBadge || null,
+      createdAt: new Date()
+    }));
+
+    // Single batch insert for all recommendations
+    if (valuesToInsert.length > 0) {
+      try {
+        await db.insert(recommendationsHistoryTable).values(valuesToInsert);
+        console.log(`[Recommendations] Batch saved ${valuesToInsert.length} recommendations to history`);
+      } catch (err) {
+        // On duplicate key conflicts, log but don't fail the request
+        // This can happen if the same recommendations were submitted twice
+        if (err.message?.includes('unique') || err.code === '23505') {
+          console.warn(`[Recommendations] Duplicate recommendation constraints detected (expected during deduplication):`, err.message);
+        } else {
           throw err;
         }
-      });
+      }
     }
   } catch (error) {
     console.error('[Recommendations] Failed to save history:', error);
     // Don't fail the request if history saving fails
+    // Users should still get recommendations even if history saving fails
   }
+}
+
+/**
+ * CRITICAL FIX #6: Calculate AI confidence instead of hard-coding
+ * Derives confidence from data quality metrics:
+ * - Schema validation passing
+ * - Complete required fields
+ * - Reasonable nutrition ranges
+ * - Safety criteria (allergen-free, diet compliance)
+ *
+ * Confidence scale:
+ * 0.95+: High confidence (all criteria met)
+ * 0.85-0.95: Good confidence (most criteria met)
+ * 0.75-0.85: Medium confidence (some quality issues)
+ * <0.75: Low confidence (multiple concerns)
+ */
+function calculateAIConfidence(recommendation, allergies = [], dietaryPreferences = []) {
+  let confidence = 0.85; // Base confidence (already passed validation)
+
+  // +0.05: All required fields present
+  const hasRequiredFields =
+    recommendation.foodName &&
+    typeof recommendation.calories === 'number' &&
+    typeof recommendation.protein === 'number' &&
+    typeof recommendation.carbs === 'number' &&
+    typeof recommendation.fats === 'number' &&
+    recommendation.reason &&
+    recommendation.tips;
+
+  if (hasRequiredFields) {
+    confidence += 0.05;
+  } else {
+    confidence -= 0.05; // Penalty for missing fields
+  }
+
+  // +0.05: Passes diet compliance if dietary preferences exist
+  if (dietaryPreferences.length > 0 && recommendation.dietCompliant === true) {
+    confidence += 0.05;
+  } else if (dietaryPreferences.length > 0 && recommendation.dietCompliant === false) {
+    confidence -= 0.05; // Penalty for non-compliant recommendations
+  }
+
+  // +0.05: Explicitly marked allergen-free
+  if (allergies.length > 0 && recommendation.allergenFree === true) {
+    confidence += 0.05;
+  } else if (allergies.length > 0 && recommendation.allergenFree !== true) {
+    confidence -= 0.05; // Penalty when allergens present and not marked safe
+  }
+
+  // +0.03: Has additional metadata (preparation tips, nutrition details)
+  if (recommendation.prepTimeMinutes || recommendation.recipeInstructions || recommendation.warningBadge === null) {
+    confidence += 0.03;
+  }
+
+  // +0.02: Nutrition data is realistic and balanced
+  const hasMacroBalance =
+    recommendation.protein > 0 &&
+    recommendation.carbs > 0 &&
+    recommendation.fats > 0;
+
+  if (hasMacroBalance) {
+    confidence += 0.02;
+  }
+
+  // Clamp to 0-1 range
+  return Math.max(0, Math.min(1.0, confidence));
 }
 
 /**

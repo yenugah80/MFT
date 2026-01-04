@@ -608,7 +608,7 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       calories: Number.isFinite(json.calories) ? json.calories : null,
       protein: Number.isFinite(json.protein) ? json.protein : null,
       carbs: Number.isFinite(json.carbs) ? json.carbs : null,
-      fat: Number.isFinite(json.fat) ? json.fat : null,
+      fats: Number.isFinite(json.fats || json.fat) ? (json.fats || json.fat) : null,
       nutriscore: json.nutriscore || "UNKNOWN",
       ecoscore: json.ecoscore || "UNKNOWN",
       novaScore: json.novaScore || null,
@@ -645,7 +645,7 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       calories: null, // MealDB doesn't include nutrition
       protein: null,
       carbs: null,
-      fat: null,
+      fats: null,
       nutriscore: "UNKNOWN",
       ecoscore: "UNKNOWN",
       category: meal.strCategory || "General",
@@ -679,7 +679,7 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       carbs: Number.isFinite(n.carbohydrates_100g)
         ? Math.round(n.carbohydrates_100g)
         : null,
-      fat: Number.isFinite(n.fat_100g) ? Math.round(n.fat_100g) : null,
+      fats: Number.isFinite(n.fat_100g) ? Math.round(n.fat_100g) : null,
       nutriscore: nutri.grade,
       nutriscoreScore: nutri.score,
       ecoscore: product.ecoscore_grade ? product.ecoscore_grade.toUpperCase() : "UNKNOWN",
@@ -743,7 +743,7 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       calories: Number.isFinite(kcal) ? Math.round(kcal) : null,
       protein: Number.isFinite(protein) ? Math.round(protein) : null,
       carbs: Number.isFinite(carbs) ? Math.round(carbs) : null,
-      fat: Number.isFinite(fat) ? Math.round(fat) : null,
+      fats: Number.isFinite(fat) ? Math.round(fat) : null,
       nutriscore: nutri.grade,
       nutriscoreScore: nutri.score,
       ecoscore: "UNKNOWN", // USDA doesn't provide eco score
@@ -788,7 +788,7 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       calories: aiData.calories || 0,
       protein: aiData.protein || 0,
       carbs: aiData.carbs || 0,
-      fat: aiData.fat || aiData.fats || 0,
+      fats: aiData.fats || aiData.fat || 0,
       nutriscore: nutri.grade,
       nutriscoreScore: nutri.score,
       ecoscore: "UNKNOWN",

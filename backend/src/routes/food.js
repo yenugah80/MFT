@@ -363,7 +363,7 @@ router.post("/verify-nutrition", async (req, res) => {
             calories: corrections.calories || food.nutrition.calories,
             protein: corrections.protein || food.nutrition.protein,
             carbs: corrections.carbs || food.nutrition.carbs,
-            fat: corrections.fat || food.nutrition.fat
+            fats: corrections.fats || food.nutrition.fats
           };
         }
       }

@@ -13,6 +13,7 @@ import path from "path";
 import { OpenAI } from "openai";
 import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification } from "../services/gamificationRewardService.js";
 import { checkAchievements } from "../services/achievementService.js";
+import { errors, ErrorCodes } from "../utils/errorResponse.js";
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -53,10 +54,7 @@ router.post("/log", async (req, res) => {
 
     // 1. Require clientEventId for idempotency
     if (!clientEventId) {
-      return res.status(400).json({
-        error: "clientEventId is required",
-        hint: "Generate a unique ID on the client: Date.now() + random string"
-      });
+      return errors.missingField(res, 'clientEventId');
     }
 
     // 2. Validation Rule: Check Macro/Calorie consistency
@@ -207,10 +205,7 @@ router.post("/log", async (req, res) => {
       // CRITICAL: If entry still null after fetch, something went wrong
       if (!entry) {
         console.error(`[CRITICAL] Entry not found for clientEventId: ${clientEventId}`);
-        return res.status(500).json({
-          error: "Internal error: Entry not found after duplicate detection",
-          wasDuplicate: !isNewEntry
-        });
+        return errors.internal(res, 'Internal error: Entry not found after duplicate detection');
       }
     }
 
@@ -249,7 +244,7 @@ router.post("/log", async (req, res) => {
       });
     }
 
-    res.status(500).json({ error: "Failed to log food" });
+    errors.internal(res, 'Failed to log food');
   }
 });
 
@@ -269,7 +264,7 @@ router.put("/log/:id", async (req, res) => {
     } = req.body;
 
     if (isNaN(logId)) {
-      return res.status(400).json({ error: "Invalid log ID" });
+      return errors.invalidValue(res, 'id', 'must be a valid number');
     }
 
     // 1. Fetch the existing entry
@@ -284,7 +279,7 @@ router.put("/log/:id", async (req, res) => {
       .limit(1);
 
     if (!existingEntry) {
-      return res.status(404).json({ error: "Food log entry not found" });
+      return errors.notFound(res, 'Food log entry');
     }
 
     // 2. Calculate deltas for daily summary update
@@ -366,7 +361,7 @@ router.put("/log/:id", async (req, res) => {
 
   } catch (error) {
     console.error("[NutritionLog Edit] Error:", error);
-    res.status(500).json({ error: "Failed to update food log" });
+    errors.internal(res, 'Failed to update food log');
   }
 });
 
@@ -382,7 +377,7 @@ router.delete("/log/:id", async (req, res) => {
     const logId = parseInt(req.params.id);
 
     if (isNaN(logId)) {
-      return res.status(400).json({ error: "Invalid log ID" });
+      return errors.invalidValue(res, 'id', 'must be a valid number');
     }
 
     // 1. Fetch the existing entry before deletion
@@ -397,7 +392,7 @@ router.delete("/log/:id", async (req, res) => {
       .limit(1);
 
     if (!existingEntry) {
-      return res.status(404).json({ error: "Food log entry not found" });
+      return errors.notFound(res, 'Food log entry');
     }
 
     // 2. Delete the entry
@@ -447,7 +442,7 @@ router.delete("/log/:id", async (req, res) => {
 
   } catch (error) {
     console.error("[NutritionLog Delete] Error:", error);
-    res.status(500).json({ error: "Failed to delete food log" });
+    errors.internal(res, 'Failed to delete food log');
   }
 });
 
@@ -484,7 +479,7 @@ router.get("/history", async (req, res) => {
     res.json(logs);
   } catch (error) {
     console.error("[NutritionHistory] Error:", error);
-    res.status(500).json({ error: "Failed to fetch history" });
+    errors.internal(res, 'Failed to fetch history');
   }
 });
 
@@ -496,7 +491,7 @@ router.get("/history", async (req, res) => {
 router.post("/recipe/parse", async (req, res) => {
   try {
     const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Recipe text required" });
+    if (!text) return errors.missingField(res, 'text');
 
     // We reuse the AI text fallback but frame it for recipes
     // In a real app, we'd add a specific method to FoodService for recipes
@@ -507,7 +502,7 @@ router.post("/recipe/parse", async (req, res) => {
     res.json(analysis);
   } catch (error) {
     console.error("[RecipeParse] Error:", error);
-    res.status(500).json({ error: "Recipe parsing failed" });
+    errors.internal(res, 'Recipe parsing failed');
   }
 });
 
@@ -528,7 +523,7 @@ router.post("/scale", (req, res) => {
 router.post("/voice-log", upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: "No audio file provided" });
+      return errors.badRequest(res, 'No audio file provided');
     }
 
     const filePath = req.file.path;
@@ -536,7 +531,7 @@ router.post("/voice-log", upload.single("audio"), async (req, res) => {
     if (!openai) {
       // Cleanup temp file
       fs.unlinkSync(filePath);
-      return res.status(503).json({ error: "AI service unavailable (API Key missing)" });
+      return errors.externalService(res, 'OpenAI');
     }
 
     // 1. Transcribe with Whisper
@@ -600,7 +595,7 @@ router.post("/voice-log", upload.single("audio"), async (req, res) => {
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    res.status(500).json({ error: "Voice processing failed" });
+    errors.internal(res, 'Voice processing failed');
   }
 });
 
@@ -642,7 +637,7 @@ router.get("/summary", async (req, res) => {
     res.json(summaries);
   } catch (error) {
     console.error("[NutritionSummary] Error:", error);
-    res.status(500).json({ error: "Failed to fetch nutrition summary" });
+    errors.internal(res, 'Failed to fetch nutrition summary');
   }
 });
 
@@ -688,7 +683,7 @@ router.get("/water", async (req, res) => {
     res.json(logs);
   } catch (error) {
     console.error("[WaterLog] Error:", error);
-    res.status(500).json({ error: "Failed to fetch water logs" });
+    errors.internal(res, 'Failed to fetch water logs');
   }
 });
 
@@ -724,7 +719,7 @@ router.get("/weight", async (req, res) => {
     res.json(history);
   } catch (error) {
     console.error("[WeightHistory] Error:", error);
-    res.status(500).json({ error: "Failed to fetch weight history" });
+    errors.internal(res, 'Failed to fetch weight history');
   }
 });
 
@@ -770,7 +765,7 @@ router.get("/mood", async (req, res) => {
     res.json(logs);
   } catch (error) {
     console.error("[MoodLog] Error:", error);
-    res.status(500).json({ error: "Failed to fetch mood logs" });
+    errors.internal(res, 'Failed to fetch mood logs');
   }
 });
 
@@ -990,7 +985,7 @@ router.get("/dashboard", async (req, res) => {
     res.json(dashboard);
   } catch (error) {
     console.error("[Dashboard] Error:", error);
-    res.status(500).json({ error: "Failed to fetch dashboard data" });
+    errors.internal(res, 'Failed to fetch dashboard data');
   }
 });
 

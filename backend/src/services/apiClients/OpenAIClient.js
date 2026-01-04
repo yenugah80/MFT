@@ -763,7 +763,7 @@ Return JSON:
           calories: json.calories || 0,
           protein: json.protein || 0,
           carbs: json.carbs || 0,
-          fat: json.fat || 0,
+          fats: json.fats || json.fat || 0,
           _modelUsed: visionModel,
           _normalizationError: normalizationError.message,
         };

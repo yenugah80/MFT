@@ -46,7 +46,7 @@ const aiEstimatedFoodSchema = new mongoose.Schema(
       calories: Number, // kcal
       protein: Number, // grams
       carbs: Number, // grams
-      fat: Number, // grams
+      fats: Number, // grams
       fiber: Number, // grams
       sugar: Number, // grams
       sodium: Number, // mg
@@ -115,8 +115,8 @@ const aiEstimatedFoodSchema = new mongoose.Schema(
      * Individual ingredients and their nutrition contribution
      * Allows showing users what makes up the dish
      * Example: [
-     *   { name: "rice", amount: "1 cup", calories: 200, protein: 4, carbs: 45, fat: 0 },
-     *   { name: "dal", amount: "0.5 cup", calories: 115, protein: 9, carbs: 20, fat: 0 }
+     *   { name: "rice", amount: "1 cup", calories: 200, protein: 4, carbs: 45, fats: 0 },
+     *   { name: "dal", amount: "0.5 cup", calories: 115, protein: 9, carbs: 20, fats: 0 }
      * ]
      */
     ingredients: [
@@ -126,7 +126,7 @@ const aiEstimatedFoodSchema = new mongoose.Schema(
         calories: Number,
         protein: Number, // grams
         carbs: Number, // grams
-        fat: Number // grams
+        fats: Number // grams
       }
     ],
 
@@ -242,7 +242,7 @@ const aiEstimatedFoodSchema = new mongoose.Schema(
           calories: Number,
           protein: Number,
           carbs: Number,
-          fat: Number
+          fats: Number
         },
         region: String, // User's region
         cuisine: String, // User's cuisine preference
@@ -499,7 +499,7 @@ aiEstimatedFoodSchema.statics.addVerification = async function (
         food.nutrition.calories = corrections.calories;
         food.nutrition.protein = corrections.protein || food.nutrition.protein;
         food.nutrition.carbs = corrections.carbs || food.nutrition.carbs;
-        food.nutrition.fat = corrections.fat || food.nutrition.fat;
+        food.nutrition.fats = corrections.fats || food.nutrition.fats;
       }
     }
     // Recalculate average confidence

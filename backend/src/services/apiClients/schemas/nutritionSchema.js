@@ -20,7 +20,7 @@ export function normalizeNutritionAnalysis(rawData) {
     calories: validateNumber(rawData.calories, 0, 0, 10000),
     protein: validateNumber(rawData.protein, 0, 0, 500),
     carbs: validateNumber(rawData.carbs, 0, 0, 500),
-    fat: validateNumber(rawData.fat || rawData.fats, 0, 0, 500),
+    fats: validateNumber(rawData.fats || rawData.fat, 0, 0, 500),
     fiber: validateNumber(rawData.fiber, 0, 0, 100),
     sugar: validateNumber(rawData.sugar, 0, 0, 500),
     sodium: validateNumber(rawData.sodium, 0, 0, 10000),
@@ -34,7 +34,7 @@ export function normalizeNutritionAnalysis(rawData) {
   };
 
   // Validate macros add up reasonably (allow some margin for rounding)
-  const calculatedCalories = (normalized.protein * 4) + (normalized.carbs * 4) + (normalized.fat * 9);
+  const calculatedCalories = (normalized.protein * 4) + (normalized.carbs * 4) + (normalized.fats * 9);
   const calorieDiff = Math.abs(normalized.calories - calculatedCalories);
 
   // If difference is > 20%, log a warning but don't reject
@@ -237,7 +237,7 @@ export function calculateDataQuality(data) {
   let maxScore = 0;
 
   // Core fields (50% of score)
-  const coreFields = ['foodName', 'calories', 'protein', 'carbs', 'fat'];
+  const coreFields = ['foodName', 'calories', 'protein', 'carbs', 'fats'];
   for (const field of coreFields) {
     maxScore += 10;
     if (data[field] && data[field] > 0) {
