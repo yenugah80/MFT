@@ -90,7 +90,7 @@ router.post("/log", async (req, res) => {
         loggedDate: safeLoggedDate,
       })
       .onConflictDoNothing({
-        target: [foodLogTable.userId, foodLogTable.clientEventId]
+        target: foodLogTable.clientEventId
       })
       .returning();
 
