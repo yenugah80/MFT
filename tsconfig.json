@@ -3,13 +3,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "references": [
-    { "path": "./mobile" },
-    { "path": "./backend" },
-    { "path": "./my-worker" }
-  ],
   "exclude": [
     "node_modules"
-  ],
-  "files": []
+  ]
 }

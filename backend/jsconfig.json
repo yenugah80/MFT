@@ -16,19 +16,11 @@
       "@db/*": ["./src/db/*"],
       "@utils/*": ["./src/utils/*"]
     },
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
     "resolveJsonModule": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": false,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "forceConsistentCasingInFileNames": true
   },
   "include": [
     "src/**/*.js",
