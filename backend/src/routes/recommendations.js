@@ -1188,22 +1188,32 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
     const remainingBudget = context.remainingBudget;
 
     for (const rec of recommendations) {
+      // Extract nutrition from nested structure (enriched format)
+      // enrichedRecommendations have nutrition nested under rec.nutrition.*
+      const nutrition = rec.nutrition || {};
+      const calories = nutrition.calories ?? rec.calories ?? 0;
+      const protein = nutrition.protein ?? rec.protein ?? 0;
+      const carbs = nutrition.carbs ?? rec.carbs ?? 0;
+      const fats = nutrition.fats ?? rec.fats ?? 0;
+      const fiber = nutrition.fiber ?? rec.fiber ?? 0;
+      const sugar = nutrition.sugar ?? rec.sugar ?? 0;
+
       await db.insert(recommendationsHistoryTable).values({
         userId,
         recommendationId: rec.id,
         foodName: rec.foodName,
         portion: rec.portion,
-        calories: rec.calories,
-        protein: rec.protein,
-        carbs: rec.carbs,
-        fats: rec.fats,
-        fiber: rec.fiber || 0,
-        sugar: rec.sugar || 0,
+        calories,
+        protein,
+        carbs,
+        fats,
+        fiber,
+        sugar,
         micros: rec.micros || {},
         recommendationType: context.recType,
-        reason: rec.reason,
-        tips: rec.tips,
-        prepTimeMinutes: rec.prepTimeMinutes || 10,
+        reason: rec.reason || nutrition.reason,
+        tips: (rec.preparation?.tips || rec.tips) || '',
+        prepTimeMinutes: rec.preparation?.timeMinutes || rec.prepTimeMinutes || 10,
         recipeInstructions: rec.recipeInstructions || '',
         mealType: context.mealType,
         timeOfDay: hour,
@@ -1214,14 +1224,14 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
         interactionStatus: 'shown',
         aiGenerated: true,
         aiModel: 'gpt-4o-mini',
-        aiConfidence: 0.85,
-        personalizationScore: rec.personalizationScore || calculatePersonalizationScore(rec, remainingBudget),
+        aiConfidence: rec.allergenSafety?.confidence || 0.85,
+        personalizationScore: rec.personalization?.score || calculatePersonalizationScore({calories, protein, carbs, fats}, remainingBudget),
         // NEW: Preference strength tracking fields
         // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
-        preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
-        dietCompliant: rec.dietCompliant === true, // Only true if explicitly marked true
-        allergenFree: rec.allergenFree === true,   // Safety: default to false unless confirmed safe
-        warningBadge: rec.warningBadge || null,
+        preferenceStrengthMatch: rec.preference?.score || rec.preferenceStrengthMatch || 3,
+        dietCompliant: rec.dietCompliance?.compliant === true,
+        allergenFree: rec.allergenSafety?.safe === true,
+        warningBadge: rec.warning || null,
         createdAt: new Date()
       }).catch(err => {
         // Ignore constraint violations (duplicate recommendations)
