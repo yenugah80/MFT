@@ -1,5 +1,5 @@
 import { useSignUp, useAuth } from "@clerk/clerk-expo";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -15,7 +15,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authStyles } from "../../assets/styles/auth.styles";
 import { Image } from "expo-image";
 import { COLORS } from "../../constants/colors";
-import { useRef } from "react";
 import { saveProfileBasics } from "../../services/profileAPI";
 
 const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
@@ -53,7 +52,7 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
             }
             return v;
           }, 2);
-        } catch (e) {
+        } catch (_e) {
           return String(obj);
         }
       };

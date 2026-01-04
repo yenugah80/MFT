@@ -35,7 +35,7 @@ export default function TermsOfServiceScreen() {
         <Section title="Description of Service">
           <Text style={styles.text}>
             My-Food-Tracker provides nutrition tracking, meal logging, mood tracking, and
-            health insights through AI-powered analysis. The App uses OpenAI's GPT-4 and
+            health insights through AI-powered analysis. The App uses OpenAI&apos;s GPT-4 and
             Whisper AI to analyze food photos and voice inputs.
           </Text>
         </Section>

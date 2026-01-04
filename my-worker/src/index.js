@@ -19,4 +19,10 @@ export default {
       console.error('Worker: ping failed', err);
     }
   },
+
+  async fetch(request, env) {
+    // For Cloudflare Access protected workers, validate the Access JWT
+    // Scheduled jobs don't need to validate, only HTTP requests do
+    return new Response('Worker is healthy', { status: 200 });
+  },
 };

@@ -195,7 +195,7 @@ const getBeverageInsight = (summary) => {
 // ============================================================================
 const getSmartAdvice = (percentage) => {
   const hour = new Date().getHours();
-  if (percentage >= 100) return "Goal met! You're fully optimized";
+  if (percentage >= 100) return "Goal met! You&apos;re fully optimized";
   if (percentage >= 80) return "Almost there! Finish strong";
 
   if (hour < 10) return "Jumpstart your metabolism";

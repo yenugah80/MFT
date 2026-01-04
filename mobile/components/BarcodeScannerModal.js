@@ -152,7 +152,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
           </View>
 
           <Text style={styles.photoHint}>
-            Photo selected. Tap "Analyze" to extract barcode or analyze product details.
+            Photo selected. Tap &quot;Analyze&quot; to extract barcode or analyze product details.
           </Text>
 
           <View style={styles.photoActionContainer}>

@@ -24,6 +24,7 @@ import { useMoodTrends } from "../hooks/useMoodTrends";
 import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
+import { useRecommendations } from "../hooks/useRecommendations";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -62,7 +63,7 @@ import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
 import { scanMealsForAllergens } from "../utils/allergenDetection";
 // Note: calculateDietaryComplianceScore and calculateCuisineDiversity moved to Profile > MyInsightsSection
 import apiClient from "../services/apiClient";
-import storage, { STORAGE_KEYS } from "../utils/storage";
+import { getItem, setItem, STORAGE_KEYS } from "../utils/storage";
 
 // Utility to deduplicate logs by clientEventId (preferred) or id
 function dedupeLogs(logs) {
@@ -208,19 +209,25 @@ export default function DashboardContent() {
   // Focus mode state - simplifies view to reduce cognitive load
   const [focusMode, setFocusMode] = useState(false);
 
-  // Recommendations state
-  const [recommendations, setRecommendations] = useState([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-  const [userProfile, setUserProfile] = useState(null);
-
   // Recommendation detail modal state
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
   const [recommendationModalVisible, setRecommendationModalVisible] = useState(false);
   const [acceptingRecommendation, setAcceptingRecommendation] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
 
   // Phase 3: Preference-based insights state
   // Note: complianceScore and cuisineDiversity moved to Profile > MyInsightsSection
   const [allergenWarnings, setAllergenWarnings] = useState([]);
+
+  // Recommendations hook (handles caching internally with 5-min cache)
+  const {
+    recommendations,
+    loading: recommendationsLoading,
+    error: recommendationsError,
+    fetchRecommendations,
+    acceptRecommendation: acceptRecommendationAction,
+    trackInteraction,
+  } = useRecommendations();
 
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
@@ -232,7 +239,7 @@ export default function DashboardContent() {
   useEffect(() => {
     let isActive = true;
     const loadSavedFilter = async () => {
-      const savedDays = await storage.getItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS);
+      const savedDays = await getItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS);
       if (!isActive) return;
       if ([7, 30, 90].includes(savedDays)) {
         setInsightsDays(savedDays);
@@ -246,7 +253,7 @@ export default function DashboardContent() {
   }, []);
 
   useEffect(() => {
-    storage.setItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS, insightsDays);
+    setItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS, insightsDays);
   }, [insightsDays]);
 
   const onRefresh = async () => {
@@ -258,46 +265,20 @@ export default function DashboardContent() {
   // Note: useFocusEffect manual refetch removed - React Query handles staleness automatically
   // Data will refetch if >30s old (respects staleTime configuration)
 
-  // Load recommendations when dashboard data is available
-  // Profile is fetched from ProfileProvider context (eliminates duplicate /profile/me API call)
-  const loadRecommendationsData = useCallback(async () => {
+  // Load recommendations and profile when dashboard data is available
+  // OPTIMIZATION: Using useRecommendations hook which handles 5-min caching internally
+  // This eliminates duplicate API calls that were happening before
+  useEffect(() => {
     if (!data || isLoading) return;
 
-    // Use profile from context instead of fetching
+    // Use profile from context instead of fetching (eliminates duplicate /profile/me)
     if (contextProfile) {
       setUserProfile(contextProfile);
     }
 
-    setRecommendationsLoading(true);
-    try {
-      // Fetch recommendations from backend (non-critical, short timeout)
-      try {
-        // Use a race condition with short timeout since recommendations aren't critical
-        const recommendationsPromise = apiClient.get('/recommendations');
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Recommendations timeout - skipping')), 3000)
-        );
-        const recommendationsResponse = await Promise.race([recommendationsPromise, timeoutPromise]);
-
-        if (recommendationsResponse?.recommendations) {
-          setRecommendations(recommendationsResponse.recommendations);
-        }
-      } catch (error) {
-        // Skip recommendations on timeout or error - they're not critical
-        if (error.message.includes('timeout')) {
-          console.log('[Dashboard] Recommendations took too long, skipping');
-        } else {
-          console.debug('[Dashboard] Recommendations unavailable:', error.message);
-        }
-        setRecommendations([]);
-      }
-    } catch (error) {
-      console.error('[Dashboard] Failed to load recommendations:', error);
-      setRecommendations([]);
-    } finally {
-      setRecommendationsLoading(false);
-    }
-  }, [data, isLoading, contextProfile]);
+    // Fetch recommendations with built-in caching
+    fetchRecommendations();
+  }, [data, isLoading, contextProfile, fetchRecommendations]);
 
   // Phase 3: Scan for allergen warnings (urgent alerts stay on Dashboard)
   // Note: complianceScore and cuisineDiversity calculations moved to Profile > MyInsightsSection
@@ -319,52 +300,40 @@ export default function DashboardContent() {
     }
   }, [data, isLoading, userProfile]);
 
-  // Track recommendation view interaction
+  // Track recommendation view interaction (delegates to hook)
   const trackRecommendationView = useCallback(async (recommendationId) => {
-    try {
-      await apiClient.post(`/recommendations/${recommendationId}/track`, {
-        action: 'view'
-      });
-    } catch (error) {
-      console.error('[Dashboard] Failed to track recommendation view:', error);
-      // Fail silently - tracking is not critical
-    }
-  }, []);
+    await trackInteraction(recommendationId, 'view');
+  }, [trackInteraction]);
 
-  // Accept recommendation and add to food log
+  // Accept recommendation and add to food log (delegates to hook)
   const handleAcceptRecommendation = useCallback(async (recommendation) => {
     try {
       setAcceptingRecommendation(true);
 
-      const response = await apiClient.post(
-        `/recommendations/${recommendation.id}/accept`,
-        {
-          portion: recommendation.portion,
-          mealType: recommendation.mealType
-        }
-      );
+      const result = await acceptRecommendationAction(recommendation);
 
-      notify.success('Added to food log!');
-      setRecommendationModalVisible(false);
-      setSelectedRecommendation(null);
+      if (result.success) {
+        notify.success(result.message || 'Added to food log!');
+        setRecommendationModalVisible(false);
+        setSelectedRecommendation(null);
 
-      // Refresh dashboard to show updated nutrition
-      await refetch();
+        // Refresh dashboard to show updated nutrition
+        await refetch();
+      } else {
+        notify.error(result.error || 'Failed to add to log');
+      }
     } catch (error) {
       console.error('[Dashboard] Failed to accept recommendation:', error);
       notify.error(error?.response?.data?.error || 'Failed to add to log');
     } finally {
       setAcceptingRecommendation(false);
     }
-  }, [refetch, notify]);
+  }, [acceptRecommendationAction, refetch, notify]);
 
-  // Reject recommendation
+  // Reject recommendation (delegates to hook)
   const handleRejectRecommendation = useCallback(async (recommendation, reason) => {
     try {
-      await apiClient.post(`/recommendations/${recommendation.id}/track`, {
-        action: 'reject',
-        reason
-      });
+      await trackInteraction(recommendation.id, 'reject', { reason });
 
       notify.info('Thanks for the feedback!');
       setRecommendationModalVisible(false);

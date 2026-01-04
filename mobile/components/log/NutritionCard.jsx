@@ -181,23 +181,6 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!foodLog) return null;
-
-  // Handle save with lock to prevent double-taps
-  const handleSave = async () => {
-    if (isSaving || !onSave) return;
-
-    setIsSaving(true);
-    try {
-      await onSave(foodLog);
-    } catch (error) {
-      console.error('[NutritionCard] Save error:', error);
-      // Error will be handled by parent component
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const {
     foodName,
     cookingMethod,
@@ -216,12 +199,29 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
     analysisNotes,
     portionGrams,
     servingSize,
-  } = foodLog;
+  } = foodLog || {};
 
   // Macro validation with useMemo for performance
   const macroValidation = useMemo(() => {
     return validateMacros(calories || 0, protein || 0, carbs || 0, fat || 0);
   }, [calories, protein, carbs, fat]);
+
+  if (!foodLog) return null;
+
+  // Handle save with lock to prevent double-taps
+  const handleSave = async () => {
+    if (isSaving || !onSave) return;
+
+    setIsSaving(true);
+    try {
+      await onSave(foodLog);
+    } catch (error) {
+      console.error('[NutritionCard] Save error:', error);
+      // Error will be handled by parent component
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const confidenceBadge = getConfidenceBadge(confidence);
 

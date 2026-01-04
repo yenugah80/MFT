@@ -10,15 +10,12 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Image,
   StyleSheet,
-  ActivityIndicator,
-  Platform,
   KeyboardAvoidingView,
   Modal,
   Share,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -59,7 +56,6 @@ import ThemeTransition from '../../components/ThemeTransition';
 import { QuickActionsBar } from '../../components/log/QuickActionsBar';
 import { HealthAnalysisModal } from '../../components/log/HealthAnalysisModal';
 import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
-import { RecentFoodsList } from '../../components/log/RecentFoodsList';
 
 // Platform-safe professional fonts for nutrition UI
 const fonts = {
@@ -332,7 +328,7 @@ export default function LogScreen() {
     try {
       await apiClient.post('/voice/report', { name: itemToReport.name });
       notify.success('Thanks! We will review this item.');
-    } catch (error) {
+    } catch (_error) {
       notify.error('Failed to send report');
     }
   };
@@ -593,13 +589,13 @@ export default function LogScreen() {
     if (analysisSource === 'photo' && selectedImage) {
       try {
         await foodAnalysis.analyzePhoto(selectedImage);
-      } catch (e) {
+      } catch (_e) {
         // Error handled in hook
       }
     } else if (analysisSource === 'text' && foodAnalysis.inputText) {
       try {
         await foodAnalysis.analyzeText(foodAnalysis.inputText);
-      } catch (e) {
+      } catch (_e) {
         // Error handled in hook
       }
     } else {
@@ -940,7 +936,7 @@ export default function LogScreen() {
                 {foodAnalysis.analysisResult.items.map(item => (
                   item.suggestions?.length > 0 && (
                     <View key={item.itemId} style={styles.suggestionGroup}>
-                      <Text style={styles.suggestionLabel}>For "{item.name}":</Text>
+                      <Text style={styles.suggestionLabel}>For &quot;{item.name}&quot;:</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
                         {item.suggestions.map((suggestion, idx) => (
                           <TouchableOpacity

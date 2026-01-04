@@ -11,6 +11,6 @@ enabled = true
 [triggers]
 crons = ["*/13 * * * *"]
 
-# Environment variables (set these in Cloudflare dashboard)
-# BACKEND_URL = "https://myfoodtracker.onrender.com/health"
-# HEALTH_TOKEN = "my-health-secret-124"
+# Environment variables
+[env.production]
+vars = { BACKEND_URL = "https://myfoodtracker.onrender.com/health", HEALTH_TOKEN = "my-health-secret-124" }

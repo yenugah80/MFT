@@ -55,7 +55,7 @@ export default function TermsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>4. Disclaimer</Text>
           <Text style={styles.text}>
-            MyFoodTracker is provided "as is" without warranty of any kind. We do not warrant that the app will be uninterrupted or error-free. Nutritional information is for educational purposes and should not be considered medical advice.
+            MyFoodTracker is provided &quot;as is&quot; without warranty of any kind. We do not warrant that the app will be uninterrupted or error-free. Nutritional information is for educational purposes and should not be considered medical advice.
           </Text>
         </View>
 
@@ -83,7 +83,7 @@ export default function TermsScreen() {
         <View style={[styles.card, { marginBottom: SPACING[10] }]}>
           <Text style={styles.sectionTitle}>8. Contact Us</Text>
           <Text style={styles.text}>
-            If you have any questions about these Terms of Service, please contact us through the app's support feature.
+            If you have any questions about these Terms of Service, please contact us through the app&apos;s support feature.
           </Text>
         </View>
       </ScrollView>

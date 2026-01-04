@@ -1,18 +1,3 @@
-/**
- * PersonalizedHeader - Intelligent Food × Mood Story Engine
- *
- * Product Philosophy:
- * - Not a calendar app - it's YOUR story
- * - Shows Food → Mood correlations in real-time
- * - Personalized insights based on actual data
- * - Changes throughout the day based on behavior
- *
- * Billion-dollar app behavior:
- * - Whoop: "You're 87% recovered"
- * - Calm: "3-day streak improved your sleep"
- * - Noom: "Balanced meals = stable mood"
- */
-
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';

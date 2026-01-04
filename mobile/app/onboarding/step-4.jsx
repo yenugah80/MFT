@@ -403,7 +403,7 @@ const Step4Screen = () => {
             style={styles.getStartedButton}
           >
             <Text style={styles.getStartedButtonText}>
-              {isSaving ? 'Setting up...' : "Let's Go!"}
+              {isSaving ? 'Setting up...' : "Let&apos;s Go!"}
             </Text>
             {isSaving ? (
               <ActivityIndicator color="#FFFFFF" size="small" />

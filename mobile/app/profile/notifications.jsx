@@ -19,7 +19,6 @@ import {
   ScrollView,
   Animated,
   Linking,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,7 +37,6 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
-  SEMANTIC_ACTIONS,
 } from '../../constants/premiumTheme';
 import {
   requestNotificationPermissions,
@@ -123,11 +121,6 @@ const NotificationCard = ({
   const iconBackgroundColor = toggleAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['#F3F4F6', config.color],
-  });
-
-  const iconColor = toggleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [TEXT.secondary, '#FFFFFF'],
   });
 
   return (

@@ -11,7 +11,6 @@ import {
   calculateActivityStreak,
 } from '../utils/activityAnalytics';
 
-const { width } = Dimensions.get('window');
 
 /**
  * Activity Insights View
@@ -43,7 +42,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
         end={{ x: 1, y: 1 }}
         style={styles.summaryCard}
       >
-        <Text style={styles.summaryTitle}>This Week's Performance</Text>
+        <Text style={styles.summaryTitle}>This Week&apos;s Performance</Text>
 
         {/* Progress Ring */}
         <View style={styles.progressRing}>

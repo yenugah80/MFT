@@ -120,7 +120,7 @@ export default function RemainingBudgetCard({ today = {}, goals = {} }) {
         {/* Header */}
         <View style={styles.header}>
           <Ionicons name="speedometer-outline" size={24} color={TEXT.white} />
-          <Text style={styles.title}>Today's Remaining Budget</Text>
+          <Text style={styles.title}>Today&apos;s Remaining Budget</Text>
         </View>
 
         {/* Nutrition Bars */}

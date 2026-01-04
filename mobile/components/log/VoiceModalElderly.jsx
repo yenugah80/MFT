@@ -324,7 +324,7 @@ export function VoiceModalElderly({ visible, onClose, onComplete, voiceHook }) {
           {state === 'listening' && (
             <>
               <View style={styles.header}>
-                <Text style={styles.titleLarge}>I'm Listening...</Text>
+                <Text style={styles.titleLarge}>I&apos;m Listening...</Text>
               </View>
 
               <View style={styles.content}>

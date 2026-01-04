@@ -39,16 +39,18 @@ export default function AllergenWarningCard({ warnings = [], onRemoveMeal }) {
     ).start();
   }, [pulseAnim]);
 
+  // Announce for accessibility
+  useEffect(() => {
+    if (warnings && warnings.length > 0) {
+      AccessibilityInfo.announceForAccessibility(
+        `Warning: ${warnings.length} meal(s) contain your allergens`
+      );
+    }
+  }, [warnings.length]);
+
   if (!warnings || warnings.length === 0) {
     return null;
   }
-
-  // Announce for accessibility
-  useEffect(() => {
-    AccessibilityInfo.announceForAccessibility(
-      `Warning: ${warnings.length} meal(s) contain your allergens`
-    );
-  }, [warnings.length]);
 
   return (
     <Animated.View style={[styles.wrapper, { transform: [{ scale: pulseAnim }] }]}>

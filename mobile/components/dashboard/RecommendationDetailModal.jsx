@@ -129,6 +129,24 @@ export default function RecommendationDetailModal({
     }
   }, [visible]);
 
+  // Animate reject sheet in
+  useEffect(() => {
+    if (showRejectOptions) {
+      Animated.spring(sheetSlideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 10
+      }).start();
+    } else {
+      Animated.timing(sheetSlideAnim, {
+        toValue: 1000,
+        duration: 200,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [showRejectOptions, sheetSlideAnim]);
+
   if (!recommendation) return null;
 
   // Calculate scaled nutrition based on portion multiplier
@@ -178,24 +196,6 @@ export default function RecommendationDetailModal({
       console.error('[RecommendationDetailModal] Reject error:', error);
     }
   };
-
-  // Animate reject sheet in
-  useEffect(() => {
-    if (showRejectOptions) {
-      Animated.spring(sheetSlideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 10
-      }).start();
-    } else {
-      Animated.timing(sheetSlideAnim, {
-        toValue: 1000,
-        duration: 200,
-        useNativeDriver: true
-      }).start();
-    }
-  }, [showRejectOptions]);
 
   return (
     <Modal

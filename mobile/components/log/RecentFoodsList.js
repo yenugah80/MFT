@@ -14,11 +14,11 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
       // For now, let's fetch history and process it client-side if no dedicated endpoint
       const response = await apiClient.get('/food/history?limit=50');
       const history = response.data || [];
-      
+
       // Deduplicate by food name
       const uniqueFoods = [];
       const seenNames = new Set();
-      
+
       for (const item of history) {
         const name = item.foodName?.trim();
         if (name && !seenNames.has(name.toLowerCase())) {
@@ -26,11 +26,19 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
           uniqueFoods.push(item);
         }
       }
-      
+
       return uniqueFoods.slice(0, 20); // Return top 20 unique recent foods
     },
     staleTime: 60000, // 1 minute
   });
+
+  const filteredFoods = useMemo(() => {
+    if (!recentFoods) return [];
+    if (!searchQuery.trim()) return recentFoods;
+    return recentFoods.filter(item =>
+      item.foodName?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [recentFoods, searchQuery]);
 
   if (isLoading) {
     return (
@@ -48,14 +56,6 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
       </View>
     );
   }
-
-  const filteredFoods = useMemo(() => {
-    if (!recentFoods) return [];
-    if (!searchQuery.trim()) return recentFoods;
-    return recentFoods.filter(item => 
-      item.foodName?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [recentFoods, searchQuery]);
 
   if (!recentFoods || (recentFoods.length === 0 && !searchQuery)) {
     return (

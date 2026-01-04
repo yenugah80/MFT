@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MoodInsightCard from '../../components/MoodTracker/MoodInsightCard';
 import { useNotification } from '../../providers/NotificationProvider';
 import apiClient from '../../services/apiClient';
-import storage, { STORAGE_KEYS } from '../../utils/storage';
+import { getItem, setItem, STORAGE_KEYS } from '../../utils/storage';
 import {
   TEXT,
   SEMANTIC,
@@ -51,7 +51,7 @@ export default function MoodInsightsScreen() {
   useEffect(() => {
     let isActive = true;
     const loadInitialDays = async () => {
-      const savedDays = await storage.getItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS);
+      const savedDays = await getItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS);
       if (!isActive) return;
 
       if (ALLOWED_DAYS.includes(savedDays)) {
@@ -73,7 +73,7 @@ export default function MoodInsightsScreen() {
   }, [daysParam]);
 
   useEffect(() => {
-    storage.setItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS, insightsDays);
+    setItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS, insightsDays);
   }, [insightsDays]);
 
   const loadMoodInsights = useCallback(async ({ days = insightsDays, forceRefresh = false } = {}) => {

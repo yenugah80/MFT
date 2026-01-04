@@ -213,7 +213,7 @@ export default function PremiumAchievementsCard({
     if (streak === 0) return 'Start your streak today';
     if (streak < 7) return 'Keep the fire burning!';
     if (streak < 30) return 'Amazing consistency!';
-    return "You're on a legendary run!";
+    return "You&apos;re on a legendary run!";
   }, [streak]);
 
   // 1.5 Level Up Detection

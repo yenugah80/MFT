@@ -356,7 +356,7 @@ function ActivityScreen() {
           {todayActivities.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Activities</Text>
+            <Text style={styles.sectionTitle}>Today&apos;s Activities</Text>
             <TouchableOpacity onPress={handleClearToday}>
               <Text style={styles.clearAllText}>Clear All</Text>
             </TouchableOpacity>

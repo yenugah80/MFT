@@ -67,13 +67,13 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="AI and Third-Party Services">
           <Text style={styles.text}>
-            We use OpenAI's GPT-4 and Whisper AI to analyze your food photos and voice inputs.
-            Your data is sent to OpenAI's servers for processing. OpenAI does not use your
+            We use OpenAI&apos;s GPT-4 and Whisper AI to analyze your food photos and voice inputs.
+            Your data is sent to OpenAI&apos;s servers for processing. OpenAI does not use your
             data to train their models. Voice recordings are processed and immediately deleted.
           </Text>
           <Text style={styles.text}>
             {'\n'}We also use Clerk for authentication. Your authentication data is processed
-            securely according to Clerk's privacy policy.
+            securely according to Clerk&apos;s privacy policy.
           </Text>
         </Section>
 
