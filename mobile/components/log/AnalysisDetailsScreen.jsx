@@ -184,7 +184,7 @@ const AnalysisDetailsScreen = ({
     if (confidence >= 0.9) return SEMANTIC.success.base;
     if (confidence >= 0.75) return SEMANTIC.info.base;
     if (confidence >= 0.6) return SEMANTIC.warning.base;
-    return SEMANTIC.error.base;
+    return SEMANTIC.danger.base;
   };
 
   /**

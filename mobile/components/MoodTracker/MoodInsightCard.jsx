@@ -63,7 +63,7 @@ const MoodInsightCard = ({
     if (confidence >= 0.8) return SEMANTIC.success.base;
     if (confidence >= 0.7) return SEMANTIC.info.base;
     if (confidence >= 0.6) return SEMANTIC.warning.base;
-    return SEMANTIC.error.base;
+    return SEMANTIC.danger.base;
   };
 
   // Get confidence label

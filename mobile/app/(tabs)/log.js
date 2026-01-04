@@ -171,6 +171,7 @@ export default function LogScreen() {
       analysisSource !== 'text' // Don't auto-show for text to prevent flickering
     ) {
       // Analysis completed successfully via photo/voice/barcode - show detailed results
+      console.log('[log] Auto-showing AnalysisDetailsScreen for', analysisSource);
       setShowAnalysisDetails(true);
     }
   }, [foodAnalysis.analysisResult, foodAnalysis.isAnalyzing, foodAnalysis.error, analysisSource, hasManuallyClosedDetails]);

@@ -63,7 +63,7 @@ const MealMoodCorrelation = ({ meals = [], currentMood = null }) => {
     if (score <= 1) return SEMANTIC.success.base;
     if (score <= 2) return SEMANTIC.info.base;
     if (score <= 3) return SEMANTIC.warning.base;
-    return SEMANTIC.error.base;
+    return SEMANTIC.danger.base;
   };
 
   // Get NOVA score label

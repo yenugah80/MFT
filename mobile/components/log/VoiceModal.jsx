@@ -323,8 +323,33 @@ export function VoiceModal({
           }
         }, 2000);
       } else {
-        // Standard mode: Show transcription for review
-        setState('transcribed');
+        // Standard mode: Also auto-analyze immediately (same as elderly mode)
+        // User can still see results before confirming to log
+        setState('analyzing');
+
+        const nutritionResult = await analyzeTranscript(transcript);
+
+        if (isCancelledRef.current) {
+          return;
+        }
+
+        // Check if analysis failed (returned null)
+        if (!nutritionResult) {
+          setLocalError(error || 'Failed to analyze nutrition. Please try again.');
+          setState('error');
+          await triggerHaptic('error');
+          stopCalledRef.current = false;
+          return;
+        }
+
+        // Store the result and show success with option to confirm
+        setTranscription(transcript);
+        setState('success');
+        await triggerHaptic('success');
+
+        // Pass result to parent immediately - AnalysisDetailsScreen will show
+        onComplete(nutritionResult);
+        handleClose();
       }
     } catch (err) {
       console.error('[VoiceModal] Stop failed:', err);
