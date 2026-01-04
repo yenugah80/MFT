@@ -21,6 +21,9 @@ import { cleanupAnalytics } from "@/services/analytics";
 // Production startup utilities
 import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
 
+// Initialization guard (prevents premature renders)
+import InitializationGuard from "@/components/InitializationGuard";
+
 // Suppress known deprecation warnings & expected development errors
 LogBox.ignoreLogs([
   'Expo AV has been deprecated',
@@ -115,11 +118,15 @@ export default function RootLayout() {
               <NotificationProvider>
                 <ProfileProvider>
                   <ApiInitializer>
-                    <SafeScreen>
-                      <OnboardingGuard>
-                        <Slot />
-                      </OnboardingGuard>
-                    </SafeScreen>
+                    {/* InitializationGuard ensures ProductionStartup completes before rendering child components */}
+                    {/* This prevents race conditions where components try to use features before they're initialized */}
+                    <InitializationGuard>
+                      <SafeScreen>
+                        <OnboardingGuard>
+                          <Slot />
+                        </OnboardingGuard>
+                      </SafeScreen>
+                    </InitializationGuard>
                   </ApiInitializer>
                 </ProfileProvider>
               </NotificationProvider>

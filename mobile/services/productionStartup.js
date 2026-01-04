@@ -2,135 +2,193 @@
  * Production Startup Service
  * Orchestrates all initialization tasks for production-grade startup
  *
+ * ARCHITECTURE:
+ * - Critical stages (environment, errorHandling): MUST succeed → hard fail
+ * - Important stages (nativeModules, features): CAN degrade gracefully
+ * - Non-critical stages (analytics): FAIL SILENTLY → log only
+ *
+ * Timeout Protection:
+ * - Each async stage has 10s timeout to prevent hangs
+ * - Failed stages are logged but don't block startup
+ *
  * Handles:
- * - Environment validation
- * - Native module initialization
- * - Feature detection
- * - Permission checking
+ * - Environment validation with actual connectivity checks
+ * - Native module initialization with timeouts
+ * - Feature detection with corrected logic
  * - Crash reporting setup
- * - Analytics initialization
- * - Network connectivity verification
+ * - Analytics initialization (non-blocking)
  */
 
 import { initializeNativeModules } from './nativeModulesManager';
-import { validateEnvironment, isEnvironmentValid } from './environmentValidation';
+import { validateEnvironment, isEnvironmentValid, assertEnvironmentValid } from './environmentValidation';
 import { detectAvailableFeatures } from './featureDetection';
 import { initAnalytics } from './analytics';
 import { setupGlobalErrorHandler } from './crashReporting';
 
-/**
- * Startup state
- */
-const StartupState = {
-  initialized: false,
-  stages: {
-    environment: { done: false, success: false, duration: 0 },
-    nativeModules: { done: false, success: false, duration: 0 },
-    features: { done: false, success: false, duration: 0 },
-    permissions: { done: false, success: false, duration: 0 },
-    errorHandling: { done: false, success: false, duration: 0 },
-    analytics: { done: false, success: false, duration: 0 },
-  },
-  errors: [],
-  warnings: [],
+// Stage severity levels
+const StageSeverity = {
+  CRITICAL: 'critical',    // Must succeed or startup fails
+  IMPORTANT: 'important',  // Failure degrades features but app runs
+  OPTIONAL: 'optional',    // Failure is logged, app runs normally
 };
 
 /**
+ * Startup state - reset on each initialization
+ */
+function createStartupState() {
+  return {
+    initialized: false,
+    startTime: 0,
+    stages: {
+      environment: { done: false, success: false, duration: 0, severity: StageSeverity.CRITICAL },
+      errorHandling: { done: false, success: false, duration: 0, severity: StageSeverity.CRITICAL },
+      nativeModules: { done: false, success: false, duration: 0, severity: StageSeverity.IMPORTANT },
+      features: { done: false, success: false, duration: 0, severity: StageSeverity.IMPORTANT },
+      analytics: { done: false, success: false, duration: 0, severity: StageSeverity.OPTIONAL },
+    },
+    criticalFailures: [],
+    degradedFeatures: [],
+    warnings: [],
+  };
+}
+
+let StartupState = createStartupState();
+
+/**
  * Run complete production startup sequence
+ *
+ * STRATEGY:
+ * 1. Reset state (support re-initialization)
+ * 2. Run critical stages → throw if fail
+ * 3. Run important stages → log if fail
+ * 4. Run optional stages → fail silently
+ * 5. Mark initialized only if critical stages succeed
  */
 export async function runProductionStartup() {
-  const startTime = Date.now();
+  // Reset state for re-initialization support
+  StartupState = createStartupState();
+  StartupState.startTime = Date.now();
 
-  console.debug('[ProductionStartup] Starting production initialization sequence...');
+  console.debug('[ProductionStartup] ▶ Starting production initialization sequence...');
 
   try {
-    // Stage 1: Environment Validation
+    // CRITICAL: Stage 1 - Environment Validation (hard fail required)
     await runStage('environment', async () => {
       validateEnvironment();
-      if (!isEnvironmentValid()) {
-        throw new Error('Environment validation failed');
-      }
-    });
+      assertEnvironmentValid(); // Throws if invalid
+    }, StageSeverity.CRITICAL);
 
-    // Stage 2: Native Modules Initialization
-    await runStage('nativeModules', async () => {
-      await initializeNativeModules();
-    });
-
-    // Stage 3: Feature Detection
-    await runStage('features', async () => {
-      await detectAvailableFeatures();
-    });
-
-    // Stage 4: Permission Checking
-    // NOTE: Permissions are now checked on-demand (when user tries to use camera/mic)
-    // We skip checking at startup to avoid React hooks being called outside components
-    await runStage('permissions', async () => {
-      console.debug('[ProductionStartup] Permissions will be requested on-demand');
-    });
-
-    // Stage 5: Error Handling Setup
+    // CRITICAL: Stage 2 - Error Handling (must be first after env validation)
     await runStage('errorHandling', () => {
       setupGlobalErrorHandler();
-    });
+    }, StageSeverity.CRITICAL);
 
-    // Stage 6: Analytics Initialization
+    // IMPORTANT: Stage 3 - Native Modules (fail degrades features)
+    await runStage('nativeModules', async () => {
+      await initializeNativeModules();
+    }, StageSeverity.IMPORTANT);
+
+    // IMPORTANT: Stage 4 - Feature Detection (fail degrades features)
+    await runStage('features', async () => {
+      await detectAvailableFeatures();
+    }, StageSeverity.IMPORTANT);
+
+    // OPTIONAL: Stage 5 - Analytics (non-critical, fail silently)
     await runStage('analytics', async () => {
       await initAnalytics();
-    });
+    }, StageSeverity.OPTIONAL);
 
+    // Mark as initialized (only reached if critical stages passed)
     StartupState.initialized = true;
 
-    const totalDuration = Date.now() - startTime;
+    const totalDuration = Date.now() - StartupState.startTime;
     logStartupStatus(totalDuration);
 
     return {
       success: true,
       duration: totalDuration,
       stages: StartupState.stages,
+      criticalFailures: StartupState.criticalFailures,
+      degradedFeatures: StartupState.degradedFeatures,
     };
   } catch (error) {
-    console.error('[ProductionStartup] Startup failed:', error);
-    StartupState.errors.push(error.message);
+    const totalDuration = Date.now() - StartupState.startTime;
+
+    console.error('[ProductionStartup] ✗ STARTUP FAILED - Critical stage error:', error.message);
+    StartupState.criticalFailures.push(error.message);
 
     return {
       success: false,
       error: error.message,
-      duration: Date.now() - startTime,
+      duration: totalDuration,
       stages: StartupState.stages,
+      criticalFailures: StartupState.criticalFailures,
+      degradedFeatures: StartupState.degradedFeatures,
     };
   }
 }
 
 /**
- * Run a single startup stage
+ * Run a single startup stage with timeout protection
+ *
+ * TIMEOUT STRATEGY:
+ * - 10 second timeout on all async operations
+ * - Prevents app hang if module load stalls
+ * - Timeout is critical failure
  */
-async function runStage(stageName, stageFn) {
+async function runStage(stageName, stageFn, severity = StageSeverity.IMPORTANT) {
   const startTime = Date.now();
+  const STAGE_TIMEOUT = 10000; // 10 seconds
 
   try {
     console.debug(`[ProductionStartup] Running stage: ${stageName}...`);
-    await stageFn();
+
+    // Wrap with timeout protection
+    await Promise.race([
+      Promise.resolve(stageFn()),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Stage timeout after ${STAGE_TIMEOUT}ms`)),
+          STAGE_TIMEOUT
+        )
+      ),
+    ]);
 
     const duration = Date.now() - startTime;
     StartupState.stages[stageName] = {
       done: true,
       success: true,
       duration,
+      severity,
     };
 
-    console.debug(`[ProductionStartup] ✓ ${stageName} completed (${duration}ms)`);
+    console.debug(`[ProductionStartup]   ✓ ${stageName} (${duration}ms)`);
   } catch (error) {
     const duration = Date.now() - startTime;
+    const errorMsg = error?.message || String(error);
+
     StartupState.stages[stageName] = {
       done: true,
       success: false,
       duration,
-      error: error.message,
+      severity,
+      error: errorMsg,
     };
 
-    console.error(`[ProductionStartup] ✗ ${stageName} failed:`, error.message);
-    throw error;
+    // Handle based on severity
+    if (severity === StageSeverity.CRITICAL) {
+      console.error(`[ProductionStartup]   ✗ CRITICAL ${stageName} failed: ${errorMsg}`);
+      StartupState.criticalFailures.push(`${stageName}: ${errorMsg}`);
+      throw error; // Re-throw to fail startup
+    } else if (severity === StageSeverity.IMPORTANT) {
+      console.warn(`[ProductionStartup]   ⚠ DEGRADED ${stageName} failed: ${errorMsg}`);
+      StartupState.degradedFeatures.push(`${stageName}: ${errorMsg}`);
+      // Don't throw - let startup continue with degraded features
+    } else {
+      // OPTIONAL stage
+      console.debug(`[ProductionStartup]   ℹ OPTIONAL ${stageName} skipped: ${errorMsg}`);
+      // Don't throw - log and continue
+    }
   }
 }
 
@@ -155,46 +213,43 @@ export function getStartupReport() {
 }
 
 /**
- * Log startup status
+ * Log comprehensive startup status
  */
 function logStartupStatus(totalDuration) {
   const allSuccess = Object.values(StartupState.stages).every((s) => s.success);
+  const hasDegraded = StartupState.degradedFeatures.length > 0;
 
   if (allSuccess) {
-    console.debug(`[ProductionStartup] ✓ Production startup completed successfully (${totalDuration}ms)`);
-    logStageDurations();
+    console.debug(`[ProductionStartup] ✓ Production startup completed successfully in ${totalDuration}ms`);
+  } else if (StartupState.initialized) {
+    console.warn(`[ProductionStartup] ⚠ Startup completed with degraded features in ${totalDuration}ms`);
+    console.warn('[ProductionStartup] Degraded Features:');
+    StartupState.degradedFeatures.forEach((d) => console.warn(`  - ${d}`));
   } else {
-    console.error('[ProductionStartup] ✗ Production startup completed with errors');
-    logFailedStages();
+    console.error(`[ProductionStartup] ✗ Startup FAILED in ${totalDuration}ms`);
+    console.error('[ProductionStartup] Critical Failures:');
+    StartupState.criticalFailures.forEach((f) => console.error(`  - ${f}`));
   }
 
+  logStageDurations();
+
   if (StartupState.warnings.length > 0) {
-    console.warn('[ProductionStartup] Warnings:');
+    console.warn('[ProductionStartup] ⚠ Warnings:');
     StartupState.warnings.forEach((w) => console.warn(`  - ${w}`));
   }
 }
 
 /**
- * Log duration of each stage
+ * Log duration of each stage (formatted for readability)
  */
 function logStageDurations() {
-  console.debug('[ProductionStartup] Stage durations:');
-  const durations = Object.entries(StartupState.stages)
-    .filter(([, s]) => s.done)
-    .map(([name, s]) => `${name}: ${s.duration}ms`)
-    .join(', ');
-  console.debug(`  ${durations}`);
-}
-
-/**
- * Log failed stages
- */
-function logFailedStages() {
-  const failed = Object.entries(StartupState.stages)
-    .filter(([, s]) => !s.success)
-    .map(([name, s]) => `${name}: ${s.error}`)
-    .join(', ');
-  console.error(`  Failed: ${failed}`);
+  console.debug('[ProductionStartup] Stage Timings:');
+  Object.entries(StartupState.stages).forEach(([name, stage]) => {
+    if (stage.done) {
+      const status = stage.success ? '✓' : '✗';
+      console.debug(`  ${status} ${name.padEnd(15)} ${String(stage.duration).padStart(4)}ms`);
+    }
+  });
 }
 
 /**

@@ -36,10 +36,16 @@ const moduleImportMap = {
 };
 
 /**
- * Safely load a native module with fallback
+ * Safely load a native module with fallback and timeout protection
+ *
+ * TIMEOUT: 5s per module (prevents stalled module loads from blocking startup)
+ * FALLBACK: Returns properly-structured stub if load fails
  */
 async function loadModule(moduleName, fallbackValue = null) {
+  const MODULE_TIMEOUT = 5000; // 5 seconds per module
+
   try {
+    // Check if already loaded
     if (NativeModulesState.modules[moduleName]) {
       return NativeModulesState.modules[moduleName];
     }
@@ -49,12 +55,23 @@ async function loadModule(moduleName, fallbackValue = null) {
       throw new Error(`Module ${moduleName} not in import map`);
     }
 
-    const module = await moduleLoader();
+    // Load with timeout protection
+    const module = await Promise.race([
+      moduleLoader(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Module load timeout after ${MODULE_TIMEOUT}ms`)), MODULE_TIMEOUT)
+      ),
+    ]);
+
     NativeModulesState.modules[moduleName] = module;
     return module;
   } catch (error) {
     const errorMsg = error?.message || String(error);
-    console.warn(`[NativeModules] Failed to load expo-${moduleName}:`, errorMsg);
+    const isTimeout = error?.message?.includes('timeout');
+
+    console.warn(
+      `[NativeModules] ${isTimeout ? 'TIMEOUT' : 'Failed'} loading expo-${moduleName}: ${errorMsg}`
+    );
 
     NativeModulesState.failed[moduleName] = errorMsg;
 
@@ -67,21 +84,85 @@ async function loadModule(moduleName, fallbackValue = null) {
 
 /**
  * Get stub/fallback for unavailable modules
+ * Stubs must match real module interfaces to prevent crashes
  */
 function getStub(moduleName) {
   const stubs = {
-    notifications: { setNotificationHandler: () => {}, getExpoPushTokenAsync: () => null },
-    device: { isDevice: false },
-    constants: { expoConfig: {} },
-    haptics: { selectionAsync: () => {}, notificationAsync: () => {} },
-    camera: { CameraView: null, useCameraPermissions: () => [{ granted: false }] },
-    av: { Audio: { Recording: {} }, Video: {} },
-    speech: { speak: () => Promise.resolve(), stop: () => Promise.resolve() },
-    'mlkit-ocr': { recognizeFromURI: () => Promise.resolve(null) },
-    'image-picker': { launchCameraAsync: () => Promise.resolve({ cancelled: true }), launchImageLibraryAsync: () => Promise.resolve({ cancelled: true }) },
-    'image-manipulator': { manipulateAsync: () => Promise.resolve({ uri: null }) },
-    'secure-store': { getItemAsync: () => Promise.resolve(null), setItemAsync: () => Promise.resolve() },
-    localization: { locale: 'en-US', getCalendars: () => [] },
+    notifications: {
+      setNotificationHandler: () => {},
+      getExpoPushTokenAsync: () => Promise.resolve({ data: null }),
+      addNotificationReceivedListener: () => ({ remove: () => {} }),
+      addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
+    },
+    device: {
+      isDevice: false,
+      brand: 'unknown',
+      manufacturer: 'unknown',
+      modelName: 'simulator',
+    },
+    constants: {
+      expoConfig: {},
+      deviceName: 'simulator',
+      nativeAppVersion: '0.0.0',
+      nativeBuildVersion: '0',
+    },
+    haptics: {
+      selectionAsync: () => Promise.resolve(),
+      notificationAsync: () => Promise.resolve(),
+      impactAsync: () => Promise.resolve(),
+    },
+    camera: {
+      CameraView: null,
+      useCameraPermissions: () => {
+        // Return hook-like structure: [permission, requestPermission]
+        const mockPermission = { granted: false, pending: false, canAskAgain: true };
+        const mockRequest = () => Promise.resolve(mockPermission);
+        return [mockPermission, mockRequest];
+      },
+      Camera: null,
+    },
+    av: {
+      Audio: {
+        Recording: {
+          createAsync: () => Promise.resolve({ sound: null, recording: null }),
+        },
+        Sound: {
+          createAsync: () => Promise.resolve({ sound: null }),
+        },
+      },
+      Video: {
+        useVideoPlayer: () => ({ play: () => {}, pause: () => {}, replace: () => {} }),
+      },
+    },
+    speech: {
+      speak: () => Promise.resolve(),
+      stop: () => Promise.resolve(),
+      pause: () => Promise.resolve(),
+      resume: () => Promise.resolve(),
+      isSpeaking: () => false,
+    },
+    'mlkit-ocr': {
+      recognizeFromURI: () => Promise.resolve({ result: [] }),
+    },
+    'image-picker': {
+      launchCameraAsync: () => Promise.resolve({ cancelled: true, assets: null }),
+      launchImageLibraryAsync: () => Promise.resolve({ cancelled: true, assets: null }),
+      requestCameraPermissionsAsync: () => Promise.resolve({ granted: false }),
+      requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false }),
+    },
+    'image-manipulator': {
+      manipulateAsync: () => Promise.resolve({ uri: null, width: 0, height: 0 }),
+    },
+    'secure-store': {
+      getItemAsync: () => Promise.resolve(null),
+      setItemAsync: () => Promise.resolve(),
+      deleteItemAsync: () => Promise.resolve(),
+    },
+    localization: {
+      locale: 'en-US',
+      getLocales: () => [{ languageCode: 'en', scriptCode: null, regionCode: 'US' }],
+      getCalendars: () => [],
+    },
   };
 
   return stubs[moduleName] || {};
@@ -89,18 +170,33 @@ function getStub(moduleName) {
 
 /**
  * Initialize all critical modules at startup
+ *
+ * STRATEGY:
+ * - Load critical modules (uses stubs if unavailable)
+ * - Log all failures for debugging
+ * - Don't block if modules fail (use stubs)
  */
 export async function initializeNativeModules() {
   if (NativeModulesState.loaded) return;
 
-  console.debug('[NativeModules] Initializing native modules...');
+  console.debug('[NativeModules] ▶ Initializing native modules...');
 
-  // Load critical modules
+  // Critical modules needed for basic functionality
   const criticalModules = ['constants', 'device', 'notifications', 'secure-store'];
 
-  for (const moduleName of criticalModules) {
-    await loadModule(moduleName);
-  }
+  const results = await Promise.allSettled(
+    criticalModules.map((moduleName) => loadModule(moduleName))
+  );
+
+  // Log results
+  results.forEach((result, index) => {
+    const moduleName = criticalModules[index];
+    if (result.status === 'fulfilled') {
+      // Already logged in loadModule
+    } else {
+      console.warn(`[NativeModules] Module ${moduleName} failed to load: ${result.reason}`);
+    }
+  });
 
   NativeModulesState.loaded = true;
   logModuleStatus();

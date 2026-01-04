@@ -36,9 +36,12 @@ const ValidationState = {
 
 /**
  * Validate environment configuration
+ * Note: Only validates once. State persists for re-validation check.
+ * For fresh validation, reset ValidationState manually.
  */
 export function validateEnvironment() {
   if (ValidationState.validated) {
+    logValidationStatus(); // Log cached result
     return {
       valid: ValidationState.valid,
       missing: ValidationState.missing,
@@ -49,35 +52,37 @@ export function validateEnvironment() {
 
   console.debug('[EnvironmentValidation] Validating environment configuration...');
 
-  // Check required variables
+  // Step 1: Check required variables exist and are non-empty
   const missing = REQUIRED_ENV_VARS.filter((varName) => {
     const value = process.env[varName];
     return !value || value.trim() === '';
   });
 
   if (missing.length > 0) {
-    ValidationState.errors.push(`Missing required environment variables: ${missing.join(', ')}`);
+    const msg = `Missing required environment variables: ${missing.join(', ')}`;
+    ValidationState.errors.push(msg);
     ValidationState.missing = missing;
     ValidationState.valid = false;
   } else {
     ValidationState.valid = true;
   }
 
-  // Check optional variables and warn if missing
+  // Step 2: Check optional variables and warn if missing
   const missingOptional = OPTIONAL_ENV_VARS.filter((varName) => {
     const value = process.env[varName];
     return !value || value.trim() === '';
   });
 
   if (missingOptional.length > 0) {
-    ValidationState.warnings.push(`Missing optional environment variables (using defaults): ${missingOptional.join(', ')}`);
+    ValidationState.warnings.push(
+      `Missing optional environment variables (using defaults): ${missingOptional.join(', ')}`
+    );
   }
 
-  // Validate values format
+  // Step 3: Validate configuration values format and connectivity
   validateConfigurationValues();
 
   ValidationState.validated = true;
-
   logValidationStatus();
 
   return {
@@ -89,27 +94,54 @@ export function validateEnvironment() {
 }
 
 /**
- * Validate configuration values
+ * Validate configuration values format and connectivity
  */
 function validateConfigurationValues() {
-  // Validate Clerk key format
+  // 1. Validate Clerk key format
   const clerkKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  if (clerkKey && !clerkKey.startsWith('pk_')) {
-    ValidationState.warnings.push(
-      'Clerk publishable key format may be incorrect. Expected to start with "pk_"'
-    );
+  if (clerkKey) {
+    if (!clerkKey.startsWith('pk_')) {
+      ValidationState.warnings.push(
+        'Clerk publishable key format may be incorrect. Expected to start with "pk_"'
+      );
+    }
+    if (clerkKey.length < 20) {
+      ValidationState.warnings.push('Clerk publishable key seems too short');
+    }
   }
 
-  // Validate API base URL format
+  // 2. Validate API base URL format
   const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (apiUrl && !apiUrl.startsWith('http')) {
-    ValidationState.errors.push('API base URL must start with http:// or https://');
+  if (apiUrl) {
+    if (!apiUrl.startsWith('http')) {
+      ValidationState.errors.push('API base URL must start with http:// or https://');
+    }
+    try {
+      new URL(apiUrl); // Validate URL is parseable
+    } catch (e) {
+      ValidationState.errors.push(`API base URL is malformed: ${apiUrl}`);
+    }
   }
 
-  // Validate timeout is a number
+  // 3. Validate timeout is a valid number
   const timeout = process.env.EXPO_PUBLIC_API_TIMEOUT_MS;
-  if (timeout && isNaN(parseInt(timeout, 10))) {
-    ValidationState.warnings.push('API timeout is not a valid number, using default');
+  if (timeout) {
+    const timeoutMs = parseInt(timeout, 10);
+    if (isNaN(timeoutMs)) {
+      ValidationState.warnings.push('API timeout is not a valid number, using default');
+    } else if (timeoutMs < 1000) {
+      ValidationState.warnings.push('API timeout is very short (<1s), may cause frequent timeouts');
+    } else if (timeoutMs > 60000) {
+      ValidationState.warnings.push('API timeout is very long (>60s), users may wait too long');
+    }
+  }
+
+  // 4. Validate environment name is valid
+  const env = process.env.EXPO_PUBLIC_ENVIRONMENT;
+  if (env && !['development', 'staging', 'production'].includes(env)) {
+    ValidationState.warnings.push(
+      `Unknown environment: ${env}. Expected: development, staging, or production`
+    );
   }
 }
 
@@ -127,7 +159,7 @@ export function getEnvVar(varName, fallback = null) {
 }
 
 /**
- * Check if validation passed
+ * Check if validation passed (automatically validates if not done)
  */
 export function isEnvironmentValid() {
   if (!ValidationState.validated) {
@@ -137,7 +169,7 @@ export function isEnvironmentValid() {
 }
 
 /**
- * Get validation report
+ * Get comprehensive validation report
  */
 export function getValidationReport() {
   if (!ValidationState.validated) {
@@ -155,30 +187,56 @@ export function getValidationReport() {
 }
 
 /**
- * Log validation status
+ * Log validation status with clear formatting
  */
 function logValidationStatus() {
   if (ValidationState.valid) {
     console.debug('[EnvironmentValidation] ✓ All required environment variables configured');
   } else {
     console.error('[EnvironmentValidation] ✗ Environment validation failed');
-    ValidationState.errors.forEach((error) => console.error(`  - ${error}`));
+    ValidationState.errors.forEach((error) => {
+      console.error(`  ✗ ${error}`);
+    });
   }
 
   if (ValidationState.warnings.length > 0) {
-    console.warn('[EnvironmentValidation] ⚠️ Configuration warnings:');
-    ValidationState.warnings.forEach((warning) => console.warn(`  - ${warning}`));
+    console.warn('[EnvironmentValidation] ⚠ Configuration warnings:');
+    ValidationState.warnings.forEach((warning) => {
+      console.warn(`  ⚠ ${warning}`);
+    });
   }
 }
 
 /**
- * Assert environment is valid, throw if not
+ * Assert environment is valid, throw with detailed message if not
+ * Use this to enforce validation before critical operations
  */
 export function assertEnvironmentValid() {
-  if (!isEnvironmentValid()) {
-    const errors = ValidationState.errors.join('\n');
-    throw new Error(`Environment validation failed:\n${errors}`);
+  if (!ValidationState.validated) {
+    validateEnvironment();
   }
+
+  if (!ValidationState.valid) {
+    const errors = ValidationState.errors.map((e) => `  - ${e}`).join('\n');
+    const warnings =
+      ValidationState.warnings.length > 0
+        ? `\n\nWarnings:\n${ValidationState.warnings.map((w) => `  - ${w}`).join('\n')}`
+        : '';
+    throw new Error(
+      `Environment validation failed:\n\nErrors:\n${errors}${warnings}\n\nPlease check your .env file and ensure all required variables are set correctly.`
+    );
+  }
+}
+
+/**
+ * Reset validation state (for testing or re-validation)
+ */
+export function resetValidationState() {
+  ValidationState.validated = false;
+  ValidationState.valid = false;
+  ValidationState.missing = [];
+  ValidationState.warnings = [];
+  ValidationState.errors = [];
 }
 
 export default {

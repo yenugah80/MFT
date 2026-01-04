@@ -18,47 +18,73 @@ const FeatureCache = {
 };
 
 /**
- * Detect all available features
+ * Detect all available features at startup
+ *
+ * STRATEGY:
+ * - Caches result after first check
+ * - Uses Promise.allSettled to prevent one failure from blocking others
+ * - Logs all unavailable features for debugging
  */
 export async function detectAvailableFeatures() {
   if (FeatureCache.checked) {
     return FeatureCache.features;
   }
 
-  console.debug('[FeatureDetection] Detecting available features...');
+  console.debug('[FeatureDetection] ▶ Detecting available features...');
 
-  const features = {
+  // Define all feature checks as a map
+  const featureChecks = {
     // Push Notifications
-    pushNotifications: await checkPushNotifications(),
+    pushNotifications: checkPushNotifications,
 
     // Camera & Photo
-    camera: await checkCamera(),
-    photoLibrary: await checkPhotoLibrary(),
-    imagePicker: await checkImagePicker(),
+    camera: checkCamera,
+    photoLibrary: checkPhotoLibrary,
+    cameraPicker: checkImagePicker, // Renamed from 'imagePicker' for clarity
 
     // Audio & Voice
-    audioRecording: await checkAudioRecording(),
-    textToSpeech: await checkTextToSpeech(),
+    audioRecording: checkAudioRecording,
+    textToSpeech: checkTextToSpeech,
 
     // OCR
-    ocr: await checkOCR(),
+    ocr: checkOCR,
 
     // Secure Storage
-    secureStorage: await checkSecureStorage(),
+    secureStorage: checkSecureStorage,
 
     // Haptics
-    haptics: await checkHaptics(),
+    haptics: checkHaptics,
 
     // Image Manipulation
-    imageManipulation: await checkImageManipulation(),
+    imageManipulation: checkImageManipulation,
 
     // Localization
-    localization: await checkLocalization(),
+    localization: checkLocalization,
 
     // Device Info
-    isPhysicalDevice: await checkPhysicalDevice(),
-    platform: Platform.OS,
+    isPhysicalDevice: checkPhysicalDevice,
+    platform: () => Promise.resolve(Platform.OS),
   };
+
+  // Run all checks in parallel
+  const results = await Promise.allSettled(
+    Object.entries(featureChecks).map(async ([featureName, checkFn]) => ({
+      name: featureName,
+      available: await checkFn(),
+    }))
+  );
+
+  // Aggregate results
+  const features = {};
+  results.forEach((result) => {
+    if (result.status === 'fulfilled') {
+      const { name, available } = result.value;
+      features[name] = available;
+    } else {
+      console.warn(`[FeatureDetection] Failed to check feature:`, result.reason);
+      features[result.reason.name || 'unknown'] = false;
+    }
+  });
 
   FeatureCache.features = features;
   FeatureCache.checked = true;
@@ -93,23 +119,27 @@ async function checkCamera() {
 
 /**
  * Check if photo library access is available
+ * Verifies ability to launch image library picker
  */
 async function checkPhotoLibrary() {
   try {
     const ImagePicker = await Modules.imagePicker();
-    return !!ImagePicker && !!ImagePicker.launchImageLibraryAsync;
+    return !!ImagePicker && typeof ImagePicker.launchImageLibraryAsync === 'function';
   } catch {
     return false;
   }
 }
 
 /**
- * Check if image picker is available
+ * Check if camera picker is available
+ * Verifies ability to launch camera picker
+ * NOTE: This is different from photo library - it launches the camera interface
  */
 async function checkImagePicker() {
   try {
     const ImagePicker = await Modules.imagePicker();
-    return !!ImagePicker && !!ImagePicker.launchCameraAsync;
+    // Correct: Check launchCameraAsync (camera picker, not library)
+    return !!ImagePicker && typeof ImagePicker.launchCameraAsync === 'function';
   } catch {
     return false;
   }

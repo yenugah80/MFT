@@ -1,8 +1,10 @@
 /**
  * Analytics Service (FREE - Uses Your Backend)
  *
- * Simple analytics that sends events to your backend.
- * Can be upgraded to Mixpanel/Amplitude/Firebase later.
+ * Non-blocking analytics that sends events to your backend
+ * - Failures are logged but don't crash the app
+ * - Events are batched and sent asynchronously
+ * - Can be upgraded to Mixpanel/Amplitude/Firebase later
  */
 
 import { Platform } from 'react-native';
@@ -12,30 +14,54 @@ import { API_URL } from '../constants/api';
 // Event queue for batching
 let eventQueue = [];
 let flushTimer = null;
+let isAnalyticsReady = false;
+let isFlushing = false;
+
+// Configuration
 const FLUSH_INTERVAL = 10000; // 10 seconds
 const MAX_QUEUE_SIZE = 20;
+const MAX_QUEUE_HISTORY = 100; // Max events to retain on failure
+const FLUSH_TIMEOUT = 5000; // 5 second timeout per flush
 
 // User properties
 let userProperties = {};
 let sessionId = null;
 let sessionStart = null;
+let initializeError = null;
 
 /**
- * Initialize analytics session
+ * Initialize analytics session (non-blocking)
+ *
+ * IMPORTANT: This function does NOT throw or block startup
+ * - Failures are logged but app continues normally
+ * - Session ID is created immediately
+ * - Timer starts in background
  */
-export const initAnalytics = () => {
-  sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  sessionStart = new Date().toISOString();
+export const initAnalytics = async () => {
+  try {
+    // Create session immediately
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    sessionStart = new Date().toISOString();
 
-  // Start flush timer
-  if (!__DEV__) {
-    flushTimer = setInterval(flushEvents, FLUSH_INTERVAL);
+    // Start background flush timer (non-blocking)
+    if (!__DEV__) {
+      flushTimer = setInterval(() => {
+        // Run in background, don't await
+        flushEvents().catch((e) => {
+          console.debug('[Analytics] Background flush error (logged, non-blocking):', e.message);
+        });
+      }, FLUSH_INTERVAL);
+    }
+
+    isAnalyticsReady = true;
+
+    // Track app open asynchronously (fire and forget)
+    trackEvent('app_opened', { session_id: sessionId });
+  } catch (error) {
+    // Store error but don't throw - app continues without analytics
+    initializeError = error;
+    console.warn('[Analytics] Initialize failed (continuing without analytics):', error.message);
   }
-
-  // Track app open
-  trackEvent('app_opened', {
-    session_id: sessionId,
-  });
 };
 
 /**
@@ -49,51 +75,96 @@ const getDeviceInfo = () => ({
 });
 
 /**
- * Track an event
+ * Track an event (non-blocking, fire and forget)
+ *
+ * BEHAVIOR:
+ * - Queues event for batching
+ * - Auto-flushes when queue reaches MAX_QUEUE_SIZE
+ * - Never throws or blocks app
  */
 export const trackEvent = (eventName, properties = {}) => {
-  const event = {
-    event: eventName,
-    timestamp: new Date().toISOString(),
-    properties: {
-      ...properties,
-      ...userProperties,
-      session_id: sessionId,
-    },
-    device: getDeviceInfo(),
-  };
-
-  if (__DEV__) {
-    console.log('[Analytics]', eventName, properties);
+  if (!isAnalyticsReady && !initializeError) {
+    // Analytics not initialized yet, skip
     return;
   }
 
-  eventQueue.push(event);
+  try {
+    const event = {
+      event: eventName,
+      timestamp: new Date().toISOString(),
+      properties: {
+        ...properties,
+        ...userProperties,
+        session_id: sessionId,
+      },
+      device: getDeviceInfo(),
+    };
 
-  // Flush if queue is full
-  if (eventQueue.length >= MAX_QUEUE_SIZE) {
-    flushEvents();
+    if (__DEV__) {
+      console.log('[Analytics]', eventName, properties);
+      return;
+    }
+
+    eventQueue.push(event);
+
+    // Flush if queue is full (non-blocking)
+    if (eventQueue.length >= MAX_QUEUE_SIZE) {
+      flushEvents().catch((e) => {
+        console.debug('[Analytics] Queue flush error (non-blocking):', e.message);
+      });
+    }
+  } catch (error) {
+    // Silently fail - analytics shouldn't crash app
+    console.debug('[Analytics] trackEvent error (silenced):', error.message);
   }
 };
 
 /**
- * Flush events to backend
+ * Flush events to backend (non-blocking with timeout)
+ *
+ * STRATEGY:
+ * - Never throws or blocks the app
+ * - Has 5s timeout to prevent hangs
+ * - Retries events on failure
+ * - Logs errors for debugging
  */
 const flushEvents = async () => {
-  if (eventQueue.length === 0) return;
+  if (eventQueue.length === 0 || isFlushing) return;
 
+  isFlushing = true;
   const eventsToSend = [...eventQueue];
   eventQueue = [];
 
   try {
-    await fetch(`${API_URL}/analytics/events`, {
+    // Flush with timeout protection
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FLUSH_TIMEOUT);
+
+    const response = await fetch(`${API_URL}/analytics/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ events: eventsToSend }),
+      signal: controller.signal,
     });
-  } catch (e) {
-    // Put events back in queue on failure
-    eventQueue = [...eventsToSend, ...eventQueue].slice(0, 100);
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.debug(
+        `[Analytics] Server returned ${response.status}, retrying events...`
+      );
+      // Put events back for retry
+      eventQueue = [...eventsToSend, ...eventQueue].slice(0, MAX_QUEUE_HISTORY);
+    }
+  } catch (error) {
+    // Network or timeout error - queue for retry
+    const errorType = error?.name === 'AbortError' ? 'timeout' : 'network';
+    console.debug(`[Analytics] Flush ${errorType} error, queuing for retry:`, error.message);
+
+    // Keep events for retry (maintain order, limit size)
+    eventQueue = [...eventsToSend, ...eventQueue].slice(0, MAX_QUEUE_HISTORY);
+  } finally {
+    isFlushing = false;
   }
 };
 
@@ -136,13 +207,41 @@ export const trackScreen = (screenName, properties = {}) => {
 
 /**
  * Cleanup on app close
+ * Final flush of any pending events
  */
-export const cleanupAnalytics = () => {
-  if (flushTimer) {
-    clearInterval(flushTimer);
+export const cleanupAnalytics = async () => {
+  try {
+    if (flushTimer) {
+      clearInterval(flushTimer);
+      flushTimer = null;
+    }
+
+    // Final flush with timeout
+    if (eventQueue.length > 0) {
+      await Promise.race([
+        flushEvents(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Cleanup flush timeout')), 2000)
+        ),
+      ]);
+    }
+  } catch (error) {
+    console.debug('[Analytics] Cleanup error (non-critical):', error.message);
+    // Don't throw - cleanup should not block app shutdown
   }
-  flushEvents(); // Final flush
 };
+
+/**
+ * Get analytics status (for debugging)
+ */
+export const getAnalyticsStatus = () => ({
+  ready: isAnalyticsReady,
+  sessionId,
+  sessionStart,
+  queuedEvents: eventQueue.length,
+  isFlushing,
+  initializeError: initializeError?.message || null,
+});
 
 // ============================================================================
 // PREDEFINED EVENTS (for consistency)
