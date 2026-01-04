@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { validateExtraction, isComplexDishInput } from '../services/canonicalIngredients.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
-import { db } from '../db/index.js';
+import { db } from '../config/db.js';
 import { aiEstimatedFoodsTable } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
@@ -270,50 +270,75 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
     if (detectedIngredients.length === 0 || isComplex) {
       // CHECK DB FIRST
       const normalizedQuery = normalizeFoodText(text);
-      const dbMatch = await AiEstimatedFood.findOne({ sourceQuery: normalizedQuery });
-      
-      if (dbMatch) {
-        detectedIngredients = [{
-          name: dbMatch.name,
-          canonical: { nutrition: dbMatch.nutrition, portion: dbMatch.portion },
-          confidence: dbMatch.confidence,
-          healthScore: dbMatch.healthScore,
-          nutriScore: dbMatch.nutriScore,
-          cookingMethod: dbMatch.cookingMethod,
-          analysis: dbMatch.analysis,
-          autoAdded: true
-        }];
-      } else {
-      // CALL AI
-      const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
-      if (aiResults.length > 0) {
-        detectedIngredients = aiResults;
 
-        // Background: Save to DB for future speedup
-        // We don't await this to return response faster
-        // GUARD: Only save high-quality results
-        const highQualityFoods = aiResults.filter(item => 
-          (item.confidence >= 0.6) && (item.canonical?.nutrition?.calories !== undefined)
-        );
+      try {
+        const [dbMatch] = await db
+          .select()
+          .from(aiEstimatedFoodsTable)
+          .where(eq(aiEstimatedFoodsTable.sourceQuery, normalizedQuery))
+          .limit(1);
 
-        const newFoods = highQualityFoods.map(item => ({
-          name: item.name,
-          nutrition: {
-            ...item.canonical.nutrition,
-            micros: item.canonical.nutrition.micros || {}
-          },
-          portion: item.canonical.portion,
-          confidence: item.confidence,
-          healthScore: item.canonical.healthScore,
-          nutriScore: item.canonical.nutriScore,
-          cookingMethod: item.canonical.cookingMethod,
-          analysis: item.canonical.analysis,
-          sourceQuery: normalizedQuery,
-          source: 'ai_estimate'
-        }));
-        AiEstimatedFood.insertMany(newFoods, { ordered: false }).catch(err => console.error("DB Save Error:", err.message));
+        if (dbMatch) {
+          detectedIngredients = [{
+            name: dbMatch.name,
+            canonical: { nutrition: dbMatch.nutrition, portion: dbMatch.portion },
+            confidence: parseFloat(dbMatch.confidence) || 0.7,
+            healthScore: dbMatch.healthScore,
+            nutriScore: dbMatch.nutriScore,
+            cookingMethod: dbMatch.cookingMethod,
+            analysis: dbMatch.analysis,
+            autoAdded: true
+          }];
+        } else {
+          // CALL AI
+          const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+          if (aiResults.length > 0) {
+            detectedIngredients = aiResults;
+
+            // Background: Save to DB for future speedup
+            // GUARD: Only save high-quality results
+            const highQualityFoods = aiResults.filter(item =>
+              (item.confidence >= 0.6) && (item.canonical?.nutrition?.calories !== undefined)
+            );
+
+            // Save first high-quality result
+            if (highQualityFoods.length > 0) {
+              const item = highQualityFoods[0];
+              db.insert(aiEstimatedFoodsTable)
+                .values({
+                  name: item.name,
+                  sourceQuery: normalizedQuery,
+                  nutrition: {
+                    calories: item.canonical.nutrition.calories,
+                    protein: item.canonical.nutrition.protein,
+                    carbs: item.canonical.nutrition.carbs,
+                    fats: item.canonical.nutrition.fats,
+                    fiber: item.canonical.nutrition.fiber,
+                    sugar: item.canonical.nutrition.sugar,
+                    sodium: item.canonical.nutrition.sodium,
+                    micros: item.canonical.nutrition.micros || {}
+                  },
+                  portion: item.canonical.portion || { amount: 1, unit: 'serving' },
+                  confidence: String(item.confidence),
+                  healthScore: item.canonical.healthScore,
+                  nutriScore: item.canonical.nutriScore,
+                  cookingMethod: item.canonical.cookingMethod,
+                  analysis: item.canonical.analysis,
+                  source: 'ai_estimate'
+                })
+                .onConflictDoNothing()
+                .catch(err => console.error("DB Save Error:", err.message));
+          }
+        }
+        }
+      } catch (dbError) {
+        console.error("[VoiceLog] DB lookup failed:", dbError.message);
+        // Fallback to OpenAI if DB fails
+        const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+        if (aiResults.length > 0) {
+          detectedIngredients = aiResults;
+        }
       }
-    }
     }
 
     // Add stable IDs to response
@@ -372,11 +397,15 @@ router.post('/report', requireAuth, async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name required" });
 
-    // Increment report count for this food item
-    await AiEstimatedFood.updateOne(
-      { name: new RegExp(`^${name}$`, 'i') },
-      { $inc: { reports: 1 }, $set: { lastReportedAt: new Date() } }
-    );
+    // Increment report count for this food item (case-insensitive match via lowercase)
+    const normalizedName = name.toLowerCase();
+    await db
+      .update(aiEstimatedFoodsTable)
+      .set({
+        reports: sql`COALESCE(${aiEstimatedFoodsTable.reports}, 0) + 1`,
+        lastReportedAt: new Date()
+      })
+      .where(sql`LOWER(${aiEstimatedFoodsTable.name}) = ${normalizedName}`);
 
     res.json({ success: true });
   } catch (error) {

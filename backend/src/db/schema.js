@@ -652,6 +652,10 @@ export const aiEstimatedFoodsTable = pgTable(
     accessCount: integer("access_count").default(0),
     lastAccessedAt: timestamp("last_accessed_at").defaultNow(),
 
+    // User reporting (for flagging inaccurate nutrition data)
+    reports: integer("reports").default(0),
+    lastReportedAt: timestamp("last_reported_at"),
+
     // Source tracking
     source: text("source").default("ai_estimate"), // ai_estimate, user_submitted, usda_fallback
 
