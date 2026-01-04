@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Button, Image, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, TouchableOpacity, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as MLKitOcr from 'expo-mlkit-ocr';
+import ExpoMlkitOcr from 'expo-mlkit-ocr';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NutritionCard from './NutritionCard';
 import { API_URL } from '../constants/api';
@@ -62,7 +62,7 @@ export default function OCRScanner({ navigation }) {
   const runOcr = async (uri) => {
     setLoading(true);
     try {
-      const ocrResult = await MLKitOcr.detectFromUri(uri);
+      const ocrResult = await ExpoMlkitOcr.recognizeText(uri);
       setTextBlocks(ocrResult);
       // Default: Select all detected text
       const allIndices = new Set(ocrResult.map((_, i) => i));

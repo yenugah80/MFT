@@ -257,7 +257,7 @@ export default function Paywall({ visible, onClose, highlightTier = 'premium' })
             <Ionicons name="star" size={20} color="#fbbf24" />
             <Ionicons name="star" size={20} color="#fbbf24" />
             <Text style={styles.testimonialText}>
-              "Finally understand how food affects my energy!"
+              &quot;Finally understand how food affects my energy!&quot;
             </Text>
           </View>
         </ScrollView>

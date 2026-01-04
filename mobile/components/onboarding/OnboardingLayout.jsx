@@ -49,12 +49,13 @@ const OnboardingLayout = ({
             totalSteps={totalSteps}
             title={title}
             subtitle={subtitle}
-            children={children}
             onBack={handleBack}
             canGoBack={canGoBack}
             scrollEnabled={scrollEnabled}
             progressValue={progressValue}
-          />
+          >
+            {children}
+          </OnboardingContent>
         </KeyboardAvoidingView>
       ) : (
         <OnboardingContent
@@ -62,12 +63,13 @@ const OnboardingLayout = ({
           totalSteps={totalSteps}
           title={title}
           subtitle={subtitle}
-          children={children}
           onBack={handleBack}
           canGoBack={canGoBack}
           scrollEnabled={scrollEnabled}
           progressValue={progressValue}
-        />
+        >
+          {children}
+        </OnboardingContent>
       )}
     </SafeAreaView>
   );

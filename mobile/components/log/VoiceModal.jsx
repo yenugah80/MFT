@@ -393,7 +393,7 @@ export function VoiceModal({
                   </LinearGradient>
                 </TouchableOpacity>
                 <Text style={styles.hint}>
-                  Example: "I had a grilled chicken salad with olive oil"
+                  Example: &quot;I had a grilled chicken salad with olive oil&quot;
                 </Text>
                 <View style={styles.limitBadge}>
                   <Ionicons name="time-outline" size={ICON_SIZES.xs} color={TEXT.muted} />

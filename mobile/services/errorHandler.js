@@ -14,7 +14,16 @@
  * - Fallback behaviors
  */
 
-import { captureException, captureMessage } from '@sentry/react-native';
+// Optional: Sentry integration (gracefully handles if not installed)
+let captureException = () => {};
+let captureMessage = () => {};
+try {
+  const sentry = require('@sentry/react-native');
+  captureException = sentry.captureException;
+  captureMessage = sentry.captureMessage;
+} catch (e) {
+  // Sentry not installed, use fallback no-op functions
+}
 
 /**
  * Error types and user messages

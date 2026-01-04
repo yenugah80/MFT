@@ -98,7 +98,7 @@ class OnboardingErrorBoundary extends React.Component {
               </View>
               <Text style={styles.messageText}>
                 Something unexpected occurred while setting up your profile.
-                Don't worry - your information is saved and you can continue right where you left off.
+                Don&apos;t worry - your information is saved and you can continue right where you left off.
               </Text>
             </View>
 

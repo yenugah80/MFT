@@ -44,7 +44,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import * as Speech from 'expo-tts';
+import * as Speech from 'expo-speech';
 
 import {
   BRAND,
@@ -312,7 +312,7 @@ export function VoiceModalElderly({ visible, onClose, onComplete, voiceHook }) {
                 </TouchableOpacity>
 
                 <Text style={styles.exampleText}>
-                  Example: "I had two eggs and toast"
+                  Example: &quot;I had two eggs and toast&quot;
                 </Text>
               </View>
             </>
@@ -410,7 +410,7 @@ export function VoiceModalElderly({ visible, onClose, onComplete, voiceHook }) {
                 </Text>
 
                 <Text style={styles.transcriptionLarge}>
-                  "{transcription}"
+                  &quot;{transcription}&quot;
                 </Text>
 
                 <Text style={styles.hintLarge}>

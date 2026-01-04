@@ -130,7 +130,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
               <Text style={styles.modalRank}>{rank}</Text>
               
               <Text style={styles.modalDesc}>
-                You've reached a new milestone. Keep crushing your goals!
+                You&apos;ve reached a new milestone. Keep crushing your goals!
               </Text>
 
               <View style={styles.modalActions}>

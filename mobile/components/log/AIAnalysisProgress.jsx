@@ -167,7 +167,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
 
       {/* Help Text */}
       <Text style={styles.helpText}>
-        You'll be able to review and adjust the results before saving
+        You&apos;ll be able to review and adjust the results before saving
       </Text>
     </View>
   );

@@ -263,7 +263,9 @@ export const useServerVoice = (options = {}) => {
         const msg = err.response?.data?.error || 'Failed to process audio';
         setError(msg);
       }
-      rejectRequest(err);
+      if (rejectRequest) {
+        rejectRequest(err);
+      }
       return null;
     } finally {
       // 3. Cleanup

@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
-import GlassCard from '../GlassCard';
+import GlassCard from './GlassCard';
 import {
   TEXT,
   SEMANTIC,

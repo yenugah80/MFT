@@ -225,7 +225,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
           ))}
           {item.components.length > 3 && (
             <Text style={styles.showMoreComponents}>
-              + {item.components.length - 3} more (tap "Show details" below)
+              + {item.components.length - 3} more (tap &quot;Show details&quot; below)
             </Text>
           )}
         </View>

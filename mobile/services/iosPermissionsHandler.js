@@ -18,7 +18,7 @@
  * Components should use permission hooks directly when needed
  */
 
-import * as Camera from 'expo-camera';
+import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as AV from 'expo-av';
 
@@ -47,7 +47,7 @@ const PERMISSION_TYPES = {
  */
 export async function requestCameraPermissionAsync() {
   try {
-    const permission = await Camera.requestPermissionsAsync();
+    const permission = await Camera.requestCameraPermissionsAsync();
     return formatPermissionStatus(permission, PERMISSION_TYPES.CAMERA);
   } catch (error) {
     console.error('[PermissionsHandler] Camera permission request failed:', error.message);

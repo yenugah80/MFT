@@ -356,7 +356,7 @@ const MoodTracker = ({
 
             {/* Note Input */}
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>What's on your mind?</Text>
+              <Text style={styles.sectionLabel}>What&apos;s on your mind?</Text>
               <TextInput
                 style={styles.noteInput}
                 placeholder="Add a private note (optional)"

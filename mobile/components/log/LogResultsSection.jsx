@@ -70,7 +70,7 @@ export default function LogResultsSection({
           {items.map(item => (
             item.suggestions?.length > 0 && (
               <View key={item.itemId} style={styles.suggestionGroup}>
-                <Text style={styles.suggestionLabel}>For "{item.name}":</Text>
+                <Text style={styles.suggestionLabel}>For &quot;{item.name}&quot;:</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}

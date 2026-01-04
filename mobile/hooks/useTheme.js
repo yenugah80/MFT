@@ -2,8 +2,9 @@ import { useColorScheme } from "react-native";
 import { useMemo } from "react";
 import { THEME } from "../assets/styles/theme";
 import { createAuthStyles } from "../assets/styles/auth.styles";
-import { useFonts as usePoppins, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
-import { useFonts as useInter, Inter_400Regular } from "@expo-google-fonts/inter";
+// Optional: Google Fonts (commented out if not installed)
+// import { useFonts as usePoppins, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
+// import { useFonts as useInter, Inter_400Regular } from "@expo-google-fonts/inter";
 
 export default function useTheme() {
   const scheme = useColorScheme();
@@ -31,9 +32,8 @@ export default function useTheme() {
         };
   }, [dark]);
 
-  const [poppinsLoaded] = usePoppins({ Poppins_600SemiBold });
-  const [interLoaded] = useInter({ Inter_400Regular });
-  const fontsLoaded = poppinsLoaded && interLoaded;
+  // Fonts are optional - using system fonts if Google Fonts not installed
+  const fontsLoaded = true;
 
   const styles = useMemo(() => createAuthStyles(colors), [colors]);
 

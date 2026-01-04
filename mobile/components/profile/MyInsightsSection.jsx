@@ -206,7 +206,7 @@ export default function MyInsightsSection({
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-                <Text style={styles.sectionTitle}>Today's Compliance</Text>
+                <Text style={styles.sectionTitle}>Today&apos;s Compliance</Text>
               </View>
               <DietaryComplianceCard
                 score={complianceScore}
