@@ -1,6 +1,7 @@
 import { useReducer, useEffect, useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import { useAuth } from "@clerk/clerk-expo";
+import { useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_PROFILE, SECTION_LABELS } from "../constants/profileConfig";
 import {
   validateBasics,
@@ -18,6 +19,7 @@ import {
   saveDietaryPreferences,
   saveNutritionGoals,
   saveGamificationStats,
+  invalidateProfileCache,
 } from "../services/profileAPI";
 
 // Action types
@@ -194,6 +196,7 @@ function profileReducer(state, action) {
  */
 export default function useProfileForm(user) {
   const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(profileReducer, initialState);
   const hasBootstrappedRef = useRef(false);
 
@@ -355,6 +358,11 @@ export default function useProfileForm(user) {
           payload: { section },
         });
 
+        // ✅ Invalidate profile cache after successful save
+        // For basics section (onboarding-critical), refetch immediately
+        const refetchImmediately = section === 'basics';
+        invalidateProfileCache(queryClient, refetchImmediately);
+
         Alert.alert("Saved", `${SECTION_LABELS[section]} updated.`);
         return true;
       } catch (error) {
@@ -415,6 +423,11 @@ export default function useProfileForm(user) {
           type: ACTIONS.SAVE_FIELD_SUCCESS,
           payload: { section, field, value },
         });
+
+        // ✅ Invalidate profile cache after successful inline save
+        // For basics section (onboarding-critical), refetch immediately
+        const refetchImmediately = section === 'basics';
+        invalidateProfileCache(queryClient, refetchImmediately);
 
         return true;
       } catch (error) {

@@ -24,36 +24,31 @@ Created a simplified, senior-optimized voice interface for users 60+ who:
 
 ---
 
-## Using VoiceModalElderly
+## Using VoiceModal with Elderly Mode
 
 ### Installation
 
-The component is already created at:
+The unified VoiceModal component supports both modes:
 ```
-mobile/components/log/VoiceModalElderly.jsx
+mobile/components/log/VoiceModal.jsx
 ```
 
 ### Import in Your Screen
 
-Replace the regular VoiceModal with the elderly version in your log screen:
-
 ```javascript
-// OLD (remove this)
 import { VoiceModal } from '../components/log/VoiceModal';
-
-// NEW (add this)
-import { VoiceModalElderly } from '../components/log/VoiceModalElderly';
 ```
 
 ### Use in JSX
 
 ```javascript
-// Use VoiceModalElderly instead of VoiceModal
-<VoiceModalElderly
+// Use accessibilityMode="elderly" for senior-friendly UI
+<VoiceModal
   visible={showVoiceModal}
   onClose={() => setShowVoiceModal(false)}
   onComplete={(result) => handleVoiceComplete(result)}
   voiceHook={useServerVoice()}
+  accessibilityMode="elderly"  // or "standard" (default)
 />
 ```
 
@@ -253,13 +248,13 @@ import { VoiceModalElderly } from '../components/log/VoiceModalElderly';
 
 ### Key Difference in Code
 
-**Standard Version** (VoiceModal.jsx):
+**Standard Mode** (`accessibilityMode="standard"`):
 ```javascript
 // 4-step flow
 state === 'transcribed' → Show transcription → User edits → Confirm
 ```
 
-**Elderly Version** (VoiceModalElderly.jsx):
+**Elderly Mode** (`accessibilityMode="elderly"`):
 ```javascript
 // 2-step flow
 state === 'listening' → Auto-analyze → Auto-close
@@ -310,7 +305,7 @@ speakInstruction('Tap the big microphone button to start speaking');
 - Users with good eyesight
 - Users comfortable with complex interfaces
 
-### Use **VoiceModalElderly** for:
+### Use **accessibilityMode="elderly"** for:
 - Users 60+
 - Users with vision impairment
 - Users with arthritis/tremors
@@ -363,7 +358,7 @@ speakInstruction('Tap the big microphone button to start speaking');
 In your **log.js** screen:
 
 ```javascript
-import { VoiceModalElderly } from '../components/log/VoiceModalElderly';
+import { VoiceModal } from '../components/log/VoiceModal';
 import { useServerVoice } from '../hooks/useServerVoice';
 
 export default function LogScreen() {
@@ -374,11 +369,12 @@ export default function LogScreen() {
     <>
       {/* ... rest of screen ... */}
 
-      <VoiceModalElderly
+      <VoiceModal
         visible={showVoiceModal}
         onClose={() => setShowVoiceModal(false)}
         onComplete={(result) => handleVoiceComplete(result)}
         voiceHook={voiceHook}
+        accessibilityMode="elderly"
       />
     </>
   );

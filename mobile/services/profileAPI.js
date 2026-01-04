@@ -388,3 +388,44 @@ export const saveGamificationStats = async (token, gamificationData, getToken = 
     );
   }
 };
+
+/**
+ * ✅ STRICT CACHE INVALIDATION
+ * Invalidates the profile query cache to ensure fresh data after any profile update
+ *
+ * IMPORTANT: Call this after EVERY profile mutation success
+ * - User updates basics → invalidate
+ * - User updates dietary → invalidate
+ * - User completes onboarding → invalidate
+ * - User updates goals → invalidate
+ *
+ * @param {Object} queryClient - React Query client instance
+ * @param {boolean} refetchImmediately - If true, also refetch immediately (recommended for critical updates)
+ */
+export const invalidateProfileCache = (queryClient, refetchImmediately = false) => {
+  if (!queryClient) {
+    console.warn('[ProfileAPI] queryClient not provided - cache invalidation skipped');
+    return;
+  }
+
+  try {
+    console.log('[ProfileAPI] ✅ Invalidating profile cache...');
+
+    // Invalidate the profile query
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+
+    // Optionally refetch immediately for critical updates
+    if (refetchImmediately) {
+      console.log('[ProfileAPI] 🔄 Refetching profile immediately...');
+      queryClient.refetchQueries({ queryKey: ['profile'] });
+    }
+
+    // Also invalidate dashboard since it depends on profile data
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
+    console.log('[ProfileAPI] ✅ Cache invalidation complete');
+  } catch (error) {
+    console.error('[ProfileAPI] Cache invalidation failed:', error);
+    // Don't throw - cache invalidation failure shouldn't break the app
+  }
+};

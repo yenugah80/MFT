@@ -264,9 +264,12 @@ export default function DashboardContent() {
   // Note: useFocusEffect manual refetch removed - React Query handles staleness automatically
   // Data will refetch if >30s old (respects staleTime configuration)
 
-  // Load recommendations and profile when dashboard data is available
-  // OPTIMIZATION: Using useRecommendations hook which handles 5-min caching internally
-  // This eliminates duplicate API calls that were happening before
+  // Load profile when dashboard data is available
+  // OPTIMIZATION: React Query's useRecommendations hook handles fetching automatically
+  // with 5-min caching internally. We don't call fetchRecommendations() here because:
+  // - useRecommendations hook already fetches on mount
+  // - Calling it creates a dependency that changes every render, causing infinite refetches
+  // - React Query deduplicates requests automatically, no need to manual call
   useEffect(() => {
     if (!data || isLoading) return;
 
@@ -274,10 +277,7 @@ export default function DashboardContent() {
     if (contextProfile) {
       setUserProfile(contextProfile);
     }
-
-    // Fetch recommendations with built-in caching
-    fetchRecommendations();
-  }, [data, isLoading, contextProfile, fetchRecommendations]);
+  }, [data, isLoading, contextProfile]);
 
   // Phase 3: Scan for allergen warnings (urgent alerts stay on Dashboard)
   // Note: complianceScore and cuisineDiversity calculations moved to Profile > MyInsightsSection

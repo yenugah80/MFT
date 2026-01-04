@@ -36,6 +36,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
 import { useProfileContext } from '@/providers/ProfileProvider';
 
+// ✅ CRITICAL: Module-level flag survives component unmount/remount cycles
+// This prevents infinite redirect loop when OnboardingGuard remounts
+let hasAttemptedRedirect = false;
+
 const OnboardingGuard = ({ children }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
@@ -46,83 +50,145 @@ const OnboardingGuard = ({ children }) => {
 
   // 🆕 PREVENT DUPLICATE CHECKS: Track if check is already in progress
   const isCheckingRef = useRef(false);
+  const redirectTimeoutRef = useRef(null); // ✅ FIX: Track timeout to cancel on unmount
+  // ✅ CRITICAL FIX: Use module-level flag instead of component-level ref (survives unmount)
 
   useEffect(() => {
+    // ✅ Reset redirect flag when auth state changes (user logs out/in)
+    if (!isSignedIn) {
+      console.log('[OnboardingGuard] Auth state changed (user logged out), resetting redirect flag');
+      hasAttemptedRedirect = false;
+    }
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    // ✅ Prevent duplicate checks using ref
+    if (isCheckingRef.current) {
+      return;
+    }
+
     // Only check when auth is loaded and user is signed in
     if (!isLoaded || !isSignedIn) {
       setIsCheckingOnboarding(false);
       return;
     }
 
+    // ✅ Mark that we're checking to prevent re-runs
+    isCheckingRef.current = true;
+
     const checkOnboardingStatus = async () => {
-      // Profile is loading from ProfileProvider - wait for it
-      if (profileLoading) {
-        console.log('[OnboardingGuard] ⏳ Waiting for profile from context...');
-        return;
-      }
+      try {
+        // Profile is loading from ProfileProvider - wait for it
+        if (profileLoading) {
+          console.log('[OnboardingGuard] ⏳ Waiting for profile from context...');
+          isCheckingRef.current = false;
+          return;
+        }
 
-      // Profile fetch failed - handle error
-      if (profileError) {
-        console.error('[OnboardingGuard] ❌ Profile fetch error from context:', profileError);
+        // Profile fetch failed - handle error
+        if (profileError) {
+          console.error('[OnboardingGuard] ❌ Profile fetch error from context:', profileError);
 
-        // Try to recover with AsyncStorage draft
-        try {
-          const savedDraft = await AsyncStorage.getItem('@onboarding_draft');
-          if (savedDraft) {
-            console.log('[OnboardingGuard] ✅ Found onboarding draft in AsyncStorage - user can resume');
-            setError(null);
-            setIsCheckingOnboarding(false);
-          } else {
-            console.log('[OnboardingGuard] 🔴 No draft found and profile unavailable');
+          // Try to recover with AsyncStorage draft
+          try {
+            const savedDraft = await AsyncStorage.getItem('@onboarding_draft');
+            if (savedDraft) {
+              console.log('[OnboardingGuard] ✅ Found onboarding draft in AsyncStorage - user can resume');
+              setError(null);
+              setIsCheckingOnboarding(false);
+            } else {
+              console.log('[OnboardingGuard] 🔴 No draft found and profile unavailable');
+              setError({
+                message: 'Unable to load profile. Please check your connection.',
+                status: profileError?.status,
+                canRetry: true
+              });
+            }
+          } catch (storageError) {
+            console.warn('[OnboardingGuard] AsyncStorage error:', storageError?.message);
             setError({
               message: 'Unable to load profile. Please check your connection.',
-              status: profileError?.status,
               canRetry: true
             });
           }
-        } catch (storageError) {
-          console.warn('[OnboardingGuard] AsyncStorage error:', storageError?.message);
-          setError({
-            message: 'Unable to load profile. Please check your connection.',
-            canRetry: true
-          });
-        }
-        return;
-      }
-
-      // Profile loaded successfully - check onboarding status
-      if (onboardingComplete === false) {
-        // ✅ User needs to complete onboarding - they are a new user
-        console.log('[OnboardingGuard] 🆕 New user detected. Onboarding is required');
-        setIsCheckingOnboarding(false);
-        setError(null);
-      } else if (onboardingComplete === true) {
-        // ✅ User has completed onboarding - they are a returning user
-        console.log('[OnboardingGuard] ✅ Returning user detected');
-
-        // Clear any stale onboarding draft data
-        try {
-          await AsyncStorage.removeItem('@onboarding_draft');
-          await AsyncStorage.removeItem('@onboarding_current_step');
-          console.log('[OnboardingGuard] Cleared onboarding draft data');
-        } catch (error) {
-          console.warn('[OnboardingGuard] Failed to clear onboarding draft:', error);
+          return;
         }
 
-        // Unconditionally redirect returning users to dashboard
-        console.log('[OnboardingGuard] Redirecting returning user to dashboard');
-        setTimeout(() => {
-          router.replace('/(tabs)/dashboard');
-        }, 100);
+        // Profile loaded successfully - check onboarding status
+        if (onboardingComplete === false) {
+          // ✅ User needs to complete onboarding - they are a new user
+          console.log('[OnboardingGuard] 🆕 New user detected. Onboarding is required');
+          setIsCheckingOnboarding(false);
+          setError(null);
+        } else if (onboardingComplete === true) {
+          // ✅ CRITICAL FIX: Check module-level flag to prevent infinite loop
+          // This flag survives component unmount/remount cycles
+          if (hasAttemptedRedirect) {
+            console.log('[OnboardingGuard] ⏭️ Already attempted redirect, skipping to prevent infinite loop');
+            setIsCheckingOnboarding(false);
+            return;
+          }
+
+          // ✅ User has completed onboarding - they are a returning user
+          console.log('[OnboardingGuard] ✅ Returning user detected');
+
+          // Clear any stale onboarding draft data
+          try {
+            await AsyncStorage.removeItem('@onboarding_draft');
+            await AsyncStorage.removeItem('@onboarding_current_step');
+            console.log('[OnboardingGuard] Cleared onboarding draft data');
+          } catch (error) {
+            console.warn('[OnboardingGuard] Failed to clear onboarding draft:', error);
+          }
+
+          // ✅ Mark that we're attempting redirect - persist across unmount cycles
+          hasAttemptedRedirect = true;
+          setIsCheckingOnboarding(false); // Stop showing loading indicator
+
+          // ✅ FIX: Redirect with proper timeout cleanup and error handling
+          console.log('[OnboardingGuard] Redirecting returning user to dashboard');
+          redirectTimeoutRef.current = setTimeout(() => {
+            try {
+              console.log('[OnboardingGuard] 🚀 Executing redirect to dashboard');
+              router.replace('/(tabs)/dashboard');
+              console.log('[OnboardingGuard] ✅ Redirect called successfully');
+            } catch (navigationError) {
+              console.error('[OnboardingGuard] ❌ Redirect failed:', navigationError);
+              // If redirect fails, show error state instead of getting stuck
+              setError({
+                message: 'Navigation failed. This may be a routing issue.',
+                status: null,
+                canRetry: true
+              });
+              setIsCheckingOnboarding(false);
+            }
+            redirectTimeoutRef.current = null;
+          }, 100);
+        }
+      } finally {
+        // ✅ Reset the checking ref when done
+        isCheckingRef.current = false;
       }
     };
 
     checkOnboardingStatus();
-    // Depend on profile context values and retry count
-  }, [isLoaded, isSignedIn, profileLoading, profileError, onboardingComplete, retryCount]);
+
+    // ✅ FIX: Cleanup function now properly cancels pending redirects
+    return () => {
+      isCheckingRef.current = false;
+      // ✅ Cancel setTimeout if component unmounts before redirect happens
+      if (redirectTimeoutRef.current !== null) {
+        clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
+    };
+    // ✅ Only depend on auth state, not profile values - profile updates are handled by the async function
+  }, [isLoaded, isSignedIn]);
 
   // Retry handler - refetch profile from context
   const handleRetry = () => {
+    console.log('[OnboardingGuard] User clicked retry, resetting redirect flag');
+    hasAttemptedRedirect = false; // Reset the flag so redirect can be retried
     setError(null); // Clear error state
     refetchProfile(); // Trigger profile refetch from ProfileProvider
   };

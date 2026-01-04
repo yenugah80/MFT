@@ -34,17 +34,19 @@ let initializeError = null;
  *
  * IMPORTANT: This function does NOT throw or block startup
  * - Failures are logged but app continues normally
- * - Session ID is created immediately
+ * - Session ID is created immediately (idempotent - only once)
  * - Timer starts in background
  */
 export const initAnalytics = async () => {
   try {
-    // Create session immediately
-    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    sessionStart = new Date().toISOString();
+    // ✅ Only create session once - prevent duplicate sessions on re-initialization
+    if (!sessionId) {
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStart = new Date().toISOString();
+    }
 
-    // Start background flush timer (non-blocking)
-    if (!__DEV__) {
+    // ✅ Only start flush timer once - prevent duplicate timers on re-initialization
+    if (!__DEV__ && !flushTimer) {
       flushTimer = setInterval(() => {
         // Run in background, don't await
         flushEvents().catch((e) => {

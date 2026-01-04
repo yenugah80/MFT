@@ -23,7 +23,10 @@ export const createAsyncStoragePersister = () => {
  * Persistence options for React Query
  */
 export const persistOptions = {
-  maxAge: 1000 * 60 * 60 * 24, // 24 hours
+  // ✅ Reduced from 24 hours to 4 hours to prevent stale profile data
+  // Profile changes should be reflected within 4 hours
+  // Analytics data (less critical) can use longer cache
+  maxAge: 1000 * 60 * 60 * 4, // 4 hours
   buster: '', // Change this to invalidate all cached data
   dehydrateOptions: {
     // Don't persist queries with errors

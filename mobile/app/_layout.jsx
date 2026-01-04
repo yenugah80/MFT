@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
@@ -23,6 +23,10 @@ import { runProductionStartup, getStartupReport } from "@/services/productionSta
 
 // Initialization guard (prevents premature renders)
 import InitializationGuard from "@/components/InitializationGuard";
+
+// ✅ Module-level flag: persists across component remounts
+// This survives even if RootLayout unmounts/remounts
+let hasRootLayoutInitialized = false;
 
 // Suppress known deprecation warnings & expected development errors
 LogBox.ignoreLogs([
@@ -73,6 +77,13 @@ export default function RootLayout() {
 
   // Initialize analytics & crash reporting on app start
   useEffect(() => {
+    // ✅ Use module-level flag instead of ref - survives component unmount/remount
+    if (hasRootLayoutInitialized) {
+      console.debug('[AppLayout] ⏳ Startup already initialized, skipping');
+      return;
+    }
+    hasRootLayoutInitialized = true;
+
     let isMounted = true;
 
     const initializeApp = async () => {

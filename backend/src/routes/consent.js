@@ -18,6 +18,13 @@ const router = express.Router();
 /**
  * Rate limiting for consent changes
  * Prevent users from spamming consent/revoke requests
+ *
+ * ✅ FIX: Rate limit by userId instead of IP address
+ * All consent endpoints require authentication, so we use userId as the rate limit key
+ * This approach is:
+ * - More secure: tracks real users, not IPs
+ * - IPv6-compliant: doesn't rely on IP address handling
+ * - Accurate: one limit per user, not per IP
  */
 const consentLimiter = rateLimit({
   windowMs: 60 * 1000,  // 1 minute window
@@ -29,8 +36,8 @@ const consentLimiter = rateLimit({
   standardHeaders: true,  // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false,   // Disable `X-RateLimit-*` headers
   keyGenerator: (req) => {
-    // Rate limit by userId instead of IP (for authenticated endpoints)
-    return req.auth?.userId || req.ip;
+    // Rate limit by userId (all consent endpoints require auth via requireAuth middleware)
+    return req.auth?.userId || 'unauthenticated';
   },
 });
 

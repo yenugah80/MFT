@@ -54,78 +54,127 @@ function createStartupState() {
 
 let StartupState = createStartupState();
 
+// ✅ Prevent multiple simultaneous startup calls
+let isStartupInProgress = false;
+let startupPromise = null;
+
 /**
  * Run complete production startup sequence
  *
  * STRATEGY:
- * 1. Reset state (support re-initialization)
- * 2. Run critical stages → throw if fail
- * 3. Run important stages → log if fail
- * 4. Run optional stages → fail silently
- * 5. Mark initialized only if critical stages succeed
+ * 1. Prevent multiple simultaneous calls (return cached promise)
+ * 2. If already initialized, return immediately
+ * 3. Reset state (support re-initialization)
+ * 4. Run critical stages → throw if fail
+ * 5. Run important stages → log if fail
+ * 6. Run optional stages → fail silently
+ * 7. Mark initialized only if critical stages succeed
  */
 export async function runProductionStartup() {
-  // Reset state for re-initialization support
-  StartupState = createStartupState();
-  StartupState.startTime = Date.now();
+  // ✅ If startup is already in progress, return the same promise
+  if (isStartupInProgress) {
+    console.debug('[ProductionStartup] ⏳ Startup already in progress, returning cached promise');
+    return startupPromise;
+  }
 
-  console.debug('[ProductionStartup] ▶ Starting production initialization sequence...');
-
-  try {
-    // CRITICAL: Stage 1 - Environment Validation (hard fail required)
-    await runStage('environment', async () => {
-      validateEnvironment();
-      assertEnvironmentValid(); // Throws if invalid
-    }, StageSeverity.CRITICAL);
-
-    // CRITICAL: Stage 2 - Error Handling (must be first after env validation)
-    await runStage('errorHandling', () => {
-      setupGlobalErrorHandler();
-    }, StageSeverity.CRITICAL);
-
-    // IMPORTANT: Stage 3 - Native Modules (fail degrades features)
-    await runStage('nativeModules', async () => {
-      await initializeNativeModules();
-    }, StageSeverity.IMPORTANT);
-
-    // IMPORTANT: Stage 4 - Feature Detection (fail degrades features)
-    await runStage('features', async () => {
-      await detectAvailableFeatures();
-    }, StageSeverity.IMPORTANT);
-
-    // OPTIONAL: Stage 5 - Analytics (non-critical, fail silently)
-    await runStage('analytics', async () => {
-      await initAnalytics();
-    }, StageSeverity.OPTIONAL);
-
-    // Mark as initialized (only reached if critical stages passed)
-    StartupState.initialized = true;
-
-    const totalDuration = Date.now() - StartupState.startTime;
-    logStartupStatus(totalDuration);
-
+  // ✅ If already initialized, return immediately (never re-run stages)
+  if (StartupState.initialized) {
+    console.debug('[ProductionStartup] ✓ Already initialized, skipping startup');
     return {
       success: true,
-      duration: totalDuration,
-      stages: StartupState.stages,
-      criticalFailures: StartupState.criticalFailures,
-      degradedFeatures: StartupState.degradedFeatures,
-    };
-  } catch (error) {
-    const totalDuration = Date.now() - StartupState.startTime;
-
-    console.error('[ProductionStartup] ✗ STARTUP FAILED - Critical stage error:', error.message);
-    StartupState.criticalFailures.push(error.message);
-
-    return {
-      success: false,
-      error: error.message,
-      duration: totalDuration,
+      duration: 0,
       stages: StartupState.stages,
       criticalFailures: StartupState.criticalFailures,
       degradedFeatures: StartupState.degradedFeatures,
     };
   }
+
+  // Mark startup in progress
+  isStartupInProgress = true;
+
+  // Create the startup promise
+  startupPromise = (async () => {
+    try {
+      // ✅ Double-check: ensure we haven't already initialized while awaiting
+      if (StartupState.initialized) {
+        console.debug('[ProductionStartup] ✓ Another call completed initialization, returning');
+        isStartupInProgress = false;
+        return {
+          success: true,
+          duration: 0,
+          stages: StartupState.stages,
+          criticalFailures: StartupState.criticalFailures,
+          degradedFeatures: StartupState.degradedFeatures,
+        };
+      }
+
+      // Reset state for re-initialization support
+      StartupState = createStartupState();
+      StartupState.startTime = Date.now();
+
+      console.debug('[ProductionStartup] ▶ Starting production initialization sequence...');
+
+      // CRITICAL: Stage 1 - Environment Validation (hard fail required)
+      await runStage('environment', async () => {
+        validateEnvironment();
+        assertEnvironmentValid(); // Throws if invalid
+      }, StageSeverity.CRITICAL);
+
+      // CRITICAL: Stage 2 - Error Handling (must be first after env validation)
+      await runStage('errorHandling', () => {
+        setupGlobalErrorHandler();
+      }, StageSeverity.CRITICAL);
+
+      // IMPORTANT: Stage 3 - Native Modules (fail degrades features)
+      await runStage('nativeModules', async () => {
+        await initializeNativeModules();
+      }, StageSeverity.IMPORTANT);
+
+      // IMPORTANT: Stage 4 - Feature Detection (fail degrades features)
+      await runStage('features', async () => {
+        await detectAvailableFeatures();
+      }, StageSeverity.IMPORTANT);
+
+      // OPTIONAL: Stage 5 - Analytics (non-critical, fail silently)
+      await runStage('analytics', async () => {
+        await initAnalytics();
+      }, StageSeverity.OPTIONAL);
+
+      // Mark as initialized (only reached if critical stages passed)
+      StartupState.initialized = true;
+
+      const totalDuration = Date.now() - StartupState.startTime;
+      logStartupStatus(totalDuration);
+
+      isStartupInProgress = false;
+
+      return {
+        success: true,
+        duration: totalDuration,
+        stages: StartupState.stages,
+        criticalFailures: StartupState.criticalFailures,
+        degradedFeatures: StartupState.degradedFeatures,
+      };
+    } catch (error) {
+      const totalDuration = Date.now() - StartupState.startTime;
+
+      console.error('[ProductionStartup] ✗ STARTUP FAILED - Critical stage error:', error.message);
+      StartupState.criticalFailures.push(error.message);
+
+      isStartupInProgress = false;
+
+      return {
+        success: false,
+        error: error.message,
+        duration: totalDuration,
+        stages: StartupState.stages,
+        criticalFailures: StartupState.criticalFailures,
+        degradedFeatures: StartupState.degradedFeatures,
+      };
+    }
+  })();
+
+  return startupPromise;
 }
 
 /**

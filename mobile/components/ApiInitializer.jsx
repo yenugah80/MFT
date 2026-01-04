@@ -28,7 +28,7 @@ const ApiInitializer = ({ children }) => {
     });
 
     console.log('[ApiInitializer] API client initialized with Clerk token provider');
-  }, [getToken, isLoaded]);
+  }, [isLoaded]); // ✅ Remove getToken from dependencies - it's a reference that changes on every render
 
   // Render children regardless of Clerk load state
   // This prevents blocking the entire app if Clerk is slow to initialize
