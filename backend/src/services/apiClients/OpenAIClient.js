@@ -354,11 +354,16 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       });
 
       // Step 2: Canonicalize each ingredient
-      const complexDishRegex = /\b(curry|masala|biryani|saag|dal|gravy|fry|vada|dosa|idli|samosa|pakora|paratha|naan|roti|chapati|pulao|korma|vindaloo|tikka|tandoori|paneer)\b/i;
+      // Detect complex dishes that should NOT be simplified:
+      // 1. Regional dish keywords (curry, biryani, tacos, etc.)
+      // 2. Multi-word names (2+ words = likely a dish, not simple ingredient)
+      const complexDishRegex = /\b(curry|masala|biryani|saag|dal|gravy|fry|vada|dosa|idli|samosa|pakora|paratha|naan|roti|chapati|pulao|korma|vindaloo|tikka|tandoori|paneer|tacos?|burrito|enchilada|quesadilla|pasta|lasagna|risotto|pizza|burger|sandwich|wrap|salad|soup|stew|casserole|pie|cake|brownie|muffin|croissant|stroganoff|parmesan|alfredo|carbonara|bolognese|teriyaki|tempura|sushi|ramen|pho|pad\s?thai|fried\s?rice|stir\s?fry|roast|grilled|baked|steamed)\b/i;
       const canonical = validated.map(item => {
         const canonicalForm = canonicalize(item.name);
         const baseConfidence = item.confidence ?? 0.5;
-        const isComplex = complexDishRegex.test(item.name);
+        // Complex if: matches dish keywords OR has 2+ words (e.g., "chicken parmesan", "beef tacos")
+        const wordCount = item.name.trim().split(/\s+/).length;
+        const isComplex = complexDishRegex.test(item.name) || wordCount >= 2;
         const confidenceLevel = isComplex
           ? 'estimated'
           : baseConfidence >= 0.85
