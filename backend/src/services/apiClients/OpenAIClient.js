@@ -567,7 +567,7 @@ Return JSON:
       const json = await this.chatCompletionJSON(messages, {
         model, // 🆕 DYNAMIC MODEL SELECTION: Uses detectDishComplexity + chooseModel
         temperature: 0.2,
-        maxTokens: complexity === 'simple' ? 300 : 600, // Simple foods need fewer tokens
+        maxTokens: complexity === 'simple' ? 400 : 1500, // Regional/complex foods with ingredients need more tokens
       });
 
       if (!json.foods || !Array.isArray(json.foods)) {
