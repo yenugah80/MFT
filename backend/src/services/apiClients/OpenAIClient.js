@@ -354,7 +354,7 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       });
 
       // Step 2: Canonicalize each ingredient
-      const complexDishRegex = /\b(curry|masala|biryani|saag|dal|gravy|fry)\b/i;
+      const complexDishRegex = /\b(curry|masala|biryani|saag|dal|gravy|fry|vada|dosa|idli|samosa|pakora|paratha|naan|roti|chapati|pulao|korma|vindaloo|tikka|tandoori|paneer)\b/i;
       const canonical = validated.map(item => {
         const canonicalForm = canonicalize(item.name);
         const baseConfidence = item.confidence ?? 0.5;
@@ -375,7 +375,9 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
           canonical: canonicalForm,
           // Keep display name for UI, use canonicalName for nutrition lookup
           name: canonicalForm.display_name || item.name,
-          canonicalName: canonicalForm.canonical, // For nutrition API lookup
+          // For complex dishes (curry, biryani, etc), use full name for nutrition lookup
+          // Simple ingredients use canonical form (eggs, chicken, rice)
+          canonicalName: isComplex ? item.name : canonicalForm.canonical,
           preparation: null,
           quantity: item.quantity || 1,
           unit: item.unit || 'serving',
