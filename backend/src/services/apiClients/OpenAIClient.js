@@ -319,14 +319,22 @@ class OpenAIClient extends BaseApiClient {
     const messages = [
       {
         role: 'system',
-        content: `Extract food items from text. Output EXACTLY what user typed - no changes, no assumptions.
+        content: `Extract food items with quantities from text.
 
 Rules:
-1. Use exact words from input
-2. If quantity given (e.g., "2 eggs"), use it. Otherwise use 1.
-3. If unit given (e.g., "cup of rice"), use it. Otherwise use "serving".
-4. Treat named dishes as a single item (e.g., "chicken biryani", "pho", "ramen", "pad thai", "lasagna", "curry").
-5. Split into multiple items ONLY when the user clearly lists separate foods (commas, "and", "with", or separate clauses).
+1. Extract the food name WITHOUT the quantity (e.g., "five eggs" → name: "eggs", quantity: 5)
+2. Convert word quantities to numbers (one=1, two=2, three=3, four=4, five=5, six=6, etc.)
+3. Parse "X servings of Y" as quantity X, unit "servings", name Y
+4. If no quantity specified, use quantity: 1
+5. If no unit specified, use unit: "serving"
+6. Treat named dishes as single items (e.g., "chicken curry", "beef tacos", "pad thai")
+7. Split into multiple items when user lists separate foods (commas, "and", "with")
+
+Examples:
+- "five eggs" → {"name": "eggs", "quantity": 5, "unit": "serving"}
+- "two servings of chicken curry" → {"name": "chicken curry", "quantity": 2, "unit": "servings"}
+- "3 Indian Vadas" → {"name": "Indian Vadas", "quantity": 3, "unit": "serving"}
+- "a bowl of rice" → {"name": "rice", "quantity": 1, "unit": "bowl"}
 
 Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       },
