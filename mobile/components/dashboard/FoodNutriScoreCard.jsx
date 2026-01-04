@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
-    letterSpacing: TYPOGRAPHY.letterSpacing.wide,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   subtitle: {
