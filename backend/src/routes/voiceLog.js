@@ -125,9 +125,10 @@ router.post('/process', requireAuth, async (req, res) => {
         } else {
           // 2. If not in DB, call OpenAI
           const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+          console.log(`[VoiceLog] OpenAI raw result:`, JSON.stringify(aiResults?.slice?.(0, 2), null, 2));
           if (aiResults.length > 0) {
             detectedIngredients = aiResults;
-            console.log(`[VoiceLog] OpenAI returned ${aiResults.length} items for "${text}"`);
+            console.log(`[VoiceLog] OpenAI returned ${aiResults.length} items for "${text}":`, aiResults.map(i => i.name).join(', '));
 
             // SAVE TO DB: Permanently store these new foods
             // GUARD: Only save high-quality results to prevent DB pollution
@@ -230,6 +231,7 @@ router.post('/process', requireAuth, async (req, res) => {
       isEstimated: true
     };
 
+    console.log(`[VoiceLog] Sending response with ${analysisResult.items.length} items`);
     res.json({ success: true, data: analysisResult });
   } catch (error) {
     console.error("Voice processing error:", error);

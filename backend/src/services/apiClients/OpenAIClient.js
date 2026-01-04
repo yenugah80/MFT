@@ -528,19 +528,23 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
 - American: Larger protein portions (6-8oz), moderate carbs, butter/cream-based sauces
 
 Rules:
-1. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
-2. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
-3. Estimate nutrition for the SPECIFIED quantity and cooking method
-4. Include macros: calories, protein (g), carbs (g), fat (g)
-5. 🆕 Include detailed INGREDIENTS breakdown (what makes up this dish)
-6. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (µg), potassium (mg)
-7. Calculate Health Score (0-100) and NutriScore (A-E) based on:
+1. CRITICAL: Split multiple foods into SEPARATE items in the foods array
+   - "5 eggs and 2 toast" → foods: [{name: "eggs", quantity: 5}, {name: "toast", quantity: 2}]
+   - "Indian vadas and chicken curry" → foods: [{name: "Indian vadas"}, {name: "chicken curry"}]
+   - Split on: "and", commas, "with" (when listing separate items)
+2. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
+3. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
+4. Estimate nutrition for the SPECIFIED quantity and cooking method
+5. Include macros: calories, protein (g), carbs (g), fat (g)
+6. Include detailed INGREDIENTS breakdown (what makes up this dish)
+7. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (µg), potassium (mg)
+8. Calculate Health Score (0-100) and NutriScore (A-E) based on:
    - Nutrient density, processing level (NOVA), cooking method
    - Penalize: frying (+30-50% cal), added sugars, high sodium, ultra-processing
    - Boost: whole foods, fiber, vitamins, healthy prep (steamed/grilled)
-8. Identify the "cookingMethod" (fried, steamed, grilled, boiled, baked, raw)
-9. Identify the "cuisine" (South Indian, American, Italian, etc.)
-10. Provide a short analysis note explaining the score
+9. Identify the "cookingMethod" (fried, steamed, grilled, boiled, baked, raw)
+10. Identify the "cuisine" (South Indian, American, Italian, etc.)
+11. Provide a short analysis note explaining the score
 
 Return JSON:
 {

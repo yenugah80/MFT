@@ -221,12 +221,18 @@ export const useServerVoice = (options = {}) => {
 
       setProcessingState({ step: 2, label: 'Complete!' });
 
-      // Return the nutrition result
+      // Backend returns: { success: true, data: { items: [...], totals: {...} } }
+      // The analysisResult is nested inside response.data.data
+      const analysisData = response.data?.data || response.data;
+
+      console.log('[useServerVoice] API response items count:', analysisData?.items?.length);
+
+      // Return the nutrition result with correct nesting
       return {
         transcription: text,
         nutrition: response.data,
-        items: response.data?.items || [],
-        totals: response.data?.totals || {},
+        items: analysisData?.items || [],
+        totals: analysisData?.totals || {},
       };
     } catch (err) {
       console.error('[useServerVoice] Analysis error:', err);

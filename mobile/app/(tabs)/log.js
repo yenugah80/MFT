@@ -260,6 +260,11 @@ export default function LogScreen() {
       // Structure: { transcription, nutrition, items, totals }
       const { transcription, nutrition, items, totals } = voiceResult;
 
+      // Debug logging for meal breakdown
+      console.log('[log] Raw voiceResult:', JSON.stringify(voiceResult, null, 2).slice(0, 500));
+      console.log('[log] items array:', items);
+      console.log('[log] items count:', items?.length || 0);
+
       if (!transcription?.trim()) {
         console.warn('[log] Empty transcription received from voice');
         return;
