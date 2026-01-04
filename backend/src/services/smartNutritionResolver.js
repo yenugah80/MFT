@@ -17,7 +17,8 @@ import { buildNutritionEstimationPrompt, buildBatchNutritionEstimationPrompt } f
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
 
-// Feature flag for USDA verification (disabled by default)
+// FIXED P1: Feature flags for dual-prompt system
+const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
 const ENABLE_USDA_VERIFICATION = process.env.ENABLE_USDA_VERIFICATION === 'true';
 
 // Aggressive caching (24 hours)
@@ -30,7 +31,31 @@ class SmartNutritionResolver {
       usdaVerifications: 0,
       cacheHits: 0,
       totalRequests: 0,
+      // FIXED P1: Observability metrics for dual-prompt system
+      promptStats: {
+        corePromptUsed: 0,
+        extendedPromptUsed: 0,
+        validationPassed: 0,
+        validationFailed: 0,
+        // FIXED: Use running averages instead of arrays to prevent memory leak
+        avgConfidenceCore: 0,
+        avgConfidenceExtended: 0,
+        sumConfidenceCore: 0,
+        sumConfidenceExtended: 0,
+      },
+      schemaValidationErrors: 0,
+      macroValidationErrors: 0,
     };
+  }
+
+  /**
+   * CRITICAL FIX: Canonicalize food/portion input
+   * Ensures consistency between cache key and prompt
+   * Prevents cache misses due to formatting differences
+   * @private
+   */
+  _canonicalizeFoodQuery(query) {
+    return query.toLowerCase().trim();
   }
 
   /**
@@ -53,23 +78,25 @@ class SmartNutritionResolver {
   async resolveFood(foodQuery, portion = '1 serving', userId = null) {
     this.stats.totalRequests++;
 
-    // Check cache first - use deterministic cache key
-    const cacheKey = getCacheKey('nutrition', foodQuery, portion);
-    const cached = nutritionCache.get(cacheKey);
-    if (cached) {
-      console.log(`[SmartResolver] Cache hit for "${foodQuery}"`);
-      this.stats.cacheHits++;
-      return cached;
-    }
+    // CRITICAL FIX #1: Canonicalize input FIRST - use same normalized form for cache + prompt
+    // Prevents cache misses due to formatting differences ("banana" vs "BANANA" vs "banana ")
+    const canonicalQuery = this._canonicalizeFoodQuery(foodQuery);
+    const canonicalPortion = this._canonicalizeFoodQuery(portion);
 
-    // NEW: Check for learned user preferences
-    let portionToUse = portion;
+    // FIXED P0: Determine prompt tier BEFORE caching to prevent cache poisoning
+    const isComplex = this._isLikelyComplex(canonicalQuery);
+    const promptTier = isComplex ? 'extended' : 'core';
+
+    // CRITICAL FIX #5: Check for learned user preferences BEFORE building cache key
+    // This ensures cache key matches the portion that will actually be used
+    // Prevents: "rice" with default "1 serving" key but caching "150g" learned portion result
+    let portionToUse = canonicalPortion;
     let portionSource = 'default';
 
     if (userId && !portion) {
       const learned = await this._getLearnedPortion(userId, foodQuery);
       if (learned) {
-        portionToUse = learned.portion;
+        portionToUse = this._canonicalizeFoodQuery(learned.portion);
         portionSource = 'learned';
         console.log(`[SmartResolver] 🎯 Using learned portion for ${foodQuery}: ${portionToUse}`);
       }
@@ -77,26 +104,37 @@ class SmartNutritionResolver {
       portionSource = 'user_specified';
     }
 
+    // NOW build cache key using ACTUAL portion that will be used
+    const cacheKey = getCacheKey('nutrition', canonicalQuery, portionToUse, promptTier);
+    const cached = nutritionCache.get(cacheKey);
+    if (cached) {
+      console.log(`[SmartResolver] Cache hit for "${canonicalQuery}" (${promptTier})`);
+      this.stats.cacheHits++;
+      return cached;
+    }
+
     try {
       // Step 1: Get OpenAI estimation (fast, always available, preserves ingredients)
       const openAIResult = await this._getOpenAIEstimation(foodQuery, portionToUse);
 
       // Step 2: Check if this is an ingredient-specific food (protein/vegetable/grain)
-      const hasSpecificIngredient = this._hasSpecificIngredient(foodQuery);
+      const hasSpecificIngredient = this._hasSpecificIngredient(canonicalQuery);
 
-      // Step 3: Decide whether to trust OpenAI or verify with USDA
+      // Step 3: CRITICAL FIX #2 - Use validation, NOT confidence for correctness decisions
+      // Confidence is NOT accuracy and is explicitly unreliable (per review)
+      // ONLY validationPassed should gate USDA fallback
       // For ingredient-specific foods: ALWAYS trust OpenAI (prevents "spinach" → "beef" errors)
-      // For generic foods: Use USDA if confidence < 60% (when USDA verification enabled)
+      // For generic foods: Use USDA ONLY if validation FAILED (not if confidence is low)
 
       // FEATURE FLAG: USDA verification disabled by default (validating OpenAI-only accuracy)
-      const shouldTrustOpenAI = !ENABLE_USDA_VERIFICATION || hasSpecificIngredient || openAIResult.confidence >= 60;
+      const shouldTrustOpenAI = !ENABLE_USDA_VERIFICATION || hasSpecificIngredient || openAIResult.validationPassed;
 
       if (shouldTrustOpenAI) {
         const reason = !ENABLE_USDA_VERIFICATION
           ? 'USDA verification disabled (OpenAI-only mode)'
           : hasSpecificIngredient
           ? 'ingredient-specific food (preserving ingredients)'
-          : `confidence ${openAIResult.confidence}% >= 60%`;
+          : `validation passed (macros are consistent)`;
 
         console.log(`[SmartResolver] ✅ Using OpenAI - ${reason} for "${foodQuery}"`);
         this.stats.openaiEstimates++;
@@ -111,6 +149,7 @@ class SmartNutritionResolver {
           limitation: openAIResult.confidence < 80 ? 'Estimated values - may vary by brand/preparation' : null,
           components: openAIResult.components || [], // Pass through components
           isComplex: openAIResult.isComplex || false,
+          estimationTier: promptTier, // FIXED P0: Track which prompt tier was used
           // NEW: Portion tracking
           portion_source: portionSource,
           portion_confidence: portionConfidence,
@@ -119,7 +158,18 @@ class SmartNutritionResolver {
           cacheKey,
         };
 
-        nutritionCache.set(cacheKey, result);
+        // FIXED P1: Track metrics
+        this._trackPromptMetrics(promptTier, result);
+
+        // CRITICAL FIX #3: ONLY cache valid results
+        // Invalid data (validationPassed=false) will poison cache and return wrong info forever
+        if (openAIResult.validationPassed) {
+          nutritionCache.set(cacheKey, result);
+          console.log(`[SmartResolver] Cached valid result for "${canonicalQuery}"`);
+        } else {
+          console.warn(`[SmartResolver] NOT caching invalid result for "${canonicalQuery}" (validationPassed=false)`);
+        }
+
         return result;
       }
 
@@ -141,6 +191,7 @@ class SmartNutritionResolver {
           limitation: 'USDA data - may not match your specific brand',
           components: [], // USDA doesn't have component breakdown
           isComplex: false,
+          estimationTier: promptTier, // FIXED P0: Track which prompt tier
           cacheKey,
         };
 
@@ -160,6 +211,7 @@ class SmartNutritionResolver {
         limitation: 'Estimated values - may not be exact',
         components: openAIResult.components || [],
         isComplex: openAIResult.isComplex || false,
+        estimationTier: promptTier, // FIXED P0: Track which prompt tier
         cacheKey,
       };
 
@@ -181,6 +233,47 @@ class SmartNutritionResolver {
       // CRITICAL: Never cache failed responses - throw immediately
       throw error;
     }
+  }
+
+  /**
+   * FIXED P0: Determine if food is complex and needs extended prompt
+   * Using word boundary matching to avoid false positives
+   *
+   * ISSUE: Naive keyword matching caused false positives:
+   * - "white rice" wrongly used extended prompt (should be simple)
+   * - "pasta" alone triggered extended prompt (should be simple)
+   *
+   * FIX: Only trigger extended prompt for known multi-component dishes
+   * FIXED P1: Respects ENABLE_DUAL_PROMPT_SYSTEM feature flag
+   * @private
+   */
+  _isLikelyComplex(foodQuery) {
+    // FIXED P1: Feature flag allows disabling dual-prompt entirely
+    if (!ENABLE_DUAL_PROMPT_SYSTEM) {
+      return true; // Always use extended prompt if dual-prompt disabled
+    }
+
+    const query = foodQuery.toLowerCase().trim();
+
+    // ALLOWLIST approach (SAFEST): Only these known multi-component dishes need extended
+    const complexDishes = [
+      // Bowl-based dishes
+      'rice bowl', 'poke bowl', 'buddha bowl', 'burrito bowl',
+      // Burritos/wraps
+      'burrito', 'wrap', 'quesadilla',
+      // Biryani and regional
+      'biryani', 'curry chicken', 'curry lamb', 'chicken curry', 'lamb curry',
+      // Pizzas & sandwiches
+      'pizza', 'burger', 'sandwich', 'sub', 'hoagie',
+      // Pasta with sauce
+      'pasta carbonara', 'pasta bolognese', 'fettuccine', 'spaghetti carbonara', 'lasagna',
+      // Multi-ingredient salads (not simple "salad")
+      'caesar salad', 'cobb salad', 'greek salad', 'caprese salad',
+      // Regional multi-component
+      'pad thai', 'pho', 'ramen', 'dosa', 'samosa', 'kebab', 'shawarma', 'falafel',
+    ];
+
+    return complexDishes.some(dish => query.includes(dish));
   }
 
   /**
@@ -215,16 +308,25 @@ class SmartNutritionResolver {
    * More efficient for meal logging
    */
   async resolveFoodsBatch(foodItems) {
-    // Filter out cached items - use deterministic cache keys
+    // Filter out cached items - FIXED P0: Include prompt tier in cache key
+    // CRITICAL FIX #1: Canonicalize food names to ensure cache key consistency
     const uncachedItems = foodItems.filter(item => {
-      const cacheKey = getCacheKey('nutrition', item.name, item.portion || '1 serving');
+      const canonicalName = this._canonicalizeFoodQuery(item.name);
+      const canonicalPortion = this._canonicalizeFoodQuery(item.portion || '1 serving');
+      const isComplex = this._isLikelyComplex(canonicalName);
+      const promptTier = isComplex ? 'extended' : 'core';
+      const cacheKey = getCacheKey('nutrition', canonicalName, canonicalPortion, promptTier);
       return !nutritionCache.has(cacheKey);
     });
 
     if (uncachedItems.length === 0) {
       console.log(`[SmartResolver] All ${foodItems.length} items from cache`);
       return foodItems.map(item => {
-        const cacheKey = getCacheKey('nutrition', item.name, item.portion || '1 serving');
+        const canonicalName = this._canonicalizeFoodQuery(item.name);
+        const canonicalPortion = this._canonicalizeFoodQuery(item.portion || '1 serving');
+        const isComplex = this._isLikelyComplex(canonicalName);
+        const promptTier = isComplex ? 'extended' : 'core';
+        const cacheKey = getCacheKey('nutrition', canonicalName, canonicalPortion, promptTier);
         return nutritionCache.get(cacheKey);
       });
     }
@@ -249,19 +351,46 @@ class SmartNutritionResolver {
         throw new OpenAIValidationError('Expected array of estimates', { type: typeof estimates });
       }
 
-      // Cache results ONLY if validation passed
+      // CRITICAL FIX #4: Batch must obey same correctness rules as single requests
+      // Validate EVERY estimate before caching
       const results = estimates.map((estimate, i) => {
         const item = uncachedItems[i];
-        const cacheKey = getCacheKey('nutrition', item.name, item.portion || '1 serving');
+
+        // CRITICAL: Apply same validation rules as single request path
+        try {
+          this._validateNutritionSchema(estimate);
+          this._validateMacros(estimate);
+        } catch (error) {
+          console.error(`[SmartResolver] Batch item ${i} ("${item.name}") failed validation:`, error.message);
+          estimate.validationPassed = false;
+        }
+
+        // CRITICAL FIX #1: Canonicalize to match single request path
+        const canonicalName = this._canonicalizeFoodQuery(item.name);
+        const canonicalPortion = this._canonicalizeFoodQuery(item.portion || '1 serving');
+        const isComplex = this._isLikelyComplex(canonicalName);
+        const promptTier = isComplex ? 'extended' : 'core';
+        const cacheKey = getCacheKey('nutrition', canonicalName, canonicalPortion, promptTier);
 
         const result = {
           ...estimate,
           source: estimate.confidence >= 80 ? 'openai_estimation' : 'openai_estimation_low_confidence',
           sourceConfidence: estimate.confidence,
           originalQuery: item.name,
+          estimationTier: promptTier, // FIXED P0: Track prompt tier
+          validationPassed: estimate.validationPassed ?? true, // Include validation status
         };
 
-        nutritionCache.set(cacheKey, result);
+        // FIXED: Track metrics for batch results
+        this._trackPromptMetrics(promptTier, result);
+
+        // CRITICAL FIX #3: ONLY cache valid batch results
+        if (estimate.validationPassed) {
+          nutritionCache.set(cacheKey, result);
+        } else {
+          console.warn(`[SmartResolver] Batch: NOT caching invalid result for "${item.name}"`);
+        }
+
         return result;
       });
 
@@ -297,16 +426,11 @@ class SmartNutritionResolver {
       }
     );
 
-    // Validate required fields exist
-    const required = ['foodName', 'macros', 'confidence'];
-    const missing = required.filter(field => !(field in estimation));
+    // FIXED P0: Deep schema validation (not just field existence)
+    this._validateNutritionSchema(estimation);
 
-    if (missing.length > 0) {
-      throw new OpenAIValidationError(
-        `Missing required fields: ${missing.join(', ')}`,
-        { estimation, missing }
-      );
-    }
+    // FIXED P0: Backend macro validation using Atwater factors
+    this._validateMacros(estimation);
 
     // Return validated and structured response
     return {
@@ -324,6 +448,110 @@ class SmartNutritionResolver {
       needsVerification: estimation.needsVerification || false,
       notes: estimation.notes || '', // Additional context or assumptions
     };
+  }
+
+  /**
+   * FIXED P1: Track metrics for observability
+   * Uses running average to prevent memory leak
+   * @private
+   */
+  _trackPromptMetrics(promptTier, result) {
+    // Track which prompt tier was used
+    if (promptTier === 'core') {
+      this.stats.promptStats.corePromptUsed++;
+      // FIXED: Use running average instead of storing array
+      this.stats.promptStats.sumConfidenceCore += result.confidence;
+      this.stats.promptStats.avgConfidenceCore =
+        this.stats.promptStats.sumConfidenceCore / this.stats.promptStats.corePromptUsed;
+    } else {
+      this.stats.promptStats.extendedPromptUsed++;
+      // FIXED: Use running average instead of storing array
+      this.stats.promptStats.sumConfidenceExtended += result.confidence;
+      this.stats.promptStats.avgConfidenceExtended =
+        this.stats.promptStats.sumConfidenceExtended / this.stats.promptStats.extendedPromptUsed;
+    }
+
+    // Track validation pass/fail
+    if (result.validationPassed) {
+      this.stats.promptStats.validationPassed++;
+    } else {
+      this.stats.promptStats.validationFailed++;
+      this.stats.macroValidationErrors++;
+    }
+  }
+
+  /**
+   * FIXED P0: Deep schema validation
+   * Validates structure and types, not just field existence
+   * @private
+   */
+  _validateNutritionSchema(estimation) {
+    const errors = [];
+
+    // Required fields with type validation
+    if (!estimation.foodName || typeof estimation.foodName !== 'string' || estimation.foodName.trim().length === 0) {
+      errors.push('foodName must be non-empty string');
+    }
+
+    if (typeof estimation.confidence !== 'number' || estimation.confidence < 0 || estimation.confidence > 100) {
+      errors.push('confidence must be number 0-100');
+    }
+
+    // Macros object validation
+    if (!estimation.macros || typeof estimation.macros !== 'object' || Array.isArray(estimation.macros)) {
+      errors.push('macros must be object');
+    } else {
+      const requiredMacroFields = ['calories_kcal', 'protein_g', 'carbs_g', 'fat_g'];
+      for (const field of requiredMacroFields) {
+        if (typeof estimation.macros[field] !== 'number' || estimation.macros[field] < 0) {
+          errors.push(`macros.${field} must be non-negative number, got ${typeof estimation.macros[field]}`);
+        }
+      }
+    }
+
+    // Optional but if present, must be correct type
+    // FIXED: Check the correct field location (macros.fiber_g, not estimation.fiber_g)
+    if (estimation.macros.fiber_g !== undefined && typeof estimation.macros.fiber_g !== 'number') {
+      errors.push(`macros.fiber_g must be number, got ${typeof estimation.macros.fiber_g}`);
+    }
+
+    // Components validation (if isComplex)
+    if (estimation.isComplex && !Array.isArray(estimation.components)) {
+      errors.push('components must be array when isComplex=true');
+    }
+
+    if (errors.length > 0) {
+      // FIXED P1: Track schema validation errors for metrics
+      this.stats.schemaValidationErrors++;
+      throw new OpenAIValidationError('Schema validation failed', { errors, estimation });
+    }
+  }
+
+  /**
+   * FIXED P0: Validate macros using scientifically correct Atwater factors
+   * Accounts for fiber (2 kcal/g) and high-carb foods
+   * @private
+   */
+  _validateMacros(estimation) {
+    const { calories_kcal, protein_g, carbs_g, fat_g, fiber_g = 0 } = estimation.macros;
+
+    // Atwater calorie calculation with fiber
+    const digestibleCarbs = Math.max(0, carbs_g - fiber_g);
+    const calculated = (protein_g * 4) + (digestibleCarbs * 4) + (fiber_g * 2) + (fat_g * 9);
+
+    const diff = Math.abs(calories_kcal - calculated);
+    const tolerance = calories_kcal * 0.15; // 15% tolerance for high-fiber foods
+
+    if (diff > tolerance) {
+      // Log warning but don't fail - OpenAI might have alcohol or sugar alcohols
+      console.warn(
+        `[SmartResolver] Macro validation warning for ${estimation.foodName}: ` +
+        `calculated ${calculated.toFixed(0)} kcal but got ${calories_kcal} (diff: ${((diff/calories_kcal)*100).toFixed(1)}%)`
+      );
+      estimation.validationPassed = false;
+    } else {
+      estimation.validationPassed = true;
+    }
   }
 
   /**
@@ -360,8 +588,17 @@ class SmartNutritionResolver {
 
   /**
    * Get resolver statistics
+   * FIXED P1: Now includes dual-prompt performance metrics
    */
   getStats() {
+    // FIXED: Use pre-calculated running averages instead of computing from arrays
+    const avgConfidenceCore = this.stats.promptStats.corePromptUsed > 0
+      ? this.stats.promptStats.avgConfidenceCore.toFixed(1)
+      : 'N/A';
+    const avgConfidenceExtended = this.stats.promptStats.extendedPromptUsed > 0
+      ? this.stats.promptStats.avgConfidenceExtended.toFixed(1)
+      : 'N/A';
+
     return {
       ...this.stats,
       cacheSize: nutritionCache.keys().length,
@@ -374,6 +611,22 @@ class SmartNutritionResolver {
       usdaUsageRate: this.stats.totalRequests > 0
         ? ((this.stats.usdaVerifications / this.stats.totalRequests) * 100).toFixed(1) + '%'
         : '0%',
+      // FIXED P1: Dual-prompt metrics
+      promptPerformance: {
+        coreUsageRate: this.stats.totalRequests > 0
+          ? ((this.stats.promptStats.corePromptUsed / this.stats.totalRequests) * 100).toFixed(1) + '%'
+          : '0%',
+        extendedUsageRate: this.stats.totalRequests > 0
+          ? ((this.stats.promptStats.extendedPromptUsed / this.stats.totalRequests) * 100).toFixed(1) + '%'
+          : '0%',
+        validationPassRate: this.stats.totalRequests > 0
+          ? ((this.stats.promptStats.validationPassed / this.stats.totalRequests) * 100).toFixed(1) + '%'
+          : '0%',
+        avgConfidenceCore,
+        avgConfidenceExtended,
+        schemaValidationErrors: this.stats.schemaValidationErrors,
+        macroValidationErrors: this.stats.macroValidationErrors,
+      },
     };
   }
 

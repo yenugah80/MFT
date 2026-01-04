@@ -46,6 +46,7 @@ import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
 import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
+import FoodNutriScoreCard from "./dashboard/FoodNutriScoreCard";
 
 // Phase 3: Dashboard Enhancements - Preference-based insights
 // Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
@@ -1080,6 +1081,16 @@ export default function DashboardContent() {
           today={today}
           goals={goals}
         />
+
+        {/* ============================================ */}
+        {/* FOOD NUTRI-SCORE CARD - Shows actual A-E grades */}
+        {/* ============================================ */}
+        {uniqueFoodLogs.length > 0 && (
+          <FoodNutriScoreCard
+            foodLogs={uniqueFoodLogs}
+            compact={false}
+          />
+        )}
 
         {/* ============================================ */}
         {/* NUTRITION SECTION - Collapsible */}

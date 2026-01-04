@@ -6,6 +6,35 @@
  * Validation, reconciliation, and policy live in code, not in prompt.
  */
 
+/**
+ * FIXED P1: Sanitize food query to prevent prompt injection
+ * @private
+ */
+function sanitizeFoodQuery(query) {
+  // FIXED #7: Remove injection patterns only, preserve valid parentheses
+  // Parentheses are valid in food names: "Vitamin B12 (1000 mcg)", "Chicken (grilled)"
+  let sanitized = query
+    .replace(/ignore.*?instructions/gi, '')
+    .replace(/system.*?prompt/gi, '')
+    .replace(/previous.*?instruction/gi, '')
+    .replace(/\n{2,}/g, ' ')                      // Collapse multiple newlines
+    .replace(/[\[\]\{\}\\]/g, '')                 // Remove ONLY dangerous brackets: [], {}, \ (NOT parentheses)
+    .replace(/\s+/g, ' ')                         // Collapse multiple spaces
+    .trim();
+
+  // Limit length
+  if (sanitized.length > 200) {
+    sanitized = sanitized.substring(0, 200).trim();
+  }
+
+  // Reject if became empty after sanitization (likely injection attempt)
+  if (sanitized.length === 0) {
+    throw new Error('Food query is invalid after sanitization');
+  }
+
+  return sanitized;
+}
+
 function buildEstimatorSystemPrompt() {
   return `You are a decisive nutrition estimator for consumer food logs.
 
@@ -54,25 +83,40 @@ RULES:
 - Use typical preparation and a common serving if none is provided.
 - Always return a best-guess estimate, even when uncertain; lower confidence accordingly.
 - Prefer plausible, typical estimates over exhaustive accuracy.
-- Calories should be broadly consistent with macros; small discrepancies are acceptable.
 - Micros are conservative estimates; if uncertain, prefer lower typical values.
 - Use mg for minerals and vitamin C/E, and µg for vitamins A/D/K/B12/folate.
 - servingGrams is approximate; round to a sensible value (e.g., nearest 5g).
-- If the dish is multi-ingredient, set isComplex=true and include a high-level component breakdown (2-5 items max).`;
+- If the dish is multi-ingredient, set isComplex=true and include a high-level component breakdown (2-5 items max).
+
+CRITICAL VALIDATION RULE - FIXED P0 (Atwater factors):
+Before returning, verify using scientifically correct Atwater calorie factors:
+digestible_carbs = carbs_g - fiber_g
+calories_kcal ≈ (protein_g × 4) + (digestible_carbs × 4) + (fiber_g × 2) + (fat_g × 9)
+Allow ±15% margin for rounding and Atwater variation (important for high-fiber foods, alcohol, sugar alcohols).
+Example: Chickpeas with 12g fiber should calculate correctly, not fail validation.`;
 }
 
 export function buildNutritionEstimationPrompt(foodQuery, portion = '1 serving') {
+  // FIXED P1: Sanitize user input to prevent prompt injection
+  const cleanQuery = sanitizeFoodQuery(foodQuery);
+  const cleanPortion = sanitizeFoodQuery(portion);
+
   return {
     system: buildEstimatorSystemPrompt(),
-    user: `Estimate nutrition for: "${foodQuery}" (${portion}).
+    user: `Estimate nutrition for: "${cleanQuery}" (${cleanPortion}).
 
 Return JSON only.`,
   };
 }
 
 export function buildBatchNutritionEstimationPrompt(foodItems) {
+  // FIXED P1: Sanitize all food items to prevent prompt injection
   const itemsList = foodItems
-    .map((item, i) => `${i + 1}. "${item.name}" (${item.portion || '1 serving'})`)
+    .map((item, i) => {
+      const cleanName = sanitizeFoodQuery(item.name);
+      const cleanPortion = sanitizeFoodQuery(item.portion || '1 serving');
+      return `${i + 1}. "${cleanName}" (${cleanPortion})`;
+    })
     .join('\n');
 
   return {
@@ -86,10 +130,13 @@ Return JSON array: [{food1}, {food2}, ...]`,
 }
 
 export function buildMealParsingPrompt(mealDescription) {
+  // FIXED P1: Sanitize meal description
+  const cleanDescription = sanitizeFoodQuery(mealDescription);
+
   return {
     system: `You are a meal parser. Extract food items with portions.
 Return JSON only.`,
-    user: `Meal text: "${mealDescription}"
+    user: `Meal text: "${cleanDescription}"
 
 Return JSON:
 {
