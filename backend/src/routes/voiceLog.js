@@ -152,30 +152,36 @@ router.post('/process', requireAuth, async (req, res) => {
     // P0 FIX: Return frontend-ready analysisResult structure
     // This prevents client-side guessing and ensures consistency
     const analysisResult = {
-      items: detectedIngredients.map(item => ({
-        name: item.name,
-        itemId: item.id,
-        portion: {
-          amount: item.portion?.amount || item.quantity || 1,
-          unit: item.portion?.unit || item.unit || 'serving',
-          servingText: `${item.portion?.amount || item.quantity || 1} ${item.portion?.unit || item.unit || 'serving'}`
-        },
-        macros: {
-          calories_kcal: item.nutrition?.calories || 0,
-          protein_g: item.nutrition?.protein_g || item.nutrition?.protein || 0,
-          carbs_g: item.nutrition?.carbs_g || item.nutrition?.carbs || 0,
-          fat_g: item.nutrition?.fats || item.nutrition?.fat_g || item.nutrition?.fat || 0,
-          fiber_g: item.nutrition?.fiber_g || 0,
-          sugar_g: item.nutrition?.sugar_g || 0,
-          sodium_mg: item.nutrition?.sodium_mg || 0
-        },
-        micros: item.nutrition?.micros || {},
-        confidence: item.confidence,
-        source: item.source || 'ai_estimate',
-        isEstimated: item.source === 'ai_estimate',
-        suggestions: []
-      })),
-      totals: {}, // Calculated on frontend or here if needed, but items are authoritative
+      items: detectedIngredients.map(item => {
+        // Handle both direct nutrition (AI) and canonical.nutrition (DB matches)
+        const nutrition = item.nutrition || item.canonical?.nutrition || {};
+        const portion = item.portion || item.canonical?.portion || {};
+
+        return {
+          name: item.name,
+          itemId: item.id,
+          portion: {
+            amount: portion.amount || item.quantity || 1,
+            unit: portion.unit || item.unit || 'serving',
+            servingText: `${portion.amount || item.quantity || 1} ${portion.unit || item.unit || 'serving'}`
+          },
+          macros: {
+            calories_kcal: nutrition.calories || nutrition.calories_kcal || 0,
+            protein_g: nutrition.protein_g || nutrition.protein || 0,
+            carbs_g: nutrition.carbs_g || nutrition.carbs || 0,
+            fat_g: nutrition.fats || nutrition.fat_g || nutrition.fat || 0,
+            fiber_g: nutrition.fiber_g || nutrition.fiber || 0,
+            sugar_g: nutrition.sugar_g || nutrition.sugar || 0,
+            sodium_mg: nutrition.sodium_mg || nutrition.sodium || 0
+          },
+          micros: nutrition.micros || {},
+          confidence: item.confidence,
+          source: item.source || 'ai_estimate',
+          isEstimated: item.source === 'ai_estimate',
+          suggestions: []
+        };
+      }),
+      totals: {}, // Calculated on frontend
       source: 'voice',
       isEstimated: true
     };
@@ -278,30 +284,36 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
 
     // P0 FIX: Return frontend-ready analysisResult structure
     const analysisResult = {
-      items: detectedIngredients.map(item => ({
-        name: item.name,
-        itemId: item.id,
-        portion: {
-          amount: item.portion?.amount || item.quantity || 1,
-          unit: item.portion?.unit || item.unit || 'serving',
-          servingText: `${item.portion?.amount || item.quantity || 1} ${item.portion?.unit || item.unit || 'serving'}`
-        },
-        macros: {
-          calories_kcal: item.nutrition?.calories || 0,
-          protein_g: item.nutrition?.protein_g || item.nutrition?.protein || 0,
-          carbs_g: item.nutrition?.carbs_g || item.nutrition?.carbs || 0,
-          fat_g: item.nutrition?.fats || item.nutrition?.fat_g || item.nutrition?.fat || 0,
-          fiber_g: item.nutrition?.fiber_g || 0,
-          sugar_g: item.nutrition?.sugar_g || 0,
-          sodium_mg: item.nutrition?.sodium_mg || 0
-        },
-        micros: item.nutrition?.micros || {},
-        confidence: item.confidence,
-        source: item.source || 'ai_estimate',
-        isEstimated: item.source === 'ai_estimate',
-        suggestions: []
-      })),
-      totals: {}, 
+      items: detectedIngredients.map(item => {
+        // Handle both direct nutrition (AI) and canonical.nutrition (DB matches)
+        const nutrition = item.nutrition || item.canonical?.nutrition || {};
+        const portion = item.portion || item.canonical?.portion || {};
+
+        return {
+          name: item.name,
+          itemId: item.id,
+          portion: {
+            amount: portion.amount || item.quantity || 1,
+            unit: portion.unit || item.unit || 'serving',
+            servingText: `${portion.amount || item.quantity || 1} ${portion.unit || item.unit || 'serving'}`
+          },
+          macros: {
+            calories_kcal: nutrition.calories || nutrition.calories_kcal || 0,
+            protein_g: nutrition.protein_g || nutrition.protein || 0,
+            carbs_g: nutrition.carbs_g || nutrition.carbs || 0,
+            fat_g: nutrition.fats || nutrition.fat_g || nutrition.fat || 0,
+            fiber_g: nutrition.fiber_g || nutrition.fiber || 0,
+            sugar_g: nutrition.sugar_g || nutrition.sugar || 0,
+            sodium_mg: nutrition.sodium_mg || nutrition.sodium || 0
+          },
+          micros: nutrition.micros || {},
+          confidence: item.confidence,
+          source: item.source || 'ai_estimate',
+          isEstimated: item.source === 'ai_estimate',
+          suggestions: []
+        };
+      }),
+      totals: {},
       source: 'voice',
       isEstimated: true
     };

@@ -278,28 +278,81 @@ export default function LogScreen() {
       // Use the nutrition result directly from VoiceModal
       // No need to re-analyze - VoiceModal already did it!
       if (items && items.length > 0) {
-        // Set the analysis result directly
+        // Map items to expected format (backend items already have correct structure)
+        const mappedItems = items.map((item, idx) => ({
+          itemId: item.itemId || `voice-${idx}`,
+          name: item.name || item.foodName,
+          portion: item.portion || { amount: 1, unit: 'serving' },
+          macros: item.macros || {
+            calories_kcal: item.calories || 0,
+            protein_g: item.protein || 0,
+            carbs_g: item.carbs || 0,
+            fat_g: item.fat || item.fats || 0,
+            fiber_g: item.fiber || 0,
+            sugar_g: item.sugar || 0,
+            sodium_mg: item.sodium || 0,
+          },
+          micros: item.micros || {},
+          confidence: item.confidence || 0.9,
+          source: item.source || 'voice',
+        }));
+
+        // Calculate totals from items (backend returns empty totals)
+        const calculatedTotals = {
+          macros: {
+            calories_kcal: 0,
+            protein_g: 0,
+            carbs_g: 0,
+            fat_g: 0,
+            fiber_g: 0,
+            sugar_g: 0,
+            sodium_mg: 0,
+          },
+          micros: {},
+        };
+
+        mappedItems.forEach((item) => {
+          const m = item.macros || {};
+          calculatedTotals.macros.calories_kcal += m.calories_kcal || 0;
+          calculatedTotals.macros.protein_g += m.protein_g || 0;
+          calculatedTotals.macros.carbs_g += m.carbs_g || 0;
+          calculatedTotals.macros.fat_g += m.fat_g || 0;
+          calculatedTotals.macros.fiber_g += m.fiber_g || 0;
+          calculatedTotals.macros.sugar_g += m.sugar_g || 0;
+          calculatedTotals.macros.sodium_mg += m.sodium_mg || 0;
+
+          // Aggregate micros
+          if (item.micros) {
+            Object.entries(item.micros).forEach(([key, value]) => {
+              if (!calculatedTotals.micros[key]) {
+                calculatedTotals.micros[key] = { value: 0, unit: value?.unit || '' };
+              }
+              calculatedTotals.micros[key].value += value?.value || 0;
+            });
+          }
+        });
+
+        // Use provided totals if they have data, otherwise use calculated
+        const finalTotals = (totals?.macros && Object.keys(totals.macros).length > 0)
+          ? totals
+          : calculatedTotals;
+
         foodAnalysis.setAnalysisResult({
-          items: items.map((item, idx) => ({
-            itemId: item.itemId || `voice-${idx}`,
-            name: item.name || item.foodName,
-            portion: item.portion || { amount: 1, unit: 'serving' },
-            macros: item.macros || {
-              calories_kcal: item.calories,
-              protein_g: item.protein,
-              carbs_g: item.carbs,
-              fat_g: item.fat || item.fats,
-              fiber_g: item.fiber,
-              sugar_g: item.sugar,
-            },
-            micros: item.micros || {},
-            confidence: item.confidence || 0.9,
-          })),
-          totals: totals || {},
+          items: mappedItems,
+          totals: finalTotals,
+          source: 'voice',
+        });
+
+        console.log('[log] Voice analysis result set:', {
+          itemCount: mappedItems.length,
+          totalCalories: finalTotals.macros.calories_kcal,
         });
       } else if (nutrition?.data) {
         // Handle legacy format where nutrition data is nested
         foodAnalysis.setAnalysisResult(nutrition.data);
+      } else if (nutrition?.items) {
+        // Handle case where nutrition contains items directly
+        foodAnalysis.setAnalysisResult(nutrition);
       }
 
       setAnalyzedFood(null); // Clear single-item state to prefer list view
