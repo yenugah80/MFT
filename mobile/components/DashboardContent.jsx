@@ -344,10 +344,6 @@ export default function DashboardContent() {
     }
   }, [notify]);
 
-  useEffect(() => {
-    loadRecommendationsData();
-  }, [loadRecommendationsData]);
-
   // ============================================================================
   // GAMIFICATION LOGIC
   // ============================================================================
@@ -1115,7 +1111,7 @@ export default function DashboardContent() {
             // Track view interaction
             trackRecommendationView(rec.id);
           }}
-          onRefresh={loadRecommendationsData}
+          onRefresh={fetchRecommendations}
         />
 
         {/* ============================================ */}
