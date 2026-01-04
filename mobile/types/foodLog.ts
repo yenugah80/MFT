@@ -16,7 +16,7 @@ export interface FoodIngredient {
   calories?: number;
   protein?: number;
   carbs?: number;
-  fat?: number;
+  fats?: number;
   icon?: string;
   imageUrl?: string;
 }
@@ -64,7 +64,7 @@ export interface FoodLog {
   calories: number;
   protein: number;
   carbs: number;
-  fat: number;
+  fats: number;
 
   // Detailed carbohydrates
   fiber?: number;
@@ -98,6 +98,10 @@ export interface FoodLog {
   createdAt?: Date;
   updatedAt?: Date;
   syncError?: string; // Error message if sync failed
+
+  // Idempotency & tracking
+  clientEventId?: string; // Unique client event ID for idempotent requests
+  sourceMeta?: Record<string, any>; // Source-specific metadata (AI confidence, recipe URL, etc)
 }
 
 /**
@@ -110,7 +114,7 @@ export const emptyFoodLog: Omit<FoodLog, 'source'> = {
   calories: 0,
   protein: 0,
   carbs: 0,
-  fat: 0,
+  fats: 0,
   fiber: 0,
   sugar: 0,
   micronutrients: [],
@@ -147,79 +151,146 @@ export function validateFoodLog(log: Partial<FoodLog>): string | null {
 
 /**
  * Transform backend response to FoodLog
+ * CRITICAL FIX: Added validation to catch type mismatches from API
  */
 export function transformBackendToFoodLog(backendData: any): FoodLog {
-  return {
-    id: backendData.id,
-    userId: backendData.userId || backendData.user_id,
-    timestamp: backendData.loggedDate ? new Date(backendData.loggedDate).getTime() : Date.now(),
-    source: (backendData.source as FoodLogSource) || 'text',
-    status: 'synced',
-    loggedDate: backendData.loggedDate ? new Date(backendData.loggedDate) : undefined,
+  try {
+    // Validate required fields exist
+    if (!backendData || typeof backendData !== 'object') {
+      console.error('[transformBackendToFoodLog] Invalid data: not an object', backendData);
+      throw new Error('Invalid backend data: not an object');
+    }
 
-    foodName: backendData.foodName || backendData.food_name || '',
-    cookingMethod: backendData.cookingMethod,
-    servingSize: backendData.servingSize || backendData.serving_size,
-    mealType: backendData.mealType || backendData.meal_type,
+    // Validate macro fields are numbers (catch "150" string instead of 150)
+    const calories = Number(backendData.calories || 0);
+    const protein = Number(backendData.protein || 0);
+    const carbs = Number(backendData.carbs || 0);
+    const fat = Number(backendData.fats || backendData.fat || 0);
 
-    calories: backendData.calories || 0,
-    protein: backendData.protein || 0,
-    carbs: backendData.carbs || 0,
-    fat: backendData.fats || backendData.fat || 0,
+    if (isNaN(calories) || isNaN(protein) || isNaN(carbs) || isNaN(fat)) {
+      console.error('[transformBackendToFoodLog] Invalid macros:', { calories, protein, carbs, fat });
+      throw new Error('Invalid macro values: expected numbers');
+    }
 
-    fiber: backendData.fiber,
-    sugar: backendData.sugar,
-    sugarAlcohols: backendData.sugarAlcohols,
-    netCarbs: backendData.netCarbs || calculateNetCarbs(backendData),
+    // Validate arrays are actually arrays
+    const micronutrients = Array.isArray(backendData.micronutrients) ? backendData.micronutrients : [];
+    const ingredients = Array.isArray(backendData.ingredients) ? backendData.ingredients : [];
+    const dietLabels = Array.isArray(backendData.dietLabels || backendData.diet_labels) ? (backendData.dietLabels || backendData.diet_labels) : [];
+    const allergens = Array.isArray(backendData.allergens) ? backendData.allergens : [];
 
-    micronutrients: backendData.micronutrients || [],
-    micros: backendData.micros || {},
+    // Validate micros is object
+    const micros = (backendData.micros && typeof backendData.micros === 'object') ? backendData.micros : {};
 
-    ingredients: backendData.ingredients || [],
+    return {
+      id: backendData.id,
+      userId: backendData.userId || backendData.user_id,
+      timestamp: backendData.loggedDate ? new Date(backendData.loggedDate).getTime() : Date.now(),
+      source: (backendData.source as FoodLogSource) || 'text',
+      status: 'synced',
+      loggedDate: backendData.loggedDate ? new Date(backendData.loggedDate) : undefined,
 
-    healthScore: backendData.healthScore || 0,
-    nutriscore: backendData.nutriscore,
-    ecoscore: backendData.ecoscore,
-    novaScore: backendData.novaScore || backendData.nova_score,
+      foodName: String(backendData.foodName || backendData.food_name || ''),
+      cookingMethod: backendData.cookingMethod,
+      servingSize: backendData.servingSize || backendData.serving_size,
+      mealType: backendData.mealType || backendData.meal_type,
 
-    dietLabels: backendData.dietLabels || backendData.diet_labels || [],
-    allergens: backendData.allergens || [],
-    barcode: backendData.barcode,
-    imageUrl: backendData.imageUrl || backendData.image_url,
+      calories,
+      protein,
+      carbs,
+      fats: fat,
 
-    createdAt: backendData.createdAt ? new Date(backendData.createdAt) : undefined,
-    updatedAt: backendData.updatedAt ? new Date(backendData.updatedAt) : undefined,
-  };
+      fiber: typeof backendData.fiber === 'number' ? backendData.fiber : undefined,
+      sugar: typeof backendData.sugar === 'number' ? backendData.sugar : undefined,
+      sugarAlcohols: typeof backendData.sugarAlcohols === 'number' ? backendData.sugarAlcohols : undefined,
+      netCarbs: backendData.netCarbs || calculateNetCarbs(backendData),
+
+      micronutrients,
+      micros,
+
+      ingredients,
+
+      healthScore: Number(backendData.healthScore || 0),
+      nutriscore: backendData.nutriscore,
+      ecoscore: backendData.ecoscore,
+      novaScore: backendData.novaScore || backendData.nova_score,
+
+      dietLabels,
+      allergens,
+      barcode: backendData.barcode,
+      imageUrl: backendData.imageUrl || backendData.image_url,
+
+      createdAt: backendData.createdAt ? new Date(backendData.createdAt) : undefined,
+      updatedAt: backendData.updatedAt ? new Date(backendData.updatedAt) : undefined,
+    };
+  } catch (error) {
+    console.error('[transformBackendToFoodLog] Transformation failed:', error, backendData);
+    // Throw error instead of silently failing with default values
+    throw new Error(`Failed to transform backend data to FoodLog: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
  * Transform FoodLog to backend payload
+ * CRITICAL FIX: Added validation to ensure required fields are present and correct type
  */
 export function transformFoodLogToBackend(log: FoodLog): any {
-  const resolvedLoggedDate = log.loggedDate
-    ? new Date(log.loggedDate).toISOString()
-    : (log.timestamp ? new Date(log.timestamp).toISOString() : new Date().toISOString());
+  try {
+    // Validate required fields
+    if (!log || typeof log !== 'object') {
+      console.error('[transformFoodLogToBackend] Invalid log object:', log);
+      throw new Error('Invalid FoodLog: not an object');
+    }
 
-  return {
-    foodName: log.foodName,
-    calories: Math.round(log.calories),
-    protein: Math.round(log.protein),
-    carbs: Math.round(log.carbs),
-    fats: Math.round(log.fat),
-    servingSize: log.servingSize,
-    mealType: log.mealType,
-    micros: log.micros || {},
-    nutriscore: log.nutriscore,
-    ecoscore: log.ecoscore,
-    novaScore: log.novaScore,
-    dietLabels: log.dietLabels || [],
-    allergens: log.allergens || [],
-    ingredients: log.ingredients || [],
-    barcode: log.barcode,
-    imageUrl: log.imageUrl,
-    loggedDate: resolvedLoggedDate,
-    source: log.source,
-    clientEventId: log.clientEventId,  // CRITICAL FIX: Include for idempotency
-    sourceMeta: log.sourceMeta || {},
-  };
+    if (!log.foodName || typeof log.foodName !== 'string') {
+      console.error('[transformFoodLogToBackend] Missing or invalid foodName:', log.foodName);
+      throw new Error('Invalid FoodLog: foodName is required and must be a string');
+    }
+
+    // Validate macro fields
+    const calories = Math.round(Number(log.calories || 0));
+    const protein = Math.round(Number(log.protein || 0));
+    const carbs = Math.round(Number(log.carbs || 0));
+    const fat = Math.round(Number(log.fats || 0));
+
+    if (isNaN(calories) || isNaN(protein) || isNaN(carbs) || isNaN(fat)) {
+      console.error('[transformFoodLogToBackend] Invalid macros:', { calories, protein, carbs, fat });
+      throw new Error('Invalid FoodLog: macros must be numbers');
+    }
+
+    // Validate arrays
+    const dietLabels = Array.isArray(log.dietLabels) ? log.dietLabels : [];
+    const allergens = Array.isArray(log.allergens) ? log.allergens : [];
+    const ingredients = Array.isArray(log.ingredients) ? log.ingredients : [];
+
+    const resolvedLoggedDate = log.loggedDate
+      ? new Date(log.loggedDate).toISOString()
+      : (log.timestamp ? new Date(log.timestamp).toISOString() : new Date().toISOString());
+
+    return {
+      foodName: log.foodName,
+      calories,
+      protein,
+      carbs,
+      fats: fat,
+      servingSize: log.servingSize,
+      mealType: log.mealType,
+      micros: (log.micros && typeof log.micros === 'object') ? log.micros : {},
+      nutriscore: log.nutriscore,
+      ecoscore: log.ecoscore,
+      novaScore: log.novaScore,
+      dietLabels,
+      allergens,
+      ingredients,
+      barcode: log.barcode,
+      imageUrl: log.imageUrl,
+      loggedDate: resolvedLoggedDate,
+      source: log.source,
+      clientEventId: log.clientEventId,  // CRITICAL FIX: Include for idempotency
+      sourceMeta: log.sourceMeta || {},
+    };
+  } catch (error) {
+    console.error('[transformFoodLogToBackend] Transformation failed:', error, log);
+    // Throw error instead of silently failing
+    throw new Error(`Failed to transform FoodLog to backend: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

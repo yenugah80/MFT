@@ -1,6 +1,12 @@
 /**
  * useRecommendations - Custom hook for managing food recommendations
  *
+ * Uses React Query for:
+ * - Automatic caching (5-minute TTL)
+ * - Request deduplication
+ * - Automatic refetching
+ * - Cache invalidation
+ *
  * Handles:
  * - Fetching personalized recommendations
  * - Tracking user interactions (view, accept, reject)
@@ -9,98 +15,82 @@
  * - Error handling and notifications
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const STALE_TIME = 5 * 60 * 1000; // 5 minutes
+const CACHE_TIME = 10 * 60 * 1000; // 10 minutes
 
 export function useRecommendations() {
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [lastFetchTime, setLastFetchTime] = useState(null);
+  const queryClient = useQueryClient();
 
-  // CRITICAL FIX: Request deduplication + AbortController
-  // Prevents timeout cascades from duplicate concurrent requests
-  const pendingRequestRef = useRef(null);
-  const abortControllerRef = useRef(null);
-
-  // Fetch recommendations with deduplication
-  const fetchRecommendations = useCallback(async (forceRefresh = false) => {
-    // CRITICAL FIX: If request already pending, return existing promise
-    // This prevents duplicate API calls on rapid double-clicks
-    if (pendingRequestRef.current && !forceRefresh) {
-      return pendingRequestRef.current;
-    }
-
-    // Check cache (skip if forceRefresh)
-    if (!forceRefresh && lastFetchTime && Date.now() - lastFetchTime < CACHE_DURATION) {
-      return recommendations;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    // CRITICAL FIX: Cancel previous request if starting a new one
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    const newAbortController = new AbortController();
-    abortControllerRef.current = newAbortController;
-
-    const fetchPromise = (async () => {
+  // ============================================================================
+  // FETCH RECOMMENDATIONS (useQuery handles deduplication + caching automatically)
+  // ============================================================================
+  const {
+    data: recommendations = [],
+    isLoading: loading,
+    error,
+    refetch: fetchRecommendations,
+    isFetching
+  } = useQuery({
+    queryKey: ['recommendations'],
+    queryFn: async () => {
       try {
         const response = await apiClient.get('/recommendations', {
-          params: { limit: 5 },
-          signal: newAbortController.signal
+          params: { limit: 5 }
         });
-
-        const recs = response.data?.recommendations || [];
-        setRecommendations(recs);
-        setLastFetchTime(Date.now());
-
-        return recs;
+        return response.data?.recommendations || [];
       } catch (err) {
-        // CRITICAL FIX: Distinguish timeout from other errors
+        // Distinguish timeout from other errors
         const isTimeout = err.message === 'Request timeout';
         const errorMessage = isTimeout
           ? 'Request took too long (10s) - try again'
           : err?.response?.data?.error || 'Failed to load recommendations';
 
         console.error('[useRecommendations] Fetch error:', err);
-        setError(errorMessage);
-        return [];
-      } finally {
-        setLoading(false);
-        // Clear pending request reference
-        pendingRequestRef.current = null;
+        throw new Error(errorMessage);
       }
-    })();
+    },
+    staleTime: STALE_TIME,
+    gcTime: CACHE_TIME, // formerly cacheTime
+    retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
 
-    // Store promise for deduplication
-    pendingRequestRef.current = fetchPromise;
-    return fetchPromise;
-  }, [recommendations, lastFetchTime]);
-
-  // Track interaction with recommendation
-  const trackInteraction = useCallback(async (recommendationId, action, meta = {}) => {
-    try {
-      await apiClient.post(`/recommendations/${recommendationId}/track`, {
+  // ============================================================================
+  // TRACK INTERACTION (useMutation)
+  // ============================================================================
+  const trackInteractionMutation = useMutation({
+    mutationFn: async ({ recommendationId, action, meta }) => {
+      const response = await apiClient.post(`/recommendations/${recommendationId}/track`, {
         action,
         ...meta
       });
+      return response.data;
+    },
+    onError: (err) => {
+      console.error('[useRecommendations] Track error:', err);
+    }
+  });
 
+  const trackInteraction = useCallback(async (recommendationId, action, meta = {}) => {
+    try {
+      await trackInteractionMutation.mutateAsync({ recommendationId, action, meta });
       return true;
     } catch (err) {
       console.error('[useRecommendations] Track error:', err);
       return false;
     }
-  }, []);
+  }, [trackInteractionMutation]);
 
-  // Accept recommendation and add to food log
-  const acceptRecommendation = useCallback(async (recommendation) => {
-    try {
+  // ============================================================================
+  // ACCEPT RECOMMENDATION (useMutation + cache invalidation)
+  // ============================================================================
+  const acceptRecommendationMutation = useMutation({
+    mutationFn: async (recommendation) => {
       // Track interaction
       await trackInteraction(recommendation.id, 'accept');
 
@@ -112,23 +102,28 @@ export function useRecommendations() {
           mealType: recommendation.mealType
         }
       );
+      return response.data;
+    },
+    onSuccess: () => {
+      // CRITICAL FIX: Invalidate cache AND refetch new recommendations
+      // React Query automatically handles this efficiently
+      console.log('[useRecommendations] Invalidating recommendations cache after accept');
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] });
+      // Also invalidate dashboard cache so it updates immediately
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (err) => {
+      console.error('[useRecommendations] Accept error:', err);
+    }
+  });
 
-      // CRITICAL FIX: Clear cache AND refetch new recommendations
-      // This prevents stale UI showing old recommendations for 5 minutes
-      setLastFetchTime(null);
-      console.log('[useRecommendations] Cache invalidated after accepting recommendation');
-
-      // Auto-fetch fresh recommendations
-      // Don't await - let it happen in background
-      fetchRecommendations(true).catch(err => {
-        console.error('[useRecommendations] Failed to refetch after accept:', err);
-        // Silently fail - user already got success message
-      });
-
+  const acceptRecommendation = useCallback(async (recommendation) => {
+    try {
+      const result = await acceptRecommendationMutation.mutateAsync(recommendation);
       return {
         success: true,
-        foodLog: response.data?.foodLog,
-        message: response.data?.message || 'Added to food log!'
+        foodLog: result?.foodLog,
+        message: result?.message || 'Added to food log!'
       };
     } catch (err) {
       console.error('[useRecommendations] Accept error:', err);
@@ -138,12 +133,23 @@ export function useRecommendations() {
         foodLog: null
       };
     }
-  }, [trackInteraction, fetchRecommendations]);
+  }, [acceptRecommendationMutation, trackInteraction]);
 
-  // Reject recommendation with reason
+  // ============================================================================
+  // REJECT RECOMMENDATION (useMutation)
+  // ============================================================================
+  const rejectRecommendationMutation = useMutation({
+    mutationFn: async ({ recommendationId, reason }) => {
+      await trackInteraction(recommendationId, 'reject', { reason });
+    },
+    onError: (err) => {
+      console.error('[useRecommendations] Reject error:', err);
+    }
+  });
+
   const rejectRecommendation = useCallback(async (recommendationId, reason) => {
     try {
-      await trackInteraction(recommendationId, 'reject', { reason });
+      await rejectRecommendationMutation.mutateAsync({ recommendationId, reason });
       return { success: true };
     } catch (err) {
       console.error('[useRecommendations] Reject error:', err);
@@ -152,9 +158,11 @@ export function useRecommendations() {
         error: err?.response?.data?.error || 'Failed to record rejection'
       };
     }
-  }, [trackInteraction]);
+  }, [rejectRecommendationMutation, trackInteraction]);
 
-  // Get recommendation history with optional filters
+  // ============================================================================
+  // GET HISTORY (useQuery)
+  // ============================================================================
   const getHistory = useCallback(async (filters = {}) => {
     const { days = 30, status, type, limit = 50 } = filters;
 
@@ -182,7 +190,9 @@ export function useRecommendations() {
     }
   }, []);
 
-  // Get detailed recommendation
+  // ============================================================================
+  // GET DETAILED RECOMMENDATION (useQuery)
+  // ============================================================================
   const getDetailedRecommendation = useCallback(async (recommendationId) => {
     try {
       const response = await apiClient.get(`/recommendations/${recommendationId}`);
@@ -192,8 +202,6 @@ export function useRecommendations() {
       };
     } catch (err) {
       console.error('[useRecommendations] Detail fetch error:', err);
-      // CRITICAL FIX: Return consistent error format instead of throwing
-      // Allows callers to handle uniformly: if (result.success) ... else error
       return {
         success: false,
         error: err?.response?.data?.error || 'Failed to fetch recommendation details',
@@ -202,17 +210,20 @@ export function useRecommendations() {
     }
   }, []);
 
-  // Clear cache on demand (useful when food is logged from other sources)
+  // ============================================================================
+  // CLEAR CACHE (React Query)
+  // ============================================================================
   const clearCache = useCallback(() => {
-    setLastFetchTime(null);
     console.log('[useRecommendations] Cache cleared on demand');
-  }, []);
+    queryClient.invalidateQueries({ queryKey: ['recommendations'] });
+  }, [queryClient]);
 
   return {
     // State
     recommendations,
     loading,
     error,
+    isFetching,
 
     // Methods
     fetchRecommendations,
@@ -231,52 +242,43 @@ export function useRecommendations() {
 
 /**
  * useRecommendationHistory - Hook for managing recommendation history and stats
+ * Uses React Query for automatic caching and refetching
  */
 export function useRecommendationHistory() {
-  const [history, setHistory] = useState([]);
-  const [stats, setStats] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
 
-  const fetchHistory = useCallback(async (filters = {}) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await apiClient.get('/recommendations/history/list', {
-        params: filters
-      });
-
-      setHistory(response.data?.history || []);
-      setStats(response.data?.stats || {});
-
-      return {
-        history: response.data?.history || [],
-        stats: response.data?.stats || {}
-      };
-    } catch (err) {
-      console.error('[useRecommendationHistory] Fetch error:', err);
-      setError(err?.response?.data?.error || 'Failed to fetch history');
-
-      // CRITICAL FIX: Clear state on error
-      // Previously: old history stayed in state while error message said "failed to fetch"
-      // This confused users who thought they were looking at fresh data
-      setHistory([]);
-      setStats({});
-
-      return { history: [], stats: {} };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: historyData = { history: [], stats: {} },
+    isLoading: loading,
+    error,
+    refetch: fetchHistory
+  } = useQuery({
+    queryKey: ['recommendations', 'history'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/recommendations/history/list');
+        return {
+          history: response.data?.history || [],
+          stats: response.data?.stats || {}
+        };
+      } catch (err) {
+        console.error('[useRecommendationHistory] Fetch error:', err);
+        // Return empty state on error (prevents stale data display)
+        throw err?.response?.data?.error || 'Failed to fetch history';
+      }
+    },
+    staleTime: STALE_TIME,
+    gcTime: CACHE_TIME,
+    retry: 1
+  });
 
   return {
-    history,
-    stats,
+    history: historyData.history,
+    stats: historyData.stats,
     loading,
     error,
     fetchHistory,
-    isEmpty: history.length === 0
+    isEmpty: historyData.history.length === 0
   };
 }
 

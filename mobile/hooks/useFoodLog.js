@@ -19,6 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '../constants/api';
 import { validateFoodLog, transformFoodLogToBackend, transformBackendToFoodLog } from '../types/foodLog';
 import { db, runInTransaction } from '../services/database';
+import { generateClientEventId } from '../utils/idGenerator';
 
 // ============================================================================
 // CONSTANTS
@@ -74,14 +75,6 @@ const sanitizeNumber = (val) => {
   return (typeof val === 'number' && !isNaN(val)) ? val : null;
 };
 
-/**
- * Generate unique client event ID
- * @param {number} timestamp - Timestamp for ID
- * @returns {string} Unique event ID
- */
-const generateClientEventId = (timestamp = Date.now()) => {
-  return `${timestamp}-${Math.random().toString(36).slice(2, 11)}`;
-};
 
 // ============================================================================
 // MAIN HOOK
@@ -262,8 +255,8 @@ export function useFoodLog() {
               }
 
               // Ensure required fields exist
-              const clientEventId = log.clientEventId || generateClientEventId(log.timestamp);
               const logUserId = log.userId || userId;
+              const clientEventId = log.clientEventId || generateClientEventId(logUserId);
               const timestamp = log.timestamp || Date.now();
               const status = log.status || 'pending';
 
@@ -407,7 +400,7 @@ export function useFoodLog() {
 
           // Ensure legacy logs have clientEventId
           if (!log.clientEventId) {
-            log.clientEventId = generateClientEventId(log.timestamp);
+            log.clientEventId = generateClientEventId(userId);
             console.log('[useFoodLog] Generated clientEventId for legacy log:', log.foodName);
           }
 
@@ -543,7 +536,7 @@ export function useFoodLog() {
         timestamp: foodLog.timestamp || Date.now(),
         userId,
         status: 'pending',
-        clientEventId: foodLog.clientEventId || generateClientEventId(),
+        clientEventId: foodLog.clientEventId || generateClientEventId(userId),
       };
 
       // Insert into SQLite

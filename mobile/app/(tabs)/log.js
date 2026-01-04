@@ -463,7 +463,7 @@ export default function LogScreen() {
           calories: item.macros?.calories_kcal || 0,
           protein: item.macros?.protein_g || 0,
           carbs: item.macros?.carbs_g || 0,
-          fat: item.macros?.fat_g || 0,
+          fats: item.macros?.fat_g || 0,
           fiber: item.macros?.fiber_g || 0,
           sugar: item.macros?.sugar_g || 0,
           micros: item.micros || {},
@@ -474,7 +474,7 @@ export default function LogScreen() {
         totalCalories += foodLogData.calories || 0;
         totalProtein += foodLogData.protein || 0;
         totalCarbs += foodLogData.carbs || 0;
-        totalFat += foodLogData.fat || 0;
+        totalFat += foodLogData.fats || 0;
 
         return foodLog.addLog(foodLogData);
       });
@@ -487,7 +487,7 @@ export default function LogScreen() {
         calories: totalCalories,
         protein: totalProtein,
         carbs: totalCarbs,
-        fat: totalFat,
+        fats: totalFat,
         mealId: mealEventId,
         originalAnalysis: foodAnalysis.analysisResult
       });
@@ -521,7 +521,7 @@ export default function LogScreen() {
       calories: item.macros?.calories_kcal ?? null,
       protein: item.macros?.protein_g ?? null,
       carbs: item.macros?.carbs_g ?? null,
-      fat: item.macros?.fat_g ?? null,
+      fats: item.macros?.fat_g ?? null,
       fiber: item.macros?.fiber_g ?? null,
       sugar: item.macros?.sugar_g ?? null,
       sugarAlcohols: item.macros?.sugarAlcohols_g ?? null,
@@ -621,7 +621,7 @@ export default function LogScreen() {
       calories: foodItem.calories,
       protein: foodItem.protein,
       carbs: foodItem.carbs,
-      fat: foodItem.fat,
+      fats: foodItem.fats || foodItem.fat,
       fiber: foodItem.fiber,
       sugar: foodItem.sugar,
       micros: foodItem.micros || {},
@@ -643,7 +643,7 @@ export default function LogScreen() {
         calories: foodItem.calories,
         protein: foodItem.protein,
         carbs: foodItem.carbs,
-        fat: foodItem.fat,
+        fats: foodItem.fats || foodItem.fat,
         fiber: foodItem.fiber,
         sugar: foodItem.sugar,
         sodium: foodItem.sodium,
@@ -1157,7 +1157,7 @@ export default function LogScreen() {
             onShare={async () => {
               try {
                 const shareText = `I logged ${loggedMeal.foodName} - ${loggedMeal.calories} kcal\n` +
-                  `Protein: ${loggedMeal.protein}g | Carbs: ${loggedMeal.carbs}g | Fat: ${loggedMeal.fat}g`;
+                  `Protein: ${loggedMeal.protein}g | Carbs: ${loggedMeal.carbs}g | Fat: ${loggedMeal.fats || loggedMeal.fat}g`;
 
                 await Share.share({
                   message: shareText,
