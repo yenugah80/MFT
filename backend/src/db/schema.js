@@ -625,22 +625,11 @@ export const aiEstimatedFoodsTable = pgTable(
     sourceQuery: text("source_query").notNull(), // Normalized query for cache matching
 
     // Nutrition data (stored as JSON for flexibility)
-    nutrition: json("nutrition").$type<{
-      calories: number;
-      protein: number;
-      carbs: number;
-      fats: number;
-      fiber?: number;
-      sugar?: number;
-      sodium?: number;
-      micros?: Record<string, { value: number; unit: string }>;
-    }>().notNull(),
+    // Structure: { calories, protein, carbs, fats, fiber, sugar, sodium, micros }
+    nutrition: json("nutrition").notNull(),
 
-    // Portion information
-    portion: json("portion").$type<{
-      amount: number;
-      unit: string;
-    }>().default({ amount: 1, unit: 'serving' }),
+    // Portion information { amount, unit }
+    portion: json("portion").default({ amount: 1, unit: 'serving' }),
 
     // Regional support
     cuisine: text("cuisine"),
