@@ -2,7 +2,9 @@ import express from 'express';
 import multer from 'multer';
 import { validateExtraction, isComplexDishInput } from '../services/canonicalIngredients.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
-import { AiEstimatedFood } from '../models/AiEstimatedFood.js';
+import { db } from '../db/index.js';
+import { aiEstimatedFoodsTable } from '../db/schema.js';
+import { eq, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import crypto from 'crypto';
 
@@ -86,60 +88,98 @@ router.post('/process', requireAuth, async (req, res) => {
     // SKIP OpenAI for partial requests to ensure instant UI feedback
     if ((detectedIngredients.length === 0 || isComplex) && !isPartial) {
       console.log(`[VoiceLog] Local dictionary missed "${text}". Calling OpenAI...`);
-      
+
       // 1. CHECK DB FIRST: Has anyone logged this before?
       // This makes "sushi" fast for the 2nd person who logs it
       const normalizedQuery = normalizeFoodText(text);
-      const dbMatch = await AiEstimatedFood.findOne({ sourceQuery: normalizedQuery });
-      
-      if (dbMatch) {
-        console.log(`[VoiceLog] ⚡ DB Hit for "${text}"`);
-        detectedIngredients = [{
-          name: dbMatch.name,
-          canonical: { nutrition: dbMatch.nutrition, portion: dbMatch.portion },
-          confidence: dbMatch.confidence,
-          healthScore: dbMatch.healthScore,
-          nutriScore: dbMatch.nutriScore,
-          cookingMethod: dbMatch.cookingMethod,
-          analysis: dbMatch.analysis,
-          autoAdded: true
-        }];
-      } else {
-        // 2. If not in DB, call OpenAI
-      const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
-      if (aiResults.length > 0) {
-        detectedIngredients = aiResults;
 
-        // SAVE TO DB: Permanently store these new foods
-        // GUARD: Only save high-quality results to prevent DB pollution
-        const highQualityFoods = aiResults.filter(item => 
-          (item.confidence >= 0.6) && (item.canonical?.nutrition?.calories !== undefined)
-        );
+      try {
+        const [dbMatch] = await db
+          .select()
+          .from(aiEstimatedFoodsTable)
+          .where(eq(aiEstimatedFoodsTable.sourceQuery, normalizedQuery))
+          .limit(1);
 
-        try {
-          const newFoods = highQualityFoods.map(item => ({
-            name: item.name,
-            nutrition: {
-              ...item.canonical.nutrition,
-              micros: item.canonical.nutrition.micros || {}
-            },
-            portion: item.canonical.portion,
-            confidence: item.confidence,
-            healthScore: item.canonical.healthScore,
-            nutriScore: item.canonical.nutriScore,
-            cookingMethod: item.canonical.cookingMethod,
-            analysis: item.canonical.analysis,
-            sourceQuery: normalizedQuery, // Store normalized text for privacy & matching
-            source: 'ai_estimate'
-          }));
-          
-          // Use insertMany with ordered: false to ignore duplicates if any
-          await AiEstimatedFood.insertMany(newFoods, { ordered: false }).catch(() => {});
-          console.log(`[VoiceLog] Saved ${newFoods.length} new foods to database.`);
-        } catch (dbError) {
-          console.error("[VoiceLog] Failed to save to DB:", dbError.message);
+        if (dbMatch) {
+          console.log(`[VoiceLog] ⚡ DB Hit for "${text}"`);
+
+          // Update access count for cache analytics
+          await db
+            .update(aiEstimatedFoodsTable)
+            .set({
+              accessCount: sql`${aiEstimatedFoodsTable.accessCount} + 1`,
+              lastAccessedAt: new Date()
+            })
+            .where(eq(aiEstimatedFoodsTable.id, dbMatch.id));
+
+          detectedIngredients = [{
+            name: dbMatch.name,
+            canonical: { nutrition: dbMatch.nutrition, portion: dbMatch.portion },
+            confidence: parseFloat(dbMatch.confidence) || 0.7,
+            healthScore: dbMatch.healthScore,
+            nutriScore: dbMatch.nutriScore,
+            cookingMethod: dbMatch.cookingMethod,
+            analysis: dbMatch.analysis,
+            autoAdded: true
+          }];
+        } else {
+          // 2. If not in DB, call OpenAI
+          const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+          if (aiResults.length > 0) {
+            detectedIngredients = aiResults;
+            console.log(`[VoiceLog] OpenAI returned ${aiResults.length} items for "${text}"`);
+
+            // SAVE TO DB: Permanently store these new foods
+            // GUARD: Only save high-quality results to prevent DB pollution
+            const highQualityFoods = aiResults.filter(item =>
+              (item.confidence >= 0.6) && (item.canonical?.nutrition?.calories !== undefined)
+            );
+
+            // Save first high-quality result (avoid duplicates with unique constraint)
+            if (highQualityFoods.length > 0) {
+              const item = highQualityFoods[0];
+              try {
+                await db
+                  .insert(aiEstimatedFoodsTable)
+                  .values({
+                    name: item.name,
+                    sourceQuery: normalizedQuery,
+                    nutrition: {
+                      calories: item.canonical.nutrition.calories,
+                      protein: item.canonical.nutrition.protein,
+                      carbs: item.canonical.nutrition.carbs,
+                      fats: item.canonical.nutrition.fats,
+                      fiber: item.canonical.nutrition.fiber,
+                      sugar: item.canonical.nutrition.sugar,
+                      sodium: item.canonical.nutrition.sodium,
+                      micros: item.canonical.nutrition.micros || {}
+                    },
+                    portion: item.canonical.portion || { amount: 1, unit: 'serving' },
+                    confidence: String(item.confidence),
+                    healthScore: item.canonical.healthScore,
+                    nutriScore: item.canonical.nutriScore,
+                    cookingMethod: item.canonical.cookingMethod,
+                    analysis: item.canonical.analysis,
+                    source: 'ai_estimate'
+                  })
+                  .onConflictDoNothing(); // Ignore if already exists
+                console.log(`[VoiceLog] Saved "${item.name}" to database cache.`);
+              } catch (dbError) {
+                // Ignore duplicate key errors
+                if (!dbError.message?.includes('duplicate')) {
+                  console.error("[VoiceLog] Failed to save to DB:", dbError.message);
+                }
+              }
+            }
+          }
         }
-      }
+      } catch (dbError) {
+        console.error("[VoiceLog] DB lookup failed, calling OpenAI directly:", dbError.message);
+        // Fallback to OpenAI if DB fails
+        const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+        if (aiResults.length > 0) {
+          detectedIngredients = aiResults;
+        }
       }
     }
 

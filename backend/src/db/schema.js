@@ -612,3 +612,71 @@ export const userPortionPreferencesTable = pgTable(
     ),
   })
 );
+
+// AI Estimated Foods table - caches OpenAI nutrition estimates
+// Replaces Mongoose model with Drizzle for PostgreSQL compatibility
+export const aiEstimatedFoodsTable = pgTable(
+  "ai_estimated_foods",
+  {
+    id: serial("id").primaryKey(),
+
+    // Core food identification
+    name: text("name").notNull(),
+    sourceQuery: text("source_query").notNull(), // Normalized query for cache matching
+
+    // Nutrition data (stored as JSON for flexibility)
+    nutrition: json("nutrition").$type<{
+      calories: number;
+      protein: number;
+      carbs: number;
+      fats: number;
+      fiber?: number;
+      sugar?: number;
+      sodium?: number;
+      micros?: Record<string, { value: number; unit: string }>;
+    }>().notNull(),
+
+    // Portion information
+    portion: json("portion").$type<{
+      amount: number;
+      unit: string;
+    }>().default({ amount: 1, unit: 'serving' }),
+
+    // Regional support
+    cuisine: text("cuisine"),
+    region: text("region"),
+    cookingMethod: text("cooking_method"),
+
+    // AI metadata
+    confidence: decimal("confidence", { precision: 3, scale: 2 }).default("0.70"),
+    healthScore: integer("health_score"),
+    nutriScore: text("nutri_score"), // A-E
+    analysis: text("analysis"),
+    aiModel: text("ai_model").default("gpt-4o-mini"),
+
+    // Verification tracking
+    isVerified: boolean("is_verified").default(false),
+    verificationCount: integer("verification_count").default(0),
+    correctionCount: integer("correction_count").default(0),
+
+    // Cache optimization
+    accessCount: integer("access_count").default(0),
+    lastAccessedAt: timestamp("last_accessed_at").defaultNow(),
+
+    // Source tracking
+    source: text("source").default("ai_estimate"), // ai_estimate, user_submitted, usda_fallback
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    // Index for cache lookups
+    sourceQueryIdx: index("ai_foods_source_query_idx").on(table.sourceQuery),
+    // Compound index for regional lookups
+    regionalIdx: index("ai_foods_regional_idx").on(table.sourceQuery, table.cuisine, table.region),
+    // Index for verified foods
+    verifiedIdx: index("ai_foods_verified_idx").on(table.sourceQuery, table.isVerified),
+    // Unique constraint for source query (prevent duplicates)
+    sourceQueryUnique: unique("ai_foods_source_query_unique").on(table.sourceQuery),
+  })
+);
