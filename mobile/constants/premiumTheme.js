@@ -50,41 +50,47 @@ export const SURFACES = {
   },
 };
 
-// TEXT HIERARCHY
+// TEXT HIERARCHY - WCAG AA Compliant Contrast
 export const TEXT = {
-  primary: '#1F2937',       // Dark gray
-  secondary: '#4B5563',     // Medium gray
-  tertiary: '#6B7280',      // Light gray
-  muted: '#9CA3AF',         // Very light gray
+  primary: '#111827',       // Very dark gray (darker for better contrast on light bg)
+  secondary: '#374151',     // Medium-dark gray (improved from #4B5563)
+  tertiary: '#4B5563',      // Light-medium gray (improved from #6B7280)
+  muted: '#6B7280',         // Muted gray (improved from #9CA3AF for disabled states)
   white: '#FFFFFF',
+  onPurple: '#FFFFFF',      // Text ON purple backgrounds
+  onPurpleSecondary: '#E0E7FF', // Secondary text on purple
   brand: BRAND.primary,
 };
 
-// SEMANTIC COLORS
+// SEMANTIC COLORS - For colored overlays and indicators
 export const SEMANTIC = {
   success: {
-    base: '#10B981',
+    base: '#059669',         // Darker base for better visibility
     light: '#34D399',
-    dark: '#059669',
+    dark: '#047857',
     bg: '#ECFDF5',
+    text: '#FFFFFF',         // White text on success backgrounds
   },
   warning: {
-    base: '#F59E0B',
+    base: '#D97706',         // Darker for better contrast
     light: '#FBBF24',
-    dark: '#D97706',
+    dark: '#B45309',
     bg: '#FFFBEB',
+    text: '#FFFFFF',         // White text on warning backgrounds
   },
   danger: {
-    base: '#EF4444',
+    base: '#DC2626',         // Darker red for better contrast
     light: '#F87171',
-    dark: '#DC2626',
+    dark: '#991B1B',
     bg: '#FEF2F2',
+    text: '#FFFFFF',         // White text on danger backgrounds
   },
   info: {
-    base: '#3B82F6',
+    base: '#2563EB',         // Darker blue for better contrast
     light: '#60A5FA',
-    dark: '#2563EB',
+    dark: '#1d4ed8',
     bg: '#EFF6FF',
+    text: '#FFFFFF',         // White text on info backgrounds
   },
 };
 

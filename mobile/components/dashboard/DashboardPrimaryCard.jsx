@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
 import PremiumRing from './PremiumRing';
 import NutriScoreDial from './NutriScoreDial';
-import { TEXT } from '../../constants/premiumTheme';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 import { parseCalories, parseGoal } from '../../utils/safeNumbers';
 
 export default function DashboardPrimaryCard({
@@ -17,7 +18,13 @@ export default function DashboardPrimaryCard({
   onLogMeal,
 }) {
   return (
-    <GlassCard style={styles.primaryCard} padding="lg">
+    <LinearGradient
+      colors={[SURFACES.gradient.accent[0], SURFACES.gradient.accent[1]]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ borderRadius: 16, marginBottom: 12 }}
+    >
+      <GlassCard style={[styles.primaryCard, { margin: 2, marginVertical: 2 }]} padding="lg">
       {today.foodLogs && today.foodLogs.length > 0 ? (
         <View style={styles.primaryContent}>
           <NutriScoreDial data={data} size={180} />
@@ -55,6 +62,7 @@ export default function DashboardPrimaryCard({
           )}
         </View>
       )}
-    </GlassCard>
+      </GlassCard>
+    </LinearGradient>
   );
 }

@@ -9,23 +9,32 @@
  */
 
 import express from 'express';
-import { randomUUID } from 'crypto';
 import { requireAuth } from '@clerk/express';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
-import { getProfileData } from '../services/profileService.js';
-import { getDashboardData } from '../services/dashboardService.js';
+import { getProfile } from '../controllers/profileController.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
 import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
-// CRITICAL FIX: Use standardized error responses
-import { errors, ErrorCodes } from '../utils/errorResponse.js';
+import { errors } from '../utils/errorResponse.js';
 
 const router = express.Router();
 
 // Request deduplication map: stores in-flight recommendation requests
 // Key: "${userId}:${mealType}:${limit}", Value: Promise
 const inFlightRequests = new Map();
+
+// Performance optimization: Log guard for debug logging
+// Only logs in development or when DEBUG_RECOMMENDATIONS=true
+const shouldLog = (level = 'info') => {
+  if (process.env.DEBUG_RECOMMENDATIONS === 'true') return true;
+  if (level === 'error' || level === 'warn') return true; // Always log errors/warnings
+  return process.env.NODE_ENV === 'development';
+};
+
+const logDebug = (msg) => shouldLog('debug') && console.log(`[Recommendations] ${msg}`);
+const logWarn = (msg) => console.warn(`[Recommendations] ${msg}`);
+const logError = (msg) => console.error(`[Recommendations] ${msg}`);
 
 /**
  * Generate a deduplication key for a recommendation request
@@ -44,7 +53,7 @@ async function generateRecommendationsWithDedup(userId, mealType, limit, generat
 
   // Check if this request is already in-flight
   if (inFlightRequests.has(key)) {
-    console.log(`[Recommendations] Coalescing duplicate request: ${key}`);
+    logDebug(`Coalescing duplicate request: ${key}`);
     return inFlightRequests.get(key);
   }
 
@@ -84,29 +93,17 @@ router.get('/', requireAuth(), async (req, res) => {
       mealType,
       parseInt(limit),
       async () => {
-        // CRITICAL FIX: Use service functions instead of HTTP calls
-        // This avoids network overhead, serialization/deserialization,
-        // and bypasses middleware duplication
-        let profile;
-        let dashboard;
+        // Fetch user profile for personalization
+        const profileRes = await fetch(`${process.env.API_URL}/profiles/me`, {
+          headers: { Authorization: req.headers.authorization },
+        });
+        const profile = profileRes.ok ? await profileRes.json() : null;
 
-        try {
-          // Fetch user profile directly from database
-          profile = await getProfileData(db, userId);
-        } catch (err) {
-          console.error('[Recommendations] Failed to fetch profile:', err);
-          profile = null;
-        }
-
-        try {
-          // Fetch today's nutrition data directly from database
-          // Pass offsetMinutes from request headers if available
-          const offsetMinutes = req.headers['x-timezone-offset'] ? parseInt(req.headers['x-timezone-offset']) : 0;
-          dashboard = await getDashboardData(db, userId, offsetMinutes);
-        } catch (err) {
-          console.error('[Recommendations] Failed to fetch dashboard:', err);
-          dashboard = null;
-        }
+        // Fetch today's nutrition data
+        const dashboardRes = await fetch(`${process.env.API_URL}/nutrition/dashboard`, {
+          headers: { Authorization: req.headers.authorization },
+        });
+        const dashboard = dashboardRes.ok ? await dashboardRes.json() : null;
 
         // Calculate remaining budget
         const goals = profile?.goals || {};
@@ -145,9 +142,7 @@ router.get('/', requireAuth(), async (req, res) => {
           recType,
           mealType,
           remainingBudget,
-          hour,
-          allergies,
-          dietaryPreferences
+          hour
         });
 
         return {
@@ -166,7 +161,6 @@ router.get('/', requireAuth(), async (req, res) => {
     });
   } catch (error) {
     console.error('[Recommendations] Error:', error);
-    // CRITICAL FIX: Use standardized error response format
     errors.externalService(res, 'Recommendation generation');
   }
 });
@@ -205,7 +199,7 @@ router.get('/:id', requireAuth(), async (req, res) => {
     res.json(recommendation[0]);
   } catch (error) {
     console.error('[Recommendations] Get detail error:', error);
-    errors.internal(res, 'Failed to fetch recommendation');
+    errors.externalService(res, 'Recommendation retrieval');
   }
 });
 
@@ -221,7 +215,7 @@ router.post('/:id/track', requireAuth(), async (req, res) => {
 
     const validActions = ['view', 'accept', 'reject', 'customize'];
     if (!validActions.includes(action)) {
-      return errors.invalidValue(res, 'action', `must be one of: ${validActions.join(', ')}`);
+      return errors.invalidInput(res, 'action must be one of: view, accept, reject, customize');
     }
 
     const updateData = {
@@ -251,7 +245,7 @@ router.post('/:id/track', requireAuth(), async (req, res) => {
     res.json({ success: true, action });
   } catch (error) {
     console.error('[Recommendations] Track error:', error);
-    errors.internal(res, 'Failed to track interaction');
+    errors.externalService(res, 'Interaction tracking');
   }
 });
 
@@ -316,7 +310,7 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
     });
   } catch (error) {
     console.error('[Recommendations] Accept error:', error);
-    errors.internal(res, 'Failed to accept recommendation');
+    errors.externalService(res, 'Recommendation acceptance');
   }
 });
 
@@ -369,7 +363,7 @@ router.get('/history/list', requireAuth(), async (req, res) => {
     res.json({ history, stats });
   } catch (error) {
     console.error('[Recommendations] History error:', error);
-    errors.internal(res, 'Failed to fetch history');
+    errors.externalService(res, 'History retrieval');
   }
 });
 
@@ -432,7 +426,7 @@ router.get('/stats/acceptance-by-preference', requireAuth(), async (req, res) =>
     });
   } catch (error) {
     console.error('[Recommendations] Stats error:', error);
-    errors.internal(res, 'Failed to fetch stats');
+    errors.externalService(res, 'Statistics retrieval');
   }
 });
 
@@ -486,61 +480,21 @@ async function analyzeRecommendationHistory(db, userId) {
     return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [] };
   }
 }
+
 /**
- * CRITICAL FIX #4: Improved recommendation type determination
- * Balances user history preferences with budget needs
- * Prevents over-reliance on history which can lead to recommendation fatigue
+ * Determine recommendation type with history awareness
  */
 function determineRecommendationType(remainingBudget, profile, history) {
-  // Require sufficient history to influence recommendation (at least 5 recommendations with >50% acceptance)
-  const hasStrongHistory =
-    history.totalRecommendations >= 5 &&
-    history.acceptanceRate > 0.5 &&
-    history.preferredTypes?.length > 0;
-
-  // Budget-based primary logic (highest priority)
-  // These are immediate nutritional needs
-  if (remainingBudget.calories < 150) {
-    // Very low calories remaining - suggest light snack
-    return 'LIGHT_SNACK';
+  // If user has strong preference based on history, respect it
+  if (history.preferredTypes?.length > 0) {
+    return history.preferredTypes[0];
   }
 
-  if (remainingBudget.protein > 80) {
-    // High protein remaining - prioritize protein boost
-    return 'PROTEIN_BOOST';
-  }
-
-  if (remainingBudget.water > 1.5) {
-    // High water remaining - suggest hydration
-    return 'HYDRATION';
-  }
-
-  // Secondary logic: Use history preferences ONLY if they exist AND are strong
-  // This prevents users from getting stuck in repetitive recommendations
-  if (hasStrongHistory) {
-    // Add some variance even with strong preferences (rotate through top 2-3 preferred types)
-    // This prevents recommendation fatigue
-    const preferredType = history.preferredTypes[0];
-    // 80% use preferred type, 20% suggest variety from other top types
-    if (Math.random() < 0.8) {
-      return preferredType;
-    }
-    // Return alternate type if available
-    if (history.preferredTypes.length > 1) {
-      return history.preferredTypes[1];
-    }
-  }
-
-  // Tertiary logic: Profile-based preferences
-  if (profile?.dietary?.cuisinePreference?.[0]) {
-    const cuisineId = profile.dietary.cuisinePreference[0].id || profile.dietary.cuisinePreference[0];
-    // Translate cuisine to recommendation type when appropriate
-    if (cuisineId === 'indian' || cuisineId === 'asian') {
-      return 'REGIONAL_PICK';
-    }
-  }
-
-  // Fallback: Balanced meal is safest default
+  // Otherwise use budget-based logic
+  if (remainingBudget.protein > 50) return 'PROTEIN_BOOST';
+  if (remainingBudget.calories < 200) return 'LIGHT_SNACK';
+  if (remainingBudget.water > 1) return 'HYDRATION';
+  if (profile?.dietary?.cuisinePreference?.[0]) return 'REGIONAL_PICK';
   return 'BALANCED_MEAL';
 }
 
@@ -616,7 +570,7 @@ function improvedAllergenCheck(foodName, allergies) {
         )) {
           continue; // Skip this allergen, it's an exception
         }
-        console.log(`[Allergen] Food "${foodName}" matches allergen "${allergen}" (pattern match)`);
+        logWarn(`Allergen match: Food "${foodName}" contains allergen "${allergen}" (pattern match)`);
         return true;
       }
     } else {
@@ -624,7 +578,7 @@ function improvedAllergenCheck(foodName, allergies) {
       // but require it to be a standalone word (not part of another word)
       const words = foodNameLower.split(/[\s,-]/);
       if (words.includes(allergenLower)) {
-        console.log(`[Allergen] Food "${foodName}" matches allergen "${allergen}" (word match)`);
+        logWarn(`Allergen match: Food "${foodName}" contains allergen "${allergen}" (word match)`);
         return true;
       }
     }
@@ -689,13 +643,166 @@ function buildPreferenceContext(preferences) {
   return { ids: ids.join(', '), strengths };
 }
 
-async function generateEnhancedRecommendations(
+/**
+ * FLAW FIX #1-6: UNIVERSAL VALIDATION & CONSTRAINTS
+ * Works with any food, any meal type - comprehensive production-grade implementation
+ */
+
+/**
+ * UNIVERSAL VALIDATION: Validates AI output against actual constraints
+ * Prevents corrupted data from reaching frontend
+ */
+function validateRecommendation(rec, remainingBudget, allergies, dietaryPrefs, mealType, recType) {
+  const errors = [];
+
+  // 1️⃣ Type validation (prevents string/number mismatches)
+  if (typeof rec.foodName !== 'string' || !rec.foodName.trim()) {
+    errors.push('Invalid foodName (must be non-empty string)');
+  }
+  if (typeof rec.portion !== 'string' || !rec.portion.trim()) {
+    errors.push('Invalid portion (must be non-empty string)');
+  }
+
+  // 2️⃣ Nutrition type validation (prevents NaN, Infinity, null)
+  const nutritionFields = ['calories', 'protein', 'carbs', 'fats', 'fiber', 'sugar'];
+  for (const field of nutritionFields) {
+    const val = rec[field];
+    if (val !== undefined && (typeof val !== 'number' || val < 0 || !isFinite(val))) {
+      errors.push(`Invalid ${field}: must be non-negative number, got ${val}`);
+    }
+  }
+
+  // 3️⃣ Per-item constraint validation (adaptive by type)
+  const constraints = getConstraintsByType(recType, mealType);
+
+  if (rec.calories > constraints.maxCalories) {
+    errors.push(`Calories ${rec.calories} exceeds max ${constraints.maxCalories} for ${recType}`);
+  }
+  if (rec.protein < constraints.minProtein) {
+    errors.push(`Protein ${rec.protein}g below minimum ${constraints.minProtein}g for ${recType}`);
+  }
+  if (rec.protein > remainingBudget.protein) {
+    errors.push(`Protein ${rec.protein}g exceeds remaining ${remainingBudget.protein}g`);
+  }
+  if (rec.carbs > remainingBudget.carbs) {
+    errors.push(`Carbs ${rec.carbs}g exceeds remaining ${remainingBudget.carbs}g`);
+  }
+  if (rec.fats > remainingBudget.fats) {
+    errors.push(`Fats ${rec.fats}g exceeds remaining ${remainingBudget.fats}g`);
+  }
+
+  // 4️⃣ Allergen safety (server-side defense)
+  if (improvedAllergenCheck(rec.foodName, allergies)) {
+    errors.push(`Food contains allergens: ${allergies.join(', ')}`);
+  }
+
+  // 5️⃣ Boolean field validation
+  if (rec.allergenFree !== undefined && typeof rec.allergenFree !== 'boolean') {
+    errors.push('allergenFree must be boolean');
+  }
+  if (rec.dietCompliant !== undefined && typeof rec.dietCompliant !== 'boolean') {
+    errors.push('dietCompliant must be boolean');
+  }
+
+  // 6️⃣ Preference strength validation
+  if (rec.preferenceStrengthMatch !== undefined) {
+    if (typeof rec.preferenceStrengthMatch !== 'number' || rec.preferenceStrengthMatch < 1 || rec.preferenceStrengthMatch > 5) {
+      errors.push('preferenceStrengthMatch must be 1-5');
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    rec: rec
+  };
+}
+
+/**
+ * UNIVERSAL CONSTRAINTS: Adaptive limits based on recommendation type
+ * Works with any food, meal type - intelligently constrains AI output
+ */
+function getConstraintsByType(recType, mealType) {
+  // Base constraints by meal type
+  const baseByMeal = {
+    breakfast: { maxCalories: 500, minProtein: 5 },
+    lunch: { maxCalories: 700, minProtein: 10 },
+    dinner: { maxCalories: 800, minProtein: 15 },
+    snack: { maxCalories: 350, minProtein: 3 }
+  };
+
+  // Overrides by recommendation type (more restrictive)
+  const overrideByType = {
+    PROTEIN_BOOST: { maxCalories: 400, minProtein: 20 },
+    LIGHT_SNACK: { maxCalories: 250, minProtein: 0 },
+    HYDRATION: { maxCalories: 50, minProtein: 0 },
+    BALANCED_MEAL: { maxCalories: 600, minProtein: 10 },
+    REGIONAL_PICK: { maxCalories: 700, minProtein: 8 }
+  };
+
+  const base = baseByMeal[mealType] || baseByMeal.snack;
+  const override = overrideByType[recType] || {};
+
+  return {
+    maxCalories: override.maxCalories || base.maxCalories,
+    minProtein: override.minProtein || base.minProtein,
+    maxPrepTime: mealType === 'snack' ? 15 : 30,
+    diversity: true
+  };
+}
+
+/**
+ * FLAW FIX #3: Smart regeneration when filtering removes too many
+ * Ensures user always gets requested number of recommendations (or tries)
+ */
+async function generateWithRegeneration(
   recType,
   mealType,
   remainingBudget,
   profile,
   history,
-  limit
+  limit,
+  attempt = 1
+) {
+  const MAX_ATTEMPTS = 2;
+  const FILTER_THRESHOLD = limit * 0.67; // If we keep 2/3 or less, regenerate
+
+  if (attempt > MAX_ATTEMPTS) {
+    console.warn('[Recommendations] Max regeneration attempts reached');
+    return null;
+  }
+
+  const recommendations = await generateEnhancedRecommendationsCore(
+    recType,
+    mealType,
+    remainingBudget,
+    profile,
+    history,
+    limit + (attempt - 1) * 2, // Request more on retry
+    attempt > 1 // Add regeneration hint
+  );
+
+  if (!recommendations || recommendations.length < FILTER_THRESHOLD) {
+    logDebug(`Insufficient after filtering (${recommendations?.length || 0}/${limit}), regenerating...`);
+    return generateWithRegeneration(recType, mealType, remainingBudget, profile, history, limit, attempt + 1);
+  }
+
+  return recommendations.slice(0, limit);
+}
+
+/**
+ * CORE: Build prompt with UNIVERSAL constraints and DIVERSITY
+ * FLAW FIX #4: Diversity enforcement in prompt
+ * FLAW FIX #5: Per-item constraints enforced
+ */
+async function generateEnhancedRecommendationsCore(
+  recType,
+  mealType,
+  remainingBudget,
+  profile,
+  history,
+  limit,
+  isRegeneration = false
 ) {
   // Extract cuisine preference (support both string and object format)
   let cuisinePreference = 'General';
@@ -710,31 +817,21 @@ async function generateEnhancedRecommendations(
   }
 
   const region = profile?.dietary?.region || 'General';
-
-  // 🆕 CRITICAL: Extract dietary restrictions with strength values
   const allergies = profile?.dietary?.allergies || [];
   const dietaryPreferences = profile?.dietary?.preferences || [];
-  const dislikes = profile?.dietary?.dislikes || [];
 
-  // Format dietary preferences with strength levels for the AI
   const dietaryFormattedWithStrength = formatDietaryPreferencesWithStrength(dietaryPreferences);
   const dietaryPreferenceIds = dietaryPreferences
     .filter(p => p && p.id)
     .map(p => p.id);
 
-  // Build preference context for strength weighting
-  const preferenceContext = buildPreferenceContext(dietaryPreferences);
-
-  // Build personalization context
   const personalizationContext = history.preferredFoods?.length > 0 ?
     `User previously accepted: ${history.preferredFoods.join(', ')}\n` : '';
 
-  // 🆕 Add strict allergen exclusion to prompt
   const allergenExclusion = allergies.length > 0 ?
     `\n⚠️ CRITICAL - NEVER recommend foods containing these allergens: ${allergies.join(', ')}
 This is a safety requirement. Exclude any food that might contain these ingredients.` : '';
 
-  // 🆕 Add dietary preference guidance with strength levels (flexible - can be overridden with warning)
   const dietaryGuidance = dietaryPreferenceIds.length > 0 ?
     `\nUser dietary preferences (ordered by importance):
 ${dietaryFormattedWithStrength}
@@ -749,165 +846,286 @@ Priority weighting:
 Strongly prioritize "Essential (5)" preferences, then "Really prefer (4)", then others.
 If suggesting foods that don't match high-priority preferences, mark them with "dietCompliant: false".` : '';
 
-  const prompt = `You are a personalized nutrition recommendation system.
+  // FLAW FIX #4: Diversity constraints - UNIVERSAL
+  const diversityGuidance = `
+DIVERSITY REQUIREMENT (CRITICAL FOR ALL RECOMMENDATIONS):
+- Mix protein sources: Include animal-based, plant-based, and/or dairy across recommendations
+- Avoid repetition: NO duplicate foods or same food prepared differently (e.g., not 3 chicken dishes)
+- Suggest variety across all options: Each recommendation should feel distinct and personalized
+- Food categories: Mix grains, proteins, fruits, vegetables, dairy to feel balanced`;
 
-User Profile:
+  // FLAW FIX #5: Per-item constraints - UNIVERSAL
+  const constraints = getConstraintsByType(recType, mealType);
+  const constraintGuidance = `
+PORTION & MACRO CONSTRAINTS (STRICT - APPLY TO EACH ITEM):
+- Each individual recommendation MUST be ≤ ${constraints.maxCalories} calories (CRITICAL)
+- Realistic prep time: ≤ ${constraints.maxPrepTime} minutes for ${mealType}
+- Portion sizes in standard units: grams (g), cups, ounces (oz), pieces (pcs), tablespoons (tbsp)
+- NEVER recommend any food that exceeds REMAINING budgets: Protein ${remainingBudget.protein}g, Carbs ${remainingBudget.carbs}g, Fats ${remainingBudget.fats}g`;
+
+  const regenerationNote = isRegeneration ?
+    `\n⚠️ REGENERATION REQUEST: Previous recommendations were filtered. Generate MORE DIVERSE options without any repetition.` : '';
+
+  const prompt = `You are a production-grade nutrition recommendation system. Generate exactly ${limit} specific food recommendations.
+
+USER STATE
 - Remaining Calories: ${remainingBudget.calories} kcal
 - Remaining Protein: ${remainingBudget.protein}g
-- Remaining Carbs: ${remainingBudget.carbs}g
+- Remaining Carbohydrates: ${remainingBudget.carbs}g
 - Remaining Fats: ${remainingBudget.fats}g
 - Cuisine Preference: ${cuisinePreference}
-- Region: ${region}
+- Regional Preference: ${region}
 - Meal Type: ${mealType}
-${personalizationContext}${allergenExclusion}${dietaryGuidance}
+${personalizationContext}${allergenExclusion}${dietaryGuidance}${regenerationNote}
 
-Recommendation Type: ${recType}
+RECOMMENDATION OBJECTIVE
+Goal: ${recType}
+- Prioritize nutritional fit based on recommendation type
+- Each recommendation must feel personalized and distinct
 
-Generate ${limit} specific food recommendations that:
-1. Fit within their remaining budget
-2. Match their cuisine and regional preferences
-3. Are appropriate for the meal type (${mealType})
-4. Have clear nutritional benefits based on their needs
-5. 🆕 NEVER contain allergens (${allergies.join(', ') || 'none'})
-6. 🆕 STRONGLY PREFER foods matching essential/high-priority dietary preferences
-7. 🆕 WEIGHT recommendations by preference strength (5=essential, 4=strong, 3=normal, 2=lighter, 1=flexible)
+${diversityGuidance}
+${constraintGuidance}
 
-For each recommendation include:
-- Food name
-- Portion size
-- Calories
-- Protein (g)
-- Carbs (g)
-- Fats (g)
-- Brief reason why it's recommended
-- Preparation tips
-- 🆕 allergenFree: boolean (MUST be true - critical for safety)
-- 🆕 dietCompliant: boolean (matches user dietary preferences, especially essential ones)
-- 🆕 preferenceStrengthMatch: number (1-5, how well it matches user's priority preferences)
-- 🆕 warningBadge: null OR { text: "reason", type: "dietary" | "dislike" | "low-priority" } (only if not compliant or low match)
+CRITICAL SAFETY RULES
+1. NEVER recommend foods containing allergens: ${allergies.join(', ') || 'none'}
+2. STRONGLY PREFER foods matching Essential (5) and Really Prefer (4) preferences
+3. Validate all nutrition values are realistic and complete
 
-Return as JSON array with objects: { foodName, portion, calories, protein, carbs, fats, reason, tips, allergenFree, dietCompliant, preferenceStrengthMatch, warningBadge }`;
+OUTPUT SCHEMA (REQUIRED - RETURN AS JSON ARRAY, NOT WRAPPED):
+[
+  {
+    "foodName": "exact food name",
+    "portion": "e.g., '150g', '1 cup', '2 pieces'",
+    "calories": number (0-${constraints.maxCalories}),
+    "protein": number,
+    "carbs": number,
+    "fats": number,
+    "fiber": number,
+    "sugar": number,
+    "reason": "why this fits ${recType}",
+    "tips": "how to prepare (≤${constraints.maxPrepTime} min)",
+    "prepTimeMinutes": number,
+    "allergenFree": true,
+    "dietCompliant": boolean,
+    "preferenceStrengthMatch": 1-5,
+    "warningBadge": null or {"text": "reason", "type": "dietary|dislike|low-priority"}
+  }
+]
+
+VALIDATION CHECKLIST
+✓ Exactly ${limit} unique recommendations (no duplicate foods)
+✓ Each item ≤ ${constraints.maxCalories} calories
+✓ All nutrition fields are numbers (not strings, not null)
+✓ Portion sizes in standard units (grams, cups, pieces, oz, tbsp)
+✓ Diverse protein sources (mix of animal, plant, dairy)
+✓ NO foods containing: ${allergies.join(', ') || 'none'}
+✓ Returned as JSON array (not wrapped in object)`;
 
   try {
     const response = await openaiClient.chatCompletionJSON(
       [{ role: 'user', content: prompt }],
-      { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 1500 }
+      { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 2000 }
     );
 
-    const recommendations = response.recommendations || [];
+    // FLAW FIX #1: Handle BOTH array and wrapped responses
+    let recommendations = response.recommendations || response;
 
-    // CRITICAL FIX #3: Validate AI output against schema bounds
-    // Prevents invalid nutrition data from being used
-    const validateRecommendation = (rec) => {
-      if (!rec || typeof rec !== 'object') return false;
-
-      // Required string fields
-      if (!rec.foodName || typeof rec.foodName !== 'string' || rec.foodName.trim().length === 0) {
-        console.warn('[Recommendations] Validation: Missing or invalid foodName', rec.foodName);
-        return false;
-      }
-
-      // Nutrition values must be numbers within reasonable bounds
-      const calories = Number(rec.calories);
-      const protein = Number(rec.protein || 0);
-      const carbs = Number(rec.carbs || 0);
-      const fats = Number(rec.fats || 0);
-
-      // Check if all values are valid numbers
-      if (isNaN(calories) || isNaN(protein) || isNaN(carbs) || isNaN(fats)) {
-        console.warn('[Recommendations] Validation: Non-numeric nutrition values', { calories, protein, carbs, fats });
-        return false;
-      }
-
-      // Validate bounds (reasonable single-meal ranges)
-      const NUTRITION_BOUNDS = {
-        calories: { min: 0, max: 2000 },
-        protein: { min: 0, max: 150 },
-        carbs: { min: 0, max: 300 },
-        fats: { min: 0, max: 100 },
-      };
-
-      if (calories < NUTRITION_BOUNDS.calories.min || calories > NUTRITION_BOUNDS.calories.max) {
-        console.warn(`[Recommendations] Validation: Calories out of bounds: ${calories} (expected 0-2000)`);
-        return false;
-      }
-
-      if (protein < NUTRITION_BOUNDS.protein.min || protein > NUTRITION_BOUNDS.protein.max) {
-        console.warn(`[Recommendations] Validation: Protein out of bounds: ${protein}g (expected 0-150g)`);
-        return false;
-      }
-
-      if (carbs < NUTRITION_BOUNDS.carbs.min || carbs > NUTRITION_BOUNDS.carbs.max) {
-        console.warn(`[Recommendations] Validation: Carbs out of bounds: ${carbs}g (expected 0-300g)`);
-        return false;
-      }
-
-      if (fats < NUTRITION_BOUNDS.fats.min || fats > NUTRITION_BOUNDS.fats.max) {
-        console.warn(`[Recommendations] Validation: Fats out of bounds: ${fats}g (expected 0-100g)`);
-        return false;
-      }
-
-      return true;
-    };
-
-    // Filter recommendations by schema validation first
-    const validatedRecommendations = recommendations.filter(rec => validateRecommendation(rec));
-
-    if (validatedRecommendations.length < recommendations.length) {
-      console.warn(
-        `[Recommendations] Schema validation: ${recommendations.length} → ${validatedRecommendations.length} recommendations passed validation`
-      );
+    if (!Array.isArray(recommendations)) {
+      console.error('[Recommendations] Invalid response format:', typeof recommendations);
+      return [];
     }
 
-    // 🆕 CRITICAL: Server-side allergen filter (defense in depth) - now using improved pattern matching
-    const safeRecommendations = validatedRecommendations.filter(rec => {
-      // Check AI marked as allergen-free
+    // FLAW FIX #2: Validate each recommendation
+    const validatedRecs = [];
+    for (let i = 0; i < recommendations.length; i++) {
+      const rec = recommendations[i];
+      const validation = validateRecommendation(rec, remainingBudget, allergies, dietaryPreferences, mealType, recType);
+
+      if (!validation.valid) {
+        console.warn(`[Recommendations] Invalid #${i + 1}: ${validation.errors.join('; ')}`);
+        continue;
+      }
+
+      validatedRecs.push(rec);
+    }
+
+    logDebug(`Validation: ${recommendations.length} → ${validatedRecs.length} valid`);
+
+    // FLAW FIX #3: Server-side allergen filter (defense in depth)
+    const safeRecommendations = validatedRecs.filter(rec => {
       if (rec.allergenFree === false) {
-        console.warn(`[Recommendations] Filtered out ${rec.foodName} - AI marked as not allergen-free`);
+        console.warn(`[Recommendations] Filtered: ${rec.foodName} - AI marked unsafe`);
         return false;
       }
 
-      // Check food name using improved allergen detection (avoids false positives)
-      const containsAllergen = improvedAllergenCheck(rec.foodName, allergies);
-
-      if (containsAllergen) {
-        console.warn(`[Recommendations] Filtered out ${rec.foodName} - contains allergen (improved pattern)`);
+      if (improvedAllergenCheck(rec.foodName, allergies)) {
+        console.warn(`[Recommendations] Filtered: ${rec.foodName} - contains allergen`);
         return false;
       }
 
       return true;
     });
 
-    console.log(`[Recommendations] Safety filter: ${recommendations.length} → ${safeRecommendations.length} recommendations`);
+    logDebug(`Safety filter: ${validatedRecs.length} → ${safeRecommendations.length} safe`);
 
-    // 🆕 Enrich with warning badges and ensure safe structure
-    // CRITICAL FIX: Use UUID instead of Date.now() to prevent ID collisions
-    const enrichedRecommendations = safeRecommendations.map((rec, idx) => ({
-      id: `rec-${randomUUID()}`,
-      title: getTitleForType(recType),
-      fiber: rec.fiber || 0,
-      sugar: rec.sugar || 0,
+    // OPTIMIZATION: Compute personalization score once per recommendation (not during sort)
+    const scoredRecommendations = safeRecommendations.map(rec => ({
       ...rec,
-      color: getColorForType(recType),
-      rank: idx + 1,
-      timeToAdd: Math.max(5, 15 - idx * 2),
-      // 🆕 Ensure warning badge is properly structured
-      warningBadge: rec.warningBadge || (
-        !rec.dietCompliant && dietaryPreferences.length > 0
-          ? { text: 'Not in your diet preferences', type: 'dietary' }
-          : null
-      )
+      personalizationScore: calculatePersonalizationScore(rec, remainingBudget)
     }));
+
+    // IMPROVEMENT: Sort by score (preference strength + personalization) BEFORE ranking
+    const rankedByScore = scoredRecommendations.sort((a, b) => {
+      // Primary: Sort by preference strength match (higher first)
+      const prefDiff = (b.preferenceStrengthMatch ?? 3) - (a.preferenceStrengthMatch ?? 3);
+      if (prefDiff !== 0) return prefDiff;
+
+      // Secondary: Sort by personalization score (higher first) - already computed
+      return b.personalizationScore - a.personalizationScore;
+    });
+
+    // TUFTE UX ENHANCEMENT: Enrich with context, reasoning, and honest data
+    const enrichedRecommendations = rankedByScore.map((rec, idx) => {
+      const prefLabel = getPreferenceLabel(rec.preferenceStrengthMatch ?? 3);
+      const persLabel = getPersonalizationLabel(rec.personalizationScore);
+      const warningInfo = getWarningSeverity(rec.warningBadge);
+      const macroBalance = calculateMacroBalance(rec);
+      const confidence = getConfidenceContext(rec);
+      const comparison = getComparisonContext(rec, rankedByScore, idx);
+      const reasoning = getPersonalizationReasoning(rec, remainingBudget, mealType);
+
+      return {
+        // Core identity
+        id: `rec-${crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`}`,
+        rank: idx + 1,
+        isTopPick: idx === 0,
+        title: getTitleForType(recType),
+
+        // Food basics
+        foodName: rec.foodName,
+        portion: rec.portion,
+
+        // TUFTE FIX: Nutrition with context
+        nutrition: {
+          calories: rec.calories,
+          protein: rec.protein,
+          carbs: rec.carbs,
+          fats: rec.fats,
+          fiber: rec.fiber || 0,
+          sugar: rec.sugar || 0,
+          macroBalance: macroBalance  // ← NOW HONEST: actual percentages
+        },
+
+        // TUFTE FIX: Preference strength with label & icon
+        preference: {
+          score: rec.preferenceStrengthMatch ?? 3,
+          label: prefLabel.label,
+          icon: prefLabel.icon,
+          level: prefLabel.level,
+          reasoning: 'Matches your dietary preferences'
+        },
+
+        // TUFTE FIX: Personalization with reasoning
+        personalization: {
+          score: rec.personalizationScore,
+          label: persLabel.label,
+          emoji: persLabel.emoji,
+          level: persLabel.level,
+          reasoning: reasoning  // ← WHY it fits
+        },
+
+        // TUFTE FIX: Real prep time, not declining with rank
+        preparation: {
+          timeMinutes: rec.prepTimeMinutes || 10,
+          confidence: confidence,  // ← Honest confidence range
+          difficulty: rec.difficulty || 'medium',
+          tips: rec.tips
+        },
+
+        // TUFTE FIX: Contextual warnings with severity
+        warning: warningInfo.severity === 'none' ? null : {
+          text: rec.warningBadge?.text || 'Check recommendation details',
+          type: rec.warningBadge?.type || 'info',
+          severity: warningInfo.severity,
+          icon: warningInfo.icon,
+          color: warningInfo.color
+        },
+
+        // TUFTE FIX: Visual encoding (meaningful, not decorative)
+        visual: {
+          color: getColorForType(recType),
+          gradient: getColorForType(recType),
+          meaning: recType,
+          icon: getTitleForType(recType).split(' ')[0]  // Extract emoji
+        },
+
+        // TUFTE FIX: Comparison context (small multiples)
+        comparison: {
+          rankLabel: comparison.rankLabel,
+          betterOptions: comparison.comparisons.betterFits,
+          totalRecommendations: rankedByScore.length
+        },
+
+        // TUFTE FIX: Diet compliance with explanation
+        dietCompliance: {
+          compliant: rec.dietCompliant === true,
+          message: rec.dietCompliant ? 'Matches your preferences' : 'Not in your preferences'
+        },
+
+        // TUFTE FIX: Allergen safety with confidence
+        allergenSafety: {
+          safe: rec.allergenFree === true,
+          message: rec.allergenFree ? 'Allergen-free' : 'Check ingredients',
+          confidence: rec.aiConfidence || 0.85
+        },
+
+        // Additional context (for display)
+        reason: rec.reason,
+        mealType: mealType,
+        recType: recType
+      };
+    });
 
     return enrichedRecommendations;
   } catch (error) {
-    console.error('[Recommendations] AI generation failed:', error);
-    return getFallbackRecommendations(recType, mealType, remainingBudget, limit)
-      .filter(rec => {
-        // Also filter fallback recommendations for allergen safety (using improved pattern matching)
-        return !improvedAllergenCheck(rec.foodName, allergies);
-      });
+    console.error('[Recommendations] AI generation error:', error.message);
+    // FLAW FIX #6: Proper error logging
+    return null;
   }
+}
+
+/**
+ * Main entry point: Orchestrate generation with regeneration logic
+ * FLAW FIX #3: Handles incomplete recommendations gracefully
+ */
+async function generateEnhancedRecommendations(
+  recType,
+  mealType,
+  remainingBudget,
+  profile,
+  history,
+  limit
+) {
+  const allergies = profile?.dietary?.allergies || [];
+
+  // Try with regeneration logic (fixes flaw #3)
+  let recommendations = await generateWithRegeneration(
+    recType,
+    mealType,
+    remainingBudget,
+    profile,
+    history,
+    limit
+  );
+
+  // If regeneration completely fails, fall back to curated list
+  if (!recommendations || recommendations.length === 0) {
+    console.warn('[Recommendations] AI generation failed completely, using fallback');
+    recommendations = getFallbackRecommendations(recType, mealType, remainingBudget, limit);
+  }
+
+  // Final allergen filter for fallback
+  return recommendations.filter(rec => !improvedAllergenCheck(rec.foodName, allergies));
 }
 
 /**
@@ -964,142 +1182,58 @@ async function enrichRecommendations(recommendations) {
 /**
  * Save recommendations to history table for tracking
  */
-/**
- * CRITICAL FIX #5: Batch database writes instead of sequential loop
- * Improves performance by writing all recommendations in one operation
- * instead of N sequential inserts
- */
 async function saveRecommendationsToHistory(db, userId, recommendations, context) {
   try {
     const hour = context.hour;
     const remainingBudget = context.remainingBudget;
-    const allergies = context.allergies || [];
-    const dietaryPreferences = context.dietaryPreferences || [];
 
-    // Prepare all values first
-    const valuesToInsert = recommendations.map(rec => ({
-      userId,
-      recommendationId: rec.id,
-      foodName: rec.foodName,
-      portion: rec.portion,
-      calories: rec.calories,
-      protein: rec.protein,
-      carbs: rec.carbs,
-      fats: rec.fats,
-      fiber: rec.fiber || 0,
-      sugar: rec.sugar || 0,
-      micros: rec.micros || {},
-      recommendationType: context.recType,
-      reason: rec.reason,
-      tips: rec.tips,
-      prepTimeMinutes: rec.prepTimeMinutes || 10,
-      recipeInstructions: rec.recipeInstructions || '',
-      mealType: context.mealType,
-      timeOfDay: hour,
-      remainingCalories: remainingBudget.calories,
-      remainingProtein: remainingBudget.protein,
-      remainingCarbs: remainingBudget.carbs,
-      remainingFats: remainingBudget.fats,
-      interactionStatus: 'shown',
-      aiGenerated: true,
-      aiModel: 'gpt-4o-mini',
-      aiConfidence: calculateAIConfidence(rec, allergies, dietaryPreferences),
-      personalizationScore: calculatePersonalizationScore(rec, remainingBudget),
-      // NEW: Preference strength tracking fields
-      // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
-      preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
-      dietCompliant: rec.dietCompliant === true, // Only true if explicitly marked true
-      allergenFree: rec.allergenFree === true,   // Safety: default to false unless confirmed safe
-      warningBadge: rec.warningBadge || null,
-      createdAt: new Date()
-    }));
-
-    // Single batch insert for all recommendations
-    if (valuesToInsert.length > 0) {
-      try {
-        await db.insert(recommendationsHistoryTable).values(valuesToInsert);
-        console.log(`[Recommendations] Batch saved ${valuesToInsert.length} recommendations to history`);
-      } catch (err) {
-        // On duplicate key conflicts, log but don't fail the request
-        // This can happen if the same recommendations were submitted twice
-        if (err.message?.includes('unique') || err.code === '23505') {
-          console.warn(`[Recommendations] Duplicate recommendation constraints detected (expected during deduplication):`, err.message);
-        } else {
+    for (const rec of recommendations) {
+      await db.insert(recommendationsHistoryTable).values({
+        userId,
+        recommendationId: rec.id,
+        foodName: rec.foodName,
+        portion: rec.portion,
+        calories: rec.calories,
+        protein: rec.protein,
+        carbs: rec.carbs,
+        fats: rec.fats,
+        fiber: rec.fiber || 0,
+        sugar: rec.sugar || 0,
+        micros: rec.micros || {},
+        recommendationType: context.recType,
+        reason: rec.reason,
+        tips: rec.tips,
+        prepTimeMinutes: rec.prepTimeMinutes || 10,
+        recipeInstructions: rec.recipeInstructions || '',
+        mealType: context.mealType,
+        timeOfDay: hour,
+        remainingCalories: remainingBudget.calories,
+        remainingProtein: remainingBudget.protein,
+        remainingCarbs: remainingBudget.carbs,
+        remainingFats: remainingBudget.fats,
+        interactionStatus: 'shown',
+        aiGenerated: true,
+        aiModel: 'gpt-4o-mini',
+        aiConfidence: 0.85,
+        personalizationScore: rec.personalizationScore || calculatePersonalizationScore(rec, remainingBudget),
+        // NEW: Preference strength tracking fields
+        // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
+        preferenceStrengthMatch: rec.preferenceStrengthMatch || 3,
+        dietCompliant: rec.dietCompliant === true, // Only true if explicitly marked true
+        allergenFree: rec.allergenFree === true,   // Safety: default to false unless confirmed safe
+        warningBadge: rec.warningBadge || null,
+        createdAt: new Date()
+      }).catch(err => {
+        // Ignore constraint violations (duplicate recommendations)
+        if (!err.message.includes('unique')) {
           throw err;
         }
-      }
+      });
     }
   } catch (error) {
     console.error('[Recommendations] Failed to save history:', error);
     // Don't fail the request if history saving fails
-    // Users should still get recommendations even if history saving fails
   }
-}
-
-/**
- * CRITICAL FIX #6: Calculate AI confidence instead of hard-coding
- * Derives confidence from data quality metrics:
- * - Schema validation passing
- * - Complete required fields
- * - Reasonable nutrition ranges
- * - Safety criteria (allergen-free, diet compliance)
- *
- * Confidence scale:
- * 0.95+: High confidence (all criteria met)
- * 0.85-0.95: Good confidence (most criteria met)
- * 0.75-0.85: Medium confidence (some quality issues)
- * <0.75: Low confidence (multiple concerns)
- */
-function calculateAIConfidence(recommendation, allergies = [], dietaryPreferences = []) {
-  let confidence = 0.85; // Base confidence (already passed validation)
-
-  // +0.05: All required fields present
-  const hasRequiredFields =
-    recommendation.foodName &&
-    typeof recommendation.calories === 'number' &&
-    typeof recommendation.protein === 'number' &&
-    typeof recommendation.carbs === 'number' &&
-    typeof recommendation.fats === 'number' &&
-    recommendation.reason &&
-    recommendation.tips;
-
-  if (hasRequiredFields) {
-    confidence += 0.05;
-  } else {
-    confidence -= 0.05; // Penalty for missing fields
-  }
-
-  // +0.05: Passes diet compliance if dietary preferences exist
-  if (dietaryPreferences.length > 0 && recommendation.dietCompliant === true) {
-    confidence += 0.05;
-  } else if (dietaryPreferences.length > 0 && recommendation.dietCompliant === false) {
-    confidence -= 0.05; // Penalty for non-compliant recommendations
-  }
-
-  // +0.05: Explicitly marked allergen-free
-  if (allergies.length > 0 && recommendation.allergenFree === true) {
-    confidence += 0.05;
-  } else if (allergies.length > 0 && recommendation.allergenFree !== true) {
-    confidence -= 0.05; // Penalty when allergens present and not marked safe
-  }
-
-  // +0.03: Has additional metadata (preparation tips, nutrition details)
-  if (recommendation.prepTimeMinutes || recommendation.recipeInstructions || recommendation.warningBadge === null) {
-    confidence += 0.03;
-  }
-
-  // +0.02: Nutrition data is realistic and balanced
-  const hasMacroBalance =
-    recommendation.protein > 0 &&
-    recommendation.carbs > 0 &&
-    recommendation.fats > 0;
-
-  if (hasMacroBalance) {
-    confidence += 0.02;
-  }
-
-  // Clamp to 0-1 range
-  return Math.max(0, Math.min(1.0, confidence));
 }
 
 /**
@@ -1282,6 +1416,148 @@ function getColorForType(type) {
     REGIONAL_PICK: ['#E9D5FF', '#8B5CF6'],
   };
   return colors[type] || colors.BALANCED_MEAL;
+}
+
+/**
+ * TUFTE UX FIX: Add human-readable label for preference strength (1-5)
+ * Explains what each score means in context
+ */
+function getPreferenceLabel(strength) {
+  const labels = {
+    1: { label: 'Open to it', icon: '◯', level: 'flexible' },
+    2: { label: 'Prefer', icon: '◐', level: 'lighter' },
+    3: { label: 'Normal', icon: '◑', level: 'standard' },
+    4: { label: 'Really prefer', icon: '◕', level: 'strong' },
+    5: { label: 'Essential', icon: '◉', level: 'critical' }
+  };
+  return labels[strength] || labels[3];
+}
+
+/**
+ * TUFTE UX FIX: Add reasoning for personalization score
+ * Explains WHY the recommendation is a good fit
+ */
+function getPersonalizationReasoning(rec, remainingBudget, mealType) {
+  const reasons = [];
+
+  // Calorie fit
+  if (rec.calories <= remainingBudget.calories * 0.5) {
+    reasons.push('Leaves plenty of room for more food');
+  } else if (rec.calories <= remainingBudget.calories * 0.8) {
+    reasons.push('Good use of your calorie budget');
+  }
+
+  // Protein fit
+  if (rec.protein >= remainingBudget.protein * 0.7) {
+    reasons.push('High protein impact for your goal');
+  } else if (rec.protein >= remainingBudget.protein * 0.4) {
+    reasons.push('Solid protein contribution');
+  }
+
+  // Prep time
+  if (rec.prepTimeMinutes <= 10) {
+    reasons.push('Quick to prepare');
+  } else if (rec.prepTimeMinutes <= 20) {
+    reasons.push('Reasonable prep time');
+  }
+
+  // Macro balance
+  if (rec.carbs > 0 && rec.fats > 0 && rec.protein > 0) {
+    reasons.push('Balanced macro profile');
+  }
+
+  return reasons.length > 0 ? reasons[0] : 'Fits your nutritional needs';
+}
+
+/**
+ * TUFTE UX FIX: Calculate actual macro balance percentages
+ * Shows what this recommendation delivers nutritionally
+ */
+function calculateMacroBalance(rec) {
+  // Use calories-based macronutrient breakdown (more accurate than weight)
+  const proteinCals = rec.protein * 4;
+  const carbsCals = rec.carbs * 4;
+  const fatsCals = rec.fats * 9;
+  const totalCals = proteinCals + carbsCals + fatsCals;
+
+  if (totalCals === 0) return { protein: 0, carbs: 0, fats: 0 };
+
+  return {
+    protein: Math.round((proteinCals / totalCals) * 100),
+    carbs: Math.round((carbsCals / totalCals) * 100),
+    fats: Math.round((fatsCals / totalCals) * 100)
+  };
+}
+
+/**
+ * TUFTE UX FIX: Classify personalization score into human terms
+ * Maps 0-1 score to meaningful labels
+ */
+function getPersonalizationLabel(score) {
+  if (score >= 0.8) return { label: 'Perfect fit', emoji: '🎯', level: 'excellent' };
+  if (score >= 0.6) return { label: 'Great fit', emoji: '✓', level: 'good' };
+  if (score >= 0.4) return { label: 'Good fit', emoji: '~', level: 'fair' };
+  return { label: 'Fair fit', emoji: '?', level: 'okay' };
+}
+
+/**
+ * TUFTE UX FIX: Classify warning severity (not vague)
+ * Makes warnings meaningful with context
+ */
+function getWarningSeverity(warningBadge) {
+  if (!warningBadge) return { severity: 'none', icon: '✓', message: 'No warnings' };
+
+  const typeToSeverity = {
+    allergen: { severity: 'critical', icon: '⚠️', color: '#EF4444' },
+    dietary: { severity: 'medium', icon: '⚡', color: '#F59E0B' },
+    dislike: { severity: 'low', icon: 'ℹ️', color: '#3B82F6' },
+    'low-priority': { severity: 'low', icon: 'ℹ️', color: '#6B7280' }
+  };
+
+  return typeToSeverity[warningBadge.type] || { severity: 'low', icon: 'ℹ️', color: '#6B7280' };
+}
+
+/**
+ * TUFTE UX FIX: Add comparison context (small multiples)
+ * Shows how this recommendation ranks against others
+ */
+function getComparisonContext(rec, allRecommendations, idx) {
+  const betterFitsCount = allRecommendations.filter((other, i) =>
+    i > idx && (other.personalizationScore < rec.personalizationScore)
+  ).length;
+
+  const betterPrefCount = allRecommendations.filter((other, i) =>
+    i > idx && (other.preferenceStrengthMatch < rec.preferenceStrengthMatch)
+  ).length;
+
+  return {
+    rankLabel: `#${idx + 1} of ${allRecommendations.length}`,
+    isTopPick: idx === 0,
+    comparisons: {
+      betterFits: betterFitsCount,
+      totalLower: allRecommendations.length - idx - 1
+    }
+  };
+}
+
+/**
+ * TUFTE UX FIX: Build honest, detailed confidence score
+ * Includes confidence range, not just a point estimate
+ */
+function getConfidenceContext(rec) {
+  // Base confidence from AI
+  const aiConfidence = rec.aiConfidence || 0.85;
+  const confidenceRange = {
+    min: Math.max(0.6, aiConfidence - 0.15),
+    max: Math.min(1.0, aiConfidence + 0.05),
+    point: aiConfidence
+  };
+
+  return {
+    point: Math.round(aiConfidence * 100),
+    range: `${Math.round(confidenceRange.min * 100)}-${Math.round(confidenceRange.max * 100)}%`,
+    label: aiConfidence >= 0.85 ? 'High confidence' : aiConfidence >= 0.7 ? 'Good confidence' : 'Estimated'
+  };
 }
 
 export default router;

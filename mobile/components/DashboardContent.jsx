@@ -345,6 +345,23 @@ export default function DashboardContent() {
     }
   }, [notify]);
 
+  // Update nutrition goals (inline edit from RemainingBudgetCard)
+  const handleGoalsUpdate = useCallback(async (goalUpdates) => {
+    try {
+      const response = await apiClient.post('/api/nutrition/goals', goalUpdates);
+      if (response?.data?.success) {
+        notify.success('Goal updated!');
+        // Refresh dashboard data
+        await refetch();
+      } else {
+        notify.error('Failed to update goal');
+      }
+    } catch (error) {
+      console.error('[Dashboard] Failed to update goals:', error);
+      notify.error(error?.response?.data?.error || 'Failed to update goal');
+    }
+  }, [refetch, notify]);
+
   // ============================================================================
   // GAMIFICATION LOGIC
   // ============================================================================
@@ -1080,6 +1097,7 @@ export default function DashboardContent() {
         <RemainingBudgetCard
           today={today}
           goals={goals}
+          onGoalsUpdate={handleGoalsUpdate}
         />
 
         {/* ============================================ */}

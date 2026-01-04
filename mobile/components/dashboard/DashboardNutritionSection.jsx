@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import CollapsibleSection from './CollapsibleSection';
 import GlassCard from './GlassCard';
-import NutritionOverviewCard from './NutritionOverviewCard';
 import MicronutrientsGrid from './MicronutrientsGrid';
 import MacroBalanceCard from './MacroBalanceCard';
 import EmptyState from '../EmptyState';
@@ -22,28 +21,12 @@ export default function DashboardNutritionSection({
   return (
     <CollapsibleSection
       styles={styles}
-      title="Nutrition"
-      icon="nutrition"
+      title="Nutrition Details"
+      icon="beaker"
       expanded={expanded}
       onToggle={onToggle}
     >
-      <View style={styles.sectionCard}>
-        <NutritionOverviewCard
-          calories={parseCalories(today.nutrition.totalCalories)}
-          calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
-          protein={parseMacro(today.nutrition.totalProtein)}
-          proteinGoal={parseGoal(goals?.proteinG, 150, 20, 500)}
-          carbs={parseMacro(today.nutrition.totalCarbs)}
-          carbsGoal={parseGoal(goals?.carbsG, 250, 50, 600)}
-          fat={parseMacro(today.nutrition.totalFats)}
-          fatGoal={parseGoal(goals?.fatsG, 65, 20, 200)}
-          fiber={parseDecimal(aggregatedMicros.fiber, 0)}
-          fiberGoal={30}
-          sugar={parseMacro(today.nutrition.totalSugars)}
-          sugarGoal={50}
-        />
-      </View>
-
+      {/* Macro Balance Assessment */}
       {macroAssessment && macroAssessment.quality !== 'none' && (
         <MacroBalanceCard assessment={macroAssessment} />
       )}
