@@ -353,17 +353,13 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
         skipIfHighConfidence: true, // Skip validation when AI confidence >= 0.9
       });
 
-      // Step 2: Canonicalize each ingredient
-      // Detect complex dishes that should NOT be simplified:
-      // 1. Regional dish keywords (curry, biryani, tacos, etc.)
-      // 2. Multi-word names (2+ words = likely a dish, not simple ingredient)
-      const complexDishRegex = /\b(curry|masala|biryani|saag|dal|gravy|fry|vada|dosa|idli|samosa|pakora|paratha|naan|roti|chapati|pulao|korma|vindaloo|tikka|tandoori|paneer|tacos?|burrito|enchilada|quesadilla|pasta|lasagna|risotto|pizza|burger|sandwich|wrap|salad|soup|stew|casserole|pie|cake|brownie|muffin|croissant|stroganoff|parmesan|alfredo|carbonara|bolognese|teriyaki|tempura|sushi|ramen|pho|pad\s?thai|fried\s?rice|stir\s?fry|roast|grilled|baked|steamed)\b/i;
+      // Step 2: Process each ingredient - preserve original names for accurate nutrition lookup
+      // OpenAI can estimate nutrition for ANY food, so no need to simplify/canonicalize
       const canonical = validated.map(item => {
         const canonicalForm = canonicalize(item.name);
         const baseConfidence = item.confidence ?? 0.5;
-        // Complex if: matches dish keywords OR has 2+ words (e.g., "chicken parmesan", "beef tacos")
-        const wordCount = item.name.trim().split(/\s+/).length;
-        const isComplex = complexDishRegex.test(item.name) || wordCount >= 2;
+        // Treat ALL foods as worthy of full name preservation
+        const isComplex = true; // Always preserve full name for nutrition lookup
         const confidenceLevel = isComplex
           ? 'estimated'
           : baseConfidence >= 0.85
