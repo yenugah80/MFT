@@ -664,8 +664,20 @@ function validateRecommendation(rec, remainingBudget, allergies, dietaryPrefs, m
   }
 
   // 2️⃣ Nutrition type validation (prevents NaN, Infinity, null)
-  const nutritionFields = ['calories', 'protein', 'carbs', 'fats', 'fiber', 'sugar'];
-  for (const field of nutritionFields) {
+  // CRITICAL: macros (calories, protein, carbs, fats) are REQUIRED
+  const requiredMacros = ['calories', 'protein', 'carbs', 'fats'];
+  const optionalNutrients = ['fiber', 'sugar'];
+
+  for (const field of requiredMacros) {
+    const val = rec[field];
+    if (val === undefined || val === null) {
+      errors.push(`Missing required field: ${field}`);
+    } else if (typeof val !== 'number' || val < 0 || !isFinite(val)) {
+      errors.push(`Invalid ${field}: must be non-negative number, got ${val}`);
+    }
+  }
+
+  for (const field of optionalNutrients) {
     const val = rec[field];
     if (val !== undefined && (typeof val !== 'number' || val < 0 || !isFinite(val))) {
       errors.push(`Invalid ${field}: must be non-negative number, got ${val}`);
@@ -986,13 +998,23 @@ VALIDATION CHECKLIST
 
     // TUFTE UX ENHANCEMENT: Enrich with context, reasoning, and honest data
     const enrichedRecommendations = rankedByScore.map((rec, idx) => {
+      // CRITICAL: Ensure nutrition values exist (shouldn't reach here but safeguard)
+      const calories = rec.calories ?? 0;
+      const protein = rec.protein ?? 0;
+      const carbs = rec.carbs ?? 0;
+      const fats = rec.fats ?? 0;
+
+      if (!calories || !protein) {
+        console.warn(`[Recommendations] WARNING: Recommendation "${rec.foodName}" has missing macros (cal=${calories}, prot=${protein}). This should have been filtered earlier!`);
+      }
+
       const prefLabel = getPreferenceLabel(rec.preferenceStrengthMatch ?? 3);
       const persLabel = getPersonalizationLabel(rec.personalizationScore);
       const warningInfo = getWarningSeverity(rec.warningBadge);
-      const macroBalance = calculateMacroBalance(rec);
+      const macroBalance = calculateMacroBalance({calories, protein, carbs, fats});
       const confidence = getConfidenceContext(rec);
       const comparison = getComparisonContext(rec, rankedByScore, idx);
-      const reasoning = getPersonalizationReasoning(rec, remainingBudget, mealType);
+      const reasoning = getPersonalizationReasoning({calories, protein, carbs, fats}, remainingBudget, mealType);
 
       return {
         // Core identity
@@ -1007,10 +1029,10 @@ VALIDATION CHECKLIST
 
         // TUFTE FIX: Nutrition with context
         nutrition: {
-          calories: rec.calories,
-          protein: rec.protein,
-          carbs: rec.carbs,
-          fats: rec.fats,
+          calories,
+          protein,
+          carbs,
+          fats,
           fiber: rec.fiber || 0,
           sugar: rec.sugar || 0,
           macroBalance: macroBalance  // ← NOW HONEST: actual percentages
