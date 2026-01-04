@@ -16,6 +16,8 @@ import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { getProfile } from '../controllers/profileController.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
 import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
+// CRITICAL FIX: Use standardized error responses
+import { errors, ErrorCodes } from '../utils/errorResponse.js';
 
 const router = express.Router();
 
@@ -148,7 +150,8 @@ router.get('/', requireAuth(), async (req, res) => {
     });
   } catch (error) {
     console.error('[Recommendations] Error:', error);
-    res.status(500).json({ error: 'Failed to generate recommendations' });
+    // CRITICAL FIX: Use standardized error response format
+    errors.externalService(res, 'Recommendation generation');
   }
 });
 
