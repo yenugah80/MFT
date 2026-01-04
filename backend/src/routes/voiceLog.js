@@ -3,6 +3,7 @@ import multer from 'multer';
 import { validateExtraction, isComplexDishInput } from '../services/canonicalIngredients.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { AiEstimatedFood } from '../models/AiEstimatedFood.js';
+import { requireAuth } from '../middleware/auth.js';
 import crypto from 'crypto';
 
 const router = express.Router();
@@ -62,7 +63,7 @@ function generateItemId(name, normalizedQuery, index) {
     .slice(0, 12);
 }
 
-router.post('/process', async (req, res) => {
+router.post('/process', requireAuth, async (req, res) => {
   try {
     const { text, isPartial, mealType } = req.body;
 
@@ -190,7 +191,7 @@ router.post('/process', async (req, res) => {
  * Handle audio transcription + processing in one optimized request.
  * Accepts multipart/form-data with 'audio' file field.
  */
-router.post('/transcribe', uploadMiddleware, async (req, res) => {
+router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
   try {
     // VALIDATION: Whitelist meal types to prevent prompt injection or confusion
     const VALID_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
@@ -314,7 +315,7 @@ router.post('/transcribe', uploadMiddleware, async (req, res) => {
   }
 });
 
-router.post('/report', async (req, res) => {
+router.post('/report', requireAuth, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name required" });

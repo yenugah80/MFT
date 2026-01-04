@@ -32,6 +32,7 @@ import recommendationsRouter from "./routes/recommendations.js";
 import analyticsRouter from "./routes/analytics.js";
 import adminStrategyRouter from "./routes/admin/strategy.js";
 import consentRouter from "./routes/consent.js";
+import voiceLogRouter from "./routes/voiceLog.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 
 const app = express();
@@ -240,6 +241,9 @@ app.use("/api/admin/strategy", adminStrategyRouter);
 
 // Mount Consent Router (GDPR-compliant data sharing management)
 app.use("/api/consent", consentRouter);
+
+// Mount Voice Log Router (Voice-to-nutrition analysis)
+app.use("/api/voice", voiceLogRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

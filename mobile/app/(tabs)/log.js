@@ -248,44 +248,64 @@ export default function LogScreen() {
 
   /**
    * Handle voice logging complete
-   * 🆕 Now routes through analyzeVoice for regional context processing
+   * VoiceModal already analyzes the transcript - we just use the result directly
+   * NO double-analysis needed!
    */
-  const handleVoiceComplete = async (serverResult) => {
-    if (!serverResult) return;
+  const handleVoiceComplete = (voiceResult) => {
+    if (!voiceResult) return;
 
     try {
-      // Extract transcription from server result
-      const transcript = serverResult.transcription || '';
+      // VoiceModal's analyzeTranscript already returns the full nutrition result
+      // Structure: { transcription, nutrition, items, totals }
+      const { transcription, nutrition, items, totals } = voiceResult;
 
-      if (!transcript.trim()) {
+      if (!transcription?.trim()) {
         console.warn('[log] Empty transcription received from voice');
         return;
       }
 
-      // 🆕 ROUTE THROUGH analyzeVoice TO GET REGIONAL CONTEXT
-      // This ensures voice inputs are processed with:
-      // - User's cuisine preference
-      // - User's region
-      // - Cooking style
-      // - Smart model routing for cost optimization
-      // - Ingredients breakdown extraction
+      console.log('[log] Voice result received:', { transcription, itemCount: items?.length });
+
+      // Reset state for new result
       resetForNewAnalysis();
-      setSelectedImage(null); // Clear any photo
+      setSelectedImage(null);
       setAnalysisSource('voice');
       setShowVoiceModal(false);
 
       // Show what was heard as input text
-      foodAnalysis.setInputText(transcript);
+      foodAnalysis.setInputText(transcription);
 
-      // Analyze with regional context through the new analyzeVoice method
-      await foodAnalysis.analyzeVoice(transcript, {
-        mealType: getMealTypeFromTime()
-      });
+      // Use the nutrition result directly from VoiceModal
+      // No need to re-analyze - VoiceModal already did it!
+      if (items && items.length > 0) {
+        // Set the analysis result directly
+        foodAnalysis.setAnalysisResult({
+          items: items.map((item, idx) => ({
+            itemId: item.itemId || `voice-${idx}`,
+            name: item.name || item.foodName,
+            portion: item.portion || { amount: 1, unit: 'serving' },
+            macros: item.macros || {
+              calories_kcal: item.calories,
+              protein_g: item.protein,
+              carbs_g: item.carbs,
+              fat_g: item.fat || item.fats,
+              fiber_g: item.fiber,
+              sugar_g: item.sugar,
+            },
+            micros: item.micros || {},
+            confidence: item.confidence || 0.9,
+          })),
+          totals: totals || {},
+        });
+      } else if (nutrition?.data) {
+        // Handle legacy format where nutrition data is nested
+        foodAnalysis.setAnalysisResult(nutrition.data);
+      }
 
       setAnalyzedFood(null); // Clear single-item state to prefer list view
     } catch (err) {
-      console.error('[log] Voice analysis failed:', err.message);
-      // Error is handled by foodAnalysis.error state
+      console.error('[log] Voice result processing failed:', err.message);
+      notify.error('Failed to process voice result');
     }
   };
 

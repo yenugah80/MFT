@@ -24,6 +24,12 @@ export const useServerVoice = (options = {}) => {
   const [liveItems, setLiveItems] = useState([]);
   const [processingState, setProcessingState] = useState({ step: 0, label: '' });
 
+  // Track volume for waveform visualization (simulated from speech activity)
+  const [volume, setVolume] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const durationIntervalRef = useRef(null);
+  const volumeIntervalRef = useRef(null);
+
   // Refs for liveness and timer management
   const isActiveRef = useRef(false);
   const timersRef = useRef([]);
@@ -54,6 +60,12 @@ export const useServerVoice = (options = {}) => {
       timersRef.current.forEach(clearTimeout);
       if (parseDebounceTimerRef.current) {
         clearTimeout(parseDebounceTimerRef.current);
+      }
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+      if (volumeIntervalRef.current) {
+        clearInterval(volumeIntervalRef.current);
       }
       if (Voice) {
         Voice.destroy().then(() => Voice.removeAllListeners());
@@ -116,14 +128,151 @@ export const useServerVoice = (options = {}) => {
       setError(null);
       setTranscript('');
       setLiveItems([]);
+      setDuration(0);
+      setVolume(0);
+
+      // Start duration timer
+      const startTime = Date.now();
+      durationIntervalRef.current = setInterval(() => {
+        setDuration(Date.now() - startTime);
+      }, 100);
+
+      // Simulate volume for waveform (based on speech activity)
+      volumeIntervalRef.current = setInterval(() => {
+        // Random volume simulation when recording
+        setVolume(Math.random() * 0.5 + 0.3);
+      }, 150);
+
       await Voice.start('en-US');
     } catch (err) {
       console.error(err);
       setError('Failed to start recording');
+      // Clean up intervals on error
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
     }
   }, []);
 
+  /**
+   * stopRecording - Step 1 of two-step flow
+   * Stops recording and returns transcript with confidence
+   * Does NOT analyze nutrition - use analyzeTranscript for that
+   */
+  const stopRecording = useCallback(async () => {
+    // Stop intervals
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    if (volumeIntervalRef.current) {
+      clearInterval(volumeIntervalRef.current);
+      volumeIntervalRef.current = null;
+    }
+    setVolume(0);
+
+    try {
+      if (Voice) {
+        await Voice.stop();
+      }
+    } catch (e) {
+      console.warn('[useServerVoice] Voice.stop error:', e);
+    }
+
+    setIsRecording(false);
+
+    // Return transcript with confidence for VoiceModal to display
+    const finalTranscript = transcript || '';
+    const confidence = finalTranscript.length > 10 ? 0.9 : 0.7; // Simple heuristic
+
+    return {
+      transcript: finalTranscript,
+      confidence,
+    };
+  }, [transcript]);
+
+  /**
+   * analyzeTranscript - Step 2 of two-step flow
+   * Sends transcript to backend for nutrition analysis
+   * @param {string} text - The transcript to analyze
+   * @returns {object} - Nutrition analysis result
+   */
+  const analyzeTranscript = useCallback(async (text) => {
+    if (!text || !text.trim()) {
+      setError('No text to analyze');
+      return null;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+    isActiveRef.current = true;
+
+    try {
+      setProcessingState({ step: 1, label: 'Analyzing nutrition...' });
+
+      const payload = {
+        text: text.trim(),
+        isPartial: false,
+        mealType: options.mealType,
+      };
+
+      const response = await apiClient.post('/voice/process', payload);
+
+      if (!isActiveRef.current) return null;
+
+      setProcessingState({ step: 2, label: 'Complete!' });
+
+      // Return the nutrition result
+      return {
+        transcription: text,
+        nutrition: response.data,
+        items: response.data?.items || [],
+        totals: response.data?.totals || {},
+      };
+    } catch (err) {
+      console.error('[useServerVoice] Analysis error:', err);
+      let msg = 'Failed to analyze nutrition';
+
+      // Provide specific error messages based on status
+      if (err.response?.status === 404) {
+        msg = 'Voice analysis service unavailable. Please try again later.';
+      } else if (err.response?.status === 401) {
+        msg = 'Session expired. Please sign in again.';
+      } else if (err.response?.status >= 500) {
+        msg = 'Server error. Please try again later.';
+      } else if (err.response?.data?.error) {
+        msg = err.response.data.error;
+      }
+
+      if (isActiveRef.current) {
+        setError(msg);
+      }
+      return null;
+    } finally {
+      isActiveRef.current = false;
+      setIsProcessing(false);
+    }
+  }, [options.mealType]);
+
+  /**
+   * clearError - Clears the error state
+   */
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  // Legacy: stopAndUpload for backwards compatibility (combines both steps)
   const stopAndUpload = useCallback(async () => {
+    // Stop intervals
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    if (volumeIntervalRef.current) {
+      clearInterval(volumeIntervalRef.current);
+      volumeIntervalRef.current = null;
+    }
+    setVolume(0);
+
     try {
       if (Voice) {
         await Voice.stop();
@@ -280,11 +429,19 @@ export const useServerVoice = (options = {}) => {
   const cancelRecording = useCallback(async () => {
     // 1. Kill liveness to prevent any pending uploads from updating state
     isActiveRef.current = false;
-    
-    // 2. Clear fake progress timers
+
+    // 2. Clear all timers and intervals
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
-    
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    if (volumeIntervalRef.current) {
+      clearInterval(volumeIntervalRef.current);
+      volumeIntervalRef.current = null;
+    }
+
     // 3. Stop recording if active
     if (Voice) {
       try {
@@ -292,7 +449,7 @@ export const useServerVoice = (options = {}) => {
         await Voice.destroy();
       } catch (e) {}
     }
-    
+
     // 4. Reset state
     setIsRecording(false);
     setIsProcessing(false);
@@ -300,17 +457,29 @@ export const useServerVoice = (options = {}) => {
     setTranscript('');
     setLiveItems([]);
     setError(null);
+    setVolume(0);
+    setDuration(0);
   }, []);
 
   return {
+    // Two-step flow (for VoiceModal)
     startRecording,
-    stopAndUpload,
+    stopRecording,      // Step 1: Stop and return transcript
+    analyzeTranscript,  // Step 2: Analyze nutrition
     cancelRecording,
+    clearError,
+
+    // Legacy (one-step flow)
+    stopAndUpload,
+
+    // State
     isRecording,
     isProcessing,
-    transcript, // Exposed for UI
-    liveItems,  // Exposed for UI Pills
+    volume,             // For waveform visualization
+    duration,           // Recording duration in ms
+    transcript,         // Live transcript for UI
+    liveItems,          // Live parsed items for UI Pills
     processingState,
-    error
+    error,
   };
 };

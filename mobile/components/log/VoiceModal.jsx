@@ -1,20 +1,13 @@
 /**
  * ============================================================================
- * VoiceModal Component - PRODUCTION GRADE
+ * VoiceModal Component - UNIFIED VERSION
  * ============================================================================
  * Premium voice recording modal with transcription preview and confidence display
+ * Supports both standard and elderly accessibility modes.
  *
- * Features:
- * - Animated waveform visualization (30 bars)
- * - Real-time volume metering
- * - Recording duration display with limit (60s)
- * - Transcription preview with edit capability (BEFORE nutrition analysis)
- * - Confidence score indicator
- * - Haptic feedback on actions
- * - Two-step flow: transcribe → user confirms → analyze nutrition
- * - State machine: idle → listening → processing → transcribed → analyzing → success/error
- * - Premium Ionicons (no emojis)
- * - Unified theme integration
+ * Modes:
+ * - "standard": Normal UI with edit capability, two-step flow
+ * - "elderly": Large buttons, audio guidance, auto-confirm, simplified flow
  *
  * @example
  * <VoiceModal
@@ -22,10 +15,11 @@
  *   onClose={() => setShowVoiceModal(false)}
  *   onComplete={(result) => handleVoiceComplete(result)}
  *   voiceHook={useLiveVoice()}
+ *   accessibilityMode="standard" // or "elderly"
  * />
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -40,6 +34,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Speech from 'expo-speech';
 
 import {
   BRAND,
@@ -58,30 +53,47 @@ import {
 // ============================================================================
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const WAVEFORM_BARS = 30;
+const WAVEFORM_BARS_STANDARD = 30;
+const WAVEFORM_BARS_ELDERLY = 15;
 const MAX_RECORDING_DURATION_MS = 60000; // 60 seconds
+
+// ============================================================================
+// AUDIO GUIDANCE (Elderly Mode)
+// ============================================================================
+
+async function speakInstruction(text, enabled) {
+  if (!enabled) return;
+  try {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      await Speech.speak(text, {
+        language: 'en',
+        pitch: 1.0,
+        rate: 0.9, // Slower for elderly
+      });
+    }
+  } catch (err) {
+    console.warn('Text-to-speech failed:', err);
+  }
+}
 
 // ============================================================================
 // WAVEFORM VISUALIZER
 // ============================================================================
 
-/**
- * Animated waveform visualizer
- * Displays 30 bars that animate based on microphone volume
- */
-function WaveformVisualizer({ volume, isActive }) {
+function WaveformVisualizer({ volume, isActive, isElderly }) {
+  const barCount = isElderly ? WAVEFORM_BARS_ELDERLY : WAVEFORM_BARS_STANDARD;
   const [bars] = useState(() =>
-    Array.from({ length: WAVEFORM_BARS }, () => new Animated.Value(0.2))
+    Array.from({ length: barCount }, () => new Animated.Value(isElderly ? 0.3 : 0.2))
   );
 
   useEffect(() => {
     let animationRef = null;
+    const baseValue = isElderly ? 0.3 : 0.2;
 
     if (!isActive) {
-      // Reset bars
       bars.forEach(bar => {
         Animated.timing(bar, {
-          toValue: 0.2,
+          toValue: baseValue,
           duration: 200,
           useNativeDriver: false,
         }).start();
@@ -89,16 +101,14 @@ function WaveformVisualizer({ volume, isActive }) {
       return;
     }
 
-    // Animate bars based on volume
     const animations = bars.map((bar, index) => {
-      // Create wave effect with varying heights
-      const baseHeight = 0.2 + volume * 0.8;
-      const variation = Math.sin((index / WAVEFORM_BARS) * Math.PI) * 0.3;
+      const baseHeight = baseValue + volume * (isElderly ? 0.7 : 0.8);
+      const variation = Math.sin((index / barCount) * Math.PI) * (isElderly ? 0.2 : 0.3);
       const targetHeight = Math.max(0.1, Math.min(1, baseHeight + variation));
 
       return Animated.timing(bar, {
         toValue: targetHeight,
-        duration: 100,
+        duration: isElderly ? 150 : 100,
         useNativeDriver: false,
       });
     });
@@ -106,25 +116,24 @@ function WaveformVisualizer({ volume, isActive }) {
     animationRef = Animated.parallel(animations);
     animationRef.start();
 
-    // FIXED: Cleanup animations on unmount or when dependencies change
     return () => {
       if (animationRef) {
         animationRef.stop();
       }
     };
-  }, [volume, isActive, bars]);
+  }, [volume, isActive, bars, isElderly]);
 
   return (
-    <View style={styles.waveformContainer}>
+    <View style={isElderly ? styles.waveformContainerElderly : styles.waveformContainer}>
       {bars.map((bar, index) => (
         <Animated.View
           key={index}
           style={[
-            styles.waveformBar,
+            isElderly ? styles.waveformBarElderly : styles.waveformBar,
             {
               height: bar.interpolate({
                 inputRange: [0, 1],
-                outputRange: ['10%', '100%'],
+                outputRange: [isElderly ? '20%' : '10%', '100%'],
               }),
             },
           ]}
@@ -138,9 +147,6 @@ function WaveformVisualizer({ volume, isActive }) {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Format duration in MM:SS
- */
 function formatDuration(ms) {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -148,40 +154,27 @@ function formatDuration(ms) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-/**
- * Get confidence color based on score
- * @param {number} confidence - Confidence score (0-1)
- * @returns {string} Color hex
- */
 function getConfidenceColor(confidence) {
   if (confidence >= 0.8) return SEMANTIC.success.base;
   if (confidence >= 0.6) return SEMANTIC.warning.base;
   return SEMANTIC.danger.base;
 }
 
-/**
- * Get confidence label
- */
 function getConfidenceLabel(confidence) {
   if (confidence >= 0.8) return 'High Confidence';
   if (confidence >= 0.6) return 'Medium Confidence';
   return 'Low Confidence';
 }
 
-/**
- * Trigger haptic feedback (safe cross-platform)
- */
 async function triggerHaptic(type = 'light') {
   try {
-    if (Platform.OS === 'ios') {
-      if (type === 'success') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (type === 'error') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } else {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    } else if (Platform.OS === 'android') {
+    if (type === 'success') {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (type === 'error') {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } else if (type === 'heavy') {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } else {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   } catch {
@@ -198,66 +191,151 @@ export function VoiceModal({
   onClose,
   onComplete,
   voiceHook,
+  accessibilityMode = 'standard', // 'standard' | 'elderly'
 }) {
+  const isElderly = accessibilityMode === 'elderly';
+
   const {
     isRecording,
     isProcessing,
     volume,
     duration,
     error,
+    transcript: liveTranscript = '', // Live transcript while speaking
     startRecording,
     stopRecording,
     analyzeTranscript,
     cancelRecording,
-    clearError,
+    clearError = () => {},
   } = voiceHook;
 
   // ─────────────────────────────────────────────
   // State & Refs
   // ─────────────────────────────────────────────
-  const [state, setState] = useState('idle'); // idle | listening | processing | transcribed | success | error
+  const [state, setState] = useState('idle');
   const [transcription, setTranscription] = useState('');
   const [confidence, setConfidence] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // FIXED: Prevent duplicate submissions
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localError, setLocalError] = useState(null);
 
-  // FIXED: Track timeout for cleanup
+  // Refs for cleanup and guards
   const successTimeoutRef = useRef(null);
+  const isCancelledRef = useRef(false);
+  const stopCalledRef = useRef(false);
+  const spinAnim = useRef(new Animated.Value(0)).current;
 
   // ─────────────────────────────────────────────
-  // Handlers (Production-grade memoization)
+  // Audio Guidance (Elderly Mode)
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (isElderly && state === 'idle' && visible) {
+      speakInstruction('Tap the big microphone button to start speaking', true);
+    }
+  }, [state, visible, isElderly]);
+
+  useEffect(() => {
+    if (isElderly && state === 'listening') {
+      speakInstruction('I am listening', true);
+    }
+  }, [state, isElderly]);
+
+  // ─────────────────────────────────────────────
+  // Handlers
   // ─────────────────────────────────────────────
 
-  // Define handleClose FIRST (used by handleCancel and handleConfirm)
   const handleClose = useCallback(() => {
+    isCancelledRef.current = true;
+
     clearError();
+    setLocalError(null);
     setState('idle');
     setTranscription('');
     setConfidence(null);
     setIsEditing(false);
+    setIsSubmitting(false);
+    stopCalledRef.current = false;
+
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+    }
     onClose();
   }, [clearError, onClose]);
 
   const handleStart = useCallback(async () => {
+    isCancelledRef.current = false;
+    stopCalledRef.current = false;
+    setLocalError(null);
+
     clearError();
-    await triggerHaptic();
+    await triggerHaptic(isElderly ? 'heavy' : 'light');
     await startRecording();
-  }, [clearError, startRecording]);
+  }, [clearError, startRecording, isElderly]);
 
   const handleStop = useCallback(async () => {
+    if (stopCalledRef.current) {
+      console.warn('[VoiceModal] handleStop already called, ignoring');
+      return;
+    }
+    stopCalledRef.current = true;
+
     try {
       await triggerHaptic();
       const result = await stopRecording();
 
-      // Step 1 complete: Got transcription only (NO nutrition data yet!)
-      setTranscription(result.transcript || 'Unknown food');
+      if (isCancelledRef.current) {
+        return;
+      }
+
+      const transcript = result.transcript || 'Unknown food';
+      setTranscription(transcript);
       setConfidence(result.confidence ?? 0.9);
-      setState('transcribed');
+
+      if (isElderly) {
+        // Elderly mode: Auto-analyze immediately
+        setState('analyzing');
+
+        const nutritionResult = await analyzeTranscript(transcript);
+
+        if (isCancelledRef.current) {
+          return;
+        }
+
+        // Check if analysis failed (returned null)
+        if (!nutritionResult) {
+          // Use error from hook if available, otherwise generic message
+          setLocalError(error || 'Failed to analyze nutrition. Please try again.');
+          setState('error');
+          await triggerHaptic('error');
+          await speakInstruction('Sorry, something went wrong. Please try again.', true);
+          stopCalledRef.current = false;
+          return;
+        }
+
+        setState('success');
+        await triggerHaptic('success');
+        await speakInstruction('Food logged successfully', true);
+
+        successTimeoutRef.current = setTimeout(() => {
+          if (!isCancelledRef.current) {
+            onComplete(nutritionResult);
+            handleClose();
+          }
+        }, 2000);
+      } else {
+        // Standard mode: Show transcription for review
+        setState('transcribed');
+      }
     } catch (err) {
       console.error('[VoiceModal] Stop failed:', err);
-      setState('error');
+      if (!isCancelledRef.current) {
+        setLocalError(err.message || 'Failed to process recording');
+        setState('error');
+        await triggerHaptic('error');
+      }
+      stopCalledRef.current = false;
     }
-  }, [stopRecording]);
+  }, [stopRecording, analyzeTranscript, onComplete, handleClose, isElderly, error]);
 
   const handleCancel = useCallback(async () => {
     await triggerHaptic();
@@ -266,36 +344,50 @@ export function VoiceModal({
   }, [cancelRecording, handleClose]);
 
   const handleConfirm = useCallback(async () => {
-    // FIXED: Prevent duplicate submissions
     if (isSubmitting) {
-      console.warn('[VoiceModal] Already submitting, ignoring duplicate call');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      // Show analyzing state
+      setLocalError(null);
       setState('analyzing');
       await triggerHaptic();
 
-      // Step 2: Analyze the confirmed/edited transcript
       const nutritionResult = await analyzeTranscript(transcription);
 
-      // Show success state
+      if (isCancelledRef.current) {
+        return;
+      }
+
+      // Check if analysis failed (returned null)
+      if (!nutritionResult) {
+        // Use error from hook if available, otherwise generic message
+        setLocalError(error || 'Failed to analyze nutrition. Please try again.');
+        setState('error');
+        await triggerHaptic('error');
+        setIsSubmitting(false);
+        return;
+      }
+
       setState('success');
       await triggerHaptic('success');
 
-      // FIXED: Store timeout ref for cleanup and delay to show success state
       successTimeoutRef.current = setTimeout(() => {
-        onComplete(nutritionResult);
-        handleClose();
+        if (!isCancelledRef.current) {
+          onComplete(nutritionResult);
+          handleClose();
+        }
       }, 800);
     } catch (err) {
       console.error('[VoiceModal] Analysis failed:', err);
-      setState('error');
+      if (!isCancelledRef.current) {
+        setLocalError(err.message || 'Failed to analyze nutrition');
+        setState('error');
+      }
       setIsSubmitting(false);
     }
-  }, [analyzeTranscript, transcription, onComplete, handleClose, isSubmitting]);
+  }, [analyzeTranscript, transcription, onComplete, handleClose, isSubmitting, error]);
 
   const handleEditTranscription = useCallback(() => {
     setIsEditing(true);
@@ -311,8 +403,11 @@ export function VoiceModal({
   // Effects
   // ─────────────────────────────────────────────
 
-  // Sync state with hook
   useEffect(() => {
+    if (state === 'transcribed' || state === 'analyzing' || state === 'success') {
+      return;
+    }
+
     if (isRecording) {
       setState('listening');
     } else if (isProcessing) {
@@ -325,31 +420,70 @@ export function VoiceModal({
       setTranscription('');
       setConfidence(null);
       setIsEditing(false);
+      setLocalError(null);
+      isCancelledRef.current = false;
+      stopCalledRef.current = false;
     }
-  }, [isRecording, isProcessing, error, visible]);
+  }, [isRecording, isProcessing, error, visible, state]);
 
-  // Auto-stop at max duration (PRODUCTION FIX: handleStop now in deps)
   useEffect(() => {
     if (duration >= MAX_RECORDING_DURATION_MS && isRecording) {
       handleStop();
     }
   }, [duration, isRecording, handleStop]);
 
-  // FIXED: Cleanup timeout on unmount
+  useEffect(() => {
+    let spinAnimation = null;
+
+    if (state === 'processing' || state === 'analyzing') {
+      spinAnim.setValue(0);
+      spinAnimation = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: isElderly ? 1200 : 1000,
+          useNativeDriver: true,
+        })
+      );
+      spinAnimation.start();
+    } else {
+      spinAnim.setValue(0);
+    }
+
+    return () => {
+      if (spinAnimation) {
+        spinAnimation.stop();
+      }
+    };
+  }, [state, spinAnim, isElderly]);
+
   useEffect(() => {
     return () => {
       if (successTimeoutRef.current) {
         clearTimeout(successTimeoutRef.current);
-        successTimeoutRef.current = null;
       }
     };
   }, []);
 
   // ─────────────────────────────────────────────
-  // Render duration with warning at 50s
+  // Computed values
   // ─────────────────────────────────────────────
   const durationColor = duration >= 50000 ? SEMANTIC.danger.base : TEXT.primary;
   const remainingSeconds = Math.ceil((MAX_RECORDING_DURATION_MS - duration) / 1000);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const displayError = localError || error;
+
+  // ─────────────────────────────────────────────
+  // Dynamic styles based on mode
+  // ─────────────────────────────────────────────
+  const modalStyle = isElderly ? styles.modalElderly : styles.modal;
+  const headerStyle = isElderly ? styles.headerElderly : styles.header;
+  const titleStyle = isElderly ? styles.titleElderly : styles.title;
+  const contentStyle = isElderly ? styles.contentElderly : styles.content;
 
   return (
     <Modal
@@ -359,108 +493,180 @@ export function VoiceModal({
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modal}>
+        <View style={modalStyle}>
           {/* ─────────────────────────────────────────── */}
-          {/* Header */}
+          {/* IDLE STATE */}
           {/* ─────────────────────────────────────────── */}
-          <View style={styles.header}>
-            <Ionicons name="mic" size={ICON_SIZES.md} color={BRAND.primary} />
-            <Text style={styles.title}>Voice Logging</Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
-            </TouchableOpacity>
-          </View>
+          {state === 'idle' && (
+            <>
+              <View style={headerStyle}>
+                {isElderly ? (
+                  <>
+                    <Text style={titleStyle}>Tell Me What You Ate</Text>
+                    <TouchableOpacity onPress={handleClose} style={styles.closeButtonElderly}>
+                      <Ionicons name="close" size={40} color={SEMANTIC.danger.base} />
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="mic" size={ICON_SIZES.md} color={BRAND.primary} />
+                    <Text style={titleStyle}>Voice Logging</Text>
+                    <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                      <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
 
-          {/* ─────────────────────────────────────────── */}
-          {/* Content based on state */}
-          {/* ─────────────────────────────────────────── */}
-          <View style={styles.content}>
+              <View style={contentStyle}>
+                {isElderly && (
+                  <Ionicons name="mic" size={80} color={BRAND.primary} style={styles.largeIcon} />
+                )}
 
-            {/* IDLE STATE */}
-            {state === 'idle' && (
-              <>
-                <Text style={styles.instruction}>
-                  Tap the microphone to start recording your meal description
+                <Text style={isElderly ? styles.instructionElderly : styles.instruction}>
+                  {isElderly
+                    ? 'Tap the big button below and tell me what you ate'
+                    : 'Tap the microphone to start recording your meal description'}
                 </Text>
-                <TouchableOpacity style={styles.micButton} onPress={handleStart}>
+
+                <TouchableOpacity
+                  style={isElderly ? styles.micButtonElderly : styles.micButton}
+                  onPress={handleStart}
+                >
                   <LinearGradient
                     colors={SURFACES.gradient.primary}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.micButtonGradient}
+                    style={isElderly ? styles.micButtonGradientElderly : styles.micButtonGradient}
                   >
-                    <Ionicons name="mic" size={ICON_SIZES['4xl']} color={TEXT.white} />
+                    <Ionicons name="mic" size={isElderly ? 60 : ICON_SIZES['4xl']} color={TEXT.white} />
                   </LinearGradient>
                 </TouchableOpacity>
-                <Text style={styles.hint}>
-                  Example: &quot;I had a grilled chicken salad with olive oil&quot;
+
+                <Text style={isElderly ? styles.exampleTextElderly : styles.hint}>
+                  Example: &quot;I had {isElderly ? 'two eggs and toast' : 'a grilled chicken salad with olive oil'}&quot;
                 </Text>
-                <View style={styles.limitBadge}>
-                  <Ionicons name="time-outline" size={ICON_SIZES.xs} color={TEXT.muted} />
-                  <Text style={styles.limitText}>Max 60 seconds</Text>
+
+                {!isElderly && (
+                  <View style={styles.limitBadge}>
+                    <Ionicons name="time-outline" size={ICON_SIZES.xs} color={TEXT.muted} />
+                    <Text style={styles.limitText}>Max 60 seconds</Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
+
+          {/* ─────────────────────────────────────────── */}
+          {/* LISTENING STATE */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'listening' && (
+            <>
+              {isElderly ? (
+                <View style={headerStyle}>
+                  <Text style={titleStyle}>I&apos;m Listening...</Text>
                 </View>
-              </>
-            )}
+              ) : null}
 
-            {/* LISTENING STATE */}
-            {state === 'listening' && (
-              <>
-                <View style={styles.statusBadge}>
-                  <View style={styles.recordingDot} />
-                  <Text style={styles.statusText}>Recording...</Text>
+              <View style={contentStyle}>
+                <View style={isElderly ? styles.recordingStatusElderly : styles.statusBadge}>
+                  <View style={isElderly ? styles.recordingDotElderly : styles.recordingDot} />
+                  <Text style={isElderly ? styles.recordingTextElderly : styles.statusText}>Recording{isElderly ? '' : '...'}</Text>
                 </View>
 
-                <WaveformVisualizer volume={volume} isActive={true} />
+                <WaveformVisualizer volume={volume} isActive={true} isElderly={isElderly} />
 
-                <Text style={[styles.durationText, { color: durationColor }]}>
-                  {formatDuration(duration)}
+                <Text style={[isElderly ? styles.durationElderly : styles.durationText, { color: durationColor }]}>
+                  {isElderly ? `${Math.floor(duration / 1000)}s` : formatDuration(duration)}
                 </Text>
-                {duration >= 50000 && (
-                  <Text style={styles.warningText}>
-                    {remainingSeconds}s remaining
-                  </Text>
+
+                {/* Live transcript display while speaking */}
+                {liveTranscript ? (
+                  <View style={isElderly ? styles.liveTranscriptContainerElderly : styles.liveTranscriptContainer}>
+                    <Text style={isElderly ? styles.liveTranscriptTextElderly : styles.liveTranscriptText} numberOfLines={3}>
+                      {liveTranscript}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {!isElderly && duration >= 50000 && (
+                  <Text style={styles.warningText}>{remainingSeconds}s remaining</Text>
                 )}
 
-                <View style={styles.recordingActions}>
-                  <TouchableOpacity style={styles.cancelRecButton} onPress={handleCancel}>
-                    <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
-                    <Text style={styles.cancelRecButtonText}>Cancel</Text>
+                <View style={isElderly ? styles.buttonGroupElderly : styles.recordingActions}>
+                  <TouchableOpacity
+                    style={isElderly ? styles.secondaryButtonElderly : styles.cancelRecButton}
+                    onPress={handleCancel}
+                  >
+                    <Ionicons name="close" size={isElderly ? 40 : ICON_SIZES.md} color={isElderly ? SEMANTIC.danger.base : TEXT.tertiary} />
+                    <Text style={isElderly ? styles.buttonTextElderly : styles.cancelRecButtonText}>Cancel</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.stopButton} onPress={handleStop}>
-                    <LinearGradient
-                      colors={SURFACES.gradient.danger}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.stopButtonGradient}
-                    >
-                      <Ionicons name="stop" size={ICON_SIZES.xl} color={TEXT.white} />
-                    </LinearGradient>
+
+                  <TouchableOpacity
+                    style={isElderly ? styles.stopButtonElderly : styles.stopButton}
+                    onPress={handleStop}
+                  >
+                    {isElderly ? (
+                      <>
+                        <Ionicons name="stop" size={50} color={TEXT.white} />
+                        <Text style={styles.buttonTextElderly}>Done</Text>
+                      </>
+                    ) : (
+                      <LinearGradient
+                        colors={SURFACES.gradient.danger}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.stopButtonGradient}
+                      >
+                        <Ionicons name="stop" size={ICON_SIZES.xl} color={TEXT.white} />
+                      </LinearGradient>
+                    )}
                   </TouchableOpacity>
                 </View>
-              </>
-            )}
+              </View>
+            </>
+          )}
 
-            {/* PROCESSING STATE */}
-            {state === 'processing' && (
-              <>
+          {/* ─────────────────────────────────────────── */}
+          {/* PROCESSING STATE */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'processing' && (
+            <>
+              {isElderly && (
+                <View style={headerStyle}>
+                  <Text style={titleStyle}>Processing...</Text>
+                </View>
+              )}
+              <View style={contentStyle}>
                 <View style={styles.processingIndicator}>
-                  <Animated.View style={styles.spinningIcon}>
-                    <Ionicons name="sync" size={ICON_SIZES['4xl']} color={BRAND.primary} />
+                  <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                    <Ionicons name="sync" size={isElderly ? 80 : ICON_SIZES['4xl']} color={BRAND.primary} />
                   </Animated.View>
                 </View>
-                <Text style={styles.statusText}>Processing...</Text>
-                <Text style={styles.hint}>
-                  Transcribing and analyzing your meal...
+                <Text style={isElderly ? styles.messageElderly : styles.statusText}>Processing...</Text>
+                <Text style={isElderly ? styles.hintElderly : styles.hint}>
+                  Transcribing your meal...
                 </Text>
-              </>
-            )}
+              </View>
+            </>
+          )}
 
-            {/* TRANSCRIBED STATE */}
-            {state === 'transcribed' && (
-              <>
+          {/* ─────────────────────────────────────────── */}
+          {/* TRANSCRIBED STATE (Standard mode only) */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'transcribed' && !isElderly && (
+            <>
+              <View style={headerStyle}>
+                <Ionicons name="mic" size={ICON_SIZES.md} color={BRAND.primary} />
+                <Text style={titleStyle}>Voice Logging</Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                  <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={contentStyle}>
                 <Text style={styles.statusText}>Transcription</Text>
 
-                {/* Confidence Indicator */}
                 {confidence !== null && (
                   <View style={styles.confidenceContainer}>
                     <Ionicons
@@ -474,7 +680,6 @@ export function VoiceModal({
                   </View>
                 )}
 
-                {/* Transcription Text */}
                 {isEditing ? (
                   <TextInput
                     style={styles.transcriptionInput}
@@ -490,15 +695,12 @@ export function VoiceModal({
                   </View>
                 )}
 
-                {/* Actions */}
                 <View style={styles.transcriptionActions}>
                   {isEditing ? (
-                    <>
-                      <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveEdit}>
-                        <Ionicons name="checkmark" size={ICON_SIZES.md} color={BRAND.primary} />
-                        <Text style={styles.secondaryButtonText}>Save</Text>
-                      </TouchableOpacity>
-                    </>
+                    <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveEdit}>
+                      <Ionicons name="checkmark" size={ICON_SIZES.md} color={BRAND.primary} />
+                      <Text style={styles.secondaryButtonText}>Save</Text>
+                    </TouchableOpacity>
                   ) : (
                     <>
                       <TouchableOpacity style={styles.secondaryButton} onPress={handleEditTranscription}>
@@ -519,59 +721,113 @@ export function VoiceModal({
                     </>
                   )}
                 </View>
-              </>
-            )}
+              </View>
+            </>
+          )}
 
-            {/* ANALYZING STATE (NEW - Step 2) */}
-            {state === 'analyzing' && (
-              <>
+          {/* ─────────────────────────────────────────── */}
+          {/* ANALYZING STATE */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'analyzing' && (
+            <>
+              {isElderly && (
+                <View style={headerStyle}>
+                  <Text style={titleStyle}>Processing...</Text>
+                </View>
+              )}
+              <View style={contentStyle}>
                 <View style={styles.processingIndicator}>
-                  <Animated.View style={styles.spinningIcon}>
-                    <Ionicons name="nutrition" size={ICON_SIZES['4xl']} color={BRAND.primary} />
+                  <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                    <Ionicons name="nutrition" size={isElderly ? 80 : ICON_SIZES['4xl']} color={BRAND.primary} />
                   </Animated.View>
                 </View>
-                <Text style={styles.statusText}>Analyzing Nutrition...</Text>
-                <Text style={styles.hint}>
+                <Text style={isElderly ? styles.messageElderly : styles.statusText}>Analyzing Nutrition...</Text>
+                <Text style={isElderly ? styles.hintElderly : styles.hint}>
                   Calculating calories, protein, carbs, and more...
                 </Text>
-              </>
-            )}
+              </View>
+            </>
+          )}
 
-            {/* SUCCESS STATE */}
-            {state === 'success' && (
-              <>
+          {/* ─────────────────────────────────────────── */}
+          {/* SUCCESS STATE */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'success' && (
+            <>
+              {isElderly && (
+                <View style={headerStyle}>
+                  <Text style={titleStyle}>Perfect!</Text>
+                </View>
+              )}
+              <View style={contentStyle}>
                 <View style={styles.successIndicator}>
-                  <Ionicons name="checkmark-circle" size={ICON_SIZES['5xl']} color={SEMANTIC.success.base} />
+                  <Ionicons name="checkmark-circle" size={isElderly ? 100 : ICON_SIZES['5xl']} color={SEMANTIC.success.base} />
                 </View>
-                <Text style={styles.statusText}>Success!</Text>
-                <Text style={styles.hint}>
-                  Food log created successfully
+                <Text style={isElderly ? styles.messageElderly : styles.statusText}>
+                  {isElderly ? 'Food logged successfully' : 'Success!'}
                 </Text>
-              </>
-            )}
+                {isElderly && transcription && (
+                  <Text style={styles.transcriptionElderly}>&quot;{transcription}&quot;</Text>
+                )}
+                <Text style={isElderly ? styles.hintElderly : styles.hint}>
+                  {isElderly ? 'Closing in a moment...' : 'Food log created successfully'}
+                </Text>
+              </View>
+            </>
+          )}
 
-            {/* ERROR STATE */}
-            {state === 'error' && (
-              <>
-                <View style={styles.errorIndicator}>
-                  <Ionicons name="close-circle" size={ICON_SIZES['5xl']} color={SEMANTIC.danger.base} />
+          {/* ─────────────────────────────────────────── */}
+          {/* ERROR STATE */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'error' && (
+            <>
+              {isElderly && (
+                <View style={headerStyle}>
+                  <Text style={[titleStyle, { color: SEMANTIC.danger.base }]}>Oops!</Text>
                 </View>
-                <Text style={[styles.statusText, { color: SEMANTIC.danger.base }]}>Error</Text>
-                <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={handleStart}>
-                  <LinearGradient
-                    colors={SURFACES.gradient.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.retryButtonGradient}
-                  >
-                    <Ionicons name="refresh" size={ICON_SIZES.md} color={TEXT.white} />
-                    <Text style={styles.retryButtonText}>Try Again</Text>
-                  </LinearGradient>
+              )}
+              <View style={contentStyle}>
+                <View style={styles.errorIndicator}>
+                  <Ionicons name="close-circle" size={isElderly ? 100 : ICON_SIZES['5xl']} color={SEMANTIC.danger.base} />
+                </View>
+                <Text style={[isElderly ? styles.messageElderly : styles.statusText, { color: SEMANTIC.danger.base }]}>
+                  {isElderly ? '' : 'Error'}
+                </Text>
+                <Text style={isElderly ? styles.errorMessageElderly : styles.errorText}>
+                  {displayError || 'Something went wrong'}
+                </Text>
+
+                <TouchableOpacity
+                  style={isElderly ? styles.retryButtonElderly : styles.retryButton}
+                  onPress={handleStart}
+                >
+                  {isElderly ? (
+                    <>
+                      <Ionicons name="refresh" size={40} color={TEXT.white} />
+                      <Text style={styles.buttonTextElderly}>Try Again</Text>
+                    </>
+                  ) : (
+                    <LinearGradient
+                      colors={SURFACES.gradient.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.retryButtonGradient}
+                    >
+                      <Ionicons name="refresh" size={ICON_SIZES.md} color={TEXT.white} />
+                      <Text style={styles.retryButtonText}>Try Again</Text>
+                    </LinearGradient>
+                  )}
                 </TouchableOpacity>
-              </>
-            )}
-          </View>
+
+                {isElderly && (
+                  <TouchableOpacity style={styles.secondaryButtonElderly} onPress={handleClose}>
+                    <Ionicons name="close" size={40} color={SEMANTIC.danger.base} />
+                    <Text style={styles.buttonTextElderly}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -583,6 +839,9 @@ export function VoiceModal({
 // ============================================================================
 
 const styles = StyleSheet.create({
+  // ─────────────────────────────────────────────
+  // OVERLAY & MODAL
+  // ─────────────────────────────────────────────
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -598,6 +857,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...SHADOWS.xl,
   },
+  modalElderly: {
+    backgroundColor: SURFACES.background.primary,
+    borderRadius: RADIUS['2xl'],
+    width: Math.min(SCREEN_WIDTH - 30, 500),
+    maxHeight: '90%',
+    overflow: 'hidden',
+    ...SHADOWS.xl,
+  },
+
+  // ─────────────────────────────────────────────
+  // HEADER
+  // ─────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -607,12 +878,29 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(107, 78, 255, 0.1)',
     gap: SPACING[2],
   },
+  headerElderly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING[6],
+    paddingVertical: SPACING[7],
+    borderBottomWidth: 3,
+    borderBottomColor: BRAND.primary,
+    backgroundColor: SURFACES.background.secondary,
+  },
   title: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
     flex: 1,
     textAlign: 'center',
+  },
+  titleElderly: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: TEXT.primary,
+    textAlign: 'center',
+    flex: 1,
   },
   closeButton: {
     position: 'absolute',
@@ -624,10 +912,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  closeButtonElderly: {
+    position: 'absolute',
+    right: SPACING[5],
+    width: 60,
+    height: 60,
+    borderRadius: RADIUS.full,
+    backgroundColor: SURFACES.background.tertiary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ─────────────────────────────────────────────
+  // CONTENT
+  // ─────────────────────────────────────────────
   content: {
     padding: SPACING[6],
     alignItems: 'center',
     minHeight: 340,
+    justifyContent: 'center',
+  },
+  contentElderly: {
+    padding: SPACING[8],
+    alignItems: 'center',
+    minHeight: 450,
     justifyContent: 'center',
   },
 
@@ -641,6 +949,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[8],
     lineHeight: TYPOGRAPHY.lineHeight.relaxed * TYPOGRAPHY.size.md,
   },
+  instructionElderly: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: TEXT.primary,
+    textAlign: 'center',
+    marginBottom: SPACING[8],
+    lineHeight: 36,
+  },
+  largeIcon: {
+    marginBottom: SPACING[8],
+  },
   micButton: {
     width: 120,
     height: 120,
@@ -648,7 +967,21 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[6],
     ...SHADOWS.xl,
   },
+  micButtonElderly: {
+    width: 160,
+    height: 160,
+    borderRadius: RADIUS.full,
+    marginVertical: SPACING[6],
+    ...SHADOWS.xl,
+  },
   micButtonGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: RADIUS.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  micButtonGradientElderly: {
     width: '100%',
     height: '100%',
     borderRadius: RADIUS.full,
@@ -661,6 +994,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     marginTop: SPACING[4],
+  },
+  hintElderly: {
+    fontSize: 18,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+    marginTop: SPACING[4],
+  },
+  exampleTextElderly: {
+    fontSize: 18,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: SPACING[6],
   },
   limitBadge: {
     flexDirection: 'row',
@@ -686,9 +1032,21 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     marginBottom: SPACING[6],
   },
+  recordingStatusElderly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    marginBottom: SPACING[8],
+  },
   recordingDot: {
     width: 8,
     height: 8,
+    borderRadius: RADIUS.full,
+    backgroundColor: SEMANTIC.danger.base,
+  },
+  recordingDotElderly: {
+    width: 20,
+    height: 20,
     borderRadius: RADIUS.full,
     backgroundColor: SEMANTIC.danger.base,
   },
@@ -696,6 +1054,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
+  },
+  recordingTextElderly: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: SEMANTIC.danger.base,
   },
   waveformContainer: {
     flexDirection: 'row',
@@ -705,8 +1068,21 @@ const styles = StyleSheet.create({
     gap: 3,
     marginVertical: SPACING[6],
   },
+  waveformContainerElderly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 200,
+    gap: 6,
+    marginVertical: SPACING[8],
+  },
   waveformBar: {
     width: 4,
+    backgroundColor: BRAND.primary,
+    borderRadius: RADIUS.sm,
+  },
+  waveformBarElderly: {
+    width: 12,
     backgroundColor: BRAND.primary,
     borderRadius: RADIUS.sm,
   },
@@ -716,16 +1092,61 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
     marginBottom: SPACING[6],
   },
+  durationElderly: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: TEXT.primary,
+    marginVertical: SPACING[6],
+  },
   warningText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: SEMANTIC.danger.base,
     marginBottom: SPACING[4],
   },
+  liveTranscriptContainer: {
+    width: '100%',
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[3],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING[4],
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  liveTranscriptContainerElderly: {
+    width: '100%',
+    paddingHorizontal: SPACING[5],
+    paddingVertical: SPACING[4],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING[6],
+    minHeight: 60,
+    justifyContent: 'center',
+  },
+  liveTranscriptText: {
+    fontSize: TYPOGRAPHY.size.md,
+    color: TEXT.secondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  liveTranscriptTextElderly: {
+    fontSize: 20,
+    color: TEXT.secondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 28,
+  },
   recordingActions: {
     flexDirection: 'row',
     gap: SPACING[4],
     alignItems: 'center',
+  },
+  buttonGroupElderly: {
+    flexDirection: 'row',
+    gap: SPACING[4],
+    marginTop: SPACING[8],
+    width: '100%',
   },
   cancelRecButton: {
     flexDirection: 'row',
@@ -745,7 +1166,18 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: RADIUS.full,
-    ...SHADOWS.danger,
+    ...SHADOWS.lg,
+  },
+  stopButtonElderly: {
+    flex: 1,
+    paddingVertical: SPACING[5],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: SEMANTIC.danger.base,
+    borderRadius: RADIUS.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING[2],
+    ...SHADOWS.lg,
   },
   stopButtonGradient: {
     width: '100%',
@@ -754,6 +1186,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  secondaryButtonElderly: {
+    flex: 1,
+    paddingVertical: SPACING[5],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING[2],
+    borderWidth: 2,
+    borderColor: TEXT.tertiary,
+  },
+  buttonTextElderly: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT.white,
+  },
 
   // ─────────────────────────────────────────────
   // PROCESSING STATE
@@ -761,12 +1210,16 @@ const styles = StyleSheet.create({
   processingIndicator: {
     marginVertical: SPACING[6],
   },
-  spinningIcon: {
-    // Animation would be applied via Animated API
+  messageElderly: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: TEXT.primary,
+    textAlign: 'center',
+    marginBottom: SPACING[4],
   },
 
   // ─────────────────────────────────────────────
-  // TRANSCRIBED STATE
+  // TRANSCRIBED STATE (Standard only)
   // ─────────────────────────────────────────────
   confidenceContainer: {
     flexDirection: 'row',
@@ -854,6 +1307,14 @@ const styles = StyleSheet.create({
   successIndicator: {
     marginVertical: SPACING[6],
   },
+  transcriptionElderly: {
+    fontSize: 20,
+    color: TEXT.primary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginVertical: SPACING[6],
+    paddingHorizontal: SPACING[4],
+  },
 
   // ─────────────────────────────────────────────
   // ERROR STATE
@@ -868,9 +1329,29 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[6],
     marginTop: SPACING[3],
   },
+  errorMessageElderly: {
+    fontSize: 22,
+    color: SEMANTIC.danger.base,
+    textAlign: 'center',
+    marginVertical: SPACING[6],
+    lineHeight: 32,
+  },
   retryButton: {
     borderRadius: RADIUS.lg,
     ...SHADOWS.md,
+  },
+  retryButtonElderly: {
+    paddingVertical: SPACING[5],
+    paddingHorizontal: SPACING[6],
+    backgroundColor: SEMANTIC.success.base,
+    borderRadius: RADIUS.lg,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING[3],
+    width: '100%',
+    marginVertical: SPACING[4],
+    ...SHADOWS.lg,
   },
   retryButtonGradient: {
     flexDirection: 'row',
