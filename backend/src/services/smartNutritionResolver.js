@@ -94,11 +94,13 @@ class SmartNutritionResolver {
     let portionSource = 'default';
 
     if (userId && !portion) {
-      const learned = await this._getLearnedPortion(userId, foodQuery);
+      // CRITICAL FIX: Use CANONICAL query for lookup to ensure consistency
+      // If DB was stored with normalized names, lookup must match that normalization
+      const learned = await this._getLearnedPortion(userId, canonicalQuery);
       if (learned) {
         portionToUse = this._canonicalizeFoodQuery(learned.portion);
         portionSource = 'learned';
-        console.log(`[SmartResolver] 🎯 Using learned portion for ${foodQuery}: ${portionToUse}`);
+        console.log(`[SmartResolver] 🎯 Using learned portion for ${canonicalQuery}: ${portionToUse}`);
       }
     } else if (portion !== '1 serving') {
       portionSource = 'user_specified';
@@ -115,7 +117,9 @@ class SmartNutritionResolver {
 
     try {
       // Step 1: Get OpenAI estimation (fast, always available, preserves ingredients)
-      const openAIResult = await this._getOpenAIEstimation(foodQuery, portionToUse);
+      // CRITICAL: Use CANONICAL form to ensure consistency between cache + prompt
+      // If cache key uses "banana" (canonical) but prompt uses "BANANA" (raw), mismatch occurs
+      const openAIResult = await this._getOpenAIEstimation(canonicalQuery, portionToUse);
 
       // Step 2: Check if this is an ingredient-specific food (protein/vegetable/grain)
       const hasSpecificIngredient = this._hasSpecificIngredient(canonicalQuery);
@@ -143,10 +147,12 @@ class SmartNutritionResolver {
 
         const result = {
           ...openAIResult,
-          source: 'openai_estimation',
-          sourceConfidence: openAIResult.confidence,
+          // CRITICAL FIX: Source should reflect VALIDATION status, not confidence
+          // Confidence is unreliable; validationPassed is the source of truth
+          source: openAIResult.validationPassed ? 'openai_estimation' : 'openai_estimation_unvalidated',
+          sourceConfidence: openAIResult.validationPassed ? 95 : openAIResult.confidence,
           reason: `OpenAI estimation (${reason})`,
-          limitation: openAIResult.confidence < 80 ? 'Estimated values - may vary by brand/preparation' : null,
+          limitation: !openAIResult.validationPassed ? 'Macros did not pass Atwater validation - values may be inaccurate' : null,
           components: openAIResult.components || [], // Pass through components
           isComplex: openAIResult.isComplex || false,
           estimationTier: promptTier, // FIXED P0: Track which prompt tier was used
@@ -168,39 +174,58 @@ class SmartNutritionResolver {
           console.log(`[SmartResolver] Cached valid result for "${canonicalQuery}"`);
         } else {
           console.warn(`[SmartResolver] NOT caching invalid result for "${canonicalQuery}" (validationPassed=false)`);
+          // CRITICAL FIX: Track invalid results for telemetry
+          this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
         }
 
         return result;
       }
 
-      // Step 4: Low confidence + generic food - try USDA verification
+      // Step 4: Validation failed + generic food - try USDA verification
       // NOTE: This code path only executes when ENABLE_USDA_VERIFICATION=true
-      console.log(`[SmartResolver] 🔍 Low confidence (${openAIResult.confidence}%) for generic food - Checking USDA for "${foodQuery}"`);
+      console.log(`[SmartResolver] 🔍 Validation failed for generic food - Checking USDA for "${canonicalQuery}"`);
 
-      const usdaResult = await this._getUSDAVerification(foodQuery);
+      const usdaResult = await this._getUSDAVerification(canonicalQuery);
 
       if (usdaResult) {
-        console.log(`[SmartResolver] ✅ USDA verification successful for "${foodQuery}"`);
+        // CRITICAL FIX: Validate USDA results before caching
+        // USDA data can be inconsistent, must pass same validation as OpenAI
+        try {
+          this._validateNutritionSchema(usdaResult);
+          this._validateMacros(usdaResult);
+          console.log(`[SmartResolver] ✅ USDA verification successful AND validated for "${canonicalQuery}"`);
+        } catch (error) {
+          console.error(`[SmartResolver] ❌ USDA result failed validation for "${canonicalQuery}":`, error.message);
+          usdaResult.validationPassed = false;
+        }
+
         this.stats.usdaVerifications++;
 
         const result = {
           ...usdaResult,
-          source: 'usda_verified',
-          sourceConfidence: 95,
+          source: usdaResult.validationPassed ? 'usda_verified' : 'usda_unvalidated',
+          sourceConfidence: usdaResult.validationPassed ? 95 : 40,
           openaiBackup: openAIResult, // Keep OpenAI estimate as backup (includes components)
-          limitation: 'USDA data - may not match your specific brand',
+          limitation: !usdaResult.validationPassed ? 'USDA data failed validation - may be inaccurate' : 'USDA data - may not match your specific brand',
           components: [], // USDA doesn't have component breakdown
           isComplex: false,
           estimationTier: promptTier, // FIXED P0: Track which prompt tier
           cacheKey,
         };
 
-        nutritionCache.set(cacheKey, result);
+        // CRITICAL: Only cache valid USDA results, same as OpenAI
+        if (usdaResult.validationPassed) {
+          nutritionCache.set(cacheKey, result);
+        } else {
+          console.warn(`[SmartResolver] NOT caching unvalidated USDA result for "${canonicalQuery}"`);
+          // Track invalid USDA results
+          this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
+        }
         return result;
       }
 
-      // Step 5: USDA failed - use OpenAI estimate
-      console.log(`[SmartResolver] ⚠️ USDA unavailable - Using OpenAI estimate for "${foodQuery}"`);
+      // Step 5: USDA failed or invalid - use OpenAI estimate as final fallback
+      console.log(`[SmartResolver] ⚠️ USDA unavailable/invalid - Using OpenAI estimate for "${canonicalQuery}"`);
       this.stats.openaiEstimates++;
 
       const result = {
@@ -215,7 +240,12 @@ class SmartNutritionResolver {
         cacheKey,
       };
 
-      nutritionCache.set(cacheKey, result);
+      // Only cache if OpenAI result is valid
+      if (openAIResult.validationPassed) {
+        nutritionCache.set(cacheKey, result);
+      } else {
+        this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
+      }
       return result;
 
     } catch (error) {
@@ -277,37 +307,51 @@ class SmartNutritionResolver {
   }
 
   /**
-   * Check if food query contains specific ingredients that should be preserved
-   * (e.g., "spinach curry" should stay spinach, not become "beef curry")
+   * Check if food query is PRIMARILY a specific ingredient (not just contains it)
+   * This is more restrictive to prevent "pasta carbonara" or "fried rice" from matching
+   *
+   * CRITICAL: Only match if ingredient is the MAIN thing being described
+   * Examples:
+   *   "spinach" → YES (ingredient-specific)
+   *   "spinach salad" → NO (complex dish)
+   *   "rice" → YES (ingredient-specific)
+   *   "fried rice" → NO (complex dish)
+   *   "chicken breast" → YES (ingredient-specific)
+   *   "chicken curry" → NO (complex dish)
    * @private
    */
   _hasSpecificIngredient(foodQuery) {
-    const query = foodQuery.toLowerCase();
+    const query = foodQuery.toLowerCase().trim();
 
-    const specificIngredients = [
-      // Proteins
-      'chicken', 'beef', 'pork', 'lamb', 'turkey', 'duck', 'fish', 'salmon', 'tuna',
-      'shrimp', 'crab', 'lobster', 'tofu', 'tempeh', 'seitan', 'eggs',
+    // CRITICAL: Only match ingredients that appear at START of query
+    // This prevents "pasta carbonara" from matching "pasta"
+    const simpleIngredients = [
+      // Proteins - match at word boundary
+      /^chicken\b/, /^beef\b/, /^pork\b/, /^lamb\b/, /^turkey\b/, /^duck\b/, /^fish\b/, /^salmon\b/, /^tuna\b/,
+      /^shrimp\b/, /^crab\b/, /^lobster\b/, /^tofu\b/, /^tempeh\b/, /^seitan\b/, /^eggs?\b/,
 
-      // Vegetables (especially leafy greens that are often substituted)
-      'spinach', 'kale', 'broccoli', 'cauliflower', 'cabbage', 'lettuce',
-      'zucchini', 'eggplant', 'mushroom', 'pepper', 'tomato',
+      // Vegetables
+      /^spinach\b/, /^kale\b/, /^broccoli\b/, /^cauliflower\b/, /^cabbage\b/, /^lettuce\b/,
+      /^zucchini\b/, /^eggplant\b/, /^mushroom\b/, /^pepper\b/, /^tomato\b/,
 
-      // Grains/Starches
-      'rice', 'quinoa', 'pasta', 'noodles', 'bread', 'potato', 'sweet potato',
+      // Grains/Starches (plain, not "fried rice" or "pasta carbonara")
+      /^rice\b/, /^quinoa\b/, /^pasta\b/, /^noodles\b/, /^bread\b/, /^potato\b/, /^sweet potato\b/,
 
       // Legumes
-      'chickpea', 'lentil', 'beans', 'peas',
+      /^chickpea\b/, /^lentil\b/, /^beans\b/, /^peas\b/,
     ];
 
-    return specificIngredients.some(ingredient => query.includes(ingredient));
+    return simpleIngredients.some(regex => regex.test(query));
   }
 
   /**
    * Resolve nutrition for multiple foods (batch)
    * More efficient for meal logging
+   *
+   * CRITICAL FIX: Now accepts userId to support learned portions in batch
+   * Otherwise fallback to single request won't use learned portions
    */
-  async resolveFoodsBatch(foodItems) {
+  async resolveFoodsBatch(foodItems, userId = null) {
     // Filter out cached items - FIXED P0: Include prompt tier in cache key
     // CRITICAL FIX #1: Canonicalize food names to ensure cache key consistency
     const uncachedItems = foodItems.filter(item => {
@@ -389,6 +433,8 @@ class SmartNutritionResolver {
           nutritionCache.set(cacheKey, result);
         } else {
           console.warn(`[SmartResolver] Batch: NOT caching invalid result for "${item.name}"`);
+          // Track invalid batch results
+          this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
         }
 
         return result;
@@ -399,8 +445,9 @@ class SmartNutritionResolver {
     } catch (error) {
       console.error(`[SmartResolver] Batch resolution failed:`, error.message);
       // Fall back to individual resolution
+      // CRITICAL FIX: Pass userId to maintain learned portion support in fallback
       return Promise.all(uncachedItems.map(item =>
-        this.resolveFood(item.name, item.portion)
+        this.resolveFood(item.name, item.portion, userId)
       ));
     }
   }
