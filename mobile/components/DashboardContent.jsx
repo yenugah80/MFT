@@ -40,8 +40,6 @@ import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
 import DashboardPrimaryCard from "./dashboard/DashboardPrimaryCard";
-import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
-import SmartRecommendationsCard from "./dashboard/SmartRecommendationsCard";
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
 import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
@@ -1092,15 +1090,6 @@ export default function DashboardContent() {
         />
 
         {/* ============================================ */}
-        {/* REMAINING BUDGET CARD - Shows remaining nutrition budget */}
-        {/* ============================================ */}
-        <RemainingBudgetCard
-          today={today}
-          goals={goals}
-          onGoalsUpdate={handleGoalsUpdate}
-        />
-
-        {/* ============================================ */}
         {/* FOOD NUTRI-SCORE CARD - Shows actual A-E grades */}
         {/* ============================================ */}
         {uniqueFoodLogs.length > 0 && (
@@ -1123,24 +1112,6 @@ export default function DashboardContent() {
           macroAssessment={macroAssessment}
           uniqueFoodLogs={uniqueFoodLogs}
           onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
-        />
-
-        {/* ============================================ */}
-        {/* SMART RECOMMENDATIONS CARD - AI-powered suggestions */}
-        {/* ============================================ */}
-        <SmartRecommendationsCard
-          today={today}
-          goals={goals}
-          userProfile={userProfile}
-          recommendations={recommendations}
-          isLoading={recommendationsLoading}
-          onSelectRecommendation={(rec) => {
-            setSelectedRecommendation(rec);
-            setRecommendationModalVisible(true);
-            // Track view interaction
-            trackRecommendationView(rec.id);
-          }}
-          onRefresh={fetchRecommendations}
         />
 
         {/* ============================================ */}
