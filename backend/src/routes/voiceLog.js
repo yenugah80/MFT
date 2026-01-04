@@ -197,22 +197,26 @@ router.post('/process', requireAuth, async (req, res) => {
         const nutrition = item.nutrition || item.canonical?.nutrition || {};
         const portion = item.portion || item.canonical?.portion || {};
 
+        // CRITICAL: Get quantity and multiply nutrition values
+        const qty = portion.amount || item.quantity || 1;
+
         return {
           name: item.name,
           itemId: item.id,
           portion: {
-            amount: portion.amount || item.quantity || 1,
+            amount: qty,
             unit: portion.unit || item.unit || 'serving',
-            servingText: `${portion.amount || item.quantity || 1} ${portion.unit || item.unit || 'serving'}`
+            servingText: `${qty} ${portion.unit || item.unit || 'serving'}`
           },
           macros: {
-            calories_kcal: nutrition.calories || nutrition.calories_kcal || 0,
-            protein_g: nutrition.protein_g || nutrition.protein || 0,
-            carbs_g: nutrition.carbs_g || nutrition.carbs || 0,
-            fat_g: nutrition.fats || nutrition.fat_g || nutrition.fat || 0,
-            fiber_g: nutrition.fiber_g || nutrition.fiber || 0,
-            sugar_g: nutrition.sugar_g || nutrition.sugar || 0,
-            sodium_mg: nutrition.sodium_mg || nutrition.sodium || 0
+            // Multiply nutrition by quantity (5 eggs = 5 × single egg nutrition)
+            calories_kcal: (nutrition.calories || nutrition.calories_kcal || 0) * qty,
+            protein_g: (nutrition.protein_g || nutrition.protein || 0) * qty,
+            carbs_g: (nutrition.carbs_g || nutrition.carbs || 0) * qty,
+            fat_g: (nutrition.fats || nutrition.fat_g || nutrition.fat || 0) * qty,
+            fiber_g: (nutrition.fiber_g || nutrition.fiber || 0) * qty,
+            sugar_g: (nutrition.sugar_g || nutrition.sugar || 0) * qty,
+            sodium_mg: (nutrition.sodium_mg || nutrition.sodium || 0) * qty
           },
           micros: nutrition.micros || {},
           confidence: item.confidence,
@@ -354,22 +358,26 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
         const nutrition = item.nutrition || item.canonical?.nutrition || {};
         const portion = item.portion || item.canonical?.portion || {};
 
+        // CRITICAL: Get quantity and multiply nutrition values
+        const qty = portion.amount || item.quantity || 1;
+
         return {
           name: item.name,
           itemId: item.id,
           portion: {
-            amount: portion.amount || item.quantity || 1,
+            amount: qty,
             unit: portion.unit || item.unit || 'serving',
-            servingText: `${portion.amount || item.quantity || 1} ${portion.unit || item.unit || 'serving'}`
+            servingText: `${qty} ${portion.unit || item.unit || 'serving'}`
           },
           macros: {
-            calories_kcal: nutrition.calories || nutrition.calories_kcal || 0,
-            protein_g: nutrition.protein_g || nutrition.protein || 0,
-            carbs_g: nutrition.carbs_g || nutrition.carbs || 0,
-            fat_g: nutrition.fats || nutrition.fat_g || nutrition.fat || 0,
-            fiber_g: nutrition.fiber_g || nutrition.fiber || 0,
-            sugar_g: nutrition.sugar_g || nutrition.sugar || 0,
-            sodium_mg: nutrition.sodium_mg || nutrition.sodium || 0
+            // Multiply nutrition by quantity (5 eggs = 5 × single egg nutrition)
+            calories_kcal: (nutrition.calories || nutrition.calories_kcal || 0) * qty,
+            protein_g: (nutrition.protein_g || nutrition.protein || 0) * qty,
+            carbs_g: (nutrition.carbs_g || nutrition.carbs || 0) * qty,
+            fat_g: (nutrition.fats || nutrition.fat_g || nutrition.fat || 0) * qty,
+            fiber_g: (nutrition.fiber_g || nutrition.fiber || 0) * qty,
+            sugar_g: (nutrition.sugar_g || nutrition.sugar || 0) * qty,
+            sodium_mg: (nutrition.sodium_mg || nutrition.sodium || 0) * qty
           },
           micros: nutrition.micros || {},
           confidence: item.confidence,
