@@ -373,8 +373,9 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
         return {
           ...item,
           canonical: canonicalForm,
-          // Update name to canonical form for better nutrition lookup
-          name: canonicalForm.canonical,
+          // Keep display name for UI, use canonicalName for nutrition lookup
+          name: canonicalForm.display_name || item.name,
+          canonicalName: canonicalForm.canonical, // For nutrition API lookup
           preparation: null,
           quantity: item.quantity || 1,
           unit: item.unit || 'serving',

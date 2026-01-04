@@ -342,7 +342,9 @@ async function resolveGenericFood(parsedFood) {
       : '1 serving';
 
     // Use Smart Nutrition Resolver (OpenAI first, USDA verification for low confidence)
-    const nutrition = await smartNutritionResolver.resolveFood(parsedFood.name, portionStr);
+    // Use canonicalName for nutrition lookup (simplified for API), display name is preserved in parsedFood.name
+    const lookupName = parsedFood.canonicalName || parsedFood.name;
+    const nutrition = await smartNutritionResolver.resolveFood(lookupName, portionStr);
 
     // Build source evidence
     sourceEvidence.push({
