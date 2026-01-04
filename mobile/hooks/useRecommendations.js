@@ -79,6 +79,10 @@ export function useRecommendations() {
         }
       );
 
+      // Invalidate cache after food is logged (remaining budget changed)
+      setLastFetchTime(null);
+      console.log('[useRecommendations] Cache invalidated after accepting recommendation');
+
       return {
         success: true,
         foodLog: response.data?.foodLog,
@@ -147,6 +151,12 @@ export function useRecommendations() {
     }
   }, []);
 
+  // Clear cache on demand (useful when food is logged from other sources)
+  const clearCache = useCallback(() => {
+    setLastFetchTime(null);
+    console.log('[useRecommendations] Cache cleared on demand');
+  }, []);
+
   return {
     // State
     recommendations,
@@ -160,6 +170,7 @@ export function useRecommendations() {
     rejectRecommendation,
     getHistory,
     getDetailedRecommendation,
+    clearCache,
 
     // Derived
     hasRecommendations: recommendations.length > 0,

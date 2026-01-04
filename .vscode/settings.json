@@ -2,6 +2,9 @@
     "claudeCode.useTerminal": true,
 
     "stylelint.validate": ["css", "scss", "less"],
+    "stylelint.ignoreDisables": false,
+    "stylelint.snippet": ["css", "scss", "less"],
+    "stylelint.enable": true,
     "css.validate": false,
     "scss.validate": false,
     "less.validate": false,

@@ -15,82 +15,135 @@ import { db } from '../config/db.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { getProfile } from '../controllers/profileController.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
-import { generateRecipeInstructions } from '../services/recipeService.js';
 import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
 
 const router = express.Router();
 
+// Request deduplication map: stores in-flight recommendation requests
+// Key: "${userId}:${mealType}:${limit}", Value: Promise
+const inFlightRequests = new Map();
+
+/**
+ * Generate a deduplication key for a recommendation request
+ * Ensures identical concurrent requests are coalesced
+ */
+function getRequestKey(userId, mealType, limit) {
+  return `${userId}:${mealType}:${limit}`;
+}
+
+/**
+ * Wrap recommendation generation with deduplication
+ * If an identical request is already in-flight, return that promise instead
+ */
+async function generateRecommendationsWithDedup(userId, mealType, limit, generatorFn) {
+  const key = getRequestKey(userId, mealType, limit);
+
+  // Check if this request is already in-flight
+  if (inFlightRequests.has(key)) {
+    console.log(`[Recommendations] Coalescing duplicate request: ${key}`);
+    return inFlightRequests.get(key);
+  }
+
+  // Create the promise for this request
+  const promise = (async () => {
+    try {
+      return await generatorFn();
+    } finally {
+      // Clean up after request completes
+      inFlightRequests.delete(key);
+    }
+  })();
+
+  // Store the promise so concurrent requests get the same result
+  inFlightRequests.set(key, promise);
+
+  return promise;
+}
+
 /**
  * GET /api/recommendations
  * Get personalized food recommendations with history awareness
+ * Uses request deduplication to prevent duplicate concurrent API calls
  */
 router.get('/', requireAuth(), async (req, res) => {
   try {
     const { userId } = req.auth;
     const { limit = 5 } = req.query;
 
-    // Fetch user profile for personalization
-    const profileRes = await fetch(`${process.env.API_URL}/profiles/me`, {
-      headers: { Authorization: req.headers.authorization },
-    });
-    const profile = profileRes.ok ? await profileRes.json() : null;
-
-    // Fetch today's nutrition data
-    const dashboardRes = await fetch(`${process.env.API_URL}/nutrition/dashboard`, {
-      headers: { Authorization: req.headers.authorization },
-    });
-    const dashboard = dashboardRes.ok ? await dashboardRes.json() : null;
-
-    // Calculate remaining budget
-    const goals = profile?.goals || {};
-    const today = dashboard?.today || {};
-    const nutrition = today?.nutrition || {};
-
-    const remainingBudget = {
-      calories: Math.max(0, (goals.dailyCalories || 2000) - (nutrition.totalCalories || 0)),
-      protein: Math.max(0, (goals.proteinG || 150) - (nutrition.totalProtein || 0)),
-      carbs: Math.max(0, (goals.carbsG || 225) - (nutrition.totalCarbs || 0)),
-      fats: Math.max(0, (goals.fatsG || 65) - (nutrition.totalFats || 0)),
-      water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
-    };
-
-    // Analyze recommendation history for personalization
-    const history = await analyzeRecommendationHistory(db, userId);
-
-    // Determine recommendation type based on budget AND history
-    const recType = determineRecommendationType(remainingBudget, profile, history);
-
-    // Get meal type based on current hour
+    // Get meal type early to use as dedup key
     const hour = new Date().getHours();
     const mealType = getMealType(hour);
 
-    // Generate recommendations with enhanced AI
-    const recommendations = await generateEnhancedRecommendations(
-      recType,
+    // Generate or coalesce request with deduplication
+    const result = await generateRecommendationsWithDedup(
+      userId,
       mealType,
-      remainingBudget,
-      profile,
-      history,
-      parseInt(limit)
+      parseInt(limit),
+      async () => {
+        // Fetch user profile for personalization
+        const profileRes = await fetch(`${process.env.API_URL}/profiles/me`, {
+          headers: { Authorization: req.headers.authorization },
+        });
+        const profile = profileRes.ok ? await profileRes.json() : null;
+
+        // Fetch today's nutrition data
+        const dashboardRes = await fetch(`${process.env.API_URL}/nutrition/dashboard`, {
+          headers: { Authorization: req.headers.authorization },
+        });
+        const dashboard = dashboardRes.ok ? await dashboardRes.json() : null;
+
+        // Calculate remaining budget
+        const goals = profile?.goals || {};
+        const today = dashboard?.today || {};
+        const nutrition = today?.nutrition || {};
+
+        const remainingBudget = {
+          calories: Math.max(0, (goals.dailyCalories || 2000) - (nutrition.totalCalories || 0)),
+          protein: Math.max(0, (goals.proteinG || 150) - (nutrition.totalProtein || 0)),
+          carbs: Math.max(0, (goals.carbsG || 225) - (nutrition.totalCarbs || 0)),
+          fats: Math.max(0, (goals.fatsG || 65) - (nutrition.totalFats || 0)),
+          water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
+        };
+
+        // Analyze recommendation history for personalization
+        const history = await analyzeRecommendationHistory(db, userId);
+
+        // Determine recommendation type based on budget AND history
+        const recType = determineRecommendationType(remainingBudget, profile, history);
+
+        // Generate recommendations with enhanced AI
+        const recommendations = await generateEnhancedRecommendations(
+          recType,
+          mealType,
+          remainingBudget,
+          profile,
+          history,
+          parseInt(limit)
+        );
+
+        // Enrich with micronutrients
+        const enrichedRecommendations = await enrichRecommendations(recommendations);
+
+        // Save recommendations to history
+        await saveRecommendationsToHistory(db, userId, enrichedRecommendations, {
+          recType,
+          mealType,
+          remainingBudget,
+          hour
+        });
+
+        return {
+          recommendations: enrichedRecommendations,
+          remainingBudget,
+          recommendationType: recType,
+          mealType
+        };
+      }
     );
-
-    // Enrich with micronutrients and recipes
-    const enrichedRecommendations = await enrichRecommendations(recommendations);
-
-    // Save recommendations to history
-    await saveRecommendationsToHistory(db, userId, enrichedRecommendations, {
-      recType,
-      mealType,
-      remainingBudget,
-      hour
-    });
 
     res.json({
       success: true,
-      recommendations: enrichedRecommendations,
-      remainingBudget,
-      recommendationType: recType,
-      mealType,
+      ...result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -735,37 +788,44 @@ Return as JSON array with objects: { foodName, portion, calories, protein, carbs
 }
 
 /**
- * Enrich recommendations with micronutrients and recipes
+ * Enrich recommendations with micronutrients
+ * Uses in-request batching to avoid re-estimating same food in same batch
  */
 async function enrichRecommendations(recommendations) {
+  // Batch micronutrient lookups by food+portion to avoid duplicates within this request
+  const microCache = new Map();
+
   const enriched = await Promise.all(
     recommendations.map(async (rec) => {
       try {
-        // Estimate micronutrients
-        const micros = await estimateMicronutrients(
-          rec.foodName,
-          rec.portion,
-          {
-            calories: rec.calories,
-            protein: rec.protein,
-            carbs: rec.carbs,
-            fats: rec.fats
-          }
-        );
+        // Create a cache key for this food
+        const cacheKey = `${rec.foodName.toLowerCase()}:${rec.portion.toLowerCase()}`;
 
-        // Get significant micronutrients (>10% DV)
-        const significantMicros = getSignificantMicronutrients(micros);
+        // Check if we've already estimated this food in this batch
+        if (!microCache.has(cacheKey)) {
+          // Estimate micronutrients
+          const micros = await estimateMicronutrients(
+            rec.foodName,
+            rec.portion,
+            {
+              calories: rec.calories,
+              protein: rec.protein,
+              carbs: rec.carbs,
+              fats: rec.fats
+            }
+          );
 
-        // Generate recipe instructions
-        const recipe = await generateRecipeInstructions(rec.foodName, rec.portion);
+          // Get significant micronutrients (>10% DV)
+          const significantMicros = getSignificantMicronutrients(micros);
+          microCache.set(cacheKey, significantMicros);
+        }
+
+        // Use cached micronutrients from this batch
+        const significantMicros = microCache.get(cacheKey);
 
         return {
           ...rec,
-          micros: significantMicros,
-          prepTimeMinutes: recipe.prepTimeMinutes,
-          cookTimeMinutes: recipe.cookTimeMinutes,
-          recipeInstructions: recipe.instructions,
-          difficulty: recipe.difficulty
+          micros: significantMicros
         };
       } catch (error) {
         console.error('[Recommendations] Enrichment error for:', rec.foodName, error);
