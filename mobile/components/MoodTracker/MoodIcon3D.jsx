@@ -136,7 +136,7 @@ const MoodIcon3D = ({
       if (animationRef.current && !useFallback) {
         try {
           animationRef.current.pause();
-        } catch (error) {
+        } catch (_error) {
           // Ignore pause errors
         }
       }

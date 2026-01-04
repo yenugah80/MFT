@@ -8,8 +8,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../providers/ThemeProvider';
-import { SPACING, RADIUS } from '../../constants/premiumTheme';
-import { SHADOWS as PREMIUM_SHADOWS } from '../../constants/premiumTheme';
+import { SPACING, RADIUS, SHADOWS as PREMIUM_SHADOWS } from '../../constants/premiumTheme';
 import { DARK_SHADOWS } from '../../constants/darkPremiumTheme';
 
 /**

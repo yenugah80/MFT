@@ -37,7 +37,7 @@ export default function EditableSection({
     try {
       await onSave?.();
       setShowSuccess(true);
-    } catch (error) {
+    } catch (_error) {
       // Show shake animation on error
       Animated.sequence([
         Animated.timing(shakeAnim, {

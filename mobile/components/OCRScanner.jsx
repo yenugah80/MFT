@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Button, Image, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Button, Image, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import ExpoMlkitOcr from 'expo-mlkit-ocr';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -63,9 +63,42 @@ export default function OCRScanner({ navigation }) {
     setLoading(true);
     try {
       const ocrResult = await ExpoMlkitOcr.recognizeText(uri);
-      setTextBlocks(ocrResult);
+
+      // Transform expo-mlkit-ocr response to expected format
+      // API returns: { text, blocks: [{ text, lines, cornerPoints }] }
+      // We need blocks with calculated bounding boxes
+      const transformedBlocks = (ocrResult.blocks || []).map(block => {
+        // Calculate bounding box from cornerPoints
+        const cornerPoints = block.cornerPoints || [];
+        let boundingBox = { x: 0, y: 0, width: 0, height: 0 };
+
+        if (cornerPoints.length === 4) {
+          const xCoords = cornerPoints.map(p => p.x);
+          const yCoords = cornerPoints.map(p => p.y);
+          const minX = Math.min(...xCoords);
+          const minY = Math.min(...yCoords);
+          const maxX = Math.max(...xCoords);
+          const maxY = Math.max(...yCoords);
+
+          boundingBox = {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+          };
+        }
+
+        return {
+          text: block.text || '',
+          frame: boundingBox, // Provide as 'frame' for compatibility
+          boundingBox: boundingBox,
+          cornerPoints: cornerPoints,
+        };
+      });
+
+      setTextBlocks(transformedBlocks);
       // Default: Select all detected text
-      const allIndices = new Set(ocrResult.map((_, i) => i));
+      const allIndices = new Set(transformedBlocks.map((_, i) => i));
       setSelectedIndices(allIndices);
     } catch (e) {
       setError(e.message || 'OCR failed');

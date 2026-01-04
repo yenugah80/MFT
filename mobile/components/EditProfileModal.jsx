@@ -85,7 +85,7 @@ const EditProfileModal = ({
       try {
         await onSave?.();
         setShowSuccess(true);
-      } catch (error) {
+      } catch (_error) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } else {
