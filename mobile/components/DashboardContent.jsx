@@ -45,6 +45,8 @@ import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 import FoodNutriScoreCard from "./dashboard/FoodNutriScoreCard";
+import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
+import SmartRecommendationsCard from "./dashboard/SmartRecommendationsCard";
 
 // Phase 3: Dashboard Enhancements - Preference-based insights
 // Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
@@ -1088,6 +1090,35 @@ export default function DashboardContent() {
           data={data}
           onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
         />
+
+        {/* ============================================ */}
+        {/* REMAINING BUDGET CARD - Detailed nutrition budget */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <RemainingBudgetCard
+            today={today}
+            goals={goals}
+          />
+        )}
+
+        {/* ============================================ */}
+        {/* SMART RECOMMENDATIONS - AI-powered food suggestions */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <SmartRecommendationsCard
+            today={today}
+            goals={goals}
+            userProfile={userProfile}
+            recommendations={recommendations}
+            isLoading={recommendationsLoading}
+            onSelectRecommendation={(rec) => {
+              setSelectedRecommendation(rec);
+              setRecommendationModalVisible(true);
+              trackRecommendationView(rec.id);
+            }}
+            onRefresh={fetchRecommendations}
+          />
+        )}
 
         {/* ============================================ */}
         {/* FOOD NUTRI-SCORE CARD - Shows actual A-E grades */}
