@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, Modal, F
 import { Ionicons } from '@expo/vector-icons';
 import { convertUnit } from '../../constants/dailyValues'; // Import the unit conversion helper
 import { IngredientsBreakdown } from './IngredientsBreakdown'; // 🆕 INGREDIENTS DISPLAY
+import { FoodItemCard } from './FoodItemCard'; // 🆕 Use rich item card
 
 // Assuming fonts are defined globally or passed as props
 const fonts = {
@@ -40,9 +41,46 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }
   const [showUnitPicker, setShowUnitPicker] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState('');
 
+  // 🔍 Debug: Log items to detect duplicates
+  console.log('[FoodItemsList] Rendering', items?.length, 'items');
+
   if (!items || items.length === 0) {
     return null;
   }
+
+  // 🆕 DEDUPLICATION: Remove duplicate items by itemId or similar name
+  const deduplicatedItems = items.reduce((acc, item, idx) => {
+    // Check if item with same ID already exists
+    const existingById = acc.find(i => i.itemId && i.itemId === item.itemId);
+    if (existingById) {
+      console.warn(`[FoodItemsList] Removing duplicate by ID: ${item.itemId}`);
+      return acc;
+    }
+
+    // Check if item with very similar name already exists (case-insensitive)
+    const itemNameLower = (item.name || '').toLowerCase().trim();
+    const existingByName = acc.find(i => {
+      const existingNameLower = (i.name || '').toLowerCase().trim();
+      return existingNameLower === itemNameLower;
+    });
+    if (existingByName) {
+      console.warn(`[FoodItemsList] Removing duplicate by name: "${item.name}"`);
+      return acc;
+    }
+
+    // Ensure unique itemId
+    const uniqueItem = {
+      ...item,
+      itemId: item.itemId || `item-${idx}-${Date.now()}`,
+    };
+
+    return [...acc, uniqueItem];
+  }, []);
+
+  console.log('[FoodItemsList] After deduplication:', deduplicatedItems.length, 'items');
+  deduplicatedItems.forEach((item, idx) => {
+    console.log(`[FoodItemsList] Item ${idx}: id=${item.itemId}, name="${item.name}", cal=${item.macros?.calories_kcal}`);
+  });
 
   const renderMicronutrient = (microName, microData) => {
     // Ensure microData is an object with value and unit
@@ -73,107 +111,17 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }
       </View>
     );
   };
+  // 🆕 Use FoodItemCard for rich display with all features
   return (
     <View style={styles.listContainer}>
       <Text style={styles.listTitle}>Meal Breakdown</Text>
-      {items.map((item, index) => (
-        <View key={item.itemId || index} style={styles.itemCard}>
-          <View style={styles.itemHeader}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Ionicons
-              name={getSourceIcon(item.sourceEvidence?.[0]?.source).name}
-              size={20}
-              color={getSourceIcon(item.sourceEvidence?.[0]?.source).color}
-              style={styles.sourceIcon}
-            />
-            <TouchableOpacity onPress={() => onRemove(item.itemId)} style={styles.removeButton}>
-              <Ionicons name="close-circle" size={24} color="#EF4444" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.itemPortion}>
-            <Text style={styles.portionLabel}>Portion:</Text>
-            <TextInput
-              style={styles.portionInput}
-              keyboardType="numeric"
-              value={String(item.portion?.amount || 1)}
-              onChangeText={(text) => onUpdateQuantity(item.itemId, parseFloat(text || '0'), item.portion?.unit || 'serving')}
-            />
-            <TouchableOpacity
-              style={styles.portionUnitButton}
-              onPress={() => {
-                setEditingUnitId(item.itemId);
-                setSelectedUnit(item.portion?.unit || 'serving');
-                setShowUnitPicker(true);
-              }}
-            >
-              <Text style={styles.portionUnitText}>{item.portion?.unit || 'serving'}</Text>
-              <Ionicons name="chevron-down-outline" size={14} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Unit Picker Modal */}
-          <Modal visible={showUnitPicker && editingUnitId === item.itemId} transparent animationType="fade">
-            <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowUnitPicker(false)}>
-              <View style={styles.unitPickerContainer}>
-                <FlatList
-                  data={COMMON_UNITS}
-                  keyExtractor={(unit) => unit}
-                  renderItem={({ item: unit }) => (
-                    <TouchableOpacity
-                      style={styles.unitPickerItem}
-                      onPress={() => {
-                        onUpdateQuantity(editingUnitId, item.portion?.amount || 1, unit);
-                        setShowUnitPicker(false);
-                        setEditingUnitId(null);
-                      }}
-                    >
-                      <Text style={styles.unitPickerItemText}>{unit}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            </TouchableOpacity>
-          </Modal>
-
-          <View style={styles.nutritionGrid}>
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>Calories</Text>
-              <Text style={styles.nutritionValue}>{formatNutrient(item.macros?.calories_kcal, 'kcal')}</Text>
-            </View>
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>Protein</Text>
-              <Text style={styles.nutritionValue}>{formatNutrient(item.macros?.protein_g, 'g')}</Text>
-            </View>
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>Carbs</Text>
-              <Text style={styles.nutritionValue}>{formatNutrient(item.macros?.carbs_g, 'g')}</Text>
-            </View>
-            <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>Fat</Text>
-              <Text style={styles.nutritionValue}>{formatNutrient(item.macros?.fat_g, 'g')}</Text>
-            </View>
-          </View>
-
-          {item.micros && Object.keys(item.micros).length > 0 && (
-            <View style={styles.micronutrientsSection}>
-              <View style={styles.micronutrientsHeader}>
-                <Text style={styles.micronutrientsTitle}>Micronutrients</Text>
-                <Text style={styles.micronutrientsNote}>Estimated</Text>
-              </View>
-              <View style={styles.micronutrientsGrid}>
-                {Object.entries(item.micros).map(([key, value]) => renderMicronutrient(key, value))}
-              </View>
-            </View>
-          )}
-
-          {/* 🆕 INGREDIENTS BREAKDOWN - Shows individual ingredient nutrition from AI analysis */}
-          {item.ingredients && item.ingredients.length > 0 && (
-            <View style={styles.ingredientsSection}>
-              <IngredientsBreakdown ingredients={item.ingredients} />
-            </View>
-          )}
-        </View>
+      {deduplicatedItems.map((item) => (
+        <FoodItemCard
+          key={item.itemId}
+          item={item}
+          onUpdateQuantity={(itemId, amount, unit) => onUpdateQuantity(itemId, amount, unit)}
+          onRemove={() => onRemove(item.itemId)}
+        />
       ))}
     </View>
   );

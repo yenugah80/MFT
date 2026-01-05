@@ -29,6 +29,11 @@ import { API_URL } from '../constants/api';
 import { calculateNetCarbs } from '../types/foodLog';
 import { normalizeNutritionData, detectAggregatedData } from '../utils/nutritionNormalizer';
 
+// Module-level cache to persist analysis result across component remounts
+// This prevents loss of analysis data when the tabs layout re-renders
+let cachedAnalysisResult = null;
+let cachedInputText = '';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -696,12 +701,24 @@ export function useFoodAnalysis() {
   const { getToken } = useAuth();
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const isAnalyzingRef = useRef(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
 
-  // Multi-item analysis state
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [inputText, setInputText] = useState('');
+  // Multi-item analysis state (initialize from cache to survive remounts)
+  const [analysisResult, setAnalysisResultState] = useState(cachedAnalysisResult);
+  const [inputText, setInputTextState] = useState(cachedInputText);
+
+  // Wrapper to update both state and cache
+  const setAnalysisResult = useCallback((result) => {
+    cachedAnalysisResult = result;
+    setAnalysisResultState(result);
+  }, []);
+
+  const setInputText = useCallback((text) => {
+    cachedInputText = text;
+    setInputTextState(text);
+  }, []);
   const [debouncedText, setDebouncedText] = useState('');
 
   // Refs
@@ -722,7 +739,17 @@ export function useFoodAnalysis() {
    * @returns {Promise<void>}
    */
   const analyzeTextUniversal = useCallback(async (text, options = {}) => {
-    if (!text?.trim()) return;
+    console.log('[useFoodAnalysis] analyzeTextUniversal called with:', text, 'options:', options);
+    if (!text?.trim()) {
+      console.log('[useFoodAnalysis] analyzeTextUniversal: empty text, returning');
+      return;
+    }
+
+    // Prevent concurrent analyses (use ref to avoid stale closure)
+    if (isAnalyzingRef.current) {
+      console.log('[useFoodAnalysis] Already analyzing, skipping');
+      return;
+    }
 
     // 🆕 EXTRACT REGIONAL CONTEXT AND USER GOALS FROM OPTIONS
     const {
@@ -744,6 +771,8 @@ export function useFoodAnalysis() {
     }
 
     try {
+      console.log('[useFoodAnalysis] Setting isAnalyzing=true');
+      isAnalyzingRef.current = true;
       setIsAnalyzing(true);
       setError(null);
       setProgress(10);
@@ -779,19 +808,23 @@ export function useFoodAnalysis() {
 
       // 2. Go to backend AI (handles multi-item meals and generic descriptions)
       // Cancel any in-flight requests
+      console.log('[useFoodAnalysis] Proceeding to backend AI...');
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
       abortControllerRef.current = new AbortController();
 
       setProgress(30);
+      console.log('[useFoodAnalysis] Getting auth token...');
 
       const token = await getToken();
+      console.log('[useFoodAnalysis] Token obtained:', !!token);
       if (!token) {
         throw new Error('Authentication required for text analysis');
       }
 
       setProgress(50);
+      console.log('[useFoodAnalysis] Calling /api/food/resolve for:', text);
 
       // 🆕 PASS REGIONAL CONTEXT AND USER GOALS TO BACKEND FOR PERSONALIZED ANALYSIS
       const response = await fetch(`${API_URL}/food/resolve`, {
@@ -817,6 +850,8 @@ export function useFoodAnalysis() {
         signal: abortControllerRef.current.signal,
       });
 
+      console.log('[useFoodAnalysis] API response status:', response.status);
+
       if (!response.ok) {
         // Handle rate limiting (429 Too Many Requests)
         if (response.status === 429) {
@@ -832,16 +867,51 @@ export function useFoodAnalysis() {
       }
 
       const data = await response.json();
+      console.log('[useFoodAnalysis] API response data:', JSON.stringify(data).slice(0, 500));
 
       setProgress(90);
 
-      setAnalysisResult({
-        ...data,
-        items: (data.items || []).map(item => ({
+      console.log('[useFoodAnalysis] Setting analysisResult with', data.items?.length, 'items');
+
+      // 🆕 Normalize items to ensure consistent field names and structure
+      const normalizedItems = (data.items || []).map((item, idx) => {
+        // Ensure macros have consistent field names
+        const macros = item.macros || {};
+        const normalizedMacros = {
+          calories_kcal: macros.calories_kcal ?? macros.calories ?? null,
+          protein_g: macros.protein_g ?? macros.protein ?? null,
+          carbs_g: macros.carbs_g ?? macros.carbs ?? null,
+          fat_g: macros.fat_g ?? macros.fat ?? macros.fats ?? null,
+          fiber_g: macros.fiber_g ?? macros.fiber ?? null,
+          sugar_g: macros.sugar_g ?? macros.sugar ?? null,
+          sodium_mg: macros.sodium_mg ?? macros.sodium ?? null,
+        };
+
+        // Determine if item is complex (has multiple ingredients)
+        const hasIngredients = item.ingredients && item.ingredients.length > 0;
+        const hasComponents = item.components && item.components.length > 0;
+        const isComplex = item.isComplex ?? hasIngredients ?? hasComponents;
+
+        return {
           ...item,
+          itemId: item.itemId || `${item.name}-${idx}-${Date.now()}`, // Ensure unique ID
+          macros: normalizedMacros,
+          isComplex,
+          ingredients: item.ingredients || item.components || [],
+          sourceEvidence: item.sourceEvidence || [{
+            source: data.source || 'AI',
+            confidence: item.confidence ?? 0.7,
+          }],
           isEditing: false,
           editedPortion: null,
-        })),
+        };
+      });
+
+      console.log('[useFoodAnalysis] Normalized items:', normalizedItems.map(i => ({ id: i.itemId, name: i.name, hasIngredients: i.ingredients?.length > 0 })));
+
+      setAnalysisResult({
+        ...data,
+        items: normalizedItems,
       });
 
       setProgress(100);
@@ -851,6 +921,7 @@ export function useFoodAnalysis() {
         console.error('[useFoodAnalysis] Text analysis error:', err);
       }
     } finally {
+      isAnalyzingRef.current = false;
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
@@ -970,6 +1041,7 @@ export function useFoodAnalysis() {
       setError(errorMsg);
       throw err;
     } finally {
+      isAnalyzingRef.current = false;
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
@@ -1146,6 +1218,7 @@ export function useFoodAnalysis() {
       setError(errorMsg);
       throw err;
     } finally {
+      isAnalyzingRef.current = false;
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
@@ -1404,6 +1477,7 @@ export function useFoodAnalysis() {
       setError(errorMsg);
       throw err;
     } finally {
+      isAnalyzingRef.current = false;
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
@@ -1504,11 +1578,14 @@ export function useFoodAnalysis() {
    * Trigger manual analysis
    */
   const runAnalysis = useCallback(async () => {
+    console.log('[useFoodAnalysis] runAnalysis called, inputText:', inputText);
     const text = inputText.trim();
     if (!text) {
+      console.log('[useFoodAnalysis] No text - showing error');
       setError('Please describe your meal to analyze');
       return;
     }
+    console.log('[useFoodAnalysis] Starting analysis for:', text);
 
     try {
       const token = await getToken();
@@ -1637,21 +1714,18 @@ export function useFoodAnalysis() {
   }, [debouncedText]); // CRITICAL FIX: Don't include isAnalyzing - causes infinite loop when it toggles false→true→false
 
   // P0-2 FIX: Cleanup abort controller and debounce timer on unmount
+  // NOTE: Only abort if NOT currently analyzing to prevent race conditions
   useEffect(() => {
     return () => {
-      // Abort any in-flight requests
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-
       // Clear debounce timer
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
 
-      console.log('[useFoodAnalysis] Cleanup: Aborted requests and cleared timers');
+      // Only abort if not analyzing - prevents cleanup from killing active requests
+      // The request will complete and update state even if component remounts
+      console.log('[useFoodAnalysis] Cleanup: Cleared debounce timer');
     };
   }, []); // Run only on unmount
 

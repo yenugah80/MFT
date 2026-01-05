@@ -372,9 +372,16 @@ async function resolveGenericFood(parsedFood) {
     }
     if (nutrition.warning) flags.push('needs_verification');
 
+    // 🆕 CRITICAL FIX: Preserve ORIGINAL parsed food name!
+    // The smartNutritionResolver may return a hallucinated foodName (e.g., "rice" → "Indian Chicken Curry")
+    // We must use the original parsed name from strategicFoodParser, not the resolver's name
+    const originalName = parsedFood.name || parsedFood.originalInput || nutrition.foodName;
+
+    console.log(`[Resolve] 🔍 Food name resolution: parsed="${parsedFood.name}" → resolver="${nutrition.foodName}" → using="${originalName}"`);
+
     return {
       itemId,
-      name: nutrition.foodName,
+      name: originalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
       portion: {
         amount: parsedFood.quantity || 1,
         unit: parsedFood.unit || 'serving',
@@ -384,6 +391,7 @@ async function resolveGenericFood(parsedFood) {
       },
       macros: nutrition.macros,
       micros: nutrition.micros || {},
+      ingredients: nutrition.components || [], // 🆕 Map components to ingredients for frontend
       components: nutrition.components || [], // Component breakdown for complex foods
       isComplex: nutrition.isComplex || false, // Whether food has multiple ingredients
       scores: {},

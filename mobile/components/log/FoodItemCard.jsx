@@ -211,46 +211,56 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         </View>
       </View>
 
-      {/* Component Breakdown - ALWAYS VISIBLE for complex foods */}
-      {item.isComplex && item.components && item.components.length > 0 && (
+      {/* Component/Ingredients Breakdown - Show if components OR ingredients exist */}
+      {((item.isComplex && item.components && item.components.length > 0) ||
+        (item.ingredients && item.ingredients.length > 0)) && (
         <View style={styles.componentsSection}>
           <Text style={styles.componentsSectionTitle}>
             🥘 Ingredients (estimated):
           </Text>
-          {item.components.slice(0, 3).map((component, index) => (
+          {/* Use components if available, otherwise use ingredients */}
+          {(item.components || item.ingredients || []).slice(0, 3).map((ingredient, index) => (
             <View key={index} style={styles.componentRowCompact}>
-              <Text style={styles.componentNameCompact}>• {component.name}</Text>
-              <Text style={styles.componentCaloriesCompact}>{component.calories} cal</Text>
+              <Text style={styles.componentNameCompact}>
+                • {ingredient.name || ingredient.foodName || ingredient}
+              </Text>
+              <Text style={styles.componentCaloriesCompact}>
+                {ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal || ''}
+                {(ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal) ? ' cal' : ''}
+              </Text>
             </View>
           ))}
-          {item.components.length > 3 && (
+          {(item.components || item.ingredients || []).length > 3 && (
             <Text style={styles.showMoreComponents}>
-              + {item.components.length - 3} more (tap &quot;Show details&quot; below)
+              + {(item.components || item.ingredients).length - 3} more (tap &quot;Show details&quot; below)
             </Text>
           )}
         </View>
       )}
 
-      {/* Accuracy Disclaimer - ALWAYS VISIBLE for estimated foods */}
-      {item._smartResolver?.source?.includes('estimation') && (
+      {/* Accuracy Disclaimer - Show for AI-estimated foods */}
+      {(item._smartResolver?.source?.includes('estimation') ||
+        item.sourceEvidence?.[0]?.source === 'AI' ||
+        item.sourceEvidence?.[0]?.source === 'Image AI' ||
+        !item.sourceEvidence?.[0]?.source?.includes('USDA')) && (
         <View style={styles.accuracyNote}>
           <Text style={styles.accuracyNoteIcon}>💡</Text>
           <Text style={styles.accuracyNoteText}>
             Estimated nutrition. May vary by brand, cooking method, and portions.
-            {item.isComplex ? ' Adjust ingredients if needed.' : ''}
+            {(item.isComplex || item.ingredients?.length > 0) ? ' Adjust ingredients if needed.' : ''}
           </Text>
         </View>
       )}
 
-      {/* Confidence Badge */}
-      {item.sourceEvidence?.[0] && (
-        <View style={[styles.badge, { borderColor: confidenceColor }]}>
-          <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
-          <Text style={styles.badgeText}>
-            {item.sourceEvidence[0].source === 'USDA' ? 'USDA' : 'AI estimated'} • {Math.round(confidence * 100)}%
-          </Text>
-        </View>
-      )}
+      {/* Confidence Badge - Always show with source info */}
+      <View style={[styles.badge, { borderColor: confidenceColor }]}>
+        <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
+        <Text style={styles.badgeText}>
+          {item.sourceEvidence?.[0]?.source === 'USDA' ? 'USDA' :
+           item.sourceEvidence?.[0]?.source === 'Open Food Facts' ? 'Verified Product' :
+           item.sourceEvidence?.[0]?.source || 'AI estimated'} • {Math.round(confidence * 100)}%
+        </Text>
+      </View>
 
       {/* Expandable Details */}
       <TouchableOpacity
@@ -264,8 +274,9 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
 
       {isExpanded && (
         <View style={styles.details}>
-          {/* Component Breakdown (for complex foods) */}
-          {item.isComplex && item.components && item.components.length > 0 && (
+          {/* Component/Ingredients Breakdown (for all foods with ingredients) */}
+          {((item.isComplex && item.components && item.components.length > 0) ||
+            (item.ingredients && item.ingredients.length > 0)) && (
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>
                 🥘 Ingredient Breakdown
@@ -275,20 +286,30 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
                   Estimated ingredients. Tap any to adjust or remove.
                 </Text>
               </View>
-              {item.components.map((component, index) => (
-                <View key={index} style={styles.componentRow}>
-                  <View style={styles.componentInfo}>
-                    <Text style={styles.componentName}>{component.name}</Text>
-                    <Text style={styles.componentPortion}>{component.portion}</Text>
+              {(item.components || item.ingredients || []).map((ingredient, index) => {
+                // Handle different ingredient data structures
+                const name = ingredient.name || ingredient.foodName || (typeof ingredient === 'string' ? ingredient : 'Unknown');
+                const portion = ingredient.portion || ingredient.servingSize || '';
+                const calories = ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal || 0;
+                const protein = ingredient.protein || ingredient.protein_g || ingredient.macros?.protein_g || 0;
+                const carbs = ingredient.carbs || ingredient.carbs_g || ingredient.macros?.carbs_g || 0;
+                const fat = ingredient.fat || ingredient.fat_g || ingredient.macros?.fat_g || 0;
+
+                return (
+                  <View key={index} style={styles.componentRow}>
+                    <View style={styles.componentInfo}>
+                      <Text style={styles.componentName}>{name}</Text>
+                      <Text style={styles.componentPortion}>{portion}</Text>
+                    </View>
+                    <View style={styles.componentMacros}>
+                      <Text style={styles.componentCalories}>{Math.round(calories)} cal</Text>
+                      <Text style={styles.componentMacroText}>
+                        P:{Math.round(protein)}g C:{Math.round(carbs)}g F:{Math.round(fat)}g
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.componentMacros}>
-                    <Text style={styles.componentCalories}>{component.calories} cal</Text>
-                    <Text style={styles.componentMacroText}>
-                      P:{component.protein}g C:{component.carbs}g F:{component.fat}g
-                    </Text>
-                  </View>
-                </View>
-              ))}
+                );
+              })}
               <View style={styles.infoNote}>
                 <Text style={styles.infoNoteIcon}>💡</Text>
                 <Text style={styles.infoNoteText}>
