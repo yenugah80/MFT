@@ -9,6 +9,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useFoodLog } from '../../hooks/useFoodLog';
@@ -162,17 +163,16 @@ export default function HistoryScreen() {
   ), [handleSelectLog, selectedLogs]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
-            if (from === 'log') {
-              router.replace('/(tabs)/log');
-            } else {
-              router.back();
-            }
+            console.log('[History] Back button pressed, canGoBack:', router.canGoBack());
+            // Always navigate to dashboard since back() may not work
+            router.replace('/(tabs)/dashboard');
           }}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
           <Ionicons name="chevron-back" size={24} color="#111827" />
         </TouchableOpacity>
@@ -322,7 +322,7 @@ export default function HistoryScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -343,12 +343,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10,
   },
   title: {
     fontSize: 18,
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
   titleBlock: {
     flex: 1,
     alignItems: 'center',
-    marginLeft: -40,
+    marginLeft: 0,
   },
   subtitle: {
     fontSize: 12,

@@ -7,7 +7,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { COLORS, TYPOGRAPHY, detectDataState, formatters } from '../../constants/designTokens';
+import { TYPOGRAPHY, detectDataState, formatters } from '../../constants/designTokens';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 
 /**
  * @param {Object} props
@@ -57,7 +58,7 @@ export default function PremiumRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={COLORS.glass.border}
+          stroke={SURFACES.card.border}
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"
@@ -168,13 +169,13 @@ const styles = StyleSheet.create({
   centerSecondary: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
     marginTop: 2,
   },
   centerLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.muted,
+    color: TEXT.muted,
     marginTop: 4,
     textTransform: 'uppercase',
     letterSpacing: TYPOGRAPHY.letterSpacing.wider,

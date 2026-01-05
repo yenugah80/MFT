@@ -1620,7 +1620,7 @@ const styles = StyleSheet.create({
   },
   infoMessage: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.secondary,
+    color: TEXT.secondary,
     lineHeight: 20,
   },
   anomalyActionButton: {
@@ -1648,7 +1648,7 @@ const styles = StyleSheet.create({
   },
   primaryHint: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
     marginTop: SPACING[3],
     textAlign: 'center',
   },
@@ -1679,7 +1679,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     marginBottom: SPACING[4],
   },
   sectionCard: {
@@ -1767,7 +1767,7 @@ const styles = StyleSheet.create({
   waterTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   waterValue: {
@@ -1778,7 +1778,7 @@ const styles = StyleSheet.create({
   },
   waterPercent: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
   waterRight: {
     alignItems: 'flex-end',
@@ -1821,12 +1821,12 @@ const styles = StyleSheet.create({
   mealName: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   mealMeta: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
 
   // Trends
@@ -1840,12 +1840,12 @@ const styles = StyleSheet.create({
   trendValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.extrabold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   trendLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.text.muted,
+    color: TEXT.muted,
     textAlign: 'center',
   },
 
@@ -1859,7 +1859,7 @@ const styles = StyleSheet.create({
   },
   gamificationSub: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.text.muted,
+    color: TEXT.muted,
     marginTop: SPACING[2],
   },
 
@@ -1883,12 +1883,12 @@ const styles = StyleSheet.create({
   weightValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   weightDate: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
 
   // Hydration Summary
@@ -1918,7 +1918,7 @@ const styles = StyleSheet.create({
   },
   hydrationLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

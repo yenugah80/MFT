@@ -17,17 +17,9 @@ const TabsLayout = () => {
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
-  // Show loading while profile is being fetched from context
-  if (profileLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
-  }
-
   // Redirect to onboarding if not completed (index route handles step resume)
-  if (!onboardingComplete) {
+  // NOTE: Don't block on profileLoading - it causes tabs to unmount and lose state!
+  if (!profileLoading && !onboardingComplete) {
     return <Redirect href="/onboarding" />;
   }
 

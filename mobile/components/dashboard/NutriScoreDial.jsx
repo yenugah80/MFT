@@ -7,7 +7,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/designTokens';
+import { TYPOGRAPHY, SPACING } from '../../constants/designTokens';
+import { TEXT, SEMANTIC } from '../../constants/premiumTheme';
 
 /**
  * Calculate nutrition score for a single day (0-100)
@@ -228,9 +229,9 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
                     }
                     size={12}
                     color={
-                      historical.trendDirection === 'improving' ? COLORS.semantic.good :
-                      historical.trendDirection === 'declining' ? COLORS.semantic.over :
-                      COLORS.text.tertiary
+                      historical.trendDirection === 'improving' ? SEMANTIC.success.base :
+                      historical.trendDirection === 'declining' ? SEMANTIC.danger.base :
+                      TEXT.tertiary
                     }
                   />
                   <Text style={styles.trendText}>
@@ -336,19 +337,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     letterSpacing: TYPOGRAPHY.letterSpacing.wide,
     textTransform: 'uppercase',
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
   numericScore: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
   },
   trendBadge: {
     flexDirection: 'row',
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.secondary,
+    color: TEXT.secondary,
   },
   gradeBar: {
     flexDirection: 'row',
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
   historicalLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
   historicalMini: {
     flexDirection: 'row',
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
     marginTop: SPACING[2],
     textAlign: 'center',
   },
