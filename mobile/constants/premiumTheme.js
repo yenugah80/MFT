@@ -118,6 +118,79 @@ export const CELEBRATION = {
   },
 };
 
+// NUTRISCORE COLORS - Official European NutriScore pastel gradients
+export const NUTRISCORE = {
+  A: {
+    base: '#038141',
+    light: '#85BB2F',
+    gradient: ['#7BC96F', '#4CAF50'],
+    pastel: ['#E8F5E9', '#C8E6C9'],
+    bg: '#E8F5E9',
+    text: '#1B5E20',
+  },
+  B: {
+    base: '#85BB2F',
+    light: '#A8D28C',
+    gradient: ['#C5E1A5', '#AED581'],
+    pastel: ['#F1F8E9', '#DCEDC8'],
+    bg: '#F1F8E9',
+    text: '#33691E',
+  },
+  C: {
+    base: '#FECB02',
+    light: '#FFE082',
+    gradient: ['#FFE082', '#FFCA28'],
+    pastel: ['#FFFDE7', '#FFF9C4'],
+    bg: '#FFFDE7',
+    text: '#F57F17',
+  },
+  D: {
+    base: '#EE8100',
+    light: '#FFB74D',
+    gradient: ['#FFCC80', '#FFA726'],
+    pastel: ['#FFF3E0', '#FFE0B2'],
+    bg: '#FFF3E0',
+    text: '#E65100',
+  },
+  E: {
+    base: '#E63E11',
+    light: '#EF5350',
+    gradient: ['#EF9A9A', '#E57373'],
+    pastel: ['#FFEBEE', '#FFCDD2'],
+    bg: '#FFEBEE',
+    text: '#B71C1C',
+  },
+};
+
+// HEALTH SCORE COLORS - For 0-100 health ratings
+export const HEALTH_SCORE = {
+  excellent: { // 80-100
+    gradient: ['#4CAF50', '#66BB6A'],
+    pastel: ['#E8F5E9', '#C8E6C9'],
+    text: '#1B5E20',
+  },
+  good: { // 60-79
+    gradient: ['#8BC34A', '#9CCC65'],
+    pastel: ['#F1F8E9', '#DCEDC8'],
+    text: '#33691E',
+  },
+  average: { // 40-59
+    gradient: ['#FFEB3B', '#FFF176'],
+    pastel: ['#FFFDE7', '#FFF9C4'],
+    text: '#F57F17',
+  },
+  poor: { // 20-39
+    gradient: ['#FF9800', '#FFB74D'],
+    pastel: ['#FFF3E0', '#FFE0B2'],
+    text: '#E65100',
+  },
+  bad: { // 0-19
+    gradient: ['#F44336', '#EF5350'],
+    pastel: ['#FFEBEE', '#FFCDD2'],
+    text: '#B71C1C',
+  },
+};
+
 // TYPOGRAPHY
 export const TYPOGRAPHY = {
   size: {

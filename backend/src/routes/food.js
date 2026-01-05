@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import { FoodService } from "../services/foodService.js";
 import { requireAuth } from "../middleware/auth.js";
+import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
 
 // Configure Multer for audio file uploads
 const upload = multer({ dest: "uploads/" });
@@ -30,16 +31,57 @@ router.get("/search", async (req, res) => {
 /**
  * GET /api/food/barcode/:code
  * Look up a product by barcode.
+ *
+ * Query params:
+ *   mealType?: string ('breakfast' | 'lunch' | 'dinner' | 'snack')
+ *
+ * Returns: UNIFIED RESPONSE STRUCTURE (same as voice/text/photo)
  */
 router.get("/barcode/:code", async (req, res) => {
   try {
     const { code } = req.params;
+    const mealType = req.query.mealType || 'snack';
     if (!code) return res.status(400).json({ error: "Barcode required" });
 
     const product = await FoodService.searchByBarcode(code);
     if (!product) return res.status(404).json({ error: "Product not found" });
 
-    res.json(product);
+    // Transform to unified response format
+    const rawItems = [{
+      name: product.title || 'Unknown Product',
+      quantity: 1,
+      unit: 'serving',
+      canonical: {
+        nutrition: {
+          calories: product.calories || 0,
+          protein: product.protein || 0,
+          carbs: product.carbs || 0,
+          fats: product.fats || product.fat || 0,
+          fiber: product.fiber || 0,
+          sugar: product.sugar || 0,
+          sodium: product.sodium || 0,
+          micros: product.micros || {}
+        },
+        portion: { amount: 1, unit: product.servingSize || 'serving' },
+        healthScore: null,
+        nutriScore: product.nutriscore || null,
+        ingredients: product.ingredients || []
+      },
+      confidence: product.source === 'openfoodfacts' ? 0.9 : 0.7,
+      source: product.source || 'openfoodfacts',
+      ingredients: product.ingredients || [],
+      nutriScore: product.nutriscore || null
+    }];
+
+    const unifiedResponse = buildUnifiedResponse({
+      inputText: product.title || `Barcode: ${code}`,
+      inputMode: 'barcode',
+      mealType: mealType,
+      rawItems: rawItems
+    });
+
+    console.log(`[FoodBarcode] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
+    res.json({ success: true, data: unifiedResponse });
   } catch (error) {
     console.error("[FoodBarcode] Error:", error);
     res.status(500).json({ error: "Barcode lookup failed" });
@@ -53,12 +95,15 @@ router.get("/barcode/:code", async (req, res) => {
  * Body: {
  *   image: string (base64),
  *   highAccuracy?: boolean (use GPT-4o for 85-92% accuracy, default: false = gpt-4o-mini 75-85%),
- *   includeIngredients?: boolean (attempt to list individual ingredients, default: false)
+ *   includeIngredients?: boolean (attempt to list individual ingredients, default: false),
+ *   mealType?: string ('breakfast' | 'lunch' | 'dinner' | 'snack')
  * }
+ *
+ * Returns: UNIFIED RESPONSE STRUCTURE (same as voice/text/barcode)
  */
 router.post("/analyze-image", async (req, res) => {
   try {
-    const { image, highAccuracy = false, includeIngredients = false } = req.body;
+    const { image, highAccuracy = false, includeIngredients = false, mealType = 'snack' } = req.body;
     if (!image) return res.status(400).json({ error: "Image required" });
 
     const result = await FoodService.analyzeImage(image, {
@@ -67,7 +112,46 @@ router.post("/analyze-image", async (req, res) => {
     });
     if (!result) return res.status(500).json({ error: "Analysis failed" });
 
-    res.json(result);
+    // Transform raw result to unified response format
+    // Convert FoodService.analyzeImage result to rawItems format for unified builder
+    const rawItems = [{
+      name: result.title || result.foodName || 'Unknown Food',
+      quantity: 1,
+      unit: 'serving',
+      canonical: {
+        nutrition: {
+          calories: result.calories || 0,
+          protein: result.protein || 0,
+          carbs: result.carbs || 0,
+          fats: result.fats || result.fat || 0,
+          fiber: result.fiber || 0,
+          sugar: result.sugar || 0,
+          sodium: result.sodium || 0,
+          micros: result.micros || {}
+        },
+        portion: { amount: 1, unit: result.servingSize || 'serving' },
+        healthScore: result.healthScore || null,
+        nutriScore: result.nutriscore || null,
+        cookingMethod: result.cookingMethod || null,
+        ingredients: result.ingredients || []
+      },
+      confidence: result.confidence || 0.75,
+      source: 'ai_estimate',
+      ingredients: result.ingredients || [],
+      healthScore: result.healthScore || null,
+      nutriScore: result.nutriscore || null
+    }];
+
+    // Build unified response
+    const unifiedResponse = buildUnifiedResponse({
+      inputText: result.title || 'Photo analysis',
+      inputMode: 'photo',
+      mealType: mealType,
+      rawItems: rawItems
+    });
+
+    console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
+    res.json({ success: true, data: unifiedResponse });
   } catch (error) {
     console.error("[FoodAnalyzeImage] Error:", error);
     res.status(500).json({ error: "Image analysis failed" });
@@ -194,15 +278,11 @@ router.post("/analyze-voice", upload.single('audio'), async (req, res) => {
  *   region?: string (e.g., 'India', 'USA'),
  *   cookingMethod?: string (e.g., 'fried', 'steamed', 'grilled'),
  *   highAccuracy?: boolean (default: true for multimodal),
- *   includeIngredients?: boolean (default: true)
+ *   includeIngredients?: boolean (default: true),
+ *   mealType?: string ('breakfast' | 'lunch' | 'dinner' | 'snack')
  * }
  *
- * Returns: {
- *   items: [...food items with nutrition],
- *   ingredients: [breakdown of individual ingredients],
- *   multimodal: { hasVoice: boolean, voiceTranscript: string },
- *   source: 'multimodal'
- * }
+ * Returns: UNIFIED RESPONSE STRUCTURE with multimodal metadata
  */
 router.post("/analyze-multimodal", async (req, res) => {
   try {
@@ -213,7 +293,8 @@ router.post("/analyze-multimodal", async (req, res) => {
       region = null,
       cookingMethod = null,
       highAccuracy = true, // Multimodal uses high accuracy by default
-      includeIngredients = true // Always include ingredients for multimodal
+      includeIngredients = true, // Always include ingredients for multimodal
+      mealType = 'snack'
     } = req.body;
 
     if (!image) {
@@ -254,14 +335,55 @@ router.post("/analyze-multimodal", async (req, res) => {
       return res.status(500).json({ error: "Multimodal analysis failed" });
     }
 
-    // Add multimodal metadata to response
-    result.multimodal = {
-      hasVoice: !!voiceTranscript,
-      voiceTranscript
-    };
-    result.source = 'multimodal';
+    // Transform to unified response format
+    const rawItems = [{
+      name: result.title || result.foodName || 'Unknown Food',
+      quantity: 1,
+      unit: 'serving',
+      canonical: {
+        nutrition: {
+          calories: result.calories || 0,
+          protein: result.protein || 0,
+          carbs: result.carbs || 0,
+          fats: result.fats || result.fat || 0,
+          fiber: result.fiber || 0,
+          sugar: result.sugar || 0,
+          sodium: result.sodium || 0,
+          micros: result.micros || {}
+        },
+        portion: { amount: 1, unit: result.servingSize || 'serving' },
+        healthScore: result.healthScore || null,
+        nutriScore: result.nutriscore || null,
+        cookingMethod: cookingMethod || result.cookingMethod || null,
+        cuisine: cuisinePreference || result.cuisine || region || null,
+        ingredients: result.ingredients || []
+      },
+      confidence: voiceTranscript ? 0.85 : 0.75, // Higher confidence with voice context
+      source: 'ai_estimate',
+      ingredients: result.ingredients || [],
+      healthScore: result.healthScore || null,
+      nutriScore: result.nutriscore || null,
+      cookingMethod: cookingMethod || result.cookingMethod || null
+    }];
 
-    res.json(result);
+    // Build unified response
+    const unifiedResponse = buildUnifiedResponse({
+      inputText: voiceTranscript || result.title || 'Multimodal analysis',
+      inputMode: 'photo', // Base mode is photo
+      mealType: mealType,
+      rawItems: rawItems
+    });
+
+    // Add multimodal metadata
+    unifiedResponse.multimodal = {
+      hasVoice: !!voiceTranscript,
+      voiceTranscript,
+      cuisinePreference,
+      region
+    };
+
+    console.log(`[FoodMultimodal] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
+    res.json({ success: true, data: unifiedResponse });
   } catch (error) {
     console.error("[FoodMultimodal] Error:", error);
     res.status(500).json({ error: error.message || "Multimodal analysis failed" });

@@ -1332,7 +1332,7 @@ export function useFoodAnalysis() {
 
       setProgress(95);
 
-      // Build food log from AI response
+      // Build food log from AI response (unified response format)
       const rawAIData = json.data || json;
       const foodLog = buildFoodLog({
         inputText: 'Photo',
@@ -1341,6 +1341,11 @@ export function useFoodAnalysis() {
       });
 
       foodLog.imageUrl = uri;
+
+      // Extract health metrics from unified response
+      const unifiedHealthScore = rawAIData.healthScore ?? foodLog.healthScore ?? null;
+      const unifiedNutriScore = rawAIData.nutriScore ?? foodLog.nutriscore ?? null;
+      const healthAnalysis = rawAIData.healthAnalysis ?? null;
 
       // Convert to multi-item format
       const aiItem = {
@@ -1366,9 +1371,13 @@ export function useFoodAnalysis() {
         },
         micros: foodLog.micros || {},
         netCarbs: foodLog.netCarbs,
+        // Health metrics from unified response
+        healthScore: unifiedHealthScore,
+        nutriScore: unifiedNutriScore,
+        healthAnalysis: healthAnalysis,
         sourceEvidence: [{
           source: 'Image AI',
-          confidence: 0.7,
+          confidence: rawAIData.dataQuality?.overallConfidence ?? 0.7,
           data: { imageUrl: uri, raw: rawAIData },
         }],
         isEditing: false,
@@ -1378,6 +1387,10 @@ export function useFoodAnalysis() {
       setAnalysisResult({
         items: [aiItem],
         totals: calculateTotals([aiItem]),
+        // Include overall health metrics in result
+        healthScore: unifiedHealthScore,
+        nutriScore: unifiedNutriScore,
+        healthAnalysis: healthAnalysis,
       });
 
       setProgress(100);

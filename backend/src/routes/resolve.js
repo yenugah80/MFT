@@ -13,6 +13,7 @@ import { smartNutritionResolver } from "../services/smartNutritionResolver.js";
 import { strategicFoodParser } from "../services/StrategicFoodParser.js";
 import { premiumFeaturesService } from "../services/PremiumFeatures.js";
 import { v4 as uuidv4 } from "uuid";
+import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -80,7 +81,10 @@ router.post("/", async (req, res) => {
       applyUserContext(resolvedDraft, userContext);
     }
 
-    res.json(resolvedDraft);
+    // Enrich with unified health metrics (healthScore, nutriScore, healthAnalysis)
+    const enrichedDraft = enrichWithHealthMetrics(resolvedDraft);
+
+    res.json(enrichedDraft);
 
   } catch (error) {
     console.error("[FoodResolve] Error:", error);
@@ -795,6 +799,78 @@ function createErrorDraft(draftId, mode, errorMsg, mealType) {
 function applyUserContext(draft, userContext) {
   // Future: Add personalized hints based on user goals/prefs
   // Example: "This meal fits your high-protein goal"
+}
+
+/**
+ * Enrich resolve draft with unified health metrics
+ * Adds healthScore, nutriScore, and healthAnalysis to the response
+ */
+function enrichWithHealthMetrics(draft) {
+  if (!draft || !draft.items || draft.items.length === 0) {
+    return {
+      ...draft,
+      healthScore: null,
+      nutriScore: null,
+      nutriScoreValue: null,
+      healthAnalysis: null
+    };
+  }
+
+  // Convert items to format expected by unified response builder
+  const rawItems = draft.items.map(item => ({
+    name: item.name,
+    quantity: item.portion?.amount || 1,
+    unit: item.portion?.unit || 'serving',
+    nutrition: {
+      calories: item.macros?.calories_kcal || 0,
+      protein: item.macros?.protein_g || 0,
+      carbs: item.macros?.carbs_g || 0,
+      fat: item.macros?.fat_g || 0,
+      fiber: item.macros?.fiber_g || 0,
+      sugar: item.macros?.sugar_g || 0,
+      sodium: item.macros?.sodium_mg || 0
+    },
+    healthScore: item.scores?.healthScore,
+    nutriScore: item.scores?.nutriScore?.grade,
+    cookingMethod: item.cookingMethod || null,
+    confidence: item.sourceEvidence?.[0]?.confidence || 0.7,
+    source: item.sourceEvidence?.[0]?.source || 'resolve'
+  }));
+
+  // Build unified response to get health metrics
+  const unified = buildUnifiedResponse({
+    inputText: draft.items[0]?.name || '',
+    inputMode: draft.mode,
+    mealType: draft.mealType,
+    rawItems
+  });
+
+  // Merge health metrics into draft
+  return {
+    ...draft,
+    healthScore: unified.healthScore,
+    nutriScore: unified.nutriScore,
+    nutriScoreValue: unified.nutriScoreValue,
+    healthAnalysis: unified.healthAnalysis,
+    suggestions: unified.suggestions,
+    // Add health metrics to totals for consistency
+    totals: {
+      ...draft.totals,
+      healthScore: unified.healthScore,
+      nutriScore: unified.nutriScore,
+      nutriScoreValue: unified.nutriScoreValue
+    },
+    // Update each item with its own health metrics
+    items: draft.items.map((item, idx) => {
+      const unifiedItem = unified.items[idx];
+      return {
+        ...item,
+        healthScore: unifiedItem?.healthScore || null,
+        nutriScore: unifiedItem?.nutriScore || null,
+        nutriScoreValue: unifiedItem?.nutriScoreValue || null
+      };
+    })
+  };
 }
 
 export default router;

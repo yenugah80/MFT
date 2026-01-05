@@ -7,6 +7,7 @@ import { aiEstimatedFoodsTable } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import crypto from 'crypto';
+import { buildUnifiedResponse } from '../utils/unifiedResponseBuilder.js';
 
 const router = express.Router();
 
@@ -184,55 +185,23 @@ router.post('/process', requireAuth, async (req, res) => {
       }
     }
 
-    // Add stable IDs to response
+    // Add stable IDs before building response
     detectedIngredients = detectedIngredients.map((item, idx) => ({
       ...item,
       id: item.id || generateItemId(item.name, normalizeFoodText(text), idx)
     }));
 
-    // P0 FIX: Return frontend-ready analysisResult structure
-    // This prevents client-side guessing and ensures consistency
-    const analysisResult = {
-      items: detectedIngredients.map(item => {
-        // Handle both direct nutrition (AI) and canonical.nutrition (DB matches)
-        const nutrition = item.nutrition || item.canonical?.nutrition || {};
-        const portion = item.portion || item.canonical?.portion || {};
+    // UNIFIED RESPONSE: All data calculated in backend
+    // Includes: totals, healthScore, nutriScore, healthAnalysis, suggestions, dataQuality
+    const unifiedResponse = buildUnifiedResponse({
+      inputText: text,
+      inputMode: 'voice',
+      mealType: mealType || 'snack',
+      rawItems: detectedIngredients
+    });
 
-        // CRITICAL: Get quantity and multiply nutrition values
-        const qty = portion.amount || item.quantity || 1;
-
-        return {
-          name: item.name,
-          itemId: item.id,
-          portion: {
-            amount: qty,
-            unit: portion.unit || item.unit || 'serving',
-            servingText: `${qty} ${portion.unit || item.unit || 'serving'}`
-          },
-          macros: {
-            // Multiply nutrition by quantity (5 eggs = 5 × single egg nutrition)
-            calories_kcal: (nutrition.calories || nutrition.calories_kcal || 0) * qty,
-            protein_g: (nutrition.protein_g || nutrition.protein || 0) * qty,
-            carbs_g: (nutrition.carbs_g || nutrition.carbs || 0) * qty,
-            fat_g: (nutrition.fats || nutrition.fat_g || nutrition.fat || 0) * qty,
-            fiber_g: (nutrition.fiber_g || nutrition.fiber || 0) * qty,
-            sugar_g: (nutrition.sugar_g || nutrition.sugar || 0) * qty,
-            sodium_mg: (nutrition.sodium_mg || nutrition.sodium || 0) * qty
-          },
-          micros: nutrition.micros || {},
-          confidence: item.confidence,
-          source: item.source || 'ai_estimate',
-          isEstimated: item.source === 'ai_estimate',
-          suggestions: []
-        };
-      }),
-      totals: {}, // Calculated on frontend
-      source: 'voice',
-      isEstimated: true
-    };
-
-    console.log(`[VoiceLog] Sending response with ${analysisResult.items.length} items`);
-    res.json({ success: true, data: analysisResult });
+    console.log(`[VoiceLog] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}, nutriScore=${unifiedResponse.nutriScore}`);
+    res.json({ success: true, data: unifiedResponse });
   } catch (error) {
     console.error("Voice processing error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -347,57 +316,25 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
       }
     }
 
-    // Add stable IDs to response
+    // Add stable IDs before building response
     detectedIngredients = detectedIngredients.map((item, idx) => ({
       ...item,
       id: item.id || generateItemId(item.name, normalizeFoodText(text), idx)
     }));
 
-    // P0 FIX: Return frontend-ready analysisResult structure
-    const analysisResult = {
-      items: detectedIngredients.map(item => {
-        // Handle both direct nutrition (AI) and canonical.nutrition (DB matches)
-        const nutrition = item.nutrition || item.canonical?.nutrition || {};
-        const portion = item.portion || item.canonical?.portion || {};
+    // UNIFIED RESPONSE: All data calculated in backend
+    const unifiedResponse = buildUnifiedResponse({
+      inputText: text,
+      inputMode: 'voice',
+      mealType: mealType || 'snack',
+      rawItems: detectedIngredients
+    });
 
-        // CRITICAL: Get quantity and multiply nutrition values
-        const qty = portion.amount || item.quantity || 1;
-
-        return {
-          name: item.name,
-          itemId: item.id,
-          portion: {
-            amount: qty,
-            unit: portion.unit || item.unit || 'serving',
-            servingText: `${qty} ${portion.unit || item.unit || 'serving'}`
-          },
-          macros: {
-            // Multiply nutrition by quantity (5 eggs = 5 × single egg nutrition)
-            calories_kcal: (nutrition.calories || nutrition.calories_kcal || 0) * qty,
-            protein_g: (nutrition.protein_g || nutrition.protein || 0) * qty,
-            carbs_g: (nutrition.carbs_g || nutrition.carbs || 0) * qty,
-            fat_g: (nutrition.fats || nutrition.fat_g || nutrition.fat || 0) * qty,
-            fiber_g: (nutrition.fiber_g || nutrition.fiber || 0) * qty,
-            sugar_g: (nutrition.sugar_g || nutrition.sugar || 0) * qty,
-            sodium_mg: (nutrition.sodium_mg || nutrition.sodium || 0) * qty
-          },
-          micros: nutrition.micros || {},
-          confidence: item.confidence,
-          source: item.source || 'ai_estimate',
-          isEstimated: item.source === 'ai_estimate',
-          suggestions: []
-        };
-      }),
-      totals: {},
-      source: 'voice',
-      isEstimated: true
-    };
-
-    res.json({ success: true, data: analysisResult, text });
+    console.log(`[VoiceLog/Transcribe] Items: ${unifiedResponse.items.length}, Health: ${unifiedResponse.healthScore}`);
+    res.json({ success: true, data: unifiedResponse, text });
 
   } catch (error) {
     console.error("[VoiceLog] Transcription error:", error);
-    // SECURITY FIX: Don't leak internal error details to client in production
     res.status(500).json({ error: "Unable to process voice log. Please try again." });
   }
 });

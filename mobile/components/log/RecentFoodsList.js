@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, 
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
+import { NutriScorePill, HealthScoreBadge } from '../NutriScoreBadge';
 
 export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,14 +79,30 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
           <Ionicons name="restaurant-outline" size={20} color="#6B4EFF" />
         </View>
         <View style={styles.foodInfo}>
-          <Text style={styles.foodName}>{item.foodName}</Text>
-          <Text style={styles.foodMeta}>
-            {Math.round(item.calories)} kcal • {item.servingSize || '1 serving'}
-          </Text>
+          <View style={styles.foodHeader}>
+            <Text style={styles.foodName} numberOfLines={1}>{item.foodName}</Text>
+            {item.nutriScore && (
+              <NutriScorePill grade={item.nutriScore} size="sm" />
+            )}
+          </View>
+          <View style={styles.foodMetaRow}>
+            <Text style={styles.foodMeta}>
+              {Math.round(item.calories)} kcal
+            </Text>
+            {item.healthScore && (
+              <View style={styles.healthScoreSmall}>
+                <Ionicons name="heart" size={10} color="#4CAF50" />
+                <Text style={styles.healthScoreText}>{item.healthScore}</Text>
+              </View>
+            )}
+            <Text style={styles.foodServing}>
+              {item.servingSize || '1 serving'}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={styles.quickAddButton}
         onPress={() => onQuickAdd && onQuickAdd(item)}
       >
@@ -208,15 +225,46 @@ const styles = StyleSheet.create({
   foodInfo: {
     flex: 1,
   },
+  foodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   foodName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 2,
+    flex: 1,
+    marginRight: 8,
+  },
+  foodMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   foodMeta: {
     fontSize: 13,
-    color: '#6B7280',
+    fontWeight: '600',
+    color: '#6B4EFF',
+  },
+  foodServing: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  healthScoreSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
+  },
+  healthScoreText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4CAF50',
   },
   quickAddButton: {
     padding: 10,

@@ -41,7 +41,9 @@ import {
   ICON_SIZES,
   SURFACES,
   MACRO_COLORS,
+  NUTRISCORE,
 } from '../../constants/premiumTheme';
+import { NutriScoreGlow, HealthScoreBadge, NutriScoreTag } from '../NutriScoreBadge';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -338,6 +340,39 @@ export default function MealLoggedCard({
         </View>
 
         {/* ──────────────────────────────────────────── */}
+        {/* HEALTH METRICS - NutriScore & Health Score */}
+        {/* ──────────────────────────────────────────── */}
+        {(meal.nutriScore || meal.healthScore) && (
+          <View style={styles.healthMetricsCard}>
+            {meal.nutriScore && (
+              <View style={styles.nutriScoreSection}>
+                <NutriScoreGlow grade={meal.nutriScore} size="lg" />
+                <View style={styles.nutriScoreInfo}>
+                  <Text style={styles.nutriScoreLabel}>NutriScore</Text>
+                  <Text style={[styles.nutriScoreGrade, { color: NUTRISCORE[meal.nutriScore]?.text || TEXT.primary }]}>
+                    Grade {meal.nutriScore}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {meal.healthScore !== null && meal.healthScore !== undefined && (
+              <View style={styles.healthScoreSection}>
+                <HealthScoreBadge score={meal.healthScore} size="lg" />
+                <View style={styles.healthScoreInfo}>
+                  <Text style={styles.healthScoreLabel}>Health Score</Text>
+                  <Text style={styles.healthScoreValue}>{meal.healthScore}/100</Text>
+                </View>
+              </View>
+            )}
+
+            {meal.healthAnalysis && (
+              <Text style={styles.healthAnalysis}>{meal.healthAnalysis}</Text>
+            )}
+          </View>
+        )}
+
+        {/* ──────────────────────────────────────────── */}
         {/* SECONDARY DATA - Macronutrients */}
         {/* ──────────────────────────────────────────── */}
         <View style={styles.section}>
@@ -620,6 +655,71 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: SPACING[2],
+  },
+
+  // ──────────────────────────────────────────────
+  // HEALTH METRICS CARD
+  // ──────────────────────────────────────────────
+  healthMetricsCard: {
+    backgroundColor: SURFACES.card.glass,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[5],
+    marginBottom: SPACING[5],
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+    ...SHADOWS.md,
+  },
+  nutriScoreSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[4],
+    marginBottom: SPACING[4],
+    paddingBottom: SPACING[4],
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(107, 78, 255, 0.1)',
+  },
+  nutriScoreInfo: {
+    flex: 1,
+  },
+  nutriScoreLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
+    marginBottom: SPACING[1],
+  },
+  nutriScoreGrade: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+  healthScoreSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[4],
+    marginBottom: SPACING[3],
+  },
+  healthScoreInfo: {
+    flex: 1,
+  },
+  healthScoreLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
+    marginBottom: SPACING[1],
+  },
+  healthScoreValue: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+  },
+  healthAnalysis: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontStyle: 'italic',
+    color: TEXT.secondary,
+    textAlign: 'center',
+    marginTop: SPACING[3],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(107, 78, 255, 0.1)',
   },
 
   // ──────────────────────────────────────────────
