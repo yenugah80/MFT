@@ -1,28 +1,27 @@
 /**
- * EnhancedMoodCard - Premium Mood Tracker Dashboard Card
+ * EnhancedMoodCard - Premium Mood & Wellness Dashboard Card
  *
- * Replaces the basic MoodChip with a comprehensive mood tracking interface
- *
- * Features:
- * - Current mood display with 3D Lottie icon
+ * Unified mood and wellness tracking with:
+ * - Current mood display with 3D icon
+ * - Integrated Wellness Score ring
  * - 7-day mini sparkline trend
- * - Quick stats (avg mood, best day, patterns detected)
- * - Dual CTAs: "Log Mood" + "View Insights"
- * - Dynamic gradient based on current mood
+ * - Quick stats (avg mood, best day, patterns)
  * - Empty state for first-time users
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 import {
   TEXT,
@@ -32,16 +31,102 @@ import {
   SHADOWS,
   ICON_SIZES,
   MOOD_PALETTE,
+  BRAND,
 } from '../../constants/premiumTheme';
 
 import MoodIcon3D from '../MoodTracker/MoodIcon3D';
 
 const SPARKLINE_WIDTH = 200;
 const SPARKLINE_HEIGHT = 64;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+/**
+ * Compact Wellness Score Ring
+ */
+const WellnessScoreRing = ({ score = 0, size = 56, strokeWidth = 5 }) => {
+  const animatedValue = useRef(new Animated.Value(0)).current;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const safeScore = typeof score === 'number' && !isNaN(score) ? score : 0;
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: safeScore / 100,
+      duration: 1000,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [safeScore, animatedValue]);
+
+  const getScoreColor = (s) => {
+    if (s >= 80) return ['#10B981', '#34D399'];
+    if (s >= 60) return ['#6B4EFF', '#8B6EFF'];
+    if (s >= 40) return ['#F59E0B', '#FBBF24'];
+    return ['#EF4444', '#F87171'];
+  };
+
+  const colors = getScoreColor(safeScore);
+
+  return (
+    <View style={wellnessStyles.ringContainer}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        <Defs>
+          <SvgGradient id="wellnessGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor={colors[0]} />
+            <Stop offset="100%" stopColor={colors[1]} />
+          </SvgGradient>
+        </Defs>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(107, 78, 255, 0.1)"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <AnimatedCircle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="url(#wellnessGradient)"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={animatedValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [circumference, 0],
+          })}
+        />
+      </Svg>
+      <View style={wellnessStyles.scoreOverlay}>
+        <Text style={[wellnessStyles.scoreValue, { color: colors[0] }]}>{safeScore}</Text>
+      </View>
+    </View>
+  );
+};
+
+const wellnessStyles = StyleSheet.create({
+  ringContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreOverlay: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreValue: {
+    fontSize: 16,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+});
 
 const EnhancedMoodCard = ({
   insights,
   loading = false,
+  wellnessScore = null,
   onOpenInsights,
 }) => {
   const latestMood = insights?.latestMood || null;
@@ -147,6 +232,44 @@ const EnhancedMoodCard = ({
           <Text style={styles.intensityValue}>{latestMood.intensity || 5}/10</Text>
         </View>
       </View>
+
+      {/* Wellness Score Section */}
+      {wellnessScore !== null && wellnessScore?.score != null && (
+        <TouchableOpacity
+          style={styles.wellnessSection}
+          onPress={onOpenInsights}
+          activeOpacity={0.8}
+        >
+          <View style={styles.wellnessLeft}>
+            <WellnessScoreRing score={wellnessScore.score || 0} />
+          </View>
+          <View style={styles.wellnessRight}>
+            <View style={styles.wellnessHeader}>
+              <Text style={styles.wellnessTitle}>Wellness Score</Text>
+              <View style={[styles.wellnessTier, { backgroundColor: getWellnessColor(wellnessScore.score) + '20' }]}>
+                <Text style={[styles.wellnessTierText, { color: getWellnessColor(wellnessScore.score) }]}>
+                  {getWellnessTier(wellnessScore.score)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.wellnessBreakdown}>
+              <View style={styles.wellnessMetric}>
+                <View style={[styles.wellnessDot, { backgroundColor: '#10B981' }]} />
+                <Text style={styles.wellnessMetricText}>Food {wellnessScore.breakdown?.nutrition || 0}%</Text>
+              </View>
+              <View style={styles.wellnessMetric}>
+                <View style={[styles.wellnessDot, { backgroundColor: '#3B82F6' }]} />
+                <Text style={styles.wellnessMetricText}>Water {wellnessScore.breakdown?.hydration || 0}%</Text>
+              </View>
+              <View style={styles.wellnessMetric}>
+                <View style={[styles.wellnessDot, { backgroundColor: '#F59E0B' }]} />
+                <Text style={styles.wellnessMetricText}>Mood {wellnessScore.breakdown?.mood || 0}%</Text>
+              </View>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={TEXT.muted} />
+        </TouchableOpacity>
+      )}
 
       {/* Trend Panel */}
       {flags.showTrend && Array.isArray(trendData) && trendData.length > 0 && (
@@ -303,6 +426,20 @@ const MiniSparkline = ({ data, width, height }) => {
 
 const PASTEL_NEUTRAL_GRADIENT = ['#F4F7FB', '#E9EFF7'];
 
+const getWellnessColor = (score) => {
+  if (score >= 80) return '#10B981';
+  if (score >= 60) return '#6B4EFF';
+  if (score >= 40) return '#F59E0B';
+  return '#EF4444';
+};
+
+const getWellnessTier = (score) => {
+  if (score >= 80) return 'Great';
+  if (score >= 60) return 'Good';
+  if (score >= 40) return 'Fair';
+  return 'Low';
+};
+
 const getPastelGradient = (moodKey) => {
   const gradients = {
     happy: ['#DFF5EE', '#F4FBF7'],
@@ -376,6 +513,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFE',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  wellnessSection: {
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[3],
+    padding: SPACING[3],
+    borderRadius: RADIUS.lg,
+    backgroundColor: '#F8FAFE',
+    borderWidth: 1,
+    borderColor: 'rgba(107, 78, 255, 0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  wellnessLeft: {},
+  wellnessRight: {
+    flex: 1,
+  },
+  wellnessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[1],
+  },
+  wellnessTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  wellnessTier: {
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+  },
+  wellnessTierText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+  wellnessBreakdown: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+  },
+  wellnessMetric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  wellnessDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  wellnessMetricText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
   },
   trendPanel: {
     marginHorizontal: SPACING[4],

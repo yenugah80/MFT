@@ -1,17 +1,16 @@
 /**
- * MealMoodCalendar.jsx
- * 
- * A multi-persona calendar component connecting nutrition, hydration, and mood.
- * Features:
- * - Compact summary view vs Full monthly grid
- * - "Heatmap" style cell coloring based on daily score
- * - Bottom sheet details for specific days
- * - Persona-based insights (Story lines)
+ * MealMoodCalendar.jsx - Premium Monthly Wellness Calendar
+ *
+ * Luxurious design with:
+ * - Premium glassmorphism styling
+ * - Streak-focused hero display
+ * - Animated interactions
+ * - Rich day details with Lottie mood icons
  * - Share functionality for daily stories
  */
 
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Dimensions, Share } from 'react-native';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Easing, Dimensions, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import GlassCard from './dashboard/GlassCard';
@@ -160,24 +159,31 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
   };
 
   return (
-    <GlassCard padding="md" style={styles.container}>
-      {/* COMPACT HEADER ROW */}
+    <View style={styles.container}>
+      {/* PREMIUM HEADER - Streak focused */}
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.headerTitle}>
-            This Month · <Text style={{ color: BRAND.primary }}>{loggedDaysCount}/{totalDays}</Text> logged
-          </Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Monthly Progress</Text>
           <Text style={styles.headerSubtitle}>
-            Current streak: <Text style={{ fontWeight: 'bold' }}>{currentStreak} {currentStreak === 1 ? 'day' : 'days'}</Text>
+            <Text style={styles.streakHighlight}>{loggedDaysCount}</Text> of {totalDays} days logged
           </Text>
         </View>
-        
-        <TouchableOpacity 
+
+        {/* Streak Badge - Hero element */}
+        {currentStreak > 0 && (
+          <View style={styles.streakBadge}>
+            <Ionicons name="flame" size={16} color="#EF4444" />
+            <Text style={styles.streakBadgeText}>{currentStreak} day streak</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
           style={styles.expandButton}
           onPress={() => setExpanded(!expanded)}
+          activeOpacity={0.8}
         >
-          <Text style={styles.expandButtonText}>{expanded ? 'Close' : 'Open Calendar'}</Text>
-          <Ionicons name={expanded ? "chevron-up" : "chevron-forward"} size={16} color={BRAND.primary} />
+          <Ionicons name={expanded ? "chevron-up" : "calendar-outline"} size={16} color={BRAND.primary} />
+          <Text style={styles.expandButtonText}>{expanded ? 'Close' : 'View'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -294,70 +300,122 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
           </View>
         </View>
       </Modal>
-    </GlassCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Premium Card Container
   container: {
     marginBottom: SPACING[4],
+    borderRadius: RADIUS['2xl'],
+    backgroundColor: '#FFFFFF',
+    // Luxurious purple shadow
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(107, 78, 255, 0.1)',
+    overflow: 'hidden',
   },
+
+  // Header Section - Streak focused
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: SPACING[4],
+    paddingTop: SPACING[4],
+    paddingBottom: SPACING[3],
+  },
+  headerLeft: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.primary,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
   headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    marginTop: 4,
   },
+  streakHighlight: {
+    color: BRAND.primary,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+
+  // Streak Badge - Hero element
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  streakBadgeText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#EF4444',
+  },
+
   expandButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    padding: 4,
+    gap: 6,
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(107, 78, 255, 0.15)',
   },
   expandButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
-  
-  // Calendar Grid
+
+  // Calendar Grid - Premium styling
   calendarContainer: {
-    marginTop: SPACING[4],
-    paddingTop: SPACING[4],
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: SPACING[3],
+    paddingBottom: SPACING[4],
+    backgroundColor: 'rgba(107, 78, 255, 0.02)',
   },
   weekHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+    paddingVertical: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(107, 78, 255, 0.08)',
     marginBottom: SPACING[2],
   },
   weekDayText: {
     width: (width - 80) / 7,
     textAlign: 'center',
-    fontSize: 10,
+    fontSize: 11,
     color: TEXT.tertiary,
-    fontWeight: 'bold',
+    fontWeight: TYPOGRAPHY.weight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    gap: 6,
+    gap: 4,
   },
   dayCell: {
-    width: (width - 90) / 7,
-    height: (width - 90) / 7,
-    borderRadius: RADIUS.sm,
+    width: (width - 86) / 7,
+    height: (width - 86) / 7,
+    borderRadius: RADIUS.lg,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 2,
@@ -365,116 +423,136 @@ const styles = StyleSheet.create({
   todayCell: {
     borderWidth: 2,
     borderColor: BRAND.primary,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
   },
   dayText: {
-    fontSize: 12,
+    fontSize: 13,
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   todayText: {
     color: BRAND.primary,
-    fontWeight: 'bold',
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
   cellIndicators: {
     flexDirection: 'row',
-    gap: 2,
-    marginTop: 2,
+    gap: 3,
+    marginTop: 3,
   },
   dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
   },
-  
-  // Legend
+
+  // Legend - Premium styling
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: SPACING[4],
-    marginTop: SPACING[4],
+    paddingTop: SPACING[3],
+    paddingBottom: SPACING[2],
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(107, 78, 255, 0.08)',
+    marginTop: SPACING[2],
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
+    width: 10,
+    height: 10,
+    borderRadius: RADIUS.sm,
   },
   legendText: {
-    fontSize: 10,
-    color: TEXT.tertiary,
+    fontSize: 11,
+    color: TEXT.secondary,
+    fontWeight: '500',
   },
 
-  // Bottom Sheet Modal
+  // Bottom Sheet Modal - Premium styling
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalBackdrop: {
     flex: 1,
   },
   bottomSheet: {
-    backgroundColor: SURFACES.card.primary,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: RADIUS['2xl'],
+    borderTopRightRadius: RADIUS['2xl'],
     padding: SPACING[6],
-    ...SHADOWS.xl,
+    // Premium shadow
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 20,
   },
   sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 2,
+    width: 48,
+    height: 5,
+    backgroundColor: 'rgba(107, 78, 255, 0.2)',
+    borderRadius: 3,
     alignSelf: 'center',
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[5],
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[5],
   },
   sheetDate: {
-    fontSize: TYPOGRAPHY.size.lg,
+    fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
+    letterSpacing: -0.5,
   },
   sheetScore: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
-    marginTop: 2,
+    marginTop: 4,
   },
   moodBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: SURFACES.background.tertiary,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(107, 78, 255, 0.2)',
   },
   storyLine: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    backgroundColor: `${BRAND.primary}10`,
-    padding: SPACING[3],
-    borderRadius: RADIUS.md,
+    alignItems: 'flex-start',
+    gap: SPACING[3],
+    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
     marginBottom: SPACING[5],
+    borderWidth: 1,
+    borderColor: 'rgba(107, 78, 255, 0.1)',
   },
   storyText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: BRAND.primaryDark,
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.primary,
     flex: 1,
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SPACING[6],
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
   },
   statItem: {
     alignItems: 'center',
@@ -484,10 +562,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    fontWeight: '600',
   },
   statValue: {
-    fontSize: TYPOGRAPHY.size.xl,
+    fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
@@ -497,27 +577,29 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    padding: SPACING[3],
-    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
   },
   shareButton: {
-    backgroundColor: SURFACES.background.tertiary,
-    borderWidth: 1,
-    borderColor: `${BRAND.primary}20`,
+    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(107, 78, 255, 0.2)',
   },
   shareButtonText: {
     color: BRAND.primary,
-    fontWeight: '600',
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontSize: TYPOGRAPHY.size.base,
   },
   closeButton: {
-    backgroundColor: SURFACES.background.tertiary,
+    backgroundColor: BRAND.primary,
   },
   closeButtonText: {
-    color: TEXT.primary,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontSize: TYPOGRAPHY.size.base,
   },
 });

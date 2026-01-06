@@ -35,6 +35,7 @@ import ThemeSettingsModal from "./ThemeSettingsModal";
 import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import SkeletonCard, { SkeletonText, SkeletonCircle } from "./dashboard/SkeletonCard";
+import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
@@ -48,9 +49,18 @@ import FoodNutriScoreCard from "./dashboard/FoodNutriScoreCard";
 import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
 import SmartRecommendationsCard from "./dashboard/SmartRecommendationsCard";
 
+// NEW KILLER FEATURES - Differentiators
+import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
+import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
+import PredictiveInsightsCard from "./dashboard/PredictiveInsightsCard";
+import PatternDetectiveCard from "./dashboard/PatternDetectiveCard";
+import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
+import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
+
 // Phase 3: Dashboard Enhancements - Preference-based insights
 // Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
 import AllergenWarningCard from "./dashboard/AllergenWarningCard";
+import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -58,7 +68,8 @@ import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_
 import { LUXURY_BACKGROUNDS, LUXURY_TEXT } from "../constants/luxuryTheme";
 
 // Utility functions
-import { calculateFoodMoodScore, generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
+import { generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
+import { calculateFoodMoodScore } from "../utils/foodMoodScore";
 import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
 import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
 import { scanMealsForAllergens } from "../utils/allergenDetection";
@@ -922,40 +933,16 @@ export default function DashboardContent() {
     return 'Updated recently';
   }, [insightsMeta]);
 
-  // Loading state
+  // Loading state - comprehensive skeleton that mirrors app layout
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header skeleton */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <SkeletonCircle size={44} />
-              <View>
-                <SkeletonText width={200} height={28} marginBottom={8} />
-                <SkeletonText width={150} height={14} marginBottom={0} />
-              </View>
-            </View>
-          </View>
-
-          {/* Main card skeleton */}
-          <SkeletonCard height={240} />
-
-          {/* Section skeletons */}
-          <View style={{ marginTop: SPACING[4] }}>
-            <SkeletonCard height={180} />
-          </View>
-
-          <View style={{ marginTop: SPACING[4] }}>
-            <SkeletonCard height={180} />
-          </View>
-
-          <View style={{ marginTop: SPACING[4] }}>
-            <SkeletonCard height={120} />
-          </View>
+          <DashboardSkeleton />
         </ScrollView>
       </View>
     );
@@ -1072,6 +1059,47 @@ export default function DashboardContent() {
           dataAnomalies={dataAnomalies}
         />
 
+        {/* Premium Calendar Strip - Unified calendar with streak & day details */}
+        <PremiumCalendarStrip
+          data={calendarData}
+          selectedDate={null}
+          currentStreak={parseDecimal(gamification?.streak, 0)}
+          onDateSelect={(dateOrObj) => {
+            // Handle both Date object and { dateKey } from day detail modal
+            const dateKey = dateOrObj?.dateKey || (dateOrObj instanceof Date ? dateOrObj.toISOString().split('T')[0] : null);
+            if (dateKey) {
+              router.push({ pathname: '/history', params: { date: dateKey } });
+            }
+          }}
+        />
+
+        {/* ============================================ */}
+        {/* HERO CARD - ONE unified wellness + mood display */}
+        {/* Staff Design: Focus on ONE primary metric, celebrate wins */}
+        {/* ============================================ */}
+        <FoodMoodScoreCard
+          today={today}
+          goals={goals}
+          moodLogs={today?.moodLogs || []}
+          streak={parseDecimal(gamification?.streak, 0)}
+          historicalScores={[]}
+          onViewDetails={() => router.push('/insights/mood')}
+        />
+
+        {/* ============================================ */}
+        {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
+        {/* Shows Level, XP progress, Streak with animations */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <PremiumAchievementsCard
+            level={parseDecimal(gamification?.level, 1)}
+            xp={parseDecimal(gamification?.xp, 0)}
+            streak={parseDecimal(gamification?.streak, 0)}
+            nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
+            streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
+          />
+        )}
+
         {/* ============================================ */}
         {/* PHASE 3: URGENT ALERTS ONLY */}
         {/* Note: DietaryComplianceCard & CuisineDiversityCard moved to Profile > MyInsightsSection */}
@@ -1092,6 +1120,35 @@ export default function DashboardContent() {
         />
 
         {/* ============================================ */}
+        {/* KILLER FEATURES - Premium Differentiators */}
+        {/* ALWAYS VISIBLE - Show empty state when no data */}
+        {/* ============================================ */}
+
+        {/* NOTE: Wellness Score is now integrated into EnhancedMoodCard in Wellness Section */}
+
+        {/* Smart Meal Suggestion - Context-Aware (ALWAYS SHOW) */}
+        <SmartMealSuggestionCard
+          today={today}
+          goals={goals}
+          recentMeals={uniqueFoodLogs}
+          userProfile={userProfile}
+          onSelectSuggestion={(suggestion) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            router.push({
+              pathname: '/(tabs)/log',
+              params: {
+                focus: 'meal',
+                prefill: suggestion.name
+              }
+            });
+          }}
+          onViewMore={() => router.push('/history')}
+        />
+
+        {/* NOTE: PredictiveInsightsCard and PatternDetectiveCard moved to Insights screen */}
+        {/* Staff Design: Dashboard = quick glance. Details = separate screen */}
+
+        {/* ============================================ */}
         {/* REMAINING BUDGET CARD - Detailed nutrition budget */}
         {/* ============================================ */}
         {hasAnyData && (
@@ -1101,24 +1158,7 @@ export default function DashboardContent() {
           />
         )}
 
-        {/* ============================================ */}
-        {/* SMART RECOMMENDATIONS - AI-powered food suggestions */}
-        {/* ============================================ */}
-        {hasAnyData && (
-          <SmartRecommendationsCard
-            today={today}
-            goals={goals}
-            userProfile={userProfile}
-            recommendations={recommendations}
-            isLoading={recommendationsLoading}
-            onSelectRecommendation={(rec) => {
-              setSelectedRecommendation(rec);
-              setRecommendationModalVisible(true);
-              trackRecommendationView(rec.id);
-            }}
-            onRefresh={fetchRecommendations}
-          />
-        )}
+        {/* NOTE: SmartRecommendationsCard removed - consolidated into SmartMealSuggestionCard */}
 
         {/* ============================================ */}
         {/* FOOD NUTRI-SCORE CARD - Shows actual A-E grades */}
@@ -1159,14 +1199,12 @@ export default function DashboardContent() {
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
-          moodInsightsData={moodInsightsData}
-          moodInsightsLoading={moodInsightsLoading}
           onOpenMoodInsights={() => router.push('/insights/mood')}
           onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
         />
 
         {/* ============================================ */}
-        {/* PROGRESS SECTION - Collapsible */}
+        {/* PROGRESS SECTION - Collapsible (Calendar moved to top) */}
         {/* ============================================ */}
         <DashboardProgressSection
           styles={styles}
@@ -1174,8 +1212,6 @@ export default function DashboardContent() {
           onToggle={() => setProgressExpanded(!progressExpanded)}
           trends={trends}
           goals={goals}
-          gamification={gamification}
-          calendarData={calendarData}
           recentWeight={recentWeight}
         />
       </ScrollView>

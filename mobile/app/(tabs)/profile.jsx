@@ -20,10 +20,9 @@ import useProfileForm from "../../hooks/useProfileForm";
 
 // Profile sections
 import BasicsSection from "../../components/profile/BasicsSection";
-import MetricsGridSection from "../../components/profile/MetricsGridSection";
+import BodyProfileCard from "../../components/profile/BodyProfileCard";
 import DietarySection from "../../components/profile/DietarySection";
 import GoalsSection from "../../components/profile/GoalsSection";
-import MyInsightsSection from "../../components/profile/MyInsightsSection";
 import AccountActions from "../../components/profile/AccountActions";
 
 // Premium theme
@@ -123,8 +122,8 @@ export default function ProfileScreen() {
           user={user}
         />
 
-        {/* Personal Metrics Grid - Inline Editable */}
-        <MetricsGridSection
+        {/* Body Profile - Premium Metrics Visualization */}
+        <BodyProfileCard
           basics={profile.basics}
           onFieldSave={handleFieldSave}
           isSaving={isSavingField}
@@ -150,12 +149,6 @@ export default function ProfileScreen() {
           cancelEdit={() => cancelEdit("goals")}
           updateField={updateField}
           status={state.status}
-        />
-
-        {/* My Insights - Collapsible Analytics Section */}
-        <MyInsightsSection
-          cuisinePreferences={profile.dietary?.cuisinePreferences || []}
-          userPreferences={profile.dietary}
         />
 
         {/* Account */}

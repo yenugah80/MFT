@@ -4,8 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CollapsibleSection from './CollapsibleSection';
 import GlassCard from './GlassCard';
 import PremiumWeeklyTrends from './PremiumWeeklyTrends';
-import PremiumAchievementsCard from './PremiumAchievementsCard';
-import MealMoodCalendar from '../MealMoodCalendar';
+// Note: Calendar and Achievements moved to main dashboard for unified UX
 import { BRAND, ICONS, ICON_SIZES } from '../../constants/premiumTheme';
 
 export default function DashboardProgressSection({
@@ -14,8 +13,6 @@ export default function DashboardProgressSection({
   onToggle,
   trends,
   goals,
-  gamification,
-  calendarData,
   recentWeight,
 }) {
   return (
@@ -26,25 +23,14 @@ export default function DashboardProgressSection({
       expanded={expanded}
       onToggle={onToggle}
     >
+      {/* Weekly Trends - Nutrition analysis */}
       {trends.weeklyAverages && (
         <View style={styles.sectionCard}>
           <PremiumWeeklyTrends trends={trends} goals={goals} />
         </View>
       )}
 
-      <PremiumAchievementsCard
-        level={gamification?.level || 1}
-        xp={gamification?.xp || 0}
-        nextLevelXp={gamification?.nextLevelXp}
-        streak={gamification?.streak || 0}
-        streakFreezes={gamification?.streakFreezes || 0}
-      />
-
-      <MealMoodCalendar
-        data={calendarData}
-        currentStreak={gamification?.streak || 0}
-      />
-
+      {/* Weight Tracking */}
       {recentWeight.length > 0 && (
         <GlassCard style={styles.sectionCard} padding="md">
           <Text style={styles.sectionTitle}>Weight Tracking</Text>

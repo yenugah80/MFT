@@ -197,6 +197,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     padding: SPACING.lg,
+    backgroundColor: SURFACES.background.primary,
     ...SHADOWS.lg,
   },
   header: {

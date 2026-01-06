@@ -1,11 +1,19 @@
+/**
+ * DashboardWellnessSection - Clean, focused wellness tracking
+ *
+ * Staff Design Principles:
+ * - Hydration: Quick water logging
+ * - Activity: Daily movement summary
+ * - No duplicate mood cards (moved to hero FoodMoodScoreCard)
+ */
+
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CollapsibleSection from './CollapsibleSection';
 import HydrationWellnessDashboard from './HydrationWellnessDashboard';
-import EnhancedMoodCard from './EnhancedMoodCard';
 import ActivitySummaryCard from './ActivitySummaryCard';
-import { TEXT } from '../../constants/premiumTheme';
+import { TEXT, SPACING, RADIUS, BRAND } from '../../constants/premiumTheme';
 
 export default function DashboardWellnessSection({
   styles,
@@ -18,8 +26,6 @@ export default function DashboardWellnessSection({
   hydrationLastLoggedAt,
   hydrationCelebratedKey,
   onCelebrateHydration,
-  moodInsightsData,
-  moodInsightsLoading,
   onOpenMoodInsights,
   onOpenHydrationTracker,
 }) {
@@ -32,8 +38,9 @@ export default function DashboardWellnessSection({
       onToggle={onToggle}
     >
       <View style={styles.wellnessStack}>
+        {/* Hydration Tracker */}
         <HydrationWellnessDashboard
-          currentIntake={today.waterIntakeLiters || 0}
+          currentIntake={today?.waterIntakeLiters || 0}
           dailyGoal={goals?.waterLiters || 2.0}
           streak={gamification?.streak || 0}
           intakeEvents={hydrationEvents}
@@ -46,26 +53,43 @@ export default function DashboardWellnessSection({
 
         <View style={styles.wellnessDivider} />
 
-        <EnhancedMoodCard
-          insights={moodInsightsData}
-          loading={moodInsightsLoading}
-          onOpenInsights={onOpenMoodInsights}
-        />
+        {/* Activity Summary */}
+        <ActivitySummaryCard />
+
+        {/* Quick link to mood insights */}
         <TouchableOpacity
-          style={styles.moodInsightsLink}
+          style={localStyles.insightsLink}
           onPress={onOpenMoodInsights}
           accessibilityRole="button"
           accessibilityLabel="View mood insights"
-          accessibilityHint="Opens your historical mood insights and recommendations"
         >
-          <Ionicons name="analytics-outline" size={16} color={TEXT.secondary} />
-          <Text style={styles.moodInsightsText}>View mood insights</Text>
+          <Ionicons name="analytics-outline" size={16} color={BRAND.primary} />
+          <Text style={localStyles.insightsText}>View detailed mood insights</Text>
+          <Ionicons name="chevron-forward" size={14} color={TEXT.muted} />
         </TouchableOpacity>
-
-        <View style={styles.wellnessDivider} />
-
-        <ActivitySummaryCard />
       </View>
     </CollapsibleSection>
   );
 }
+
+const localStyles = StyleSheet.create({
+  insightsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: `${BRAND.primary}08`,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: `${BRAND.primary}15`,
+  },
+  insightsText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: TEXT.secondary,
+  },
+});
