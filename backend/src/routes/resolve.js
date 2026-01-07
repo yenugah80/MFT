@@ -12,6 +12,7 @@ import { FoodService } from "../services/foodService.js";
 import { smartNutritionResolver } from "../services/smartNutritionResolver.js";
 import { strategicFoodParser } from "../services/StrategicFoodParser.js";
 import { premiumFeaturesService } from "../services/PremiumFeatures.js";
+import { parseIngredientsText, shouldParseIngredients } from "../services/ingredientParser.js";
 import { v4 as uuidv4 } from "uuid";
 import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
 
@@ -180,7 +181,42 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     flags: []
   };
 
-  // Step 2: If nutrients incomplete, try USDA fallback
+  // Step 2: Parse raw ingredients text into structured components with nutrition
+  const rawIngredientsText = offProduct.ingredients_text || offProduct.ingredientsText || '';
+  if (shouldParseIngredients(rawIngredientsText)) {
+    try {
+      console.log(`[Resolve] Parsing barcode ingredients: ${rawIngredientsText.substring(0, 100)}...`);
+      const parsedComponents = await parseIngredientsText(
+        rawIngredientsText,
+        {
+          calories: safeOffProduct.calories,
+          protein: safeOffProduct.protein,
+          carbs: safeOffProduct.carbs,
+          fat: safeOffProduct.fat,
+        },
+        { servingSize: safeOffProduct.servingSize }
+      );
+
+      if (parsedComponents && parsedComponents.length > 0) {
+        item.components = parsedComponents;
+        item.isComplex = parsedComponents.length > 1;
+        item.ingredients = parsedComponents.map(c => ({
+          name: c.name,
+          portion: c.portion,
+          calories: c.calories,
+          protein: c.protein,
+          carbs: c.carbs,
+          fat: c.fat,
+        }));
+        console.log(`[Resolve] ✅ Parsed ${parsedComponents.length} ingredients from barcode label`);
+      }
+    } catch (err) {
+      console.warn(`[Resolve] Failed to parse barcode ingredients:`, err.message);
+      // Keep original ingredients array as fallback
+    }
+  }
+
+  // Step 3: If nutrients incomplete, try USDA fallback
   if (!isNutrientsComplete(item.macros)) {
     const usdaData = await FoodService.searchUSDAByName(item.name);
     if (usdaData) {
@@ -196,7 +232,7 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     }
   }
 
-  // Step 3: Quality assessment
+  // Step 4: Quality assessment
   const dataQuality = assessDataQuality([item]);
 
   return {

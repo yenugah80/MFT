@@ -15,7 +15,7 @@ export const NUTRITION_ANALYSIS_SYSTEM_PROMPT = `Identify food in images and est
 
 /**
  * User prompt for food image analysis
- * SIMPLIFIED: Focused on essentials only
+ * Enhanced: Includes per-ingredient nutrition breakdown
  */
 export const NUTRITION_ANALYSIS_USER_PROMPT = `Analyze this food image.
 
@@ -44,10 +44,27 @@ Return JSON:
     "vitamin_b12": number (µg),
     "folate": number (µg)
   },
-  "ingredients": ["ingredient", "..."],
-  "servingSize": "estimated portion",
-  "confidence": 0.0-1.0
+  "ingredients": [
+    {
+      "name": "ingredient name",
+      "portion": "estimated amount (e.g., 1 cup, 150g)",
+      "calories": number,
+      "protein": number,
+      "carbs": number,
+      "fat": number
+    }
+  ],
+  "servingSize": "estimated total portion",
+  "confidence": 0.0-1.0,
+  "isComplex": boolean
 }
+
+INGREDIENT BREAKDOWN RULES:
+- List ALL visible ingredients with individual nutrition estimates
+- Each ingredient's macros should reflect its portion in the dish
+- Sum of ingredient calories should approximately equal total calories
+- For multi-component dishes (curry, bowl, sandwich), list 5-10 main ingredients
+- For simple foods (apple, egg), list as single ingredient
 
 Confidence guide:
 - 0.9+: Clear image, simple food

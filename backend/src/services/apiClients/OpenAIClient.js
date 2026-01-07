@@ -758,7 +758,7 @@ Return JSON:
     try {
       const json = await this.chatCompletionJSON(messages, {
         model: visionModel,
-        maxTokens: highAccuracy ? 1200 : 600, // Increased for detailed analysis with ingredients and micros
+        maxTokens: highAccuracy ? 1500 : 800, // Increased for per-ingredient nutrition breakdown
         temperature: 0.2, // Lower temperature for more consistent quality
       });
 

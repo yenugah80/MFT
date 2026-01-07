@@ -48,6 +48,7 @@ import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
 import LogInputSection from '../../components/log/LogInputSection';
 import MoodLogger from '../../components/MoodLogger';
+import MealPreviewCard from '../../components/log/MealPreviewCard';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
 import HydrationTracker from '../../components/HydrationTracker';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -160,7 +161,7 @@ export default function LogScreen() {
 
   /**
    * Auto-show analysis details screen when analysis completes
-   * Only for photo/voice/barcode - NOT for text input (prevents flickering)
+   * SMART FLOW: Photo/barcode show inline preview, voice auto-opens details
    */
   useEffect(() => {
     if (
@@ -170,9 +171,15 @@ export default function LogScreen() {
       !foodAnalysis.error &&
       !hasManuallyClosedDetails
     ) {
-      // Analysis completed successfully with items - show detailed results
-      console.log('[log] Auto-showing MealSummaryScreen for', analysisSource, 'with', foodAnalysis.analysisResult.items.length, 'items');
-      setShowAnalysisDetails(true);
+      // SMART FLOW: Only auto-open for voice input (conversational UX)
+      // Photo/barcode show inline MealPreviewCard - user taps to see details
+      if (analysisSource === 'voice') {
+        console.log('[log] Auto-showing MealSummaryScreen for voice with', foodAnalysis.analysisResult.items.length, 'items');
+        setShowAnalysisDetails(true);
+      } else {
+        console.log('[log] Showing inline MealPreviewCard for', analysisSource, 'with', foodAnalysis.analysisResult.items.length, 'items');
+        // Don't auto-open - MealPreviewCard handles the display
+      }
     }
   }, [foodAnalysis.analysisResult, foodAnalysis.isAnalyzing, foodAnalysis.error, analysisSource, hasManuallyClosedDetails]);
 
@@ -981,7 +988,20 @@ export default function LogScreen() {
           </View>
         ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 ? (
           <View style={styles.resultsContainer}>
-            {foodAnalysis.analysisResult.items.length === 1 ? (
+            {/* SMART FLOW: Photo/Barcode show MealPreviewCard, Text shows detailed view */}
+            {(analysisSource === 'photo' || analysisSource === 'barcode') ? (
+              <MealPreviewCard
+                analysisResult={foodAnalysis.analysisResult}
+                imageUri={selectedImage}
+                onTapDetails={() => {
+                  setHasManuallyClosedDetails(false);
+                  setShowAnalysisDetails(true);
+                }}
+                onQuickSave={handleSaveMeal}
+                onEdit={handleCancel}
+                isSaving={isSavingLog}
+              />
+            ) : foodAnalysis.analysisResult.items.length === 1 ? (
               <NutritionCard
                 foodLog={buildLegacyFoodLog(foodAnalysis.analysisResult.items[0])}
                 dailyValues={DAILY_VALUES} // Pass daily values
@@ -1005,8 +1025,8 @@ export default function LogScreen() {
               </>
             )}
 
-            {/* "Did you mean?" Suggestions */}
-            {foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
+            {/* "Did you mean?" Suggestions - Only for text input */}
+            {analysisSource === 'text' && foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
               <View style={styles.suggestionsContainer}>
                 <View style={styles.suggestionsHeader}>
                   <Ionicons name="help-buoy-outline" size={18} color="#F59E0B" />
@@ -1033,8 +1053,8 @@ export default function LogScreen() {
               </View>
             )}
 
-            {/* View Details Button - Manual trigger for text input */}
-            {foodAnalysis.analysisResult && (
+            {/* View Details Button - Manual trigger for text input only (photo/barcode use MealPreviewCard) */}
+            {foodAnalysis.analysisResult && analysisSource === 'text' && (
               <TouchableOpacity
                 style={styles.viewDetailsButton}
                 onPress={() => {
@@ -1057,8 +1077,8 @@ export default function LogScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Actions Footer */}
-            {foodAnalysis.analysisResult && (
+            {/* Actions Footer - Only for text input (photo/barcode have actions in MealPreviewCard) */}
+            {foodAnalysis.analysisResult && analysisSource === 'text' && (
               <View style={styles.resultsActions}>
                 <TouchableOpacity
                   style={styles.shareButton}

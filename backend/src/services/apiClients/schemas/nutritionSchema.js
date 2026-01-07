@@ -14,6 +14,8 @@ export function normalizeNutritionAnalysis(rawData) {
   }
 
   // Normalize numeric values
+  const ingredients = validateIngredients(rawData.ingredients);
+
   const normalized = {
     foodName: validateString(rawData.foodName, 'Unknown Food', 1, 200),
     description: validateString(rawData.description, 'AI Analyzed Meal', 0, 500),
@@ -28,7 +30,11 @@ export function normalizeNutritionAnalysis(rawData) {
     portionGrams: validateNumber(rawData.portionGrams, null, 0, 5000),
     mealType: validateMealType(rawData.mealType),
     confidence: validateConfidence(rawData.confidence),
-    ingredients: validateIngredients(rawData.ingredients),
+    ingredients,
+    // isComplex: true if multiple ingredients with nutrition data
+    isComplex: rawData.isComplex === true || ingredients.length > 1,
+    // Map ingredients to components for consistency with text mode
+    components: ingredients.filter(i => i.calories > 0),
     micros: normalizeMicronutrients(rawData.micros),
     analysisNotes: validateString(rawData.analysisNotes, null, 0, 500),
   };
@@ -109,6 +115,7 @@ function validateConfidence(value) {
 
 /**
  * Validate ingredients array
+ * Supports both simple strings and structured objects with nutrition
  */
 function validateIngredients(value) {
   if (!Array.isArray(value)) {
@@ -116,8 +123,27 @@ function validateIngredients(value) {
   }
 
   return value
-    .filter(item => typeof item === 'string' && item.trim().length > 0)
-    .map(item => item.trim())
+    .map(item => {
+      // Handle string format (legacy)
+      if (typeof item === 'string' && item.trim().length > 0) {
+        return { name: item.trim() };
+      }
+
+      // Handle structured object format (new)
+      if (item && typeof item === 'object' && item.name) {
+        return {
+          name: validateString(item.name, '', 1, 100),
+          portion: validateString(item.portion, '1 serving', 0, 50),
+          calories: validateNumber(item.calories, 0, 0, 5000),
+          protein: validateNumber(item.protein, 0, 0, 200),
+          carbs: validateNumber(item.carbs, 0, 0, 300),
+          fat: validateNumber(item.fat, 0, 0, 200),
+        };
+      }
+
+      return null;
+    })
+    .filter(item => item && item.name && item.name.length > 0)
     .slice(0, 50); // Max 50 ingredients
 }
 
