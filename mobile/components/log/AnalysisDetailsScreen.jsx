@@ -577,8 +577,12 @@ const AnalysisDetailsScreen = ({
 
                         {ingredients.length > 0 && (
                           <View style={styles.ingredientsChips}>
-                            {ingredients.map((name, chipIndex) => {
+                            {ingredients.map((ingredient, chipIndex) => {
                               const chipKey = `${item.itemId || index}-ing-${chipIndex}`;
+                              // Handle both object and string ingredients
+                              const ingredientName = typeof ingredient === 'string'
+                                ? ingredient
+                                : (ingredient?.name || 'Unknown');
                               if (!chipAnimationsRef.current[chipKey]) {
                                 chipAnimationsRef.current[chipKey] = new Animated.Value(
                                   expandedSections.ingredients ? 0 : 1
@@ -605,7 +609,7 @@ const AnalysisDetailsScreen = ({
                                     end={{ x: 1, y: 1 }}
                                     style={styles.ingredientChip}
                                   >
-                                    <Text style={styles.ingredientChipText}>{name}</Text>
+                                    <Text style={styles.ingredientChipText}>{ingredientName}</Text>
                                   </LinearGradient>
                                 </Animated.View>
                               );

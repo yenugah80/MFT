@@ -42,7 +42,7 @@ import { NutritionCard } from '../../components/log/NutritionCard';
 import { NutritionCardSkeleton } from '../../components/log/NutritionCardSkeleton';
 import { FoodItemsList } from '../../components/log/FoodItemsList';
 import BarcodeScannerModal from '../../components/BarcodeScannerModal';
-import AnalysisDetailsScreen from '../../components/log/AnalysisDetailsScreen';
+import { MealSummaryScreen } from '../../components/log/MealSummary';
 import CameraModal from '../../components/log/CameraModal';
 import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
@@ -1259,14 +1259,15 @@ export default function LogScreen() {
         )}
       </Modal>
 
-      {/* Advanced Analysis Details Screen */}
-      <AnalysisDetailsScreen
+      {/* Meal Summary Screen - Premium Analysis Display */}
+      <MealSummaryScreen
         visible={showAnalysisDetails}
         onClose={() => {
           setShowAnalysisDetails(false);
           setHasManuallyClosedDetails(true); // Prevent auto-reopen
         }}
         analysisResult={foodAnalysis.analysisResult}
+        dailyValues={DAILY_VALUES}
         imageUri={selectedImage}
         onSave={async () => {
           // Save the meal
@@ -1279,6 +1280,7 @@ export default function LogScreen() {
           setShowAnalysisDetails(false);
         }}
         onShare={handleShare}
+        isSaving={isSavingLog}
       />
     </KeyboardAvoidingView>
         </ErrorBoundary>

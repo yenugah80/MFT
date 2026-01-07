@@ -86,7 +86,9 @@ RULES:
 - Micros are conservative estimates; if uncertain, prefer lower typical values.
 - Use mg for minerals and vitamin C/E, and µg for vitamins A/D/K/B12/folate.
 - servingGrams is approximate; round to a sensible value (e.g., nearest 5g).
-- If the dish is multi-ingredient, set isComplex=true and include a high-level component breakdown (2-5 items max).
+- If the dish is multi-ingredient, set isComplex=true and include components for ALL main ingredients (5-10 items).
+- For regional/ethnic dishes (Indian, Mexican, Thai, etc.), use authentic ingredients typical of that cuisine.
+  Example: Indian curry should include onion, tomato, ginger, garlic, oil/ghee, and relevant spices - not generic Western ingredients.
 
 CRITICAL VALIDATION RULE - FIXED P0 (Atwater factors):
 Before returning, verify using scientifically correct Atwater calorie factors:

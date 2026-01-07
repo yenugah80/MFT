@@ -62,6 +62,17 @@ function validateMacros(calories, protein, carbs, fat) {
   };
 }
 
+function toText(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return '';
+}
+
+function toNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 /**
  * Macro pie chart (simplified visual)
  */
@@ -152,7 +163,7 @@ function IngredientItem({ ingredient, onPress }) {
           {ingredient.description && (
             <Text style={styles.ingredientDescription}>{ingredient.description}</Text>
           )}
-          {(ingredient.protein || ingredient.carbs || ingredient.fat) && (
+          {(ingredient.protein || ingredient.carbs || ingredient.fat) ? (
             <View style={styles.ingredientMacros}>
               {ingredient.protein ? (
                 <Text style={styles.ingredientMacro}>P: {ingredient.protein}g</Text>
@@ -164,7 +175,7 @@ function IngredientItem({ ingredient, onPress }) {
                 <Text style={styles.ingredientMacro}>F: {ingredient.fat}g</Text>
               ) : null}
             </View>
-          )}
+          ) : null}
         </View>
       )}
     </TouchableOpacity>
@@ -231,7 +242,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
         {/* Header with Confidence Badge */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <Text style={styles.foodName}>{foodName}</Text>
+            <Text style={styles.foodName}>{toText(foodName)}</Text>
             <View style={[styles.confidenceBadge, { backgroundColor: confidenceBadge.bg }]}>
               <Text style={[styles.confidenceBadgeText, { color: confidenceBadge.color }]}>
                 {confidenceBadge.icon} {Math.round((confidence || 0.7) * 100)}%
@@ -239,17 +250,17 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
             </View>
           </View>
           {cookingMethod && (
-            <Text style={styles.cookingMethod}>{cookingMethod}</Text>
+            <Text style={styles.cookingMethod}>{toText(cookingMethod)}</Text>
           )}
-          {(portionGrams || servingSize) && (
+          {(portionGrams || servingSize) ? (
             <Text style={styles.servingSize}>
-              {servingSize || `Approx. ${portionGrams}g`}
+              {servingSize ? toText(servingSize) : `Approx. ${portionGrams}g`}
             </Text>
-          )}
+          ) : null}
         </View>
 
         {/* Confidence Explanation */}
-        {confidence && confidence < 0.85 && (
+        {confidence != null && confidence < 0.85 ? (
           <View style={styles.infoBox}>
             <Text style={styles.infoIcon}>ℹ️</Text>
             <Text style={styles.infoText}>
@@ -257,7 +268,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
               {'\n'}Based on typical preparation, common portions, and public nutrition data.
             </Text>
           </View>
-        )}
+        ) : null}
 
         {/* Nutrition Balance */}
         <View style={styles.healthScoreContainer}>
@@ -277,27 +288,27 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
             />
           </View>
           <Text style={[styles.healthScoreValue, { color: getHealthScoreColor(healthScore) }]}>
-            {healthScore}/100
+            {toNumber(healthScore, 0)}/100
           </Text>
         </View>
 
         {/* Calories */}
         <View style={styles.caloriesContainer}>
-          <Text style={styles.caloriesValue}>{Math.round(calories)}</Text>
+          <Text style={styles.caloriesValue}>{Math.round(toNumber(calories, 0))}</Text>
           <Text style={styles.caloriesLabel}>calories</Text>
         </View>
 
         {/* Macro Consistency */}
-        {macroValidation.level === 'warn' && (
+        {macroValidation.level === 'warn' && typeof macroValidation.message === 'string' && (
           <View style={styles.warningBox}>
             <Text style={styles.warningIcon}>⚠️</Text>
-            <Text style={styles.warningText}>{macroValidation.message}</Text>
+            <Text style={styles.warningText}>{toText(macroValidation.message)}</Text>
           </View>
         )}
-        {macroValidation.level === 'info' && (
+        {macroValidation.level === 'info' && typeof macroValidation.message === 'string' && (
           <View style={styles.infoBox}>
             <Text style={styles.infoIcon}>ℹ️</Text>
-            <Text style={styles.infoText}>{macroValidation.message}</Text>
+            <Text style={styles.infoText}>{toText(macroValidation.message)}</Text>
           </View>
         )}
 
@@ -313,13 +324,13 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
           </View>
 
           {/* Detailed carbs */}
-          {(fiber || sugar || netCarbs) && (
+          {(fiber || sugar || netCarbs) ? (
             <View style={styles.detailedCarbs}>
               {fiber ? <DetailItem label="Fiber" value={fiber} unit="g" /> : null}
               {netCarbs ? <DetailItem label="Net Carbs" value={netCarbs} unit="g" /> : null}
               {sugar ? <DetailItem label="Sugar" value={sugar} unit="g" /> : null}
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Micronutrients */}
@@ -353,21 +364,21 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
         )}
 
         {/* Hydration */}
-        {hydration && (
+        {hydration ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Hydration</Text>
-            {hydration.waterContent && (
+            {hydration.waterContent ? (
               <Text style={styles.hydrationText}>
                 💧 Water: {hydration.waterContent}ml
               </Text>
-            )}
-            {hydration.electrolytes && hydration.electrolytes.length > 0 && (
+            ) : null}
+            {hydration.electrolytes && hydration.electrolytes.length > 0 ? (
               <Text style={styles.hydrationText}>
-                ⚡ Electrolytes: {hydration.electrolytes.join(', ')}
+                ⚡ Electrolytes: {toText(hydration.electrolytes.join(', '))}
               </Text>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
         {/* Ingredients */}
         {ingredients.length > 0 && (
@@ -414,7 +425,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
               <Text style={styles.analysisNotesText}>• Public nutrition databases</Text>
               {analysisNotes ? (
                 <Text style={[styles.analysisNotesText, styles.analysisNotesDetail]}>
-                  {analysisNotes}
+                  {toText(analysisNotes)}
                 </Text>
               ) : null}
             </View>

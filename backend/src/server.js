@@ -34,6 +34,7 @@ import adminStrategyRouter from "./routes/admin/strategy.js";
 import consentRouter from "./routes/consent.js";
 import voiceLogRouter from "./routes/voiceLog.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
+import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
@@ -359,6 +360,15 @@ app.get("/api/food/filter", requireAuth, async (req, res) => {
 
 app.listen(PORT, "0.0.0.0", async () => {
   console.log("Server is running on PORT:", PORT);
+
+  // Log feature flags for debugging
+  const featureFlags = premiumFeaturesService.getFeatureFlags();
+  console.log('🚀 Feature Flags:', {
+    FULL_AI_MODE: featureFlags.FULL_AI_MODE,
+    HYBRID_MODE: featureFlags.HYBRID_MODE,
+    PREMIUM_OPENAI: featureFlags.PREMIUM_OPENAI,
+    envValue: process.env.FULL_AI_MODE,
+  });
 
   // Initialize database schema on startup
   console.log('📦 Initializing database schema...');
