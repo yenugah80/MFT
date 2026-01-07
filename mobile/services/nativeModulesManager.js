@@ -26,7 +26,7 @@ const moduleImportMap = {
   constants: () => import('expo-constants'),
   haptics: () => import('expo-haptics'),
   camera: () => import('expo-camera'),
-  av: () => import('expo-av'),
+  audio: () => import('expo-audio'),
   speech: () => import('expo-speech'),
   'mlkit-ocr': () => import('expo-mlkit-ocr'),
   'image-picker': () => import('expo-image-picker'),
@@ -121,17 +121,29 @@ function getStub(moduleName) {
       },
       Camera: null,
     },
-    av: {
-      Audio: {
-        Recording: {
-          createAsync: () => Promise.resolve({ sound: null, recording: null }),
-        },
-        Sound: {
-          createAsync: () => Promise.resolve({ sound: null }),
-        },
-      },
-      Video: {
-        useVideoPlayer: () => ({ play: () => {}, pause: () => {}, replace: () => {} }),
+    audio: {
+      useAudioRecorder: () => ({
+        prepareToRecordAsync: () => Promise.resolve(),
+        record: () => {},
+        stop: () => Promise.resolve(),
+        pause: () => {},
+        isRecording: false,
+        uri: null,
+        currentTime: 0,
+      }),
+      useAudioPlayer: () => ({
+        play: () => {},
+        pause: () => {},
+        replace: () => {},
+        playing: false,
+        duration: 0,
+        currentTime: 0,
+      }),
+      requestRecordingPermissionsAsync: () => Promise.resolve({ granted: false, status: 'undetermined' }),
+      setAudioModeAsync: () => Promise.resolve(),
+      RecordingPresets: {
+        HIGH_QUALITY: {},
+        LOW_QUALITY: {},
       },
     },
     speech: {
@@ -280,9 +292,9 @@ export const Modules = {
     return getModule('camera');
   },
 
-  // Audio/Video
-  async av() {
-    return getModule('av');
+  // Audio (migrated from expo-av to expo-audio)
+  async audio() {
+    return getModule('audio');
   },
 
   // Text-to-Speech (via expo-speech)

@@ -1,63 +1,73 @@
-import { useState, useRef, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import { useState, useCallback } from 'react';
+import {
+  useAudioRecorder,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  RecordingPresets,
+} from 'expo-audio';
 import apiClient from '../services/apiClient';
 
 /**
  * Hook for Backend Voice Transcription (OpenAI Whisper)
  * Records audio file -> Uploads to /transcribe -> Returns analysis
+ * Migrated from expo-av to expo-audio
  */
 export const useBackendVoice = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState(''); // Only available after processing
   const [error, setError] = useState(null);
-  const recordingRef = useRef(null);
+
+  // Use the expo-audio recorder hook
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   const startRecording = useCallback(async () => {
     try {
       setError(null);
       setTranscript('');
-      
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
+
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
         setError('Microphone permission denied');
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      
-      recordingRef.current = recording;
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
       setError('Could not start recording');
     }
-  }, []);
+  }, [recorder]);
 
   const stopRecording = useCallback(async () => {
-    if (!recordingRef.current) return null;
+    if (!recorder.isRecording) return null;
 
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
+      await recorder.stop();
+      const uri = recorder.uri;
       setIsRecording(false);
-      recordingRef.current = null;
+
+      if (!uri) {
+        setError('No recording URI available');
+        return null;
+      }
 
       // Prepare FormData for upload
       const formData = new FormData();
       formData.append('audio', {
         uri: uri,
-        type: 'audio/m4a', // Ensure this matches your recording preset
+        type: 'audio/m4a', // Matches HIGH_QUALITY preset (.m4a)
         name: 'recording.m4a',
       });
 
-      // Send to new /transcribe endpoint
+      // Send to /transcribe endpoint
       // NOTE: We let the browser/client set the Content-Type header to include boundary
       const response = await apiClient.post('/voice/transcribe', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -76,20 +86,19 @@ export const useBackendVoice = () => {
       setError(err.response?.data?.error || 'Audio processing failed');
       return null;
     }
-  }, []);
+  }, [recorder]);
 
   const cancelRecording = useCallback(async () => {
-    if (!recordingRef.current) return;
+    if (!recorder.isRecording) return;
 
     try {
-      await recordingRef.current.stopAndUnloadAsync();
+      await recorder.stop();
     } catch (err) {
       console.warn('Error cancelling recording:', err);
     } finally {
       setIsRecording(false);
-      recordingRef.current = null;
     }
-  }, []);
+  }, [recorder]);
 
   return { isRecording, transcript, error, startRecording, stopRecording, cancelRecording };
 };

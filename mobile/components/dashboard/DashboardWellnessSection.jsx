@@ -4,7 +4,7 @@
  * Staff Design Principles:
  * - Hydration: Quick water logging
  * - Activity: Daily movement summary
- * - No duplicate mood cards (moved to hero FoodMoodScoreCard)
+ * - Enhanced Mood Card with Wellness Score integration
  */
 
 import React from 'react';
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CollapsibleSection from './CollapsibleSection';
 import HydrationWellnessDashboard from './HydrationWellnessDashboard';
 import ActivitySummaryCard from './ActivitySummaryCard';
+import EnhancedMoodCard from './EnhancedMoodCard';
 import { TEXT, SPACING, RADIUS, BRAND } from '../../constants/premiumTheme';
 
 export default function DashboardWellnessSection({
@@ -28,6 +29,9 @@ export default function DashboardWellnessSection({
   onCelebrateHydration,
   onOpenMoodInsights,
   onOpenHydrationTracker,
+  moodInsights,
+  moodInsightsLoading,
+  wellnessScore,
 }) {
   return (
     <CollapsibleSection
@@ -56,17 +60,15 @@ export default function DashboardWellnessSection({
         {/* Activity Summary */}
         <ActivitySummaryCard />
 
-        {/* Quick link to mood insights */}
-        <TouchableOpacity
-          style={localStyles.insightsLink}
-          onPress={onOpenMoodInsights}
-          accessibilityRole="button"
-          accessibilityLabel="View mood insights"
-        >
-          <Ionicons name="analytics-outline" size={16} color={BRAND.primary} />
-          <Text style={localStyles.insightsText}>View detailed mood insights</Text>
-          <Ionicons name="chevron-forward" size={14} color={TEXT.muted} />
-        </TouchableOpacity>
+        <View style={styles.wellnessDivider} />
+
+        {/* Enhanced Mood Card with Wellness Score */}
+        <EnhancedMoodCard
+          insights={moodInsights}
+          loading={moodInsightsLoading}
+          wellnessScore={wellnessScore}
+          onOpenInsights={onOpenMoodInsights}
+        />
       </View>
     </CollapsibleSection>
   );

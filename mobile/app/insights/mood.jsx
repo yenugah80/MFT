@@ -1,6 +1,7 @@
 /**
  * Mood Insights Screen - Full Screen View
  * Personalized insights derived from user logs with share + filters.
+ * Includes PredictiveInsightsCard and PatternDetectiveCard for advanced analytics.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,9 +11,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import MoodInsightCard from '../../components/MoodTracker/MoodInsightCard';
+import PredictiveInsightsCard from '../../components/dashboard/PredictiveInsightsCard';
+import PatternDetectiveCard from '../../components/dashboard/PatternDetectiveCard';
 import { useNotification } from '../../providers/NotificationProvider';
+import { useDashboard } from '../../hooks/useDashboard';
+import { useMoodTrends } from '../../hooks/useMoodTrends';
+import { useFoodLog } from '../../hooks/useFoodLog';
+import { useWaterLog } from '../../hooks/useWaterLog';
 import apiClient from '../../services/apiClient';
 import { getItem, setItem, STORAGE_KEYS } from '../../utils/storage';
+import { calculateFoodMoodScore } from '../../utils/foodMoodScore';
 import {
   TEXT,
   SEMANTIC,
@@ -31,6 +39,16 @@ export default function MoodInsightsScreen() {
   const router = useRouter();
   const { days: daysParam } = useLocalSearchParams();
   const notify = useNotification();
+
+  // Dashboard data for predictive and pattern cards
+  const { data: dashboardData } = useDashboard();
+  const { data: moodTrendsData } = useMoodTrends({ period: 'month' });
+
+  // Historical food logs for pattern detection
+  const { fetchHistory: fetchFoodHistory, logs: foodLogs } = useFoodLog();
+  const { fetchHistory: fetchWaterHistory } = useWaterLog();
+  const [historicalFoodLogs, setHistoricalFoodLogs] = useState([]);
+  const [historicalWaterLogs, setHistoricalWaterLogs] = useState([]);
 
   const [insightsDays, setInsightsDays] = useState(DEFAULT_DAYS);
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -75,6 +93,41 @@ export default function MoodInsightsScreen() {
   useEffect(() => {
     setItem(STORAGE_KEYS.INSIGHTS_FILTER_DAYS, insightsDays);
   }, [insightsDays]);
+
+  // Fetch historical food and water logs for pattern detection
+  useEffect(() => {
+    const loadHistoricalData = async () => {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - insightsDays);
+
+      const dateParams = {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        limit: 200,
+      };
+
+      // Fetch food history
+      try {
+        const foodHistory = await fetchFoodHistory(dateParams);
+        setHistoricalFoodLogs(foodHistory || []);
+      } catch (err) {
+        console.error('[MoodInsights] Failed to load food history:', err);
+        setHistoricalFoodLogs(foodLogs || []);
+      }
+
+      // Fetch water history
+      try {
+        const waterHistory = await fetchWaterHistory(dateParams);
+        setHistoricalWaterLogs(waterHistory?.logs || []);
+      } catch (err) {
+        console.error('[MoodInsights] Failed to load water history:', err);
+        setHistoricalWaterLogs([]);
+      }
+    };
+
+    loadHistoricalData();
+  }, [insightsDays, fetchFoodHistory, fetchWaterHistory, foodLogs]);
 
   const loadMoodInsights = useCallback(async ({ days = insightsDays, forceRefresh = false } = {}) => {
     setInsightsLoading(true);
@@ -288,6 +341,42 @@ export default function MoodInsightsScreen() {
           onRefresh={() => loadMoodInsights({ forceRefresh: true })}
           minDataMessage={insightsMessage}
         />
+
+        {/* Predictive Insights - Tomorrow's Forecast */}
+        {dashboardData?.today && (
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Tomorrow&apos;s Forecast</Text>
+            <PredictiveInsightsCard
+              todaysMeals={dashboardData.today.foodLogs || []}
+              todaysMood={dashboardData.today.moodLogs?.[0] || null}
+              currentScore={calculateFoodMoodScore({
+                calories: dashboardData.today.nutrition?.totalCalories || 0,
+                calorieGoal: dashboardData.goals?.dailyCalories || 2000,
+                protein: dashboardData.today.nutrition?.totalProtein || 0,
+                proteinGoal: dashboardData.goals?.proteinG || 150,
+              })}
+              historicalPatterns={moodTrendsData?.data || []}
+              onViewHistory={() => router.push('/history')}
+            />
+          </View>
+        )}
+
+        {/* Pattern Detective - Discover Your Patterns */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Discover Your Patterns</Text>
+          <PatternDetectiveCard
+            foodLogs={historicalFoodLogs}
+            moodLogs={moodTrendsData?.data || []}
+            waterLogs={historicalWaterLogs}
+            days={insightsDays}
+            onPatternPress={(pattern) => {
+              notify.info(`Pattern: ${pattern.title}`);
+            }}
+            onTryAction={(action) => {
+              notify.success(`Try: ${action}`);
+            }}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -441,6 +530,15 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.danger.base,
+    marginBottom: SPACING[3],
+  },
+  sectionContainer: {
+    marginTop: SPACING[5],
+  },
+  sectionTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
     marginBottom: SPACING[3],
   },
 });

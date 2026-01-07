@@ -270,9 +270,9 @@ export default function PredictiveInsightsCard({
           <View style={styles.emptyIconContainer}>
             <Ionicons name="sparkles" size={32} color={BRAND.primary} />
           </View>
-          <Text style={styles.emptyTitle}>Tomorrow's Forecast</Text>
+          <Text style={styles.emptyTitle}>Tomorrow&apos;s Forecast</Text>
           <Text style={styles.emptyText}>
-            Log more meals today to unlock predictions about how you'll feel tomorrow
+            Log more meals today to unlock predictions about how you&apos;ll feel tomorrow
           </Text>
           <View style={styles.emptyProgress}>
             <View style={styles.emptyProgressBar}>
@@ -331,7 +331,7 @@ export default function PredictiveInsightsCard({
             </View>
             <View style={styles.headerText}>
               <View style={styles.titleRow}>
-                <Text style={styles.title}>Tomorrow's Forecast</Text>
+                <Text style={styles.title}>Tomorrow&apos;s Forecast</Text>
                 <View style={styles.aiBadge}>
                   <Ionicons name="sparkles" size={10} color={BRAND.primary} />
                   <Text style={styles.aiText}>AI</Text>
@@ -371,7 +371,7 @@ export default function PredictiveInsightsCard({
         {expanded && hasPredictions && (
           <Animated.View style={styles.expandedContent}>
             <View style={styles.divider} />
-            <Text style={styles.factorsTitle}>What's affecting tomorrow</Text>
+            <Text style={styles.factorsTitle}>What&apos;s affecting tomorrow</Text>
             {predictions.map((factor, index) => (
               <PredictionFactor key={factor.factor} factor={factor} index={index} />
             ))}

@@ -74,11 +74,13 @@ function formatDateKey(date) {
 
 // Single day cell
 function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) {
+  // Hooks must be called unconditionally before any early returns
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
   if (!date) {
     return <View style={[styles.dayCell, compact && styles.dayCellCompact]} />;
   }
 
-  const scaleAnim = useRef(new Animated.Value(1)).current;
   const dateKey = formatDateKey(date);
   const dayData = data?.[dateKey] || {};
 

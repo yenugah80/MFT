@@ -137,7 +137,12 @@ router.get("/today", async (req, res) => {
 
 /**
  * GET /api/water/history
- * Get water intake history
+ * Get water intake history for pattern detection
+ *
+ * Query params:
+ *   startDate?: ISO date string
+ *   endDate?: ISO date string
+ *   limit?: number (default 100)
  */
 router.get("/history", async (req, res) => {
   try {
@@ -145,25 +150,60 @@ router.get("/history", async (req, res) => {
     const userId = req.auth.userId;
     const { startDate, endDate, limit = 100 } = req.query;
 
-    let query = db
-      .select()
-      .from(waterLogTable)
-      .where(eq(waterLogTable.userId, userId))
-      .orderBy(desc(waterLogTable.loggedDate));
+    // Build where clause with all conditions
+    let whereClause = eq(waterLogTable.userId, userId);
 
     // Add date filters if provided
     if (startDate && endDate) {
-      query = query.where(
-        and(
-          gte(waterLogTable.loggedDate, new Date(startDate)),
-          lte(waterLogTable.loggedDate, new Date(endDate))
-        )
+      whereClause = and(
+        whereClause,
+        gte(waterLogTable.loggedDate, new Date(startDate)),
+        lte(waterLogTable.loggedDate, new Date(endDate))
+      );
+    } else if (startDate) {
+      whereClause = and(
+        whereClause,
+        gte(waterLogTable.loggedDate, new Date(startDate))
+      );
+    } else if (endDate) {
+      whereClause = and(
+        whereClause,
+        lte(waterLogTable.loggedDate, new Date(endDate))
       );
     }
 
-    const history = await query.limit(parseInt(limit));
+    const history = await db
+      .select()
+      .from(waterLogTable)
+      .where(whereClause)
+      .orderBy(desc(waterLogTable.loggedDate))
+      .limit(parseInt(limit));
 
-    res.json(history);
+    // Calculate daily aggregates for pattern detection
+    const dailyAggregates = {};
+    history.forEach(log => {
+      const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+      if (!dailyAggregates[dateKey]) {
+        dailyAggregates[dateKey] = {
+          date: dateKey,
+          totalLiters: 0,
+          hydrationLiters: 0,
+          count: 0,
+          beverageTypes: {},
+        };
+      }
+      dailyAggregates[dateKey].totalLiters += parseFloat(log.amountLiters || 0);
+      dailyAggregates[dateKey].hydrationLiters += parseFloat(log.hydrationLiters || log.amountLiters || 0);
+      dailyAggregates[dateKey].count += 1;
+      const bevType = log.beverageType || 'water';
+      dailyAggregates[dateKey].beverageTypes[bevType] = (dailyAggregates[dateKey].beverageTypes[bevType] || 0) + 1;
+    });
+
+    res.json({
+      logs: history,
+      dailyAggregates: Object.values(dailyAggregates),
+      totalEntries: history.length,
+    });
   } catch (error) {
     console.error("[WaterHistory] Error:", error);
     errors.internal(res, 'Failed to fetch water history');

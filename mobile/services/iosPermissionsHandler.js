@@ -20,7 +20,7 @@
 
 import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import * as AV from 'expo-av';
+import { requestRecordingPermissionsAsync } from 'expo-audio';
 
 /**
  * Permission status tracking
@@ -71,10 +71,11 @@ export async function requestPhotoLibraryPermissionAsync() {
 
 /**
  * Request microphone permissions (native async API)
+ * Uses expo-audio instead of deprecated expo-av
  */
 export async function requestMicrophonePermissionAsync() {
   try {
-    const permission = await AV.Audio.requestPermissionsAsync();
+    const permission = await requestRecordingPermissionsAsync();
     PermissionState.requested.add(PERMISSION_TYPES.MICROPHONE);
     return formatPermissionStatus(permission, PERMISSION_TYPES.MICROPHONE);
   } catch (error) {

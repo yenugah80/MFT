@@ -12,7 +12,6 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { View, ScrollView, Text, RefreshControl, StyleSheet, TouchableOpacity, Modal, Share } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
@@ -34,7 +33,6 @@ import ThemeTransition from "./ThemeTransition";
 import ThemeSettingsModal from "./ThemeSettingsModal";
 import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
-import SkeletonCard, { SkeletonText, SkeletonCircle } from "./dashboard/SkeletonCard";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
@@ -47,13 +45,9 @@ import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 import FoodNutriScoreCard from "./dashboard/FoodNutriScoreCard";
 import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
-import SmartRecommendationsCard from "./dashboard/SmartRecommendationsCard";
 
 // NEW KILLER FEATURES - Differentiators
 import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
-import EnhancedMoodCard from "./dashboard/EnhancedMoodCard";
-import PredictiveInsightsCard from "./dashboard/PredictiveInsightsCard";
-import PatternDetectiveCard from "./dashboard/PatternDetectiveCard";
 import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
 import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
 
@@ -64,12 +58,12 @@ import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 
 // Design tokens - using unified premium theme
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
-import { BRAND, SURFACES, TEXT, SEMANTIC, ICON_SIZES, ICONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
-import { LUXURY_BACKGROUNDS, LUXURY_TEXT } from "../constants/luxuryTheme";
+import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
 
 // Utility functions
 import { generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
 import { calculateFoodMoodScore } from "../utils/foodMoodScore";
+import { calculatePersonalizedWellnessScore } from "../utils/smartWellnessEngine";
 import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
 import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
 import { scanMealsForAllergens } from "../utils/allergenDetection";
@@ -190,7 +184,7 @@ export default function DashboardContent() {
   const notify = useNotification();
   const router = useRouter();
   const { user } = useUser();
-  const { theme, toggleTheme, colors } = useTheme();
+  const { theme, colors } = useTheme();
   const queryClient = useQueryClient();
 
   // Insights modal state
@@ -766,6 +760,41 @@ export default function DashboardContent() {
     });
   }, [data]);
 
+  // Calculate personalized wellness score for EnhancedMoodCard
+  const wellnessScore = useMemo(() => {
+    if (!data?.today || !data?.goals) return null;
+
+    const rawScore = calculatePersonalizedWellnessScore({
+      today: data.today,
+      goals: data.goals,
+      historicalData: data.trends?.weekSummaries || [],
+      streak: parseDecimal(data.gamification?.streak, 0),
+    });
+
+    // Transform to format expected by EnhancedMoodCard
+    // breakdown should have simple percentage values, not nested objects
+    const breakdown = rawScore.breakdown || {};
+    return {
+      score: rawScore.score || 0,
+      tier: rawScore.tier,
+      label: rawScore.label,
+      breakdown: {
+        nutrition: breakdown.nutrition?.max > 0
+          ? Math.round((breakdown.nutrition.score / breakdown.nutrition.max) * 100)
+          : 0,
+        hydration: breakdown.hydration?.max > 0
+          ? Math.round((breakdown.hydration.score / breakdown.hydration.max) * 100)
+          : 0,
+        mood: breakdown.mood?.max > 0
+          ? Math.round((breakdown.mood.score / breakdown.mood.max) * 100)
+          : 0,
+        habits: breakdown.habits?.max > 0
+          ? Math.round((breakdown.habits.score / breakdown.habits.max) * 100)
+          : 0,
+      },
+    };
+  }, [data]);
+
   // Handlers
   const handleLogMood = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1201,6 +1230,9 @@ export default function DashboardContent() {
           onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/insights/mood')}
           onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          moodInsights={moodInsightsData}
+          moodInsightsLoading={moodInsightsLoading}
+          wellnessScore={wellnessScore}
         />
 
         {/* ============================================ */}

@@ -1,11 +1,12 @@
 /**
  * useWaterLog Hook
  * Production-ready water logging with backend sync and optimistic updates
+ * Includes history fetching for pattern detection
  */
 
 import { useState, useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
 
 /**
@@ -280,6 +281,31 @@ export function useWaterLog() {
     }
   }, [celebrationMutation]);
 
+  /**
+   * Fetch water history for pattern detection
+   * @param {Object} options - Query options
+   * @param {string} options.startDate - Start date (ISO string)
+   * @param {string} options.endDate - End date (ISO string)
+   * @param {number} options.limit - Max results (default 200)
+   * @returns {Promise<Object>} Water history with logs and daily aggregates
+   */
+  const fetchHistory = useCallback(async (options = {}) => {
+    const { startDate, endDate, limit = 200 } = options;
+
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      params.append('limit', limit.toString());
+
+      const response = await apiClient.get(`/water/history?${params}`);
+      return response;
+    } catch (err) {
+      console.error('[useWaterLog] Failed to fetch history:', err);
+      return { logs: [], dailyAggregates: [], totalEntries: 0 };
+    }
+  }, []);
+
   return {
     logWater,
     removeWater,
@@ -290,5 +316,6 @@ export function useWaterLog() {
     getTodayTotal,
     getProgress,
     markHydrationCelebration,
+    fetchHistory,
   };
 }

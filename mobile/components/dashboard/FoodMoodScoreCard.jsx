@@ -528,7 +528,7 @@ export default function FoodMoodScoreCard({
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Ionicons name="sparkles" size={18} color={BRAND.primary} />
-              <Text style={styles.headerTitle}>Today's Wellness</Text>
+              <Text style={styles.headerTitle}>Today&apos;s Wellness</Text>
             </View>
             {celebration && <CelebrationBadge celebration={celebration} />}
           </View>
