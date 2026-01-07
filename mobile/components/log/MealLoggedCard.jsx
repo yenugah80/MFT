@@ -142,13 +142,12 @@ const MacroBar = ({ label, value, unit, color, goal, icon }) => {
             styles.macroFill,
             {
               backgroundColor: color,
-              width: fillAnim.interpolate({
-                inputRange: [0, 100],
-                outputRange: ['0%', '100%'],
-              }),
+              flex: percentage / 100,
             },
           ]}
         />
+        {/* Empty space for remaining percentage */}
+        <View style={{ flex: (100 - percentage) / 100 }} />
       </View>
     </View>
   );
@@ -194,27 +193,21 @@ const ComparisonBar = ({ label, mealValue, dailyTotal, goal, unit, color, onView
           {formatMacro(totalAfter)}<Text style={styles.comparisonUnit}> / {formatMacro(goal)} {unit}</Text>
         </Text>
       </View>
-      <View style={styles.comparisonTrack}>
-        {/* Daily Total Before */}
-        <Animated.View style={[styles.comparisonFill, { 
-          backgroundColor: `${color}40`, // Lighter shade for background
-          width: fillAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: ['0%', `${totalBeforePct}%`]
-          })
+      <View style={[styles.comparisonTrack, { flexDirection: 'row' }]}>
+        {/* Daily Total Before (lighter shade) */}
+        <View style={[styles.comparisonFill, {
+          backgroundColor: `${color}40`,
+          flex: totalBeforePct / 100,
         }]} />
-        {/* This Meal */}
-        <Animated.View style={[styles.comparisonFill, { 
-          position: 'absolute',
+        {/* This Meal (main color) */}
+        <View style={[styles.comparisonFill, {
           backgroundColor: color,
-          left: `${totalBeforePct}%`,
-          width: fillAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: ['0%', `${mealPct}%`]
-          })
+          flex: mealPct / 100,
         }]} />
+        {/* Remaining space */}
+        <View style={{ flex: Math.max(0, (100 - totalBeforePct - mealPct)) / 100 }} />
         {/* Goal Marker */}
-        <View style={styles.goalMarker} />
+        <View style={[styles.goalMarker, { position: 'absolute', right: 0 }]} />
       </View>
     </View>
   );
@@ -794,6 +787,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.full,
     overflow: 'hidden',
+    flexDirection: 'row',
   },
   macroFill: {
     height: '100%',

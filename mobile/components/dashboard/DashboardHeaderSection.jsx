@@ -118,8 +118,8 @@ export default function DashboardHeaderSection({
             <Ionicons name="leaf" size={14} color="#FFFFFF" />
           </LinearGradient>
           <View style={localStyles.brandTextContainer}>
-            <Text style={[localStyles.brandName, { color: textPrimary }]}>NutriTrack</Text>
-            <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Smart Nutrition</Text>
+            <Text style={[localStyles.brandName, { color: textPrimary }]}>My-Food-Tracker</Text>
+            <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Your Wellness Companion</Text>
           </View>
         </View>
         <View style={[localStyles.premiumBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : 'rgba(251, 191, 36, 0.1)', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)' }]}>
