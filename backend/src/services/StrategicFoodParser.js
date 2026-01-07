@@ -109,12 +109,13 @@ class StrategicFoodParser {
 
     try {
       // Use OpenAI for detailed extraction
-      const result = await openaiClient.parseTextToFoods(text);
+      // NOTE: parseTextToFoods returns an ARRAY of items, not an object with items property
+      const parsedItems = await openaiClient.parseTextToFoods(text);
 
       // Track premium usage for billing
       // Estimate tokens (rough: 1 token ≈ 4 chars)
       const estimatedInputTokens = Math.ceil(text.length / 4);
-      const estimatedOutputTokens = Math.ceil(JSON.stringify(result).length / 4);
+      const estimatedOutputTokens = Math.ceil(JSON.stringify(parsedItems).length / 4);
 
       await premiumFeaturesService.trackPremiumUsage(
         userId,
@@ -129,9 +130,13 @@ class StrategicFoodParser {
 
       this.stats.totalCost += cost;
 
+      // parsedItems is an array, not an object - fix the bug!
+      const items = Array.isArray(parsedItems) ? parsedItems : [];
+      console.log(`[StrategicFoodParser] AI parsing returned ${items.length} items`);
+
       return {
         success: true,
-        items: result.items || [],
+        items,
         engine: 'ai-powered',
         confidence: 0.92, // Higher confidence for AI
         message: 'Extracted using AI-powered parsing (accurate, slower)',
@@ -144,7 +149,6 @@ class StrategicFoodParser {
           inputTokens: estimatedInputTokens,
           outputTokens: estimatedOutputTokens,
         },
-        ...result, // Include collapsing info, ui_message, etc.
       };
     } catch (err) {
       console.error('[StrategicFoodParser] AI parsing failed:', err);
