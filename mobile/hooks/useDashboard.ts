@@ -24,8 +24,8 @@ export const useDashboard = () => {
     staleTime: 30 * 1000,
     // Keep cached data for 5 minutes (gcTime replaces deprecated cacheTime in React Query v5)
     gcTime: 5 * 60 * 1000,
-    // Only refetch on mount if data is older than staleTime (eliminates aggressive refetching)
-    refetchOnMount: 'stale',
+    // Refetch on mount only if data is stale (default behavior with staleTime set)
+    refetchOnMount: true,
   });
 };
 

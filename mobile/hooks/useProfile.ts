@@ -26,8 +26,8 @@ export const useProfile = () => {
     staleTime: 5 * 60 * 1000,
     // Keep data in memory for 10 minutes
     gcTime: 10 * 60 * 1000,
-    // Only refetch if data is stale
-    refetchOnMount: 'stale',
+    // Refetch on mount only if data is stale (default behavior with staleTime set)
+    refetchOnMount: true,
   });
 };
 

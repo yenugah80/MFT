@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Hooks
-import { useFoodAnalysis, getMealTypeFromTime } from '../../hooks/useFoodAnalysis';
+import { useFoodAnalysis } from '../../hooks/useFoodAnalysis';
 // SWITCHED: Using Instant Voice (On-Device) for immediate feedback
 import { useServerVoice } from '../../hooks/useServerVoice';
 import { useFoodLog } from '../../hooks/useFoodLog';
@@ -165,13 +165,13 @@ export default function LogScreen() {
   useEffect(() => {
     if (
       foodAnalysis.analysisResult &&
+      foodAnalysis.analysisResult.items?.length > 0 &&
       !foodAnalysis.isAnalyzing &&
       !foodAnalysis.error &&
-      !hasManuallyClosedDetails &&
-      analysisSource !== 'text' // Don't auto-show for text to prevent flickering
+      !hasManuallyClosedDetails
     ) {
-      // Analysis completed successfully via photo/voice/barcode - show detailed results
-      console.log('[log] Auto-showing AnalysisDetailsScreen for', analysisSource);
+      // Analysis completed successfully with items - show detailed results
+      console.log('[log] Auto-showing MealSummaryScreen for', analysisSource, 'with', foodAnalysis.analysisResult.items.length, 'items');
       setShowAnalysisDetails(true);
     }
   }, [foodAnalysis.analysisResult, foodAnalysis.isAnalyzing, foodAnalysis.error, analysisSource, hasManuallyClosedDetails]);

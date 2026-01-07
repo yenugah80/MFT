@@ -242,9 +242,21 @@ class OpenAIClient extends BaseApiClient {
     };
 
     // Generate cache key from messages (for identical requests)
+    // CRITICAL FIX: Previous truncation to 500 chars caused cache collisions!
+    // The system prompt alone is ~400 chars, so user queries never made it into the key.
+    // Now we include: model + hash of system prompt (for efficiency) + FULL user content
     const cacheKey = options.disableCache
       ? null
-      : `chat:${model}:${JSON.stringify(messages).substring(0, 500)}`; // Increased length to capture user query
+      : (() => {
+          const userMessage = messages.find(m => m.role === 'user');
+          const systemMessage = messages.find(m => m.role === 'system');
+          // Use first 100 chars of system as identifier + FULL user content for uniqueness
+          const systemId = systemMessage?.content?.substring(0, 100) || 'no-system';
+          const userContent = typeof userMessage?.content === 'string'
+            ? userMessage.content
+            : JSON.stringify(userMessage?.content || '');
+          return `chat:${model}:${systemId}:${userContent}`;
+        })()
 
     try {
       const data = await this.request(
