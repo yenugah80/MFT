@@ -19,10 +19,15 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
 
-const STALE_TIME = 5 * 60 * 1000; // 5 minutes
-const CACHE_TIME = 10 * 60 * 1000; // 10 minutes
+const STALE_TIME = 10 * 60 * 1000; // 10 minutes
+const CACHE_TIME = 30 * 60 * 1000; // 30 minutes
 
-export function useRecommendations() {
+/**
+ * useRecommendations hook
+ * @param {Object} options
+ * @param {boolean} options.enabled - Whether to auto-fetch recommendations (default: false)
+ */
+export function useRecommendations({ enabled = false } = {}) {
   const queryClient = useQueryClient();
 
   // ============================================================================
@@ -38,27 +43,31 @@ export function useRecommendations() {
     queryKey: ['recommendations'],
     queryFn: async () => {
       try {
+        console.log('[useRecommendations] Fetching recommendations...');
         const response = await apiClient.get('/recommendations', {
           params: { limit: 5 },
-          _timeout: 15000 // 15s timeout for recommendations endpoint (complex AI processing)
+          timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
         });
+        console.log('[useRecommendations] Fetch successful');
         return response.data?.recommendations || [];
       } catch (err) {
         // Distinguish timeout from other errors
-        const isTimeout = err.message === 'Request timeout';
+        const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
         const errorMessage = isTimeout
-          ? 'Request took too long (15s) - try again'
+          ? 'Request took too long - try again later'
           : err?.response?.data?.error || 'Failed to load recommendations';
 
-        console.error('[useRecommendations] Fetch error:', err);
+        console.error('[useRecommendations] Fetch error:', errorMessage);
         throw new Error(errorMessage);
       }
     },
+    enabled, // CRITICAL: Only fetch when explicitly enabled
     staleTime: STALE_TIME,
-    gcTime: CACHE_TIME, // formerly cacheTime
-    retry: 1,
+    gcTime: CACHE_TIME,
+    retry: false, // No retries - recommendations are optional
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 
   // ============================================================================

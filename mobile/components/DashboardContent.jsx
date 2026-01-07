@@ -38,13 +38,13 @@ import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
-import DashboardPrimaryCard from "./dashboard/DashboardPrimaryCard";
+// DashboardPrimaryCard removed - redundant with FoodMoodScoreCard hero + CompactDashboardTiles
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
 import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 import FoodNutriScoreCard from "./dashboard/FoodNutriScoreCard";
-import RemainingBudgetCard from "./dashboard/RemainingBudgetCard";
+// RemainingBudgetCard removed - redundant with InsightNudge system
 
 // NEW KILLER FEATURES - Differentiators
 import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
@@ -1250,20 +1250,7 @@ export default function DashboardContent() {
           <AllergenWarningCard warnings={allergenWarnings} />
         )}
 
-        {/* ============================================ */}
-        {/* TODAY'S NUDGE - Single gentle insight */}
-        {/* ============================================ */}
-        <RemainingBudgetCard
-          today={today}
-          goals={goals}
-          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
-        />
-
-        <DashboardPrimaryCard
-          styles={styles}
-          today={today}
-          data={data}
-        />
+        {/* RemainingBudgetCard & DashboardPrimaryCard removed - redundant with hero + compact tiles */}
 
         {/* ============================================ */}
         {/* KILLER FEATURES - Premium Differentiators */}
