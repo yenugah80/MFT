@@ -56,8 +56,12 @@ import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
 import AllergenWarningCard from "./dashboard/AllergenWarningCard";
 import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 
+// Premium dashboard enhancements - compact tiles and timeline
+import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
+import TodayMealsTimeline from "./dashboard/TodayMealsTimeline";
+
 // Design tokens - using unified premium theme
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
+import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
 import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
 
 // Utility functions
@@ -218,6 +222,7 @@ export default function DashboardContent() {
   // Recommendation detail modal state
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
   const [recommendationModalVisible, setRecommendationModalVisible] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [acceptingRecommendation, setAcceptingRecommendation] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
 
@@ -226,6 +231,7 @@ export default function DashboardContent() {
   const [allergenWarnings, setAllergenWarnings] = useState([]);
 
   // Recommendations hook (handles caching internally with 5-min cache)
+  // eslint-disable-next-line no-unused-vars
   const {
     recommendations,
     loading: recommendationsLoading,
@@ -264,8 +270,11 @@ export default function DashboardContent() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Note: useFocusEffect manual refetch removed - React Query handles staleness automatically
@@ -307,6 +316,7 @@ export default function DashboardContent() {
   }, [data, isLoading, userProfile]);
 
   // Track recommendation view interaction (delegates to hook)
+  // eslint-disable-next-line no-unused-vars
   const trackRecommendationView = useCallback(async (recommendationId) => {
     await trackInteraction(recommendationId, 'view');
   }, [trackInteraction]);
@@ -351,6 +361,7 @@ export default function DashboardContent() {
   }, [notify]);
 
   // Update nutrition goals (inline edit from RemainingBudgetCard)
+  // eslint-disable-next-line no-unused-vars
   const handleGoalsUpdate = useCallback(async (goalUpdates) => {
     try {
       const response = await apiClient.post('/api/nutrition/goals', goalUpdates);
@@ -737,12 +748,45 @@ export default function DashboardContent() {
   const smartInsights = useMemo(() => {
     if (!data?.today || !data?.goals) return [];
 
+    const currentCalories = parseCalories(data.today.nutrition.totalCalories);
+    const currentWater = parseLiters(data.today.waterIntakeLiters);
+    const todayMoodLogs = data.today.moodLogs?.length || 0;
+    const hasTodayActivity = currentCalories > 0 || currentWater > 0 || todayMoodLogs > 0;
+
+    // Check if returning user (has historical data but nothing today)
+    const isReturningUser = parseDecimal(data.gamification?.totalMealsLogged, 0) > 0 ||
+                           parseDecimal(data.gamification?.xp, 0) > 0 ||
+                           parseDecimal(data.gamification?.level, 1) > 1;
+
+    // Show friendly welcome back message for returning users with no today's data
+    if (isReturningUser && !hasTodayActivity) {
+      const hour = new Date().getHours();
+      let greeting = 'Ready to start your day?';
+      let message = 'Log your first meal to kick off today\'s tracking.';
+
+      if (hour >= 12 && hour < 17) {
+        greeting = 'Good to see you back!';
+        message = 'Start logging to pick up where you left off.';
+      } else if (hour >= 17) {
+        greeting = 'Welcome back!';
+        message = 'It\'s not too late to log today\'s meals.';
+      }
+
+      return [{
+        type: 'welcome',
+        icon: 'hand-right',
+        title: greeting,
+        message: message,
+        action: 'Quick Log',
+      }];
+    }
+
     return generateInsights({
-      currentCalories: parseCalories(data.today.nutrition.totalCalories),
+      currentCalories,
       calorieGoal: parseGoal(data.goals?.dailyCalories, 2000, 800, 10000),
       currentProtein: parseMacro(data.today.nutrition.totalProtein),
       proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
-      currentHydration: parseLiters(data.today.waterIntakeLiters),
+      currentHydration: currentWater,
       hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
       streak: parseDecimal(data.gamification?.streak, 0),
       timeOfDay: new Date().getHours(),
@@ -774,28 +818,33 @@ export default function DashboardContent() {
     // Transform to format expected by EnhancedMoodCard
     // breakdown should have simple percentage values, not nested objects
     const breakdown = rawScore.breakdown || {};
+
+    // Safe percentage calculation helper - prevents NaN and division by zero
+    const safePercent = (category) => {
+      const score = breakdown[category]?.score;
+      const max = breakdown[category]?.max;
+      if (!max || max <= 0 || typeof score !== 'number') return 0;
+      const pct = Math.round((score / max) * 100);
+      return Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
+    };
+
     return {
-      score: rawScore.score || 0,
+      score: typeof rawScore.score === 'number' && Number.isFinite(rawScore.score)
+        ? Math.min(100, Math.max(0, rawScore.score))
+        : 0,
       tier: rawScore.tier,
       label: rawScore.label,
       breakdown: {
-        nutrition: breakdown.nutrition?.max > 0
-          ? Math.round((breakdown.nutrition.score / breakdown.nutrition.max) * 100)
-          : 0,
-        hydration: breakdown.hydration?.max > 0
-          ? Math.round((breakdown.hydration.score / breakdown.hydration.max) * 100)
-          : 0,
-        mood: breakdown.mood?.max > 0
-          ? Math.round((breakdown.mood.score / breakdown.mood.max) * 100)
-          : 0,
-        habits: breakdown.habits?.max > 0
-          ? Math.round((breakdown.habits.score / breakdown.habits.max) * 100)
-          : 0,
+        nutrition: safePercent('nutrition'),
+        hydration: safePercent('hydration'),
+        mood: safePercent('mood'),
+        habits: safePercent('habits'),
       },
     };
   }, [data]);
 
   // Handlers
+  // eslint-disable-next-line no-unused-vars
   const handleLogMood = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } });
@@ -855,6 +904,7 @@ export default function DashboardContent() {
     }
   }, [insightsDays]);
 
+  // eslint-disable-next-line no-unused-vars
   const handlePreviewInsights = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: '/insights/mood', params: { days: String(insightsDays) } });
@@ -984,7 +1034,7 @@ export default function DashboardContent() {
     return (
       <View style={styles.centerContainer}>
         <View style={styles.errorIconContainer}>
-          <Ionicons name={errorDetails.icon} size={64} color={COLORS.text.tertiary} />
+          <Ionicons name={errorDetails.icon} size={64} color={TEXT.tertiary} />
         </View>
         <Text style={styles.errorTitle}>{errorDetails.title}</Text>
         <Text style={styles.errorText}>
@@ -1020,10 +1070,19 @@ export default function DashboardContent() {
   const { today, goals, gamification, trends, recentWeight } = data;
 
   // Check if user has any data (first-time user detection)
-  const hasAnyData = uniqueFoodLogs.length > 0 ||
-                      parseLiters(today.waterIntakeLiters) > 0 ||
-                      today.moodLogs?.length > 0 ||
-                      parseDecimal(gamification?.streak, 0) > 0;
+  // Include historical data checks so returning users don't see welcome banner
+  const hasTodayData = uniqueFoodLogs.length > 0 ||
+                        parseLiters(today.waterIntakeLiters) > 0 ||
+                        today.moodLogs?.length > 0;
+
+  const hasHistoricalData = parseDecimal(gamification?.streak, 0) > 0 ||
+                            parseDecimal(gamification?.xp, 0) > 0 ||
+                            parseDecimal(gamification?.level, 1) > 1 ||
+                            parseDecimal(gamification?.totalMealsLogged, 0) > 0 ||
+                            (trends?.weekSummaries && trends.weekSummaries.length > 0) ||
+                            recentWeight != null;
+
+  const hasAnyData = hasTodayData || hasHistoricalData;
 
   const displayName = user?.firstName
     || user?.fullName?.split(' ')?.[0]
@@ -1064,6 +1123,25 @@ export default function DashboardContent() {
               setNutritionExpanded(false);
               setWellnessExpanded(false);
               setProgressExpanded(false);
+            }
+          }}
+          // Enhanced header props
+          userInitials={user?.firstName?.[0]?.toUpperCase() || user?.fullName?.[0]?.toUpperCase() || 'U'}
+          userImageUrl={user?.imageUrl || null}
+          streak={parseDecimal(gamification?.streak, 0)}
+          todayCalories={parseCalories(today?.nutrition?.totalCalories)}
+          calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
+          waterProgress={calculatePercentage(
+            parseLiters(today?.waterIntakeLiters),
+            parseGoal(goals?.waterLiters, 2.0, 0.5, 10),
+            200
+          )}
+          wellnessScore={wellnessScore?.score ?? null}
+          hasNotifications={allergenWarnings.length > 0}
+          onNotificationPress={() => {
+            // Scroll to allergen warnings or show notification modal
+            if (allergenWarnings.length > 0) {
+              notify.info(`${allergenWarnings.length} allergen warning${allergenWarnings.length > 1 ? 's' : ''} detected`);
             }
           }}
         />
@@ -1116,6 +1194,21 @@ export default function DashboardContent() {
         />
 
         {/* ============================================ */}
+        {/* COMPACT TILES - Glassmorphic quick stats row */}
+        {/* Shows: Macros donut, Hydration bar, Streak pill */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <CompactDashboardTiles
+            today={today}
+            goals={goals}
+            gamification={gamification}
+            onTapMacros={() => setNutritionExpanded(true)}
+            onTapHydration={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+            onTapStreak={() => router.push('/history')}
+          />
+        )}
+
+        {/* ============================================ */}
         {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
         {/* Shows Level, XP progress, Streak with animations */}
         {/* ============================================ */}
@@ -1130,6 +1223,24 @@ export default function DashboardContent() {
         )}
 
         {/* ============================================ */}
+        {/* TODAY'S MEALS TIMELINE - Visual meal history */}
+        {/* Shows: Thumbnails, NutriScores, Micro tags */}
+        {/* ============================================ */}
+        {uniqueFoodLogs.length > 0 && (
+          <TodayMealsTimeline
+            meals={uniqueFoodLogs}
+            onMealPress={(meal) => {
+              router.push({
+                pathname: '/history',
+                params: { mealId: meal.id || meal.clientEventId }
+              });
+            }}
+            onViewAll={() => router.push('/history')}
+            maxItems={4}
+          />
+        )}
+
+        {/* ============================================ */}
         {/* PHASE 3: URGENT ALERTS ONLY */}
         {/* Note: DietaryComplianceCard & CuisineDiversityCard moved to Profile > MyInsightsSection */}
         {/* ============================================ */}
@@ -1139,13 +1250,19 @@ export default function DashboardContent() {
           <AllergenWarningCard warnings={allergenWarnings} />
         )}
 
+        {/* ============================================ */}
+        {/* TODAY'S NUDGE - Single gentle insight */}
+        {/* ============================================ */}
+        <RemainingBudgetCard
+          today={today}
+          goals={goals}
+          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+        />
+
         <DashboardPrimaryCard
           styles={styles}
           today={today}
-          goals={goals}
-          trends={trends}
           data={data}
-          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
         />
 
         {/* ============================================ */}
@@ -1156,36 +1273,28 @@ export default function DashboardContent() {
         {/* NOTE: Wellness Score is now integrated into EnhancedMoodCard in Wellness Section */}
 
         {/* Smart Meal Suggestion - Context-Aware (ALWAYS SHOW) */}
-        <SmartMealSuggestionCard
-          today={today}
-          goals={goals}
-          recentMeals={uniqueFoodLogs}
-          userProfile={userProfile}
-          onSelectSuggestion={(suggestion) => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push({
-              pathname: '/(tabs)/log',
-              params: {
-                focus: 'meal',
-                prefill: suggestion.name
-              }
-            });
-          }}
-          onViewMore={() => router.push('/history')}
-        />
+        {uniqueFoodLogs.length > 0 && (
+          <SmartMealSuggestionCard
+            today={today}
+            goals={goals}
+            recentMeals={uniqueFoodLogs}
+            userProfile={userProfile}
+            onSelectSuggestion={(suggestion) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push({
+                pathname: '/(tabs)/log',
+                params: {
+                  focus: 'meal',
+                  prefill: suggestion.name
+                }
+              });
+            }}
+            onViewMore={() => router.push('/history')}
+          />
+        )}
 
         {/* NOTE: PredictiveInsightsCard and PatternDetectiveCard moved to Insights screen */}
         {/* Staff Design: Dashboard = quick glance. Details = separate screen */}
-
-        {/* ============================================ */}
-        {/* REMAINING BUDGET CARD - Detailed nutrition budget */}
-        {/* ============================================ */}
-        {hasAnyData && (
-          <RemainingBudgetCard
-            today={today}
-            goals={goals}
-          />
-        )}
 
         {/* NOTE: SmartRecommendationsCard removed - consolidated into SmartMealSuggestionCard */}
 
@@ -1872,7 +1981,7 @@ const styles = StyleSheet.create({
   waterValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: COLORS.semantic.info,
+    color: SEMANTIC.info.base,
     marginBottom: SPACING[1],
   },
   waterPercent: {
@@ -1905,13 +2014,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[3],
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.glass.border,
+    borderBottomColor: SURFACES.card.border,
   },
   mealDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.semantic.good,
+    backgroundColor: SEMANTIC.success.base,
     marginRight: SPACING[3],
   },
   mealContent: {

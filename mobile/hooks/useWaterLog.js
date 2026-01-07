@@ -25,6 +25,8 @@ const BEVERAGE_FACTORS = {
   juice: 0.8,
   milk: 0.9,
   electrolyte: 1.1,
+  smoothie: 0.8,
+  alcohol: 0.1,
 };
 
 /**
@@ -109,7 +111,7 @@ export function useWaterLog() {
     }
 
     // Validate beverage type
-    const validBeverageTypes = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte'];
+    const validBeverageTypes = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte', 'smoothie', 'alcohol'];
     if (!validBeverageTypes.includes(beverageType)) {
       console.warn('Invalid beverage type, defaulting to water:', beverageType);
       beverageType = 'water';

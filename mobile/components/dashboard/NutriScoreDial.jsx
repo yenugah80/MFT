@@ -8,7 +8,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TYPOGRAPHY, SPACING } from '../../constants/designTokens';
-import { TEXT, SEMANTIC } from '../../constants/premiumTheme';
+import { SEMANTIC } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 /**
  * Calculate nutrition score for a single day (0-100)
@@ -197,6 +198,11 @@ const NUTRI_SCORE_GRADES = [
  * NutriScore component - Official A-E grade display with historical trends
  */
 export default function NutriScoreDial({ data, showNumericScore = true, showTrends = true, compact = false }) {
+  const { colors, isDark } = useTheme();
+  const textPrimary = colors.text.primary;
+  const textSecondary = colors.text.secondary;
+  const textTertiary = colors.text.tertiary;
+
   const { score, message, historical } = calculateNutriScore(data);
   const currentGrade = scoreToGrade(score);
   const avg7DayGrade = historical ? scoreToGrade(historical.avg7Day) : null;
@@ -213,14 +219,14 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
       {!compact && (
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.title}>Nutri-Score</Text>
-            <Text style={styles.subtitle}>Today</Text>
+            <Text style={[styles.title, { color: textPrimary }]}>Nutri-Score</Text>
+            <Text style={[styles.subtitle, { color: textTertiary }]}>Today</Text>
           </View>
           {showNumericScore && (
             <View style={styles.headerRight}>
-              <Text style={styles.numericScore}>{score}/100</Text>
+              <Text style={[styles.numericScore, { color: textPrimary }]}>{score}/100</Text>
               {historical && showTrends && (
-                <View style={styles.trendBadge}>
+                <View style={[styles.trendBadge, { backgroundColor: isDark ? 'rgba(107, 78, 255, 0.2)' : 'rgba(107, 78, 255, 0.1)' }]}>
                   <Ionicons
                     name={
                       historical.trendDirection === 'improving' ? 'trending-up' :
@@ -231,10 +237,10 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
                     color={
                       historical.trendDirection === 'improving' ? SEMANTIC.success.base :
                       historical.trendDirection === 'declining' ? SEMANTIC.danger.base :
-                      TEXT.tertiary
+                      textTertiary
                     }
                   />
-                  <Text style={styles.trendText}>
+                  <Text style={[styles.trendText, { color: textSecondary }]}>
                     {historical.trendDiff > 0 ? '+' : ''}{historical.trendDiff}
                   </Text>
                 </View>
@@ -283,7 +289,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
       {/* Historical Comparison */}
       {!compact && historical && showTrends && (
         <View style={styles.historicalBar}>
-          <Text style={styles.historicalLabel}>7-day avg: {avg7DayGrade}</Text>
+          <Text style={[styles.historicalLabel, { color: textTertiary }]}>7-day avg: {avg7DayGrade}</Text>
           <View style={styles.historicalMini}>
             {NUTRI_SCORE_GRADES.map((grade) => {
               const isActive = grade.letter === avg7DayGrade;
@@ -305,7 +311,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
 
       {/* Message */}
       {!compact && message && (
-        <Text style={styles.message}>{message}</Text>
+        <Text style={[styles.message, { color: textTertiary }]}>{message}</Text>
       )}
     </View>
   );
@@ -337,19 +343,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
+    // color applied inline for theme support
     letterSpacing: TYPOGRAPHY.letterSpacing.wide,
     textTransform: 'uppercase',
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    // color applied inline for theme support
   },
   numericScore: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
+    // color applied inline for theme support
   },
   trendBadge: {
     flexDirection: 'row',
@@ -363,7 +369,7 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
+    // color applied inline for theme support
   },
   gradeBar: {
     flexDirection: 'row',
@@ -409,7 +415,7 @@ const styles = StyleSheet.create({
   historicalLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    // color applied inline for theme support
   },
   historicalMini: {
     flexDirection: 'row',
@@ -423,7 +429,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    // color applied inline for theme support
     marginTop: SPACING[2],
     textAlign: 'center',
   },

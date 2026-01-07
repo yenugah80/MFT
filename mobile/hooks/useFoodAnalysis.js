@@ -221,17 +221,33 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 /**
- * Parse micronutrient string value
- * @param {string|number} val - Micro value (e.g., "80mg", 80)
+ * Parse micronutrient value
+ * Handles multiple formats:
+ * - New structured format: {value: number, unit: string}
+ * - Number format: 80
+ * - String format: "80mg", "15µg"
+ *
+ * @param {Object|string|number} val - Micro value
  * @returns {Micro|null} Parsed micro with value and unit
  */
 function parseMicronutrient(val) {
   if (val === null || val === undefined) return null;
 
+  // Handle new structured format {value, unit} from backend
+  if (typeof val === 'object' && val.value !== undefined) {
+    const numValue = parseFloat(val.value);
+    if (!isNaN(numValue)) {
+      return { value: numValue, unit: val.unit || '' };
+    }
+    return null;
+  }
+
+  // Handle number format
   if (typeof val === 'number') {
     return { value: val, unit: '' };
   }
 
+  // Handle string format ("80mg", "15µg", etc.)
   if (typeof val !== 'string') return null;
 
   const match = val.match(/([\d.]+)/);
@@ -275,21 +291,43 @@ function buildFoodLog({ inputText, source, raw }) {
     : inputText;
 
   // Extract micronutrients with units
+  // Handles both new format {value, unit} and legacy formats (number or string)
   const micros = {};
-  Object.entries(normalized.micros || {}).forEach(([key, value]) => {
-    // Infer units if not provided
-    let unit = '';
+  Object.entries(normalized.micros || {}).forEach(([key, val]) => {
     const keyLower = key.toLowerCase();
 
-    if (['calcium', 'iron', 'potassium', 'sodium', 'magnesium', 'zinc'].some(m => keyLower.includes(m))) {
-      unit = 'mg';
-    } else if (keyLower.includes('vitamin')) {
-      unit = ['a', 'd', 'e', 'k'].some(v => keyLower.includes(v)) ? 'µg' : 'mg';
-    }
+    // Default units for micronutrients
+    const defaultUnit = (() => {
+      if (['calcium', 'iron', 'potassium', 'sodium', 'magnesium', 'zinc'].some(m => keyLower.includes(m))) {
+        return 'mg';
+      } else if (keyLower.includes('vitamin')) {
+        return ['a', 'd', 'e', 'k'].some(v => keyLower.includes(v)) ? 'µg' : 'mg';
+      }
+      return '';
+    })();
 
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue) && numValue > 0) {
-      micros[key] = { value: parseFloat(numValue.toFixed(2)), unit };
+    // Handle new structured format {value, unit} from backend
+    if (val && typeof val === 'object' && val.value !== undefined) {
+      const numValue = parseFloat(val.value);
+      if (!isNaN(numValue) && numValue > 0) {
+        micros[key] = { value: parseFloat(numValue.toFixed(2)), unit: val.unit || defaultUnit };
+      }
+    }
+    // Handle legacy number format
+    else if (typeof val === 'number') {
+      if (!isNaN(val) && val > 0) {
+        micros[key] = { value: parseFloat(val.toFixed(2)), unit: defaultUnit };
+      }
+    }
+    // Handle legacy string format (e.g., "120mg", "15µg")
+    else if (typeof val === 'string') {
+      const match = val.match(/([\d.]+)\s*([a-zA-Zµ%]*)/);
+      if (match) {
+        const numValue = parseFloat(match[1]);
+        if (!isNaN(numValue) && numValue > 0) {
+          micros[key] = { value: parseFloat(numValue.toFixed(2)), unit: match[2] || defaultUnit };
+        }
+      }
     }
   });
 
@@ -1473,7 +1511,9 @@ export function useFoodAnalysis() {
         setError(errorMsg);
         return;
       }
-      const errorMsg = err.message || 'Photo analysis failed. Please try again.';
+      const errorMsg = typeof err?.message === 'string'
+        ? err.message
+        : 'Photo analysis failed. Please try again.';
       setError(errorMsg);
       throw err;
     } finally {

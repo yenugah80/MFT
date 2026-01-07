@@ -2,30 +2,32 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
-import PremiumRing from './PremiumRing';
 import NutriScoreDial from './NutriScoreDial';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
-import { parseCalories, parseGoal } from '../../utils/safeNumbers';
+import { SURFACES } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 export default function DashboardPrimaryCard({
   styles,
   today,
-  goals,
-  trends,
   data,
-  onLogMeal,
 }) {
+  const { colors, isDark } = useTheme();
+  const textSecondary = colors.text.secondary;
+  const gradientColors = isDark
+    ? ['rgba(107, 78, 255, 0.15)', 'rgba(139, 92, 246, 0.1)']
+    : [SURFACES.gradient.accent[0], SURFACES.gradient.accent[1]];
+  const hasFoodLogs = today?.foodLogs && today.foodLogs.length > 0;
+
   return (
     <LinearGradient
-      colors={[SURFACES.gradient.accent[0], SURFACES.gradient.accent[1]]}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{ borderRadius: 16, marginBottom: 12 }}
     >
       <GlassCard style={[styles.primaryCard, { margin: 2, marginVertical: 2 }]} padding="lg">
-      {today.foodLogs && today.foodLogs.length > 0 ? (
+      {hasFoodLogs ? (
         <View style={styles.primaryContent}>
           <NutriScoreDial data={data} size={180} />
           <Text style={styles.primaryHint}>
@@ -34,32 +36,8 @@ export default function DashboardPrimaryCard({
         </View>
       ) : (
         <View style={styles.primaryContent}>
-          <PremiumRing
-            value={parseCalories(today.nutrition.totalCalories)}
-            goal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
-            label="Calories"
-            unit="kcal"
-            size={180}
-            strokeWidth={16}
-          />
-          {trends.weeklyAverages ? (
-            <Text style={styles.primaryHint}>
-              {`Weekly avg: ${Math.round(parseCalories(trends.weeklyAverages.avgCalories))} kcal/day`}
-            </Text>
-          ) : (
-            <TouchableOpacity
-              style={styles.primaryHintCta}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onLogMeal();
-              }}
-              accessibilityLabel="Log your first meal"
-              accessibilityRole="button"
-            >
-              <Ionicons name="add-circle-outline" size={14} color={TEXT.secondary} />
-              <Text style={styles.primaryHintCtaText}>Log your first meal to unlock your score</Text>
-            </TouchableOpacity>
-          )}
+          <Ionicons name="sparkles-outline" size={26} color={textSecondary} />
+          <Text style={styles.primaryHint}>No pressure today. Log your first meal when you&apos;re ready.</Text>
         </View>
       )}
       </GlassCard>

@@ -50,8 +50,6 @@ export default function DashboardNutritionSection({
           icon="restaurant"
           title="No meals logged yet"
           description="Track your first meal to start building your nutrition insights and discover patterns in your eating habits"
-          actionLabel="Log Your First Meal"
-          onAction={onLogMeal}
           variant="compact"
         />
       )}

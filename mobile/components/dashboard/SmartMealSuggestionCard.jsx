@@ -21,7 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, SURFACES, TEXT, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, SHADOWS } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 /**
  * Get meal type based on current hour
@@ -79,7 +80,7 @@ function generateSuggestions({ remainingCalories, remainingProtein, mealType, re
 /**
  * Suggestion Item Component
  */
-function SuggestionItem({ item, index, onSelect }) {
+function SuggestionItem({ item, index, onSelect, textPrimary, textTertiary, rowBg }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -108,14 +109,14 @@ function SuggestionItem({ item, index, onSelect }) {
       ]}
     >
       <TouchableOpacity
-        style={styles.suggestionRow}
+        style={[styles.suggestionRow, { backgroundColor: rowBg }]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
         <Text style={styles.suggestionEmoji}>{item.icon}</Text>
         <View style={styles.suggestionInfo}>
-          <Text style={styles.suggestionName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.suggestionMeta}>
+          <Text style={[styles.suggestionName, { color: textPrimary }]} numberOfLines={1}>{item.name}</Text>
+          <Text style={[styles.suggestionMeta, { color: textTertiary }]}>
             {item.cal} cal · {item.protein}g protein
           </Text>
         </View>
@@ -138,7 +139,16 @@ export default function SmartMealSuggestionCard({
   onSelectSuggestion,
   onViewMore,
 }) {
+  const { colors, isDark } = useTheme();
   const cardAnim = useRef(new Animated.Value(0)).current;
+
+  // Theme-aware colors
+  const textPrimary = colors.text.primary;
+  const textTertiary = colors.text.tertiary;
+  const cardBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF';
+  const cardBorder = isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.12)';
+  const rowBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0,0,0,0.02)';
+  const viewMoreBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.04)';
 
   // Calculate remaining budget
   const remaining = useMemo(() => {
@@ -178,14 +188,14 @@ export default function SmartMealSuggestionCard({
     <Animated.View
       style={[
         styles.card,
-        { transform: [{ scale: cardAnim }], opacity: cardAnim },
+        { transform: [{ scale: cardAnim }], opacity: cardAnim, backgroundColor: cardBg, borderColor: cardBorder },
       ]}
     >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Ionicons name={mealContext.icon} size={18} color={BRAND.primary} />
-          <Text style={styles.headerTitle}>{mealContext.label}</Text>
+          <Text style={[styles.headerTitle, { color: textPrimary }]}>{mealContext.label}</Text>
         </View>
         <View style={styles.budgetPill}>
           <Text style={styles.budgetText}>{remaining.calories} cal left</Text>
@@ -200,14 +210,17 @@ export default function SmartMealSuggestionCard({
             item={item}
             index={index}
             onSelect={onSelectSuggestion}
+            textPrimary={textPrimary}
+            textTertiary={textTertiary}
+            rowBg={rowBg}
           />
         ))}
       </View>
 
       {/* View more */}
-      <TouchableOpacity style={styles.viewMore} onPress={onViewMore} activeOpacity={0.7}>
-        <Text style={styles.viewMoreText}>Browse more options</Text>
-        <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
+      <TouchableOpacity style={[styles.viewMore, { borderTopColor: viewMoreBorder }]} onPress={onViewMore} activeOpacity={0.7}>
+        <Text style={[styles.viewMoreText, { color: textTertiary }]}>Browse more options</Text>
+        <Ionicons name="chevron-forward" size={14} color={textTertiary} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -217,7 +230,7 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: SPACING[4],
     borderRadius: RADIUS['2xl'],
-    backgroundColor: '#FFFFFF',
+    // backgroundColor and borderColor applied inline for theme support
     padding: SPACING[5],
     // Luxurious shadow
     shadowColor: '#10B981',
@@ -227,7 +240,6 @@ const styles = StyleSheet.create({
     elevation: 10,
     // Premium border
     borderWidth: 1.5,
-    borderColor: 'rgba(16, 185, 129, 0.12)',
   },
 
   // Header
@@ -245,7 +257,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+    // color applied inline for theme support
   },
   budgetPill: {
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -271,7 +283,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[2],
-    backgroundColor: 'rgba(0,0,0,0.02)',
+    // backgroundColor applied inline for theme support
     borderRadius: RADIUS.lg,
   },
   suggestionEmoji: {
@@ -284,12 +296,12 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.primary,
+    // color applied inline for theme support
     marginBottom: 2,
   },
   suggestionMeta: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    // color applied inline for theme support
   },
   addBtn: {
     width: 32,
@@ -309,10 +321,10 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[2],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.04)',
+    // borderTopColor applied inline for theme support
   },
   viewMoreText: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    // color applied inline for theme support
   },
 });

@@ -18,6 +18,8 @@ const BEVERAGE_FACTORS = {
   juice: 0.8,
   milk: 0.9,
   electrolyte: 1.1,
+  smoothie: 0.8,
+  alcohol: 0.1,
 };
 
 /**

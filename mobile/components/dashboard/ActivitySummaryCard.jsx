@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateWeeklyGoalProgress } from '../../utils/activityAnalytics';
+import { TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const STORAGE_KEY = '@activity_log';
 
@@ -65,7 +66,7 @@ export default function ActivitySummaryCard() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0F3D5E', '#1F6F8B']}
+        colors={['#F0FDF4', '#ECFDF5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -73,7 +74,7 @@ export default function ActivitySummaryCard() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <Ionicons name="fitness" size={20} color="#fff" />
+            <Ionicons name="fitness" size={20} color="#10B981" />
             <Text style={styles.title}>Activity</Text>
           </View>
         </View>
@@ -81,7 +82,7 @@ export default function ActivitySummaryCard() {
         {/* Today's Stats */}
         <View style={styles.todayStats}>
           <View style={styles.statItem}>
-            <Ionicons name="flame" size={24} color="#FCD34D" />
+            <Ionicons name="flame" size={24} color="#F59E0B" />
             <Text style={styles.statValue}>{Math.round(todayCalories)}</Text>
             <Text style={styles.statLabel}>kcal today</Text>
           </View>
@@ -89,7 +90,7 @@ export default function ActivitySummaryCard() {
           <View style={styles.divider} />
 
           <View style={styles.statItem}>
-            <Ionicons name="time" size={24} color="#A5F3FC" />
+            <Ionicons name="time" size={24} color="#3B82F6" />
             <Text style={styles.statValue}>{todayDuration}</Text>
             <Text style={styles.statLabel}>min active</Text>
           </View>
@@ -97,7 +98,7 @@ export default function ActivitySummaryCard() {
           <View style={styles.divider} />
 
           <View style={styles.statItem}>
-            <Ionicons name="barbell" size={24} color="#C7D2FE" />
+            <Ionicons name="barbell" size={24} color="#8B5CF6" />
             <Text style={styles.statValue}>{todayActivities.length}</Text>
             <Text style={styles.statLabel}>workout{todayActivities.length !== 1 ? 's' : ''}</Text>
           </View>
@@ -107,7 +108,7 @@ export default function ActivitySummaryCard() {
         <View style={styles.weeklySection}>
           <View style={styles.weeklyHeader}>
             <Text style={styles.weeklyTitle}>Week Progress</Text>
-            <View style={[styles.progressBadge, { backgroundColor: progressColor + '30' }]}>
+            <View style={[styles.progressBadge, { backgroundColor: progressColor + '20' }]}>
               <Text style={[styles.progressPercentage, { color: progressColor }]}>
                 {Math.round(weeklyProgress.percentage)}%
               </Text>
@@ -135,8 +136,8 @@ export default function ActivitySummaryCard() {
           {/* Quick Insight */}
           {weeklyProgress.percentage >= 100 ? (
             <View style={styles.insightRow}>
-              <Ionicons name="trophy" size={16} color="#FCD34D" />
-              <Text style={styles.insightText}>Goal achieved! Keep it up! 🎉</Text>
+              <Ionicons name="trophy" size={16} color="#F59E0B" />
+              <Text style={styles.insightText}>Goal achieved! Keep it up!</Text>
             </View>
           ) : weeklyProgress.percentage >= 80 ? (
             <View style={styles.insightRow}>
@@ -147,7 +148,7 @@ export default function ActivitySummaryCard() {
             </View>
           ) : (
             <View style={styles.insightRow}>
-              <Ionicons name="trending-up" size={16} color="rgba(255,255,255,0.7)" />
+              <Ionicons name="trending-up" size={16} color={TEXT.tertiary} />
               <Text style={styles.insightText}>
                 {weeklyProgress.workoutCount} / {weeklyProgress.workoutGoal} workouts this week
               </Text>
@@ -162,120 +163,122 @@ export default function ActivitySummaryCard() {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: SPACING[4],
   },
   gradient: {
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#0F3D5E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[5],
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    ...SHADOWS.md,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: SPACING[4],
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING[2],
   },
   title: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#fff',
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
   },
   todayStats: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.1)',
   },
   statItem: {
     alignItems: 'center',
     gap: 4,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#fff',
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
     marginTop: 4,
   },
   statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.tertiary,
   },
   divider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
   },
   weeklySection: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.1)',
   },
   weeklyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACING[3],
   },
   weeklyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
   },
   progressBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: SPACING[2],
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: RADIUS.full,
   },
   progressPercentage: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
   progressBarContainer: {
-    marginBottom: 8,
+    marginBottom: SPACING[2],
   },
   progressBarBg: {
     height: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: RADIUS.sm,
     overflow: 'hidden',
     marginBottom: 6,
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: RADIUS.sm,
   },
   progressText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
     textAlign: 'center',
   },
   insightRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 8,
+    paddingTop: SPACING[2],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: 'rgba(16, 185, 129, 0.15)',
   },
   insightText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
     flex: 1,
   },
 });

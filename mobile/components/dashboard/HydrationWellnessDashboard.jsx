@@ -128,6 +128,14 @@ const BEVERAGE_PROFILE = {
     label: 'Electrolyte',
     color: '#0EA5E9',
   },
+  smoothie: {
+    label: 'Smoothie',
+    color: '#EC4899',
+  },
+  alcohol: {
+    label: 'Alcohol',
+    color: '#B45309',
+  },
 };
 
 const normalizeBeverageType = (type) => (type && BEVERAGE_PROFILE[type] ? type : 'water');
@@ -162,10 +170,16 @@ const getBeverageInsight = (summary) => {
   const caffeinatedMl = (totals.coffee || 0) + (totals.tea || 0);
   const juiceMl = totals.juice || 0;
   const electrolyteMl = totals.electrolyte || 0;
+  const smoothieMl = totals.smoothie || 0;
+  const alcoholMl = totals.alcohol || 0;
 
   let note = null;
-  if (caffeinatedMl / totalMl >= 0.5) {
+  if (alcoholMl / totalMl >= 0.2) {
+    note = 'Alcohol shows up today. A glass of water before bed can help tomorrow.';
+  } else if (caffeinatedMl / totalMl >= 0.5) {
     note = 'Caffeinated drinks dominate today. Add water to balance.';
+  } else if (smoothieMl / totalMl >= 0.4) {
+    note = 'Smoothies help, but water keeps hydration steady.';
   } else if (juiceMl / totalMl >= 0.4) {
     note = 'Juice contributes a lot today; it hydrates but can be high in sugar.';
   } else if (electrolyteMl / totalMl >= 0.4) {
@@ -219,6 +233,65 @@ const FEEDBACK_STATUS = {
   LOW_LOGS: 'low_logs',
   AHEAD: 'ahead',
   STEADY: 'steady',
+};
+
+const getHydrationInsightCandidate = ({
+  summary,
+  feedbackStatus,
+  logCountToday,
+  largestGapMinutesToday,
+}) => {
+  if (!summary || summary.totalMl <= 0) return null;
+
+  const { totalMl, totals } = summary;
+  const caffeinatedMl = (totals.coffee || 0) + (totals.tea || 0);
+  const alcoholMl = totals.alcohol || 0;
+  const electrolyteMl = totals.electrolyte || 0;
+  const smoothieMl = totals.smoothie || 0;
+
+  if (alcoholMl / totalMl >= 0.2) {
+    return 'Alcohol shows up today. A glass of water before bed can help tomorrow.';
+  }
+  if (caffeinatedMl / totalMl >= 0.5) {
+    return 'Lots of coffee today; a bit of water later might feel good.';
+  }
+  if (electrolyteMl / totalMl >= 0.35) {
+    return 'Electrolytes help after heavy sweat; keep water steady too.';
+  }
+  if (smoothieMl / totalMl >= 0.4) {
+    return 'Smoothies help, but water keeps hydration steady.';
+  }
+
+  const steadyRhythm = [FEEDBACK_STATUS.STEADY, FEEDBACK_STATUS.AHEAD, FEEDBACK_STATUS.GOAL].includes(feedbackStatus)
+    && logCountToday >= 3
+    && (!Number.isFinite(largestGapMinutesToday) || largestGapMinutesToday <= 150);
+
+  if (steadyRhythm) {
+    return 'Steady hydration today; nice balance across the day.';
+  }
+
+  return null;
+};
+
+const getHydrationLeadMessage = (insight, feedbackStatus) => {
+  if (insight) return insight;
+
+  switch (feedbackStatus) {
+    case FEEDBACK_STATUS.NO_LOG:
+      return 'No drinks logged yet. A quick glass can start your rhythm.';
+    case FEEDBACK_STATUS.GOAL:
+      return 'Hydration looks strong today. Keep it steady.';
+    case FEEDBACK_STATUS.AHEAD:
+      return 'You are ahead of pace. Small sips keep it smooth.';
+    case FEEDBACK_STATUS.BEHIND:
+      return 'A little water now can help you catch up.';
+    case FEEDBACK_STATUS.RHYTHM:
+      return 'Spacing drinks out helps hydration feel better.';
+    case FEEDBACK_STATUS.LOW_LOGS:
+      return 'A couple more drinks will smooth out your day.';
+    default:
+      return 'Steady pacing so far. Keep it consistent.';
+  }
 };
 
 const normalizeHour = (hour) => {
@@ -969,6 +1042,12 @@ export default function HydrationWellnessDashboard({
     usesEventSource,
     yesterdayMl,
   });
+  const insightCandidate = useMemo(() => getHydrationInsightCandidate({
+    summary: beverageSummary,
+    feedbackStatus: feedback.status,
+    logCountToday,
+    largestGapMinutesToday,
+  }), [beverageSummary, feedback.status, logCountToday, largestGapMinutesToday]);
 
   const rhythmAdjustedMetrics = applyRhythmPenalty(
     baseMetrics,
@@ -992,11 +1071,16 @@ export default function HydrationWellnessDashboard({
   const [metricDeltaNote, setMetricDeltaNote] = useState(null);
   const [activeSection, setActiveSection] = useState('physical');
   const [showInsights, setShowInsights] = useState(false);
+  const [dailyInsight, setDailyInsight] = useState(null);
   const isCompact = SCREEN_WIDTH < 360;
   const previousMetricsRef = useRef(null);
   const previousPercentageRef = useRef(percentage);
   const lastSnapshotRef = useRef(null);
   const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+  const leadMessage = useMemo(
+    () => getHydrationLeadMessage(dailyInsight, feedback.status),
+    [dailyInsight, feedback.status]
+  );
 
   // PRODUCTION FIX: Celebration logic - no state in deps to prevent infinite loops
   // Uses ref-based guard (previousPercentageRef) + prop-based guard (celebratedTodayKey)
@@ -1021,6 +1105,36 @@ export default function HydrationWellnessDashboard({
       console.warn('Invalid hydration streak');
     }
   }, [streak]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadDailyInsight = async () => {
+      const stored = await getItem(STORAGE_KEYS.HYDRATION_DAILY_INSIGHT);
+      if (!isActive) return;
+
+      if (stored?.dateKey === todayKey && typeof stored?.message === 'string') {
+        setDailyInsight(stored.message);
+        return;
+      }
+
+      if (insightCandidate) {
+        setDailyInsight(insightCandidate);
+        await setItem(STORAGE_KEYS.HYDRATION_DAILY_INSIGHT, {
+          dateKey: todayKey,
+          message: insightCandidate,
+        });
+      } else {
+        setDailyInsight(null);
+      }
+    };
+
+    loadDailyInsight();
+
+    return () => {
+      isActive = false;
+    };
+  }, [insightCandidate, todayKey]);
 
   useEffect(() => {
     const nowTime = Date.now();
@@ -1090,9 +1204,10 @@ export default function HydrationWellnessDashboard({
           <WaveProgress percentage={percentage} size={isCompact ? 120 : 140} />
 
           <View style={styles.mainStats}>
-            <View style={styles.statRow}>
-              <Text style={styles.mainValue}>{currentMl}ml</Text>
-              <Text style={styles.mainLabel}>/ {goalMl}ml</Text>
+            <Text style={styles.mainInsight}>{leadMessage}</Text>
+            <View style={styles.statRowSecondary}>
+              <Text style={styles.mainValueSecondary}>{currentMl}ml</Text>
+              <Text style={styles.mainLabel}>of {goalMl}ml</Text>
             </View>
             <Text style={styles.remainingText}>
               {remaining > 0 ? `${remaining}ml to goal` : '🎉 Goal reached!'}
@@ -1452,13 +1567,19 @@ const styles = StyleSheet.create({
   mainStats: {
     flex: 1,
   },
-  statRow: {
+  statRowSecondary: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: SPACING[1],
   },
-  mainValue: {
-    fontSize: TYPOGRAPHY.size['3xl'],
+  mainInsight: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+    marginBottom: SPACING[2],
+  },
+  mainValueSecondary: {
+    fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: SEMANTIC.info.base,
   },

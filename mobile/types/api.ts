@@ -37,6 +37,14 @@ export interface NutritionGoals {
   updatedAt: string;
 }
 
+/**
+ * Micronutrient value with unit
+ */
+export interface MicronutrientValue {
+  value: number;
+  unit: string;
+}
+
 export interface FoodLog {
   id: number;
   userId: string;
@@ -47,7 +55,7 @@ export interface FoodLog {
   fats: number | null;
   servingSize: string | null;
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | null;
-  micros: Record<string, string>;
+  micros: Record<string, MicronutrientValue>;
   nutriscore: 'A' | 'B' | 'C' | 'D' | 'E' | null;
   ecoscore: 'A' | 'B' | 'C' | 'D' | 'E' | null;
   novaScore: 1 | 2 | 3 | 4 | null;
@@ -62,7 +70,13 @@ export interface FoodLog {
 
 export interface Ingredient {
   name: string;
-  amount: string;
+  amount?: string;
+  portion?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  isMainIngredient?: boolean;
 }
 
 export interface DailyNutritionSummary {
@@ -133,6 +147,10 @@ export interface Gamification {
   level: number;
   streak: number;
   badges: string[];
+  streakFreezes: number;
+  totalMealsLogged: number;
+  nextLevelXp: number;
+  freezeConsumed: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -188,6 +206,7 @@ export interface TodayNutrition {
   totalProtein: number;
   totalCarbs: number;
   totalFats: number;
+  micros?: Record<string, MicronutrientValue>;
 }
 
 export interface WeeklyAverages {

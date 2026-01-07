@@ -18,15 +18,14 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-na
 
 import GlassCard from './GlassCard';
 import {
-  TEXT,
   SEMANTIC,
   TYPOGRAPHY,
   SPACING,
   RADIUS,
   ICON_SIZES,
-  SURFACES,
   BRAND,
 } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -35,10 +34,12 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 // ============================================================================
 
 const MiniProgressRing = ({ percentage, size = 60 }) => {
+  const { isDark } = useTheme();
   const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const bgStroke = isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)';
 
   return (
     <View style={{ width: size, height: size }}>
@@ -56,7 +57,7 @@ const MiniProgressRing = ({ percentage, size = 60 }) => {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(59, 130, 246, 0.1)"
+          stroke={bgStroke}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -96,6 +97,15 @@ export default function EnhancedHydrationCard({
   onQuickAdd,
   onOpenFull,
 }) {
+  const { colors, isDark } = useTheme();
+
+  // Theme-aware colors
+  const textPrimary = colors.text.primary;
+  const textSecondary = colors.text.secondary;
+  const textMuted = colors.text.muted || colors.text.tertiary;
+  const moreButtonBg = isDark ? 'rgba(107, 78, 255, 0.15)' : 'rgba(107, 78, 255, 0.08)';
+  const entryPillBg = isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)';
+
   const percentage = Math.min((currentIntake / goal) * 100, 100);
   const currentMl = Math.round(currentIntake * 1000);
   const goalMl = Math.round(goal * 1000);
@@ -122,7 +132,7 @@ export default function EnhancedHydrationCard({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Ionicons name="water" size={ICON_SIZES.lg} color={SEMANTIC.info.base} />
-          <Text style={styles.title}>Hydration</Text>
+          <Text style={[styles.title, { color: textPrimary }]}>Hydration</Text>
         </View>
         {streak > 2 && (
           <View style={styles.streakBadge}>
@@ -139,9 +149,9 @@ export default function EnhancedHydrationCard({
         <View style={styles.statsContainer}>
           <View style={styles.statRow}>
             <Text style={styles.statValue}>{currentMl}ml</Text>
-            <Text style={styles.statLabel}>/ {goalMl}ml</Text>
+            <Text style={[styles.statLabel, { color: textMuted }]}>/ {goalMl}ml</Text>
           </View>
-          <Text style={styles.remainingText}>
+          <Text style={[styles.remainingText, { color: textSecondary }]}>
             {goalReached ? '🎉 Goal achieved!' : `${remaining}ml remaining`}
           </Text>
         </View>
@@ -182,7 +192,7 @@ export default function EnhancedHydrationCard({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.moreButton}
+          style={[styles.moreButton, { backgroundColor: moreButtonBg }]}
           onPress={handleOpenFull}
           activeOpacity={0.8}
         >
@@ -193,14 +203,14 @@ export default function EnhancedHydrationCard({
       {/* Recent Entries Preview */}
       {recentEntries.length > 0 && (
         <View style={styles.recentEntries}>
-          <Text style={styles.recentLabel}>Recent</Text>
+          <Text style={[styles.recentLabel, { color: textMuted }]}>Recent</Text>
           <View style={styles.entryPills}>
             {recentEntries.slice(0, 3).map((entry, index) => {
               const emoji = entry.type === 'water' ? '💧' : entry.type === 'coffee' ? '☕' : '🍵';
               const timeAgo = getTimeAgo(entry.timestamp);
 
               return (
-                <View key={index} style={styles.entryPill}>
+                <View key={index} style={[styles.entryPill, { backgroundColor: entryPillBg }]}>
                   <Text style={styles.entryPillText}>
                     {emoji} {entry.amount}ml • {timeAgo}
                   </Text>
@@ -246,7 +256,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+    // color applied inline for theme support
   },
   streakBadge: {
     flexDirection: 'row',
@@ -297,11 +307,11 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.muted,
+    // color applied inline for theme support
   },
   remainingText: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
+    // color applied inline for theme support
     marginTop: SPACING[1],
   },
   quickAddRow: {
@@ -331,7 +341,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: RADIUS.lg,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    // backgroundColor applied inline for theme support
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -341,7 +351,7 @@ const styles = StyleSheet.create({
   recentLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.muted,
+    // color applied inline for theme support
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: SPACING[2],
@@ -352,7 +362,7 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
   },
   entryPill: {
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    // backgroundColor applied inline for theme support
     paddingVertical: SPACING[1],
     paddingHorizontal: SPACING[2],
     borderRadius: RADIUS.full,

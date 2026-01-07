@@ -1,31 +1,22 @@
 /**
- * RemainingBudgetCard - Shows remaining nutrition budget for the day
- * Provides visual progress and actionable insights
+ * RemainingBudgetCard - Single gentle nudge (no lists, no scores)
  */
 
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BRAND, SURFACES, TEXT, SPACING, SHADOWS } from '../../constants/premiumTheme';
 
-export default function RemainingBudgetCard({ today = {}, goals = {} }) {
+export default function RemainingBudgetCard({ today = {}, goals = {}, onLogMeal }) {
   // Calculate remaining budget
   const budgets = useMemo(() => {
     const nutrition = today?.nutrition || {};
     const waterIntake = today?.waterIntakeLiters || 0;
 
     const dailyCalories = goals?.dailyCalories || 2000;
-    const proteinG = goals?.proteinG || 150;
-    const carbsG = goals?.carbsG || 225;
-    const fatsG = goals?.fatsG || 65;
     const waterLiters = goals?.waterLiters || 2.0;
 
     const consumedCalories = nutrition?.totalCalories || 0;
-    const consumedProtein = nutrition?.totalProtein || 0;
-    const consumedCarbs = nutrition?.totalCarbs || 0;
-    const consumedFats = nutrition?.totalFats || 0;
-
     return {
       calories: {
         remaining: Math.max(0, dailyCalories - consumedCalories),
@@ -33,27 +24,6 @@ export default function RemainingBudgetCard({ today = {}, goals = {} }) {
         consumed: consumedCalories,
         percent: Math.min(100, (consumedCalories / dailyCalories) * 100),
         status: consumedCalories > dailyCalories ? 'over' : 'on-track',
-      },
-      protein: {
-        remaining: Math.max(0, proteinG - consumedProtein),
-        total: proteinG,
-        consumed: consumedProtein,
-        percent: Math.min(100, (consumedProtein / proteinG) * 100),
-        status: consumedProtein > proteinG ? 'over' : 'on-track',
-      },
-      carbs: {
-        remaining: Math.max(0, carbsG - consumedCarbs),
-        total: carbsG,
-        consumed: consumedCarbs,
-        percent: Math.min(100, (consumedCarbs / carbsG) * 100),
-        status: consumedCarbs > carbsG ? 'over' : 'on-track',
-      },
-      fats: {
-        remaining: Math.max(0, fatsG - consumedFats),
-        total: fatsG,
-        consumed: consumedFats,
-        percent: Math.min(100, (consumedFats / fatsG) * 100),
-        status: consumedFats > fatsG ? 'over' : 'on-track',
       },
       water: {
         remaining: Math.max(0, waterLiters - waterIntake),
@@ -65,126 +35,78 @@ export default function RemainingBudgetCard({ today = {}, goals = {} }) {
     };
   }, [today, goals]);
 
-  const getNutrientColor = (nutrient) => {
-    if (nutrient.status === 'over') return ['#FCA5A5', '#EF4444'];
-    if (nutrient.status === 'complete') return ['#86EFAC', '#22C55E'];
-    return [BRAND.primary, BRAND.secondary];
+  const getNudge = () => {
+    const hydrationRatio = budgets.water.total > 0
+      ? budgets.water.consumed / budgets.water.total
+      : 0;
+    const caloriesRatio = budgets.calories.total > 0
+      ? budgets.calories.consumed / budgets.calories.total
+      : 0;
+
+    if (hydrationRatio > 0 && hydrationRatio < 0.6) {
+      return {
+        title: "Today’s nudge",
+        message: 'Hydration is still early today. A small glass now could help later.',
+        icon: 'water-outline',
+        actionLabel: null,
+      };
+    }
+
+    if (caloriesRatio > 0 && caloriesRatio < 0.4) {
+      return {
+        title: "Today’s nudge",
+        message: 'You have not logged much food yet. A simple snack would be a good start.',
+        icon: 'restaurant-outline',
+        actionLabel: 'Log a meal',
+      };
+    }
+
+    if (caloriesRatio >= 1.05) {
+      return {
+        title: "Today’s nudge",
+        message: 'You have logged plenty today. A lighter option can feel good.',
+        icon: 'sparkles-outline',
+        actionLabel: null,
+      };
+    }
+
+    return {
+      title: "Today’s nudge",
+      message: 'No pressure today. Log one thing when you’re ready.',
+      icon: 'leaf-outline',
+      actionLabel: 'Log a meal',
+    };
   };
 
-  const NutrientBar = ({ label, nutrient, unit, icon }) => (
-    <View style={styles.nutrientContainer}>
-      <View style={styles.nutrientHeader}>
-        <View style={styles.labelRow}>
-          <Ionicons name={icon} size={18} color={BRAND.primary} />
-          <Text style={styles.nutrientLabel}>{label}</Text>
-        </View>
-        <Text style={styles.nutrientValue}>
-          {Math.round(nutrient.remaining)}{unit} left
-        </Text>
-      </View>
-
-      <View style={styles.progressContainer}>
-        <LinearGradient
-          colors={getNutrientColor(nutrient)}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[
-            styles.progressBar,
-            { width: `${nutrient.percent}%` },
-          ]}
-        />
-      </View>
-
-      <View style={styles.nutrientFooter}>
-        <Text style={styles.consumedText}>
-          {Math.round(nutrient.consumed)}{unit} / {Math.round(nutrient.total)}{unit}
-        </Text>
-        <Text style={[
-          styles.statusText,
-          { color: nutrient.status === 'over' ? '#EF4444' : '#22C55E' }
-        ]}>
-          {nutrient.status === 'over' ? '⚠️ Over' : '✓ On Track'}
-        </Text>
-      </View>
-    </View>
-  );
+  const nudge = getNudge();
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[SURFACES.gradient.primary[0], SURFACES.gradient.primary[1]]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.card}
-      >
-        {/* Header */}
+      <View style={styles.card}>
         <View style={styles.header}>
-          <Ionicons name="speedometer-outline" size={24} color={TEXT.white} />
-          <Text style={styles.title}>{"Today's Remaining Budget"}</Text>
+          <View style={styles.headerIcon}>
+            <Ionicons name={nudge.icon} size={18} color={BRAND.primary} />
+          </View>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>{nudge.title}</Text>
+            <Text style={styles.subtitle}>Soft guidance, no pressure</Text>
+          </View>
         </View>
 
-        {/* Nutrition Bars */}
-        <View style={styles.nutrientsGrid}>
-          <NutrientBar
-            label="Calories"
-            nutrient={budgets.calories}
-            unit=" kcal"
-            icon="flame-outline"
-          />
-          <NutrientBar
-            label="Protein"
-            nutrient={budgets.protein}
-            unit="g"
-            icon="barbell-outline"
-          />
-          <NutrientBar
-            label="Carbs"
-            nutrient={budgets.carbs}
-            unit="g"
-            icon="nutrition-outline"
-          />
-          <NutrientBar
-            label="Fats"
-            nutrient={budgets.fats}
-            unit="g"
-            icon="water-outline"
-          />
-          <NutrientBar
-            label="Water"
-            nutrient={budgets.water}
-            unit="L"
-            icon="water"
-          />
-        </View>
-
-        {/* Quick Insights */}
-        <View style={styles.insightsContainer}>
-          {budgets.calories.remaining < 200 && (
-            <View style={styles.insight}>
-              <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
-              <Text style={styles.insightText}>
-                Only {Math.round(budgets.calories.remaining)} calories remaining
-              </Text>
-            </View>
-          )}
-          {budgets.protein.remaining > 50 && (
-            <View style={styles.insight}>
-              <Ionicons name="bulb-outline" size={16} color="#F59E0B" />
-              <Text style={styles.insightText}>
-                You need {Math.round(budgets.protein.remaining)}g more protein
-              </Text>
-            </View>
-          )}
-          {budgets.water.remaining > 1 && (
-            <View style={styles.insight}>
-              <Ionicons name="water-outline" size={16} color="#3B82F6" />
-              <Text style={styles.insightText}>
-                Drink {Math.round(budgets.water.remaining * 1000)}ml more water
-              </Text>
-            </View>
-          )}
-        </View>
-      </LinearGradient>
+        <Text style={styles.summaryText}>{nudge.message}</Text>
+        {nudge.actionLabel && onLogMeal && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={onLogMeal}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={nudge.actionLabel}
+          >
+            <Ionicons name="add-circle-outline" size={16} color={BRAND.primary} />
+            <Text style={styles.actionText}>{nudge.actionLabel}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -195,90 +117,59 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.md,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 18,
     padding: SPACING.lg,
-    backgroundColor: SURFACES.background.primary,
-    ...SHADOWS.lg,
+    backgroundColor: SURFACES.card.primary,
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+    ...SHADOWS.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  headerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${BRAND.primary}12`,
+  },
+  headerCopy: {
+    gap: 2,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: TEXT.white,
-    marginLeft: SPACING.sm,
+    color: TEXT.primary,
   },
-  nutrientsGrid: {
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  nutrientContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: SPACING.md,
-    backdropFilter: 'blur(10px)',
-  },
-  nutrientHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  nutrientLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: TEXT.white,
-  },
-  nutrientValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4ADE80', // Bright green for visibility on gradient
-  },
-  progressContainer: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: SPACING.sm,
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  nutrientFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  consumedText: {
+  subtitle: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: TEXT.tertiary,
   },
-  statusText: {
+  summaryText: {
+    fontSize: 15,
+    color: TEXT.secondary,
+  },
+  actionButton: {
+    marginTop: SPACING.sm,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: `${BRAND.primary}30`,
+    backgroundColor: `${BRAND.primary}08`,
+  },
+  actionText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  insightsContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: SPACING.md,
-    gap: SPACING.sm,
-  },
-  insight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  insightText: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.85)',
-    flex: 1,
+    color: BRAND.primary,
   },
 });

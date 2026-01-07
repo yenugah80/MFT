@@ -3,9 +3,18 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
-import InsightsCard from './InsightsCard';
+import InsightNudge from './InsightNudge';
 import { BRAND, ICONS, ICON_SIZES } from '../../constants/premiumTheme';
 
+/**
+ * DashboardInsightsSection
+ *
+ * Displays insights in two ways:
+ * 1. Subtle nudges (InsightNudge) - for welcome messages, gentle reminders
+ * 2. Cards (GlassCard) - only for important anomalies that need attention
+ *
+ * This follows UX best practices: non-intrusive, dismissible, doesn't overwhelm
+ */
 export default function DashboardInsightsSection({
   styles,
   smartInsights,
@@ -16,16 +25,38 @@ export default function DashboardInsightsSection({
     return null;
   }
 
+  // Separate welcome/gentle insights from actionable ones
+  const welcomeInsights = smartInsights.filter(i => i.type === 'welcome' || i.type === 'info');
+  const actionableInsights = smartInsights.filter(i => i.type !== 'welcome' && i.type !== 'info');
+
   return (
     <>
-      {smartInsights.length > 0 && (
-        <InsightsCard
-          insights={smartInsights}
-          onActionPress={onInsightAction}
+      {/* Subtle nudges for welcome messages and gentle reminders */}
+      {welcomeInsights.map((insight, index) => (
+        <InsightNudge
+          key={`nudge-${index}`}
+          icon={insight.icon}
+          message={insight.message}
+          actionLabel={insight.action}
+          onAction={() => onInsightAction(insight)}
+          type="welcome"
         />
-      )}
+      ))}
 
-      {dataAnomalies.length > 0 && (
+      {/* Subtle nudges for other non-critical insights */}
+      {actionableInsights.map((insight, index) => (
+        <InsightNudge
+          key={`insight-${index}`}
+          icon={insight.icon}
+          message={insight.title || insight.message}
+          actionLabel={insight.action}
+          onAction={() => onInsightAction(insight)}
+          type={insight.type === 'reminder' ? 'reminder' : 'default'}
+        />
+      ))}
+
+      {/* Only show large card for truly important anomalies */}
+      {dataAnomalies.length > 0 && dataAnomalies[0].tone === 'warning' && (
         <GlassCard style={styles.infoCard} padding="md">
           <View style={styles.anomalyHeader}>
             <View style={styles.iconContainer}>
@@ -69,6 +100,18 @@ export default function DashboardInsightsSection({
           </View>
         </GlassCard>
       )}
+
+      {/* Non-warning anomalies as nudges too */}
+      {dataAnomalies.filter(a => a.tone !== 'warning').map((anomaly, index) => (
+        <InsightNudge
+          key={`anomaly-${index}`}
+          icon={anomaly.icon}
+          message={anomaly.message}
+          actionLabel={anomaly.actionLabel}
+          onAction={anomaly.action}
+          type={anomaly.tone === 'success' ? 'success' : 'reminder'}
+        />
+      ))}
     </>
   );
 }

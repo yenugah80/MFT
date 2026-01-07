@@ -16,14 +16,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import GlassCard from './GlassCard';
 import {
-  TEXT,
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  SURFACES,
   SHADOWS,
-  BRAND
+  BRAND,
+  SURFACES,
+  TEXT,
 } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const { width, height } = Dimensions.get('window');
@@ -189,6 +190,14 @@ export default function PremiumAchievementsCard({
   nextLevelXp, // Can be passed from backend or calculated
   streakFreezes = 0,
 }) {
+  const { colors, isDark } = useTheme();
+
+  // Theme-aware colors
+  const textPrimary = colors.text.primary;
+  const textSecondary = colors.text.secondary;
+  const textMuted = colors.text.muted || colors.text.tertiary;
+  const dividerBg = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.05)';
+
   // Calculate XP for current level
   const calculatedNextLevelXp = nextLevelXp || getNextLevelXp(level);
 
@@ -295,7 +304,7 @@ export default function PremiumAchievementsCard({
     />
     <GlassCard padding="lg" style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.sectionTitle}>Achievements</Text>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>Achievements</Text>
         <View style={styles.rankBadge}>
           <Text style={styles.rankText}>{rankTitle}</Text>
         </View>
@@ -317,7 +326,7 @@ export default function PremiumAchievementsCard({
                 cx={size / 2}
                 cy={size / 2}
                 r={radius}
-                stroke="rgba(245, 158, 11, 0.1)"
+                stroke={isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.1)'}
                 strokeWidth={strokeWidth}
                 fill="none"
               />
@@ -339,20 +348,20 @@ export default function PremiumAchievementsCard({
             {/* Center Level Display */}
             <View style={styles.levelCenter}>
               <Text style={styles.levelLabel}>LEVEL</Text>
-              <Text style={styles.levelValue}>{level}</Text>
+              <Text style={[styles.levelValue, { color: textPrimary }]}>{level}</Text>
             </View>
           </View>
-          
-          <Text style={styles.xpText}>
+
+          <Text style={[styles.xpText, { color: textSecondary }]}>
             {Math.round(safeXp)} / {safeTarget} XP
           </Text>
-          <Text style={styles.totalXpText}>
+          <Text style={[styles.totalXpText, { color: textMuted }]}>
             {Math.max(0, Math.round(safeTarget - safeXp)).toLocaleString()} XP to Level {level + 1}
           </Text>
         </View>
 
         {/* DIVIDER */}
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: dividerBg }]} />
 
         {/* RIGHT: Streak Display */}
         <View style={styles.streakSection}>
@@ -376,8 +385,8 @@ export default function PremiumAchievementsCard({
           </View>
 
           <View style={styles.streakTextContainer}>
-            <Text style={styles.streakValue}>{streak}</Text>
-            <Text style={styles.streakLabel}>Day Streak</Text>
+            <Text style={[styles.streakValue, { color: textPrimary }]}>{streak}</Text>
+            <Text style={[styles.streakLabel, { color: textSecondary }]}>Day Streak</Text>
           </View>
 
           {streakFreezes > 0 && (
@@ -388,7 +397,7 @@ export default function PremiumAchievementsCard({
           )}
 
           <View style={styles.streakMessageContainer}>
-            <Text style={styles.streakMessage}>
+            <Text style={[styles.streakMessage, { color: textMuted }]}>
               {streakMessage}
             </Text>
           </View>

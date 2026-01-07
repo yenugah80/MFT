@@ -150,6 +150,7 @@ function validateIngredients(value) {
 /**
  * Normalize micronutrients object
  * Converts camelCase keys (vitaminA) to snake_case (vitamin_a) for consistency
+ * Returns structured {value: number, unit: string} objects for proper aggregation
  */
 function normalizeMicronutrients(value) {
   if (!value || typeof value !== 'object') {
@@ -181,34 +182,70 @@ function normalizeMicronutrients(value) {
     'folate': 'folate',
   };
 
+  // Default units for micronutrients (used when unit not provided)
+  const defaultUnits = {
+    'vitamin_a': 'µg',
+    'vitamin_c': 'mg',
+    'vitamin_d': 'µg',
+    'vitamin_e': 'mg',
+    'vitamin_k': 'µg',
+    'vitamin_b12': 'µg',
+    'calcium': 'mg',
+    'iron': 'mg',
+    'magnesium': 'mg',
+    'potassium': 'mg',
+    'zinc': 'mg',
+    'sodium': 'mg',
+    'folate': 'µg',
+  };
+
   const normalized = {};
 
   for (const [inputKey, normalizedKey] of Object.entries(keyMapping)) {
-    if (value[inputKey]) {
-      // Parse the value (could be "120mg", "15% DV", or numeric)
+    if (value[inputKey] !== undefined && value[inputKey] !== null) {
       const rawValue = value[inputKey];
-      let microValue;
+      let numericValue = null;
+      let unit = defaultUnits[normalizedKey] || '';
 
-      if (typeof rawValue === 'string') {
-        microValue = rawValue.trim();
-      } else if (typeof rawValue === 'number') {
-        microValue = String(rawValue);
-      } else {
-        continue; // Skip invalid types
+      // Handle already structured format {value, unit}
+      if (typeof rawValue === 'object' && rawValue.value !== undefined) {
+        numericValue = parseFloat(rawValue.value);
+        unit = rawValue.unit || unit;
       }
+      // Handle numeric values
+      else if (typeof rawValue === 'number') {
+        numericValue = rawValue;
+      }
+      // Handle string values like "120mg", "15µg", "15% DV"
+      else if (typeof rawValue === 'string') {
+        const trimmed = rawValue.trim();
 
-      if (microValue.length > 0 && microValue.length < 50) {
-        // Convert "15% DV" format to numeric value if possible
-        if (microValue.includes('%')) {
-          // Extract percentage and convert to actual amount
-          // Note: This is a rough estimation - client can refine
-          const percentMatch = microValue.match(/(\d+(?:\.\d+)?)\s*%/);
+        // Handle percentage DV format (convert to approximate absolute value)
+        if (trimmed.includes('%')) {
+          const percentMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*%/);
           if (percentMatch) {
-            normalized[normalizedKey] = microValue; // Keep as-is for now, client handles it
+            // Store as percentage with DV unit for frontend to handle
+            numericValue = parseFloat(percentMatch[1]);
+            unit = '% DV';
           }
         } else {
-          normalized[normalizedKey] = microValue;
+          // Extract numeric value and unit from strings like "120mg", "15µg"
+          const numMatch = trimmed.match(/^([\d.]+)\s*([a-zA-Zµ]*)/);
+          if (numMatch) {
+            numericValue = parseFloat(numMatch[1]);
+            if (numMatch[2]) {
+              unit = numMatch[2];
+            }
+          }
         }
+      }
+
+      // Only add if we got a valid numeric value
+      if (numericValue !== null && !isNaN(numericValue) && numericValue >= 0) {
+        normalized[normalizedKey] = {
+          value: Math.round(numericValue * 100) / 100, // Round to 2 decimals
+          unit: unit,
+        };
       }
     }
   }

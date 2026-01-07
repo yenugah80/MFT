@@ -8,7 +8,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { TYPOGRAPHY, detectDataState, formatters } from '../../constants/designTokens';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 /**
  * @param {Object} props
@@ -27,6 +27,11 @@ export default function PremiumRing({
   size = 140,
   strokeWidth = 12,
 }) {
+  const { colors, isDark } = useTheme();
+  const textTertiary = colors.text.tertiary;
+  const textMuted = colors.text.muted || colors.text.tertiary;
+  const trackColor = isDark ? 'rgba(255, 255, 255, 0.1)' : colors.surface?.card?.border || 'rgba(0,0,0,0.08)';
+
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -58,7 +63,7 @@ export default function PremiumRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={SURFACES.card.border}
+          stroke={trackColor}
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"
@@ -85,12 +90,12 @@ export default function PremiumRing({
           {centerText.primary}
         </Text>
         {centerText.secondary && (
-          <Text style={styles.centerSecondary}>
+          <Text style={[styles.centerSecondary, { color: textTertiary }]}>
             {centerText.secondary}
           </Text>
         )}
         {label && (
-          <Text style={styles.centerLabel}>{label}</Text>
+          <Text style={[styles.centerLabel, { color: textMuted }]}>{label}</Text>
         )}
       </View>
     </View>
@@ -169,13 +174,13 @@ const styles = StyleSheet.create({
   centerSecondary: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.tertiary,
+    // color applied inline for theme support
     marginTop: 2,
   },
   centerLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.muted,
+    // color applied inline for theme support
     marginTop: 4,
     textTransform: 'uppercase',
     letterSpacing: TYPOGRAPHY.letterSpacing.wider,

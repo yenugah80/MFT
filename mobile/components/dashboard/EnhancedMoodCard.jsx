@@ -24,7 +24,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 import {
-  TEXT,
   TYPOGRAPHY,
   SPACING,
   RADIUS,
@@ -32,7 +31,9 @@ import {
   ICON_SIZES,
   MOOD_PALETTE,
   BRAND,
+  TEXT,
 } from '../../constants/premiumTheme';
+import { useTheme } from '../../providers/ThemeProvider';
 
 import MoodIcon3D from '../MoodTracker/MoodIcon3D';
 
@@ -129,11 +130,30 @@ const EnhancedMoodCard = ({
   wellnessScore = null,
   onOpenInsights,
 }) => {
+  const { colors, isDark } = useTheme();
+
+  // Theme-aware colors
+  const textPrimary = colors.text.primary;
+  const textSecondary = colors.text.secondary;
+  const textTertiary = colors.text.tertiary;
+  const textMuted = colors.text.muted || textTertiary;
+
+  // Theme-aware backgrounds
+  const containerBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F6F8FC';
+  const sectionBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#F8FAFE';
+  const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0';
+  const statsGridBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#F3F6FB';
+  const hintBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F3F6FB';
+  const pillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : '#EEF2F6';
+  const confidencePillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0';
+
   const latestMood = insights?.latestMood || null;
   const moodColors = latestMood?.mood
     ? MOOD_PALETTE[latestMood.mood]
     : MOOD_PALETTE.neutral;
-  const pastelGradient = getPastelGradient(latestMood?.mood);
+  const pastelGradient = isDark
+    ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']
+    : getPastelGradient(latestMood?.mood);
   const lastLoggedLabel = useMemo(() => formatLastLogged(latestMood?.loggedDate), [latestMood?.loggedDate]);
   const stats = insights?.stats || null;
   const trendData = insights?.trendData || [];
@@ -144,23 +164,26 @@ const EnhancedMoodCard = ({
 
   // Empty State - also check if mood field is missing
   if ((!latestMood || !latestMood.mood) && !loading) {
+    const emptyGradient = isDark
+      ? ['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']
+      : PASTEL_NEUTRAL_GRADIENT;
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: containerBg }]}>
         <LinearGradient
-          colors={PASTEL_NEUTRAL_GRADIENT}
+          colors={emptyGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.emptyGradient}
         >
           <View style={styles.emptyState}>
             <MoodIcon3D mood="happy" size={64} selected={false} />
-            <Text style={styles.emptyTitle}>How are you feeling?</Text>
-            <Text style={styles.emptySubtitle}>
+            <Text style={[styles.emptyTitle, { color: textPrimary }]}>How are you feeling?</Text>
+            <Text style={[styles.emptySubtitle, { color: textSecondary }]}>
               Track your mood and discover patterns
             </Text>
-            <View style={styles.emptyHintRow}>
-              <Ionicons name="information-circle" size={ICON_SIZES.md} color={TEXT.primary} />
-              <Text style={styles.emptyHintText}>Log your mood in the tracker to unlock insights</Text>
+            <View style={[styles.emptyHintRow, { backgroundColor: hintBg }]}>
+              <Ionicons name="information-circle" size={ICON_SIZES.md} color={textPrimary} />
+              <Text style={[styles.emptyHintText, { color: textSecondary }]}>Log your mood in the tracker to unlock insights</Text>
             </View>
           </View>
         </LinearGradient>
@@ -171,17 +194,17 @@ const EnhancedMoodCard = ({
   // Loading State
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: containerBg }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={TEXT.tertiary} />
-          <Text style={styles.loadingText}>Loading mood data...</Text>
+          <ActivityIndicator size="large" color={textTertiary} />
+          <Text style={[styles.loadingText, { color: textSecondary }]}>Loading mood data...</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: containerBg }]}>
       {/* Header with Gradient Glow */}
       <LinearGradient
         colors={pastelGradient}
@@ -191,14 +214,14 @@ const EnhancedMoodCard = ({
       >
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <Ionicons name="happy" size={ICON_SIZES.md} color={TEXT.primary} />
-            <Text style={styles.headerTitle}>Mood & Energy</Text>
+            <Ionicons name="happy" size={ICON_SIZES.md} color={textPrimary} />
+            <Text style={[styles.headerTitle, { color: textPrimary }]}>Mood & Energy</Text>
           </View>
         </View>
       </LinearGradient>
 
       {/* Mood Summary */}
-      <View style={styles.moodSummary}>
+      <View style={[styles.moodSummary, { backgroundColor: sectionBg, borderColor }]}>
         <View style={styles.moodHeader}>
           <MoodIcon3D
             mood={latestMood?.mood || 'neutral'}
@@ -207,36 +230,36 @@ const EnhancedMoodCard = ({
             onSelect={() => {}}
           />
           <View style={styles.moodMeta}>
-            <Text style={styles.currentMoodLabel}>Current Mood</Text>
-            <Text style={styles.currentMoodValue}>
+            <Text style={[styles.currentMoodLabel, { color: textTertiary }]}>Current Mood</Text>
+            <Text style={[styles.currentMoodValue, { color: textPrimary }]}>
               {latestMood?.mood ? latestMood.mood.charAt(0).toUpperCase() + latestMood.mood.slice(1) : 'Unknown'}
             </Text>
             {lastLoggedLabel && (
-              <Text style={styles.lastLoggedText}>Logged {lastLoggedLabel}</Text>
+              <Text style={[styles.lastLoggedText, { color: textTertiary }]}>Logged {lastLoggedLabel}</Text>
             )}
           </View>
         </View>
         <View style={styles.intensityContainer}>
-          <Text style={styles.intensityLabel}>Intensity</Text>
-          <View style={styles.intensityBar}>
+          <Text style={[styles.intensityLabel, { color: textTertiary }]}>Intensity</Text>
+          <View style={[styles.intensityBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }]}>
             <View
               style={[
                 styles.intensityFill,
                 {
-                  width: `${((latestMood.intensity || 5) / 10) * 100}%`,
+                  width: `${((latestMood?.intensity || 5) / 10) * 100}%`,
                   backgroundColor: moodColors?.base,
                 },
               ]}
             />
           </View>
-          <Text style={styles.intensityValue}>{latestMood.intensity || 5}/10</Text>
+          <Text style={[styles.intensityValue, { color: textPrimary }]}>{latestMood?.intensity || 5}/10</Text>
         </View>
       </View>
 
       {/* Wellness Score Section */}
       {wellnessScore !== null && wellnessScore?.score != null && (
         <TouchableOpacity
-          style={styles.wellnessSection}
+          style={[styles.wellnessSection, { backgroundColor: sectionBg, borderColor: isDark ? 'rgba(107, 78, 255, 0.25)' : 'rgba(107, 78, 255, 0.15)' }]}
           onPress={onOpenInsights}
           activeOpacity={0.8}
         >
@@ -245,7 +268,7 @@ const EnhancedMoodCard = ({
           </View>
           <View style={styles.wellnessRight}>
             <View style={styles.wellnessHeader}>
-              <Text style={styles.wellnessTitle}>Wellness Score</Text>
+              <Text style={[styles.wellnessTitle, { color: textPrimary }]}>Wellness Score</Text>
               <View style={[styles.wellnessTier, { backgroundColor: getWellnessColor(wellnessScore.score) + '20' }]}>
                 <Text style={[styles.wellnessTierText, { color: getWellnessColor(wellnessScore.score) }]}>
                   {getWellnessTier(wellnessScore.score)}
@@ -255,26 +278,26 @@ const EnhancedMoodCard = ({
             <View style={styles.wellnessBreakdown}>
               <View style={styles.wellnessMetric}>
                 <View style={[styles.wellnessDot, { backgroundColor: '#10B981' }]} />
-                <Text style={styles.wellnessMetricText}>Food {wellnessScore.breakdown?.nutrition || 0}%</Text>
+                <Text style={[styles.wellnessMetricText, { color: textTertiary }]}>Food {wellnessScore.breakdown?.nutrition || 0}%</Text>
               </View>
               <View style={styles.wellnessMetric}>
                 <View style={[styles.wellnessDot, { backgroundColor: '#3B82F6' }]} />
-                <Text style={styles.wellnessMetricText}>Water {wellnessScore.breakdown?.hydration || 0}%</Text>
+                <Text style={[styles.wellnessMetricText, { color: textTertiary }]}>Water {wellnessScore.breakdown?.hydration || 0}%</Text>
               </View>
               <View style={styles.wellnessMetric}>
                 <View style={[styles.wellnessDot, { backgroundColor: '#F59E0B' }]} />
-                <Text style={styles.wellnessMetricText}>Mood {wellnessScore.breakdown?.mood || 0}%</Text>
+                <Text style={[styles.wellnessMetricText, { color: textTertiary }]}>Mood {wellnessScore.breakdown?.mood || 0}%</Text>
               </View>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={TEXT.muted} />
+          <Ionicons name="chevron-forward" size={16} color={textMuted} />
         </TouchableOpacity>
       )}
 
       {/* Trend Panel */}
       {flags.showTrend && Array.isArray(trendData) && trendData.length > 0 && (
         <TouchableOpacity
-          style={styles.trendPanel}
+          style={[styles.trendPanel, { backgroundColor: sectionBg, borderColor }]}
           onPress={onOpenInsights}
           activeOpacity={0.8}
           accessibilityRole="button"
@@ -282,14 +305,14 @@ const EnhancedMoodCard = ({
           accessibilityHint="Opens detailed mood insights and history"
         >
           <View style={styles.trendHeaderRow}>
-            <Text style={styles.trendLabel}>7-Day Trend</Text>
-            <View style={styles.trendBadge}>
+            <Text style={[styles.trendLabel, { color: textSecondary }]}>7-Day Trend</Text>
+            <View style={[styles.trendBadge, { backgroundColor: pillBg, borderColor }]}>
               <Ionicons
                 name={trendSummary.direction === 'up' ? 'trending-up' : trendSummary.direction === 'down' ? 'trending-down' : 'remove'}
                 size={12}
-                color={trendSummary.direction === 'up' ? '#0F766E' : trendSummary.direction === 'down' ? '#B45309' : TEXT.tertiary}
+                color={trendSummary.direction === 'up' ? '#0F766E' : trendSummary.direction === 'down' ? '#B45309' : textTertiary}
               />
-              <Text style={styles.trendBadgeText}>
+              <Text style={[styles.trendBadgeText, { color: textSecondary }]}>
                 {trendSummary.direction === 'up'
                   ? 'Up'
                   : trendSummary.direction === 'down'
@@ -301,11 +324,11 @@ const EnhancedMoodCard = ({
             </View>
           </View>
           <MiniSparkline data={trendData} width={SPARKLINE_WIDTH} height={SPARKLINE_HEIGHT} />
-          {latestMood.energyLevel && (
+          {latestMood?.energyLevel && (
             <View style={styles.energyPill}>
               <Ionicons name="flash" size={ICON_SIZES.xs} color="#F59E0B" />
               <Text style={styles.energyText}>
-                Energy {latestMood.energyLevel}/10
+                Energy {latestMood?.energyLevel}/10
               </Text>
             </View>
           )}
@@ -316,41 +339,41 @@ const EnhancedMoodCard = ({
       {flags.showStats && stats && (
         <View style={styles.statsSection}>
           <View style={styles.statsHeaderRow}>
-            <Text style={styles.statsLabel}>This Week</Text>
-            <View style={styles.confidencePill}>
-              <Text style={styles.confidenceText}>{confidenceLevel} confidence</Text>
+            <Text style={[styles.statsLabel, { color: textSecondary }]}>This Week</Text>
+            <View style={[styles.confidencePill, { backgroundColor: confidencePillBg }]}>
+              <Text style={[styles.confidenceText, { color: textSecondary }]}>{confidenceLevel} confidence</Text>
             </View>
           </View>
-          <View style={styles.statsGrid}>
+          <View style={[styles.statsGrid, { backgroundColor: statsGridBg }]}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.avgMood || '--'}</Text>
-              <Text style={styles.statLabel}>Avg</Text>
+              <Text style={[styles.statValue, { color: textPrimary }]}>{stats.avgMood || '--'}</Text>
+              <Text style={[styles.statLabel, { color: textTertiary }]}>Avg</Text>
             </View>
 
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
 
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
+              <Text style={[styles.statValue, { color: textPrimary }]}>
                 {stats.bestDay ? formatDayKey(stats.bestDay) : '--'}
               </Text>
-              <Text style={styles.statLabel}>Best</Text>
+              <Text style={[styles.statLabel, { color: textTertiary }]}>Best</Text>
             </View>
 
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
 
             <View style={styles.statItem}>
               <Ionicons
                 name={stats.patternsDetected ? 'checkmark-circle' : 'close-circle'}
                 size={ICON_SIZES.md}
-                color={stats.patternsDetected ? '#0F766E' : TEXT.tertiary}
+                color={stats.patternsDetected ? '#0F766E' : textTertiary}
               />
-              <Text style={styles.statLabel}>Pattern</Text>
+              <Text style={[styles.statLabel, { color: textTertiary }]}>Pattern</Text>
             </View>
           </View>
-          <Text style={styles.statsFootnote}>
+          <Text style={[styles.statsFootnote, { color: textTertiary }]}>
             Based on {dataQuality.totalLogs} log{dataQuality.totalLogs === 1 ? '' : 's'} over {dataQuality.daysWithLogs} day{dataQuality.daysWithLogs === 1 ? '' : 's'}.
           </Text>
-          <Text style={styles.progressHint}>
+          <Text style={[styles.progressHint, { color: textSecondary }]}>
             Insights sharpen as you log across more days.
           </Text>
         </View>
@@ -364,6 +387,14 @@ const EnhancedMoodCard = ({
  * Mini Sparkline Component
  */
 const MiniSparkline = ({ data, width, height }) => {
+  const { colors, isDark } = useTheme();
+
+  // Theme-aware colors for sparkline
+  const lineStroke = isDark ? 'rgba(255,255,255,0.2)' : '#E2E8F0';
+  const pathStroke = isDark ? '#A78BFF' : '#475569';
+  const dotFill = isDark ? '#FFFFFF' : '#0F172A';
+  const emptyTextColor = colors.text.tertiary;
+
   const { path, lastPoint } = useMemo(() => {
     if (!data.length) return { path: '', lastPoint: null };
 
@@ -390,7 +421,7 @@ const MiniSparkline = ({ data, width, height }) => {
   if (data.length === 0) {
     return (
       <View style={[styles.sparklineContainer, { width, height }]}>
-        <Text style={styles.sparklineEmpty}>Trend builds as you log</Text>
+        <Text style={[styles.sparklineEmpty, { color: emptyTextColor }]}>Trend builds as you log</Text>
       </View>
     );
   }
@@ -403,21 +434,21 @@ const MiniSparkline = ({ data, width, height }) => {
           y1={height - 1}
           x2={width}
           y2={height - 1}
-          stroke="#E2E8F0"
+          stroke={lineStroke}
           strokeWidth={1}
         />
         {path ? (
           <Path
             d={path}
             fill="none"
-            stroke="#475569"
+            stroke={pathStroke}
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         ) : null}
         {lastPoint ? (
-          <Circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill="#0F172A" />
+          <Circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={dotFill} />
         ) : null}
       </Svg>
     </View>

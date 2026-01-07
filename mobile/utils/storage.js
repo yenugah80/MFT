@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   OFFLINE_QUEUE: 'offline-queue',
   LAST_SYNC: 'last-sync',
   HYDRATION_CELEBRATION: 'hydration-celebration-key',
+  HYDRATION_DAILY_INSIGHT: 'hydration-daily-insight',
   INSIGHTS_FILTER_DAYS: 'insights-filter-days',
   THEME_PREFERENCE: 'theme-preference',
 };

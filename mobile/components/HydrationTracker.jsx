@@ -98,6 +98,22 @@ const BEVERAGE_TYPES = {
     emoji: '⚡',
     description: 'Hydration boost',
   },
+  smoothie: {
+    hydrationFactor: 0.8,
+    icon: 'ice-cream',
+    color: '#EC4899',
+    label: 'Smoothie',
+    emoji: '🥤',
+    description: 'Hydrating with fiber',
+  },
+  alcohol: {
+    hydrationFactor: 0.1,
+    icon: 'beer',
+    color: '#B45309',
+    label: 'Alcohol',
+    emoji: '🍺',
+    description: 'Minimal hydration credit',
+  },
 };
 
 const QUICK_ADD_SIZES = [
