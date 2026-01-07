@@ -106,6 +106,28 @@ export default function DashboardHeaderSection({
 
   return (
     <>
+      {/* App Branding Row - Subtle & Premium */}
+      <View style={[localStyles.brandingRow, { borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)' }]}>
+        <View style={localStyles.brandingLeft}>
+          <LinearGradient
+            colors={isDark ? ['#7C66FF', '#A78BFF'] : [brandPrimary, '#8B5CF6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={localStyles.brandIcon}
+          >
+            <Ionicons name="leaf" size={14} color="#FFFFFF" />
+          </LinearGradient>
+          <View style={localStyles.brandTextContainer}>
+            <Text style={[localStyles.brandName, { color: textPrimary }]}>NutriTrack</Text>
+            <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Smart Nutrition</Text>
+          </View>
+        </View>
+        <View style={[localStyles.premiumBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : 'rgba(251, 191, 36, 0.1)', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)' }]}>
+          <Ionicons name="star" size={10} color="#F59E0B" />
+          <Text style={localStyles.premiumText}>PRO</Text>
+        </View>
+      </View>
+
       {/* Main Header Row */}
       <View style={localStyles.headerContainer}>
         {/* Left: Avatar + Greeting */}
@@ -317,6 +339,57 @@ export default function DashboardHeaderSection({
 }
 
 const localStyles = StyleSheet.create({
+  // App Branding Row
+  brandingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING[4],
+    paddingBottom: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  brandingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  brandIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandTextContainer: {
+    gap: 1,
+  },
+  brandName: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    letterSpacing: 0.5,
+  },
+  brandTagline: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    letterSpacing: 0.3,
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  premiumText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#F59E0B',
+    letterSpacing: 0.5,
+  },
+
   // Main Header Container
   headerContainer: {
     flexDirection: 'row',
