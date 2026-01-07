@@ -122,10 +122,11 @@ export default function DashboardHeaderSection({
             <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Your Wellness Companion</Text>
           </View>
         </View>
-        <View style={[localStyles.premiumBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : 'rgba(251, 191, 36, 0.1)', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)' }]}>
+        {/* PRO badge - TODO: Show only for premium users once payment system is implemented */}
+        {/* <View style={[localStyles.premiumBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : 'rgba(251, 191, 36, 0.1)', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)' }]}>
           <Ionicons name="star" size={10} color="#F59E0B" />
           <Text style={localStyles.premiumText}>PRO</Text>
-        </View>
+        </View> */}
       </View>
 
       {/* Main Header Row */}
