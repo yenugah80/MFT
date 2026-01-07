@@ -79,6 +79,7 @@ class StrategicFoodParser {
     try {
       // Use existing regex-based approach
       const items = await FoodService.parseTextToFoods(text);
+      console.log(`[StrategicFoodParser] parseTextToFoods returned ${items?.length || 0} items:`, JSON.stringify(items?.slice(0, 2)));
 
       return {
         success: true,

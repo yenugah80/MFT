@@ -345,14 +345,18 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     ];
 
     try {
+      console.log(`[OpenAI] parseTextToFoods called with query: "${query}"`);
       const json = await this.chatCompletionJSON(messages, {
         temperature: 0.1, // Very low for deterministic extraction
         maxTokens: 300, // Minimal - just food names and quantities
       });
+      console.log(`[OpenAI] Raw response:`, JSON.stringify(json));
 
       if (!json.foods || !Array.isArray(json.foods)) {
+        console.error(`[OpenAI] Invalid response format - missing foods array`);
         throw new Error('Invalid response format');
       }
+      console.log(`[OpenAI] Parsed ${json.foods.length} foods from AI response`);
 
       // PRODUCTION FIX: Validation + Canonicalization Pipeline
       // Step 1: Validate extraction (ensure no ingredients were missed)
