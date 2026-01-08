@@ -38,22 +38,22 @@ export default function AnimatedMeshGradient({
     // Create looping animation sequence
     const createAnimation = () => {
       return Animated.parallel([
-        // Gradient 1 movement
+        // Gradient 1 movement - useNativeDriver: false required for ValueXY interpolation
         Animated.sequence([
           Animated.timing(gradient1, {
             toValue: { x: 0.7, y: 0.3 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(gradient1, {
             toValue: { x: 0.2, y: 0.8 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(gradient1, {
             toValue: { x: 0, y: 0 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
 
@@ -62,17 +62,17 @@ export default function AnimatedMeshGradient({
           Animated.timing(gradient2, {
             toValue: { x: 0.3, y: 0.7 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(gradient2, {
             toValue: { x: 0.9, y: 0.2 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(gradient2, {
             toValue: { x: 1, y: 0 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
 
@@ -81,17 +81,17 @@ export default function AnimatedMeshGradient({
           Animated.timing(gradient3, {
             toValue: { x: 0.8, y: 0.5 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(gradient3, {
             toValue: { x: 0.1, y: 0.3 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(gradient3, {
             toValue: { x: 0.5, y: 1 },
             duration: animationDuration / 3,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
 

@@ -238,27 +238,11 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         </View>
       )}
 
-      {/* Accuracy Disclaimer - Show for AI-estimated foods */}
-      {(item._smartResolver?.source?.includes('estimation') ||
-        item.sourceEvidence?.[0]?.source === 'AI' ||
-        item.sourceEvidence?.[0]?.source === 'Image AI' ||
-        !item.sourceEvidence?.[0]?.source?.includes('USDA')) && (
-        <View style={styles.accuracyNote}>
-          <Text style={styles.accuracyNoteIcon}>💡</Text>
-          <Text style={styles.accuracyNoteText}>
-            Estimated nutrition. May vary by brand, cooking method, and portions.
-            {(item.isComplex || item.ingredients?.length > 0) ? ' Adjust ingredients if needed.' : ''}
-          </Text>
-        </View>
-      )}
-
-      {/* Confidence Badge - Always show with source info */}
+      {/* Confidence Badge - Simplified to just show percentage */}
       <View style={[styles.badge, { borderColor: confidenceColor }]}>
         <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
         <Text style={styles.badgeText}>
-          {item.sourceEvidence?.[0]?.source === 'USDA' ? 'USDA' :
-           item.sourceEvidence?.[0]?.source === 'Open Food Facts' ? 'Verified Product' :
-           item.sourceEvidence?.[0]?.source || 'AI estimated'} • {Math.round(confidence * 100)}%
+          {Math.round(confidence * 100)}% confidence
         </Text>
       </View>
 
@@ -768,26 +752,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontStyle: 'italic',
     marginTop: 4,
-  },
-  // Accuracy disclaimer
-  accuracyNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 8,
-    gap: 8,
-  },
-  accuracyNoteIcon: {
-    fontSize: 14,
-    marginTop: 1,
-  },
-  accuracyNoteText: {
-    flex: 1,
-    fontSize: 11,
-    color: '#92400E',
-    lineHeight: 15,
   },
   // Portion source badge styles
   portionSourceBadge: {
