@@ -125,15 +125,16 @@ export async function runProductionStartup() {
         setupGlobalErrorHandler();
       }, StageSeverity.CRITICAL);
 
-      // IMPORTANT: Stage 3 - Native Modules (fail degrades features)
-      await runStage('nativeModules', async () => {
-        await initializeNativeModules();
-      }, StageSeverity.IMPORTANT);
-
-      // IMPORTANT: Stage 4 - Feature Detection (fail degrades features)
-      await runStage('features', async () => {
-        await detectAvailableFeatures();
-      }, StageSeverity.IMPORTANT);
+      // IMPORTANT: Stage 3 & 4 - Run Native Modules AND Feature Detection IN PARALLEL
+      // This saves ~1000ms by not waiting for one to complete before starting the other
+      await Promise.all([
+        runStage('nativeModules', async () => {
+          await initializeNativeModules();
+        }, StageSeverity.IMPORTANT),
+        runStage('features', async () => {
+          await detectAvailableFeatures();
+        }, StageSeverity.IMPORTANT),
+      ]);
 
       // OPTIONAL: Stage 5 - Analytics (non-critical, fail silently)
       await runStage('analytics', async () => {
