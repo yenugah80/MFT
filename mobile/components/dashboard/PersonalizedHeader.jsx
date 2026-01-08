@@ -6,7 +6,7 @@ import { TEXT, TYPOGRAPHY, SPACING, RADIUS, SURFACES } from '../../constants/pre
 
 // Insight generation engine
 const generateFoodMoodInsight = (data) => {
-  const { nutrition, mood, hydration, timeOfDay } = data;
+  const { nutrition, mood, hydration } = data;
 
   // Calculate scores
   const nutritionScore = (nutrition.calories / nutrition.calorieGoal) * 100;

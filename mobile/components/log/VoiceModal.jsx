@@ -19,7 +19,7 @@
  * />
  */
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -121,6 +121,7 @@ function WaveformVisualizer({ volume, isActive, isElderly }) {
         animationRef.stop();
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volume, isActive, bars, isElderly]);
 
   return (

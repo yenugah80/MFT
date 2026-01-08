@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Dimensions,
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,14 +20,11 @@ import { useRouter } from 'expo-router';
 
 import {
   BRAND,
-  SURFACES,
   TEXT,
   SPACING,
   RADIUS,
   SHADOWS,
 } from '../../constants/premiumTheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Pulse animation for the recording indicator
 function PulseRing({ isRecording }) {

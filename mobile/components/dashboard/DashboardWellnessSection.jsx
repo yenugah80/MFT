@@ -8,13 +8,11 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 import CollapsibleSection from './CollapsibleSection';
 import HydrationWellnessDashboard from './HydrationWellnessDashboard';
 import ActivitySummaryCard from './ActivitySummaryCard';
 import EnhancedMoodCard from './EnhancedMoodCard';
-import { TEXT, SPACING, RADIUS, BRAND } from '../../constants/premiumTheme';
 
 export default function DashboardWellnessSection({
   styles,
@@ -74,24 +72,4 @@ export default function DashboardWellnessSection({
   );
 }
 
-const localStyles = StyleSheet.create({
-  insightsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING[2],
-    marginTop: SPACING[3],
-    paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[4],
-    backgroundColor: `${BRAND.primary}08`,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: `${BRAND.primary}15`,
-  },
-  insightsText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: TEXT.secondary,
-  },
-});
+// Unused localStyles removed (was for insightsLink)

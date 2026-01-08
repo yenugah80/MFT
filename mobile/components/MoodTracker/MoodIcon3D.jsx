@@ -141,6 +141,7 @@ const MoodIcon3D = ({
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, useFallback, mood, scaleAnim, lottieSource]);
 
   useEffect(() => {

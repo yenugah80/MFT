@@ -3,14 +3,14 @@
  * Premium UI: 3 compact tiles showing macros donut, hydration bar, streak pill
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle, G } from 'react-native-svg';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
-import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
 
 // Mini Donut Chart for macros
 function MiniDonut({ protein, carbs, fat, size = 48 }) {

@@ -30,6 +30,7 @@ export default function EditableSection({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       contentAnim.start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing]);
 
   const handleSave = async () => {

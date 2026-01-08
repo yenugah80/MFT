@@ -9,7 +9,7 @@
  * - Tap to open full tracker
  */
 
-import React, { useRef } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +27,7 @@ import {
 } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
 
+// eslint-disable-next-line no-unused-vars
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ============================================================================

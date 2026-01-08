@@ -17,7 +17,7 @@ import { HistoryItem } from '../../components/log/HistoryDrawer';
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const { days, scanned, from } = useLocalSearchParams();
+  const { days, scanned } = useLocalSearchParams();
   const foodLog = useFoodLog();
 
   const [selectedLogs, setSelectedLogs] = useState([]);
@@ -160,6 +160,7 @@ export default function HistoryScreen() {
       isSelected={isSelected(item)}
       onPress={handleSelectLog}
     />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   ), [handleSelectLog, selectedLogs]);
 
   return (

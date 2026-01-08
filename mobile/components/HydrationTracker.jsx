@@ -20,7 +20,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   AccessibilityInfo,
 } from 'react-native';
@@ -42,7 +41,6 @@ import {
   SHADOWS,
   ICON_SIZES,
   SURFACES,
-  BRAND,
 } from '../constants/premiumTheme';
 
 // ============================================================================
@@ -202,6 +200,7 @@ export default function HydrationTracker({
     }
 
     setPreviousPercentage(percentage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   // Show random tips periodically (every 3 logs, not at milestones)
@@ -221,6 +220,7 @@ export default function HydrationTracker({
         setIsTipMessage(false);
       }, 4500);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logCount]);
 
   const handleQuickAdd = useCallback(async (ml) => {

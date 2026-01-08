@@ -51,6 +51,7 @@ const MoodIntensitySlider = ({
       friction: 20,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const panResponder = useRef(

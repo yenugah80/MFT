@@ -55,6 +55,7 @@ const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, de
         friction: 8,
       }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delay]);
 
   return (
@@ -106,6 +107,7 @@ const WaterCard = ({ value, onEdit, delay = 0 }) => {
       delay,
       useNativeDriver: true,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delay]);
 
   return (

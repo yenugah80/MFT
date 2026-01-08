@@ -1,8 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput, Modal, FlatList } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { convertUnit } from '../../constants/dailyValues'; // Import the unit conversion helper
-import { IngredientsBreakdown } from './IngredientsBreakdown'; // 🆕 INGREDIENTS DISPLAY
+import React from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { FoodItemCard } from './FoodItemCard'; // 🆕 Use rich item card
 
 // Assuming fonts are defined globally or passed as props
@@ -12,34 +9,7 @@ const fonts = {
   regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
 };
 
-// Helper to format nutrient values
-const formatNutrient = (value, unit = '') => {
-  if (value === undefined || value === null) return 'N/A';
-  return `${value.toFixed(0)}${unit}`;
-};
-
-// Common units for selection
-const COMMON_UNITS = [
-  'g', 'kg', 'mg', 'µg', // Mass
-  'ml', 'l', // Volume
-  'cup', 'tbsp', 'tsp', // Common household volume
-  'serving', 'unit', 'slice', 'piece', 'item', // Generic
-];
-
-// Helper to get source icon
-const getSourceIcon = (source) => {
-  if (source === 'Open Food Facts') {
-    return { name: 'barcode-outline', color: '#22C55E' }; // Green for verified product
-  }
-  return { name: 'sparkles-outline', color: '#6B4EFF' }; // Purple for AI analysis
-};
-
-
-export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }) {
-  // Hooks must be called at the top level before any conditional returns
-  const [editingUnitId, setEditingUnitId] = useState(null);
-  const [showUnitPicker, setShowUnitPicker] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState('');
+export function FoodItemsList({ items, onUpdateQuantity, onRemove }) {
 
   // 🔍 Debug: Log items to detect duplicates
   console.log('[FoodItemsList] Rendering', items?.length, 'items');
@@ -82,35 +52,6 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove, dailyValues }
     console.log(`[FoodItemsList] Item ${idx}: id=${item.itemId}, name="${item.name}", cal=${item.macros?.calories_kcal}`);
   });
 
-  const renderMicronutrient = (microName, microData) => {
-    // Ensure microData is an object with value and unit
-    if (!microData || typeof microData.value !== 'number') return null;
-
-    if (!microData || microData.value === 0) return null;
-
-    const dv = dailyValues[microName.toLowerCase()]; // Get DV for this micronutrient
-    let percentage = null;
-
-    if (dv && dv.value > 0 && microData.value !== undefined && microData.value !== null) {
-      // Attempt unit conversion if units don't match exactly
-      const microAmountInDVUnit = convertUnit(microData.value, microData.unit, dv.unit);
-      percentage = (microAmountInDVUnit / dv.value) * 100;
-    }
-
-    return (
-      <View key={microName} style={styles.microItem}>
-        <Text style={styles.microName}>{microName.charAt(0).toUpperCase() + microName.slice(1)}</Text>
-        <View style={styles.microValueContainer}>
-          <Text style={styles.microValue}>{formatNutrient(microData.value, microData.unit)}</Text>
-          {percentage !== null && (
-            <Text style={styles.microPercentage}>
-              ({percentage.toFixed(0)}% DV)
-            </Text>
-          )}
-        </View>
-      </View>
-    );
-  };
   // 🆕 Use FoodItemCard for rich display with all features
   return (
     <View style={styles.listContainer}>

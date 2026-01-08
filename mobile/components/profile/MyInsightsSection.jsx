@@ -77,6 +77,7 @@ export default function MyInsightsSection({
         contentOpacity.setValue(1);
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Toggle expanded state

@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import {
   COLORS,
   TYPOGRAPHY,
@@ -31,7 +31,6 @@ export default function MacroDonut({
   strokeWidth = 24,
 }) {
   const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
 
   // Calculate macro percentages by calorie contribution
   const percentages = calculateMacroPercentages(protein, carbs, fat);

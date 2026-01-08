@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
-import { TEXT, TYPOGRAPHY, SPACING, RADIUS, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -46,8 +46,6 @@ const generateScoreInsight = (scores, timeOfDay) => {
   const { score, nutrition, mood, hydration } = scores;
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 12;
-  const isAfternoon = hour >= 12 && hour < 17;
-  const isEvening = hour >= 17 && hour < 22;
 
   // EXCELLENT PERFORMANCE
   if (score >= 85) {
@@ -140,7 +138,6 @@ const getScoreLabel = (score) => {
 
 export default function TodayScoreCard({ data }) {
   const [expanded, setExpanded] = useState(false);
-  const rotateAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -177,6 +174,7 @@ export default function TodayScoreCard({ data }) {
       friction: 8,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scores.score]);
 
   const strokeDashoffset = progressAnim.interpolate({

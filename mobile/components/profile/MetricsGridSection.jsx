@@ -13,13 +13,11 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 
 import InlineEditMetricCard from './InlineEditMetricCard';
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';

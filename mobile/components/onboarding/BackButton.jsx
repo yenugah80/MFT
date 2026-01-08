@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { BRAND, TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 
 const BackButton = ({ onPress, enabled = true }) => {
   const animScale = React.useRef(new Animated.Value(1)).current;

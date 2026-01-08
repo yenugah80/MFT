@@ -21,7 +21,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,7 +39,6 @@ import {
   TYPOGRAPHY,
 } from '../constants/premiumTheme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FAB_SIZE = 64;
 const MENU_ITEM_SIZE = 56;
 
@@ -95,6 +93,7 @@ const QuickActionItem = ({ icon, label, color, onPress, index, isOpen }) => {
         }),
       ]).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, index]);
 
   return (

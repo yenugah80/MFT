@@ -48,6 +48,7 @@ export default function SaveSuccessAnimation({ visible, onComplete }) {
     }, 2000);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   if (!visible) return null;

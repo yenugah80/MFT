@@ -20,7 +20,6 @@ import {
   ScrollView,
   StyleSheet,
   Animated,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -38,8 +37,6 @@ import {
   RADIUS,
   SHADOWS,
 } from '../../constants/premiumTheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Activity level configuration with visual representation
 const ACTIVITY_LEVELS = [

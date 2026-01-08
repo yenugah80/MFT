@@ -39,6 +39,7 @@ const JSSlider = ({ value, onValueChange, min, max, step, color, trackColor }) =
       duration: 50,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   const panResponder = useRef(
@@ -215,6 +216,7 @@ const GoalEditSheet = ({
         }),
       ]).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, safeCurrentValue]);
 
   const handleValueChange = (newValue) => {

@@ -53,7 +53,6 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  SHADOWS,
   ICON_SIZES,
   SURFACES,
 } from '../../constants/premiumTheme';

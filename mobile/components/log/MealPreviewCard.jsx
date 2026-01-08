@@ -14,14 +14,10 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { TEXT, SURFACES, BRAND, SEMANTIC } from '../../constants/premiumTheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function MealPreviewCard({
   analysisResult,

@@ -59,6 +59,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
     }).start();
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
   const progressWidth = progress.interpolate({

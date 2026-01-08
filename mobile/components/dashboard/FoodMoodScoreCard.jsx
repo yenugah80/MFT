@@ -26,7 +26,7 @@ import * as Haptics from 'expo-haptics';
 import LottieView from 'lottie-react-native';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, SURFACES, TEXT, SHADOWS, MOOD_PALETTE } from '../../constants/premiumTheme';
+import { BRAND, TEXT, MOOD_PALETTE } from '../../constants/premiumTheme';
 import { calculateFoodMoodScore } from '../../utils/foodMoodScore';
 
 // Lottie animation sources for mood display
@@ -433,6 +433,7 @@ export default function FoodMoodScoreCard({
   onViewDetails,
 }) {
   const cardAnim = useRef(new Animated.Value(0)).current;
+  // eslint-disable-next-line no-unused-vars
   const [showDetails, setShowDetails] = useState(false);
 
   // Calculate the score

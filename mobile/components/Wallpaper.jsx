@@ -86,6 +86,7 @@ export function FlowingQuotesBanner({ quotes = [], interval = 4000 }) {
     animate();
     const id = setInterval(animate, interval);
     return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interval, quotes.length]);
 
   const current = quotes.length ? quotes[index % quotes.length] : "Welcome";

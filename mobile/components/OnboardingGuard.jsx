@@ -46,7 +46,6 @@ const OnboardingGuard = ({ children }) => {
   const { onboardingComplete, isLoading: profileLoading, error: profileError, refetchProfile } = useProfileContext();
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const [error, setError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
 
   // 🆕 PREVENT DUPLICATE CHECKS: Track if check is already in progress
   const isCheckingRef = useRef(false);
@@ -183,6 +182,7 @@ const OnboardingGuard = ({ children }) => {
       }
     };
     // ✅ Only depend on auth state, not profile values - profile updates are handled by the async function
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, isSignedIn]);
 
   // Retry handler - refetch profile from context

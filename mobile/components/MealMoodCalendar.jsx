@@ -9,11 +9,9 @@
  * - Share functionality for daily stories
  */
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Easing, Dimensions, Share } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Dimensions, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import GlassCard from './dashboard/GlassCard';
 import {
   TEXT,
   TYPOGRAPHY,
@@ -22,7 +20,6 @@ import {
   SURFACES,
   BRAND,
   SEMANTIC,
-  SHADOWS
 } from '../constants/premiumTheme';
 import { generateStoryLine } from '../utils/healthCalculations';
 import { formatDateLocal } from '../utils/dateHelpers';

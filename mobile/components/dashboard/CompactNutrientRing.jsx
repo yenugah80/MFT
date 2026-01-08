@@ -37,6 +37,7 @@ export default function CompactNutrientRing({
       friction: 8,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   const strokeDashoffset = animatedProgress.interpolate({

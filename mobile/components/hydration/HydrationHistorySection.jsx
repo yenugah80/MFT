@@ -12,9 +12,7 @@ import * as Haptics from 'expo-haptics';
 import {
   TEXT,
   SEMANTIC,
-  TYPOGRAPHY,
   ICON_SIZES,
-  BRAND,
 } from '../../constants/premiumTheme';
 
 function HydrationEmptyState({ styles }) {

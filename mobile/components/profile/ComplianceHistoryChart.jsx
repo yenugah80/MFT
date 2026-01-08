@@ -10,7 +10,7 @@ import { LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../services/apiClient';
-import { BRAND, TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
 
 const screenWidth = Dimensions.get('window').width;
 

@@ -24,7 +24,6 @@ import {
   Animated,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -43,9 +42,7 @@ import {
   MACRO_COLORS,
   NUTRISCORE,
 } from '../../constants/premiumTheme';
-import { NutriScoreGlow, HealthScoreBadge, NutriScoreTag } from '../NutriScoreBadge';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
+import { NutriScoreGlow, HealthScoreBadge } from '../NutriScoreBadge';
 
 // ============================================================================
 // HELPER FUNCTIONS - Tufte-inspired Data Formatting
@@ -117,6 +114,7 @@ const MacroBar = ({ label, value, unit, color, goal, icon }) => {
       friction: 8,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   return (
@@ -173,6 +171,7 @@ const ComparisonBar = ({ label, mealValue, dailyTotal, goal, unit, color, onView
       friction: 8,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -269,6 +268,7 @@ export default function MealLoggedCard({
         useNativeDriver: true,
       }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!meal) return null;

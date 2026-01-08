@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { BRAND, TEXT, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
 
 export default function AllergenWarningCard({ warnings = [], onRemoveMeal }) {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
@@ -46,6 +46,7 @@ export default function AllergenWarningCard({ warnings = [], onRemoveMeal }) {
         `Warning: ${warnings.length} meal(s) contain your allergens`
       );
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warnings.length]);
 
   if (!warnings || warnings.length === 0) {

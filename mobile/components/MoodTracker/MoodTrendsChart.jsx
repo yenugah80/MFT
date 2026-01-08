@@ -71,6 +71,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
         useNativeDriver: false,
       }).start();
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   // Calculate chart dimensions

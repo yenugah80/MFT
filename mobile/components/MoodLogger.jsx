@@ -21,7 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useMoodLog, MOOD_TYPES } from '../hooks/useMoodLog';
+import { useMoodLog } from '../hooks/useMoodLog';
 import MoodIcon3D from './MoodTracker/MoodIcon3D';
 import {
   MOOD_PALETTE,
@@ -53,6 +53,7 @@ const IntensitySlider = ({ value, onChange, moodColor, label = 'Intensity', help
       friction: 20,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const handleSlide = (evt) => {
@@ -192,6 +193,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       setNote('');
       setShowAdvanced(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const handleSave = async () => {

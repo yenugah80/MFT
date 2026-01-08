@@ -16,7 +16,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { useWaterLog, WATER_PRESETS } from '../hooks/useWaterLog';
+import { useWaterLog } from '../hooks/useWaterLog';
 import { useQueryClient } from '@tanstack/react-query';
 
 const { width } = Dimensions.get('window');
@@ -53,6 +53,7 @@ const WaterWave = ({ progress, todayTotal, dailyGoal }) => {
       animation1.stop();
       animation2.stop();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const wave1TranslateX = waveAnim1.interpolate({
@@ -197,6 +198,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
       setCustomAmount('');
       setLocalError(null); // Clear local error when modal closes
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const handleQuickAdd = async (preset) => {

@@ -15,7 +15,6 @@ import {
   SPACING,
   RADIUS,
   SURFACES,
-  BRAND,
   SEMANTIC,
 } from '../../constants/premiumTheme';
 
@@ -29,6 +28,7 @@ const MacroBar = ({ label, percentage, color, isIdeal }) => {
       friction: 8,
       useNativeDriver: false,
     }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   const animatedWidth = widthAnim.interpolate({

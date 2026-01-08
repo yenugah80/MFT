@@ -100,7 +100,6 @@ export default function DashboardHeaderSection({
   const cardBg = isDark ? 'rgba(255, 255, 255, 0.08)' : colors.surface?.card?.primary || '#FFFFFF';
   const cardBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : colors.surface?.card?.border || 'rgba(0,0,0,0.08)';
   const subtleBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
-  const onlineColor = '#22C55E';
   const streakColor = '#F97316';
   const focusColor = isDark ? '#60A5FA' : '#3B82F6';
 

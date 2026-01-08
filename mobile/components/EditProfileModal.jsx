@@ -18,9 +18,8 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from "@expo/vector-icons";
 import SaveSuccessAnimation from "./profile/SaveSuccessAnimation";
-import { createFadeSlideAnimation, createSlideUpAnimation, ANIMATION_TIMING } from "../utils/profileAnimations";
+import { createSlideUpAnimation, ANIMATION_TIMING } from "../utils/profileAnimations";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../constants/premiumTheme";
-import { COLORS } from "../constants/colors";
 
 const EditProfileModal = ({
   visible,
@@ -60,6 +59,7 @@ const EditProfileModal = ({
         useNativeDriver: true,
       }).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const validate = () => {

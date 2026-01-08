@@ -1,7 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, View } from "react-native";
 import { COLORS } from "../../constants/colors";
 import { useProfileContext } from "../../providers/ProfileProvider";
 

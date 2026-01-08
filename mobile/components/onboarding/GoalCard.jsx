@@ -14,7 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+// Surfaces not currently used but kept for potential styling
 
 const GoalCard = ({
   id,

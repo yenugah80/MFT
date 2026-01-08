@@ -30,7 +30,6 @@ import {
   SHADOWS,
   ICON_SIZES,
   MOOD_PALETTE,
-  BRAND,
   TEXT,
 } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';

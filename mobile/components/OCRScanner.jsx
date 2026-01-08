@@ -100,8 +100,8 @@ export default function OCRScanner({ navigation }) {
       // Default: Select all detected text
       const allIndices = new Set(transformedBlocks.map((_, i) => i));
       setSelectedIndices(allIndices);
-    } catch (e) {
-      setError(e.message || 'OCR failed');
+    } catch (_e) {
+      setError(_e.message || 'OCR failed');
     } finally {
       setLoading(false);
     }
@@ -166,7 +166,7 @@ export default function OCRScanner({ navigation }) {
           { text: "View Log", onPress: () => navigation.navigate('History') }
         ]
       );
-    } catch (e) {
+    } catch (_e) {
       Alert.alert("Error", "Failed to save meal.");
     }
   };

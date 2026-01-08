@@ -21,16 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import apiClient from '../../services/apiClient';
-import { BRAND, TEXT, SURFACES, SHADOWS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';
-
-// Defensive fallbacks for theme values
-const FALLBACK = {
-  primary: '#6B4EFF',
-  secondary: '#4B5563',
-  tertiary: '#6B7280',
-  muted: '#9CA3AF',
-  gradient: ['#F5F3FF', '#EDE9FE'],
-};
+import { TEXT, SURFACES, SHADOWS, SPACING, RADIUS } from '../../constants/premiumTheme';
 
 const CIRCLE_RADIUS = 45;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;

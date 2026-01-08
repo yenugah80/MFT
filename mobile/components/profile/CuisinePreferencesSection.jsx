@@ -8,7 +8,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { BRAND, TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
 
 const CUISINE_EMOJI = {
   mediterranean: '🌍',

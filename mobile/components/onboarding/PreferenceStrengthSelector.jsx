@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { BRAND, TEXT, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS } from '../../constants/premiumTheme';
 
 const STRENGTH_LABELS = {
   1: 'Open to it',
@@ -44,6 +44,7 @@ export default function PreferenceStrengthSelector({
       bounciness: 5
     }).start();
     setDisplayStrength(currentStrength);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStrength]);
 
   const handleStrengthSelect = async (strength) => {

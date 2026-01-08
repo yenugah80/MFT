@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -13,6 +13,7 @@ const Skeleton = ({ width, height, style }) => {
         Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true })
       ])
     ).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return <Animated.View style={[{ opacity, width, height, backgroundColor: '#E1E9EE', borderRadius: 4 }, style]} />;
 };

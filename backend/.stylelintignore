@@ -1,0 +1,4 @@
+# Ignore all JavaScript files (stylelint is for CSS only)
+**/*.js
+**/*.mjs
+**/*.cjs

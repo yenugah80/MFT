@@ -6,10 +6,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { API_URL, API_BASE_URL } from '../../constants/api';
+import { API_BASE_URL } from '../../constants/api';
 
 export function ConnectionStatus() {
   const [status, setStatus] = useState('checking'); // 'checking' | 'connected' | 'disconnected'
+  // eslint-disable-next-line no-unused-vars
   const [lastChecked, setLastChecked] = useState(null);
   const [error, setError] = useState(null);
 

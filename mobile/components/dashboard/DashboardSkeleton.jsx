@@ -5,12 +5,9 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet, Dimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
+import { View, Animated, StyleSheet } from 'react-native';
+import { SPACING, RADIUS } from '../../constants/designTokens';
 import { SURFACES, BRAND } from '../../constants/premiumTheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Shared shimmer animation hook
 function useShimmer() {
@@ -39,7 +36,8 @@ function useShimmer() {
   });
 }
 
-// Base skeleton element with shimmer
+// Base skeleton element with shimmer (kept for potential future use)
+// eslint-disable-next-line no-unused-vars
 function SkeletonElement({ style, children }) {
   const opacity = useShimmer();
 

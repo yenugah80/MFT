@@ -14,13 +14,10 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSubscription, TIERS, PRODUCTS, PRICING } from '../../contexts/SubscriptionContext';
+import { useSubscription, PRODUCTS, PRICING } from '../../contexts/SubscriptionContext';
 import { trackEvent, Events } from '../../services/analytics';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Feature lists for each tier
 const BASIC_FEATURES = [

@@ -20,14 +20,13 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
-  BRAND,
   SURFACES,
   TEXT,
 } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // Rank logic to make levels meaningful
 const getRankTitle = (level) => {
@@ -106,6 +105,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
       opacityAnim.setValue(0);
       glowAnim.setValue(0);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   if (!visible) return null;
@@ -287,6 +287,7 @@ export default function PremiumAchievementsCard({
         ])
       ).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress, streak]);
 
   const strokeDashoffset = progressAnim.interpolate({

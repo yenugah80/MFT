@@ -37,7 +37,7 @@ export default function PremiumRing({
 
   // Detect data state
   const dataState = detectDataState(value, goal, { allowNull: false });
-  const { state, color, ratio, isAnomaly } = dataState;
+  const { color, ratio, isAnomaly } = dataState;
 
   // CRITICAL: Cap visual progress at 100%
   const visualRatio = Math.min(ratio || 0, 1.0);

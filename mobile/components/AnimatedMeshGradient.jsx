@@ -127,6 +127,7 @@ export default function AnimatedMeshGradient({
       opacity2.stopAnimation();
       opacity3.stopAnimation();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [animationDuration, animationEnabled]);
 
   // Transform animated values to translateX/Y

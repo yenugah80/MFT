@@ -24,7 +24,6 @@ import {
   Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { generateStoryLine } from '../../utils/healthCalculations';
 
@@ -35,7 +34,6 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  SHADOWS,
 } from '../../constants/premiumTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -307,7 +305,6 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
   // Get display data based on period
   const periodDays = selectedPeriod === 'day' ? 1 : selectedPeriod === '30d' ? 30 : selectedPeriod === '60d' ? 60 : 90;
   const periodStats = selectedPeriod === 'day' ? null : getPeriodStats(periodDays);
-  const displayData = selectedPeriod === 'day' ? (dayData || {}) : periodStats;
 
   const hasData = selectedPeriod === 'day'
     ? (dayData?.logged || dayData?.calories > 0)
@@ -689,7 +686,6 @@ export default function PremiumCalendarStrip({
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [showMonthGrid, setShowMonthGrid] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState(null);
-  const scrollRef = useRef(null);
 
   // Handle day tap - show detail modal
   const handleDayPress = useCallback((date) => {
@@ -709,6 +705,7 @@ export default function PremiumCalendarStrip({
       dates.push(date);
     }
     return dates;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleViewAll = async () => {

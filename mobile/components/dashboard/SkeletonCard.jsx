@@ -5,8 +5,8 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet } from 'react-native';
-import { SPACING, RADIUS } from '../../constants/designTokens';
+import { Animated, StyleSheet } from 'react-native';
+import { RADIUS } from '../../constants/designTokens';
 import { LUXURY_SURFACES } from '../../constants/luxuryTheme';
 
 /**

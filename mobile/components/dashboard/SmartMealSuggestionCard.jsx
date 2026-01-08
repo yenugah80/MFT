@@ -8,7 +8,7 @@
  * - No visual clutter
  */
 
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
 
 /**

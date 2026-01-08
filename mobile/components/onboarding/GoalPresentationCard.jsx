@@ -4,7 +4,7 @@
  * Shows context, prominent number, reassuring copy, and refined edit interaction
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TEXT, BRAND, SURFACES } from '../../constants/premiumTheme';
 
 const GoalPresentationCard = ({
   label,
@@ -29,7 +28,6 @@ const GoalPresentationCard = ({
   gradientEnd = '#8B6EFF',
   iconColor = '#FFFFFF',
 }) => {
-  const [isPressed, setIsPressed] = useState(false);
   const animScale = React.useRef(new Animated.Value(1)).current;
   const animOpacity = React.useRef(new Animated.Value(1)).current;
 
@@ -48,7 +46,6 @@ const GoalPresentationCard = ({
         useNativeDriver: true,
       }),
     ]).start();
-    setIsPressed(true);
   };
 
   const handlePressOut = () => {
@@ -65,7 +62,6 @@ const GoalPresentationCard = ({
         useNativeDriver: true,
       }),
     ]).start();
-    setIsPressed(false);
   };
 
   return (

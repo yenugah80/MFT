@@ -79,6 +79,7 @@ const MoodTracker = ({
     } else {
       animateOut();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   // Auto-save draft
@@ -86,6 +87,7 @@ const MoodTracker = ({
     if (visible) {
       saveDraft();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMood, intensity, energyLevel, tags, note]);
 
   const loadDraft = async () => {

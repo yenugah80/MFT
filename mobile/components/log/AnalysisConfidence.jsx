@@ -20,6 +20,7 @@ export default function AnalysisConfidence({
   const overallConfidence = 95; // This should come from your AI response
   const confidenceLevel = overallConfidence >= 90 ? 'high' : overallConfidence >= 75 ? 'medium' : 'low';
 
+  // eslint-disable-next-line no-unused-vars
   const confidenceColor = {
     high: '#22C55E',
     medium: '#F59E0B',

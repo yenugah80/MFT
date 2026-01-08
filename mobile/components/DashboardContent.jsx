@@ -231,12 +231,7 @@ export default function DashboardContent() {
   const [allergenWarnings, setAllergenWarnings] = useState([]);
 
   // Recommendations hook (handles caching internally with 5-min cache)
-  // eslint-disable-next-line no-unused-vars
   const {
-    recommendations,
-    loading: recommendationsLoading,
-    error: recommendationsError,
-    fetchRecommendations,
     acceptRecommendation: acceptRecommendationAction,
     trackInteraction,
   } = useRecommendations();
@@ -358,7 +353,7 @@ export default function DashboardContent() {
       console.error('[Dashboard] Failed to reject recommendation:', error);
       // Fail silently - rejection tracking is not critical
     }
-  }, [notify]);
+  }, [notify, trackInteraction]);
 
   // Update nutrition goals (inline edit from RemainingBudgetCard)
   // eslint-disable-next-line no-unused-vars
@@ -683,6 +678,7 @@ export default function DashboardContent() {
     }
 
     return calData;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, trendData]);
 
   // Detect anomalies in data

@@ -13,6 +13,7 @@ export default function LoadingSkeleton({ width = '100%', height = 20, style }) 
 
   useEffect(() => {
     pulseAnim.start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

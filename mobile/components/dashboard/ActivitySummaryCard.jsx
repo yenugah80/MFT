@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateWeeklyGoalProgress } from '../../utils/activityAnalytics';
-import { TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TEXT, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const STORAGE_KEY = '@activity_log';
 
@@ -15,7 +15,6 @@ const STORAGE_KEY = '@activity_log';
 export default function ActivitySummaryCard() {
   const [todayActivities, setTodayActivities] = useState([]);
   const [allActivities, setAllActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadActivities();
@@ -43,8 +42,6 @@ export default function ActivitySummaryCard() {
       }
     } catch (error) {
       console.error('Error loading activities:', error);
-    } finally {
-      setLoading(false);
     }
   };
 

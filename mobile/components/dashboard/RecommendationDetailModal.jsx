@@ -104,7 +104,7 @@ export default function RecommendationDetailModal({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const sheetSlideAnim = useRef(new Animated.Value(1000)).current;
 
-  const { height: screenHeight } = useWindowDimensions();
+  useWindowDimensions();
 
   // Animate in when modal opens
   useEffect(() => {
@@ -127,6 +127,7 @@ export default function RecommendationDetailModal({
       fadeAnim.setValue(0);
       sheetSlideAnim.setValue(1000);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   // Animate reject sheet in

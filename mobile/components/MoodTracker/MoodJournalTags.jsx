@@ -22,7 +22,6 @@ import * as Haptics from 'expo-haptics';
 
 import {
   TEXT,
-  SEMANTIC,
   TYPOGRAPHY,
   SPACING,
   RADIUS,

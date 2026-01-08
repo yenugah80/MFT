@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { BRAND, TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS } from '../../constants/premiumTheme';
 
 export default function PreferenceCombinationCard({
   title = 'Your Preferences',
@@ -33,6 +33,7 @@ export default function PreferenceCombinationCard({
         useNativeDriver: true
       })
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, description]);
 
   if (!dietaryPrefs.length && !cuisinePrefs.length) {

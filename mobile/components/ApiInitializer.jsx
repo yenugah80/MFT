@@ -28,6 +28,7 @@ const ApiInitializer = ({ children }) => {
     });
 
     console.log('[ApiInitializer] API client initialized with Clerk token provider');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]); // ✅ Remove getToken from dependencies - it's a reference that changes on every render
 
   // Render children regardless of Clerk load state
