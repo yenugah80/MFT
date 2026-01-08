@@ -126,13 +126,10 @@ export default function IngredientsSection({ ingredients, isComplex = false, tot
   const textPrimary = isDark ? colors.text.primary : TEXT.primary;
   const textSecondary = isDark ? colors.text.secondary : TEXT.secondary;
 
-  // Don't render if no ingredients
-  if (!ingredients || ingredients.length === 0) {
-    return null;
-  }
-
   // Calculate total calories from ingredients if not provided
+  // Must be called before any early returns to follow React hooks rules
   const totalCalories = useMemo(() => {
+    if (!ingredients || ingredients.length === 0) return 0;
     if (totalMealCalories > 0) return totalMealCalories;
     return ingredients.reduce((sum, ing) => {
       const cal = typeof ing === 'object' ? (ing.calories || 0) : 0;
@@ -141,11 +138,18 @@ export default function IngredientsSection({ ingredients, isComplex = false, tot
   }, [ingredients, totalMealCalories]);
 
   // Check if any ingredients have nutrition data
+  // Must be called before any early returns to follow React hooks rules
   const hasNutritionData = useMemo(() => {
+    if (!ingredients || ingredients.length === 0) return false;
     return ingredients.some(ing =>
       typeof ing === 'object' && (ing.calories > 0 || ing.protein > 0 || ing.carbs > 0 || ing.fat > 0)
     );
   }, [ingredients]);
+
+  // Don't render if no ingredients
+  if (!ingredients || ingredients.length === 0) {
+    return null;
+  }
 
   return (
     <View

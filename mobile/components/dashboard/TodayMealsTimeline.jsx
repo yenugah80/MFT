@@ -203,7 +203,7 @@ export default function TodayMealsTimeline({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Ionicons name="time-outline" size={18} color={BRAND.primary} />
-          <Text style={styles.headerTitle}>Today's Meals</Text>
+          <Text style={styles.headerTitle}>Today&apos;s Meals</Text>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{meals.length}</Text>
           </View>
