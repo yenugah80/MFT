@@ -134,10 +134,11 @@ export default function MoodInsightsScreen() {
     setInsightsError(null);
 
     try {
+      // AI-powered insights can take longer, use extended timeout (30s)
       const response = await apiClient.post('/mood/insights', {
         days,
         forceRefresh,
-      });
+      }, { _timeout: 30000 });
 
       setMoodInsights(response?.insights || []);
 

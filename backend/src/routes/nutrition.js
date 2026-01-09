@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
 import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification } from "../services/gamificationRewardService.js";
+import { calculateLevel } from "../utils/levelCalculator.js";
 import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 
@@ -948,6 +949,15 @@ router.get("/dashboard", async (req, res) => {
       gamificationRow = await initializeGamification(userId, db);
     }
 
+    // Calculate level info to include nextLevelXp
+    const levelInfo = calculateLevel(gamificationRow?.xp || 0);
+    const gamificationWithLevel = {
+      ...gamificationRow,
+      nextLevelXp: levelInfo.nextLevelXp,
+      currentLevelXp: levelInfo.currentLevelXP,
+      progressPercent: levelInfo.progressPercent,
+    };
+
     const dashboard = {
       today: {
         date: today,
@@ -967,7 +977,7 @@ router.get("/dashboard", async (req, res) => {
         hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
       goals: goals[0] || null,
-      gamification: gamificationRow,
+      gamification: gamificationWithLevel,
       trends: {
         weeklyAverages,
         weekSummaries: weekSummaries.map(s => ({
