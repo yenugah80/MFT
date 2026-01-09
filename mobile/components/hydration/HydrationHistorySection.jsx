@@ -236,9 +236,11 @@ function SwipeableEntry({ entry, onDelete, bevType, styles }) {
         <TouchableOpacity
           onPress={handleDirectDelete}
           style={styles.timelineDeleteButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityLabel="Delete this water entry"
+          accessibilityRole="button"
         >
-          <Ionicons name="close-circle" size={20} color="#EF4444" />
+          <Ionicons name="close-circle" size={24} color="#EF4444" />
         </TouchableOpacity>
       </Animated.View>
     </View>

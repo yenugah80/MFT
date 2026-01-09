@@ -1007,7 +1007,10 @@ export default function HydrationWellnessDashboard({
   celebratedTodayKey,
   onCelebrate,
   onOpenFullTracker,
+  onQuickAddWater, // New: callback for quick-add buttons
 }) {
+  // State for collapsible health metrics section
+  const [healthMetricsExpanded, setHealthMetricsExpanded] = useState(false);
   const safeCurrentIntake = parseLiters(currentIntake);
   const safeGoal = parseGoal(dailyGoal, 2.0, 0.5, 10);
   const now = new Date();
@@ -1205,7 +1208,14 @@ export default function HydrationWellnessDashboard({
       {/* Main Progress & Wellness Score */}
       <GlassCard padding="lg" style={styles.mainCard}>
         <View style={[styles.mainContent, isCompact && styles.mainContentCompact]}>
-          <WaveProgress percentage={percentage} size={isCompact ? 120 : 140} />
+          <View
+            accessible={true}
+            accessibilityLabel={`Hydration progress: ${Math.round(percentage)}% of daily goal. ${currentMl} milliliters of ${goalMl} milliliters consumed.`}
+            accessibilityRole="progressbar"
+            accessibilityValue={{ min: 0, max: 100, now: Math.round(percentage) }}
+          >
+            <WaveProgress percentage={percentage} size={isCompact ? 120 : 140} />
+          </View>
 
           <View style={styles.mainStats}>
             <Text style={styles.mainInsight}>{leadMessage}</Text>
@@ -1218,6 +1228,51 @@ export default function HydrationWellnessDashboard({
             </Text>
           </View>
         </View>
+
+        {/* Quick-Add Buttons - One tap hydration logging */}
+        {onQuickAddWater && (
+          <View style={styles.quickAddContainer}>
+            <Text style={styles.quickAddLabel}>Quick add</Text>
+            <View style={styles.quickAddRow}>
+              <TouchableOpacity
+                style={styles.quickAddButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onQuickAddWater(0.25);
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Add 250 milliliters of water"
+                accessibilityRole="button"
+              >
+                <Text style={styles.quickAddButtonText}>+250ml</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickAddButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onQuickAddWater(0.5);
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Add 500 milliliters of water"
+                accessibilityRole="button"
+              >
+                <Text style={styles.quickAddButtonText}>+500ml</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickAddButton, styles.quickAddButtonLarge]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onQuickAddWater(1.0);
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Add 1 liter of water"
+                accessibilityRole="button"
+              >
+                <Text style={styles.quickAddButtonText}>+1L</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </GlassCard>
 
       {/* Behavior Feedback */}
@@ -1290,15 +1345,36 @@ export default function HydrationWellnessDashboard({
 
       <View style={styles.sectionDivider} />
 
-      {/* Health Impact Indicators (Segmented) */}
+      {/* Health Impact Indicators (Collapsible - Default Collapsed) */}
       <GlassCard padding="md" style={styles.impactCard}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="fitness" size={20} color={BRAND.primary} />
-            <Text style={styles.sectionTitle}>Health Impact</Text>
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setHealthMetricsExpanded(!healthMetricsExpanded);
+          }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Health Impact section. ${healthMetricsExpanded ? 'Expanded' : 'Collapsed'}. Tap to ${healthMetricsExpanded ? 'collapse' : 'expand'}.`}
+        >
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="fitness" size={20} color={BRAND.primary} />
+              <Text style={styles.sectionTitle}>Health Impact</Text>
+            </View>
+            <Text style={styles.sectionSubtitle}>
+              {healthMetricsExpanded ? 'Tap to collapse' : 'Tap to see details'}
+            </Text>
           </View>
-          <Text style={styles.sectionSubtitle}>Switch between body and mind</Text>
-        </View>
+          <Ionicons
+            name={healthMetricsExpanded ? 'chevron-up' : 'chevron-down'}
+            size={24}
+            color={TEXT.tertiary}
+          />
+        </TouchableOpacity>
+
+        {healthMetricsExpanded && (
+          <>
 
         <View style={[styles.segmentedToggle, isCompact && styles.segmentedToggleCompact]}>
           <TouchableOpacity
@@ -1401,6 +1477,8 @@ export default function HydrationWellnessDashboard({
               size={isCompact ? 60 : 70}
             />
           </View>
+        )}
+          </>
         )}
       </GlassCard>
 
@@ -1554,6 +1632,49 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     marginTop: SPACING[1],
+  },
+
+  // Quick-Add Buttons
+  quickAddContainer: {
+    marginTop: SPACING[4],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: `${TEXT.tertiary}15`,
+  },
+  quickAddLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.secondary,
+    marginBottom: SPACING[2],
+  },
+  quickAddRow: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+  },
+  quickAddButton: {
+    flex: 1,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[2],
+    backgroundColor: `${SEMANTIC.info.base}15`,
+    borderRadius: RADIUS.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48, // Accessibility: minimum touch target
+  },
+  quickAddButtonLarge: {
+    backgroundColor: `${SEMANTIC.info.base}25`,
+  },
+  quickAddButtonText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: SEMANTIC.info.base,
+  },
+
+  // Collapsible Header
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 
   // Main Card

@@ -241,7 +241,7 @@ export default function DashboardContent() {
   const { data: moodInsightsData, isLoading: moodInsightsLoading } = useMoodInsights({ windowDays: 30, trendDays: 7 });
 
   // Water tracking hook
-  const { markHydrationCelebration } = useWaterLog();
+  const { markHydrationCelebration, logWater } = useWaterLog();
 
   useEffect(() => {
     let isActive = true;
@@ -1326,6 +1326,7 @@ export default function DashboardContent() {
           onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/insights/mood')}
           onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          onQuickAddWater={logWater}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}

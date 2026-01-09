@@ -944,7 +944,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timelineDeleteButton: {
-    padding: 4,
+    padding: 8,
+    minWidth: 44, // Accessibility: minimum touch target
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   timelineContent: {
     flex: 1,
@@ -968,9 +972,9 @@ const styles = StyleSheet.create({
     maxWidth: 60,
   },
   hydrationFactorText: {
-    fontSize: 10,
+    fontSize: 13, // Increased from 10px for better readability
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.muted,
+    color: TEXT.secondary, // Improved contrast
   },
 
   // Empty State

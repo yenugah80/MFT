@@ -27,6 +27,7 @@ export default function DashboardWellnessSection({
   onCelebrateHydration,
   onOpenMoodInsights,
   onOpenHydrationTracker,
+  onQuickAddWater, // New: quick-add water callback
   moodInsights,
   moodInsightsLoading,
   wellnessScore,
@@ -50,6 +51,7 @@ export default function DashboardWellnessSection({
           celebratedTodayKey={hydrationCelebratedKey}
           onCelebrate={onCelebrateHydration}
           onOpenFullTracker={onOpenHydrationTracker}
+          onQuickAddWater={onQuickAddWater}
           compact={true}
         />
 
