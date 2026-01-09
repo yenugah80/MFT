@@ -784,7 +784,7 @@ export default function DashboardContent() {
       proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
       currentHydration: currentWater,
       hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
-      streak: parseDecimal(data.gamification?.streak, 0),
+      streak: parseDecimal(data.trends?.currentStreak, 0) || parseDecimal(data.gamification?.streak, 0),
       timeOfDay: new Date().getHours(),
     });
   }, [data]);
@@ -808,7 +808,7 @@ export default function DashboardContent() {
       today: data.today,
       goals: data.goals,
       historicalData: data.trends?.weekSummaries || [],
-      streak: parseDecimal(data.gamification?.streak, 0),
+      streak: parseDecimal(data.trends?.currentStreak, 0) || parseDecimal(data.gamification?.streak, 0),
     });
 
     // Transform to format expected by EnhancedMoodCard
@@ -1065,13 +1065,17 @@ export default function DashboardContent() {
 
   const { today, goals, gamification, trends, recentWeight } = data;
 
+  // Use calculated streak from trends (fresh calculation) instead of DB streak
+  // DB streak may be stale if updateStreak wasn't called properly
+  const displayStreak = parseDecimal(trends?.currentStreak, 0) || parseDecimal(gamification?.streak, 0);
+
   // Check if user has any data (first-time user detection)
   // Include historical data checks so returning users don't see welcome banner
   const hasTodayData = uniqueFoodLogs.length > 0 ||
                         parseLiters(today.waterIntakeLiters) > 0 ||
                         today.moodLogs?.length > 0;
 
-  const hasHistoricalData = parseDecimal(gamification?.streak, 0) > 0 ||
+  const hasHistoricalData = displayStreak > 0 ||
                             parseDecimal(gamification?.xp, 0) > 0 ||
                             parseDecimal(gamification?.level, 1) > 1 ||
                             parseDecimal(gamification?.totalMealsLogged, 0) > 0 ||
@@ -1124,7 +1128,7 @@ export default function DashboardContent() {
           // Enhanced header props
           userInitials={user?.firstName?.[0]?.toUpperCase() || user?.fullName?.[0]?.toUpperCase() || 'U'}
           userImageUrl={user?.imageUrl || null}
-          streak={parseDecimal(gamification?.streak, 0)}
+          streak={displayStreak}
           todayCalories={parseCalories(today?.nutrition?.totalCalories)}
           calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
           waterProgress={calculatePercentage(
@@ -1166,7 +1170,7 @@ export default function DashboardContent() {
         <PremiumCalendarStrip
           data={calendarData}
           selectedDate={null}
-          currentStreak={parseDecimal(gamification?.streak, 0)}
+          currentStreak={displayStreak}
           onDateSelect={(dateOrObj) => {
             // Handle both Date object and { dateKey } from day detail modal
             const dateKey = dateOrObj?.dateKey || (dateOrObj instanceof Date ? dateOrObj.toISOString().split('T')[0] : null);
@@ -1184,7 +1188,7 @@ export default function DashboardContent() {
           today={today}
           goals={goals}
           moodLogs={today?.moodLogs || []}
-          streak={parseDecimal(gamification?.streak, 0)}
+          streak={displayStreak}
           historicalScores={[]}
           onViewDetails={() => router.push('/insights/mood')}
         />
@@ -1212,7 +1216,7 @@ export default function DashboardContent() {
           <PremiumAchievementsCard
             level={parseDecimal(gamification?.level, 1)}
             xp={parseDecimal(gamification?.xp, 0)}
-            streak={parseDecimal(gamification?.streak, 0)}
+            streak={displayStreak}
             nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
             streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
           />
