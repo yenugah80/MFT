@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
 import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../utils/schemaGuards.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
+import { updateStreak } from "../services/gamificationRewardService.js";
 
 const router = express.Router();
 
@@ -87,6 +88,14 @@ router.post("/log", async (req, res) => {
     } else {
       entry = result[0];
       console.log(`[WaterLog] New entry created: id=${entry.id}, amount=${entry.amountLiters}L`);
+
+      // Update streak for new water log (any activity continues streak)
+      try {
+        const streakResult = await updateStreak(userId, entry.loggedDate, db);
+        console.log(`[WaterLog] Streak updated: ${streakResult.streak}, incremented: ${streakResult.streakIncremented}`);
+      } catch (streakError) {
+        console.error("[WaterLog] Streak update failed (non-fatal):", streakError);
+      }
     }
 
     res.json({ entry, wasDuplicate: !isNewEntry });

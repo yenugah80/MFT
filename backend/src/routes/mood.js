@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC } from "../utils/timezone.js";
 import { generateMoodInsights, generateBasicMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
+import { updateStreak } from "../services/gamificationRewardService.js";
 
 const router = express.Router();
 
@@ -136,6 +137,14 @@ router.post("/log", async (req, res) => {
     } else {
       entry = result[0];
       console.log(`[MoodLog] New entry created: id=${entry.id}, mood=${entry.mood}, intensity=${entry.intensity}`);
+
+      // Update streak for new mood log (any activity continues streak)
+      try {
+        const streakResult = await updateStreak(userId, safeLoggedDate, db);
+        console.log(`[MoodLog] Streak updated: ${streakResult.streak}, incremented: ${streakResult.streakIncremented}`);
+      } catch (streakError) {
+        console.error("[MoodLog] Streak update failed (non-fatal):", streakError);
+      }
 
       // Trigger async correlation analysis (don't await)
       analyzeMoodMealCorrelation(userId, entry).catch(err => {

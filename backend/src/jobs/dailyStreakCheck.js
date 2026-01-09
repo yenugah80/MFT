@@ -3,7 +3,7 @@
 
 import cron from 'cron';
 import { db } from '../config/db.js';
-import { gamificationTable, foodLogTable } from '../db/schema.js';
+import { gamificationTable, foodLogTable, waterLogTable, moodLogTable } from '../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { normalizeDateUTC, addDaysUTC } from '../utils/timezone.js';
 
@@ -40,21 +40,46 @@ export function initStreakCronJob() {
 
         for (const { userId } of allUsers) {
           try {
-            // Check if user logged any meals yesterday
-            const yesterdayLogs = await db
-              .select({ count: sql`count(*)::int` })
-              .from(foodLogTable)
-              .where(
-                and(
-                  eq(foodLogTable.userId, userId),
-                  sql`${foodLogTable.loggedDate} >= ${yesterdayStart}`,
-                  sql`${foodLogTable.loggedDate} <= ${yesterdayEnd}`
-                )
-              );
+            // Check if user logged any activity yesterday (food, water, or mood)
+            const [foodLogs, waterLogs, moodLogs] = await Promise.all([
+              db
+                .select({ count: sql`count(*)::int` })
+                .from(foodLogTable)
+                .where(
+                  and(
+                    eq(foodLogTable.userId, userId),
+                    sql`${foodLogTable.loggedDate} >= ${yesterdayStart}`,
+                    sql`${foodLogTable.loggedDate} <= ${yesterdayEnd}`
+                  )
+                ),
+              db
+                .select({ count: sql`count(*)::int` })
+                .from(waterLogTable)
+                .where(
+                  and(
+                    eq(waterLogTable.userId, userId),
+                    sql`${waterLogTable.loggedDate} >= ${yesterdayStart}`,
+                    sql`${waterLogTable.loggedDate} <= ${yesterdayEnd}`
+                  )
+                ),
+              db
+                .select({ count: sql`count(*)::int` })
+                .from(moodLogTable)
+                .where(
+                  and(
+                    eq(moodLogTable.userId, userId),
+                    sql`${moodLogTable.loggedDate} >= ${yesterdayStart}`,
+                    sql`${moodLogTable.loggedDate} <= ${yesterdayEnd}`
+                  )
+                ),
+            ]);
 
-            const mealCount = yesterdayLogs[0]?.count || 0;
+            const totalActivityCount =
+              (foodLogs[0]?.count || 0) +
+              (waterLogs[0]?.count || 0) +
+              (moodLogs[0]?.count || 0);
 
-            if (mealCount === 0) {
+            if (totalActivityCount === 0) {
               // User missed yesterday - check for streak freeze
               const [gamification] = await db
                 .select()
@@ -94,7 +119,7 @@ export function initStreakCronJob() {
                 console.log(`[Streak] 🔄 User ${userId} streak reset (was ${gamification.streak} days)`);
               }
             } else {
-              // User logged yesterday, streak is safe
+              // User had activity yesterday (food, water, or mood), streak is safe
               streaksPreserved++;
             }
           } catch (userError) {
