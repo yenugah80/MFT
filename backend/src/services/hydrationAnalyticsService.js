@@ -600,6 +600,18 @@ export async function getOrCreateHydrationProfile(userId) {
     console.log(`[HydrationAnalytics] Created profile for user ${userId}`);
     return profile;
   } catch (error) {
+    // Check if table doesn't exist (relation does not exist error)
+    if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+      console.warn('[HydrationAnalytics] Profile table does not exist yet - using fallback');
+      const coldStart = await getColdStartStage(userId);
+      return {
+        userId,
+        onboardingStage: coldStart.stage,
+        daysWithData: coldStart.distinctDays,
+        patternTrackingEnabled: true,
+        calendarConnected: false,
+      };
+    }
     console.error('[HydrationAnalytics] getOrCreateHydrationProfile error:', error);
     throw error;
   }
@@ -813,6 +825,11 @@ export async function getDismissedInsightTypes(userId) {
 
     return dismissed.map((d) => d.insightType);
   } catch (error) {
+    // Gracefully handle if table doesn't exist
+    if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+      console.warn('[HydrationAnalytics] Feedback table does not exist yet - returning empty');
+      return [];
+    }
     console.error('[HydrationAnalytics] getDismissedInsightTypes error:', error);
     return [];
   }

@@ -49,14 +49,24 @@ router.get('/dashboard', async (req, res) => {
   try {
     const userId = req.auth.userId;
 
-    // Ensure user has a hydration profile
-    await getOrCreateHydrationProfile(userId);
+    // Try to ensure user has a hydration profile (graceful if table doesn't exist)
+    try {
+      await getOrCreateHydrationProfile(userId);
+    } catch (profileError) {
+      // Table might not exist yet on production - continue without profile
+      console.warn('[HydrationAnalytics] Profile creation skipped (table may not exist):', profileError.message);
+    }
 
     // Get full analytics dashboard
     const dashboard = await getAnalyticsDashboard(userId);
 
-    // Also get dismissed insight types for filtering on client
-    const dismissedTypes = await getDismissedInsightTypes(userId);
+    // Try to get dismissed insight types (graceful if table doesn't exist)
+    let dismissedTypes = [];
+    try {
+      dismissedTypes = await getDismissedInsightTypes(userId);
+    } catch (dismissedError) {
+      console.warn('[HydrationAnalytics] Dismissed types fetch skipped:', dismissedError.message);
+    }
 
     res.json({
       ...dashboard,
@@ -64,7 +74,16 @@ router.get('/dashboard', async (req, res) => {
     });
   } catch (error) {
     console.error('[HydrationAnalytics] Dashboard error:', error);
-    res.status(500).json({ error: 'Failed to fetch analytics dashboard' });
+    // Return fallback data instead of 500 error
+    res.json({
+      coldStart: { stage: 'day0', daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
+      patterns: null,
+      persona: null,
+      personaConfidence: 0,
+      prediction: null,
+      dismissedInsightTypes: [],
+      error: 'Analytics temporarily unavailable',
+    });
   }
 });
 
