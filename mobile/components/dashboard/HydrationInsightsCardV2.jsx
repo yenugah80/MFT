@@ -295,6 +295,24 @@ function SecondaryAction({ onPress, label = 'Other amount' }) {
 }
 
 // ============================================================================
+// VIEW INSIGHTS LINK
+// ============================================================================
+
+function ViewInsightsLink({ onPress }) {
+  return (
+    <TouchableOpacity
+      style={styles.viewInsightsLink}
+      onPress={onPress}
+      hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+    >
+      <Ionicons name="analytics-outline" size={16} color={HYDRATION_ACCENT.primary} />
+      <Text style={styles.viewInsightsText}>View insights</Text>
+      <Ionicons name="chevron-forward" size={14} color={HYDRATION_ACCENT.primary} />
+    </TouchableOpacity>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -315,6 +333,7 @@ export default function HydrationInsightsCardV2({
   onOpenBeveragePicker,
   onExplainPrediction,
   onOpenTracker,
+  onOpenInsights,
 
   // Loading state
   isLoading = false,
@@ -373,6 +392,11 @@ export default function HydrationInsightsCardV2({
           label="Other amount"
         />
       </View>
+
+      {/* View Insights Link (only for established users) */}
+      {!isColdStart && onOpenInsights && (
+        <ViewInsightsLink onPress={onOpenInsights} />
+      )}
     </View>
   );
 }
@@ -535,6 +559,23 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontSize: HYDRATION_TYPOGRAPHY.size.bodySmall,
     color: HYDRATION_BASE.text.secondary,
+    fontWeight: HYDRATION_TYPOGRAPHY.weight.medium,
+  },
+
+  // View Insights Link
+  viewInsightsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: HYDRATION_SPACING.xs,
+    marginTop: HYDRATION_SPACING.lg,
+    paddingTop: HYDRATION_SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: HYDRATION_BASE.surfaceSubtle,
+  },
+  viewInsightsText: {
+    fontSize: HYDRATION_TYPOGRAPHY.size.bodySmall,
+    color: HYDRATION_ACCENT.primary,
     fontWeight: HYDRATION_TYPOGRAPHY.weight.medium,
   },
 });

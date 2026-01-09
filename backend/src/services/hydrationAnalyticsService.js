@@ -533,12 +533,38 @@ export async function generatePrediction(userId, context = {}) {
  */
 export async function getAnalyticsDashboard(userId) {
   try {
-    const [coldStart, patterns, persona, prediction] = await Promise.all([
+    // Use Promise.allSettled for resilience - partial data is better than no data
+    const results = await Promise.allSettled([
       getColdStartStage(userId),
       analyzeHydrationPatterns(userId),
       classifyPersona(userId),
       generatePrediction(userId),
     ]);
+
+    // Extract results, using fallbacks for rejected promises
+    const coldStart = results[0].status === 'fulfilled'
+      ? results[0].value
+      : { stage: COLD_START_STAGES.DAY_0, daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 };
+
+    const patterns = results[1].status === 'fulfilled'
+      ? results[1].value
+      : { hasEnoughData: false };
+
+    const persona = results[2].status === 'fulfilled'
+      ? results[2].value
+      : { persona: null, confidence: 0 };
+
+    const prediction = results[3].status === 'fulfilled'
+      ? results[3].value
+      : { hasPrediction: false };
+
+    // Log any failures for debugging
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const names = ['coldStart', 'patterns', 'persona', 'prediction'];
+        console.warn(`[HydrationAnalytics] ${names[index]} failed:`, result.reason?.message);
+      }
+    });
 
     return {
       coldStart,
@@ -553,9 +579,10 @@ export async function getAnalyticsDashboard(userId) {
     console.error('[HydrationAnalytics] getAnalyticsDashboard error:', error);
     return {
       error: error.message,
-      coldStart: { stage: COLD_START_STAGES.DAY_0 },
+      coldStart: { stage: COLD_START_STAGES.DAY_0, daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
       patterns: null,
       persona: null,
+      personaConfidence: 0,
       prediction: null,
     };
   }

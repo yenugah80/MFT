@@ -31,6 +31,7 @@ export default function DashboardWellnessSection({
   today,
   goals,
   onOpenMoodInsights,
+  onOpenHydrationInsights,
   onOpenHydrationTracker,
   onQuickAddWater,
   onOpenBeveragePicker,
@@ -77,6 +78,7 @@ export default function DashboardWellnessSection({
             onOpenBeveragePicker={onOpenBeveragePicker}
             onExplainPrediction={handleExplainPrediction}
             onOpenTracker={onOpenHydrationTracker}
+            onOpenInsights={onOpenHydrationInsights}
           />
         ) : (
           <HydrationInsightsCard

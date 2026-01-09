@@ -1325,6 +1325,7 @@ export default function DashboardContent() {
           today={today}
           goals={goals}
           onOpenMoodInsights={() => router.push('/insights/mood')}
+          onOpenHydrationInsights={() => router.push('/insights/hydration')}
           onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
           onQuickAddWater={logWater}
           onOpenBeveragePicker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration', openPicker: true } })}
