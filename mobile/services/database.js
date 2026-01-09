@@ -214,19 +214,54 @@ export async function exportDatabase() {
 }
 
 /**
- * Get a single meal by ID (clientEventId or local_id)
- * @param {string|number} id - clientEventId or local_id
+ * Get a single meal by ID (clientEventId, server id, local_id, or mealId)
+ * @param {string|number} id - clientEventId, server id, local_id, or mealId
  * @returns {Promise<Object|null>} Meal data or null if not found
  */
 export async function getMealById(id) {
   const db = getDatabase();
 
   try {
-    // Try clientEventId first, then local_id
+    const idStr = String(id);
+    const idNum = Number(id) || 0;
+
+    // Try clientEventId first
     let meal = await db.getFirstAsync(
-      'SELECT * FROM food_logs WHERE clientEventId = ? OR local_id = ? LIMIT 1',
-      [String(id), Number(id) || 0]
+      'SELECT * FROM food_logs WHERE clientEventId = ? LIMIT 1',
+      [idStr]
     );
+
+    // Try server id column
+    if (!meal) {
+      meal = await db.getFirstAsync(
+        'SELECT * FROM food_logs WHERE id = ? LIMIT 1',
+        [idNum]
+      );
+    }
+
+    // Try local_id
+    if (!meal) {
+      meal = await db.getFirstAsync(
+        'SELECT * FROM food_logs WHERE local_id = ? LIMIT 1',
+        [idNum]
+      );
+    }
+
+    // Try mealId in data_json (for multi-item meals)
+    if (!meal) {
+      meal = await db.getFirstAsync(
+        `SELECT * FROM food_logs WHERE json_extract(data_json, '$.mealId') = ? LIMIT 1`,
+        [idStr]
+      );
+    }
+
+    // Try clientEventId starting with the id (for multi-item meal items)
+    if (!meal) {
+      meal = await db.getFirstAsync(
+        `SELECT * FROM food_logs WHERE clientEventId LIKE ? LIMIT 1`,
+        [`${idStr}-%`]
+      );
+    }
 
     if (meal && meal.data_json) {
       return {

@@ -259,7 +259,8 @@ export default function MealLoggedCard({
   // Navigate to meal detail screen
   const handleViewDetails = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const mealId = meal.clientEventId || meal.id || meal.local_id;
+    // Check all possible ID fields (clientEventId, mealId, id, local_id)
+    const mealId = meal.clientEventId || meal.mealId || meal.id || meal.local_id;
     if (mealId) {
       router.push(`/meal/${mealId}`);
     }

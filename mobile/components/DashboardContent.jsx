@@ -1226,7 +1226,7 @@ export default function DashboardContent() {
           <TodayMealsTimeline
             meals={uniqueFoodLogs}
             onMealPress={(meal) => {
-              const mealId = meal.clientEventId || meal.id || meal.local_id;
+              const mealId = meal.clientEventId || meal.mealId || meal.id || meal.local_id;
               if (mealId) {
                 router.push(`/meal/${mealId}`);
               }

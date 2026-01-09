@@ -68,7 +68,7 @@ export default function HistoryScreen() {
       }
     } else {
       // Navigate to meal detail screen
-      const mealId = log.clientEventId || log.id || log.local_id;
+      const mealId = log.clientEventId || log.mealId || log.id || log.local_id;
       if (mealId) {
         router.push(`/meal/${mealId}`);
       }
