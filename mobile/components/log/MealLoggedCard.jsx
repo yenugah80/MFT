@@ -28,6 +28,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 import {
   BRAND,
@@ -251,8 +252,18 @@ export default function MealLoggedCard({
   onViewTrends,
   onViewHistory,
 }) {
+  const router = useRouter();
   const [scaleAnim] = useState(new Animated.Value(0.9));
   const [fadeAnim] = useState(new Animated.Value(0));
+
+  // Navigate to meal detail screen
+  const handleViewDetails = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const mealId = meal.clientEventId || meal.id || meal.local_id;
+    if (mealId) {
+      router.push(`/meal/${mealId}`);
+    }
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -531,6 +542,11 @@ export default function MealLoggedCard({
         {/* ACTIONS */}
         {/* ──────────────────────────────────────────── */}
         <View style={styles.actions}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={handleViewDetails}>
+            <Ionicons name="nutrition-outline" size={ICON_SIZES.md} color={BRAND.primary} />
+            <Text style={styles.secondaryButtonText}>Details</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.secondaryButton} onPress={onEdit}>
             <Ionicons name="create-outline" size={ICON_SIZES.md} color={BRAND.primary} />
             <Text style={styles.secondaryButtonText}>Edit</Text>

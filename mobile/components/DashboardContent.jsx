@@ -1226,10 +1226,10 @@ export default function DashboardContent() {
           <TodayMealsTimeline
             meals={uniqueFoodLogs}
             onMealPress={(meal) => {
-              router.push({
-                pathname: '/history',
-                params: { mealId: meal.id || meal.clientEventId }
-              });
+              const mealId = meal.clientEventId || meal.id || meal.local_id;
+              if (mealId) {
+                router.push(`/meal/${mealId}`);
+              }
             }}
             onViewAll={() => router.push('/history')}
             maxItems={4}

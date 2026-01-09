@@ -67,7 +67,11 @@ export default function HistoryScreen() {
         setSelectedLogs([log]);
       }
     } else {
-      setDetailLog(log);
+      // Navigate to meal detail screen
+      const mealId = log.clientEventId || log.id || log.local_id;
+      if (mealId) {
+        router.push(`/meal/${mealId}`);
+      }
     }
   };
 

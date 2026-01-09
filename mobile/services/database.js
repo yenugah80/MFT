@@ -213,5 +213,34 @@ export async function exportDatabase() {
   }
 }
 
+/**
+ * Get a single meal by ID (clientEventId or local_id)
+ * @param {string|number} id - clientEventId or local_id
+ * @returns {Promise<Object|null>} Meal data or null if not found
+ */
+export async function getMealById(id) {
+  const db = getDatabase();
+
+  try {
+    // Try clientEventId first, then local_id
+    let meal = await db.getFirstAsync(
+      'SELECT * FROM food_logs WHERE clientEventId = ? OR local_id = ? LIMIT 1',
+      [String(id), Number(id) || 0]
+    );
+
+    if (meal && meal.data_json) {
+      return {
+        ...meal,
+        data: JSON.parse(meal.data_json),
+      };
+    }
+
+    return meal;
+  } catch (error) {
+    console.error('[Database] getMealById failed:', error);
+    return null;
+  }
+}
+
 // Export singleton instance
 export const db = getDatabase();
