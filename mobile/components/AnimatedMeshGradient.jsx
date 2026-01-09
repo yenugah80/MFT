@@ -95,17 +95,17 @@ export default function AnimatedMeshGradient({
           }),
         ]),
 
-        // Opacity pulsing for depth
+        // Opacity pulsing for depth - useNativeDriver: false to match transforms
         Animated.sequence([
           Animated.timing(opacity2, {
             toValue: 1,
             duration: animationDuration / 2,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(opacity2, {
             toValue: 0.8,
             duration: animationDuration / 2,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
       ]);
