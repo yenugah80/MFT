@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: SPACING[4],
     borderRadius: RADIUS['2xl'],
-    // backgroundColor and borderColor applied inline for theme support
+    backgroundColor: '#FFFFFF', // Default for shadow efficiency (overridden inline for theme)
     padding: SPACING[5],
     // Luxurious shadow
     shadowColor: '#10B981',

@@ -2406,6 +2406,8 @@ const styles = StyleSheet.create({
   },
   freezeIconContainer: {
     marginBottom: SPACING[4],
+    backgroundColor: '#FFFFFF', // Required for shadow efficiency
+    borderRadius: RADIUS.full,
     shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

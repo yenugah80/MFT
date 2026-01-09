@@ -612,6 +612,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[4],
     borderRadius: RADIUS['2xl'],
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF', // Required for shadow efficiency
     // Luxurious shadow for depth
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 8 },

@@ -590,6 +590,8 @@ const styles = StyleSheet.create({
   },
   modalIconContainer: {
     marginBottom: SPACING[4],
+    // Note: Shadow without solid background is intentional for glow effect
+    // Warning expected: glow needs to show gradient behind it
     shadowColor: '#F59E0B',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,

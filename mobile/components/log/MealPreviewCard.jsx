@@ -227,6 +227,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     overflow: 'hidden',
+    backgroundColor: SURFACES.card.primary, // Required for shadow efficiency
     shadowColor: BRAND.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,

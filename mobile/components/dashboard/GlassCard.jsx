@@ -40,6 +40,7 @@ export default function GlassCard({
   }[padding] || SPACING[3];
 
   const glowStyle = glow && glowColor ? {
+    backgroundColor: '#FFFFFF', // Required for shadow efficiency
     shadowColor: glowColor,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,

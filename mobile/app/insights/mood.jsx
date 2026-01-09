@@ -354,7 +354,7 @@ export default function MoodInsightsScreen() {
                 calorieGoal: dashboardData.goals?.dailyCalories || 2000,
                 protein: dashboardData.today.nutrition?.totalProtein || 0,
                 proteinGoal: dashboardData.goals?.proteinG || 150,
-              })}
+              }).score}
               historicalPatterns={moodTrendsData?.data || []}
               onViewHistory={() => router.push('/history')}
             />
