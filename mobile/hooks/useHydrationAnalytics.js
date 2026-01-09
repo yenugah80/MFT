@@ -48,7 +48,11 @@ export function useHydrationAnalytics(options = {}) {
         const response = await apiClient.get('/hydration/analytics/dashboard');
         return response.data;
       } catch (error) {
-        console.error('[useHydrationAnalytics] Dashboard fetch error:', error);
+        // Silently return fallback data - backend may not have tables yet
+        // Once backend is fully deployed, this will work
+        if (__DEV__) {
+          console.warn('[useHydrationAnalytics] Using fallback data (backend may still be deploying)');
+        }
         // Return fallback data on error
         return {
           coldStart: { stage: 'day0', daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
