@@ -33,6 +33,8 @@ import analyticsRouter from "./routes/analytics.js";
 import adminStrategyRouter from "./routes/admin/strategy.js";
 import consentRouter from "./routes/consent.js";
 import voiceLogRouter from "./routes/voiceLog.js";
+import hydrationAnalyticsRouter from "./routes/hydrationAnalytics.js";
+import flagsRouter from "./routes/flags.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 
@@ -245,6 +247,12 @@ app.use("/api/consent", consentRouter);
 
 // Mount Voice Log Router (Voice-to-nutrition analysis)
 app.use("/api/voice", voiceLogRouter);
+
+// Mount Hydration Analytics Router (Predictive Hydration Intelligence)
+app.use("/api/hydration/analytics", hydrationAnalyticsRouter);
+
+// Mount Feature Flags Router (Progressive Rollout)
+app.use("/api/flags", flagsRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

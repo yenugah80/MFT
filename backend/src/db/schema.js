@@ -613,6 +613,193 @@ export const userPortionPreferencesTable = pgTable(
   })
 );
 
+// ============================================================================
+// HYDRATION INTELLIGENCE TABLES
+// Phase 0: Foundation for Predictive Hydration Intelligence
+// ============================================================================
+
+// Hydration daily summary - Pre-computed aggregates for WARM PATH
+// Regeneratable from water_log - no user data lost if truncated
+export const hydrationDailySummaryTable = pgTable(
+  "hydration_daily_summary",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    date: timestamp("date").notNull(),
+
+    // Raw totals
+    totalMl: integer("total_ml").notNull().default(0),
+    hydrationMl: integer("hydration_ml").notNull().default(0), // After beverage factors
+    logCount: integer("log_count").notNull().default(0),
+
+    // Beverage breakdown { water: 0.6, coffee: 0.2, tea: 0.1, juice: 0.1 }
+    beverageBreakdown: json("beverage_breakdown").default({}),
+
+    // Goal tracking
+    goalMl: integer("goal_ml"),
+    goalMet: boolean("goal_met").default(false),
+    goalPercent: decimal("goal_percent", { precision: 5, scale: 2 }),
+
+    // Pattern features (computed during aggregation)
+    peakHour: integer("peak_hour"), // 0-23
+    distributionVariance: decimal("distribution_variance", { precision: 8, scale: 4 }),
+    firstLogHour: integer("first_log_hour"),
+    lastLogHour: integer("last_log_hour"),
+
+    // Computation metadata
+    computedAt: timestamp("computed_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userDateUniqueIdx: unique("hydration_daily_user_date_idx").on(table.userId, table.date),
+    dateIdx: index("hydration_daily_date_idx").on(table.date),
+    userIdIdx: index("hydration_daily_user_idx").on(table.userId),
+    // CHECK constraints
+    totalMlCheck: check("hydration_total_ml_check", sql`${table.totalMl} >= 0`),
+    logCountCheck: check("hydration_log_count_check", sql`${table.logCount} >= 0`),
+    peakHourCheck: check("hydration_peak_hour_check", sql`${table.peakHour} IS NULL OR (${table.peakHour} >= 0 AND ${table.peakHour} <= 23)`),
+  })
+);
+
+// User hydration profile - Persona, patterns, privacy controls
+// Can be deleted/reset by user (GDPR compliant)
+export const userHydrationProfileTable = pgTable(
+  "user_hydration_profile",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Persona classification (NULL until day 7)
+    personaType: text("persona_type"), // CONSISTENT_SIPPER, MORNING_DEHYDRATOR, etc.
+    personaConfidence: decimal("persona_confidence", { precision: 3, scale: 2 }),
+    personaAssignedAt: timestamp("persona_assigned_at"),
+    personaVersion: text("persona_version").default("v1"),
+
+    // Learned patterns (JSON for flexibility)
+    patternsJson: json("patterns_json").default({}),
+
+    // Privacy controls
+    patternTrackingEnabled: boolean("pattern_tracking_enabled").default(true),
+    predictionsEnabled: boolean("predictions_enabled").default(true),
+    insightsEnabled: boolean("insights_enabled").default(true),
+
+    // Calendar integration
+    calendarConnected: boolean("calendar_connected").default(false),
+    calendarProvider: text("calendar_provider"), // 'apple', 'google', null
+    calendarConnectedAt: timestamp("calendar_connected_at"),
+
+    // Cold start tracking
+    onboardingStage: text("onboarding_stage").default("day0"), // day0, days1-3, days4-7, established, power_user
+    firstLogAt: timestamp("first_log_at"),
+    daysWithData: integer("days_with_data").default(0),
+
+    // Computation metadata
+    lastPatternComputeAt: timestamp("last_pattern_compute_at"),
+    lastPersonaComputeAt: timestamp("last_persona_compute_at"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userIdUniqueIdx: unique("hydration_profile_user_idx").on(table.userId),
+    stageIdx: index("hydration_profile_stage_idx").on(table.onboardingStage),
+    // CHECK constraints
+    personaConfidenceCheck: check("hydration_persona_confidence_check", sql`${table.personaConfidence} IS NULL OR (${table.personaConfidence} >= 0 AND ${table.personaConfidence} <= 1)`),
+    stageCheck: check("hydration_stage_check", sql`${table.onboardingStage} IN ('day0', 'days1-3', 'days4-7', 'established', 'power_user')`),
+    calendarProviderCheck: check("hydration_calendar_provider_check", sql`${table.calendarProvider} IS NULL OR ${table.calendarProvider} IN ('apple', 'google')`),
+  })
+);
+
+// Hydration predictions - Ephemeral, regenerated daily
+// For WARM PATH queries - pre-computed at midnight
+export const hydrationPredictionsTable = pgTable(
+  "hydration_predictions",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    predictionDate: timestamp("prediction_date").notNull(),
+
+    // Core prediction
+    predictedNeedMl: integer("predicted_need_ml").notNull(),
+    baselineMl: integer("baseline_ml").notNull(),
+
+    // Explainable factors (JSON array)
+    factors: json("factors").default([]),
+
+    // Confidence and metadata
+    confidence: decimal("confidence", { precision: 3, scale: 2 }),
+    algorithmVersion: text("algorithm_version").default("v1"),
+    dataPointsUsed: integer("data_points_used"),
+
+    // Context that influenced prediction
+    contextJson: json("context_json").default({}),
+
+    // Lifecycle
+    generatedAt: timestamp("generated_at").defaultNow(),
+    expiresAt: timestamp("expires_at"),
+    wasShownToUser: boolean("was_shown_to_user").default(false),
+    shownAt: timestamp("shown_at"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userDateUniqueIdx: unique("hydration_predictions_user_date_idx").on(table.userId, table.predictionDate),
+    expiresIdx: index("hydration_predictions_expires_idx").on(table.expiresAt),
+    userDateIdx: index("hydration_predictions_user_idx").on(table.userId, table.predictionDate),
+    // CHECK constraints
+    predictedMlCheck: check("hydration_prediction_ml_check", sql`${table.predictedNeedMl} > 0`),
+    confidenceCheck: check("hydration_prediction_confidence_check", sql`${table.confidence} IS NULL OR (${table.confidence} >= 0 AND ${table.confidence} <= 1)`),
+  })
+);
+
+// Insight feedback - User feedback loop for learning
+// Helps improve insight quality and respects user preferences
+export const insightFeedbackTable = pgTable(
+  "insight_feedback",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Insight identification
+    insightType: text("insight_type").notNull(), // 'prediction', 'pattern', 'persona', 'suggestion'
+    insightId: text("insight_id").notNull(),
+    insightVersion: text("insight_version").default("v1"),
+
+    // User feedback
+    wasHelpful: boolean("was_helpful"),
+    dismissed: boolean("dismissed").default(false),
+    dismissReason: text("dismiss_reason"), // 'not_accurate', 'not_useful', 'too_frequent', 'privacy'
+
+    // Optional detailed feedback
+    feedbackText: text("feedback_text"),
+    accuracyRating: integer("accuracy_rating"), // 1-5
+
+    // Context at feedback time
+    contextJson: json("context_json").default({}),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("insight_feedback_user_idx").on(table.userId),
+    typeIdx: index("insight_feedback_type_idx").on(table.insightType),
+    userInsightUniqueIdx: unique("insight_feedback_user_insight_idx").on(table.userId, table.insightType, table.insightId),
+    // CHECK constraints
+    typeCheck: check("insight_feedback_type_check", sql`${table.insightType} IN ('prediction', 'pattern', 'persona', 'suggestion', 'correlation')`),
+    reasonCheck: check("insight_feedback_reason_check", sql`${table.dismissReason} IS NULL OR ${table.dismissReason} IN ('not_accurate', 'not_useful', 'too_frequent', 'privacy', 'other')`),
+    ratingCheck: check("insight_feedback_rating_check", sql`${table.accuracyRating} IS NULL OR (${table.accuracyRating} >= 1 AND ${table.accuracyRating} <= 5)`),
+  })
+);
+
 // AI Estimated Foods table - caches OpenAI nutrition estimates
 // Replaces Mongoose model with Drizzle for PostgreSQL compatibility
 export const aiEstimatedFoodsTable = pgTable(

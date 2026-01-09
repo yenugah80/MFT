@@ -24,6 +24,7 @@ import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useRecommendations } from "../hooks/useRecommendations";
+import { useHydrationAnalytics } from "../hooks/useHydrationAnalytics";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -242,6 +243,9 @@ export default function DashboardContent() {
 
   // Water tracking hook
   const { markHydrationCelebration, logWater } = useWaterLog();
+
+  // Hydration analytics (V2 features)
+  const { analytics: hydrationAnalytics } = useHydrationAnalytics();
 
   useEffect(() => {
     let isActive = true;
@@ -1323,9 +1327,14 @@ export default function DashboardContent() {
           onOpenMoodInsights={() => router.push('/insights/mood')}
           onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
           onQuickAddWater={logWater}
+          onOpenBeveragePicker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration', openPicker: true } })}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}
+          waterLogs={today?.waterLogs || []}
+          hydrationWeekData={trends?.hydrationWeekData || []}
+          hydrationStreak={trends?.hydrationStreak || 0}
+          hydrationAnalytics={hydrationAnalytics}
         />
 
         {/* ============================================ */}
