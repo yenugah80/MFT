@@ -1312,6 +1312,7 @@ export default function DashboardContent() {
 
         {/* ============================================ */}
         {/* WELLNESS SECTION - Collapsible */}
+        {/* Premium hydration card: clean, honest, action-focused */}
         {/* ============================================ */}
         <DashboardWellnessSection
           styles={styles}
@@ -1319,11 +1320,6 @@ export default function DashboardContent() {
           onToggle={() => setWellnessExpanded(!wellnessExpanded)}
           today={today}
           goals={goals}
-          gamification={gamification}
-          hydrationEvents={hydrationEvents}
-          hydrationLastLoggedAt={hydrationLastLoggedAt}
-          hydrationCelebratedKey={hydrationCelebratedKey}
-          onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/insights/mood')}
           onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
           onQuickAddWater={logWater}

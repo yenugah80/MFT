@@ -826,10 +826,14 @@ export default function LogScreen() {
 
   /**
    * Handle water logging from HydrationTracker
+   * IMPORTANT: Send RAW amount, NOT effectiveAmount!
+   * Backend applies hydration factor - sending effectiveAmount would double-apply it
    */
   const handleLogWater = async (entry) => {
     try {
-      const amountLiters = entry.effectiveAmount / 1000; // Convert ml to liters
+      // FIX: Use entry.amount (raw ml), not entry.effectiveAmount (already factor-adjusted)
+      // Backend water.js applies hydration factor: hydrationLiters = amountLiters * factor
+      const amountLiters = entry.amount / 1000; // Convert raw ml to liters
       await logWater(amountLiters, entry.type);
       notify.success(`Logged ${entry.amount}ml of ${entry.type}`);
     } catch (error) {

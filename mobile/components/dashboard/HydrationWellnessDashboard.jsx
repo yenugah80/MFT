@@ -129,10 +129,6 @@ const BEVERAGE_PROFILE = {
     label: 'Smoothie',
     color: '#EC4899',
   },
-  alcohol: {
-    label: 'Alcohol',
-    color: '#B45309',
-  },
 };
 
 const normalizeBeverageType = (type) => (type && BEVERAGE_PROFILE[type] ? type : 'water');
@@ -168,12 +164,9 @@ const getBeverageInsight = (summary) => {
   const juiceMl = totals.juice || 0;
   const electrolyteMl = totals.electrolyte || 0;
   const smoothieMl = totals.smoothie || 0;
-  const alcoholMl = totals.alcohol || 0;
 
   let note = null;
-  if (alcoholMl / totalMl >= 0.2) {
-    note = 'Alcohol shows up today. A glass of water before bed can help tomorrow.';
-  } else if (caffeinatedMl / totalMl >= 0.5) {
+  if (caffeinatedMl / totalMl >= 0.5) {
     note = 'Caffeinated drinks dominate today. Add water to balance.';
   } else if (smoothieMl / totalMl >= 0.4) {
     note = 'Smoothies help, but water keeps hydration steady.';
@@ -242,13 +235,9 @@ const getHydrationInsightCandidate = ({
 
   const { totalMl, totals } = summary;
   const caffeinatedMl = (totals.coffee || 0) + (totals.tea || 0);
-  const alcoholMl = totals.alcohol || 0;
   const electrolyteMl = totals.electrolyte || 0;
   const smoothieMl = totals.smoothie || 0;
 
-  if (alcoholMl / totalMl >= 0.2) {
-    return 'Alcohol shows up today. A glass of water before bed can help tomorrow.';
-  }
   if (caffeinatedMl / totalMl >= 0.5) {
     return 'Lots of coffee today; a bit of water later might feel good.';
   }

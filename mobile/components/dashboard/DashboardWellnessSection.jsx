@@ -2,15 +2,16 @@
  * DashboardWellnessSection - Clean, focused wellness tracking
  *
  * Staff Design Principles:
- * - Hydration: Quick water logging
+ * - Hydration: Quick water logging with ONE action-focused card
  * - Activity: Daily movement summary
- * - Enhanced Mood Card with Wellness Score integration
+ * - Mood: Wellness insights
+ * - NO pseudoscience health claims
  */
 
 import React from 'react';
 import { View } from 'react-native';
 import CollapsibleSection from './CollapsibleSection';
-import HydrationWellnessDashboard from './HydrationWellnessDashboard';
+import PremiumHydrationCard from './PremiumHydrationCard';
 import ActivitySummaryCard from './ActivitySummaryCard';
 import EnhancedMoodCard from './EnhancedMoodCard';
 
@@ -20,14 +21,9 @@ export default function DashboardWellnessSection({
   onToggle,
   today,
   goals,
-  gamification,
-  hydrationEvents,
-  hydrationLastLoggedAt,
-  hydrationCelebratedKey,
-  onCelebrateHydration,
   onOpenMoodInsights,
   onOpenHydrationTracker,
-  onQuickAddWater, // New: quick-add water callback
+  onQuickAddWater,
   moodInsights,
   moodInsightsLoading,
   wellnessScore,
@@ -41,18 +37,12 @@ export default function DashboardWellnessSection({
       onToggle={onToggle}
     >
       <View style={styles.wellnessStack}>
-        {/* Hydration Tracker */}
-        <HydrationWellnessDashboard
+        {/* Premium Hydration Card - Clean, honest, action-focused */}
+        <PremiumHydrationCard
           currentIntake={today?.waterIntakeLiters || 0}
           dailyGoal={goals?.waterLiters || 2.0}
-          streak={gamification?.streak || 0}
-          intakeEvents={hydrationEvents}
-          lastLoggedAt={hydrationLastLoggedAt}
-          celebratedTodayKey={hydrationCelebratedKey}
-          onCelebrate={onCelebrateHydration}
+          onQuickAdd={onQuickAddWater}
           onOpenFullTracker={onOpenHydrationTracker}
-          onQuickAddWater={onQuickAddWater}
-          compact={true}
         />
 
         <View style={styles.wellnessDivider} />

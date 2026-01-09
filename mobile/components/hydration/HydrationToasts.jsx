@@ -45,9 +45,9 @@ export function MilestoneToast({
 
   const isSuccess = milestone === 100 && !isTip;
   const gradientColors = isTip
-    ? SURFACES.gradient.softPurple
+    ? SURFACES.gradient.purple
     : isSuccess
-      ? SURFACES.gradient.green
+      ? SURFACES.gradient.success
       : SURFACES.gradient.blue;
 
   return (

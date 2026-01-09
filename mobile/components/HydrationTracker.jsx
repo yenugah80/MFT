@@ -22,6 +22,9 @@ import {
   StyleSheet,
   ScrollView,
   AccessibilityInfo,
+  TextInput,
+  TouchableOpacity,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,84 +47,16 @@ import {
 } from '../constants/premiumTheme';
 
 // ============================================================================
-// CONSTANTS & CONFIG
+// CONSTANTS & CONFIG - Using single source of truth
 // ============================================================================
-
-const BEVERAGE_TYPES = {
-  water: {
-    hydrationFactor: 1.0,
-    icon: 'water',
-    color: '#3B82F6',
-    label: 'Water',
-    emoji: '💧',
-    description: '100% hydration credit',
-  },
-  coffee: {
-    hydrationFactor: 0.5,
-    icon: 'cafe',
-    color: '#78350F',
-    label: 'Coffee',
-    emoji: '☕',
-    description: 'Partial hydration credit',
-  },
-  tea: {
-    hydrationFactor: 0.9,
-    icon: 'leaf',
-    color: '#059669',
-    label: 'Tea',
-    emoji: '🍵',
-    description: 'Lightly hydrating',
-  },
-  juice: {
-    hydrationFactor: 0.8,
-    icon: 'wine',
-    color: '#F59E0B',
-    label: 'Juice',
-    emoji: '🧃',
-    description: 'Hydrating with sugars',
-  },
-  milk: {
-    hydrationFactor: 0.9,
-    icon: 'nutrition',
-    color: '#FBBF24',
-    label: 'Milk',
-    emoji: '🥛',
-    description: 'Hydrating with protein',
-  },
-  electrolyte: {
-    hydrationFactor: 1.1,
-    icon: 'flash',
-    color: '#0EA5E9',
-    label: 'Electrolyte',
-    emoji: '⚡',
-    description: 'Hydration boost',
-  },
-  smoothie: {
-    hydrationFactor: 0.8,
-    icon: 'ice-cream',
-    color: '#EC4899',
-    label: 'Smoothie',
-    emoji: '🥤',
-    description: 'Hydrating with fiber',
-  },
-  alcohol: {
-    hydrationFactor: 0.1,
-    icon: 'beer',
-    color: '#B45309',
-    label: 'Alcohol',
-    emoji: '🍺',
-    description: 'Minimal hydration credit',
-  },
-};
-
-const QUICK_ADD_SIZES = [
-  { ml: 150, label: 'Small', subtitle: '150ml', icon: 'water-outline' },
-  { ml: 250, label: 'Cup', subtitle: '250ml', icon: 'water' },
-  { ml: 500, label: 'Bottle', subtitle: '500ml', icon: 'water' },
-  { ml: 750, label: 'Large', subtitle: '750ml', icon: 'water' },
-];
-
-const MILESTONES = [25, 50, 75, 100];
+import {
+  BEVERAGE_TYPES,
+  QUICK_ADD_SIZES,
+  HYDRATION_MILESTONES as MILESTONES,
+  getBeverageWarning,
+  getPairingRecommendation,
+  shouldAvoidBeverage,
+} from '../constants/beverageConstants';
 
 // Gamified tips and motivational messages
 const HYDRATION_TIPS = [
@@ -166,6 +101,8 @@ export default function HydrationTracker({
   const [isTipMessage, setIsTipMessage] = useState(false);
   const [logCount, setLogCount] = useState(0);
   const [shownFirstLogToast, setShownFirstLogToast] = useState(false);
+  const [customAmount, setCustomAmount] = useState('');
+  const [isCustomInputFocused, setIsCustomInputFocused] = useState(false);
   const [loadingButton, setLoadingButton] = useState(null);
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -313,22 +250,63 @@ export default function HydrationTracker({
   }, [lastEntry, onRemoveWater, beverageHistory]);
 
   const handleSwipeDelete = useCallback(async (entry) => {
-    if (syncInFlightRef.current) return;
+    if (syncInFlightRef.current) {
+      console.log('[HydrationTracker] Delete blocked - sync in flight');
+      return;
+    }
     syncInFlightRef.current = true;
 
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (onRemoveWater) {
-        if (Number.isFinite(entry?.id)) {
-          await onRemoveWater(entry.id, entry.amountLiters, entry.hydrationLiters);
-        }
+
+      if (!entry) {
+        console.error('[HydrationTracker] Delete failed - entry is null/undefined');
+        return;
       }
+
+      // Validate entry has required fields
+      const entryId = entry.id;
+      if (!Number.isFinite(entryId) && typeof entryId !== 'number') {
+        console.error('[HydrationTracker] Delete failed - invalid entry id:', entryId, 'entry:', entry);
+        return;
+      }
+
+      if (onRemoveWater) {
+        console.log('[HydrationTracker] Deleting entry:', entryId, 'amount:', entry.amountLiters);
+        await onRemoveWater(entryId, entry.amountLiters, entry.hydrationLiters);
+      } else {
+        console.error('[HydrationTracker] Delete failed - onRemoveWater not provided');
+      }
+    } catch (error) {
+      console.error('[HydrationTracker] Delete error:', error);
     } finally {
       setTimeout(() => {
         syncInFlightRef.current = false;
       }, 500);
     }
   }, [onRemoveWater]);
+
+  // Handle custom amount submission
+  const handleCustomAmountSubmit = useCallback(async () => {
+    const amount = parseInt(customAmount, 10);
+    if (!amount || amount <= 0 || amount > 5000) {
+      return; // Invalid amount
+    }
+
+    Keyboard.dismiss();
+    await handleQuickAdd(amount);
+    setCustomAmount('');
+  }, [customAmount, handleQuickAdd]);
+
+  // Quick adjust buttons for custom input
+  const adjustCustomAmount = useCallback((delta) => {
+    Haptics.selectionAsync();
+    setCustomAmount(prev => {
+      const current = parseInt(prev, 10) || 0;
+      const newAmount = Math.max(0, Math.min(5000, current + delta));
+      return newAmount > 0 ? String(newAmount) : '';
+    });
+  }, []);
 
   return (
     <View style={styles.mainContainer}>
@@ -431,6 +409,52 @@ export default function HydrationTracker({
               />
             ))}
           </ScrollView>
+
+          {/* Beverage Warning/Tip */}
+          {(() => {
+            const warning = getBeverageWarning(selectedBeverage);
+            const shouldAvoid = shouldAvoidBeverage(selectedBeverage);
+            const pairing = getPairingRecommendation(selectedBeverage);
+            const bevInfo = BEVERAGE_TYPES[selectedBeverage];
+
+            if (shouldAvoid) {
+              return (
+                <View style={styles.beverageWarning}>
+                  <Ionicons name="warning" size={16} color="#F59E0B" />
+                  <Text style={styles.beverageWarningText}>
+                    {bevInfo?.label || selectedBeverage} is not recommended at this time
+                  </Text>
+                </View>
+              );
+            }
+            if (warning) {
+              return (
+                <View style={styles.beverageWarning}>
+                  <Ionicons name="information-circle" size={16} color="#3B82F6" />
+                  <Text style={styles.beverageWarningText}>{warning}</Text>
+                </View>
+              );
+            }
+            if (pairing) {
+              return (
+                <View style={styles.beverageTip}>
+                  <Ionicons name="bulb-outline" size={16} color="#10B981" />
+                  <Text style={styles.beverageTipText}>
+                    Tip: {pairing.reason}
+                  </Text>
+                </View>
+              );
+            }
+            if (bevInfo?.tip && selectedBeverage !== 'water') {
+              return (
+                <View style={styles.beverageTip}>
+                  <Ionicons name="leaf-outline" size={16} color="#10B981" />
+                  <Text style={styles.beverageTipText}>{bevInfo.tip}</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
         </View>
 
         {/* Quick Add Buttons - Premium with Scale Animation + Glow */}
@@ -450,6 +474,102 @@ export default function HydrationTracker({
                 styles={styles}
               />
             ))}
+          </View>
+
+          {/* Custom Amount Input */}
+          <View style={styles.customAmountSection}>
+            <Text style={styles.customAmountLabel}>Custom Amount</Text>
+            <View style={styles.customAmountRow}>
+              {/* Decrease buttons */}
+              <View style={styles.adjustButtonGroup}>
+                <TouchableOpacity
+                  style={styles.adjustButton}
+                  onPress={() => adjustCustomAmount(-100)}
+                  accessibilityLabel="Decrease by 100ml"
+                >
+                  <Text style={styles.adjustButtonText}>-100</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.adjustButton}
+                  onPress={() => adjustCustomAmount(-50)}
+                  accessibilityLabel="Decrease by 50ml"
+                >
+                  <Text style={styles.adjustButtonText}>-50</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Input field */}
+              <View style={[
+                styles.customInputContainer,
+                isCustomInputFocused && styles.customInputContainerFocused
+              ]}>
+                <TextInput
+                  style={styles.customInput}
+                  value={customAmount}
+                  onChangeText={(text) => setCustomAmount(text.replace(/[^0-9]/g, ''))}
+                  onFocus={() => setIsCustomInputFocused(true)}
+                  onBlur={() => setIsCustomInputFocused(false)}
+                  placeholder="ml"
+                  placeholderTextColor={TEXT.muted}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  returnKeyType="done"
+                  onSubmitEditing={handleCustomAmountSubmit}
+                  accessibilityLabel="Enter custom amount in milliliters"
+                />
+                <Text style={styles.customInputUnit}>ml</Text>
+              </View>
+
+              {/* Increase buttons */}
+              <View style={styles.adjustButtonGroup}>
+                <TouchableOpacity
+                  style={styles.adjustButton}
+                  onPress={() => adjustCustomAmount(50)}
+                  accessibilityLabel="Increase by 50ml"
+                >
+                  <Text style={styles.adjustButtonText}>+50</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.adjustButton}
+                  onPress={() => adjustCustomAmount(100)}
+                  accessibilityLabel="Increase by 100ml"
+                >
+                  <Text style={styles.adjustButtonText}>+100</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Add Custom Button */}
+            <TouchableOpacity
+              style={[
+                styles.addCustomButton,
+                (!customAmount || parseInt(customAmount, 10) <= 0) && styles.addCustomButtonDisabled
+              ]}
+              onPress={handleCustomAmountSubmit}
+              disabled={!customAmount || parseInt(customAmount, 10) <= 0}
+              accessibilityLabel={`Add ${customAmount || 0} milliliters`}
+            >
+              <LinearGradient
+                colors={customAmount && parseInt(customAmount, 10) > 0
+                  ? SURFACES.gradient.blue
+                  : ['#E5E7EB', '#D1D5DB']}
+                style={styles.addCustomButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Ionicons
+                  name="add-circle"
+                  size={20}
+                  color={customAmount && parseInt(customAmount, 10) > 0 ? TEXT.white : TEXT.muted}
+                />
+                <Text style={[
+                  styles.addCustomButtonText,
+                  (!customAmount || parseInt(customAmount, 10) <= 0) && styles.addCustomButtonTextDisabled
+                ]}>
+                  Add {customAmount || '0'}ml
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -711,6 +831,42 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     paddingRight: SPACING[4],
   },
+  beverageWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    backgroundColor: '#FEF3C7',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#F59E0B30',
+  },
+  beverageWarningText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.xs,
+    color: '#92400E',
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  beverageTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    backgroundColor: '#ECFDF5',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#10B98130',
+  },
+  beverageTipText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.xs,
+    color: '#065F46',
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
   beverageChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -790,6 +946,99 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 2,
+  },
+
+  // Custom Amount Input
+  customAmountSection: {
+    marginTop: SPACING[4],
+    paddingTop: SPACING[4],
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  customAmountLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.tertiary,
+    marginBottom: SPACING[3],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  customAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+  },
+  adjustButtonGroup: {
+    flexDirection: 'row',
+    gap: SPACING[1],
+  },
+  adjustButton: {
+    backgroundColor: SURFACES.background.secondary,
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[2],
+    borderRadius: RADIUS.md,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  adjustButtonText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+  },
+  customInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderWidth: 2,
+    borderColor: 'transparent',
+    minWidth: 100,
+  },
+  customInputContainerFocused: {
+    borderColor: SEMANTIC.info.base,
+    backgroundColor: TEXT.white,
+  },
+  customInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+    textAlign: 'center',
+    minWidth: 60,
+    paddingVertical: SPACING[1],
+  },
+  customInputUnit: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.muted,
+    marginLeft: SPACING[1],
+  },
+  addCustomButton: {
+    marginTop: SPACING[3],
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  addCustomButtonDisabled: {
+    opacity: 0.6,
+  },
+  addCustomButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+  },
+  addCustomButtonText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.white,
+  },
+  addCustomButtonTextDisabled: {
+    color: TEXT.muted,
   },
 
   // Stats Card

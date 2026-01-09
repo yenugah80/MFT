@@ -12,15 +12,33 @@ const router = express.Router();
 
 router.use(requireAuth);
 
+/**
+ * BEVERAGE HYDRATION FACTORS
+ * Keep in sync with mobile/constants/beverageConstants.js
+ *
+ * Science-based factors:
+ * - Water: 1.0 (baseline)
+ * - Tea: 0.9 (minimal caffeine)
+ * - Milk: 0.87 (studies show excellent retention)
+ * - Smoothie: 0.85 (fiber doesn't significantly affect absorption)
+ * - Juice: 0.8 (sugar increases osmotic load)
+ * - Soda: 0.6 (high sugar, some caffeine)
+ * - Coffee: 0.5 (caffeine is mild diuretic)
+ * - Electrolyte/Sports/Coconut: 1.05-1.1 (sodium helps retention)
+ */
 const BEVERAGE_FACTORS = {
   water: 1.0,
-  coffee: 0.5,
+  sparkling: 1.0,
+  herbal: 1.0,
   tea: 0.9,
+  milk: 0.87,
+  smoothie: 0.85,
   juice: 0.8,
-  milk: 0.9,
+  soda: 0.6,
+  coffee: 0.5,
   electrolyte: 1.1,
-  smoothie: 0.8,
-  alcohol: 0.1,
+  coconut: 1.05,
+  sports: 1.05,
 };
 
 /**
@@ -54,12 +72,13 @@ router.post("/log", async (req, res) => {
 
     // Insert with idempotency protection via ON CONFLICT
     // Drizzle ORM handles decimal conversion automatically - pass numbers directly
+    // FIX: Use 3 decimal places (1ml precision) instead of 1 decimal (100ml precision)
     const result = await db.insert(waterLogTable).values({
       userId,
-      amountLiters: parseFloat(amountLiters),
+      amountLiters: parseFloat(parseFloat(amountLiters).toFixed(3)),
       beverageType: normalizedType,
       hydrationFactor: hydrationFactor,
-      hydrationLiters: parseFloat(hydrationLiters.toFixed(1)),
+      hydrationLiters: parseFloat(hydrationLiters.toFixed(3)),
       loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
       clientEventId,
     }).onConflictDoNothing({ target: [waterLogTable.userId, waterLogTable.clientEventId] })

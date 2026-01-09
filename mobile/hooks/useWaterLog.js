@@ -6,28 +6,17 @@
 
 import { useState, useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
 
 /**
  * Quick add presets (in liters)
  */
-export const WATER_PRESETS = [
-  { label: 'Glass', amount: 0.25, icon: '🥛', color: '#3b82f6' },
-  { label: 'Bottle', amount: 0.5, icon: '💧', color: '#06b6d4' },
-  { label: 'Large', amount: 1.0, icon: '🚰', color: '#0ea5e9' },
-];
+// Import from single source of truth
+import { WATER_PRESETS } from '../constants/beverageConstants';
 
-const BEVERAGE_FACTORS = {
-  water: 1.0,
-  coffee: 0.5,
-  tea: 0.9,
-  juice: 0.8,
-  milk: 0.9,
-  electrolyte: 1.1,
-  smoothie: 0.8,
-  alcohol: 0.1,
-};
+// Re-export for backwards compatibility
+export { WATER_PRESETS };
 
 /**
  * Hook for water logging operations
@@ -111,7 +100,7 @@ export function useWaterLog() {
     }
 
     // Validate beverage type
-    const validBeverageTypes = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte', 'smoothie', 'alcohol'];
+    const validBeverageTypes = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte', 'smoothie', 'soda', 'sparkling', 'coconut', 'herbal', 'sports'];
     if (!validBeverageTypes.includes(beverageType)) {
       console.warn('Invalid beverage type, defaulting to water:', beverageType);
       beverageType = 'water';
@@ -162,10 +151,11 @@ export function useWaterLog() {
    */
   const removeWaterMutation = useMutation({
     mutationFn: async ({ entryId, amountLiters, hydrationLiters }) => {
+      console.log('[useWaterLog] Deleting entry:', entryId);
       return await apiClient.delete(`/water/${entryId}`);
     },
-    onMutate: async ({ amountLiters, hydrationLiters }) => {
-      // Optimistic update - subtract the amount
+    onMutate: async ({ entryId, amountLiters, hydrationLiters }) => {
+      // Optimistic update - subtract the amount and remove from logs
       await queryClient.cancelQueries({ queryKey: ['dashboard'] });
       await queryClient.cancelQueries({ queryKey: ['waterToday'] });
 
@@ -173,6 +163,7 @@ export function useWaterLog() {
       const previousWaterToday = queryClient.getQueryData(['waterToday']);
       const hydrationDelta = Number.isFinite(hydrationLiters) ? hydrationLiters : amountLiters;
 
+      // Update dashboard water total
       queryClient.setQueryData(['dashboard'], (old) => {
         if (!old) return old;
         return {
@@ -181,6 +172,22 @@ export function useWaterLog() {
             ...old.today,
             waterIntakeLiters: Math.max((old.today.waterIntakeLiters || 0) - hydrationDelta, 0),
           },
+        };
+      });
+
+      // Optimistic update: Remove entry from waterToday logs for instant UI feedback
+      queryClient.setQueryData(['waterToday'], (old) => {
+        if (!old || !old.logs) return old;
+        const filteredLogs = old.logs.filter(log => log.id !== entryId);
+        const newTotal = filteredLogs.reduce((sum, log) => {
+          const hydration = parseFloat(log.hydrationLiters || log.amountLiters || 0);
+          return sum + hydration;
+        }, 0);
+        return {
+          ...old,
+          logs: filteredLogs,
+          totalLiters: newTotal,
+          count: filteredLogs.length,
         };
       });
 
