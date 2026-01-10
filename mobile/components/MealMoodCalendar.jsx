@@ -27,6 +27,14 @@ import { formatDateLocal } from '../utils/dateHelpers';
 const { width } = Dimensions.get('window');
 const DAYS_OF_WEEK = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+// Helper to extract score value from foodMoodScore (can be object with .score or a number)
+function getScoreValue(foodMoodScore) {
+  if (foodMoodScore && typeof foodMoodScore === 'object' && 'score' in foodMoodScore) {
+    return foodMoodScore.score || 0;
+  }
+  return typeof foodMoodScore === 'number' ? foodMoodScore : 0;
+}
+
 // Helper to get color based on score/status
 const getDayStatusColor = (day) => {
   if (!day.logged) return SURFACES.background.tertiary; // Gray/Empty
@@ -112,7 +120,8 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
     try {
       const dateStr = new Date(selectedDay.key).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
       const story = selectedDay.storyLine || (selectedDay.logged ? "Tracked my nutrition and wellness." : "No data logged.");
-      const score = selectedDay.foodMoodScore ? `Daily Score: ${selectedDay.foodMoodScore}/100` : "";
+      const scoreVal = getScoreValue(selectedDay.foodMoodScore);
+      const score = scoreVal ? `Daily Score: ${scoreVal}/100` : "";
       
       const message = `📅 My Daily Wellness - ${dateStr}\n\n"${story}"\n\n${score}\n\nTracked with My-Food-Tracker 🥗`;
       
@@ -242,7 +251,7 @@ export default function MealMoodCalendar({ data = {}, currentStreak = 0 }) {
                       })() : 'Unknown Date'}
                     </Text>
                     <Text style={styles.sheetScore}>
-                      Daily Score: <Text style={{ color: BRAND.primary }}>{selectedDay.foodMoodScore || '-'}/100</Text>
+                      Daily Score: <Text style={{ color: BRAND.primary }}>{getScoreValue(selectedDay.foodMoodScore) || '-'}/100</Text>
                     </Text>
                   </View>
                   {selectedDay.moodAvg && (

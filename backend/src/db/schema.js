@@ -125,6 +125,7 @@ export const gamificationTable = pgTable(
     streakFreezes: integer("streak_freezes").default(0),
     lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
     lastStreakUpdatedAt: timestamp("last_streak_updated_at"),
+    timezoneOffset: integer("timezone_offset"),
     totalMealsLogged: integer("total_meals_logged").default(0),
     lastLogDate: timestamp("last_log_date"),
     lastXpAwardedAt: timestamp("last_xp_awarded_at"),

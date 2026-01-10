@@ -95,7 +95,10 @@ export default function MoodInsightsScreen() {
   }, [insightsDays]);
 
   // Fetch historical food and water logs for pattern detection
+  // Note: Only depend on insightsDays to avoid infinite loops
   useEffect(() => {
+    let isMounted = true;
+
     const loadHistoricalData = async () => {
       const endDate = new Date();
       const startDate = new Date();
@@ -110,24 +113,29 @@ export default function MoodInsightsScreen() {
       // Fetch food history
       try {
         const foodHistory = await fetchFoodHistory(dateParams);
-        setHistoricalFoodLogs(foodHistory || []);
+        if (isMounted) setHistoricalFoodLogs(foodHistory || []);
       } catch (err) {
         console.error('[MoodInsights] Failed to load food history:', err);
-        setHistoricalFoodLogs(foodLogs || []);
+        if (isMounted) setHistoricalFoodLogs([]);
       }
 
       // Fetch water history
       try {
         const waterHistory = await fetchWaterHistory(dateParams);
-        setHistoricalWaterLogs(waterHistory?.logs || []);
+        if (isMounted) setHistoricalWaterLogs(waterHistory?.logs || []);
       } catch (err) {
         console.error('[MoodInsights] Failed to load water history:', err);
-        setHistoricalWaterLogs([]);
+        if (isMounted) setHistoricalWaterLogs([]);
       }
     };
 
     loadHistoricalData();
-  }, [insightsDays, fetchFoodHistory, fetchWaterHistory, foodLogs]);
+
+    return () => {
+      isMounted = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insightsDays]);
 
   const loadMoodInsights = useCallback(async ({ days = insightsDays, forceRefresh = false } = {}) => {
     setInsightsLoading(true);
@@ -241,7 +249,13 @@ export default function MoodInsightsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(tabs)/dashboard');
+          }
+        }} style={styles.backButton}>
           <Ionicons name="chevron-back" size={22} color={TEXT.primary} />
         </TouchableOpacity>
         <View style={styles.headerText}>

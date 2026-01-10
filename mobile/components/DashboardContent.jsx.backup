@@ -16,7 +16,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import * as Haptics from 'expo-haptics';
-import { trackEvent } from "../services/analytics";
 
 // Hooks
 import { useDashboard } from "../hooks/useDashboard";
@@ -38,12 +37,32 @@ import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
+import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
+// DashboardPrimaryCard removed - redundant with FoodMoodScoreCard hero + CompactDashboardTiles
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
-import ReflectionCheckInCard from "./dashboard/ReflectionCheckInCard";
-import DashboardPillarsGrid from "./dashboard/DashboardPillarsGrid";
-import GuidanceCard from "./dashboard/GuidanceCard";
-import WeeklyStoryCard from "./dashboard/WeeklyStoryCard";
-import ProgressMilestonesCard from "./dashboard/ProgressMilestonesCard";
+import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
+import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
+import DashboardProgressSection from "./dashboard/DashboardProgressSection";
+import FoodNutriScoreCard from "./dashboard/FoodNutriScoreCard";
+// RemainingBudgetCard removed - redundant with InsightNudge system
+
+// NEW KILLER FEATURES - Differentiators
+import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
+import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
+import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
+
+// Phase 3: Dashboard Enhancements - Preference-based insights
+// Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
+import AllergenWarningCard from "./dashboard/AllergenWarningCard";
+import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
+
+// Premium dashboard enhancements - compact tiles and timeline
+import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
+import MealInsightsCard from "./dashboard/MealInsightsCard";
+
+// NEW: Premium dashboard redesign components
+import QuickActionsRow from "./dashboard/QuickActionsRow";
+import UnifiedActivityFeed from "./dashboard/UnifiedActivityFeed";
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -163,100 +182,6 @@ function getErrorDetails(error) {
   };
 }
 
-function getMoodScore(log) {
-  const score = Number(log?.score ?? log?.moodScore ?? log?.intensity);
-  return Number.isFinite(score) ? score : null;
-}
-
-function getEnergyScore(log) {
-  const score = Number(log?.energy ?? log?.energyLevel);
-  return Number.isFinite(score) ? score : null;
-}
-
-function getFoodMoodInsight({ trends, hasMeals, hasMood }) {
-  if (trends?.breakfastMoodCorrelation > 0.3) {
-    return 'Breakfast before 9am aligns with better mood for you.';
-  }
-  if (trends?.proteinMoodCorrelation > 0.2) {
-    return 'Higher protein days align with steadier mood.';
-  }
-  if (!hasMeals || !hasMood) {
-    return 'Log meals and mood to unlock your patterns.';
-  }
-  return 'Keep logging to surface clearer patterns.';
-}
-
-function getGuidanceConfig({ hasMeals, hasMood, waterIntake, waterGoal, hour }) {
-  const mealLabel = hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : 'Dinner';
-  if (!hasMood) {
-    return {
-      title: 'Quick check-in',
-      message: '1 tap to log mood and energy.',
-      actionLabel: 'Check in',
-      action: 'mood',
-    };
-  }
-  if (!hasMeals) {
-    return {
-      title: 'Next best step',
-      message: `Log ${mealLabel.toLowerCase()} to anchor your day.`,
-      actionLabel: `Add ${mealLabel}`,
-      action: 'meal',
-    };
-  }
-  if (waterIntake < Math.max(0.3, waterGoal * 0.25)) {
-    return {
-      title: 'Hydration boost',
-      message: 'A quick glass helps keep energy steady.',
-      actionLabel: 'Add water',
-      action: 'water',
-    };
-  }
-  return {
-    title: 'Your weekly story',
-    message: 'See what is shaping your week.',
-    actionLabel: 'View story',
-    action: 'story',
-  };
-}
-
-function getWeeklyStoryCopy({ trends, moodAvg, waterAvg }) {
-  if (trends?.breakfastMoodCorrelation > 0.3) {
-    return {
-      title: 'Breakfast timing lifts mood.',
-      subtitle: 'Earlier meals align with higher scores.',
-    };
-  }
-  if (waterAvg > 1.2) {
-    return {
-      title: 'Hydration looks steady.',
-      subtitle: 'Energy holds above 1.2L.',
-    };
-  }
-  if (moodAvg != null) {
-    return {
-      title: 'Your mood is finding a baseline.',
-      subtitle: 'More check-ins sharpen the story.',
-    };
-  }
-  return {
-    title: 'Your weekly story is waiting.',
-    subtitle: 'Log a few days to reveal patterns.',
-  };
-}
-
-function getReflectionMilestone(streak) {
-  if (streak <= 0) {
-    return 'Log your first check-in to start a reflection streak.';
-  }
-  const target = streak < 3 ? 3 : streak < 7 ? 7 : streak < 14 ? 14 : 21;
-  const remaining = Math.max(0, target - streak);
-  if (remaining === 0) {
-    return `Milestone reached: ${target}-day reflection streak.`;
-  }
-  return `${remaining} day${remaining === 1 ? '' : 's'} to reach a ${target}-day reflection streak.`;
-}
-
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -269,7 +194,6 @@ export default function DashboardContent() {
   const { user } = useUser();
   const { theme, colors } = useTheme();
   const queryClient = useQueryClient();
-  const hasTrackedView = useRef(false);
 
   // Insights modal state
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
@@ -291,10 +215,10 @@ export default function DashboardContent() {
     cacheAge: null,
   });
 
-  // REMOVED: Collapsible section states - now handled internally by Intelligence Cards
-  // const [nutritionExpanded, setNutritionExpanded] = useState(true);
-  // const [wellnessExpanded, setWellnessExpanded] = useState(true);
-  // const [progressExpanded, setProgressExpanded] = useState(false);
+  // Collapsible section states
+  const [nutritionExpanded, setNutritionExpanded] = useState(true);
+  const [wellnessExpanded, setWellnessExpanded] = useState(true);
+  const [progressExpanded, setProgressExpanded] = useState(false);
 
   // Focus mode state - simplifies view to reduce cognitive load
   const [focusMode, setFocusMode] = useState(false);
@@ -1197,112 +1121,6 @@ export default function DashboardContent() {
 
   const headerTitle = `${getGreeting()}, ${displayName}`;
 
-  const moodLogs = today?.moodLogs || [];
-  const waterLogs = today?.waterLogs || [];
-  const waterIntake = parseLiters(today?.waterIntakeLiters);
-  const waterGoal = parseGoal(goals?.waterLiters, 2.0, 0.5, 10);
-  const hasMeals = uniqueFoodLogs.length > 0;
-  const hasMood = moodLogs.length > 0;
-  const activityCount = uniqueFoodLogs.length + waterLogs.length + moodLogs.length;
-
-  const moodScores = moodLogs.map(getMoodScore).filter((value) => value != null);
-  const energyScores = moodLogs.map(getEnergyScore).filter((value) => value != null);
-  const moodAvg = moodScores.length ? moodScores.reduce((sum, value) => sum + value, 0) / moodScores.length : null;
-  const energyAvg = energyScores.length ? energyScores.reduce((sum, value) => sum + value, 0) / energyScores.length : null;
-
-  const foodMoodInsight = getFoodMoodInsight({ trends, hasMeals, hasMood });
-  const guidance = getGuidanceConfig({
-    hasMeals,
-    hasMood,
-    waterIntake,
-    waterGoal,
-    hour: new Date().getHours(),
-  });
-  const weeklyStory = getWeeklyStoryCopy({ trends, moodAvg, waterAvg: waterIntake });
-  const milestoneText = getReflectionMilestone(displayStreak);
-
-  const pillarItems = [
-    {
-      key: 'food',
-      title: 'Food-mood engine',
-      icon: 'restaurant',
-      gradient: SURFACES.gradient.secondary,
-      value: `${Math.round(parseCalories(today?.nutrition?.totalCalories))} cal`,
-      caption: hasMeals ? 'On track' : 'Log meals + mood',
-      actionLabel: 'Add meal',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'food_mood' });
-        router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
-      },
-    },
-    {
-      key: 'mood',
-      title: 'Mood and energy',
-      icon: 'happy-outline',
-      gradient: SURFACES.gradient.primary,
-      value: moodAvg != null ? `${moodAvg.toFixed(1)}/10` : 'No check-in',
-      caption: energyAvg != null ? `Energy ${energyAvg.toFixed(1)}/10` : 'Tap to check in',
-      actionLabel: 'View insights',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'mood_energy' });
-        router.push('/insights/mood');
-      },
-    },
-    {
-      key: 'hydration',
-      title: 'Hydration',
-      icon: 'water-outline',
-      gradient: SURFACES.gradient.accent,
-      value: `${waterIntake.toFixed(1)} / ${waterGoal.toFixed(1)} L`,
-      caption: 'Quick add 250ml',
-      actionLabel: 'Add water',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'hydration' });
-        router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
-      },
-    },
-    {
-      key: 'activity',
-      title: 'Activity',
-      icon: 'pulse-outline',
-      gradient: SURFACES.gradient.pastelLavender,
-      value: `${activityCount} moments`,
-      caption: 'View timeline',
-      actionLabel: 'View timeline',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'activity' });
-        router.push('/activity/today');
-      },
-    },
-  ];
-
-  const handleGuidanceAction = () => {
-    trackEvent('dashboard_guidance_action', { action: guidance.action });
-    if (guidance.action === 'meal') {
-      router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
-    } else if (guidance.action === 'water') {
-      router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
-    } else if (guidance.action === 'mood') {
-      router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } });
-    } else if (guidance.action === 'story') {
-      router.push('/history');
-    } else {
-      router.push('/insights/mood');
-    }
-  };
-
-  useEffect(() => {
-    if (!hasTrackedView.current && data) {
-      trackEvent('dashboard_viewed', {
-        has_any_data: hasAnyData,
-        has_meals: hasMeals,
-        has_mood: hasMood,
-        water_intake_liters: waterIntake,
-      });
-      hasTrackedView.current = true;
-    }
-  }, [data, hasAnyData, hasMeals, hasMood, waterIntake]);
-
   return (
     <>
       <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
@@ -1325,8 +1143,11 @@ export default function DashboardContent() {
             const newFocusMode = !focusMode;
             setFocusMode(newFocusMode);
 
-            // Focus mode now handled by Intelligence Cards (collapsed by default)
-            // No need to manually collapse sections anymore
+            if (newFocusMode) {
+              setNutritionExpanded(false);
+              setWellnessExpanded(false);
+              setProgressExpanded(false);
+            }
           }}
           // Enhanced header props
           userInitials={user?.firstName?.[0]?.toUpperCase() || user?.fullName?.[0]?.toUpperCase() || 'U'}
@@ -1347,7 +1168,6 @@ export default function DashboardContent() {
               notify.info(`${allergenWarnings.length} allergen warning${allergenWarnings.length > 1 ? 's' : ''} detected`);
             }
           }}
-          showQuickStats={false}
         />
 
         {/* FIRST-TIME USER EMPTY STATE */}
@@ -1355,52 +1175,216 @@ export default function DashboardContent() {
           <EmptyState
             icon="rocket"
             title="Welcome to Your Health Journey!"
-            description="Start logging meals, water, and mood to unlock insights and build a steady daily rhythm."
-            actionLabel="Add moment"
+            description="Start tracking your meals, water intake, and mood to unlock powerful insights and build healthy habits."
+            actionLabel="Start Logging"
             onAction={() => {
-              trackEvent('dashboard_empty_state_action', { action: 'add_moment' });
               router.push('/(tabs)/log');
             }}
           />
         )}
-        <ReflectionCheckInCard
-          moodLogs={moodLogs}
-          onCheckIn={() => {
-            trackEvent('dashboard_reflection_checkin_tap');
-            router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } });
-          }}
+
+        {/* ============================================ */}
+        {/* HERO CARD - ONE unified wellness + mood display */}
+        {/* Staff Design: Focus on ONE primary metric, celebrate wins */}
+        {/* ============================================ */}
+        <FoodMoodScoreCard
+          today={today}
+          goals={goals}
+          moodLogs={today?.moodLogs || []}
+          historicalScores={[]}
+          onViewDetails={() => router.push('/insights/mood')}
         />
 
-        <DashboardPillarsGrid items={pillarItems} />
-
-        <GuidanceCard
-          title={guidance.title}
-          message={guidance.message}
-          actionLabel={guidance.actionLabel}
-          onAction={handleGuidanceAction}
+        {/* ============================================ */}
+        {/* QUICK ACTIONS ROW - One-tap navigation to log screens */}
+        {/* 3 gradient buttons: Log Meal | Log Water | Log Mood */}
+        {/* ============================================ */}
+        <QuickActionsRow
+          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+          onLogWater={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          onLogMood={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } })}
         />
 
-        <WeeklyStoryCard
-          title={weeklyStory.title}
-          subtitle={weeklyStory.subtitle}
-          actionLabel="View weekly story"
-          onAction={() => {
-            trackEvent('dashboard_weekly_story_view');
-            router.push('/history');
-          }}
-        />
-
+        {/* ============================================ */}
+        {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
+        {/* Moved UP - Streak drives daily retention */}
+        {/* ============================================ */}
         {hasAnyData && (
-          <ProgressMilestonesCard
-            reflectionStreak={displayStreak}
-            insightsUnlocked={trends?.patternsDiscovered || 0}
-            milestoneText={milestoneText}
-            onViewProgress={() => {
-              trackEvent('dashboard_progress_view');
-              router.push('/profile');
-            }}
+          <PremiumAchievementsCard
+            level={parseDecimal(gamification?.level, 1)}
+            xp={parseDecimal(gamification?.xp, 0)}
+            streak={displayStreak}
+            nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
+            streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
           />
         )}
+
+        {/* Premium Calendar Strip - Unified calendar with streak & day details */}
+        <PremiumCalendarStrip
+          data={calendarData}
+          selectedDate={null}
+          currentStreak={displayStreak}
+          onDateSelect={(dateOrObj) => {
+            // Handle both Date object and { dateKey } from day detail modal
+            const dateKey = dateOrObj?.dateKey || (dateOrObj instanceof Date ? dateOrObj.toISOString().split('T')[0] : null);
+            if (dateKey) {
+              router.push({ pathname: '/history', params: { date: dateKey } });
+            }
+          }}
+        />
+
+        {/* ============================================ */}
+        {/* INSIGHT NUDGE - Single most important insight */}
+        {/* Staff Design: One nudge, not stacked warnings */}
+        {/* ============================================ */}
+        <DashboardInsightsSection
+          styles={styles}
+          smartInsights={smartInsights}
+          onInsightAction={handleInsightAction}
+          dataAnomalies={dataAnomalies}
+        />
+
+        {/* ============================================ */}
+        {/* TODAY CARD - Single source of truth for today */}
+        {/* Chronological timeline: meals, water, mood */}
+        {/* View All → /activity/today (full day timeline) */}
+        {/* ============================================ */}
+        <UnifiedActivityFeed
+          meals={uniqueFoodLogs}
+          waterLogs={today?.waterLogs || []}
+          moodLogs={today?.moodLogs || []}
+          onItemPress={(activity) => {
+            if (activity.type === 'meal') {
+              const mealId = activity.data?.clientEventId || activity.data?.id;
+              if (mealId) router.push(`/meal/${mealId}`);
+            } else if (activity.type === 'mood') {
+              router.push('/insights/mood');
+            } else if (activity.type === 'water') {
+              // Navigate to hydration/water section of log tab
+              router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
+            }
+          }}
+          onViewAll={() => router.push('/activity/today')}
+        />
+
+        {/* ============================================ */}
+        {/* SMART MEAL SUGGESTIONS - Context-aware */}
+        {/* ALWAYS SHOW - Helps users before they log food */}
+        {/* ============================================ */}
+        <SmartMealSuggestionCard
+          today={today}
+          goals={goals}
+          recentMeals={uniqueFoodLogs}
+          userProfile={userProfile}
+          onSelectSuggestion={(suggestion) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            router.push({
+              pathname: '/(tabs)/log',
+              params: {
+                focus: 'meal',
+                prefill: suggestion.name
+              }
+            });
+          }}
+          onViewMore={() => router.push('/history')}
+        />
+
+        {/* ============================================ */}
+        {/* THIS WEEK CARD - Aggregate trends over time */}
+        {/* Tabs: Stats | Insights */}
+        {/* View Trends → /insights/nutrition (detailed trends) */}
+        {/* ============================================ */}
+        <MealInsightsCard
+          meals={uniqueFoodLogs}
+          periodData={mealPeriodData}
+          onMealPress={(meal) => {
+            const mealId = meal.clientEventId || meal.mealId || meal.id || meal.local_id;
+            if (mealId) {
+              router.push(`/meal/${mealId}`);
+            }
+          }}
+          onViewAll={() => router.push('/insights/nutrition')}
+        />
+
+        {/* ============================================ */}
+        {/* COMPACT TILES - Glassmorphic quick stats row */}
+        {/* Moved down - macros & hydration detail after activity */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <CompactDashboardTiles
+            today={today}
+            goals={goals}
+            onTapMacros={() => setNutritionExpanded(true)}
+            onTapHydration={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          />
+        )}
+
+        {/* ============================================ */}
+        {/* ALLERGEN WARNING - Urgent alerts only */}
+        {/* ============================================ */}
+        {allergenWarnings.length > 0 && (
+          <AllergenWarningCard warnings={allergenWarnings} />
+        )}
+
+        {/* ============================================ */}
+        {/* FOOD NUTRI-SCORE CARD - Shows actual A-E grades */}
+        {/* ============================================ */}
+        <FoodNutriScoreCard
+          foodLogs={uniqueFoodLogs}
+          onScanBarcode={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'barcode' } })}
+          onViewDetails={() => router.push('/history')}
+        />
+
+        {/* ============================================ */}
+        {/* NUTRITION SECTION - Collapsible */}
+        {/* ============================================ */}
+        <DashboardNutritionSection
+          styles={styles}
+          expanded={nutritionExpanded}
+          onToggle={() => setNutritionExpanded(!nutritionExpanded)}
+          today={today}
+          goals={goals}
+          aggregatedMicros={aggregatedMicros}
+          macroAssessment={macroAssessment}
+          uniqueFoodLogs={uniqueFoodLogs}
+          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+        />
+
+        {/* ============================================ */}
+        {/* WELLNESS SECTION - Collapsible */}
+        {/* Premium hydration card: clean, honest, action-focused */}
+        {/* ============================================ */}
+        <DashboardWellnessSection
+          styles={styles}
+          expanded={wellnessExpanded}
+          onToggle={() => setWellnessExpanded(!wellnessExpanded)}
+          today={today}
+          goals={goals}
+          onOpenMoodInsights={() => router.push('/insights/mood')}
+          onOpenHydrationInsights={() => router.push('/insights/hydration')}
+          onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          onQuickAddWater={logWater}
+          onOpenBeveragePicker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration', openPicker: true } })}
+          moodInsights={moodInsightsData}
+          moodInsightsLoading={moodInsightsLoading}
+          wellnessScore={wellnessScore}
+          waterLogs={today?.waterLogs || []}
+          hydrationWeekData={trends?.hydrationWeekData || []}
+          hydrationStreak={trends?.hydrationStreak || 0}
+          hydrationAnalytics={hydrationAnalytics}
+        />
+
+        {/* ============================================ */}
+        {/* PROGRESS SECTION - Collapsible (Calendar moved to top) */}
+        {/* ============================================ */}
+        <DashboardProgressSection
+          styles={styles}
+          expanded={progressExpanded}
+          onToggle={() => setProgressExpanded(!progressExpanded)}
+          trends={trends}
+          goals={goals}
+          recentWeight={recentWeight}
+        />
       </ScrollView>
         </ThemeTransition>
       </View>
@@ -1649,7 +1633,7 @@ export default function DashboardContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SURFACES.background.primary,
+    backgroundColor: '#F9F7F4', // Warm off-white background for consistency with log screen
   },
   shimmerOverlay: {
     position: 'absolute',

@@ -49,6 +49,7 @@ router.post("/log", async (req, res) => {
   try {
     await ensureWaterLogTableShape();
     const userId = req.auth.userId;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const { amountLiters, loggedDate, clientEventId, beverageType } = req.body;
 
     if (!amountLiters || amountLiters <= 0) {
@@ -110,7 +111,7 @@ router.post("/log", async (req, res) => {
 
       // Update streak for new water log (any activity continues streak)
       try {
-        const streakResult = await updateStreak(userId, entry.loggedDate, db);
+        const streakResult = await updateStreak(userId, entry.loggedDate, db, offsetMinutes);
         console.log(`[WaterLog] Streak updated: ${streakResult.streak}, incremented: ${streakResult.streakIncremented}`);
       } catch (streakError) {
         console.error("[WaterLog] Streak update failed (non-fatal):", streakError);

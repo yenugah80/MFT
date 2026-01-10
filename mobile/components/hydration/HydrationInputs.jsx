@@ -191,12 +191,11 @@ export function PremiumQuickAddButton({
           style={styles.quickAddTileGradient}
         >
           {isLoading ? (
-            <ActivityIndicator size="large" color="#FFF" />
+            <ActivityIndicator size="small" color="#FFF" />
           ) : (
             <>
-              <Ionicons name={size.icon} size={32} color="#FFF" />
+              <Ionicons name={size.icon} size={22} color="#FFF" />
               <Text style={styles.quickAddTileLabel}>{size.label}</Text>
-              <Text style={styles.quickAddTileSubtitle}>{size.subtitle}</Text>
             </>
           )}
         </LinearGradient>

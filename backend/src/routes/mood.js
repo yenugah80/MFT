@@ -140,7 +140,7 @@ router.post("/log", async (req, res) => {
 
       // Update streak for new mood log (any activity continues streak)
       try {
-        const streakResult = await updateStreak(userId, safeLoggedDate, db);
+        const streakResult = await updateStreak(userId, safeLoggedDate, db, offsetMinutes);
         console.log(`[MoodLog] Streak updated: ${streakResult.streak}, incremented: ${streakResult.streakIncremented}`);
       } catch (streakError) {
         console.error("[MoodLog] Streak update failed (non-fatal):", streakError);

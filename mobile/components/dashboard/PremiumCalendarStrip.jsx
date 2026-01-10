@@ -25,7 +25,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import LottieView from 'lottie-react-native';
 import { generateStoryLine } from '../../utils/healthCalculations';
+
+// Lottie mood animation sources
+const MOOD_LOTTIE_SOURCES = {
+  happy: require('../../constants/lottie/mood-happy.json'),
+  calm: require('../../constants/lottie/mood-calm.json'),
+  focused: require('../../constants/lottie/mood-focused.json'),
+  energized: require('../../constants/lottie/mood-energized.json'),
+  neutral: require('../../constants/lottie/mood-neutral.json'),
+  tired: require('../../constants/lottie/mood-tired.json'),
+  stressed: require('../../constants/lottie/mood-stressed.json'),
+  sad: require('../../constants/lottie/mood-sad.json'),
+};
 
 import {
   BRAND,
@@ -34,10 +47,19 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
+  CARD_SYSTEM,
 } from '../../constants/premiumTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAY_WIDTH = (SCREEN_WIDTH - 48) / 7;
+
+// Helper to extract score value from foodMoodScore (can be object with .score or a number)
+function getScoreValue(foodMoodScore) {
+  if (foodMoodScore && typeof foodMoodScore === 'object' && 'score' in foodMoodScore) {
+    return foodMoodScore.score || 0;
+  }
+  return typeof foodMoodScore === 'number' ? foodMoodScore : 0;
+}
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
@@ -82,9 +104,10 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
   const dateKey = formatDateKey(date);
   const dayData = data?.[dateKey] || {};
 
-  const hasFood = dayData.foodCount > 0 || dayData.calories > 0;
-  const hasMood = dayData.moodCount > 0 || dayData.avgMood > 0;
-  const hasWater = dayData.water > 0;
+  // Support all field name variants from different data sources
+  const hasFood = (dayData.meals > 0) || (dayData.foodCount > 0) || (dayData.calories > 0);
+  const hasMood = (dayData.moodCount > 0) || (dayData.avgMood > 0) || (dayData.moodAvg > 0);
+  const hasWater = (dayData.water > 0) || (dayData.hydrationPercent > 0);
   const hasAnyData = hasFood || hasMood || hasWater;
 
   const handlePress = async () => {
@@ -117,12 +140,20 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
           {date.getDate()}
         </Text>
 
-        {/* Data indicators */}
+        {/* Data indicators - max 2 dots, or single combined for all 3 */}
         {hasAnyData && (
           <View style={styles.indicators}>
-            {hasFood && <View style={[styles.indicator, styles.indicatorFood]} />}
-            {hasMood && <View style={[styles.indicator, styles.indicatorMood]} />}
-            {hasWater && <View style={[styles.indicator, styles.indicatorWater]} />}
+            {hasFood && hasMood && hasWater ? (
+              // All 3 activities logged - show single combined indicator
+              <View style={[styles.indicator, styles.indicatorCombined]} />
+            ) : (
+              // Show individual dots (max 2)
+              <>
+                {hasFood && <View style={[styles.indicator, styles.indicatorFood]} />}
+                {hasMood && <View style={[styles.indicator, styles.indicatorMood]} />}
+                {hasWater && <View style={[styles.indicator, styles.indicatorWater]} />}
+              </>
+            )}
           </View>
         )}
       </TouchableOpacity>
@@ -238,9 +269,12 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
 
   if (!visible) return null;
 
-  const moodEmojis = {
-    happy: '😊', calm: '😌', focused: '🎯', energized: '⚡',
-    neutral: '😐', tired: '😴', stressed: '😰', sad: '😔',
+  // Get Lottie source for mood display
+  const getMoodLottie = (moodType, avgMood) => {
+    if (moodType && MOOD_LOTTIE_SOURCES[moodType]) return MOOD_LOTTIE_SOURCES[moodType];
+    if (avgMood >= 4) return MOOD_LOTTIE_SOURCES.happy;
+    if (avgMood >= 2.5) return MOOD_LOTTIE_SOURCES.neutral;
+    return MOOD_LOTTIE_SOURCES.sad;
   };
 
   const periods = [
@@ -287,9 +321,10 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
           hydrationSum += data.hydrationPercent || data.water || 0;
           hydrationCount++;
         }
-        if (data.foodMoodScore) { wellnessSum += data.foodMoodScore; wellnessCount++; }
-        if (!stats.bestDay || (data.foodMoodScore || 0) > (stats.bestDay.score || 0)) {
-          stats.bestDay = { date: key, score: data.foodMoodScore || 0 };
+        const scoreVal = getScoreValue(data.foodMoodScore);
+        if (scoreVal > 0) { wellnessSum += scoreVal; wellnessCount++; }
+        if (!stats.bestDay || scoreVal > (stats.bestDay.score || 0)) {
+          stats.bestDay = { date: key, score: scoreVal };
         }
       }
     }
@@ -317,7 +352,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
       if (selectedPeriod === 'day') {
         const dateStr = formatDate(dateKey);
         const story = dayData?.storyLine || generateStoryLine(dayData) || 'No activity logged.';
-        message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${dayData?.foodMoodScore || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.avgMood?.toFixed(1) || '-'}/5`;
+        message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${getScoreValue(dayData?.foodMoodScore) || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.avgMood?.toFixed(1) || '-'}/5`;
       } else {
         message = `📊 My ${periodDays}-Day Wellness Summary\n\n🏆 Avg Score: ${periodStats.avgWellnessScore}/100\n🍽️ Avg Calories: ${periodStats.avgCalories}\n💧 Avg Hydration: ${periodStats.avgHydration}%\n😊 Avg Mood: ${periodStats.avgMood}/5\n📈 ${periodStats.daysLogged}/${periodStats.totalDays} days logged`;
       }
@@ -367,7 +402,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
               <View style={dayDetailStyles.scoreHero}>
                 <View style={dayDetailStyles.scoreRing}>
                   <Text style={dayDetailStyles.scoreValue}>
-                    {selectedPeriod === 'day' ? (dayData?.foodMoodScore || 0) : periodStats.avgWellnessScore}
+                    {selectedPeriod === 'day' ? getScoreValue(dayData?.foodMoodScore) : periodStats.avgWellnessScore}
                   </Text>
                   <Text style={dayDetailStyles.scoreLabel}>
                     {selectedPeriod === 'day' ? 'Wellness' : 'Avg Score'}
@@ -434,11 +469,14 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
                     </View>
                     <View style={dayDetailStyles.statCardDivider} />
                     <View style={dayDetailStyles.statCardItem}>
-                      <Text style={{ fontSize: 24 }}>
-                        {selectedPeriod === 'day'
-                          ? (moodEmojis[dayData?.moodType] || (dayData?.avgMood >= 4 ? '😊' : dayData?.avgMood >= 2.5 ? '😐' : '😔'))
-                          : (parseFloat(periodStats.avgMood) >= 4 ? '😊' : parseFloat(periodStats.avgMood) >= 2.5 ? '😐' : '😔')}
-                      </Text>
+                      <LottieView
+                        source={selectedPeriod === 'day'
+                          ? getMoodLottie(dayData?.moodType, dayData?.avgMood)
+                          : getMoodLottie(null, parseFloat(periodStats.avgMood))}
+                        autoPlay
+                        loop
+                        style={{ width: 32, height: 32 }}
+                      />
                       <Text style={dayDetailStyles.statCardLabel}>Feeling</Text>
                     </View>
                   </View>
@@ -527,6 +565,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
 }
 
 const dayDetailStyles = StyleSheet.create({
+  // Modal overlay and backdrop
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -541,6 +580,7 @@ const dayDetailStyles = StyleSheet.create({
     borderTopRightRadius: RADIUS['2xl'],
     padding: SPACING[5],
     paddingBottom: SPACING[8],
+    maxHeight: '90%',
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.15,
@@ -553,35 +593,177 @@ const dayDetailStyles = StyleSheet.create({
     backgroundColor: 'rgba(107, 78, 255, 0.2)',
     borderRadius: 3,
     alignSelf: 'center',
-    marginBottom: SPACING[5],
+    marginBottom: SPACING[4],
   },
-  header: {
+
+  // Header row with title and close button
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING[4],
   },
-  date: {
+  title: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
     letterSpacing: -0.5,
   },
-  score: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    marginTop: 4,
-  },
-  moodBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(107, 78, 255, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(107, 78, 255, 0.2)',
   },
+
+  // Period tabs (Day, 30D, 60D, 90D)
+  periodTabs: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    borderRadius: RADIUS.xl,
+    padding: 4,
+    marginBottom: SPACING[5],
+  },
+  periodTab: {
+    flex: 1,
+    paddingVertical: SPACING[2] + 2,
+    alignItems: 'center',
+    borderRadius: RADIUS.lg,
+  },
+  periodTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  periodTabText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
+  },
+  periodTabTextActive: {
+    color: BRAND.primary,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+
+  // Score hero section
+  scoreHero: {
+    alignItems: 'center',
+    marginBottom: SPACING[5],
+  },
+  scoreRing: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    borderWidth: 4,
+    borderColor: BRAND.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING[3],
+  },
+  scoreValue: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: TEXT.primary,
+    letterSpacing: -1,
+  },
+  scoreLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  periodSummary: {
+    marginTop: SPACING[2],
+  },
+  periodSummaryText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+  },
+
+  // Stats cards section
+  statsSection: {
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
+  },
+  statCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(107, 78, 255, 0.08)',
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  statCardIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statCardTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  statCardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statCardItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statCardValue: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+    marginBottom: 2,
+  },
+  statCardLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+  },
+  statCardDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    marginHorizontal: SPACING[3],
+  },
+
+  // Hydration progress bar
+  hydrationBar: {
+    width: '80%',
+    height: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: SPACING[2],
+  },
+  hydrationFill: {
+    height: '100%',
+    backgroundColor: '#3B82F6',
+    borderRadius: 4,
+  },
+
+  // Story container
   storyContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -589,7 +771,7 @@ const dayDetailStyles = StyleSheet.create({
     backgroundColor: 'rgba(107, 78, 255, 0.06)',
     padding: SPACING[4],
     borderRadius: RADIUS.xl,
-    marginBottom: SPACING[5],
+    marginBottom: SPACING[4],
     borderWidth: 1,
     borderColor: 'rgba(107, 78, 255, 0.1)',
   },
@@ -600,48 +782,52 @@ const dayDetailStyles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: '500',
   },
-  statsGrid: {
+
+  // Best day card (for period view)
+  bestDayCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING[5],
-  },
-  statItem: {
     alignItems: 'center',
-    flex: 1,
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    marginBottom: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.15)',
   },
-  statIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING[2],
-  },
-  statValue: {
-    fontSize: TYPOGRAPHY.size.lg,
+  bestDayTitle: {
+    fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
+    color: '#D97706',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  statLabel: {
-    fontSize: 11,
-    color: TEXT.tertiary,
+  bestDayText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
     marginTop: 2,
   },
+
+  // Empty state
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING[8],
   },
-  emptyText: {
-    fontSize: TYPOGRAPHY.size.base,
-    color: TEXT.tertiary,
+  emptyTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
     marginTop: SPACING[3],
   },
-  actions: {
-    flexDirection: 'row',
-    gap: SPACING[3],
+  emptyText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+    marginTop: SPACING[2],
+    textAlign: 'center',
+    paddingHorizontal: SPACING[4],
   },
+
+  // Action buttons
   shareBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -656,21 +842,6 @@ const dayDetailStyles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: BRAND.primary,
-  },
-  historyBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: SPACING[4],
-    backgroundColor: BRAND.primary,
-    borderRadius: RADIUS.xl,
-  },
-  historyBtnText: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#FFFFFF',
   },
 });
 
@@ -796,19 +967,7 @@ export default function PremiumCalendarStrip({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS['2xl'],
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
-    // Luxurious shadow
-    shadowColor: '#6B4EFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 6,
-    // Subtle premium border
-    borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.08)',
+    ...CARD_SYSTEM.standard,
   },
   header: {
     flexDirection: 'row',
@@ -923,6 +1082,12 @@ const styles = StyleSheet.create({
   },
   indicatorWater: {
     backgroundColor: '#3B82F6', // Blue
+  },
+  indicatorCombined: {
+    backgroundColor: '#6B4EFF', // Brand purple - indicates complete logging
+    width: 8,
+    height: 5,
+    borderRadius: 2.5,
   },
 
   // Modal styles

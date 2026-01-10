@@ -30,11 +30,11 @@ import {
 const getNutritionAdvice = (percentage) => {
   const hour = new Date().getHours();
   
-  if (percentage >= 100) return "Goal hit! You&apos;re fueled up 🔥";
+  if (percentage >= 100) return "Goal hit! You're fueled up 🔥";
   if (percentage >= 90) return "So close! Finish strong 🎯";
-
+  
   if (hour < 11) return percentage < 15 ? "Fuel your morning 🍳" : "Great start to the day 🚀";
-  if (hour < 15) return percentage < 40 ? "Don&apos;t forget lunch! 🥗" : "Keeping energy steady ⚡";
+  if (hour < 15) return percentage < 40 ? "Don't forget lunch! 🥗" : "Keeping energy steady ⚡";
   if (hour < 20) return percentage < 70 ? "Dinner time approaching 🍽️" : "On track for the day 👌";
   return "Winding down for rest 🌙";
 };

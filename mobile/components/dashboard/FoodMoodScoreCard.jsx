@@ -386,14 +386,17 @@ const moodStyles = StyleSheet.create({
 });
 
 /**
- * Celebration Badge - For wins
+ * Celebration Badge - For wins (uses Ionicons, no emojis)
  */
 function CelebrationBadge({ celebration }) {
   if (!celebration) return null;
 
+  const bgColor = celebration.color ? `${celebration.color}15` : 'rgba(16, 185, 129, 0.1)';
+  const borderColor = celebration.color ? `${celebration.color}30` : 'rgba(16, 185, 129, 0.2)';
+
   return (
-    <View style={celebrationStyles.badge}>
-      <Text style={celebrationStyles.emoji}>{celebration.emoji}</Text>
+    <View style={[celebrationStyles.badge, { backgroundColor: bgColor, borderColor }]}>
+      <Ionicons name={celebration.icon || 'sparkles'} size={14} color={celebration.color || '#10B981'} />
       <Text style={celebrationStyles.text}>{celebration.text}</Text>
     </View>
   );
@@ -406,13 +409,8 @@ const celebrationStyles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: SPACING[3],
     paddingVertical: SPACING[2],
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-  },
-  emoji: {
-    fontSize: 14,
   },
   text: {
     fontSize: 12,
@@ -428,7 +426,6 @@ export default function FoodMoodScoreCard({
   today = {},
   goals = {},
   moodLogs = [],
-  streak = 0,
   historicalScores = [],
   onViewDetails,
 }) {
@@ -457,9 +454,8 @@ export default function FoodMoodScoreCard({
       waterGoal: goals?.waterLiters || 2.5,
       moodLogs,
       meals,
-      streak,
     });
-  }, [today, goals, moodLogs, streak]);
+  }, [today, goals, moodLogs]);
 
   // Get latest mood
   const latestMood = useMemo(() => {
@@ -474,13 +470,12 @@ export default function FoodMoodScoreCard({
   const celebration = useMemo(() => {
     const { score, breakdown } = scoreData;
 
-    if (score >= 85) return { emoji: '🌟', text: 'Amazing day!' };
-    if (streak >= 7) return { emoji: '🔥', text: `${streak} day streak!` };
-    if ((breakdown?.hydration || 0) >= 18) return { emoji: '💧', text: 'Hydration goal!' };
-    if ((breakdown?.nutrition || 0) >= 30) return { emoji: '🥗', text: 'Great eating!' };
-    if (score >= 70) return { emoji: '💪', text: 'Keep it up!' };
+    if (score >= 85) return { icon: 'star', color: '#F59E0B', text: 'Amazing day!' };
+    if ((breakdown?.hydration || 0) >= 18) return { icon: 'water', color: '#3B82F6', text: 'Hydration goal!' };
+    if ((breakdown?.nutrition || 0) >= 30) return { icon: 'leaf', color: '#10B981', text: 'Great eating!' };
+    if (score >= 70) return { icon: 'fitness', color: '#8B5CF6', text: 'Keep it up!' };
     return null;
-  }, [scoreData, streak]);
+  }, [scoreData]);
 
   // Get encouraging message
   const getMessage = (score, tier) => {

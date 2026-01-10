@@ -5,7 +5,7 @@ import cron from 'cron';
 import { db } from '../config/db.js';
 import { gamificationTable, foodLogTable, waterLogTable, moodLogTable } from '../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { normalizeDateUTC, addDaysUTC } from '../utils/timezone.js';
+import { addDaysUTC, getLocalDayRange } from '../utils/timezone.js';
 
 /**
  * Initialize the daily streak check cron job
@@ -19,17 +19,14 @@ export function initStreakCronJob() {
       console.log('[Cron] Daily streak check started at', new Date().toISOString());
 
       try {
-        const yesterday = new Date();
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        const yesterdayNormalized = normalizeDateUTC(yesterday);
-
-        const yesterdayStart = new Date(yesterdayNormalized);
-        const yesterdayEnd = new Date(yesterdayNormalized);
-        yesterdayEnd.setUTCHours(23, 59, 59, 999);
-
         // Get all users with gamification records
         const allUsers = await db
-          .select({ userId: gamificationTable.userId })
+          .select({
+            userId: gamificationTable.userId,
+            timezoneOffset: gamificationTable.timezoneOffset,
+            streak: gamificationTable.streak,
+            streakFreezes: gamificationTable.streakFreezes,
+          })
           .from(gamificationTable);
 
         console.log(`[Cron] Checking streaks for ${allUsers.length} users`);
@@ -38,8 +35,12 @@ export function initStreakCronJob() {
         let freezesUsed = 0;
         let streaksPreserved = 0;
 
-        for (const { userId } of allUsers) {
+        for (const { userId, timezoneOffset, streak, streakFreezes } of allUsers) {
           try {
+            const offsetMinutes = Number.isFinite(timezoneOffset) ? timezoneOffset : 0;
+            const yesterdayBase = addDaysUTC(new Date(), -1);
+            const { start: yesterdayStart, end: yesterdayEnd } = getLocalDayRange(offsetMinutes, yesterdayBase);
+
             // Check if user logged any activity yesterday (food, water, or mood)
             const [foodLogs, waterLogs, moodLogs] = await Promise.all([
               db
@@ -81,17 +82,12 @@ export function initStreakCronJob() {
 
             if (totalActivityCount === 0) {
               // User missed yesterday - check for streak freeze
-              const [gamification] = await db
-                .select()
-                .from(gamificationTable)
-                .where(eq(gamificationTable.userId, userId));
-
-              if (!gamification || gamification.streak === 0) {
+              if (!streak || streak === 0) {
                 // No active streak to maintain, skip
                 continue;
               }
 
-              if (gamification.streakFreezes > 0) {
+              if (streakFreezes > 0) {
                 // Use a streak freeze
                 await db
                   .update(gamificationTable)
@@ -103,7 +99,7 @@ export function initStreakCronJob() {
                   .where(eq(gamificationTable.userId, userId));
 
                 freezesUsed++;
-                console.log(`[Streak] ❄️ User ${userId} used freeze (${gamification.streakFreezes - 1} remaining)`);
+                console.log(`[Streak] ❄️ User ${userId} used freeze (${streakFreezes - 1} remaining)`);
               } else {
                 // Reset streak
                 await db
@@ -116,7 +112,7 @@ export function initStreakCronJob() {
                   .where(eq(gamificationTable.userId, userId));
 
                 streaksReset++;
-                console.log(`[Streak] 🔄 User ${userId} streak reset (was ${gamification.streak} days)`);
+                console.log(`[Streak] 🔄 User ${userId} streak reset (was ${streak} days)`);
               }
             } else {
               // User had activity yesterday (food, water, or mood), streak is safe

@@ -4,7 +4,7 @@
 import { db } from "../config/db.js";
 import { gamificationTable } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
-import { normalizeDateUTC, addDaysUTC } from "../utils/timezone.js";
+import { normalizeDateUTC, addDaysUTC, getLocalDateUTC } from "../utils/timezone.js";
 import { calculateLevel, checkLevelUp } from "../utils/levelCalculator.js";
 import {
   sendStreakCelebration,
@@ -170,9 +170,11 @@ export async function awardXP(userId, xp, source = "meal_log", dbConn = db) {
  * @param {Object} dbConn - Database connection (can be transaction)
  * @returns {Promise<Object>} { streak, streakIncremented, previousStreak }
  */
-export async function updateStreak(userId, date, dbConn = db) {
+export async function updateStreak(userId, date, dbConn = db, timezoneOffset = null) {
   try {
-    const today = normalizeDateUTC(date);
+    const today = Number.isFinite(timezoneOffset)
+      ? getLocalDateUTC(timezoneOffset, date)
+      : normalizeDateUTC(date);
 
     // Use atomic upsert with conflict handling to prevent race conditions
     // This ensures only one concurrent request can update the streak
@@ -196,9 +198,10 @@ export async function updateStreak(userId, date, dbConn = db) {
             level: 1,
             streak: 1,
             lastLogDate: today,
-            lastStreakUpdatedAt: today,
-            badges: [],
-          })
+          lastStreakUpdatedAt: today,
+          timezoneOffset: Number.isFinite(timezoneOffset) ? timezoneOffset : null,
+          badges: [],
+        })
           .onConflictDoNothing()
           .returning();
 
@@ -269,6 +272,9 @@ export async function updateStreak(userId, date, dbConn = db) {
           streak: newStreak,
           lastLogDate: today,
           lastStreakUpdatedAt: today,
+          timezoneOffset: Number.isFinite(timezoneOffset)
+            ? timezoneOffset
+            : currentGamification.timezone_offset ?? null,
           updatedAt: new Date(),
         })
         .where(eq(gamificationTable.userId, userId));

@@ -6,102 +6,102 @@
 
 // PRIMARY BRAND COLORS
 export const BRAND = {
-  primary: '#6B4EFF',
-  primaryLight: '#8B6EFF',
-  primaryDark: '#5739CC',
-  secondary: '#FF6B9D',
-  secondaryLight: '#FF8FB8',
-  accent: '#00D9FF',
+  primary: '#E46A4B',
+  primaryLight: '#F6D6CC',
+  primaryDark: '#C6553A',
+  secondary: '#4B7B9C',
+  secondaryLight: '#DCE6E0',
+  accent: '#4B7B9C',
 };
 
 // BACKGROUND & SURFACES
 export const SURFACES = {
   background: {
-    primary: '#F8F9FF',      // Soft purple-white
-    secondary: '#FFFFFF',     // Pure white
-    tertiary: '#EEF2FF',      // Light purple tint
+    primary: '#F5F3EE',
+    secondary: '#FFFFFF',
+    tertiary: '#F0EDE8',
   },
   card: {
     primary: '#FFFFFF',
     glass: 'rgba(255, 255, 255, 0.9)',
-    glassDark: 'rgba(107, 78, 255, 0.05)',
+    glassDark: 'rgba(228, 106, 75, 0.06)',
     overlay: 'rgba(0, 0, 0, 0.5)',
-    border: 'rgba(107, 78, 255, 0.1)',
+    border: 'rgba(230, 225, 217, 0.9)',
   },
   gradient: {
-    primary: ['#6B4EFF', '#8B6EFF'],
-    secondary: ['#FF6B9D', '#FF8FB8'],
-    accent: ['#00D9FF', '#3AEAFF'],
-    success: ['#10B981', '#34D399'],
-    warning: ['#F59E0B', '#FBBF24'],
-    danger: ['#EF4444', '#F87171'],
-    purple: ['#64748B', '#94A3B8'],  // Soft slate gradient (was overwhelming lavender)
-    blue: ['#3B82F6', '#60A5FA'],
-    pink: ['#EC4899', '#F472B6'],
+    primary: ['#E46A4B', '#F1A98E'],
+    secondary: ['#4B7B9C', '#A7C0D4'],
+    accent: ['#4B7B9C', '#C9D8E4'],
+    success: ['#4B7B9C', '#A7C0D4'],
+    warning: ['#C9A26A', '#E8D1AF'],
+    danger: ['#C9705A', '#EBC1B5'],
+    purple: ['#6A6F7C', '#B6BCC7'],
+    blue: ['#4B7B9C', '#A7C0D4'],
+    pink: ['#E46A4B', '#F6D6CC'],
     // Modern Pastel Gradients
-    pastelPeach: ['#FFEEE8', '#FFE0D5'],
-    pastelLavender: ['#F3E8FF', '#E9D5FF'],
-    pastelMint: ['#DCFCE7', '#D1FAE5'],
-    pastelSky: ['#E0F2FE', '#DBEAFE'],
-    pastelRose: ['#FFE4E6', '#FECDD3'],
-    softPurple: ['#F5F3FF', '#EDE9FE'],
-    softBlue: ['#EFF6FF', '#DBEAFE'],
-    softGreen: ['#F0FDF4', '#DCFCE7'],
+    pastelPeach: ['#F6D6CC', '#FBEDE8'],
+    pastelLavender: ['#B6BCC7', '#E2E6EE'],
+    pastelMint: ['#DCE6E0', '#F0F5F3'],
+    pastelSky: ['#F0EDE8', '#F7F5F1'],
+    pastelRose: ['#F6D6CC', '#FBEDE8'],
+    softPurple: ['#F0EDE8', '#F7F5F1'],
+    softBlue: ['#F0EDE8', '#F7F5F1'],
+    softGreen: ['#F0F5F3', '#FFFFFF'],
   },
 };
 
 // TEXT HIERARCHY - WCAG AA Compliant Contrast
 export const TEXT = {
-  primary: '#111827',       // Very dark gray (darker for better contrast on light bg)
-  secondary: '#374151',     // Medium-dark gray (improved from #4B5563)
-  tertiary: '#4B5563',      // Light-medium gray (improved from #6B7280)
-  muted: '#6B7280',         // Muted gray (improved from #9CA3AF for disabled states)
+  primary: '#1C1F26',
+  secondary: '#4D5565',
+  tertiary: '#6F7686',
+  muted: '#98A0AF',
   white: '#FFFFFF',
   onPurple: '#FFFFFF',      // Text ON purple backgrounds
-  onPurpleSecondary: '#E0E7FF', // Secondary text on purple
+  onPurpleSecondary: '#F0EDE8',
   brand: BRAND.primary,
 };
 
 // SEMANTIC COLORS - For colored overlays and indicators
 export const SEMANTIC = {
   success: {
-    base: '#059669',         // Darker base for better visibility
-    light: '#34D399',
-    dark: '#047857',
-    bg: '#ECFDF5',
+    base: '#4B7B9C',
+    light: '#A7C0D4',
+    dark: '#355C78',
+    bg: '#E9F0F6',
     text: '#FFFFFF',         // White text on success backgrounds
   },
   warning: {
-    base: '#D97706',         // Darker for better contrast
-    light: '#FBBF24',
-    dark: '#B45309',
-    bg: '#FFFBEB',
+    base: '#C9A26A',
+    light: '#E8D1AF',
+    dark: '#A5824F',
+    bg: '#F6EFE3',
     text: '#FFFFFF',         // White text on warning backgrounds
   },
   danger: {
-    base: '#DC2626',         // Darker red for better contrast
-    light: '#F87171',
-    dark: '#991B1B',
-    bg: '#FEF2F2',
+    base: '#C9705A',
+    light: '#EBC1B5',
+    dark: '#A35341',
+    bg: '#F7ECE9',
     text: '#FFFFFF',         // White text on danger backgrounds
   },
   info: {
-    base: '#2563EB',         // Darker blue for better contrast
-    light: '#60A5FA',
-    dark: '#1d4ed8',
-    bg: '#EFF6FF',
+    base: '#4B7B9C',
+    light: '#A7C0D4',
+    dark: '#355C78',
+    bg: '#E9F0F6',
     text: '#FFFFFF',         // White text on info backgrounds
   },
 };
 
 // SEMANTIC ACTION COLORS - For CTAs and interactive elements
 export const SEMANTIC_ACTIONS = {
-  primary: '#6B4EFF',     // Main actions (submit, confirm)
-  success: '#10B981',     // Goal achieved, positive actions
-  warning: '#F59E0B',     // Approaching limit, caution
-  danger: '#EF4444',      // Over limit, delete actions
-  info: '#3B82F6',        // Insights, informational
-  muted: '#6B7280',       // Disabled, inactive
+  primary: '#E46A4B',     // Main actions (submit, confirm)
+  success: '#4B7B9C',     // Goal achieved, positive actions
+  warning: '#C9A26A',     // Approaching limit, caution
+  danger: '#C9705A',      // Over limit, delete actions
+  info: '#4B7B9C',        // Insights, informational
+  muted: '#98A0AF',       // Disabled, inactive
 };
 
 // CELEBRATION COLORS - For achievements and celebrations
@@ -253,7 +253,7 @@ export const RADIUS = {
 export const SHADOWS = {
   sm: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#6B4EFF',
+    shadowColor: '#E46A4B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -261,7 +261,7 @@ export const SHADOWS = {
   },
   md: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#6B4EFF',
+    shadowColor: '#E46A4B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 8,
@@ -269,7 +269,7 @@ export const SHADOWS = {
   },
   lg: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#6B4EFF',
+    shadowColor: '#E46A4B',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -277,7 +277,7 @@ export const SHADOWS = {
   },
   xl: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#6B4EFF',
+    shadowColor: '#E46A4B',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -286,7 +286,7 @@ export const SHADOWS = {
   // Colored glows (for non-white backgrounds, override backgroundColor if needed)
   success: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#10B981',
+    shadowColor: '#4B7B9C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -294,7 +294,7 @@ export const SHADOWS = {
   },
   warning: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#F59E0B',
+    shadowColor: '#C9A26A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -302,7 +302,7 @@ export const SHADOWS = {
   },
   danger: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#EF4444',
+    shadowColor: '#C9705A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -310,7 +310,7 @@ export const SHADOWS = {
   },
   info: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#3B82F6',
+    shadowColor: '#4B7B9C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -336,7 +336,7 @@ export const PREMIUM_CARD = {
   backgroundColor: SURFACES.card.primary,
   borderRadius: RADIUS.xl,
   borderWidth: 1,
-  borderColor: 'rgba(107, 78, 255, 0.1)',
+  borderColor: 'rgba(43, 93, 255, 0.12)',
   padding: SPACING[4],
   ...SHADOWS.md,
 };
@@ -346,7 +346,7 @@ export const GLASS_CARD = {
   backgroundColor: SURFACES.card.glass,
   borderRadius: RADIUS.xl,
   borderWidth: 1,
-  borderColor: 'rgba(107, 78, 255, 0.15)',
+  borderColor: 'rgba(43, 93, 255, 0.15)',
   padding: SPACING[4],
   ...SHADOWS.sm,
 };
@@ -359,6 +359,81 @@ export const GRADIENT_BUTTON = {
   alignItems: 'center',
   justifyContent: 'center',
   ...SHADOWS.md,
+};
+
+// =============================================================================
+// STANDARDIZED CARD SYSTEM - Use consistently across ALL dashboard cards
+// =============================================================================
+// Design Philosophy: "Calm Luxury" - Oura Ring, Apple Health, Linear inspired
+// - Brand-tinted shadows (not black)
+// - Consistent radius and spacing
+// - Three tiers: hero (50% viewport), standard (most cards), compact (tiles)
+// =============================================================================
+
+export const CARD_SYSTEM = {
+  // HERO CARD - Primary metric, demands attention (e.g., Wellness Score)
+  hero: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS['2xl'],        // 24px - generous rounding
+    padding: SPACING[5],                // 20px - breathing room
+    marginBottom: SPACING[4],           // 16px - consistent spacing
+    borderWidth: 1.5,
+    borderColor: 'rgba(43, 93, 255, 0.18)',
+    shadowColor: '#2B5DFF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+
+  // STANDARD CARD - Most dashboard cards (calendar, meals, achievements)
+  standard: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,            // 20px
+    padding: SPACING[4],                // 16px
+    marginBottom: SPACING[4],           // 16px
+    borderWidth: 1,
+    borderColor: 'rgba(43, 93, 255, 0.12)',
+    shadowColor: '#2B5DFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+
+  // COMPACT CARD - Small tiles, quick stats, glassmorphism
+  compact: {
+    backgroundColor: 'rgba(255, 255, 255, 0.90)',
+    borderRadius: RADIUS.xl,            // 20px
+    padding: SPACING[3],                // 12px
+    marginBottom: SPACING[3],           // 12px
+    borderWidth: 1,
+    borderColor: 'rgba(43, 93, 255, 0.10)',
+    shadowColor: '#2B5DFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  // INTERACTIVE STATES - Apply when card is pressed/focused
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    shadowOpacity: 0.05,
+  },
+
+  // ELEVATED - For modals, bottom sheets, overlays
+  elevated: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS['2xl'],
+    padding: SPACING[5],
+    borderWidth: 0,
+    shadowColor: '#2B5DFF',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.20,
+    shadowRadius: 32,
+    elevation: 16,
+  },
 };
 
 // ANIMATION TIMINGS
@@ -375,84 +450,84 @@ export const ANIMATION = {
 // MACRO COLORS (consistent with dashboard)
 export const MACRO_COLORS = {
   protein: {
-    base: '#8B5CF6',
-    light: '#A78BFA',
-    gradient: ['#8B5CF6', '#A78BFA'],
+    base: '#8FA0E6',
+    light: '#C8D2F5',
+    gradient: ['#8FA0E6', '#C8D2F5'],
   },
   carbs: {
-    base: '#3B82F6',
-    light: '#60A5FA',
-    gradient: ['#3B82F6', '#60A5FA'],
+    base: '#A8C9B6',
+    light: '#D6EFE6',
+    gradient: ['#A8C9B6', '#D6EFE6'],
   },
   fat: {
-    base: '#F59E0B',
-    light: '#FBBF24',
-    gradient: ['#F59E0B', '#FBBF24'],
+    base: '#E7B7B1',
+    light: '#F6D7CC',
+    gradient: ['#E7B7B1', '#F6D7CC'],
   },
   fiber: {
-    base: '#10B981',
-    light: '#34D399',
-    gradient: ['#10B981', '#34D399'],
+    base: '#B9B4E7',
+    light: '#D9D5F2',
+    gradient: ['#B9B4E7', '#D9D5F2'],
   },
 };
 
 // MOOD COLORS (8 core moods for premium MoodTracker)
 export const MOOD_PALETTE = {
   happy: {
-    base: '#10B981',
-    light: '#34D399',
-    dark: '#059669',
-    bg: '#ECFDF5',
-    gradient: ['#10B981', '#34D399'],
+    base: '#A8C9B6',
+    light: '#D6EFE6',
+    dark: '#7AAE9A',
+    bg: '#EEF7F3',
+    gradient: ['#A8C9B6', '#D6EFE6'],
   },
   calm: {
-    base: '#3B82F6',
-    light: '#60A5FA',
-    dark: '#2563EB',
-    bg: '#EFF6FF',
-    gradient: ['#3B82F6', '#60A5FA'],
+    base: '#8FA0E6',
+    light: '#C8D2F5',
+    dark: '#6F82C8',
+    bg: '#EEF2FF',
+    gradient: ['#8FA0E6', '#C8D2F5'],
   },
   focused: {
-    base: '#14B8A6',
-    light: '#2DD4BF',
-    dark: '#0D9488',
-    bg: '#F0FDFA',
-    gradient: ['#14B8A6', '#2DD4BF'],
+    base: '#A8C9B6',
+    light: '#D6EFE6',
+    dark: '#7AAE9A',
+    bg: '#EEF7F3',
+    gradient: ['#A8C9B6', '#D6EFE6'],
   },
   energized: {
-    base: '#FBBF24',
-    light: '#FCD34D',
-    dark: '#F59E0B',
-    bg: '#FFFBEB',
-    gradient: ['#FBBF24', '#FCD34D'],
+    base: '#F1C6A8',
+    light: '#F6D7CC',
+    dark: '#C98E7F',
+    bg: '#FBF1ED',
+    gradient: ['#F1C6A8', '#F6D7CC'],
   },
   neutral: {
-    base: '#4B5563',
-    light: '#0b57eeff',
-    dark: '#374151',
-    bg: '#E5E7EB',
-    gradient: ['#4B5563', '#6B7280'],
+    base: '#7C839A',
+    light: '#9AA1B2',
+    dark: '#5E657A',
+    bg: '#F1F3F7',
+    gradient: ['#7C839A', '#9AA1B2'],
   },
   tired: {
-    base: '#64748B',      // Soft slate blue (was overwhelming purple #8B5CF6)
-    light: '#94A3B8',     // Light slate
-    dark: '#475569',      // Darker slate
-    bg: '#F1F5F9',        // Soft blue-gray background (was lavender #F5F3FF)
-    gradient: ['#64748B', '#94A3B8'],
+    base: '#B9B4E7',
+    light: '#D9D5F2',
+    dark: '#8F88C8',
+    bg: '#F3F2FA',
+    gradient: ['#B9B4E7', '#D9D5F2'],
   },
   stressed: {
-    base: '#F97316',
-    light: '#FB923C',
-    dark: '#EA580C',
-    bg: '#FFF7ED',
-    gradient: ['#F97316', '#FB923C'],
+    base: '#E7B7B1',
+    light: '#F6D7CC',
+    dark: '#C98E7F',
+    bg: '#FBF1ED',
+    gradient: ['#E7B7B1', '#F6D7CC'],
   },
   sad: {
-    base: '#0EA5E9',      // Calm sky blue (was bright indigo #6366F1)
-    light: '#38BDF8',     // Lighter sky blue
-    dark: '#0284C7',      // Deeper blue
-    bg: '#F0F9FF',        // Soft blue background (was lavender #EEF2FF)
-    gradient: ['#0EA5E9', '#38BDF8'],
+    base: '#8FA0E6',
+    light: '#C8D2F5',
+    dark: '#6F82C8',
+    bg: '#EEF2FF',
+    gradient: ['#8FA0E6', '#C8D2F5'],
   },
   // Future expansion (Phase 4+): angry, anxious, excited, relaxed
 };
@@ -460,27 +535,27 @@ export const MOOD_PALETTE = {
 // ENERGY LEVEL COLORS
 export const ENERGY_PALETTE = {
   veryHigh: {
-    color: '#FBBF24',
+    color: '#F1C6A8',
     label: 'Very High',
     range: [9, 10],
   },
   high: {
-    color: '#10B981',
+    color: '#A8C9B6',
     label: 'High',
     range: [7, 8],
   },
   medium: {
-    color: '#3B82F6',
+    color: '#8FA0E6',
     label: 'Medium',
     range: [5, 6],
   },
   low: {
-    color: '#F97316',
+    color: '#E7B7B1',
     label: 'Low',
     range: [3, 4],
   },
   veryLow: {
-    color: '#64748B',     // Soft slate blue (was overwhelming purple #8B5CF6)
+    color: '#B9B4E7',
     label: 'Very Low',
     range: [1, 2],
   },
@@ -489,28 +564,28 @@ export const ENERGY_PALETTE = {
 // CORRELATION STRENGTH COLORS (for meal-mood correlations)
 export const CORRELATION_COLORS = {
   strong: {
-    base: '#10B981',
-    light: '#34D399',
+    base: '#A8C9B6',
+    light: '#D6EFE6',
     label: 'Strong',
-    gradient: ['#10B981', '#34D399'],
+    gradient: ['#A8C9B6', '#D6EFE6'],
   },
   moderate: {
-    base: '#3B82F6',
-    light: '#60A5FA',
+    base: '#8FA0E6',
+    light: '#C8D2F5',
     label: 'Moderate',
-    gradient: ['#3B82F6', '#60A5FA'],
+    gradient: ['#8FA0E6', '#C8D2F5'],
   },
   weak: {
-    base: '#F59E0B',
-    light: '#FBBF24',
+    base: '#E7B7B1',
+    light: '#F6D7CC',
     label: 'Weak',
-    gradient: ['#F59E0B', '#FBBF24'],
+    gradient: ['#E7B7B1', '#F6D7CC'],
   },
   none: {
-    base: '#6B7280',
-    light: '#9CA3AF',
+    base: '#9AA1B2',
+    light: '#C2C7D4',
     label: 'None',
-    gradient: ['#6B7280', '#9CA3AF'],
+    gradient: ['#9AA1B2', '#C2C7D4'],
   },
 };
 
@@ -656,6 +731,7 @@ export const PREMIUM_THEME = {
   PREMIUM_CARD,
   GLASS_CARD,
   GRADIENT_BUTTON,
+  CARD_SYSTEM,
   ANIMATION,
   MACRO_COLORS,
   MOOD_PALETTE,

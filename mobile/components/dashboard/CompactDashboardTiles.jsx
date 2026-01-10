@@ -1,6 +1,6 @@
 /**
  * CompactDashboardTiles - Glassmorphic compact tiles row
- * Premium UI: 3 compact tiles showing macros donut, hydration bar, streak pill
+ * Premium UI: 2 compact tiles showing macros donut and hydration bar
  */
 
 import React from 'react';
@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle, G } from 'react-native-svg';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
-import { TEXT, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SEMANTIC, SHADOWS, CARD_SYSTEM } from '../../constants/premiumTheme';
 
 // Mini Donut Chart for macros
 function MiniDonut({ protein, carbs, fat, size = 48 }) {
@@ -105,10 +105,8 @@ function MiniHydrationBar({ current, goal, width = 60 }) {
 export default function CompactDashboardTiles({
   today,
   goals,
-  gamification,
   onTapMacros,
   onTapHydration,
-  onTapStreak,
 }) {
   // Parse values
   const protein = today?.nutrition?.totalProtein ?? 0;
@@ -119,9 +117,6 @@ export default function CompactDashboardTiles({
 
   const waterIntake = parseFloat(today?.waterIntakeLiters) || 0;
   const waterGoal = parseFloat(goals?.waterLiters) || 2.0;
-
-  const streak = gamification?.streak ?? 0;
-  const level = gamification?.level ?? 1;
 
   // Calculate calorie percentage
   const caloriePercent = Math.min(100, Math.round((totalCalories / calorieGoal) * 100));
@@ -168,31 +163,6 @@ export default function CompactDashboardTiles({
         </BlurView>
       </TouchableOpacity>
 
-      {/* Streak/Level Pill */}
-      <TouchableOpacity
-        style={styles.streakPill}
-        onPress={onTapStreak}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel={`${streak} day streak, Level ${level}`}
-      >
-        <LinearGradient
-          colors={streak > 0 ? ['#F59E0B', '#F97316'] : ['#9CA3AF', '#6B7280']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.streakGradient}
-        >
-          <Ionicons
-            name={streak > 0 ? 'flame' : 'flame-outline'}
-            size={18}
-            color="#FFF"
-          />
-          <Text style={styles.streakValue}>{streak}</Text>
-          <View style={styles.levelBadge}>
-            <Text style={styles.levelText}>L{level}</Text>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -205,12 +175,9 @@ const styles = StyleSheet.create({
   },
   tile: {
     flex: 1,
-    borderRadius: RADIUS.xl,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    ...SHADOWS.sm,
+    ...CARD_SYSTEM.compact,
+    marginBottom: 0, // Override default margin since container handles spacing
   },
   blurContainer: {
     padding: SPACING[3],
@@ -264,33 +231,5 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: TEXT.tertiary,
     marginTop: 2,
-  },
-  streakPill: {
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-    ...SHADOWS.sm,
-  },
-  streakGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[3],
-    gap: 6,
-  },
-  streakValue: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#FFF',
-  },
-  levelBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-  },
-  levelText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#FFF',
   },
 });

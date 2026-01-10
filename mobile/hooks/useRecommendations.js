@@ -44,12 +44,13 @@ export function useRecommendations({ enabled = false } = {}) {
     queryFn: async () => {
       try {
         console.log('[useRecommendations] Fetching recommendations...');
-        const response = await apiClient.get('/recommendations', {
+        // apiClient.get returns data directly, not a response wrapper
+        const data = await apiClient.get('/recommendations', {
           params: { limit: 5 },
           timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
         });
         console.log('[useRecommendations] Fetch successful');
-        return response.data?.recommendations || [];
+        return data?.recommendations || [];
       } catch (err) {
         // Distinguish timeout from other errors
         const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
@@ -75,11 +76,12 @@ export function useRecommendations({ enabled = false } = {}) {
   // ============================================================================
   const trackInteractionMutation = useMutation({
     mutationFn: async ({ recommendationId, action, meta }) => {
-      const response = await apiClient.post(`/recommendations/${recommendationId}/track`, {
+      // apiClient.post returns data directly
+      const data = await apiClient.post(`/recommendations/${recommendationId}/track`, {
         action,
         ...meta
       });
-      return response.data;
+      return data;
     },
     onError: (err) => {
       console.error('[useRecommendations] Track error:', err);
@@ -104,15 +106,15 @@ export function useRecommendations({ enabled = false } = {}) {
       // Track interaction
       await trackInteraction(recommendation.id, 'accept');
 
-      // Accept and add to log
-      const response = await apiClient.post(
+      // Accept and add to log - apiClient.post returns data directly
+      const data = await apiClient.post(
         `/recommendations/${recommendation.id}/accept`,
         {
           portion: recommendation.portion,
           mealType: recommendation.mealType
         }
       );
-      return response.data;
+      return data;
     },
     onSuccess: () => {
       // CRITICAL FIX: Invalidate cache AND refetch new recommendations
@@ -177,7 +179,8 @@ export function useRecommendations({ enabled = false } = {}) {
     const { days = 30, status, type, limit = 50 } = filters;
 
     try {
-      const response = await apiClient.get('/recommendations/history/list', {
+      // apiClient.get returns data directly
+      const data = await apiClient.get('/recommendations/history/list', {
         params: {
           days,
           status,
@@ -187,8 +190,8 @@ export function useRecommendations({ enabled = false } = {}) {
       });
 
       return {
-        history: response.data?.history || [],
-        stats: response.data?.stats || {}
+        history: data?.history || [],
+        stats: data?.stats || {}
       };
     } catch (err) {
       console.error('[useRecommendations] History fetch error:', err);
@@ -205,10 +208,11 @@ export function useRecommendations({ enabled = false } = {}) {
   // ============================================================================
   const getDetailedRecommendation = useCallback(async (recommendationId) => {
     try {
-      const response = await apiClient.get(`/recommendations/${recommendationId}`);
+      // apiClient.get returns data directly
+      const data = await apiClient.get(`/recommendations/${recommendationId}`);
       return {
         success: true,
-        data: response.data
+        data: data
       };
     } catch (err) {
       console.error('[useRecommendations] Detail fetch error:', err);
@@ -266,10 +270,11 @@ export function useRecommendationHistory() {
     queryKey: ['recommendations', 'history'],
     queryFn: async () => {
       try {
-        const response = await apiClient.get('/recommendations/history/list');
+        // apiClient.get returns data directly
+        const data = await apiClient.get('/recommendations/history/list');
         return {
-          history: response.data?.history || [],
-          stats: response.data?.stats || {}
+          history: data?.history || [],
+          stats: data?.stats || {}
         };
       } catch (err) {
         console.error('[useRecommendationHistory] Fetch error:', err);

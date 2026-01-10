@@ -457,11 +457,11 @@ export default function HydrationTracker({
           })()}
         </View>
 
-        {/* Quick Add Buttons - Premium with Scale Animation + Glow */}
+        {/* Quick Add Buttons - Clean 3-button layout */}
         <View style={styles.quickAddCard}>
           <Text style={styles.sectionLabel}>Quick Add</Text>
           <View style={styles.quickAddGrid}>
-            {QUICK_ADD_SIZES.map((size) => (
+            {QUICK_ADD_SIZES.filter(s => [250, 500, 750].includes(s.ml)).map((size) => (
               <PremiumQuickAddButton
                 key={size.ml}
                 size={size}
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
 
-  // Quick Add
+  // Quick Add - Clean horizontal pills (WaterMinder/Waterllama inspired)
   quickAddCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
@@ -919,11 +919,11 @@ const styles = StyleSheet.create({
   },
   quickAddGrid: {
     flexDirection: 'row',
-    gap: SPACING[3],
+    gap: SPACING[2],
   },
   quickAddTile: {
     flex: 1,
-    aspectRatio: 1,
+    height: 72,
   },
   quickAddTileWrapper: {
     flex: 1,
@@ -932,20 +932,20 @@ const styles = StyleSheet.create({
   },
   quickAddTileGradient: {
     flex: 1,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SPACING[3],
+    paddingHorizontal: SPACING[3],
+    gap: SPACING[2],
   },
   quickAddTileLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.white,
-    marginTop: SPACING[2],
   },
   quickAddTileSubtitle: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
 
   // Custom Amount Input

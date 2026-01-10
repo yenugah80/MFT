@@ -108,7 +108,13 @@ export default function CompareScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(tabs)/dashboard');
+          }
+        }}>
           <Ionicons name="chevron-back" size={22} color={TEXT.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Food Comparison</Text>
@@ -192,7 +198,13 @@ export default function CompareScreen() {
               <Text style={styles.notesText}>
                 Compare two meals and pick the one that aligns with your goals. Small choices add up.
               </Text>
-              <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()}>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/history');
+                }
+              }}>
                 <Text style={styles.primaryButtonText}>Pick another meal</Text>
               </TouchableOpacity>
             </View>

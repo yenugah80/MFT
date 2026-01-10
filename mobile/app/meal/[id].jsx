@@ -79,7 +79,11 @@ export default function MealDetailScreen() {
 
   const handleBack = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/dashboard');
+    }
   };
 
   // Format timestamp

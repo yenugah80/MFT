@@ -44,24 +44,27 @@ export function useHydrationAnalytics(options = {}) {
   const query = useQuery({
     queryKey: HYDRATION_ANALYTICS_KEYS.dashboard(),
     queryFn: async () => {
+      const fallbackData = {
+        coldStart: { stage: 'day0', daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
+        patterns: null,
+        persona: null,
+        personaConfidence: 0,
+        prediction: null,
+        dismissedInsightTypes: [],
+      };
+
       try {
-        const response = await apiClient.get('/hydration/analytics/dashboard');
-        return response.data;
+        // apiClient.get returns data directly, not a response wrapper
+        const data = await apiClient.get('/hydration/analytics/dashboard');
+        // React Query requires returning a value - never undefined
+        return data ?? fallbackData;
       } catch (error) {
         // Silently return fallback data - backend may not have tables yet
         // Once backend is fully deployed, this will work
         if (__DEV__) {
           console.warn('[useHydrationAnalytics] Using fallback data (backend may still be deploying)');
         }
-        // Return fallback data on error
-        return {
-          coldStart: { stage: 'day0', daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
-          patterns: null,
-          persona: null,
-          personaConfidence: 0,
-          prediction: null,
-          dismissedInsightTypes: [],
-        };
+        return fallbackData;
       }
     },
     enabled,

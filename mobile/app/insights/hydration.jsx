@@ -258,7 +258,7 @@ function PredictionDetailCard({ prediction }) {
     <View style={predictionStyles.card}>
       <View style={predictionStyles.header}>
         <View style={predictionStyles.dot} />
-        <Text style={predictionStyles.label}>Tomorrow's Prediction</Text>
+        <Text style={predictionStyles.label}>Tomorrow&apos;s Prediction</Text>
       </View>
 
       <View style={predictionStyles.mainValue}>
@@ -639,7 +639,13 @@ export default function HydrationInsightsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(tabs)/dashboard');
+          }
+        }} style={styles.backButton}>
           <Ionicons name="chevron-back" size={22} color={TEXT.primary} />
         </TouchableOpacity>
         <View style={styles.headerText}>

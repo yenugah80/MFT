@@ -66,7 +66,7 @@ export default function AllergenWarningCard({ warnings = [], onRemoveMeal }) {
           <View style={styles.iconContainer}>
             <Ionicons name="alert-circle" size={24} color="#DC2626" />
           </View>
-          <Text style={styles.title}>⚠️ Allergen Alert</Text>
+          <Text style={styles.title}>Allergen Alert</Text>
         </View>
 
         {/* Warning message */}

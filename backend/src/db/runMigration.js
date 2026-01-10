@@ -69,16 +69,29 @@ async function runMigration(migrationFile) {
 // Run migrations
 async function main() {
   try {
-    // Run any pending migrations
+    // Run all pending migrations in order
+    await runMigration('0013_hydration_celebration.sql');
+    await runMigration('0014_add_water_beverage.sql');
+    await runMigration('0014_add_streak_freezes.sql');
+    await runMigration('0015_account_settings.sql');
+    await runMigration('0016_gamification_integration.sql');
     await runMigration('0017_add_lottie_animations.sql');
     await runMigration('0018_add_mood_day_key.sql');
-    // 🆕 Regional multimodal food analysis support
     await runMigration('0019_add_regional_context.sql');
     await runMigration('0020_add_multimodal_analysis.sql');
-    console.log('\n🎉 All migrations completed successfully!');
+    await runMigration('0021_recommendations_history.sql');
+    await runMigration('0022_user_portion_preferences.sql');
+    await runMigration('0023_add_premium_fields_to_profiles.sql');
+    await runMigration('0024_add_openai_consent_to_profiles.sql');
+    await runMigration('0025_add_onboarding_and_audit_columns.sql');
+    await runMigration('0026_add_premium_columns_to_profiles.sql');
+    await runMigration('0027_add_unique_constraints_user_tables.sql');
+    await runMigration('0028_hydration_intelligence.sql');
+    await runMigration('0029_add_gamification_timezone_offset.sql');
+    console.log('\n All migrations completed successfully!');
     process.exit(0);
   } catch (error) {
-    console.error('\n💥 Migration failed:', error);
+    console.error('\n Migration failed:', error);
     process.exit(1);
   }
 }

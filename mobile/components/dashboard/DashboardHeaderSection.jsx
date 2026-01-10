@@ -29,13 +29,14 @@ export default function DashboardHeaderSection({
   // Enhanced props
   userInitials = 'U',
   userImageUrl = null,
-  streak = 0,
   todayCalories = 0,
   calorieGoal = 2000,
   waterProgress = 0, // 0-100 percentage
-  wellnessScore = null, // 0-100 or null
+  waterIntakeLiters = 0, // actual liters consumed
+  waterGoalLiters = 2.0, // goal in liters
   hasNotifications = false,
   onNotificationPress,
+  showQuickStats = true,
 }) {
   const { colors, isDark } = useTheme();
 
@@ -64,28 +65,20 @@ export default function DashboardHeaderSection({
   const textSecondary = colors.text.secondary;
   const textTertiary = colors.text.tertiary;
   const brandPrimary = colors.brand.primary;
+  const brandSecondary = colors.brand.secondary;
 
   // Get color for calorie progress
   const getCalorieColor = () => {
-    if (caloriePercent >= 90 && caloriePercent <= 110) return isDark ? '#4ADE80' : '#22C55E';
-    if (caloriePercent > 110) return isDark ? '#FBBF24' : '#F59E0B';
+    if (caloriePercent >= 90 && caloriePercent <= 110) return brandSecondary;
+    if (caloriePercent > 110) return brandSecondary;
     return brandPrimary;
   };
 
   // Get color for water progress
   const getWaterColor = () => {
-    if (waterProgress >= 100) return isDark ? '#4ADE80' : '#22C55E';
-    if (waterProgress >= 70) return isDark ? '#60A5FA' : '#3B82F6';
+    if (waterProgress >= 100) return brandSecondary;
+    if (waterProgress >= 70) return brandPrimary;
     return textTertiary;
-  };
-
-  // Get wellness tier color
-  const getWellnessColor = () => {
-    if (!wellnessScore) return textTertiary;
-    if (wellnessScore >= 80) return isDark ? '#4ADE80' : '#22C55E';
-    if (wellnessScore >= 60) return isDark ? '#60A5FA' : '#3B82F6';
-    if (wellnessScore >= 40) return isDark ? '#FBBF24' : '#F59E0B';
-    return isDark ? '#F87171' : '#EF4444';
   };
 
   // Get time-based icon
@@ -100,7 +93,6 @@ export default function DashboardHeaderSection({
   const cardBg = isDark ? 'rgba(255, 255, 255, 0.08)' : colors.surface?.card?.primary || '#FFFFFF';
   const cardBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : colors.surface?.card?.border || 'rgba(0,0,0,0.08)';
   const subtleBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
-  const streakColor = '#F97316';
   const focusColor = isDark ? '#60A5FA' : '#3B82F6';
 
   return (
@@ -108,14 +100,21 @@ export default function DashboardHeaderSection({
       {/* App Branding Row - Subtle & Premium */}
       <View style={[localStyles.brandingRow, { borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)' }]}>
         <View style={localStyles.brandingLeft}>
-          <LinearGradient
-            colors={isDark ? ['#7C66FF', '#A78BFF'] : [brandPrimary, '#8B5CF6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={localStyles.brandIcon}
+          <View
+            style={[
+              localStyles.brandIcon,
+              { borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.08)' },
+            ]}
           >
-            <Ionicons name="leaf" size={14} color="#FFFFFF" />
-          </LinearGradient>
+            <LinearGradient
+              colors={isDark ? ['#8FA0E6', '#C8D2F5'] : [brandPrimary, brandSecondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={localStyles.brandIconInner}
+            >
+              <Text style={localStyles.brandIconLabel}>Logo</Text>
+            </LinearGradient>
+          </View>
           <View style={localStyles.brandTextContainer}>
             <Text style={[localStyles.brandName, { color: textPrimary }]}>My-Food-Tracker</Text>
             <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Your Wellness Companion</Text>
@@ -134,12 +133,12 @@ export default function DashboardHeaderSection({
         <View style={localStyles.leftSection}>
           {/* User Avatar */}
           <View style={localStyles.avatarContainer}>
-            <LinearGradient
-              colors={isDark ? ['#7C66FF', '#A78BFF'] : [brandPrimary, colors.brand.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={localStyles.avatar}
-            >
+          <LinearGradient
+            colors={isDark ? ['#8FA0E6', '#C8D2F5'] : [brandPrimary, brandSecondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={localStyles.avatar}
+          >
               <Text style={localStyles.avatarText}>{userInitials}</Text>
             </LinearGradient>
             {/* Online indicator */}
@@ -153,7 +152,7 @@ export default function DashboardHeaderSection({
               <Ionicons
                 name={getTimeIcon()}
                 size={18}
-                color="#F59E0B"
+                color={textTertiary}
                 style={localStyles.timeIcon}
               />
             </View>
@@ -161,25 +160,15 @@ export default function DashboardHeaderSection({
               {new Date().toLocaleDateString('en-US', {
                 weekday: 'long',
                 month: 'short',
-                day: 'numeric'
+                day: 'numeric',
+                year: 'numeric'
               })}
-              {streak > 0 && (
-                <Text style={[localStyles.streakInline, { color: streakColor }]}> · Day {streak} </Text>
-              )}
             </Text>
           </View>
         </View>
 
         {/* Right: Actions */}
         <View style={localStyles.rightSection}>
-          {/* Streak Badge */}
-          {streak > 0 && (
-            <View style={[localStyles.streakBadge, { backgroundColor: 'rgba(249, 115, 22, 0.15)', borderColor: 'rgba(249, 115, 22, 0.25)' }]}>
-              <Ionicons name="flame" size={14} color={streakColor} />
-              <Text style={[localStyles.streakText, { color: streakColor }]}>{streak}</Text>
-            </View>
-          )}
-
           {/* Notification Bell */}
           <TouchableOpacity
             style={[localStyles.iconButton, { backgroundColor: subtleBg, borderColor: cardBorder }]}
@@ -212,7 +201,8 @@ export default function DashboardHeaderSection({
       </View>
 
       {/* Quick Stats Row */}
-      <View style={[localStyles.quickStatsRow, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+      {showQuickStats && (
+        <View style={[localStyles.quickStatsRow, { backgroundColor: cardBg, borderColor: cardBorder }]}>
         {/* Calories */}
         <View style={localStyles.quickStat}>
           <View style={[localStyles.quickStatIcon, { backgroundColor: subtleBg }]}>
@@ -240,16 +230,16 @@ export default function DashboardHeaderSection({
         {/* Divider */}
         <View style={[localStyles.statDivider, { backgroundColor: cardBorder }]} />
 
-        {/* Water */}
+        {/* Water - Show absolute liters for consistency with calories */}
         <View style={localStyles.quickStat}>
           <View style={[localStyles.quickStatIcon, { backgroundColor: subtleBg }]}>
             <Ionicons name="water-outline" size={16} color={getWaterColor()} />
           </View>
           <View style={localStyles.quickStatContent}>
             <Text style={[localStyles.quickStatValue, { color: getWaterColor() }]}>
-              {Math.round(waterProgress)}%
+              {waterIntakeLiters.toFixed(1)}
             </Text>
-            <Text style={[localStyles.quickStatLabel, { color: textTertiary }]}>hydrated</Text>
+            <Text style={[localStyles.quickStatLabel, { color: textTertiary }]}>/{waterGoalLiters.toFixed(1)} L</Text>
           </View>
           <View style={[localStyles.miniProgressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
             <View
@@ -264,67 +254,16 @@ export default function DashboardHeaderSection({
           </View>
         </View>
 
-        {/* Divider */}
-        <View style={[localStyles.statDivider, { backgroundColor: cardBorder }]} />
-
-        {/* Wellness */}
-        <View style={localStyles.quickStat}>
-          <View style={[localStyles.quickStatIcon, { backgroundColor: subtleBg }]}>
-            <Ionicons name="heart-outline" size={16} color={getWellnessColor()} />
-          </View>
-          <View style={localStyles.quickStatContent}>
-            <Text style={[localStyles.quickStatValue, { color: getWellnessColor() }]}>
-              {wellnessScore !== null ? Math.round(wellnessScore) : '--'}
-            </Text>
-            <Text style={[localStyles.quickStatLabel, { color: textTertiary }]}>wellness</Text>
-          </View>
-          {wellnessScore !== null && (
-            <View style={[localStyles.miniProgressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-              <View
-                style={[
-                  localStyles.miniProgressFill,
-                  {
-                    width: `${Math.min(wellnessScore, 100)}%`,
-                    backgroundColor: getWellnessColor()
-                  }
-                ]}
-              />
-            </View>
-          )}
         </View>
-      </View>
+      )}
 
-      {/* Sync Status + Focus Mode Row */}
-      <View style={localStyles.statusRow}>
-        {/* Sync Status */}
-        <View style={[localStyles.syncStatus, { backgroundColor: subtleBg, borderColor: cardBorder }]}>
-          <View style={[localStyles.syncDot, refreshing && localStyles.syncDotActive]} />
-          <Text style={[localStyles.syncText, { color: textSecondary }]}>
-            {refreshing ? 'Syncing...' : 'Synced'}
-          </Text>
+      {/* Minimal sync indicator - just a subtle dot, no distracting pills */}
+      {refreshing && (
+        <View style={localStyles.syncingIndicator}>
+          <View style={localStyles.syncingDot} />
+          <Text style={[localStyles.syncingText, { color: textTertiary }]}>Syncing...</Text>
         </View>
-
-        {/* Focus Mode Toggle */}
-        <TouchableOpacity
-          style={[
-            localStyles.focusModeChip,
-            { backgroundColor: subtleBg, borderColor: cardBorder },
-            focusMode && { backgroundColor: isDark ? 'rgba(96, 165, 250, 0.15)' : 'rgba(107, 78, 255, 0.1)', borderColor: isDark ? 'rgba(96, 165, 250, 0.3)' : 'rgba(107, 78, 255, 0.3)' }
-          ]}
-          onPress={handleToggleFocus}
-          accessibilityRole="button"
-          accessibilityLabel={focusMode ? 'Exit focus mode' : 'Enter focus mode'}
-        >
-          <Ionicons
-            name={focusMode ? 'eye-off' : 'eye'}
-            size={14}
-            color={focusMode ? focusColor : textTertiary}
-          />
-          <Text style={[localStyles.focusModeText, { color: focusMode ? focusColor : textTertiary }]}>
-            {focusMode ? 'Focus On' : 'Focus'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      )}
 
       {/* Focus Mode Indicator Banner */}
       {focusMode && (
@@ -355,11 +294,22 @@ const localStyles = StyleSheet.create({
     gap: SPACING[2],
   },
   brandIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  brandIconInner: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandIconLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   brandTextContainer: {
     gap: 1,
@@ -448,28 +398,12 @@ const localStyles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     marginTop: 2,
   },
-  streakInline: {
-    fontWeight: TYPOGRAPHY.weight.semibold,
-  },
 
   // Right Section (Actions)
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[2],
-  },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: SPACING[2],
-    paddingVertical: SPACING[1],
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-  },
-  streakText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
   },
   iconButton: {
     width: 40,
@@ -603,5 +537,24 @@ const localStyles = StyleSheet.create({
   focusModeIndicatorSubtext: {
     fontSize: TYPOGRAPHY.size.xs,
     marginLeft: 'auto',
+  },
+
+  // Minimal syncing indicator
+  syncingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: SPACING[2],
+  },
+  syncingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#3B82F6',
+  },
+  syncingText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
 });

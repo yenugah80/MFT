@@ -137,7 +137,12 @@ router.post("/log", async (req, res) => {
         const { newXP, newLevel, leveledUp, currentLevelXP, nextLevelXP, progressPercent } = await awardXP(userId, xp, 'meal_log', db);
 
         // 2. Update streak
-        const { streak, streakIncremented, previousStreak } = await updateStreak(userId, safeLoggedDate, db);
+        const { streak, streakIncremented, previousStreak } = await updateStreak(
+          userId,
+          safeLoggedDate,
+          db,
+          offsetMinutes
+        );
 
         // 3. Get last log date for achievement checking
         const lastLogDate = previousStreak > 0 ? await getLastLogDate(userId, db) : null;
@@ -790,6 +795,9 @@ router.get("/dashboard", async (req, res) => {
     // Get last 30 days date range
     const thirtyDaysAgo = addDaysUTC(today, -30);
 
+    // Get last 365 days date range for streaks
+    const streakWindowStart = addDaysUTC(today, -365);
+
     // Fetch all data in parallel for performance
     const [
       todaySummary,
@@ -798,6 +806,9 @@ router.get("/dashboard", async (req, res) => {
       todayWaterLogs,
       recentWeightEntries,
       todayMoodLogs,
+      streakFoodLogs,
+      streakWaterLogs,
+      streakMoodLogs,
       goals,
       gamification,
     ] = await Promise.all([
@@ -867,6 +878,36 @@ router.get("/dashboard", async (req, res) => {
         )
         .orderBy(desc(moodLogTable.loggedDate)),
 
+      // Streak window food logs (all activity days)
+      db.select({ loggedDate: foodLogTable.loggedDate })
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.userId, userId),
+            gte(foodLogTable.loggedDate, streakWindowStart)
+          )
+        ),
+
+      // Streak window water logs
+      db.select({ loggedDate: waterLogTable.loggedDate })
+        .from(waterLogTable)
+        .where(
+          and(
+            eq(waterLogTable.userId, userId),
+            gte(waterLogTable.loggedDate, streakWindowStart)
+          )
+        ),
+
+      // Streak window mood logs
+      db.select({ loggedDate: moodLogTable.loggedDate, timezoneOffset: moodLogTable.timezoneOffset })
+        .from(moodLogTable)
+        .where(
+          and(
+            eq(moodLogTable.userId, userId),
+            gte(moodLogTable.loggedDate, streakWindowStart)
+          )
+        ),
+
       // User's nutrition goals
       db.select()
         .from(nutritionGoalsTable)
@@ -903,17 +944,27 @@ router.get("/dashboard", async (req, res) => {
       ),
     } : null;
 
-    // Calculate streak (consecutive days with logged data)
+    // Calculate streak (consecutive days with ANY activity)
+    const activityDays = new Set();
+    const fallbackOffset = Number.isFinite(offsetMinutes) ? offsetMinutes : 0;
+
+    const addActivityDay = (loggedDate, tzOffset) => {
+      if (!loggedDate) return;
+      const offset = Number.isFinite(tzOffset) ? tzOffset : fallbackOffset;
+      const day = getLocalDateUTC(offset, loggedDate);
+      activityDays.add(day.getTime());
+    };
+
+    streakFoodLogs.forEach(log => addActivityDay(log.loggedDate, fallbackOffset));
+    streakWaterLogs.forEach(log => addActivityDay(log.loggedDate, fallbackOffset));
+    streakMoodLogs.forEach(log => addActivityDay(log.loggedDate, log.timezoneOffset));
+
     let currentStreak = 0;
-    let checkDate = new Date(today);
+    const hasTodayActivity = activityDays.has(today.getTime());
+    let checkDate = hasTodayActivity ? new Date(today) : addDaysUTC(today, -1);
+
     for (let i = 0; i < 365; i++) {
-      const dayStart = normalizeDateUTC(checkDate);
-
-      const hasSummary = weekSummaries.some(s => {
-        return normalizeDateUTC(s.date).getTime() === dayStart.getTime();
-      });
-
-      if (hasSummary) {
+      if (activityDays.has(checkDate.getTime())) {
         currentStreak++;
         checkDate = addDaysUTC(checkDate, -1);
       } else {
