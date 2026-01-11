@@ -20,8 +20,10 @@ import {
  * @param {number} props.protein - Protein grams
  * @param {number} props.carbs - Carbs grams
  * @param {number} props.fat - Fat grams
- * @param {number} props.size - Donut diameter
- * @param {number} props.strokeWidth - Donut thickness
+ * @param {number} props.size - Donut diameter (default 200, compact 120)
+ * @param {number} props.strokeWidth - Donut thickness (default 24, compact 16)
+ * @param {boolean} props.compact - Compact mode (hide legend, smaller size)
+ * @param {number} props.totalCalories - Optional override for center value
  */
 export default function MacroDonut({
   protein = 0,
@@ -29,34 +31,40 @@ export default function MacroDonut({
   fat = 0,
   size = 200,
   strokeWidth = 24,
+  compact = false,
+  totalCalories = null,
 }) {
-  const radius = (size - strokeWidth) / 2;
+  // Apply compact sizing if compact mode
+  const finalSize = compact ? 120 : size;
+  const finalStrokeWidth = compact ? 16 : strokeWidth;
+  const radius = (finalSize - finalStrokeWidth) / 2;
 
   // Calculate macro percentages by calorie contribution
   const percentages = calculateMacroPercentages(protein, carbs, fat);
-  const totalCalories = calculateCaloriesFromMacros(protein, carbs, fat);
+  const calculatedCalories = calculateCaloriesFromMacros(protein, carbs, fat);
+  const displayCalories = totalCalories ?? calculatedCalories;
 
   // Check if we have data
-  const hasData = totalCalories > 0;
+  const hasData = displayCalories > 0;
 
   if (!hasData) {
     return (
-      <View style={[styles.container, { width: size, height: size }]}>
+      <View style={[styles.container, { width: finalSize, height: finalSize }]}>
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📊</Text>
-          <Text style={styles.emptyText}>No macros logged</Text>
+          <Text style={styles.emptyText}>Macros</Text>
         </View>
       </View>
     );
   }
 
   // Calculate arc paths for each macro
-  const arcs = calculateArcPaths(percentages, radius, size / 2, size / 2, strokeWidth);
+  const arcs = calculateArcPaths(percentages, radius, finalSize / 2, finalSize / 2, finalStrokeWidth);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compact && styles.containerCompact]}>
       {/* SVG Donut */}
-      <Svg width={size} height={size}>
+      <Svg width={finalSize} height={finalSize}>
         <Defs>
           {/* Protein gradient */}
           <LinearGradient id="proteinGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -110,34 +118,36 @@ export default function MacroDonut({
       </Svg>
 
       {/* Center content - Total calories */}
-      <View style={styles.centerContent}>
-        <Text style={styles.centerValue}>
-          {Math.round(totalCalories)}
+      <View style={[styles.centerContent, compact && styles.centerContentCompact]}>
+        <Text style={[styles.centerValue, compact && styles.centerValueCompact]}>
+          {Math.round(displayCalories)}
         </Text>
-        <Text style={styles.centerLabel}>kcal</Text>
+        <Text style={[styles.centerLabel, compact && styles.centerLabelCompact]}>kcal</Text>
       </View>
 
-      {/* Legend */}
-      <View style={styles.legend}>
-        <LegendItem
-          color={COLORS.macros.protein.base}
-          label="Protein"
-          grams={protein}
-          percent={percentages.protein}
-        />
-        <LegendItem
-          color={COLORS.macros.carbs.base}
-          label="Carbs"
-          grams={carbs}
-          percent={percentages.carbs}
-        />
-        <LegendItem
-          color={COLORS.macros.fat.base}
-          label="Fat"
-          grams={fat}
-          percent={percentages.fat}
-        />
-      </View>
+      {/* Legend - NOT shown in compact mode */}
+      {!compact && (
+        <View style={styles.legend}>
+          <LegendItem
+            color={COLORS.macros.protein.base}
+            label="Protein"
+            grams={protein}
+            percent={percentages.protein}
+          />
+          <LegendItem
+            color={COLORS.macros.carbs.base}
+            label="Carbs"
+            grams={carbs}
+            percent={percentages.carbs}
+          />
+          <LegendItem
+            color={COLORS.macros.fat.base}
+            label="Fat"
+            grams={fat}
+            percent={percentages.fat}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -210,6 +220,10 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
   },
+  containerCompact: {
+    width: 120,
+    height: 120,
+  },
   centerContent: {
     position: 'absolute',
     alignItems: 'center',
@@ -219,17 +233,27 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 80, // Offset for legend
   },
+  centerContentCompact: {
+    bottom: 0, // No legend in compact mode
+  },
   centerValue: {
     fontSize: TYPOGRAPHY.size['4xl'],
     fontWeight: TYPOGRAPHY.weight.black,
     color: COLORS.text.primary,
     letterSpacing: TYPOGRAPHY.letterSpacing.tight,
   },
+  centerValueCompact: {
+    fontSize: TYPOGRAPHY.size.xl,
+  },
   centerLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.tertiary,
     marginTop: 4,
+  },
+  centerLabelCompact: {
+    fontSize: TYPOGRAPHY.size.xs,
+    marginTop: 2,
   },
   legend: {
     marginTop: SPACING[4],

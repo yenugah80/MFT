@@ -4,104 +4,110 @@
  * Consistent across Log, Dashboard, and Profile
  */
 
-// PRIMARY BRAND COLORS
+// PRIMARY BRAND COLORS - Apple Health Inspired Professional
 export const BRAND = {
-  primary: '#E46A4B',
-  primaryLight: '#F6D6CC',
-  primaryDark: '#C6553A',
-  secondary: '#4B7B9C',
-  secondaryLight: '#DCE6E0',
-  accent: '#4B7B9C',
+  primary: '#8FA3C7',        // Muted professional blue
+  primaryLight: '#B9C7E0',   // Light blue (Apple Health)
+  primaryDark: '#6B82AD',    // Dark blue
+  secondary: '#C4AE9E',      // Warm sand
+  secondaryLight: '#EBDBD3', // Light sand (Apple Health)
+  accent: '#D89B7D',         // Muted coral
 };
 
 // BACKGROUND & SURFACES
 export const SURFACES = {
   background: {
-    primary: '#F5F3EE',
+    primary: '#FBF9F7',           // Warm off-white base
     secondary: '#FFFFFF',
-    tertiary: '#F0EDE8',
+    tertiary: '#F5F2EF',          // Warm light
+    // Soft pastel gradients for screens (playful, encouraging)
+    gradient: ['#FBF9F7', '#F5F0EB', '#FDF8F5'],  // Warm cream flow
+    gradientWarm: ['#FDF8F5', '#FAF5F0', '#F8F3EE'],  // Peachy warmth
+    gradientCool: ['#F8FAFC', '#F1F5F9', '#EFF6F5'],  // Soft mint-blue
+    gradientSunrise: ['#FDF9F6', '#FBF5EF', '#F9F1E8'],  // Morning glow
   },
   card: {
     primary: '#FFFFFF',
-    glass: 'rgba(255, 255, 255, 0.9)',
-    glassDark: 'rgba(228, 106, 75, 0.06)',
+    glass: 'rgba(255, 255, 255, 0.92)',
+    glassDark: 'rgba(79, 143, 139, 0.06)',
     overlay: 'rgba(0, 0, 0, 0.5)',
-    border: 'rgba(230, 225, 217, 0.9)',
+    border: 'rgba(138, 127, 120, 0.08)',  // Warm border
   },
   gradient: {
-    primary: ['#E46A4B', '#F1A98E'],
-    secondary: ['#4B7B9C', '#A7C0D4'],
-    accent: ['#4B7B9C', '#C9D8E4'],
-    success: ['#4B7B9C', '#A7C0D4'],
-    warning: ['#C9A26A', '#E8D1AF'],
-    danger: ['#C9705A', '#EBC1B5'],
-    purple: ['#6A6F7C', '#B6BCC7'],
-    blue: ['#4B7B9C', '#A7C0D4'],
-    pink: ['#E46A4B', '#F6D6CC'],
-    // Modern Pastel Gradients
-    pastelPeach: ['#F6D6CC', '#FBEDE8'],
-    pastelLavender: ['#B6BCC7', '#E2E6EE'],
-    pastelMint: ['#DCE6E0', '#F0F5F3'],
-    pastelSky: ['#F0EDE8', '#F7F5F1'],
-    pastelRose: ['#F6D6CC', '#FBEDE8'],
-    softPurple: ['#F0EDE8', '#F7F5F1'],
-    softBlue: ['#F0EDE8', '#F7F5F1'],
-    softGreen: ['#F0F5F3', '#FFFFFF'],
+    primary: ['#6B82AD', '#B9C7E0'],      // Muted blue gradient (professional)
+    secondary: ['#C4AE9E', '#EBDBD3'],    // Warm sand gradient (Apple Health)
+    accent: ['#D89B7D', '#E9C4B8'],       // Muted coral gradient
+    success: ['#6B9B76', '#A8C9A5'],      // Sage green gradient (professional)
+    warning: ['#D89B36', '#E8B965'],      // Muted amber gradient
+    danger: ['#C96B6B', '#E09B9B'],       // Muted red gradient
+    purple: ['#7B8CAD', '#B0B8C1'],       // Soft purple-gray
+    blue: ['#6B82AD', '#B9C7E0'],         // Professional blue
+    pink: ['#D89B7D', '#E9C4B8'],         // Muted coral
+    // Professional Pastel Gradients - Apple Health inspired
+    pastelPeach: ['#FAF8F5', '#F5F0E8'],  // Warm white to sand
+    pastelLavender: ['#F6F8FC', '#EEF2F9'], // Soft blue-white
+    pastelMint: ['#F0F7F1', '#E5F2E6'],   // Soft sage
+    pastelSky: ['#F8F9FA', '#F6F8FC'],    // Cool white to blue
+    pastelRose: ['#FDF8F7', '#F5DDD5'],   // Soft peach
+    softPurple: ['#F6F8FC', '#DCE4F0'],   // Soft blue
+    softBlue: ['#F6F8FC', '#EEF2F9'],     // Soft blue-white
+    softGreen: ['#F0F7F1', '#E5F2E6'],    // Soft sage
   },
 };
 
 // TEXT HIERARCHY - WCAG AA Compliant Contrast
+// Warm grays with peach/rose undertone for playful, encouraging feel
 export const TEXT = {
-  primary: '#1C1F26',
-  secondary: '#4D5565',
-  tertiary: '#6F7686',
-  muted: '#98A0AF',
+  primary: '#2D2522',       // Warm charcoal - friendly, readable
+  secondary: '#5D534D',     // Warm taupe - approachable labels
+  tertiary: '#8A7F78',      // Warm stone - soft secondary info
+  muted: '#B5ACA5',         // Warm sand - gentle hints
   white: '#FFFFFF',
   onPurple: '#FFFFFF',      // Text ON purple backgrounds
-  onPurpleSecondary: '#F0EDE8',
+  onPurpleSecondary: '#EEF5F4',
   brand: BRAND.primary,
 };
 
-// SEMANTIC COLORS - For colored overlays and indicators
+// SEMANTIC COLORS - Professional, high contrast (Apple Health style)
 export const SEMANTIC = {
   success: {
-    base: '#4B7B9C',
-    light: '#A7C0D4',
-    dark: '#355C78',
-    bg: '#E9F0F6',
+    base: '#6B9B76',         // Muted sage green (professional)
+    light: '#A8C9A5',
+    dark: '#4A7856',
+    bg: '#F0F7F1',
     text: '#FFFFFF',         // White text on success backgrounds
   },
   warning: {
-    base: '#C9A26A',
-    light: '#E8D1AF',
-    dark: '#A5824F',
-    bg: '#F6EFE3',
+    base: '#D89B36',         // Muted amber (professional)
+    light: '#E8B965',
+    dark: '#B67F1F',
+    bg: '#FDF8ED',
     text: '#FFFFFF',         // White text on warning backgrounds
   },
   danger: {
-    base: '#C9705A',
-    light: '#EBC1B5',
-    dark: '#A35341',
-    bg: '#F7ECE9',
+    base: '#C96B6B',         // Muted rose red (professional)
+    light: '#E09B9B',
+    dark: '#A84848',
+    bg: '#FDF2F2',
     text: '#FFFFFF',         // White text on danger backgrounds
   },
   info: {
-    base: '#4B7B9C',
-    light: '#A7C0D4',
-    dark: '#355C78',
-    bg: '#E9F0F6',
+    base: '#6B82AD',         // Muted blue (Apple Health style)
+    light: '#B9C7E0',
+    dark: '#4A5F8C',
+    bg: '#F6F8FC',
     text: '#FFFFFF',         // White text on info backgrounds
   },
 };
 
-// SEMANTIC ACTION COLORS - For CTAs and interactive elements
+// SEMANTIC ACTION COLORS - Professional, accessible
 export const SEMANTIC_ACTIONS = {
-  primary: '#E46A4B',     // Main actions (submit, confirm)
-  success: '#4B7B9C',     // Goal achieved, positive actions
-  warning: '#C9A26A',     // Approaching limit, caution
-  danger: '#C9705A',      // Over limit, delete actions
-  info: '#4B7B9C',        // Insights, informational
-  muted: '#98A0AF',       // Disabled, inactive
+  primary: '#6B82AD',     // Main actions (submit, confirm) - professional blue
+  success: '#6B9B76',     // Goal achieved, positive actions - sage green
+  warning: '#D89B36',     // Approaching limit, caution - muted amber
+  danger: '#C96B6B',      // Over limit, delete actions - muted red
+  info: '#6B82AD',        // Insights, informational - professional blue
+  muted: '#C4BBB5',       // Disabled, inactive - warm muted (encouraging)
 };
 
 // CELEBRATION COLORS - For achievements and celebrations
@@ -249,71 +255,71 @@ export const RADIUS = {
   full: 9999,
 };
 
-// PREMIUM SHADOWS (with backgroundColor for efficient rendering)
+// PREMIUM SHADOWS - Subtle, warm (playful, encouraging)
 export const SHADOWS = {
   sm: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#E46A4B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowColor: '#3D3633',    // Warm shadow (friendly feel)
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
     elevation: 2,
   },
   md: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#E46A4B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
+    shadowColor: '#3D3633',    // Warm shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 4,
   },
   lg: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#E46A4B',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowColor: '#3D3633',    // Warm shadow
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
     elevation: 6,
   },
   xl: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#E46A4B',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
+    shadowColor: '#3D3633',    // Warm shadow
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     elevation: 8,
   },
-  // Colored glows (for non-white backgrounds, override backgroundColor if needed)
+  // Subtle colored glows for emphasis (professional tone)
   success: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#4B7B9C',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowColor: '#6B9B76',    // Sage green glow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 4,
   },
   warning: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#C9A26A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowColor: '#D89B36',    // Muted amber glow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 4,
   },
   danger: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#C9705A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowColor: '#C96B6B',    // Muted red glow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 4,
   },
   info: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#4B7B9C',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowColor: '#6B82AD',    // Professional blue glow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 4,
   },
 };
@@ -377,13 +383,13 @@ export const CARD_SYSTEM = {
     borderRadius: RADIUS['2xl'],        // 24px - generous rounding
     padding: SPACING[5],                // 20px - breathing room
     marginBottom: SPACING[4],           // 16px - consistent spacing
-    borderWidth: 1.5,
-    borderColor: 'rgba(43, 93, 255, 0.18)',
-    shadowColor: '#2B5DFF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 127, 120, 0.12)',  // Warm subtle border
+    shadowColor: '#3D3633',             // Warm shadow (friendly)
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
   },
 
   // STANDARD CARD - Most dashboard cards (calendar, meals, achievements)
@@ -393,33 +399,33 @@ export const CARD_SYSTEM = {
     padding: SPACING[4],                // 16px
     marginBottom: SPACING[4],           // 16px
     borderWidth: 1,
-    borderColor: 'rgba(43, 93, 255, 0.12)',
-    shadowColor: '#2B5DFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 12,
-    elevation: 6,
+    borderColor: 'rgba(138, 127, 120, 0.10)',  // Warm subtle border
+    shadowColor: '#3D3633',             // Warm shadow (friendly)
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   // COMPACT CARD - Small tiles, quick stats, glassmorphism
   compact: {
-    backgroundColor: 'rgba(255, 255, 255, 0.90)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: RADIUS.xl,            // 20px
     padding: SPACING[3],                // 12px
     marginBottom: SPACING[3],           // 12px
     borderWidth: 1,
-    borderColor: 'rgba(43, 93, 255, 0.10)',
-    shadowColor: '#2B5DFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderColor: 'rgba(138, 127, 120, 0.08)',  // Warm subtle border
+    shadowColor: '#3D3633',             // Warm shadow (friendly)
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   // INTERACTIVE STATES - Apply when card is pressed/focused
   pressed: {
     transform: [{ scale: 0.98 }],
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.03,
   },
 
   // ELEVATED - For modals, bottom sheets, overlays
@@ -428,11 +434,11 @@ export const CARD_SYSTEM = {
     borderRadius: RADIUS['2xl'],
     padding: SPACING[5],
     borderWidth: 0,
-    shadowColor: '#2B5DFF',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.20,
-    shadowRadius: 32,
-    elevation: 16,
+    shadowColor: '#3D3633',             // Warm shadow (friendly)
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
   },
 };
 
@@ -472,64 +478,130 @@ export const MACRO_COLORS = {
 };
 
 // MOOD COLORS (8 core moods for premium MoodTracker)
+// VIBRANT colors - NO soft/muted tones
 export const MOOD_PALETTE = {
   happy: {
-    base: '#A8C9B6',
-    light: '#D6EFE6',
-    dark: '#7AAE9A',
-    bg: '#EEF7F3',
-    gradient: ['#A8C9B6', '#D6EFE6'],
+    base: '#FBBF24',      // VIBRANT amber/gold
+    light: '#FCD34D',
+    dark: '#F59E0B',
+    bg: '#FFFBEB',
+    gradient: ['#FBBF24', '#FCD34D', '#FDE68A'],
   },
   calm: {
-    base: '#8FA0E6',
-    light: '#C8D2F5',
-    dark: '#6F82C8',
-    bg: '#EEF2FF',
-    gradient: ['#8FA0E6', '#C8D2F5'],
+    base: '#06B6D4',      // VIBRANT cyan
+    light: '#22D3EE',
+    dark: '#0891B2',
+    bg: '#ECFEFF',
+    gradient: ['#06B6D4', '#22D3EE', '#67E8F9'],
   },
   focused: {
-    base: '#A8C9B6',
-    light: '#D6EFE6',
-    dark: '#7AAE9A',
-    bg: '#EEF7F3',
-    gradient: ['#A8C9B6', '#D6EFE6'],
+    base: '#8B5CF6',      // VIBRANT purple
+    light: '#A78BFA',
+    dark: '#7C3AED',
+    bg: '#F5F3FF',
+    gradient: ['#8B5CF6', '#A78BFA', '#C4B5FD'],
   },
   energized: {
-    base: '#F1C6A8',
-    light: '#F6D7CC',
-    dark: '#C98E7F',
-    bg: '#FBF1ED',
-    gradient: ['#F1C6A8', '#F6D7CC'],
+    base: '#F97316',      // VIBRANT orange
+    light: '#FB923C',
+    dark: '#EA580C',
+    bg: '#FFF7ED',
+    gradient: ['#F97316', '#FB923C', '#FDBA74'],
   },
   neutral: {
-    base: '#7C839A',
-    light: '#9AA1B2',
-    dark: '#5E657A',
-    bg: '#F1F3F7',
-    gradient: ['#7C839A', '#9AA1B2'],
+    base: '#8A7F78',      // Warm stone (friendly)
+    light: '#B5ACA5',
+    dark: '#5D534D',
+    bg: '#F7F5F4',        // Warm white
+    gradient: ['#8A7F78', '#B5ACA5', '#D9D4D0'],
   },
   tired: {
-    base: '#B9B4E7',
-    light: '#D9D5F2',
-    dark: '#8F88C8',
-    bg: '#F3F2FA',
-    gradient: ['#B9B4E7', '#D9D5F2'],
+    base: '#A78BFA',      // VIBRANT violet
+    light: '#C4B5FD',
+    dark: '#8B5CF6',
+    bg: '#F5F3FF',
+    gradient: ['#A78BFA', '#C4B5FD', '#DDD6FE'],
   },
   stressed: {
-    base: '#E7B7B1',
-    light: '#F6D7CC',
-    dark: '#C98E7F',
-    bg: '#FBF1ED',
-    gradient: ['#E7B7B1', '#F6D7CC'],
+    base: '#F43F5E',      // VIBRANT rose
+    light: '#FB7185',
+    dark: '#E11D48',
+    bg: '#FFF1F2',
+    gradient: ['#F43F5E', '#FB7185', '#FDA4AF'],
   },
   sad: {
-    base: '#8FA0E6',
-    light: '#C8D2F5',
-    dark: '#6F82C8',
+    base: '#6366F1',      // VIBRANT indigo
+    light: '#818CF8',
+    dark: '#4F46E5',
     bg: '#EEF2FF',
-    gradient: ['#8FA0E6', '#C8D2F5'],
+    gradient: ['#6366F1', '#818CF8', '#A5B4FC'],
   },
   // Future expansion (Phase 4+): angry, anxious, excited, relaxed
+};
+
+// VIBRANT WELLNESS COLORS - For dashboard cards (NO soft tones)
+export const VIBRANT_WELLNESS = {
+  // Mood Card - VIBRANT purple/magenta/rose
+  mood: {
+    gradient: ['#9333EA', '#C026D3', '#E11D48'],
+    solid: '#9333EA',
+    glow: 'rgba(147, 51, 234, 0.5)',
+    shadow: '#9333EA',
+  },
+  // Hydration Card - VIBRANT cyan/blue/indigo
+  hydration: {
+    gradient: ['#0891B2', '#0284C7', '#1D4ED8'],
+    solid: '#0891B2',
+    glow: 'rgba(8, 145, 178, 0.5)',
+    shadow: '#0891B2',
+  },
+  // Food/Nutrition - VIBRANT orange
+  nutrition: {
+    gradient: ['#F97316', '#FB923C', '#FBBF24'],
+    solid: '#F97316',
+    glow: 'rgba(249, 115, 22, 0.4)',
+    shadow: '#EA580C',
+  },
+  // Activity - VIBRANT green
+  activity: {
+    gradient: ['#059669', '#10B981', '#34D399'],
+    solid: '#059669',
+    glow: 'rgba(5, 150, 105, 0.4)',
+    shadow: '#059669',
+  },
+};
+
+// CONFIDENCE INDICATOR COLORS - For uncertainty display
+export const CONFIDENCE_COLORS = {
+  high: {
+    color: '#059669',     // Emerald green
+    label: 'High confidence',
+    bg: '#ECFDF5',
+  },
+  medium: {
+    color: '#D97706',     // Amber
+    label: 'Moderate confidence',
+    bg: '#FFFBEB',
+  },
+  low: {
+    color: '#B5ACA5',     // Warm gray (encouraging)
+    label: 'Low confidence',
+    bg: '#F7F5F4',
+  },
+  veryLow: {
+    color: '#EF4444',     // Red
+    label: 'Uncertain',
+    bg: '#FEF2F2',
+  },
+};
+
+// FOOD QUALITY GRADE COLORS
+export const GRADE_COLORS = {
+  A: { color: '#059669', bg: '#ECFDF5', label: 'Excellent' },
+  B: { color: '#84CC16', bg: '#F7FEE7', label: 'Good' },
+  C: { color: '#EAB308', bg: '#FEFCE8', label: 'Average' },
+  D: { color: '#F97316', bg: '#FFF7ED', label: 'Below Average' },
+  E: { color: '#EF4444', bg: '#FEF2F2', label: 'Occasional Choice' },
 };
 
 // ENERGY LEVEL COLORS
@@ -582,10 +654,10 @@ export const CORRELATION_COLORS = {
     gradient: ['#E7B7B1', '#F6D7CC'],
   },
   none: {
-    base: '#9AA1B2',
-    light: '#C2C7D4',
+    base: '#A9A099',      // Warm stone
+    light: '#CCC6C1',
     label: 'None',
-    gradient: ['#9AA1B2', '#C2C7D4'],
+    gradient: ['#A9A099', '#CCC6C1'],
   },
 };
 
@@ -738,6 +810,9 @@ export const PREMIUM_THEME = {
   ENERGY_PALETTE,
   CORRELATION_COLORS,
   ICONS,
+  VIBRANT_WELLNESS,
+  CONFIDENCE_COLORS,
+  GRADE_COLORS,
 };
 
 export default PREMIUM_THEME;

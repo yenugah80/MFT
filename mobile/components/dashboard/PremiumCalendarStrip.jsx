@@ -351,7 +351,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
       let message = '';
       if (selectedPeriod === 'day') {
         const dateStr = formatDate(dateKey);
-        const story = dayData?.storyLine || generateStoryLine(dayData) || 'No activity logged.';
+        const story = dayData?.storyLine || generateStoryLine(dayData) || 'Fresh start';
         message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${getScoreValue(dayData?.foodMoodScore) || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.avgMood?.toFixed(1) || '-'}/5`;
       } else {
         message = `📊 My ${periodDays}-Day Wellness Summary\n\n🏆 Avg Score: ${periodStats.avgWellnessScore}/100\n🍽️ Avg Calories: ${periodStats.avgCalories}\n💧 Avg Hydration: ${periodStats.avgHydration}%\n😊 Avg Mood: ${periodStats.avgMood}/5\n📈 ${periodStats.daysLogged}/${periodStats.totalDays} days logged`;
@@ -542,11 +542,11 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
           ) : (
             <View style={dayDetailStyles.emptyState}>
               <Ionicons name="calendar-outline" size={56} color={TEXT.muted} />
-              <Text style={dayDetailStyles.emptyTitle}>No Data Yet</Text>
+              <Text style={dayDetailStyles.emptyTitle}>Your stats</Text>
               <Text style={dayDetailStyles.emptyText}>
                 {selectedPeriod === 'day'
-                  ? 'Start logging food, mood & water to see your stats'
-                  : `No data logged in the last ${periodDays} days`}
+                  ? 'Stats appear as you log food, mood & water'
+                  : `Stats will populate as you log`}
               </Text>
             </View>
           )}
@@ -974,6 +974,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING[3],
+    paddingBottom: SPACING[2],
+    borderBottomWidth: 1,
+    borderBottomColor: SURFACES.card.border,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -985,8 +988,8 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
   },
   monthText: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   streakBadge: {
@@ -1049,6 +1052,13 @@ const styles = StyleSheet.create({
   },
   dayCellSelected: {
     backgroundColor: BRAND.primary,
+    borderWidth: 2,
+    borderColor: BRAND.primaryDark,
+    shadowColor: BRAND.primaryDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
   dayNumber: {
     fontSize: TYPOGRAPHY.size.md,
@@ -1070,9 +1080,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   indicator: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.15)',
   },
   indicatorFood: {
     backgroundColor: '#10B981', // Green
@@ -1085,9 +1097,9 @@ const styles = StyleSheet.create({
   },
   indicatorCombined: {
     backgroundColor: '#6B4EFF', // Brand purple - indicates complete logging
-    width: 8,
-    height: 5,
-    borderRadius: 2.5,
+    width: 12,
+    height: 6,
+    borderRadius: 3,
   },
 
   // Modal styles

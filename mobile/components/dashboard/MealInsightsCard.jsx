@@ -353,7 +353,7 @@ function TodayTab({ meals, onMealPress }) {
   );
 
   if (groupedMeals.length === 0) {
-    return <EmptyState message="No meals logged today. Start tracking!" />;
+    return <EmptyState message="Meal insights appear here" />;
   }
 
   return (

@@ -116,8 +116,8 @@ function EmptyState() {
       <View style={styles.emptyIconContainer}>
         <Ionicons name="calendar-outline" size={28} color={TEXT.tertiary} />
       </View>
-      <Text style={styles.emptyText}>No activity logged today</Text>
-      <Text style={styles.emptyHint}>Start by logging a meal, water, or mood</Text>
+      <Text style={styles.emptyText}>Today&apos;s activity</Text>
+      <Text style={styles.emptyHint}>Meals, water, and mood appear here</Text>
     </View>
   );
 }

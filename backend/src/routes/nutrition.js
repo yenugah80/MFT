@@ -972,6 +972,45 @@ router.get("/dashboard", async (req, res) => {
       }
     }
 
+    // ============================================================================
+    // USER LIFECYCLE DETECTION
+    // Properly distinguishes brand new users from returning users who missed a day
+    // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
+    // ============================================================================
+    const totalDaysWithLogs = activityDays.size;  // Already computed for streak!
+    const hasLoggedToday = activityDays.has(today.getTime());
+
+    // Calculate days since last activity
+    let lastActivityDate = null;
+    if (activityDays.size > 0) {
+      const sortedDays = Array.from(activityDays).sort((a, b) => b - a);
+      lastActivityDate = new Date(sortedDays[0]);
+    }
+    const daysSinceLastLog = lastActivityDate
+      ? Math.floor((today.getTime() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    // Determine lifecycle stage (single source of truth)
+    let lifecycleStage;
+    if (totalDaysWithLogs === 0) {
+      lifecycleStage = 'brand_new';
+    } else if (totalDaysWithLogs < 3) {
+      lifecycleStage = 'onboarding';
+    } else if (totalDaysWithLogs < 7) {
+      lifecycleStage = 'building';
+    } else if (totalDaysWithLogs < 30) {
+      lifecycleStage = 'established';
+    } else {
+      lifecycleStage = 'power_user';
+    }
+
+    // isReturning is a MODIFIER, not a stage
+    // True when: has history, nothing logged today, was active within last 30 days
+    const isReturning = totalDaysWithLogs > 0 &&
+                        !hasLoggedToday &&
+                        daysSinceLastLog !== null &&
+                        daysSinceLastLog <= 30;
+
     // PHASE 3.2 - API FIX: Aggregate micronutrients from today's food logs
     const todayMicros = {};
     todayFoodLogs.forEach(log => {
@@ -1041,6 +1080,16 @@ router.get("/dashboard", async (req, res) => {
         currentStreak,
       },
       recentWeight: recentWeightEntries,
+      // USER LIFECYCLE - Single source of truth for user state detection
+      userLifecycle: {
+        stage: lifecycleStage,           // 'brand_new' | 'onboarding' | 'building' | 'established' | 'power_user'
+        isReturning,                     // Modifier: has history but nothing today
+        hasLoggedToday,                  // Any activity today
+        daysSinceLastLog,                // Gap in days (null if brand new)
+        totalDaysWithLogs,               // Distinct days with any activity (lifetime)
+        totalMealsLogged: gamificationRow?.totalMealsLogged || 0,
+        reachedFirstMilestone: (gamificationRow?.totalMealsLogged || 0) >= 3,
+      },
     };
 
     res.json(dashboard);

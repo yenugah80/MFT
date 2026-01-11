@@ -16,7 +16,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import * as Haptics from 'expo-haptics';
-import { trackEvent } from "../services/analytics";
 
 // Hooks
 import { useDashboard } from "../hooks/useDashboard";
@@ -25,7 +24,6 @@ import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useRecommendations } from "../hooks/useRecommendations";
-import { useHydrationAnalytics } from "../hooks/useHydrationAnalytics";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -36,14 +34,29 @@ import ThemeSettingsModal from "./ThemeSettingsModal";
 import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
+import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
+import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
+// DashboardPrimaryCard removed - redundant with FoodMoodScoreCard hero + CompactDashboardTiles
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
-import ReflectionCheckInCard from "./dashboard/ReflectionCheckInCard";
-import DashboardPillarsGrid from "./dashboard/DashboardPillarsGrid";
-import GuidanceCard from "./dashboard/GuidanceCard";
-import WeeklyStoryCard from "./dashboard/WeeklyStoryCard";
-import ProgressMilestonesCard from "./dashboard/ProgressMilestonesCard";
+import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
+import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
+import DashboardProgressSection from "./dashboard/DashboardProgressSection";
+// RemainingBudgetCard removed - redundant with InsightNudge system
+
+// NEW KILLER FEATURES - Differentiators
+import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
+import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
+import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
+
+// Phase 3: Dashboard Enhancements - Preference-based insights
+// Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
+import AllergenWarningCard from "./dashboard/AllergenWarningCard";
+import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
+
+// Premium dashboard enhancements - compact tiles
+import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -163,100 +176,6 @@ function getErrorDetails(error) {
   };
 }
 
-function getMoodScore(log) {
-  const score = Number(log?.score ?? log?.moodScore ?? log?.intensity);
-  return Number.isFinite(score) ? score : null;
-}
-
-function getEnergyScore(log) {
-  const score = Number(log?.energy ?? log?.energyLevel);
-  return Number.isFinite(score) ? score : null;
-}
-
-function getFoodMoodInsight({ trends, hasMeals, hasMood }) {
-  if (trends?.breakfastMoodCorrelation > 0.3) {
-    return 'Breakfast before 9am aligns with better mood for you.';
-  }
-  if (trends?.proteinMoodCorrelation > 0.2) {
-    return 'Higher protein days align with steadier mood.';
-  }
-  if (!hasMeals || !hasMood) {
-    return 'Log meals and mood to unlock your patterns.';
-  }
-  return 'Keep logging to surface clearer patterns.';
-}
-
-function getGuidanceConfig({ hasMeals, hasMood, waterIntake, waterGoal, hour }) {
-  const mealLabel = hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : 'Dinner';
-  if (!hasMood) {
-    return {
-      title: 'Quick check-in',
-      message: '1 tap to log mood and energy.',
-      actionLabel: 'Check in',
-      action: 'mood',
-    };
-  }
-  if (!hasMeals) {
-    return {
-      title: 'Next best step',
-      message: `Log ${mealLabel.toLowerCase()} to anchor your day.`,
-      actionLabel: `Add ${mealLabel}`,
-      action: 'meal',
-    };
-  }
-  if (waterIntake < Math.max(0.3, waterGoal * 0.25)) {
-    return {
-      title: 'Hydration boost',
-      message: 'A quick glass helps keep energy steady.',
-      actionLabel: 'Add water',
-      action: 'water',
-    };
-  }
-  return {
-    title: 'Your weekly story',
-    message: 'See what is shaping your week.',
-    actionLabel: 'View story',
-    action: 'story',
-  };
-}
-
-function getWeeklyStoryCopy({ trends, moodAvg, waterAvg }) {
-  if (trends?.breakfastMoodCorrelation > 0.3) {
-    return {
-      title: 'Breakfast timing lifts mood.',
-      subtitle: 'Earlier meals align with higher scores.',
-    };
-  }
-  if (waterAvg > 1.2) {
-    return {
-      title: 'Hydration looks steady.',
-      subtitle: 'Energy holds above 1.2L.',
-    };
-  }
-  if (moodAvg != null) {
-    return {
-      title: 'Your mood is finding a baseline.',
-      subtitle: 'More check-ins sharpen the story.',
-    };
-  }
-  return {
-    title: 'Your weekly story is waiting.',
-    subtitle: 'Log a few days to reveal patterns.',
-  };
-}
-
-function getReflectionMilestone(streak) {
-  if (streak <= 0) {
-    return 'Log your first check-in to start a reflection streak.';
-  }
-  const target = streak < 3 ? 3 : streak < 7 ? 7 : streak < 14 ? 14 : 21;
-  const remaining = Math.max(0, target - streak);
-  if (remaining === 0) {
-    return `Milestone reached: ${target}-day reflection streak.`;
-  }
-  return `${remaining} day${remaining === 1 ? '' : 's'} to reach a ${target}-day reflection streak.`;
-}
-
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
@@ -269,7 +188,6 @@ export default function DashboardContent() {
   const { user } = useUser();
   const { theme, colors } = useTheme();
   const queryClient = useQueryClient();
-  const hasTrackedView = useRef(false);
 
   // Insights modal state
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
@@ -291,10 +209,10 @@ export default function DashboardContent() {
     cacheAge: null,
   });
 
-  // REMOVED: Collapsible section states - now handled internally by Intelligence Cards
-  // const [nutritionExpanded, setNutritionExpanded] = useState(true);
-  // const [wellnessExpanded, setWellnessExpanded] = useState(true);
-  // const [progressExpanded, setProgressExpanded] = useState(false);
+  // Collapsible section states
+  const [nutritionExpanded, setNutritionExpanded] = useState(true);
+  const [wellnessExpanded, setWellnessExpanded] = useState(true);
+  const [progressExpanded, setProgressExpanded] = useState(false);
 
   // Focus mode state - simplifies view to reduce cognitive load
   const [focusMode, setFocusMode] = useState(false);
@@ -311,7 +229,12 @@ export default function DashboardContent() {
   const [allergenWarnings, setAllergenWarnings] = useState([]);
 
   // Recommendations hook (handles caching internally with 5-min cache)
+  // eslint-disable-next-line no-unused-vars
   const {
+    recommendations,
+    loading: recommendationsLoading,
+    error: recommendationsError,
+    fetchRecommendations,
     acceptRecommendation: acceptRecommendationAction,
     trackInteraction,
   } = useRecommendations();
@@ -321,10 +244,7 @@ export default function DashboardContent() {
   const { data: moodInsightsData, isLoading: moodInsightsLoading } = useMoodInsights({ windowDays: 30, trendDays: 7 });
 
   // Water tracking hook
-  const { markHydrationCelebration, logWater } = useWaterLog();
-
-  // Hydration analytics (V2 features)
-  const { analytics: hydrationAnalytics } = useHydrationAnalytics();
+  const { markHydrationCelebration } = useWaterLog();
 
   useEffect(() => {
     let isActive = true;
@@ -436,7 +356,7 @@ export default function DashboardContent() {
       console.error('[Dashboard] Failed to reject recommendation:', error);
       // Fail silently - rejection tracking is not critical
     }
-  }, [notify, trackInteraction]);
+  }, [notify]);
 
   // Update nutrition goals (inline edit from RemainingBudgetCard)
   // eslint-disable-next-line no-unused-vars
@@ -514,23 +434,6 @@ export default function DashboardContent() {
     // Deduplicate by clientEventId (backend + local may have same meal)
     return dedupeLogs(allLogs);
   }, [data, localFoodLogs]);
-
-  // Calculate period data for MealInsightsCard History tab
-  const mealPeriodData = useMemo(() => {
-    const summaries = data?.trends?.weekSummaries || [];
-    if (summaries.length === 0) return null;
-
-    const totalCalories = summaries.reduce((sum, s) => sum + (s.totalCalories || 0), 0);
-    const totalProtein = summaries.reduce((sum, s) => sum + (s.totalProtein || 0), 0);
-    const totalMeals = summaries.reduce((sum, s) => sum + (s.mealCount || 0), 0);
-
-    return {
-      avgCalories: Math.round(totalCalories / summaries.length),
-      avgProtein: Math.round(totalProtein / summaries.length),
-      totalMeals: totalMeals || uniqueFoodLogs.length,
-      caloriesTrend: 0, // Could calculate week-over-week if we have prior week data
-    };
-  }, [data?.trends?.weekSummaries, uniqueFoodLogs.length]);
 
   const hydrationEvents = useMemo(() => {
     if (!data?.today?.waterLogs) return [];
@@ -778,7 +681,6 @@ export default function DashboardContent() {
     }
 
     return calData;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, trendData]);
 
   // Detect anomalies in data
@@ -804,11 +706,14 @@ export default function DashboardContent() {
         value: totalCalories,
         goal: calorieGoal,
         percentageDiff: Math.abs(percentageDiff),
-        message: `Today's calories (${Math.round(totalCalories)} kcal) are ${Math.abs(percentageDiff)}% ${isOver ? 'above' : 'below'} your goal (${Math.round(calorieGoal)} kcal). ${isOver ? 'Want to double-check portions?' : 'Make sure you\'re eating enough!'}`,
-        icon: 'analytics-outline',
+        percentageLabel: `${isOver ? '+' : '-'}${Math.abs(percentageDiff)}%`,
+        message: isOver
+          ? `You're ${Math.abs(percentageDiff)}% above today's calorie goal. Review portions to rebalance.`
+          : `You're ${Math.abs(percentageDiff)}% below today's calorie goal. Add a nourishing snack to stay on track.`,
+        icon: isOver ? 'alert-circle-outline' : 'nutrition-outline',
         tone: isOver ? 'warning' : 'info',
-        actionLabel: 'View History',
-        action: () => router.push('/history'),
+        actionLabel: isOver ? 'Review Portions' : 'Add a Meal',
+        action: () => router.push('/(tabs)/log'),
       });
     }
 
@@ -884,7 +789,7 @@ export default function DashboardContent() {
       proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
       currentHydration: currentWater,
       hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
-      streak: parseDecimal(data.trends?.currentStreak, 0) || parseDecimal(data.gamification?.streak, 0),
+      streak: parseDecimal(data.gamification?.streak, 0),
       timeOfDay: new Date().getHours(),
     });
   }, [data]);
@@ -908,7 +813,7 @@ export default function DashboardContent() {
       today: data.today,
       goals: data.goals,
       historicalData: data.trends?.weekSummaries || [],
-      streak: parseDecimal(data.trends?.currentStreak, 0) || parseDecimal(data.gamification?.streak, 0),
+      streak: parseDecimal(data.gamification?.streak, 0),
     });
 
     // Transform to format expected by EnhancedMoodCard
@@ -1163,26 +1068,22 @@ export default function DashboardContent() {
 
   if (!data) return null;
 
-  const { today, goals, gamification, trends, recentWeight } = data;
+  const { today, goals, gamification, trends, recentWeight, userLifecycle } = data;
 
-  // Use calculated streak from trends (fresh calculation) instead of DB streak
-  // DB streak may be stale if updateStreak wasn't called properly
-  const displayStreak = parseDecimal(trends?.currentStreak, 0) || parseDecimal(gamification?.streak, 0);
+  // ============================================================================
+  // USER LIFECYCLE DETECTION - Single source of truth from backend
+  // Properly distinguishes: brand new user vs returning user who missed a day
+  // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
+  // ============================================================================
+  const isNewUser = userLifecycle?.stage === 'brand_new';
+  const isOnboarding = ['brand_new', 'onboarding'].includes(userLifecycle?.stage);
+  const isReturning = userLifecycle?.isReturning ?? false;
+  const hasLoggedToday = userLifecycle?.hasLoggedToday ?? false;
+  const daysSinceLastLog = userLifecycle?.daysSinceLastLog;
 
-  // Check if user has any data (first-time user detection)
-  // Include historical data checks so returning users don't see welcome banner
-  const hasTodayData = uniqueFoodLogs.length > 0 ||
-                        parseLiters(today.waterIntakeLiters) > 0 ||
-                        today.moodLogs?.length > 0;
-
-  const hasHistoricalData = displayStreak > 0 ||
-                            parseDecimal(gamification?.xp, 0) > 0 ||
-                            parseDecimal(gamification?.level, 1) > 1 ||
-                            parseDecimal(gamification?.totalMealsLogged, 0) > 0 ||
-                            (trends?.weekSummaries && trends.weekSummaries.length > 0) ||
-                            recentWeight != null;
-
-  const hasAnyData = hasTodayData || hasHistoricalData;
+  // Legacy compatibility flags (for components still using old names)
+  const hasAnyData = !isNewUser;
+  const hasTodayData = hasLoggedToday;
 
   const displayName = user?.firstName
     || user?.fullName?.split(' ')?.[0]
@@ -1197,115 +1098,14 @@ export default function DashboardContent() {
 
   const headerTitle = `${getGreeting()}, ${displayName}`;
 
-  const moodLogs = today?.moodLogs || [];
-  const waterLogs = today?.waterLogs || [];
-  const waterIntake = parseLiters(today?.waterIntakeLiters);
-  const waterGoal = parseGoal(goals?.waterLiters, 2.0, 0.5, 10);
-  const hasMeals = uniqueFoodLogs.length > 0;
-  const hasMood = moodLogs.length > 0;
-  const activityCount = uniqueFoodLogs.length + waterLogs.length + moodLogs.length;
-
-  const moodScores = moodLogs.map(getMoodScore).filter((value) => value != null);
-  const energyScores = moodLogs.map(getEnergyScore).filter((value) => value != null);
-  const moodAvg = moodScores.length ? moodScores.reduce((sum, value) => sum + value, 0) / moodScores.length : null;
-  const energyAvg = energyScores.length ? energyScores.reduce((sum, value) => sum + value, 0) / energyScores.length : null;
-
-  const foodMoodInsight = getFoodMoodInsight({ trends, hasMeals, hasMood });
-  const guidance = getGuidanceConfig({
-    hasMeals,
-    hasMood,
-    waterIntake,
-    waterGoal,
-    hour: new Date().getHours(),
-  });
-  const weeklyStory = getWeeklyStoryCopy({ trends, moodAvg, waterAvg: waterIntake });
-  const milestoneText = getReflectionMilestone(displayStreak);
-
-  const pillarItems = [
-    {
-      key: 'food',
-      title: 'Food-mood engine',
-      icon: 'restaurant',
-      gradient: SURFACES.gradient.secondary,
-      value: `${Math.round(parseCalories(today?.nutrition?.totalCalories))} cal`,
-      caption: hasMeals ? 'On track' : 'Log meals + mood',
-      actionLabel: 'Add meal',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'food_mood' });
-        router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
-      },
-    },
-    {
-      key: 'mood',
-      title: 'Mood and energy',
-      icon: 'happy-outline',
-      gradient: SURFACES.gradient.primary,
-      value: moodAvg != null ? `${moodAvg.toFixed(1)}/10` : 'No check-in',
-      caption: energyAvg != null ? `Energy ${energyAvg.toFixed(1)}/10` : 'Tap to check in',
-      actionLabel: 'View insights',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'mood_energy' });
-        router.push('/insights/mood');
-      },
-    },
-    {
-      key: 'hydration',
-      title: 'Hydration',
-      icon: 'water-outline',
-      gradient: SURFACES.gradient.accent,
-      value: `${waterIntake.toFixed(1)} / ${waterGoal.toFixed(1)} L`,
-      caption: 'Quick add 250ml',
-      actionLabel: 'Add water',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'hydration' });
-        router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
-      },
-    },
-    {
-      key: 'activity',
-      title: 'Activity',
-      icon: 'pulse-outline',
-      gradient: SURFACES.gradient.pastelLavender,
-      value: `${activityCount} moments`,
-      caption: 'View timeline',
-      actionLabel: 'View timeline',
-      onPress: () => {
-        trackEvent('dashboard_pillar_tap', { pillar: 'activity' });
-        router.push('/activity/today');
-      },
-    },
-  ];
-
-  const handleGuidanceAction = () => {
-    trackEvent('dashboard_guidance_action', { action: guidance.action });
-    if (guidance.action === 'meal') {
-      router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
-    } else if (guidance.action === 'water') {
-      router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
-    } else if (guidance.action === 'mood') {
-      router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } });
-    } else if (guidance.action === 'story') {
-      router.push('/history');
-    } else {
-      router.push('/insights/mood');
-    }
-  };
-
-  useEffect(() => {
-    if (!hasTrackedView.current && data) {
-      trackEvent('dashboard_viewed', {
-        has_any_data: hasAnyData,
-        has_meals: hasMeals,
-        has_mood: hasMood,
-        water_intake_liters: waterIntake,
-      });
-      hasTrackedView.current = true;
-    }
-  }, [data, hasAnyData, hasMeals, hasMood, waterIntake]);
-
   return (
     <>
-      <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
+      <LinearGradient
+        colors={['#FDF9F6', '#FAF5F0', '#F8F3EE']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.container}
+      >
         <ThemeTransition>
           <ScrollView
           style={styles.scrollView}
@@ -1325,12 +1125,16 @@ export default function DashboardContent() {
             const newFocusMode = !focusMode;
             setFocusMode(newFocusMode);
 
-            // Focus mode now handled by Intelligence Cards (collapsed by default)
-            // No need to manually collapse sections anymore
+            if (newFocusMode) {
+              setNutritionExpanded(false);
+              setWellnessExpanded(false);
+              setProgressExpanded(false);
+            }
           }}
           // Enhanced header props
           userInitials={user?.firstName?.[0]?.toUpperCase() || user?.fullName?.[0]?.toUpperCase() || 'U'}
           userImageUrl={user?.imageUrl || null}
+          streak={parseDecimal(gamification?.streak, 0)}
           todayCalories={parseCalories(today?.nutrition?.totalCalories)}
           calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
           waterProgress={calculatePercentage(
@@ -1340,6 +1144,7 @@ export default function DashboardContent() {
           )}
           waterIntakeLiters={parseLiters(today?.waterIntakeLiters)}
           waterGoalLiters={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
+          wellnessScore={wellnessScore?.score ?? null}
           hasNotifications={allergenWarnings.length > 0}
           onNotificationPress={() => {
             // Scroll to allergen warnings or show notification modal
@@ -1347,63 +1152,185 @@ export default function DashboardContent() {
               notify.info(`${allergenWarnings.length} allergen warning${allergenWarnings.length > 1 ? 's' : ''} detected`);
             }
           }}
-          showQuickStats={false}
+          // User lifecycle props - for returning user welcome message
+          isReturning={isReturning}
+          daysSinceLastLog={daysSinceLastLog}
         />
 
-        {/* FIRST-TIME USER EMPTY STATE */}
-        {!hasAnyData && (
+        {/* FIRST-TIME USER ONLY - Brand new users see clean onboarding */}
+        {/* Returning users who missed a day see full dashboard, not this */}
+        {isNewUser && (
           <EmptyState
-            icon="rocket"
-            title="Welcome to Your Health Journey!"
-            description="Start logging meals, water, and mood to unlock insights and build a steady daily rhythm."
-            actionLabel="Add moment"
+            icon="scan-outline"
+            title="3 meals unlocks your baseline"
+            description="Log what you eat. We'll find your patterns—protein timing, energy dips, what actually works for you."
+            actionLabel="Log breakfast →"
             onAction={() => {
-              trackEvent('dashboard_empty_state_action', { action: 'add_moment' });
               router.push('/(tabs)/log');
             }}
           />
         )}
-        <ReflectionCheckInCard
-          moodLogs={moodLogs}
-          onCheckIn={() => {
-            trackEvent('dashboard_reflection_checkin_tap');
-            router.push({ pathname: '/(tabs)/log', params: { focus: 'mood' } });
-          }}
+
+        <DashboardInsightsSection
+          styles={styles}
+          smartInsights={smartInsights}
+          onInsightAction={handleInsightAction}
+          dataAnomalies={dataAnomalies}
         />
 
-        <DashboardPillarsGrid items={pillarItems} />
-
-        <GuidanceCard
-          title={guidance.title}
-          message={guidance.message}
-          actionLabel={guidance.actionLabel}
-          onAction={handleGuidanceAction}
-        />
-
-        <WeeklyStoryCard
-          title={weeklyStory.title}
-          subtitle={weeklyStory.subtitle}
-          actionLabel="View weekly story"
-          onAction={() => {
-            trackEvent('dashboard_weekly_story_view');
-            router.push('/history');
-          }}
-        />
-
+        {/* Premium Calendar Strip - Only show when user has data */}
         {hasAnyData && (
-          <ProgressMilestonesCard
-            reflectionStreak={displayStreak}
-            insightsUnlocked={trends?.patternsDiscovered || 0}
-            milestoneText={milestoneText}
-            onViewProgress={() => {
-              trackEvent('dashboard_progress_view');
-              router.push('/profile');
+          <PremiumCalendarStrip
+            data={calendarData}
+            selectedDate={null}
+            currentStreak={parseDecimal(gamification?.streak, 0)}
+            onDateSelect={(dateOrObj) => {
+              // Handle both Date object and { dateKey } from day detail modal
+              const dateKey = dateOrObj?.dateKey || (dateOrObj instanceof Date ? dateOrObj.toISOString().split('T')[0] : null);
+              if (dateKey) {
+                router.push({ pathname: '/history', params: { date: dateKey } });
+              }
             }}
           />
         )}
-      </ScrollView>
+
+        {/* ============================================ */}
+        {/* HERO CARD - ONE unified wellness + mood display */}
+        {/* Only show after first log - Day 0 sees clean EmptyState only */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <FoodMoodScoreCard
+            today={today}
+            goals={goals}
+            moodLogs={today?.moodLogs || []}
+            streak={parseDecimal(gamification?.streak, 0)}
+            historicalScores={[]}
+            onViewDetails={() => router.push('/insights/mood')}
+          />
+        )}
+
+        {/* ============================================ */}
+        {/* COMPACT TILES - Glassmorphic quick stats row */}
+        {/* Shows: Macros donut, Hydration bar, Streak pill */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <CompactDashboardTiles
+            today={today}
+            onTapMacros={() => setNutritionExpanded(true)}
+          />
+        )}
+
+        {/* ============================================ */}
+        {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
+        {/* Only show after user logs today AND past onboarding phase */}
+        {/* ============================================ */}
+        {hasLoggedToday && !isOnboarding && (
+          <PremiumAchievementsCard
+            level={parseDecimal(gamification?.level, 1)}
+            xp={parseDecimal(gamification?.xp, 0)}
+            streak={parseDecimal(gamification?.streak, 0)}
+            nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
+            streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
+          />
+        )}
+
+
+        {/* ============================================ */}
+        {/* PHASE 3: URGENT ALERTS ONLY */}
+        {/* Note: DietaryComplianceCard & CuisineDiversityCard moved to Profile > MyInsightsSection */}
+        {/* ============================================ */}
+
+        {/* Allergen Warning Card - Urgent alerts stay on Dashboard */}
+        {allergenWarnings.length > 0 && (
+          <AllergenWarningCard warnings={allergenWarnings} />
+        )}
+
+        {/* RemainingBudgetCard & DashboardPrimaryCard removed - redundant with hero + compact tiles */}
+
+        {/* ============================================ */}
+        {/* KILLER FEATURES - Premium Differentiators */}
+        {/* ALWAYS VISIBLE - Show empty state when no data */}
+        {/* ============================================ */}
+
+        {/* NOTE: Wellness Score is now integrated into EnhancedMoodCard in Wellness Section */}
+
+        {/* Smart Meal Suggestion - Context-Aware (ALWAYS SHOW) */}
+        {uniqueFoodLogs.length > 0 && (
+          <SmartMealSuggestionCard
+            today={today}
+            goals={goals}
+            recentMeals={uniqueFoodLogs}
+            userProfile={userProfile}
+            onSelectSuggestion={(suggestion) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push({
+                pathname: '/(tabs)/log',
+                params: {
+                  focus: 'meal',
+                  prefill: suggestion.name
+                }
+              });
+            }}
+            onViewMore={() => router.push('/history')}
+          />
+        )}
+
+        {/* NOTE: PredictiveInsightsCard and PatternDetectiveCard moved to Insights screen */}
+        {/* Staff Design: Dashboard = quick glance. Details = separate screen */}
+
+        {/* NOTE: SmartRecommendationsCard removed - consolidated into SmartMealSuggestionCard */}
+
+
+        {/* ============================================ */}
+        {/* NUTRITION SECTION - Collapsible */}
+        {/* ============================================ */}
+        <DashboardNutritionSection
+          styles={styles}
+          expanded={nutritionExpanded}
+          onToggle={() => setNutritionExpanded(!nutritionExpanded)}
+          today={today}
+          goals={goals}
+          aggregatedMicros={aggregatedMicros}
+          macroAssessment={macroAssessment}
+          uniqueFoodLogs={uniqueFoodLogs}
+          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
+        />
+
+        {/* ============================================ */}
+        {/* WELLNESS SECTION - Collapsible */}
+        {/* ============================================ */}
+        <DashboardWellnessSection
+          styles={styles}
+          expanded={wellnessExpanded}
+          onToggle={() => setWellnessExpanded(!wellnessExpanded)}
+          today={today}
+          goals={goals}
+          gamification={gamification}
+          hydrationEvents={hydrationEvents}
+          hydrationLastLoggedAt={hydrationLastLoggedAt}
+          hydrationCelebratedKey={hydrationCelebratedKey}
+          onCelebrateHydration={handleHydrationCelebration}
+          onOpenMoodInsights={() => router.push('/insights/mood')}
+          onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          moodInsights={moodInsightsData}
+          moodInsightsLoading={moodInsightsLoading}
+          wellnessScore={wellnessScore}
+        />
+
+        {/* ============================================ */}
+        {/* PROGRESS SECTION - Collapsible (Calendar moved to top) */}
+        {/* ============================================ */}
+        <DashboardProgressSection
+          styles={styles}
+          expanded={progressExpanded}
+          onToggle={() => setProgressExpanded(!progressExpanded)}
+          trends={trends}
+          goals={goals}
+          recentWeight={recentWeight}
+        />
+          </ScrollView>
         </ThemeTransition>
-      </View>
+      </LinearGradient>
 
       {/* Modals */}
       <Modal
@@ -1627,6 +1554,14 @@ export default function DashboardContent() {
         onClose={() => setThemeModalVisible(false)}
       />
 
+      {/* Floating Action Button - Quick Actions */}
+      <FloatingActionButton
+        currentWater={parseLiters(today?.waterIntakeLiters || 0)}
+        waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
+        onWaterLogged={() => refetch()}
+        onMoodLogged={handleMoodLogged}
+      />
+
       {/* Recommendation Detail Modal */}
       <RecommendationDetailModal
         visible={recommendationModalVisible}
@@ -1649,7 +1584,7 @@ export default function DashboardContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SURFACES.background.primary,
+    // Background handled by LinearGradient wrapper
   },
   shimmerOverlay: {
     position: 'absolute',
@@ -1664,7 +1599,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING[5],
-    paddingBottom: SPACING[10],
+    paddingBottom: SPACING[16],
   },
   centerContainer: {
     flex: 1,
@@ -1820,11 +1755,11 @@ const styles = StyleSheet.create({
     color: TEXT.primary, // Dark text for light background
   },
 
-  // Info card (calm, supportive tone - blue instead of orange/red)
+  // Anomaly card (clear warning tone for attention)
   infoCard: {
     marginBottom: SPACING[4],
-    backgroundColor: 'rgba(107, 78, 255, 0.05)', // Purple tint
-    borderColor: 'rgba(107, 78, 255, 0.2)', // Purple border
+    backgroundColor: SEMANTIC.warning.bg,
+    borderColor: SEMANTIC.warning.light,
   },
   anomalyHeader: {
     flexDirection: 'row',
@@ -1834,7 +1769,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: 'rgba(216, 155, 54, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING[3],
@@ -1851,10 +1786,10 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#6B4EFF', // Brand purple
+    color: SEMANTIC.warning.dark,
   },
   percentageBadge: {
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: SEMANTIC.warning.base,
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
@@ -1862,7 +1797,7 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#6B4EFF',
+    color: '#FFFFFF',
   },
   infoMessage: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -1873,14 +1808,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[1],
-    marginTop: SPACING[2],
+    marginTop: SPACING[3],
     alignSelf: 'flex-start',
-    paddingVertical: SPACING[1],
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: SEMANTIC.warning.base,
+  },
+  anomalyActionButtonWarning: {
+    backgroundColor: SEMANTIC.warning.base,
+    borderColor: SEMANTIC.warning.base,
   },
   anomalyActionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: BRAND.primary,
+    color: SEMANTIC.warning.base,
+  },
+  anomalyActionTextWarning: {
+    color: '#FFFFFF',
   },
 
   // Primary KPI card
@@ -2461,8 +2407,6 @@ const styles = StyleSheet.create({
   },
   freezeIconContainer: {
     marginBottom: SPACING[4],
-    backgroundColor: '#FFFFFF', // Required for shadow efficiency
-    borderRadius: RADIUS.full,
     shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

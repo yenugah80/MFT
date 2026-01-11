@@ -10,7 +10,7 @@
  * NO overwhelming data. NO stress. Pure delight.
  */
 
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,23 +23,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import LottieView from 'lottie-react-native';
-
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, TEXT, MOOD_PALETTE } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SEMANTIC, SURFACES } from '../../constants/premiumTheme';
 import { calculateFoodMoodScore } from '../../utils/foodMoodScore';
-
-// Lottie animation sources for mood display
-const MOOD_LOTTIE_SOURCES = {
-  happy: require('../../constants/lottie/mood-happy.json'),
-  calm: require('../../constants/lottie/mood-calm.json'),
-  focused: require('../../constants/lottie/mood-focused.json'),
-  energized: require('../../constants/lottie/mood-energized.json'),
-  neutral: require('../../constants/lottie/mood-neutral.json'),
-  tired: require('../../constants/lottie/mood-tired.json'),
-  stressed: require('../../constants/lottie/mood-stressed.json'),
-  sad: require('../../constants/lottie/mood-sad.json'),
-};
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -81,10 +67,10 @@ function ScoreRing({ score, size = 120, strokeWidth = 10 }) {
   }, [score, animatedValue, pulseAnim]);
 
   const getScoreGradient = (s) => {
-    if (s >= 80) return ['#10B981', '#34D399']; // Green - Thriving
-    if (s >= 60) return ['#6B4EFF', '#8B6EFF']; // Purple - Great
-    if (s >= 40) return ['#3B82F6', '#60A5FA']; // Blue - Good
-    return ['#F59E0B', '#FBBF24']; // Amber - Building
+    if (s >= 80) return [SEMANTIC.success.base, SEMANTIC.success.light];
+    if (s >= 60) return [BRAND.primaryDark, BRAND.primary];
+    if (s >= 40) return [BRAND.primary, BRAND.primaryLight];
+    return [SEMANTIC.warning.base, SEMANTIC.warning.light];
   };
 
   const colors = getScoreGradient(score);
@@ -104,7 +90,7 @@ function ScoreRing({ score, size = 120, strokeWidth = 10 }) {
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke="rgba(107, 78, 255, 0.1)"
+            stroke="rgba(143, 163, 199, 0.22)"
             strokeWidth={strokeWidth}
             fill="none"
           />
@@ -127,7 +113,7 @@ function ScoreRing({ score, size = 120, strokeWidth = 10 }) {
         {/* Score number */}
         <View style={ringStyles.scoreContainer}>
           <Text style={[ringStyles.score, { color: colors[0] }]}>{score}</Text>
-          <Text style={ringStyles.label}>wellness</Text>
+          <Text style={ringStyles.label}>score</Text>
         </View>
       </View>
     </Animated.View>
@@ -160,230 +146,6 @@ const ringStyles = StyleSheet.create({
   },
 });
 
-/**
- * Beautiful Lottie Mood Display - Pure animation-focused mood indicator
- * Shows ONLY Lottie animations (no emoji fallbacks) for premium feel
- */
-function LottieMoodDisplay({ mood, intensity, timestamp }) {
-  const lottieRef = useRef(null);
-  const glowAnim = useRef(new Animated.Value(0.5)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-
-  // Get mood colors
-  const moodColors = MOOD_PALETTE?.[mood] || { base: '#6B4EFF', gradient: ['#6B4EFF', '#8B6EFF'] };
-  const lottieSource = MOOD_LOTTIE_SOURCES[mood];
-
-  useEffect(() => {
-    // Entrance animation
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      // Gentle glow pulse
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0.5,
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      ),
-      // Subtle bounce effect
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(bounceAnim, {
-            toValue: -3,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(bounceAnim, {
-            toValue: 0,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      ),
-    ]).start();
-
-    // Auto-play lottie
-    if (lottieRef.current) {
-      lottieRef.current.play();
-    }
-  }, [mood, glowAnim, scaleAnim, bounceAnim]);
-
-  if (!mood) return null;
-
-  const formatTime = (ts) => {
-    if (!ts) return 'Just now';
-    const date = new Date(ts);
-    const hours = date.getHours();
-    const mins = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHour = hours % 12 || 12;
-    return `${displayHour}:${mins} ${ampm}`;
-  };
-
-  return (
-    <Animated.View style={[moodStyles.container, { transform: [{ scale: scaleAnim }] }]}>
-      {/* Outer glow ring */}
-      <Animated.View
-        style={[
-          moodStyles.outerGlow,
-          {
-            backgroundColor: moodColors.base,
-            opacity: glowAnim.interpolate({
-              inputRange: [0.5, 1],
-              outputRange: [0.1, 0.25],
-            }),
-          }
-        ]}
-      />
-
-      {/* Main Lottie animation - HERO element */}
-      <Animated.View
-        style={[
-          moodStyles.lottieWrapper,
-          { transform: [{ translateY: bounceAnim }] }
-        ]}
-      >
-        <View style={[moodStyles.lottieContainer, { borderColor: `${moodColors.base}30` }]}>
-          {lottieSource && (
-            <LottieView
-              ref={lottieRef}
-              source={lottieSource}
-              style={moodStyles.lottie}
-              autoPlay
-              loop
-              speed={0.7}
-              resizeMode="cover"
-            />
-          )}
-        </View>
-
-        {/* Animated sparkle dots */}
-        <Animated.View style={[moodStyles.sparkle1, { backgroundColor: moodColors.base, opacity: glowAnim }]} />
-        <Animated.View style={[moodStyles.sparkle2, { backgroundColor: moodColors.base, opacity: glowAnim.interpolate({ inputRange: [0.5, 1], outputRange: [1, 0.5] }) }]} />
-      </Animated.View>
-
-      {/* Mood info - minimal and clean */}
-      <View style={moodStyles.info}>
-        <View style={moodStyles.labelRow}>
-          <Text style={[moodStyles.moodLabel, { color: moodColors.base }]}>
-            {mood.charAt(0).toUpperCase() + mood.slice(1)}
-          </Text>
-          {intensity && (
-            <View style={[moodStyles.intensityPill, { backgroundColor: `${moodColors.base}15`, borderColor: `${moodColors.base}30` }]}>
-              <Text style={[moodStyles.intensityText, { color: moodColors.base }]}>
-                {intensity}/10
-              </Text>
-            </View>
-          )}
-        </View>
-        <Text style={moodStyles.timeText}>Logged at {formatTime(timestamp)}</Text>
-      </View>
-    </Animated.View>
-  );
-}
-
-const moodStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[4],
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS['2xl'],
-    padding: SPACING[3],
-    borderWidth: 1.5,
-    borderColor: 'rgba(107, 78, 255, 0.12)',
-    shadowColor: '#6B4EFF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  outerGlow: {
-    position: 'absolute',
-    top: -12,
-    left: -12,
-    right: -12,
-    bottom: -12,
-    borderRadius: RADIUS['2xl'] + 12,
-  },
-  lottieWrapper: {
-    position: 'relative',
-  },
-  lottieContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(107, 78, 255, 0.04)',
-    borderWidth: 2,
-  },
-  lottie: {
-    width: 64,
-    height: 64,
-  },
-  sparkle1: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  sparkle2: {
-    position: 'absolute',
-    bottom: 4,
-    left: -4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  info: {
-    flex: 1,
-    gap: 6,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  moodLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-  },
-  intensityPill: {
-    paddingHorizontal: SPACING[2],
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-  },
-  intensityText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  timeText: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-    fontWeight: '500',
-  },
-});
 
 /**
  * Celebration Badge - For wins (uses Ionicons, no emojis)
@@ -430,8 +192,6 @@ export default function FoodMoodScoreCard({
   onViewDetails,
 }) {
   const cardAnim = useRef(new Animated.Value(0)).current;
-  // eslint-disable-next-line no-unused-vars
-  const [showDetails, setShowDetails] = useState(false);
 
   // Calculate the score
   const scoreData = useMemo(() => {
@@ -457,33 +217,45 @@ export default function FoodMoodScoreCard({
     });
   }, [today, goals, moodLogs]);
 
-  // Get latest mood
-  const latestMood = useMemo(() => {
-    if (!moodLogs || moodLogs.length === 0) return null;
-    const sorted = [...moodLogs].sort((a, b) =>
-      new Date(b.loggedDate || b.timestamp) - new Date(a.loggedDate || a.timestamp)
-    );
-    return sorted[0];
-  }, [moodLogs]);
+  // Generate status indicator - functional, not emotional
+  const getStatusIndicator = useMemo(() => {
+    const { breakdown } = scoreData;
+    const hasMeals = (today?.foodLogs || []).length > 0;
+    const hasWater = (today?.waterIntakeLiters || 0) > 0;
+    const hasMood = (moodLogs || []).length > 0;
+    const logged = [hasMeals, hasWater, hasMood].filter(Boolean).length;
 
-  // Generate celebration for wins
-  const celebration = useMemo(() => {
-    const { score, breakdown } = scoreData;
+    if (logged === 3) return { icon: 'checkmark-circle', color: '#10B981', text: 'Complete' };
+    if (logged === 2) return { icon: 'ellipse-outline', color: '#8B5CF6', text: '2 of 3' };
+    if (logged === 1) return { icon: 'ellipse-outline', color: '#F59E0B', text: '1 of 3' };
+    return { icon: 'scan-outline', color: '#6B7280', text: 'No data' };
+  }, [scoreData, today, moodLogs]);
 
-    if (score >= 85) return { icon: 'star', color: '#F59E0B', text: 'Amazing day!' };
-    if ((breakdown?.hydration || 0) >= 18) return { icon: 'water', color: '#3B82F6', text: 'Hydration goal!' };
-    if ((breakdown?.nutrition || 0) >= 30) return { icon: 'leaf', color: '#10B981', text: 'Great eating!' };
-    if (score >= 70) return { icon: 'fitness', color: '#8B5CF6', text: 'Keep it up!' };
-    return null;
-  }, [scoreData]);
+  // Functional message - what's next, not judgment
+  const getDataMessage = ({ score, breakdown, hasMeals, hasWater, hasMood }) => {
+    const missing = [];
+    if (!hasMeals) missing.push('meals');
+    if (!hasWater) missing.push('water');
+    if (!hasMood) missing.push('mood');
 
-  // Get encouraging message
-  const getMessage = (score, tier) => {
-    if (score >= 85) return "You're absolutely crushing it!";
-    if (score >= 70) return "Great balance today!";
-    if (score >= 55) return "You're building momentum";
-    if (score >= 40) return "Every step counts";
-    return "Let's make today great";
+    if (missing.length === 3) {
+      return "Log meals to start pattern detection";
+    }
+
+    if (missing.length > 0) {
+      return `Missing: ${missing.join(', ')}`;
+    }
+
+    // All data present - give functional insight
+    if ((breakdown?.nutrition || 0) >= 25 && (breakdown?.hydration || 0) >= 15) {
+      return "Full data. Check insights below.";
+    }
+
+    if ((breakdown?.nutrition || 0) < 18) {
+      return "Low protein logged. Check portions.";
+    }
+
+    return "Data captured. Patterns building.";
   };
 
   // Entrance animation
@@ -501,7 +273,12 @@ export default function FoodMoodScoreCard({
     onViewDetails?.();
   };
 
-  const { score, tier, label, emoji, color, breakdown } = scoreData;
+  const hasMeals = (today?.foodLogs || []).length > 0;
+  const hasWater = (today?.waterIntakeLiters || 0) > 0;
+  const hasMood = (moodLogs || []).length > 0;
+  const { score, label, emoji, color, breakdown } = scoreData;
+  const message = getDataMessage({ score, breakdown, hasMeals, hasWater, hasMood });
+  const statusIndicator = getStatusIndicator;
 
   return (
     <TouchableOpacity onPress={handlePress} activeOpacity={0.95}>
@@ -515,86 +292,52 @@ export default function FoodMoodScoreCard({
         ]}
       >
         <LinearGradient
-          colors={['#FFFFFF', '#FAFBFF', '#F5F7FF']}
+          colors={SURFACES.gradient.pastelLavender}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.gradient}
         >
-          {/* Header */}
+          {/* Header - Functional, not judgmental */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Ionicons name="sparkles" size={18} color={BRAND.primary} />
-              <Text style={styles.headerTitle}>Today&apos;s Wellness</Text>
+              <View style={styles.headerIcon}>
+                <Ionicons name="analytics-outline" size={16} color={BRAND.primaryDark} />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Data Coverage</Text>
+                <Text style={styles.headerSubtitle}>Today&apos;s tracking</Text>
+              </View>
             </View>
-            {celebration && <CelebrationBadge celebration={celebration} />}
+            <View style={styles.headerRight}>
+              <View style={[styles.statusPill, { borderColor: `${statusIndicator.color}30`, backgroundColor: `${statusIndicator.color}12` }]}>
+                <Ionicons name={statusIndicator.icon} size={14} color={statusIndicator.color} />
+                <Text style={[styles.statusText, { color: statusIndicator.color }]}>{statusIndicator.text}</Text>
+              </View>
+            </View>
           </View>
 
           {/* Main content */}
           <View style={styles.content}>
             {/* Score Ring */}
-            <ScoreRing score={score} />
+            <View style={styles.scorePanel}>
+              <ScoreRing score={score} />
+              <View style={styles.scoreMeta}>
+                <Text style={styles.scoreMetaLabel}>Completeness</Text>
+                <Text style={[styles.scoreMetaValue, { color: statusIndicator.color }]}>{score}%</Text>
+              </View>
+            </View>
 
             {/* Right side info */}
             <View style={styles.info}>
-              {/* Tier badge */}
-              <View style={[styles.tierBadge, { backgroundColor: `${color}15` }]}>
-                <Text style={styles.tierEmoji}>{emoji}</Text>
-                <Text style={[styles.tierLabel, { color }]}>{label}</Text>
-              </View>
-
-              {/* Encouraging message */}
-              <Text style={styles.message}>{getMessage(score, tier)}</Text>
-
-              {/* Beautiful Lottie Mood Display */}
-              {latestMood && (
-                <LottieMoodDisplay
-                  mood={latestMood.mood}
-                  intensity={latestMood.intensity}
-                  timestamp={latestMood.loggedDate || latestMood.timestamp}
-                />
-              )}
-
-              {/* No mood logged - encouraging CTA */}
-              {!latestMood && (
-                <TouchableOpacity style={styles.logMoodCta} activeOpacity={0.8}>
-                  <View style={styles.logMoodIconContainer}>
-                    <Ionicons name="happy-outline" size={24} color={BRAND.primary} />
-                  </View>
-                  <View style={styles.logMoodTextContainer}>
-                    <Text style={styles.logMoodTitle}>How are you feeling?</Text>
-                    <Text style={styles.logMoodSubtext}>Tap to log your mood</Text>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color={BRAND.primary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* Quick stats row - subtle, not overwhelming */}
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <View style={[styles.statDot, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.statLabel}>Food</Text>
-              <Text style={styles.statValue}>{Math.round((breakdown?.nutrition || 0) / 35 * 100)}%</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <View style={[styles.statDot, { backgroundColor: '#3B82F6' }]} />
-              <Text style={styles.statLabel}>Water</Text>
-              <Text style={styles.statValue}>{Math.round((breakdown?.hydration || 0) / 20 * 100)}%</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <View style={[styles.statDot, { backgroundColor: '#F59E0B' }]} />
-              <Text style={styles.statLabel}>Mood</Text>
-              <Text style={styles.statValue}>{Math.round((breakdown?.mood || 0) / 25 * 100)}%</Text>
+              {/* Functional status message */}
+              <Text style={styles.message}>{message}</Text>
             </View>
           </View>
 
           {/* Tap hint */}
-          <View style={styles.tapHint}>
-            <Text style={styles.tapHintText}>Tap for insights</Text>
-            <Ionicons name="chevron-forward" size={14} color={TEXT.muted} />
+          <View style={styles.actionRow}>
+            <Text style={styles.actionText}>View breakdown</Text>
+            <Ionicons name="arrow-forward" size={14} color={TEXT.secondary} />
           </View>
         </LinearGradient>
       </Animated.View>
@@ -607,21 +350,20 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[4],
     borderRadius: RADIUS['2xl'],
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF', // Required for shadow efficiency
+    backgroundColor: SURFACES.card.primary,
     // Luxurious shadow for depth
-    shadowColor: '#6B4EFF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowColor: BRAND.primaryDark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 10,
     // Premium border glow
     borderWidth: 1.5,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: SURFACES.card.border,
   },
   gradient: {
     padding: SPACING[5],
-    // Subtle inner glow effect
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
   },
 
   // Header
@@ -636,10 +378,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[2],
   },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(143, 163, 199, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  statusEmoji: {
+    fontSize: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
 
   // Content
@@ -648,27 +423,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[5],
   },
+  scorePanel: {
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  scoreMeta: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  scoreMetaLabel: {
+    fontSize: 11,
+    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  scoreMetaValue: {
+    fontSize: 13,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+  },
   info: {
     flex: 1,
-    gap: SPACING[3],
-  },
-
-  // Tier badge
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[1],
-    borderRadius: RADIUS.full,
-  },
-  tierEmoji: {
-    fontSize: 14,
-  },
-  tierLabel: {
-    fontSize: 13,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    justifyContent: 'center',
   },
 
   // Message
@@ -679,87 +453,23 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 
-  // Log mood CTA - Beautiful encouraging prompt
-  logMoodCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
-    borderRadius: RADIUS.xl,
-    padding: SPACING[3],
-    borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
-    borderStyle: 'dashed',
-  },
-  logMoodIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logMoodTextContainer: {
-    flex: 1,
-  },
-  logMoodTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: TEXT.primary,
-    marginBottom: 2,
-  },
-  logMoodSubtext: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-  },
-
-  // Stats row
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: SPACING[4],
-    paddingTop: SPACING[4],
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.04)',
-  },
-  stat: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  statDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-  },
-  statDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
-  },
-
   // Tap hint
-  tapHint: {
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    marginTop: SPACING[3],
+    marginTop: SPACING[5],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[5],
+    borderRadius: RADIUS.full,
+    backgroundColor: SURFACES.background.tertiary,
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
   },
-  tapHintText: {
-    fontSize: 11,
-    color: TEXT.muted,
+  actionText: {
+    fontSize: 12,
+    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
 });
