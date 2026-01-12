@@ -1,5 +1,5 @@
 import React from 'react';
-import { TEXT } from '../constants/premiumTheme';
+import { TEXT } from '../../constants/premiumTheme';
 import {
   Modal as RNModal,
   View,
