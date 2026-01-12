@@ -623,7 +623,12 @@ const AnalysisDetailsScreen = ({
                               const calories = Number.isFinite(component.calories)
                                 ? `${Math.round(component.calories)} kcal`
                                 : null;
-                              const portion = component.portion || calories || 'Estimated';
+                              // Handle portion - can be string or object {amount, unit, servingText}
+                              const rawPortion = component.portion;
+                              const portionText = typeof rawPortion === 'object'
+                                ? rawPortion?.servingText || `${rawPortion?.amount || ''} ${rawPortion?.unit || ''}`.trim()
+                                : rawPortion || '';
+                              const portion = portionText || calories || 'Estimated';
                               return (
                                 <View
                                   key={`${item.itemId || index}-comp-${compIndex}`}

@@ -38,11 +38,59 @@ export const PRODUCTS = {
 };
 
 // Pricing (for display - actual prices come from store)
+// Core Philosophy: "Users don't pay for tracking. They pay for clarity and confidence."
+// BASIC ($4.79): "Now I understand what I ate" - Clarity
+// PREMIUM ($7.97): "Now I know what to do next" - Confidence
 export const PRICING = {
-  [PRODUCTS.BASIC_MONTHLY]: { price: '$4.79', period: 'month' },
-  [PRODUCTS.BASIC_YEARLY]: { price: '$38.99', period: 'year', savings: '32%' },
-  [PRODUCTS.PREMIUM_MONTHLY]: { price: '$7.79', period: 'month' },
-  [PRODUCTS.PREMIUM_YEARLY]: { price: '$62.99', period: 'year', savings: '33%' },
+  [PRODUCTS.BASIC_MONTHLY]: { price: '$4.79', period: 'month', tagline: 'Clarity' },
+  [PRODUCTS.BASIC_YEARLY]: { price: '$38.99', period: 'year', savings: '32%', tagline: 'Clarity' },
+  [PRODUCTS.PREMIUM_MONTHLY]: { price: '$7.97', period: 'month', tagline: 'Confidence' },
+  [PRODUCTS.PREMIUM_YEARLY]: { price: '$63.99', period: 'year', savings: '33%', tagline: 'Confidence' },
+};
+
+// Feature definitions by tier
+export const TIER_FEATURES = {
+  [TIERS.FREE]: {
+    name: 'Free',
+    description: 'Basic tracking',
+    features: [
+      'Food logging',
+      'Water tracking',
+      'Mood check-ins',
+      '7 days history',
+    ],
+  },
+  [TIERS.BASIC]: {
+    name: 'Basic',
+    description: 'Clarity - Understand what happened',
+    price: '$4.79/month',
+    features: [
+      'Everything in Free',
+      'Nutri-Score (A-E grading)',
+      'Daily summaries',
+      'Basic insights (what happened)',
+      'Processing level analysis',
+      'Macro distribution',
+      'Unlimited history',
+    ],
+  },
+  [TIERS.PREMIUM]: {
+    name: 'Premium',
+    description: 'Confidence - Know what to do next',
+    price: '$7.97/month',
+    features: [
+      'Everything in Basic',
+      'Predictive insights',
+      'Behavioral correlations',
+      'Personalized 5W2H recommendations',
+      'Weekly health narrative',
+      '"What to change next" guidance',
+      'Mood-food correlations',
+      'Energy pattern predictions',
+      'Micronutrient gap analysis',
+      'Outcome tracking',
+    ],
+  },
 };
 
 // RevenueCat API Keys (add when you have them)
@@ -151,6 +199,8 @@ export function SubscriptionProvider({ children }) {
                 identifier: PRODUCTS.BASIC_MONTHLY,
                 priceString: '$4.79',
                 price: 4.79,
+                title: 'Basic Monthly',
+                description: 'Clarity - Understand what happened',
               },
               packageType: 'MONTHLY',
             },
@@ -160,6 +210,8 @@ export function SubscriptionProvider({ children }) {
                 identifier: PRODUCTS.BASIC_YEARLY,
                 priceString: '$38.99',
                 price: 38.99,
+                title: 'Basic Yearly',
+                description: 'Save 32% with annual billing',
               },
               packageType: 'ANNUAL',
             },
@@ -167,8 +219,10 @@ export function SubscriptionProvider({ children }) {
               identifier: PRODUCTS.PREMIUM_MONTHLY,
               product: {
                 identifier: PRODUCTS.PREMIUM_MONTHLY,
-                priceString: '$7.79',
-                price: 7.79,
+                priceString: '$7.97',
+                price: 7.97,
+                title: 'Premium Monthly',
+                description: 'Confidence - Know what to do next',
               },
               packageType: 'MONTHLY',
             },
@@ -176,8 +230,10 @@ export function SubscriptionProvider({ children }) {
               identifier: PRODUCTS.PREMIUM_YEARLY,
               product: {
                 identifier: PRODUCTS.PREMIUM_YEARLY,
-                priceString: '$62.99',
-                price: 62.99,
+                priceString: '$63.99',
+                price: 63.99,
+                title: 'Premium Yearly',
+                description: 'Save 33% with annual billing',
               },
               packageType: 'ANNUAL',
             },

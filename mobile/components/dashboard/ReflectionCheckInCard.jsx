@@ -1,6 +1,6 @@
 /**
  * ReflectionCheckInCard - Reflection-first entry point
- * Quick mood/energy check-in with a single CTA.
+ * Quick mood/energy check-in with premium pink/purple gradient
  */
 
 import React from 'react';
@@ -8,8 +8,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES, CARD_SYSTEM } from '../../constants/premiumTheme';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
+import { BOLD_GRADIENTS, DEPTH_SHADOWS } from '../../constants/modernColorPalette';
 
 function getScore(log, fields, fallback = 5) {
   for (const field of fields) {
@@ -31,116 +31,123 @@ export default function ReflectionCheckInCard({ moodLogs = [], onCheckIn }) {
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.cardWrapper, DEPTH_SHADOWS.reflection]}>
       <LinearGradient
-        colors={SURFACES.gradient.primary}
+        colors={BOLD_GRADIENTS.reflection}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.accentBar}
-      />
-      <View style={styles.header}>
-        <LinearGradient
-          colors={SURFACES.gradient.primary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconBadge}
-        >
-          <Ionicons name="sparkles-outline" size={16} color="#FFFFFF" />
-        </LinearGradient>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Today's reflection</Text>
-          <View style={styles.chipRow}>
-            <View style={styles.chip}>
-              <Ionicons name="happy-outline" size={12} color={TEXT.tertiary} />
-              <Text style={styles.chipText}>Mood</Text>
-            </View>
-            <View style={styles.chip}>
-              <Ionicons name="pulse-outline" size={12} color={TEXT.tertiary} />
-              <Text style={styles.chipText}>Energy</Text>
+        end={{ x: 1, y: 1 }}
+        style={styles.card}
+      >
+        {/* Glass overlay for depth */}
+        <View style={styles.glassOverlay} />
+
+        <View style={styles.header}>
+          {/* Icon badge with inner glow */}
+          <View style={styles.iconBadge}>
+            <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Today's reflection</Text>
+            <View style={styles.chipRow}>
+              <View style={styles.chip}>
+                <Ionicons name="happy-outline" size={12} color="rgba(255,255,255,0.85)" />
+                <Text style={styles.chipText}>Mood</Text>
+              </View>
+              <View style={styles.chip}>
+                <Ionicons name="pulse-outline" size={12} color="rgba(255,255,255,0.85)" />
+                <Text style={styles.chipText}>Energy</Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.body}>
-        {hasCheckIn ? (
-          <View style={styles.statRow}>
-            <View style={styles.statPill}>
-              <Text style={styles.statLabel}>Mood</Text>
-              <Text style={styles.statValue}>{moodScore}/10</Text>
+        <View style={styles.body}>
+          {hasCheckIn ? (
+            <View style={styles.statRow}>
+              <View style={styles.statPill}>
+                <Text style={styles.statLabel}>Mood</Text>
+                <Text style={styles.statValue}>{moodScore}/10</Text>
+              </View>
+              <View style={styles.statPill}>
+                <Text style={styles.statLabel}>Energy</Text>
+                <Text style={styles.statValue}>{energyScore}/10</Text>
+              </View>
             </View>
-            <View style={styles.statPill}>
-              <Text style={styles.statLabel}>Energy</Text>
-              <Text style={styles.statValue}>{energyScore}/10</Text>
-            </View>
-          </View>
-        ) : (
-          <Text style={styles.emptyPrompt}>
-            How are you feeling right now?
-          </Text>
-        )}
-      </View>
+          ) : (
+            <Text style={styles.emptyPrompt}>
+              How are you feeling right now?
+            </Text>
+          )}
+        </View>
 
-      <TouchableOpacity
-        style={styles.cta}
-        activeOpacity={0.9}
-        onPress={handleCheckIn}
-        accessibilityRole="button"
-        accessibilityLabel={hasCheckIn ? 'Update check-in' : 'Start check-in'}
-      >
-        <LinearGradient
-          colors={SURFACES.gradient.primary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.ctaGradient}
+        <TouchableOpacity
+          style={styles.cta}
+          activeOpacity={0.9}
+          onPress={handleCheckIn}
+          accessibilityRole="button"
+          accessibilityLabel={hasCheckIn ? 'Update check-in' : 'Start check-in'}
         >
-          <Ionicons name="happy-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.ctaText}>{hasCheckIn ? 'Update' : 'Check in'}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+          <View style={styles.ctaInner}>
+            <Ionicons name="happy-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.ctaText}>{hasCheckIn ? 'Update' : 'Check in'}</Text>
+          </View>
+        </TouchableOpacity>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    ...CARD_SYSTEM.standard,
-    paddingTop: SPACING[5],
+  cardWrapper: {
+    borderRadius: RADIUS['2xl'],
+    marginBottom: SPACING[4],
+    overflow: 'hidden',
   },
-  accentBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+  card: {
+    borderRadius: RADIUS['2xl'],
+    padding: SPACING[5],
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  glassOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[3],
-    marginBottom: SPACING[3],
+    marginBottom: SPACING[4],
   },
   iconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 2,
   },
   headerText: {
     flex: 1,
   },
   title: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   chipRow: {
     flexDirection: 'row',
     gap: SPACING[2],
-    marginTop: 6,
+    marginTop: 8,
   },
   chip: {
     flexDirection: 'row',
@@ -149,16 +156,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.full,
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 1,
-    borderColor: SURFACES.card.border,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   chipText: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
   body: {
-    marginBottom: SPACING[3],
+    marginBottom: SPACING[4],
   },
   statRow: {
     flexDirection: 'row',
@@ -167,32 +175,48 @@ const styles = StyleSheet.create({
   statPill: {
     flex: 1,
     paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[3],
+    paddingHorizontal: SPACING[4],
     borderRadius: RADIUS.lg,
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 1,
-    borderColor: SURFACES.card.border,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
   statValue: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#FFFFFF',
     marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   emptyPrompt: {
     fontSize: TYPOGRAPHY.size.md,
-    color: TEXT.secondary,
-    lineHeight: 20,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 22,
+    textShadowColor: 'rgba(0, 0, 0, 0.15)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   cta: {
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    // Glow effect
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  ctaGradient: {
+  ctaInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

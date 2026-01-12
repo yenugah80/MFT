@@ -1,5 +1,6 @@
 /**
  * ProgressMilestonesCard - reflection-aligned gamification.
+ * Premium UI with gold gradient
  */
 
 import React from 'react';
@@ -7,8 +8,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES, CARD_SYSTEM } from '../../constants/premiumTheme';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
+import { BOLD_GRADIENTS, DEPTH_SHADOWS } from '../../constants/modernColorPalette';
 
 export default function ProgressMilestonesCard({
   reflectionStreak = 0,
@@ -22,136 +23,170 @@ export default function ProgressMilestonesCard({
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.cardWrapper, DEPTH_SHADOWS.progress]}>
       <LinearGradient
-        colors={SURFACES.gradient.accent}
+        colors={BOLD_GRADIENTS.progress}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.accentBar}
-      />
-      <View style={styles.header}>
-        <LinearGradient
-          colors={SURFACES.gradient.accent}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconBadge}
-        >
-          <Ionicons name="trophy-outline" size={16} color="#FFFFFF" />
-        </LinearGradient>
-        <Text style={styles.title}>Progress and milestones</Text>
-      </View>
-
-      <View style={styles.statsRow}>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{reflectionStreak}</Text>
-          <Text style={styles.statLabel}>Reflection streak</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{insightsUnlocked}</Text>
-          <Text style={styles.statLabel}>Insights unlocked</Text>
-        </View>
-      </View>
-
-      <View style={styles.milestone}>
-        <Ionicons name="flag-outline" size={14} color={TEXT.tertiary} />
-        <Text style={styles.milestoneText}>{milestoneText}</Text>
-      </View>
-
-      <TouchableOpacity
-        style={styles.cta}
-        activeOpacity={0.9}
-        onPress={handlePress}
-        accessibilityRole="button"
-        accessibilityLabel="View progress"
+        end={{ x: 1, y: 1 }}
+        style={styles.card}
       >
-        <Text style={styles.ctaText}>View progress</Text>
-        <Ionicons name="chevron-forward" size={16} color={TEXT.tertiary} />
-      </TouchableOpacity>
+        {/* Glass overlay for depth */}
+        <View style={styles.glassOverlay} />
+
+        <View style={styles.header}>
+          <View style={styles.iconBadge}>
+            <Ionicons name="trophy" size={18} color="#FFFFFF" />
+          </View>
+          <Text style={styles.title}>Progress & milestones</Text>
+        </View>
+
+        <View style={styles.statsRow}>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{reflectionStreak}</Text>
+            <Text style={styles.statLabel}>Reflection streak</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{insightsUnlocked}</Text>
+            <Text style={styles.statLabel}>Insights unlocked</Text>
+          </View>
+        </View>
+
+        <View style={styles.milestone}>
+          <Ionicons name="flag" size={14} color="rgba(255,255,255,0.85)" />
+          <Text style={styles.milestoneText}>{milestoneText}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.cta}
+          activeOpacity={0.9}
+          onPress={handlePress}
+          accessibilityRole="button"
+          accessibilityLabel="View progress"
+        >
+          <View style={styles.ctaInner}>
+            <Text style={styles.ctaText}>View progress</Text>
+            <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
+          </View>
+        </TouchableOpacity>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    ...CARD_SYSTEM.standard,
-    paddingTop: SPACING[5],
+  cardWrapper: {
+    borderRadius: RADIUS['2xl'],
+    marginBottom: SPACING[4],
+    overflow: 'hidden',
   },
-  accentBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+  card: {
+    borderRadius: RADIUS['2xl'],
+    padding: SPACING[5],
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  glassOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[3],
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
   },
   iconBadge: {
-    width: 28,
-    height: 28,
+    width: 40,
+    height: 40,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[3],
-    marginBottom: SPACING[3],
+    marginBottom: SPACING[4],
   },
   stat: {
     flex: 1,
   },
   statValue: {
-    fontSize: TYPOGRAPHY.size.xl,
+    fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 2,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
   statDivider: {
     width: 1,
-    height: 32,
-    backgroundColor: SURFACES.card.border,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   milestone: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[2],
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: RADIUS.lg,
-    paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
     borderWidth: 1,
-    borderColor: SURFACES.card.border,
-    marginBottom: SPACING[3],
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginBottom: SPACING[4],
   },
   milestoneText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
   cta: {
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  ctaInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
   },
   ctaText: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
+    color: '#FFFFFF',
   },
 });

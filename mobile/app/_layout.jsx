@@ -6,6 +6,7 @@ import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { ProfileProvider } from "@/providers/ProfileProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
@@ -126,9 +127,10 @@ export default function RootLayout() {
           <QueryProvider>
             <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
               {/* NotificationProvider & ProfileProvider must be INSIDE ClerkProvider to access useAuth */}
-              <NotificationProvider>
-                <ProfileProvider>
-                  <ApiInitializer>
+              <SubscriptionProvider>
+                <NotificationProvider>
+                  <ProfileProvider>
+                    <ApiInitializer>
                     {/* InitializationGuard ensures ProductionStartup completes before rendering child components */}
                     {/* This prevents race conditions where components try to use features before they're initialized */}
                     <InitializationGuard>
@@ -141,6 +143,7 @@ export default function RootLayout() {
                   </ApiInitializer>
                 </ProfileProvider>
               </NotificationProvider>
+              </SubscriptionProvider>
             </ClerkProvider>
           </QueryProvider>
         </DatabaseInitializer>

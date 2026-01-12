@@ -12,23 +12,21 @@ import { DAILY_VALUES } from '../../../constants/dailyValues';
 import { useTheme } from '../../../providers/ThemeProvider';
 
 /**
+ * Key micronutrients to display (simplified for initial version)
+ * These 5 are the most commonly tracked and clinically relevant
+ */
+const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium'];
+
+/**
  * Micronutrient display names and categories
+ * Limited to 5 key minerals for initial version
  */
 const MICRO_CONFIG = {
-  // Vitamins
-  vitamin_a: { label: 'Vitamin A', category: 'vitamin', key: 'vitaminA' },
-  vitamin_c: { label: 'Vitamin C', category: 'vitamin', key: 'vitaminC' },
-  vitamin_d: { label: 'Vitamin D', category: 'vitamin', key: 'vitaminD' },
-  vitamin_e: { label: 'Vitamin E', category: 'vitamin', key: 'vitaminE' },
-  vitamin_k: { label: 'Vitamin K', category: 'vitamin', key: 'vitaminK' },
-  vitamin_b12: { label: 'Vitamin B12', category: 'vitamin', key: 'vitaminB12' },
-  folate: { label: 'Folate', category: 'vitamin', key: 'vitaminB9' },
-  // Minerals
+  // Key Minerals (displayed)
   calcium: { label: 'Calcium', category: 'mineral', key: 'calcium' },
   iron: { label: 'Iron', category: 'mineral', key: 'iron' },
   magnesium: { label: 'Magnesium', category: 'mineral', key: 'magnesium' },
   potassium: { label: 'Potassium', category: 'mineral', key: 'potassium' },
-  zinc: { label: 'Zinc', category: 'mineral', key: 'zinc' },
   sodium: { label: 'Sodium', category: 'mineral', key: 'sodium' },
 };
 
@@ -115,29 +113,27 @@ export default function MicrosGrid({ micros }) {
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
 
-  // Process micros into array format
+  // Process micros into array format - only 5 key micronutrients
   const processedMicros = React.useMemo(() => {
     if (!micros || typeof micros !== 'object') return [];
 
     return Object.entries(micros)
       .filter(([key, val]) => {
+        // Only include the 5 key micronutrients
+        if (!KEY_MICRONUTRIENTS.includes(key.toLowerCase())) return false;
         // Filter out invalid entries
         if (!val) return false;
         const value = typeof val === 'object' ? val.value : val;
         return value > 0;
       })
       .map(([key, val]) => ({
-        key,
+        key: key.toLowerCase(),
         value: typeof val === 'object' ? val.value : val,
-        unit: typeof val === 'object' ? val.unit : '',
+        unit: typeof val === 'object' ? val.unit : 'mg',
       }))
       .sort((a, b) => {
-        // Sort by category (vitamins first) then by name
-        const configA = MICRO_CONFIG[a.key];
-        const configB = MICRO_CONFIG[b.key];
-        if (configA?.category === 'vitamin' && configB?.category !== 'vitamin') return -1;
-        if (configA?.category !== 'vitamin' && configB?.category === 'vitamin') return 1;
-        return (configA?.label || a.key).localeCompare(configB?.label || b.key);
+        // Sort by predefined order
+        return KEY_MICRONUTRIENTS.indexOf(a.key) - KEY_MICRONUTRIENTS.indexOf(b.key);
       });
   }, [micros]);
 
@@ -164,7 +160,7 @@ export default function MicrosGrid({ micros }) {
         <View style={styles.headerLeft}>
           <Ionicons name="leaf-outline" size={18} color="#10B981" />
           <Text style={[styles.sectionTitle, { color: textPrimary }]}>
-            Vitamins & Minerals
+            Key Minerals
           </Text>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{processedMicros.length}</Text>

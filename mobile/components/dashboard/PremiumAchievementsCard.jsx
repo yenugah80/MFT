@@ -218,8 +218,11 @@ export default function PremiumAchievementsCard({
   const safeTarget = Math.max(1, calculatedNextLevelXp);
   const progress = Math.min(safeXp / safeTarget, 1); // Cap at 100%
   const rankTitle = useMemo(() => getRankTitle(level), [level]);
+  const streakDisplayValue = streak > 0 ? String(streak) : 'Start';
+  const streakLabelText = streak > 0 ? 'Day Streak' : 'Start Today';
+  const streakGlowColor = streak > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(107, 130, 173, 0.18)';
   const streakMessage = useMemo(() => {
-    if (streak === 0) return 'Start your streak today';
+    if (streak === 0) return 'Log a meal, water, or mood to spark your streak';
     if (streak < 7) return 'Keep the fire burning!';
     if (streak < 30) return 'Amazing consistency!';
     return "You&apos;re on a legendary run!";
@@ -374,11 +377,12 @@ export default function PremiumAchievementsCard({
                 {
                   transform: [{ scale: flameScale }],
                   opacity: flameOpacity,
+                  backgroundColor: streakGlowColor,
                 },
               ]}
             />
             <ExpoLinearGradient
-              colors={streak > 0 ? ['#EF4444', '#F59E0B'] : ['#9CA3AF', '#D1D5DB']}
+              colors={streak > 0 ? ['#EF4444', '#F59E0B'] : SURFACES.gradient.primary}
               style={styles.streakCircle}
             >
               <Ionicons name="flame" size={32} color="#FFF" />
@@ -386,8 +390,8 @@ export default function PremiumAchievementsCard({
           </View>
 
           <View style={styles.streakTextContainer}>
-            <Text style={[styles.streakValue, { color: textPrimary }]}>{streak}</Text>
-            <Text style={[styles.streakLabel, { color: textSecondary }]}>Day Streak</Text>
+            <Text style={[styles.streakValue, { color: textPrimary }]}>{streakDisplayValue}</Text>
+            <Text style={[styles.streakLabel, { color: textSecondary }]}>{streakLabelText}</Text>
           </View>
 
           {streakFreezes > 0 && (

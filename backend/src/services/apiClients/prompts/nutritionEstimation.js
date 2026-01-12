@@ -56,19 +56,11 @@ OUTPUT SCHEMA:
     "sodium_mg": number
   },
   "micros": {
-    "calcium": number,
-    "iron": number,
-    "magnesium": number,
-    "potassium": number,
-    "zinc": number,
-    "sodium": number,
-    "vitamin_a": number,
-    "vitamin_c": number,
-    "vitamin_d": number,
-    "vitamin_e": number,
-    "vitamin_k": number,
-    "vitamin_b12": number,
-    "folate": number
+    "calcium": number (mg),
+    "iron": number (mg),
+    "magnesium": number (mg),
+    "potassium": number (mg),
+    "sodium": number (mg)
   },
   "isComplex": boolean,
   "components": [
@@ -83,8 +75,8 @@ RULES:
 - Use typical preparation and a common serving if none is provided.
 - Always return a best-guess estimate, even when uncertain; lower confidence accordingly.
 - Prefer plausible, typical estimates over exhaustive accuracy.
+- Only estimate the 5 key minerals (calcium, iron, magnesium, potassium, sodium) - all in mg.
 - Micros are conservative estimates; if uncertain, prefer lower typical values.
-- Use mg for minerals and vitamin C/E, and µg for vitamins A/D/K/B12/folate.
 - servingGrams is approximate; round to a sensible value (e.g., nearest 5g).
 - If the dish is multi-ingredient, set isComplex=true and include components for ALL main ingredients (5-10 items).
 - For regional/ethnic dishes (Indian, Mexican, Thai, etc.), use authentic ingredients typical of that cuisine.

@@ -32,9 +32,13 @@ function IngredientRow({ ingredient, index, totalCalories }) {
   const name = typeof ingredient === 'string'
     ? ingredient
     : ingredient?.name || 'Unknown';
-  const portion = typeof ingredient === 'object'
-    ? ingredient?.portion || ''
-    : '';
+
+  // Handle portion - can be string or object {amount, unit, servingText}
+  const rawPortion = typeof ingredient === 'object' ? ingredient?.portion : '';
+  const portion = typeof rawPortion === 'object'
+    ? rawPortion?.servingText || `${rawPortion?.amount || ''} ${rawPortion?.unit || ''}`.trim()
+    : rawPortion || '';
+
   const calories = typeof ingredient === 'object'
     ? ingredient?.calories || 0
     : 0;

@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   // Menu Container
   menuContainer: {
     position: 'absolute',
-    bottom: SPACING[6] + FAB_SIZE,
+    bottom: SPACING[7] + FAB_SIZE,
     right: SPACING[6],
     alignItems: 'flex-end',
     zIndex: 999,
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   // FAB Container
   fabContainer: {
     position: 'absolute',
-    bottom: SPACING[6],
+    bottom: SPACING[7],
     right: SPACING[6],
     zIndex: 1000,
   },

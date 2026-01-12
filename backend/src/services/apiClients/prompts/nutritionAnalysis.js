@@ -35,14 +35,7 @@ Return JSON:
     "iron": number (mg),
     "magnesium": number (mg),
     "potassium": number (mg),
-    "zinc": number (mg),
-    "vitamin_a": number (µg),
-    "vitamin_c": number (mg),
-    "vitamin_d": number (µg),
-    "vitamin_e": number (mg),
-    "vitamin_k": number (µg),
-    "vitamin_b12": number (µg),
-    "folate": number (µg)
+    "sodium": number (mg)
   },
   "ingredients": [
     {

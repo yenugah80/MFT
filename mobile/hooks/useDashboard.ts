@@ -11,10 +11,15 @@ import type { DashboardData } from '@/types/api';
  * React Query requires queryFn to always return a value (not undefined)
  */
 const fetchDashboard = async (): Promise<DashboardData> => {
-  const data = await apiClient.get('/nutrition/dashboard');
+  const response = await apiClient.get('/nutrition/dashboard');
+  const data = response?.data ?? response;
   // Ensure we never return undefined - React Query will throw an error
   if (data === undefined || data === null) {
     throw new Error('Dashboard returned no data');
+  }
+  if (__DEV__) {
+    console.log('[Dashboard] gamification.streak:', data?.gamification?.streak);
+    console.log('[Dashboard] trends.currentStreak:', data?.trends?.currentStreak);
   }
   return data;
 };

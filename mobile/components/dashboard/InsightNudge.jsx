@@ -74,14 +74,6 @@ export default function InsightNudge({
             text: textPrimary,
             actionText: '#4ADE80',
           };
-        case 'warning':
-          return {
-            bg: 'rgba(251, 191, 36, 0.15)',
-            border: 'rgba(251, 191, 36, 0.25)',
-            icon: '#FBBF24',
-            text: textPrimary,
-            actionText: '#FBBF24',
-          };
         default:
           return {
             bg: 'rgba(255, 255, 255, 0.08)',
@@ -117,14 +109,6 @@ export default function InsightNudge({
             icon: '#22C55E',
             text: textSecondary,
             actionText: '#22C55E',
-          };
-        case 'warning':
-          return {
-            bg: 'rgba(245, 158, 11, 0.08)',
-            border: 'rgba(245, 158, 11, 0.15)',
-            icon: '#F59E0B',
-            text: textSecondary,
-            actionText: '#F59E0B',
           };
         default:
           return {

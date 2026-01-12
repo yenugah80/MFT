@@ -9,7 +9,7 @@ const fonts = {
   regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
 };
 
-export function FoodItemsList({ items, onUpdateQuantity, onRemove }) {
+export function FoodItemsList({ items, onUpdateQuantity, onRemove, onRemoveIngredient }) {
 
   // 🔍 Debug: Log items to detect duplicates
   console.log('[FoodItemsList] Rendering', items?.length, 'items');
@@ -62,6 +62,7 @@ export function FoodItemsList({ items, onUpdateQuantity, onRemove }) {
           item={item}
           onUpdateQuantity={(itemId, amount, unit) => onUpdateQuantity(itemId, amount, unit)}
           onRemove={() => onRemove(item.itemId)}
+          onRemoveIngredient={onRemoveIngredient}
         />
       ))}
     </View>

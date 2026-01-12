@@ -52,6 +52,12 @@ function setInCache(key, data) {
   });
 }
 
+/**
+ * Key micronutrients to focus on for initial version
+ * These 5 are the most commonly tracked and clinically relevant
+ */
+export const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium'];
+
 // Micronutrients definition with daily values (FDA/NIH standards)
 export const MICRONUTRIENTS = {
   // Fat-soluble vitamins
@@ -98,7 +104,8 @@ export async function estimateMicronutrients(foodName, portion, macros) {
     // Check if already cached
     const cached = getFromCache(cacheKey);
     if (cached) {
-      return cached;
+      // Filter to key micronutrients for initial version
+      return filterToKeyMicronutrients(cached);
     }
 
     // Skip USDA if we know it wasn't found before
@@ -107,7 +114,8 @@ export async function estimateMicronutrients(foodName, portion, macros) {
       usdaData = await tryUSDAEstimation(foodName, portion);
       if (usdaData && Object.keys(usdaData).length > 0) {
         setInCache(cacheKey, usdaData);
-        return usdaData;
+        // Filter to key micronutrients for initial version
+        return filterToKeyMicronutrients(usdaData);
       }
     }
 
@@ -116,7 +124,8 @@ export async function estimateMicronutrients(foodName, portion, macros) {
     if (aiData && Object.keys(aiData).length > 0) {
       setInCache(cacheKey, aiData);
     }
-    return aiData;
+    // Filter to key micronutrients for initial version
+    return filterToKeyMicronutrients(aiData);
   } catch (error) {
     logError('[MicronutrientService]', error, `estimating micronutrients for "${foodName}"`, true);
     // Return empty object on error - better to have partial data than fail
@@ -203,26 +212,30 @@ async function tryUSDAEstimation(foodName, portion) {
  */
 async function tryAIEstimation(foodName, portion, macros) {
   try {
-    const prompt = `You are a nutrition expert. Estimate the micronutrient content for the following food:
+    // Only request the 5 key micronutrients for initial version
+    const prompt = `You are a nutrition expert. Estimate the KEY MINERAL content for the following food:
 
 Food: ${foodName}
 Portion: ${portion}
 Macronutrients: ${macros.calories} kcal, ${macros.protein}g protein, ${macros.carbs}g carbs, ${macros.fats}g fat
 
-Provide realistic estimates for these micronutrients. Use standard units:
-- Vitamins in: A (µg), C/E (mg), D/K (µg), B-vitamins (mg)
-- Minerals in: mg except iodine/selenium (µg)
+Provide realistic estimates for ONLY these 5 key minerals (all in mg):
+- calcium
+- iron
+- magnesium
+- potassium
+- sodium
 
-Return ONLY valid JSON with nutrient names as keys and numeric values. Example:
+Return ONLY valid JSON with these exact keys and numeric values in mg. Example:
 {
-  "vitaminA": 500,
-  "vitaminC": 45,
   "calcium": 300,
   "iron": 2.5,
-  "zinc": 1.2
+  "magnesium": 40,
+  "potassium": 350,
+  "sodium": 150
 }
 
-Only include nutrients where you have reasonable confidence.`;
+Only include minerals where you have reasonable confidence.`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -353,4 +366,22 @@ export function getRecommendedMicros(foodCategory) {
   };
 
   return recommendations[foodCategory] || [];
+}
+
+/**
+ * Filter micronutrients to only include the 5 key ones for initial version
+ * @param {object} micros - Full micronutrient object
+ * @returns {object} Filtered micronutrient object with only key minerals
+ */
+export function filterToKeyMicronutrients(micros) {
+  if (!micros || typeof micros !== 'object') return {};
+
+  const filtered = {};
+  for (const key of KEY_MICRONUTRIENTS) {
+    if (micros[key] !== undefined && micros[key] !== null) {
+      filtered[key] = micros[key];
+    }
+  }
+
+  return filtered;
 }

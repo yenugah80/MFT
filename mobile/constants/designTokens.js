@@ -21,12 +21,12 @@ export const COLORS = {
     overlay: 'rgba(15, 23, 42, 0.85)',
   },
 
-  // Text hierarchy
+  // Text hierarchy - warm tones for playful, encouraging feel
   text: {
-    primary: '#f8fafc',     // Almost white
-    secondary: '#cbd5e1',   // Light slate
-    tertiary: '#94a3b8',    // Medium slate
-    muted: '#64748b',       // Dark slate
+    primary: '#faf8f7',     // Warm white
+    secondary: '#e0d8d3',   // Warm light
+    tertiary: '#a9a099',    // Warm stone
+    muted: '#78716c',       // Warm muted
   },
 
   // Semantic colors for data states
@@ -49,10 +49,10 @@ export const COLORS = {
     overLight: '#f87171',
     overGlow: 'rgba(239, 68, 68, 0.3)',
 
-    // Neutral / no data
-    neutral: '#64748b',     // Slate
-    neutralLight: '#94a3b8',
-    neutralGlow: 'rgba(100, 116, 139, 0.2)',
+    // Neutral / no data - warm tones
+    neutral: '#78716c',     // Warm stone (friendly)
+    neutralLight: '#a9a099',
+    neutralGlow: 'rgba(120, 113, 108, 0.2)',
 
     // Info / contextual
     info: '#3b82f6',        // Blue
@@ -88,7 +88,7 @@ export const COLORS = {
     success: ['#10b981', '#34d399'],
     warning: ['#f59e0b', '#fbbf24'],
     danger: ['#ef4444', '#f87171'],
-    neutral: ['#64748b', '#94a3b8'],
+    neutral: ['#78716c', '#a9a099'],  // Warm stone gradient
   },
 };
 

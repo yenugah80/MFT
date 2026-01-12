@@ -37,6 +37,11 @@ function getHealthScoreColor(score) {
 }
 
 /**
+ * Key micronutrients to display (simplified for initial version)
+ */
+const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium'];
+
+/**
  * Validate macro-calorie consistency
  * Formula: Calories = (Protein × 4) + (Carbs × 4) + (Fat × 9)
  */
@@ -333,7 +338,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
           ) : null}
         </View>
 
-        {/* Micronutrients */}
+        {/* Micronutrients - Limited to 5 key ones */}
         {micronutrients.length > 0 && (
           <View style={styles.section}>
             <TouchableOpacity
@@ -341,7 +346,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
               onPress={() => setShowMicros(!showMicros)}
             >
               <View style={styles.sectionHeaderLeft}>
-                <Text style={styles.sectionTitle}>Micronutrients</Text>
+                <Text style={styles.sectionTitle}>Key Minerals</Text>
                 <Text style={styles.estimatedLabel}>Estimated</Text>
               </View>
               <Text style={styles.toggleIcon}>{showMicros ? '▼' : '▶'}</Text>
@@ -349,15 +354,17 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
 
             {showMicros && (
               <View style={styles.microsContainer}>
-                {micronutrients.map((micro, idx) => (
-                  <MicroBar
-                    key={idx}
-                    name={micro.name}
-                    amount={micro.amount}
-                    unit={micro.unit}
-                    percentage={micro.percentageOfDailyNeeds}
-                  />
-                ))}
+                {micronutrients
+                  .filter(micro => KEY_MICRONUTRIENTS.includes(micro.name?.toLowerCase()))
+                  .map((micro, idx) => (
+                    <MicroBar
+                      key={idx}
+                      name={micro.name}
+                      amount={micro.amount}
+                      unit={micro.unit}
+                      percentage={micro.percentageOfDailyNeeds}
+                    />
+                  ))}
               </View>
             )}
           </View>

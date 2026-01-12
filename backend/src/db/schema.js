@@ -861,3 +861,104 @@ export const aiEstimatedFoodsTable = pgTable(
     sourceQueryUnique: unique("ai_foods_source_query_unique").on(table.sourceQuery),
   })
 );
+
+// ========================================
+// CORRELATION ENGINE TABLES
+// ========================================
+
+// User correlations - stores discovered patterns between signals
+export const userCorrelationsTable = pgTable(
+  "user_correlations",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Correlation metadata
+    correlationType: text("correlation_type").notNull(), // 'mood_food', 'stress_eating', 'hydration_mood', 'activity_recovery', 'meal_timing_sleep'
+    ruleName: text("rule_name").notNull(), // 'high_nova_mood_crash', 'stress_meal_skipping', etc.
+
+    // Signal pair
+    signalA: text("signal_a").notNull(), // e.g., 'high_nova_carbs'
+    signalAValue: decimal("signal_a_value", { precision: 10, scale: 2 }), // e.g., 45 (grams)
+    signalAUnit: text("signal_a_unit"), // 'grams', 'intensity', 'liters', etc.
+    signalB: text("signal_b").notNull(), // e.g., 'mood_drop'
+    signalBValue: decimal("signal_b_value", { precision: 10, scale: 2 }), // e.g., -3 (points)
+    signalBUnit: text("signal_b_unit"), // 'points', 'level', 'hours', etc.
+
+    // Timing
+    windowType: text("window_type").notNull(), // '4h', '24h', '7d', '15d', '30d', '60d'
+    timeLagMinutes: integer("time_lag_minutes"), // Typically 120-180 for food-mood
+
+    // Scoring
+    strength: decimal("strength", { precision: 3, scale: 2 }).notNull(), // 0.0-1.0
+    confidence: decimal("confidence", { precision: 3, scale: 2 }).notNull(), // 0.0-1.0
+    occurrences: integer("occurrences").notNull().default(0), // Count of pattern observations
+
+    // Health impact
+    healthImpactSeverity: text("health_impact_severity"), // 'high', 'moderate', 'low', 'positive', 'neutral'
+    affectedDomains: json("affected_domains").default([]), // ['mood', 'energy', 'sleep']
+    expectedOutcome: text("expected_outcome"), // Plain language description
+
+    // Metadata
+    evidenceJson: json("evidence_json"), // Full evidence data for detail views
+    lastObservedDate: text("last_observed_date"), // YYYY-MM-DD
+    firstObservedDate: text("first_observed_date"), // YYYY-MM-DD
+    isActive: boolean("is_active").default(true), // Is pattern still valid?
+
+    // Audit
+    computedAt: timestamp("computed_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    // Unique constraint: one rule per user per window type
+    userRuleWindowUnique: unique("user_corr_user_rule_window_unique").on(
+      table.userId,
+      table.correlationType,
+      table.ruleName,
+      table.windowType
+    ),
+    // Indexes for performance
+    userActiveIdx: index("user_corr_user_active_idx").on(table.userId, table.isActive),
+    userConfidenceIdx: index("user_corr_user_confidence_idx").on(table.userId, table.confidence),
+    correlationTypeIdx: index("user_corr_type_idx").on(table.correlationType),
+    severityIdx: index("user_corr_severity_idx").on(table.healthImpactSeverity),
+  })
+);
+
+// Correlation evidence - individual data points that support correlations
+export const correlationEvidenceTable = pgTable(
+  "correlation_evidence",
+  {
+    id: serial("id").primaryKey(),
+    correlationId: integer("correlation_id")
+      .notNull()
+      .references(() => userCorrelationsTable.id, { onDelete: "cascade" }),
+
+    // Evidence point linking
+    observationDate: text("observation_date"), // YYYY-MM-DD
+    foodLogId: integer("food_log_id").references(() => foodLogTable.id, { onDelete: "set null" }),
+    moodLogId: integer("mood_log_id").references(() => moodLogTable.id, { onDelete: "set null" }),
+    waterLogId: integer("water_log_id").references(() => waterLogTable.id, { onDelete: "set null" }),
+
+    // Raw signal values
+    signalAActual: decimal("signal_a_actual", { precision: 10, scale: 2 }),
+    signalBActual: decimal("signal_b_actual", { precision: 10, scale: 2 }),
+
+    // Context at observation time (JSON for flexibility)
+    tagsJson: json("tags_json"), // { sleep: 'good', exercise: 'moderate', stress: 'high', weather: 'sunny' }
+
+    // Timing context
+    hourOfDay: integer("hour_of_day"), // 0-23
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    // Indexes for querying evidence
+    correlationIdx: index("corr_evidence_correlation_idx").on(table.correlationId),
+    dateIdx: index("corr_evidence_date_idx").on(table.observationDate),
+  })
+);

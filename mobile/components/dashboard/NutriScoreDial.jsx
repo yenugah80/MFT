@@ -196,15 +196,17 @@ const NUTRI_SCORE_GRADES = [
 
 /**
  * NutriScore component - Official A-E grade display with historical trends
+ * Compact mode: Visual-only (no header, numeric score, or trends)
  */
-export default function NutriScoreDial({ data, showNumericScore = true, showTrends = true, compact = false }) {
+export default function NutriScoreDial({ data, showNumericScore = true, showTrends = true, compact = false, grade }) {
   const { colors, isDark } = useTheme();
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
   const textTertiary = colors.text.tertiary;
 
-  const { score, message, historical } = calculateNutriScore(data);
-  const currentGrade = scoreToGrade(score);
+  // If grade is passed directly, use it; otherwise calculate from data
+  const { score, message, historical } = data ? calculateNutriScore(data) : { score: 0, message: '', historical: null };
+  const currentGrade = grade || scoreToGrade(score);
   const avg7DayGrade = historical ? scoreToGrade(historical.avg7Day) : null;
 
   return (
@@ -212,10 +214,10 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
       style={[styles.container, compact && styles.containerCompact]}
       accessible={true}
       accessibilityRole="text"
-      accessibilityLabel={`Nutrition grade: ${currentGrade}. Score: ${score} out of 100. ${message}`}
+      accessibilityLabel={`Nutrition grade: ${currentGrade}.${score ? ` Score: ${score} out of 100. ${message}` : ''}`}
       accessibilityHint="Your daily nutrition quality based on calories, protein, hydration, and meal consistency"
     >
-      {/* Header */}
+      {/* Header - NOT shown in compact mode */}
       {!compact && (
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -250,8 +252,8 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
         </View>
       )}
 
-      {/* A-E Grade Bar */}
-      <View style={styles.gradeBar}>
+      {/* A-E Grade Bar - Main visual element */}
+      <View style={[styles.gradeBar, compact && styles.gradeBarCompact]}>
         {NUTRI_SCORE_GRADES.map((grade, index) => {
           const isActive = grade.letter === currentGrade;
           const isLeftEdge = index === 0;
@@ -262,6 +264,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
               key={grade.letter}
               style={[
                 styles.gradeBlock,
+                compact && styles.gradeBlockCompact,
                 {
                   backgroundColor: isActive ? grade.bgColor : `${grade.bgColor}30`,
                   borderTopLeftRadius: isLeftEdge ? 12 : 0,
@@ -269,12 +272,13 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
                   borderTopRightRadius: isRightEdge ? 12 : 0,
                   borderBottomRightRadius: isRightEdge ? 12 : 0,
                 },
-                isActive && styles.gradeBlockActive,
+                isActive && [styles.gradeBlockActive, compact && styles.gradeBlockActiveCompact],
               ]}
             >
               <Text
                 style={[
                   styles.gradeLetter,
+                  compact && styles.gradeLetterCompact,
                   { color: isActive ? '#FFFFFF' : `${grade.color}80` },
                   isActive && styles.gradeLetterActive,
                 ]}
@@ -286,7 +290,12 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
         })}
       </View>
 
-      {/* Historical Comparison */}
+      {/* Micro text - Only in compact mode */}
+      {compact && (
+        <Text style={[styles.compactFooter, { color: textTertiary }]}>Based on today's meals</Text>
+      )}
+
+      {/* Historical Comparison - NOT shown in compact mode */}
       {!compact && historical && showTrends && (
         <View style={styles.historicalBar}>
           <Text style={[styles.historicalLabel, { color: textTertiary }]}>7-day avg: {avg7DayGrade}</Text>
@@ -309,7 +318,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
         </View>
       )}
 
-      {/* Message */}
+      {/* Message - NOT shown in compact mode */}
       {!compact && message && (
         <Text style={[styles.message, { color: textTertiary }]}>{message}</Text>
       )}
@@ -377,6 +386,10 @@ const styles = StyleSheet.create({
     height: 56,
     gap: 4,
   },
+  gradeBarCompact: {
+    height: 48,
+    gap: 2,
+  },
   gradeBlock: {
     flex: 1,
     justifyContent: 'center',
@@ -384,6 +397,9 @@ const styles = StyleSheet.create({
     opacity: 0.4,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  gradeBlockCompact: {
+    height: 48,
   },
   gradeBlockActive: {
     opacity: 1,
@@ -396,10 +412,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(0, 0, 0, 0.15)',
   },
+  gradeBlockActiveCompact: {
+    transform: [{ scale: 1.02 }],
+    shadowOpacity: 0.1,
+  },
   gradeLetter: {
     fontSize: TYPOGRAPHY.size['3xl'],
     fontWeight: TYPOGRAPHY.weight.black,
     letterSpacing: TYPOGRAPHY.letterSpacing.tight,
+  },
+  gradeLetterCompact: {
+    fontSize: TYPOGRAPHY.size.xl,
   },
   gradeLetterActive: {
     fontSize: TYPOGRAPHY.size['4xl'],
@@ -432,5 +455,10 @@ const styles = StyleSheet.create({
     // color applied inline for theme support
     marginTop: SPACING[2],
     textAlign: 'center',
+  },
+  compactFooter: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    marginTop: SPACING[1],
   },
 });

@@ -30,6 +30,7 @@ import {
   SHADOWS,
   ICON_SIZES,
   MOOD_PALETTE,
+  BRAND,
   TEXT,
 } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
@@ -127,6 +128,7 @@ const EnhancedMoodCard = ({
   insights,
   loading = false,
   wellnessScore = null,
+  showWellnessScore = true,
   onOpenInsights,
 }) => {
   const { colors, isDark } = useTheme();
@@ -255,39 +257,28 @@ const EnhancedMoodCard = ({
         </View>
       </View>
 
-      {/* Wellness Score Section */}
-      {wellnessScore !== null && wellnessScore?.score != null && (
+      {/* Wellness Score Section - Redesigned for simplicity */}
+      {showWellnessScore && wellnessScore !== null && wellnessScore?.score != null && (
         <TouchableOpacity
           style={[styles.wellnessSection, { backgroundColor: sectionBg, borderColor: isDark ? 'rgba(107, 78, 255, 0.25)' : 'rgba(107, 78, 255, 0.15)' }]}
           onPress={onOpenInsights}
           activeOpacity={0.8}
         >
-          <View style={styles.wellnessLeft}>
-            <WellnessScoreRing score={wellnessScore.score || 0} />
-          </View>
-          <View style={styles.wellnessRight}>
-            <View style={styles.wellnessHeader}>
-              <Text style={[styles.wellnessTitle, { color: textPrimary }]}>Wellness Score</Text>
-              <View style={[styles.wellnessTier, { backgroundColor: getWellnessColor(wellnessScore.score) + '20' }]}>
-                <Text style={[styles.wellnessTierText, { color: getWellnessColor(wellnessScore.score) }]}>
-                  {getWellnessTier(wellnessScore.score)}
-                </Text>
+          <View style={styles.wellnessContent}>
+            <View style={styles.wellnessScoreSection}>
+              <WellnessScoreRing score={wellnessScore.score || 0} size={48} strokeWidth={4} />
+              <View style={styles.wellnessMeta}>
+                <Text style={[styles.wellnessScore, { color: textPrimary }]}>Wellness</Text>
+                <View style={[styles.wellnessTier, { backgroundColor: getWellnessColor(wellnessScore.score) + '20' }]}>
+                  <Text style={[styles.wellnessTierText, { color: getWellnessColor(wellnessScore.score) }]}>
+                    {getWellnessTier(wellnessScore.score)}
+                  </Text>
+                </View>
               </View>
             </View>
-            <View style={styles.wellnessBreakdown}>
-              <View style={styles.wellnessMetric}>
-                <View style={[styles.wellnessDot, { backgroundColor: '#10B981' }]} />
-                <Text style={[styles.wellnessMetricText, { color: textTertiary }]}>Food {wellnessScore.breakdown?.nutrition || 0}%</Text>
-              </View>
-              <View style={styles.wellnessMetric}>
-                <View style={[styles.wellnessDot, { backgroundColor: '#3B82F6' }]} />
-                <Text style={[styles.wellnessMetricText, { color: textTertiary }]}>Water {wellnessScore.breakdown?.hydration || 0}%</Text>
-              </View>
-              <View style={styles.wellnessMetric}>
-                <View style={[styles.wellnessDot, { backgroundColor: '#F59E0B' }]} />
-                <Text style={[styles.wellnessMetricText, { color: textTertiary }]}>Mood {wellnessScore.breakdown?.mood || 0}%</Text>
-              </View>
-            </View>
+            <Text style={[styles.wellnessDescription, { color: textTertiary }]}>
+              Tap to view detailed breakdown
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={textMuted} />
         </TouchableOpacity>
@@ -556,17 +547,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[3],
   },
-  wellnessLeft: {},
-  wellnessRight: {
+  wellnessContent: {
     flex: 1,
+    gap: SPACING[2],
   },
-  wellnessHeader: {
+  wellnessScoreSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[1],
+    gap: SPACING[3],
   },
-  wellnessTitle: {
+  wellnessMeta: {
+    flex: 1,
+    gap: SPACING[1],
+  },
+  wellnessScore: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
@@ -575,26 +569,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[2],
     paddingVertical: 2,
     borderRadius: RADIUS.full,
+    alignSelf: 'flex-start',
   },
   wellnessTierText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
   },
-  wellnessBreakdown: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-  },
-  wellnessMetric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  wellnessDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  wellnessMetricText: {
+  wellnessDescription: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
   },

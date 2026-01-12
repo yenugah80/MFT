@@ -1615,6 +1615,72 @@ export function useFoodAnalysis() {
   }, []);
 
   /**
+   * Remove ingredient from a food item and recalculate macros
+   * @param {string} itemId - Parent item ID
+   * @param {number} ingredientIndex - Index of ingredient to remove
+   */
+  const removeIngredient = useCallback((itemId, ingredientIndex) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+
+      const updatedItems = prev.items.map(item => {
+        if (item.itemId !== itemId) return item;
+
+        // Get current ingredients array
+        const ingredients = item.ingredients || item.components || [];
+        if (ingredientIndex < 0 || ingredientIndex >= ingredients.length) {
+          console.warn(`[useFoodAnalysis] Invalid ingredient index: ${ingredientIndex}`);
+          return item;
+        }
+
+        // Get the ingredient being removed
+        const removedIngredient = ingredients[ingredientIndex];
+
+        // Calculate the macros to subtract
+        const removedMacros = {
+          calories_kcal: removedIngredient.calories || removedIngredient.calories_kcal || removedIngredient.macros?.calories_kcal || 0,
+          protein_g: removedIngredient.protein || removedIngredient.protein_g || removedIngredient.macros?.protein_g || 0,
+          carbs_g: removedIngredient.carbs || removedIngredient.carbs_g || removedIngredient.macros?.carbs_g || 0,
+          fat_g: removedIngredient.fat || removedIngredient.fat_g || removedIngredient.macros?.fat_g || 0,
+          fiber_g: removedIngredient.fiber || removedIngredient.fiber_g || removedIngredient.macros?.fiber_g || 0,
+          sugar_g: removedIngredient.sugar || removedIngredient.sugar_g || removedIngredient.macros?.sugar_g || 0,
+          sodium_mg: removedIngredient.sodium || removedIngredient.sodium_mg || removedIngredient.macros?.sodium_mg || 0,
+        };
+
+        // Create new ingredients array without the removed item
+        const newIngredients = [...ingredients];
+        newIngredients.splice(ingredientIndex, 1);
+
+        // Update the item's macros by subtracting the removed ingredient
+        const updatedMacros = {
+          calories_kcal: Math.max(0, (item.macros?.calories_kcal || 0) - removedMacros.calories_kcal),
+          protein_g: Math.max(0, (item.macros?.protein_g || 0) - removedMacros.protein_g),
+          carbs_g: Math.max(0, (item.macros?.carbs_g || 0) - removedMacros.carbs_g),
+          fat_g: Math.max(0, (item.macros?.fat_g || 0) - removedMacros.fat_g),
+          fiber_g: Math.max(0, (item.macros?.fiber_g || 0) - removedMacros.fiber_g),
+          sugar_g: Math.max(0, (item.macros?.sugar_g || 0) - removedMacros.sugar_g),
+          sodium_mg: Math.max(0, (item.macros?.sodium_mg || 0) - removedMacros.sodium_mg),
+        };
+
+        console.log(`[useFoodAnalysis] Removed ingredient "${removedIngredient.name || 'Unknown'}" from "${item.name}"`);
+
+        return {
+          ...item,
+          ingredients: item.ingredients ? newIngredients : undefined,
+          components: item.components ? newIngredients : undefined,
+          macros: updatedMacros,
+        };
+      });
+
+      return {
+        ...prev,
+        items: updatedItems,
+        totals: calculateTotals(updatedItems),
+      };
+    });
+  }, []);
+
+  /**
    * Trigger manual analysis
    */
   const runAnalysis = useCallback(async () => {
@@ -1791,6 +1857,7 @@ export function useFoodAnalysis() {
     // Multi-item methods
     updateItemQuantity,
     removeItem,
+    removeIngredient,
     runAnalysis,
 
     // Shared state

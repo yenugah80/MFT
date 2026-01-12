@@ -35,6 +35,13 @@ import consentRouter from "./routes/consent.js";
 import voiceLogRouter from "./routes/voiceLog.js";
 import hydrationAnalyticsRouter from "./routes/hydrationAnalytics.js";
 import flagsRouter from "./routes/flags.js";
+import insightsRouter from "./routes/insights.js";
+import outcomesRouter from "./routes/outcomes.js";
+import correlationsRouter from "./routes/correlations.js";
+import orchestratorRouter from "./routes/orchestrator.js";
+import resolverRouterNew from "./routes/resolver.js";
+import learningRouter from "./routes/learning.js";
+import expiryRouter from "./routes/expiry.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 
@@ -253,6 +260,27 @@ app.use("/api/hydration/analytics", hydrationAnalyticsRouter);
 
 // Mount Feature Flags Router (Progressive Rollout)
 app.use("/api/flags", flagsRouter);
+
+// Mount Insights Router (Premium Intelligence - 5W2H System)
+app.use("/api/insights", insightsRouter);
+
+// Mount Outcomes Router (Recommendation Effectiveness Tracking)
+app.use("/api/outcomes", outcomesRouter);
+
+// Mount Correlations Router (Behavioral Pattern Detection)
+app.use("/api/correlations", correlationsRouter);
+
+// Mount Orchestrator Router (Daily Decision Pipeline)
+app.use("/api/orchestrator", orchestratorRouter);
+
+// Mount Resolver Router (Intent → Foods mapping)
+app.use("/api/resolver", resolverRouterNew);
+
+// Mount Learning Router (Learning state & readiness)
+app.use("/api/learning", learningRouter);
+
+// Mount Expiry Router (Recommendation lifecycle management)
+app.use("/api/expiry", expiryRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

@@ -1,28 +1,20 @@
 /**
- * DashboardWellnessSection - Premium Staff-Level Wellness Tracking
+ * DashboardWellnessSection - Clean, focused wellness tracking
  *
- * Design Philosophy:
- * - Hydration: Premium insights card with smart recommendations
+ * Staff Design Principles:
+ * - Hydration: Quick water logging
  * - Activity: Daily movement summary
- * - Mood: Wellness insights with score
- * - Progressive disclosure pattern
- * - Visual storytelling with data
- *
- * V2 Features (behind HYDRATION_V2_DASHBOARD flag):
- * - Calm luxury design (Oura Ring aesthetic)
- * - 1-tap water logging
- * - Cold start progressive disclosure
- * - Predictive hydration intelligence
+ * - Enhanced Mood Card with Wellness Score integration
  */
 
-import React, { useCallback } from 'react';
-import { View } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import CollapsibleSection from './CollapsibleSection';
-import HydrationInsightsCard from './HydrationInsightsCard';
-import HydrationInsightsCardV2 from './HydrationInsightsCardV2';
+import HydrationWellnessDashboard from './HydrationWellnessDashboard';
 import ActivitySummaryCard from './ActivitySummaryCard';
 import EnhancedMoodCard from './EnhancedMoodCard';
-import { useFeatureFlag, FLAG_NAMES } from '../../hooks/useFeatureFlags';
+import { TEXT, SPACING, RADIUS, BRAND } from '../../constants/premiumTheme';
 
 export default function DashboardWellnessSection({
   styles,
@@ -30,33 +22,17 @@ export default function DashboardWellnessSection({
   onToggle,
   today,
   goals,
+  gamification,
+  hydrationEvents,
+  hydrationLastLoggedAt,
+  hydrationCelebratedKey,
+  onCelebrateHydration,
   onOpenMoodInsights,
-  onOpenHydrationInsights,
   onOpenHydrationTracker,
-  onQuickAddWater,
-  onOpenBeveragePicker,
   moodInsights,
   moodInsightsLoading,
   wellnessScore,
-  waterLogs = [],
-  hydrationWeekData = [],
-  hydrationStreak = 0,
-  // V2 props
-  hydrationAnalytics = null,
 }) {
-  // Feature flag for V2 hydration card
-  const { enabled: useV2Card } = useFeatureFlag(FLAG_NAMES.HYDRATION_V2_DASHBOARD);
-
-  // Extract cold start and prediction data from analytics
-  const coldStartStage = hydrationAnalytics?.coldStart?.stage || 'established';
-  const daysWithData = hydrationAnalytics?.coldStart?.distinctDays || 7;
-  const prediction = hydrationAnalytics?.prediction || null;
-
-  // Handler to explain prediction (opens tracker with explanation modal)
-  const handleExplainPrediction = useCallback(() => {
-    onOpenHydrationTracker?.({ showPredictionExplanation: true });
-  }, [onOpenHydrationTracker]);
-
   return (
     <CollapsibleSection
       styles={styles}
@@ -66,31 +42,18 @@ export default function DashboardWellnessSection({
       onToggle={onToggle}
     >
       <View style={styles.wellnessStack}>
-        {/* Hydration Card - V1 or V2 based on feature flag */}
-        {useV2Card ? (
-          <HydrationInsightsCardV2
-            currentIntake={today?.waterIntakeLiters || 0}
-            dailyGoal={goals?.waterLiters || 2.0}
-            coldStartStage={coldStartStage}
-            daysWithData={daysWithData}
-            prediction={prediction}
-            onQuickAdd={onQuickAddWater}
-            onOpenBeveragePicker={onOpenBeveragePicker}
-            onExplainPrediction={handleExplainPrediction}
-            onOpenTracker={onOpenHydrationTracker}
-            onOpenInsights={onOpenHydrationInsights}
-          />
-        ) : (
-          <HydrationInsightsCard
-            currentIntake={today?.waterIntakeLiters || 0}
-            dailyGoal={goals?.waterLiters || 2.0}
-            logs={waterLogs}
-            weekData={hydrationWeekData}
-            streak={hydrationStreak}
-            onQuickAdd={onQuickAddWater}
-            onOpenTracker={onOpenHydrationTracker}
-          />
-        )}
+        {/* Hydration Tracker */}
+        <HydrationWellnessDashboard
+          currentIntake={today?.waterIntakeLiters || 0}
+          dailyGoal={goals?.waterLiters || 2.0}
+          streak={gamification?.streak || 0}
+          intakeEvents={hydrationEvents}
+          lastLoggedAt={hydrationLastLoggedAt}
+          celebratedTodayKey={hydrationCelebratedKey}
+          onCelebrate={onCelebrateHydration}
+          onOpenFullTracker={onOpenHydrationTracker}
+          compact={true}
+        />
 
         <View style={styles.wellnessDivider} />
 
@@ -105,8 +68,31 @@ export default function DashboardWellnessSection({
           loading={moodInsightsLoading}
           wellnessScore={wellnessScore}
           onOpenInsights={onOpenMoodInsights}
+          showWellnessScore={false}
         />
       </View>
     </CollapsibleSection>
   );
 }
+
+const localStyles = StyleSheet.create({
+  insightsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: `${BRAND.primary}08`,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: `${BRAND.primary}15`,
+  },
+  insightsText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: TEXT.secondary,
+  },
+});

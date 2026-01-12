@@ -10,7 +10,9 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
+  Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 /**
  * Unit picker options
@@ -18,9 +20,15 @@ import {
 const UNITS = ['g', 'kg', 'oz', 'lb', 'ml', 'l', 'cup', 'tbsp', 'tsp', 'serving'];
 
 /**
+ * Key micronutrients to display (simplified for initial version)
+ * These are the most commonly tracked and clinically relevant
+ */
+const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium'];
+
+/**
  * FoodItemCard Component
  */
-export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
+export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredient }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [editingQuantity, setEditingQuantity] = useState(false);
   const [amount, setAmount] = useState(item.portion?.amount?.toString() || '1');
@@ -42,6 +50,12 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
     setEditingQuantity(false);
   };
 
+  const handleRemoveIngredient = (ingredientIndex) => {
+    if (onRemoveIngredient) {
+      onRemoveIngredient(item.itemId, ingredientIndex);
+    }
+  };
+
   // Get confidence color
   const confidence = item.sourceEvidence?.[0]?.confidence || 0.5;
   const confidenceColor = confidence >= 0.7 ? '#10B981' : confidence >= 0.5 ? '#F59E0B' : '#EF4444';
@@ -56,10 +70,12 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
         <TouchableOpacity
           onPress={onRemove}
           style={styles.removeButton}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessible
           accessibilityLabel="Remove item"
         >
-          <Text style={styles.removeButtonText}>✕</Text>
+          <Ionicons name="close" size={16} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
 
@@ -224,10 +240,24 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
               <Text style={styles.componentNameCompact}>
                 • {ingredient.name || ingredient.foodName || ingredient}
               </Text>
-              <Text style={styles.componentCaloriesCompact}>
-                {ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal || ''}
-                {(ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal) ? ' cal' : ''}
-              </Text>
+              <View style={styles.componentRightSection}>
+                <Text style={styles.componentCaloriesCompact}>
+                  {ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal || ''}
+                  {(ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal) ? ' cal' : ''}
+                </Text>
+                {onRemoveIngredient && (
+                  <TouchableOpacity
+                    onPress={() => handleRemoveIngredient(index)}
+                    style={styles.ingredientRemoveButton}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessible
+                    accessibilityLabel={`Remove ${ingredient.name || ingredient.foodName || 'ingredient'}`}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ))}
           {(item.components || item.ingredients || []).length > 3 && (
@@ -273,7 +303,11 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
               {(item.components || item.ingredients || []).map((ingredient, index) => {
                 // Handle different ingredient data structures
                 const name = ingredient.name || ingredient.foodName || (typeof ingredient === 'string' ? ingredient : 'Unknown');
-                const portion = ingredient.portion || ingredient.servingSize || '';
+                // Handle portion - can be string or object {amount, unit, servingText}
+                const rawPortion = ingredient.portion || ingredient.servingSize || '';
+                const portion = typeof rawPortion === 'object'
+                  ? rawPortion?.servingText || `${rawPortion?.amount || ''} ${rawPortion?.unit || ''}`.trim()
+                  : rawPortion || '';
                 const calories = ingredient.calories || ingredient.calories_kcal || ingredient.macros?.calories_kcal || 0;
                 const protein = ingredient.protein || ingredient.protein_g || ingredient.macros?.protein_g || 0;
                 const carbs = ingredient.carbs || ingredient.carbs_g || ingredient.macros?.carbs_g || 0;
@@ -285,11 +319,27 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
                       <Text style={styles.componentName}>{name}</Text>
                       <Text style={styles.componentPortion}>{portion}</Text>
                     </View>
-                    <View style={styles.componentMacros}>
-                      <Text style={styles.componentCalories}>{Math.round(calories)} cal</Text>
-                      <Text style={styles.componentMacroText}>
-                        P:{Math.round(protein)}g C:{Math.round(carbs)}g F:{Math.round(fat)}g
-                      </Text>
+                    <View style={styles.componentMacrosWithDelete}>
+                      <View style={styles.componentMacros}>
+                        <Text style={styles.componentCalories}>{Math.round(calories)} cal</Text>
+                        <Text style={styles.componentMacroText}>
+                          P:{Math.round(protein)}g C:{Math.round(carbs)}g F:{Math.round(fat)}g
+                        </Text>
+                      </View>
+                      {onRemoveIngredient && (
+                        <TouchableOpacity
+                          onPress={() => handleRemoveIngredient(index)}
+                          style={styles.ingredientRemoveButtonLarge}
+                          activeOpacity={0.6}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          accessible
+                          accessibilityLabel={`Remove ${name}`}
+                        >
+                          <View style={styles.removeButtonInner}>
+                            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                          </View>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -315,28 +365,30 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove }) {
             </View>
           </View>
 
-          {/* Micronutrients */}
+          {/* Micronutrients - Limited to 5 key ones */}
           {item.micros && Object.keys(item.micros).length > 0 && (
             <View style={styles.detailSection}>
               <View style={styles.detailSectionHeader}>
-                <Text style={styles.detailSectionTitle}>Micronutrients</Text>
+                <Text style={styles.detailSectionTitle}>Key Micronutrients</Text>
                 <Text style={styles.detailSectionNote}>Estimated</Text>
               </View>
               <View style={styles.detailGrid}>
-                {Object.entries(item.micros).map(([key, value]) => {
-                  // Format value with unit
-                  const displayValue = typeof value === 'object' && value.value !== undefined
-                    ? `${value.value}${value.unit || ''}`
-                    : value;
+                {Object.entries(item.micros)
+                  .filter(([key]) => KEY_MICRONUTRIENTS.includes(key.toLowerCase()))
+                  .map(([key, value]) => {
+                    // Format value with unit
+                    const displayValue = typeof value === 'object' && value.value !== undefined
+                      ? `${Math.round(value.value)}${value.unit || 'mg'}`
+                      : value;
 
-                  return (
-                    <DetailRow
-                      key={key}
-                      label={key.charAt(0).toUpperCase() + key.slice(1)}
-                      value={displayValue}
-                    />
-                  );
-                })}
+                    return (
+                      <DetailRow
+                        key={key}
+                        label={key.charAt(0).toUpperCase() + key.slice(1)}
+                        value={displayValue}
+                      />
+                    );
+                  })}
               </View>
               {/* Variance note for composite foods */}
               {(/bowl|plate|cup|serving|meal|mix|homemade|cooked/i.test(item.name)) && (
@@ -400,17 +452,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   removeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FEE2E2',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  removeButtonText: {
-    fontSize: 16,
-    color: '#EF4444',
-    fontWeight: '600',
   },
   portionRow: {
     marginBottom: 12,
@@ -855,5 +902,32 @@ const styles = StyleSheet.create({
   collapsedItemDetail: {
     fontSize: 11,
     color: '#6B7280',
+  },
+  // Ingredient delete button styles - Premium UX
+  componentRightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  ingredientRemoveButton: {
+    padding: 2,
+    opacity: 0.7,
+  },
+  ingredientRemoveButtonLarge: {
+    marginLeft: 12,
+  },
+  removeButtonInner: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  componentMacrosWithDelete: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

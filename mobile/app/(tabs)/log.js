@@ -4,7 +4,7 @@
  * Clear user flow with explicit actions
  */
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   Share,
   Alert,
   Platform,
+  InteractionManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -493,16 +494,24 @@ export default function LogScreen() {
 
       await foodLog.addLog(foodDataWithId);
 
+      // Clear state first to reduce state complexity
+      setAnalyzedFood(null);
+      setSelectedImage(null);
+
       // Show MealLoggedCard instead of just notification
       setLoggedMeal({
         ...foodDataWithId,
         originalAnalysis: analyzedFood || (foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null)
       });
-      setShowMealLogged(true);
 
-      // Clear state
-      setAnalyzedFood(null);
-      setSelectedImage(null);
+      // Use InteractionManager to wait for all animations/transitions to complete
+      // This prevents bridge overflow from simultaneous UI operations
+      InteractionManager.runAfterInteractions(() => {
+        // Additional delay to ensure React has processed state updates
+        setTimeout(() => {
+          setShowMealLogged(true);
+        }, 100);
+      });
     } catch (err) {
       console.error('[LogScreen] Save error:', err);
       notify.error(`Save failed: ${err.message}`);
@@ -567,7 +576,11 @@ export default function LogScreen() {
 
       await Promise.all(savePromises);
 
-      notify.success(`${foodAnalysis.analysisResult.items.length} items logged!`);
+      // Clear UI first to reduce state complexity
+      foodAnalysis.setInputText('');
+      foodAnalysis.setAnalysisResult(null);
+
+      // Set meal data
       setLoggedMeal({
         foodName: `Meal (${foodAnalysis.analysisResult.items.length} items)`,
         calories: totalCalories,
@@ -577,11 +590,15 @@ export default function LogScreen() {
         mealId: mealEventId,
         originalAnalysis: foodAnalysis.analysisResult
       });
-      setShowMealLogged(true);
 
-      // Clear UI
-      foodAnalysis.setInputText('');
-      foodAnalysis.setAnalysisResult(null);
+      // Use InteractionManager to wait for all animations/transitions to complete
+      // This prevents bridge overflow from simultaneous UI operations
+      InteractionManager.runAfterInteractions(() => {
+        // Additional delay to ensure React has processed state updates
+        setTimeout(() => {
+          setShowMealLogged(true);
+        }, 100);
+      });
     } catch (error) {
       console.error('[LogScreen] Multi-item save error:', error);
       notify.error('Failed to save meal');
@@ -1019,6 +1036,7 @@ export default function LogScreen() {
                   items={foodAnalysis.analysisResult.items}
                   onUpdateQuantity={foodAnalysis.updateItemQuantity}
                   onRemove={foodAnalysis.removeItem}
+                  onRemoveIngredient={foodAnalysis.removeIngredient}
                   dailyValues={DAILY_VALUES} // Pass daily values to FoodItemsList
                 />
                 <MealTotalsCard
@@ -1241,7 +1259,7 @@ export default function LogScreen() {
 
       <Modal
         visible={showMealLogged}
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setShowMealLogged(false)}
       >
         {loggedMeal && (
