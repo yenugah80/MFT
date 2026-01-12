@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, RADIUS, SPACING, SURFACES } from '../../constants/premiumTheme';
 import { getCuisineColor } from '../../utils/cuisineDiversity';
 
 export default function CuisineDiversityCard({ diversity = {} }) {
