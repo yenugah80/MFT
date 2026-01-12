@@ -54,6 +54,17 @@ export default function DailyIntelligenceBehaviorSection({
     }).start();
   }, [fadeAnim]);
 
+  // Callbacks MUST be defined before any returns (React Hooks Rule)
+  const handleCorrelationDismiss = useCallback((correlationId) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onRequestDismiss?.(correlationId);
+  }, [onRequestDismiss]);
+
+  const handleAction = useCallback((action) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    onAction?.(action);
+  }, [onAction]);
+
   // Guard: no data
   if (!orchestratorData) {
     return null;
@@ -80,17 +91,6 @@ export default function DailyIntelligenceBehaviorSection({
       </Animated.View>
     );
   }
-
-  // SPEAK/REINFORCE/PREDICT: Show main card + correlations
-  const handleCorrelationDismiss = useCallback((correlationId) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    onRequestDismiss?.(correlationId);
-  }, [onRequestDismiss]);
-
-  const handleAction = useCallback((action) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onAction?.(action);
-  }, [onAction]);
 
   return (
     <Animated.View
