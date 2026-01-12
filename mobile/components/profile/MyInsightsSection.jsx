@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING[8],
     paddingHorizontal: SPACING[4],
-    backgroundColor: 'rgba(107, 78, 255, 0.03)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}08`,
     borderRadius: RADIUS.xl,
     borderWidth: 1,
     borderColor: `${SEMANTIC_ACTIONS.success}1A`,

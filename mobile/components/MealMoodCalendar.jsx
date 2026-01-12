@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0F`,
     padding: SPACING[4],
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[5],

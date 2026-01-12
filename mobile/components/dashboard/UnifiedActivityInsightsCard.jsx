@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   // Tabs
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`,
     borderRadius: RADIUS.lg,
     padding: 3,
     marginBottom: SPACING[3],
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   },
   activityItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.06)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}0F`,
   },
   activityIcon: {
     width: 36,
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   periodChipInactive: {
     paddingHorizontal: SPACING[3],
     paddingVertical: SPACING[1] + 2,
-    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0F`,
     borderRadius: RADIUS.full,
   },
   periodChipGradient: {
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
   // Stats Grid
   statsGrid: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(107, 78, 255, 0.04)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0A`,
     borderRadius: RADIUS.xl,
     paddingVertical: SPACING[3],
     paddingHorizontal: SPACING[2],
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.04)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0A`,
     borderRadius: RADIUS.lg,
   },
   insightIcon: {

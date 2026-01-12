@@ -1120,7 +1120,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[2],
     paddingBottom: SPACING[2],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.05)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}0D`,
   },
   timelinePeriodName: {
     fontSize: TYPOGRAPHY.size.sm,

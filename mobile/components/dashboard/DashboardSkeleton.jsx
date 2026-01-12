@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.04)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0A`,
     borderRadius: RADIUS.lg,
   },
 
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0F`,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -106,7 +106,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
             >
               <View style={[
                 styles.iconContainer,
-                { backgroundColor: isActive ? `${step.color}15` : 'rgba(107, 78, 255, 0.05)' }
+                { backgroundColor: isActive ? `${step.color}15` : `${SEMANTIC_ACTIONS.success}0D` }
               ]}>
                 <Ionicons
                   name={isComplete ? 'checkmark-circle' : step.icon}
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   stepRowActive: {
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`,
   },
   iconContainer: {
     width: 40,

@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   },
   patternCardActive: {
     borderColor: `${BRAND.primary}30`,
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`,
   },
   patternIcon: {
     width: 48,
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginBottom: SPACING[4],
     paddingVertical: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`,
     borderRadius: RADIUS.lg,
   },
   detailStatItem: {

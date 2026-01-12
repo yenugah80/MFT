@@ -11,7 +11,7 @@ import {
   StyleSheet,
   Pressable,
 } from 'react-native';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 const MetricInput = ({
   label,
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
   inputContainerFocused: {
     borderColor: BRAND.primary,
-    backgroundColor: 'rgba(107, 78, 255, 0.02)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}05`,
   },
   inputContainerError: {
     borderColor: '#EF4444',

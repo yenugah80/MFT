@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`,
     borderRadius: RADIUS.lg,
     paddingVertical: SPACING[2],
     marginBottom: SPACING[4],

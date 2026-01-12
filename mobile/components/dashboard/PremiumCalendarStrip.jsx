@@ -621,7 +621,7 @@ const dayDetailStyles = StyleSheet.create({
   // Period tabs (Day, 30D, 60D, 90D)
   periodTabs: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0F`,
     borderRadius: RADIUS.xl,
     padding: 4,
     marginBottom: SPACING[5],
@@ -768,7 +768,7 @@ const dayDetailStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0F`,
     padding: SPACING[4],
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[4],

@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   accuracyNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`,
     padding: 8,
     borderRadius: 8,
   },

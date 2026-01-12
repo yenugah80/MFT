@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[3],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.05)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}0D`,
   },
   iconContainer: {
     width: 40,

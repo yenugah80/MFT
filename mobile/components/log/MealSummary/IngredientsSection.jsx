@@ -53,7 +53,7 @@ function IngredientRow({ ingredient, index, totalCalories }) {
   return (
     <View style={styles.ingredientRow}>
       {/* Index Badge */}
-      <View style={[styles.ingredientIndex, { backgroundColor: isDark ? 'rgba(107,78,255,0.2)' : 'rgba(107,78,255,0.1)' }]}>
+      <View style={[styles.ingredientIndex, { backgroundColor: isDark ? `${SEMANTIC_ACTIONS.success}33` : `${SEMANTIC_ACTIONS.success}1A` }]}>
         <Text style={[styles.indexNumber, { color: BRAND.primary }]}>{index + 1}</Text>
       </View>
 
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   caloriesBadge: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    backgroundColor: 'rgba(107,78,255,0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 16,
-    backgroundColor: 'rgba(107,78,255,0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderRadius: 8,
     overflow: 'hidden',
     position: 'relative',

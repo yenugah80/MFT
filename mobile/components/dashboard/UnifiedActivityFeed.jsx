@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   activityItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.06)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}0F`,
   },
   iconContainer: {
     width: 40,
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 78, 255, 0.06)',
+    borderTopColor: `${SEMANTIC_ACTIONS.success}0F`,
   },
   viewAllText: {
     fontSize: TYPOGRAPHY.size.sm,

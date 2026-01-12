@@ -260,7 +260,7 @@ const EnhancedMoodCard = ({
       {/* Wellness Score Section - Redesigned for simplicity */}
       {showWellnessScore && wellnessScore !== null && wellnessScore?.score != null && (
         <TouchableOpacity
-          style={[styles.wellnessSection, { backgroundColor: sectionBg, borderColor: isDark ? 'rgba(107, 78, 255, 0.25)' : `${SEMANTIC_ACTIONS.success}26` }]}
+          style={[styles.wellnessSection, { backgroundColor: sectionBg, borderColor: `${SEMANTIC_ACTIONS.success}40` }]}
           onPress={onOpenInsights}
           activeOpacity={0.8}
         >

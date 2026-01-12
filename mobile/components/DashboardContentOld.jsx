@@ -1799,7 +1799,7 @@ const styles = StyleSheet.create({
   },
   focusModeButtonActive: {
     backgroundColor: `${SEMANTIC_ACTIONS.success}26`, // Stronger purple when active (was gold)
-    borderColor: 'rgba(107, 78, 255, 0.3)',
+    borderColor: `${SEMANTIC_ACTIONS.success}4D`,
   },
   focusModeIndicator: {
     flexDirection: 'row',
@@ -1871,7 +1871,7 @@ const styles = StyleSheet.create({
   // Info card (calm, supportive tone - blue instead of orange/red)
   infoCard: {
     marginBottom: SPACING[4],
-    backgroundColor: 'rgba(107, 78, 255, 0.05)', // Purple tint
+    backgroundColor: `${SEMANTIC_ACTIONS.success}0D`, // Purple tint
     borderColor: `${SEMANTIC_ACTIONS.success}33`, // Purple border
   },
   anomalyHeader: {
@@ -2427,7 +2427,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.3)',
+    borderColor: `${SEMANTIC_ACTIONS.success}4D`,
   },
   insightsCtaText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -2479,7 +2479,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[2],
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.3)',
+    borderColor: `${SEMANTIC_ACTIONS.success}4D`,
     backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
   },
   proteinHistoryButtonText: {

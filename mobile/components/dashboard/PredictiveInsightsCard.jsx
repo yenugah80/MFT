@@ -262,7 +262,7 @@ export default function PredictiveInsightsCard({
         ]}
       >
         <LinearGradient
-          colors={['rgba(107, 78, 255, 0.05)', 'rgba(59, 130, 246, 0.03)']}
+          colors={[`${SEMANTIC_ACTIONS.success}0D`, 'rgba(59, 130, 246, 0.03)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.emptyGradient}
@@ -302,8 +302,8 @@ export default function PredictiveInsightsCard({
       <LinearGradient
         colors={
           isPositiveOutlook
-            ? ['rgba(16, 185, 129, 0.08)', 'rgba(107, 78, 255, 0.05)']
-            : ['rgba(245, 158, 11, 0.08)', 'rgba(107, 78, 255, 0.05)']
+            ? ['rgba(16, 185, 129, 0.08)', `${SEMANTIC_ACTIONS.success}0D`]
+            : ['rgba(245, 158, 11, 0.08)', `${SEMANTIC_ACTIONS.success}0D`]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   scoreBarToday: {
-    backgroundColor: 'rgba(107, 78, 255, 0.4)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}66`,
   },
   scoreBarTomorrow: {
     backgroundColor: BRAND.primary,
