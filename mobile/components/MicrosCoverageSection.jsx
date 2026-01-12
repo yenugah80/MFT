@@ -33,7 +33,7 @@ const MicrosCoverageSection = ({ micros, onViewAll }) => {
           size={120}
           strokeWidth={12}
           color={coverageColor}
-          backgroundColor=TEXT.tertiary
+          backgroundColor={TEXT.tertiary}
         >
           <View style={styles.ringCenter}>
             <Text style={styles.coverageValue}>{coverage}%</Text>
