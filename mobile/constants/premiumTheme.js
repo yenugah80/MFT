@@ -112,22 +112,22 @@ export const SEMANTIC = {
   },
 };
 
-// SEMANTIC ACTION COLORS - Professional, accessible with Premium Glossy Gradients
+// SEMANTIC ACTION COLORS - Vibrant Premium Gradients from palette
 export const SEMANTIC_ACTIONS = {
-  primary: '#6B82AD',     // Main actions (submit, confirm) - professional blue
-  primaryGradient: ['#6B82AD', '#4A5F8C', '#8FA3C7'],  // Deep blue → Light blue
+  primary: '#FF8A50',     // Main actions - vibrant warm orange (CALORIES indicator)
+  primaryGradient: ['#FF8A50', '#FFD700'],  // Warm orange → Gold (energetic, motivating)
 
-  success: '#6B9B76',     // Goal achieved, positive actions - sage green
-  successGradient: ['#6B9B76', '#4A7856', '#8CBC91'],  // Deep sage → Light green
+  success: '#10B981',     // Goal achieved - vibrant emerald green
+  successGradient: ['#10B981', '#34D399'],  // Deep emerald → Bright mint (positive)
 
-  warning: '#D89B36',     // Approaching limit, caution - muted amber
-  warningGradient: ['#D89B36', '#B67F1F', '#E8B965'],  // Deep amber → Light gold
+  warning: '#F59E0B',     // Approaching limit - vibrant amber
+  warningGradient: ['#F59E0B', '#FBBF24'],  // Deep amber → Light gold (caution)
 
-  danger: '#C96B6B',      // Over limit, delete actions - muted red
-  dangerGradient: ['#C96B6B', '#A84848', '#E09B9B'],  // Deep red → Light rose
+  danger: '#EF4444',      // Over limit - vibrant red
+  dangerGradient: ['#EF4444', '#F87171'],  // Deep red → Light rose (alert)
 
-  info: '#6B82AD',        // Insights, informational - professional blue
-  infoGradient: ['#6B82AD', '#4A5F8C', '#B9C7E0'],  // Deep blue → Soft blue
+  info: '#00E5FF',        // Insights, informational - vibrant cyan (WATER indicator)
+  infoGradient: ['#00E5FF', '#0096FF'],  // Bright cyan → Deep blue (hydration, refreshing)
 
   // Disabled/muted - Premium glossy gray gradient
   muted: '#C4BBB5',       // Fallback: warm muted
