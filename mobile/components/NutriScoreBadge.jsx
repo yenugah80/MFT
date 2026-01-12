@@ -11,7 +11,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { NUTRISCORE, TYPOGRAPHY, SPACING, RADIUS } from '../constants/premiumTheme';
+import { NUTRISCORE, TYPOGRAPHY, SPACING, RADIUS, TEXT, HEALTH_SCORE } from '../constants/premiumTheme';
 
 // Get NutriScore label
 const getLabel = (grade) => {
@@ -191,11 +191,11 @@ export function NutriScoreCompact({ grade = 'C', style }) {
  */
 export function HealthScoreBadge({ score = 50, size = 'md', showLabel = false, style }) {
   const getHealthColor = (s) => {
-    if (s >= 80) return { gradient: ['#4CAF50', '#66BB6A'], bg: '#E8F5E9', text: '#1B5E20', label: 'Excellent' };
-    if (s >= 60) return { gradient: ['#8BC34A', '#9CCC65'], bg: '#F1F8E9', text: '#33691E', label: 'Good' };
-    if (s >= 40) return { gradient: ['#FFC107', '#FFCA28'], bg: '#FFFDE7', text: '#F57F17', label: 'Average' };
-    if (s >= 20) return { gradient: ['#FF9800', '#FFB74D'], bg: '#FFF3E0', text: '#E65100', label: 'Poor' };
-    return { gradient: ['#F44336', '#EF5350'], bg: '#FFEBEE', text: '#B71C1C', label: 'Low' };
+    if (s >= 80) return { ...HEALTH_SCORE.excellent, label: 'Excellent' };
+    if (s >= 60) return { ...HEALTH_SCORE.good, label: 'Good' };
+    if (s >= 40) return { ...HEALTH_SCORE.average, label: 'Average' };
+    if (s >= 20) return { ...HEALTH_SCORE.poor, label: 'Poor' };
+    return { ...HEALTH_SCORE.bad, label: 'Low' };
   };
 
   const colors = getHealthColor(score);
@@ -208,7 +208,7 @@ export function HealthScoreBadge({ score = 50, size = 'md', showLabel = false, s
 
   return (
     <View style={[styles.healthContainer, style]}>
-      <View style={[styles.healthOuter, { backgroundColor: colors.bg, width: s.size, height: s.size, borderRadius: s.size / 2 }]}>
+      <View style={[styles.healthOuter, { backgroundColor: colors.pastel[0], width: s.size, height: s.size, borderRadius: s.size / 2 }]}>
         <LinearGradient
           colors={colors.gradient}
           start={{ x: 0, y: 0 }}
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   pillText: {
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: TEXT.white,
     letterSpacing: 0.5,
   },
 
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   glowOuter: {
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   glowText: {
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: TEXT.white,
   },
   glowLabel: {
     marginTop: SPACING[1],
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
 
   // Dot styles
   dot: {
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   tagGrade: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: TEXT.white,
   },
   tagContent: {
     gap: 1,
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   healthOuter: {
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
   },
   healthScore: {
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: TEXT.white,
   },
   healthLabel: {
     marginTop: SPACING[1],
