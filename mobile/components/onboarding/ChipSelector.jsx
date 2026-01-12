@@ -22,7 +22,7 @@ const ChipSelector = ({
   onSelectionChange,
   multiSelect = true,
   renderLabel,
-, SEMANTIC_ACTIONS }) => {
+}) => {
   // Helper to extract ID from string or object format
   const getItemId = (item) => {
     if (!item) return '';
