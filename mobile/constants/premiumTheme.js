@@ -839,6 +839,31 @@ export const formatNumber = (value) => {
   return Math.round(value).toString();
 };
 
+// HELPER: Map old muted colors to new vibrant SEMANTIC_ACTIONS colors
+// Use this to systematically replace all muted blues/grays with vibrant colors
+export const getMutedToVibrantColor = (type = 'primary') => {
+  const colorMap = {
+    'primary': SEMANTIC_ACTIONS.primaryGradient,      // Orange-to-gold for primary actions
+    'success': SEMANTIC_ACTIONS.successGradient,      // Emerald-to-mint for success
+    'info': SEMANTIC_ACTIONS.infoGradient,            // Cyan-to-blue for info/water
+    'warning': SEMANTIC_ACTIONS.warningGradient,      // Amber-to-gold for warnings
+    'danger': SEMANTIC_ACTIONS.dangerGradient,        // Red-to-rose for danger
+    'calories': SEMANTIC_ACTIONS.primaryGradient,     // Orange-to-gold for calories
+    'water': SEMANTIC_ACTIONS.infoGradient,           // Cyan-to-blue for water
+    'protein': ['#8FA0E6', '#C8D2F5'],                // Blue for protein (MACRO_COLORS.protein)
+    'carbs': ['#A8C9B6', '#D6EFE6'],                  // Green for carbs (MACRO_COLORS.carbs)
+    'fat': ['#E7B7B1', '#F6D7CC'],                    // Peachy for fat (MACRO_COLORS.fat)
+    'fiber': ['#B9B4E7', '#D9D5F2'],                  // Purple for fiber (MACRO_COLORS.fiber)
+  };
+  return colorMap[type] || SEMANTIC_ACTIONS.primaryGradient;
+};
+
+// HELPER: Get solid vibrant color (first color from gradient, good for solid fills)
+export const getMutedToVibrantSolid = (type = 'primary') => {
+  const gradient = getMutedToVibrantColor(type);
+  return Array.isArray(gradient) ? gradient[0] : gradient;
+};
+
 // Export all
 export const PREMIUM_THEME = {
   BRAND,
