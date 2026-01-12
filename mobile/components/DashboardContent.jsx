@@ -24,6 +24,7 @@ import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useRecommendations } from "../hooks/useRecommendations";
+import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -57,6 +58,11 @@ import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 
 // Premium dashboard enhancements - compact tiles
 import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
+
+// Behavioral Health Intelligence System - Phase 6
+import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehaviorSection";
+import { LifecycleStageFooter } from "./dashboard/LifecycleStageFooter";
+import { DismissReasonSelector } from "./dashboard/DismissReasonSelector";
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -228,6 +234,9 @@ export default function DashboardContent() {
   // Note: complianceScore and cuisineDiversity moved to Profile > MyInsightsSection
   const [allergenWarnings, setAllergenWarnings] = useState([]);
 
+  // Behavioral Health Intelligence System - Phase 6
+  const [dismissingCorrelationId, setDismissingCorrelationId] = useState(null);
+
   // Recommendations hook (handles caching internally with 5-min cache)
   // eslint-disable-next-line no-unused-vars
   const {
@@ -245,6 +254,10 @@ export default function DashboardContent() {
 
   // Water tracking hook
   const { markHydrationCelebration } = useWaterLog();
+
+  // Behavioral Health Intelligence - single fetch point
+  const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestrator();
+  const { mutate: sendCorrelationFeedback } = useCorrelationFeedback();
 
   useEffect(() => {
     let isActive = true;
@@ -274,6 +287,50 @@ export default function DashboardContent() {
       setRefreshing(false);
     }
   };
+
+  // Behavioral Health Intelligence - Handlers
+  const handleDismissRequest = useCallback((correlationId) => {
+    setDismissingCorrelationId(correlationId);
+  }, []);
+
+  const handleCorrelationDismiss = useCallback((reasonId) => {
+    if (dismissingCorrelationId) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      sendCorrelationFeedback(
+        { correlationId: dismissingCorrelationId, reason: reasonId },
+        {
+          onSuccess: () => {
+            setDismissingCorrelationId(null);
+            notify?.({
+              type: 'success',
+              title: 'Pattern dismissed',
+              message: 'Thank you for the feedback',
+            });
+          },
+          onError: (error) => {
+            console.error('[Dashboard] Feedback error:', error);
+            notify?.({
+              type: 'error',
+              title: 'Could not save feedback',
+              message: 'Please try again',
+            });
+          },
+        }
+      );
+    }
+  }, [dismissingCorrelationId, sendCorrelationFeedback, notify]);
+
+  const handleCorrelationCancel = useCallback(() => {
+    setDismissingCorrelationId(null);
+  }, []);
+
+  const handleIntelligenceAction = useCallback((action) => {
+    if (action?.type === 'navigate') {
+      router.push(action.path);
+    } else if (action?.callback) {
+      action.callback();
+    }
+  }, [router]);
 
   // Note: useFocusEffect manual refetch removed - React Query handles staleness automatically
   // Data will refetch if >30s old (respects staleTime configuration)
@@ -1221,6 +1278,18 @@ export default function DashboardContent() {
         )}
 
         {/* ============================================ */}
+        {/* BEHAVIORAL HEALTH INTELLIGENCE - Daily insights */}
+        {/* Shows decision cards, pattern insights, lifecycle stage */}
+        {/* ============================================ */}
+        {hasAnyData && !isOnboarding && (
+          <DailyIntelligenceBehaviorSection
+            orchestratorData={orchestratorData}
+            onRequestDismiss={handleDismissRequest}
+            onAction={handleIntelligenceAction}
+          />
+        )}
+
+        {/* ============================================ */}
         {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
         {/* Only show after user logs today AND past onboarding phase */}
         {/* ============================================ */}
@@ -1328,6 +1397,16 @@ export default function DashboardContent() {
           goals={goals}
           recentWeight={recentWeight}
         />
+
+        {/* ============================================ */}
+        {/* LIFECYCLE STAGE FOOTER - User progression */}
+        {/* Shows current stage and progress to next milestone */}
+        {/* ============================================ */}
+        {hasAnyData && !isOnboarding && (
+          <LifecycleStageFooter
+            orchestratorData={orchestratorData}
+          />
+        )}
           </ScrollView>
         </ThemeTransition>
       </LinearGradient>
@@ -1492,6 +1571,14 @@ export default function DashboardContent() {
           </View>
         </View>
       </Modal>
+
+      {/* Behavioral Health Intelligence - Dismiss Reason Modal */}
+      <DismissReasonSelector
+        visible={dismissingCorrelationId !== null}
+        headline="Pattern Feedback"
+        onDismiss={handleCorrelationDismiss}
+        onCancel={handleCorrelationCancel}
+      />
 
       <Modal
         visible={proteinModalVisible}
