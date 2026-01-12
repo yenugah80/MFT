@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity, ScrollView, Platform, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SPACING, TYPOGRAPHY, NUTRISCORE, SEMANTIC } from '../../constants/premiumTheme';
 
 const fonts = {
   display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
@@ -16,19 +16,19 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
 
   const getNutriScoreColor = (score) => {
     switch (score?.toUpperCase()) {
-      case 'A': return '#038141'; // Dark Green
-      case 'B': return '#85BB2F'; // Light Green
-      case 'C': return '#FECB02'; // Yellow
-      case 'D': return '#EE8100'; // Orange
-      case 'E': return '#E63E11'; // Red
+      case 'A': return NUTRISCORE.A.base;
+      case 'B': return NUTRISCORE.B.base;
+      case 'C': return NUTRISCORE.C.base;
+      case 'D': return NUTRISCORE.D.base;
+      case 'E': return NUTRISCORE.E.base;
       default: return TEXT.tertiary;
     }
   };
 
   const getScoreColor = (score) => {
-    if (score >= 80) return '#10B981';
-    if (score >= 50) return '#F59E0B';
-    return '#EF4444';
+    if (score >= 80) return SEMANTIC_ACTIONS.success;
+    if (score >= 50) return SEMANTIC_ACTIONS.warning;
+    return SEMANTIC_ACTIONS.danger;
   };
 
   const handleShare = async () => {
@@ -108,22 +108,22 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
                 
                 <View style={styles.chartContainer}>
                   <View style={styles.chartBar}>
-                    {pPct > 0 && <View style={[styles.chartSegment, { flex: pPct, backgroundColor: '#10B981' }]} />}
-                    {cPct > 0 && <View style={[styles.chartSegment, { flex: cPct, backgroundColor: '#F59E0B' }]} />}
-                    {fPct > 0 && <View style={[styles.chartSegment, { flex: fPct, backgroundColor: '#EF4444' }]} />}
+                    {pPct > 0 && <View style={[styles.chartSegment, { flex: pPct, backgroundColor: SEMANTIC_ACTIONS.success }]} />}
+                    {cPct > 0 && <View style={[styles.chartSegment, { flex: cPct, backgroundColor: SEMANTIC_ACTIONS.warning }]} />}
+                    {fPct > 0 && <View style={[styles.chartSegment, { flex: fPct, backgroundColor: SEMANTIC_ACTIONS.danger }]} />}
                   </View>
-                  
+
                   <View style={styles.chartLegend}>
                     <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                      <View style={[styles.legendDot, { backgroundColor: SEMANTIC_ACTIONS.success }]} />
                       <Text style={styles.legendText}>Protein ({Math.round(pPct)}%)</Text>
                     </View>
                     <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
+                      <View style={[styles.legendDot, { backgroundColor: SEMANTIC_ACTIONS.warning }]} />
                       <Text style={styles.legendText}>Carbs ({Math.round(cPct)}%)</Text>
                     </View>
                     <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                      <View style={[styles.legendDot, { backgroundColor: SEMANTIC_ACTIONS.danger }]} />
                       <Text style={styles.legendText}>Fat ({Math.round(fPct)}%)</Text>
                     </View>
                   </View>
@@ -164,7 +164,7 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: SURFACES.card.overlay,
     justifyContent: 'flex-end',
   },
   container: {
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   nutriValue: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: TEXT.white,
     fontFamily: fonts.display,
   },
   section: {
