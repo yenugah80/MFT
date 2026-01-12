@@ -632,7 +632,7 @@ export default function DashboardContent() {
         ? data.today.moodLogs.reduce((sum, log) => sum + (log.intensity ?? 5), 0) / data.today.moodLogs.length
         : null;
 
-      const totalProtein = parseMacro(data.today.nutrition.totalProtein);
+      const totalProtein = parseMacro(data.today?.nutrition?.totalProtein);
       const proteinGoalValue = parseGoal(data.goals?.proteinG, 150, 20, 500);
 
       const foodMoodScore = calculateFoodMoodScore({
@@ -753,7 +753,7 @@ export default function DashboardContent() {
     const anomalies = [];
 
     // Check calories
-    const totalCalories = parseCalories(data.today.nutrition.totalCalories);
+    const totalCalories = parseCalories(data.today?.nutrition?.totalCalories);
     const calorieGoal = parseGoal(data.goals?.dailyCalories, 2000, 800, 10000);
     const calorieState = detectDataState(
       totalCalories,
@@ -781,7 +781,7 @@ export default function DashboardContent() {
     }
 
     // Check protein
-    const totalProtein = parseMacro(data.today.nutrition.totalProtein);
+    const totalProtein = parseMacro(data.today?.nutrition?.totalProtein);
     const proteinGoal = parseGoal(data.goals?.proteinG, 150, 20, 500);
     const proteinState = detectDataState(
       totalProtein,
@@ -812,8 +812,8 @@ export default function DashboardContent() {
   const smartInsights = useMemo(() => {
     if (!data?.today || !data?.goals) return [];
 
-    const currentCalories = parseCalories(data.today.nutrition.totalCalories);
-    const currentWater = parseLiters(data.today.waterIntakeLiters);
+    const currentCalories = parseCalories(data.today?.nutrition?.totalCalories);
+    const currentWater = parseLiters(data.today?.waterIntakeLiters);
     const todayMoodLogs = data.today.moodLogs?.length || 0;
     const hasTodayActivity = currentCalories > 0 || currentWater > 0 || todayMoodLogs > 0;
 
@@ -848,7 +848,7 @@ export default function DashboardContent() {
     return generateInsights({
       currentCalories,
       calorieGoal: parseGoal(data.goals?.dailyCalories, 2000, 800, 10000),
-      currentProtein: parseMacro(data.today.nutrition.totalProtein),
+      currentProtein: parseMacro(data.today?.nutrition?.totalProtein),
       proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
       currentHydration: currentWater,
       hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
@@ -862,9 +862,9 @@ export default function DashboardContent() {
     if (!data?.today?.nutrition) return null;
 
     return assessMacroBalance({
-      protein: parseMacro(data.today.nutrition.totalProtein),
-      carbs: parseMacro(data.today.nutrition.totalCarbs),
-      fat: parseMacro(data.today.nutrition.totalFats),
+      protein: parseMacro(data.today?.nutrition?.totalProtein),
+      carbs: parseMacro(data.today?.nutrition?.totalCarbs),
+      fat: parseMacro(data.today?.nutrition?.totalFats),
     });
   }, [data]);
 
@@ -1388,7 +1388,7 @@ export default function DashboardContent() {
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/insights/mood')}
-          onOpenHydrationTracker={() => router.navigate({ pathname: '/(tabs)/log', params: { focus: 'hydration' } })}
+          onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}
