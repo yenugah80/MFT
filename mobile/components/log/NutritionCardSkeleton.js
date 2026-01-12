@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   skeleton: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: 12,
   },
   header: {

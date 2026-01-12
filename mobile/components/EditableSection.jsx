@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     padding: SPACING[5],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     ...SHADOWS.md,
   },
   header: {
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[4],
     paddingBottom: SPACING[3],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.1)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   title: {
     fontSize: TYPOGRAPHY.size.lg,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[3],
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.2)',
+    borderColor: `${SEMANTIC_ACTIONS.success}33`,
   },
   cancelButtonText: {
     fontSize: TYPOGRAPHY.size.sm,

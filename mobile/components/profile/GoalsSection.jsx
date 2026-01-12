@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[3],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   calorieInput: {
     flex: 1,
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.08)',
+    borderColor: `${SEMANTIC_ACTIONS.success}14`,
     ...SHADOWS.sm,
   },
   macroInputHeader: {

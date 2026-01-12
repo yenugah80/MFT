@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
   },
   confidenceLabel: {
     fontSize: 13,

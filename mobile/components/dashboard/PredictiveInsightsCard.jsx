@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   scoreBarContainer: {
     flex: 1,
     height: 8,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderRadius: 4,
     marginHorizontal: SPACING[2],
     overflow: 'hidden',
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[2],
     paddingTop: SPACING[2],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 78, 255, 0.1)',
+    borderTopColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   confidenceLabel: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     marginBottom: SPACING[3],
   },
   factorsTitle: {
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
   confidenceBar: {
     flex: 1,
     height: 4,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 78, 255, 0.08)',
+    borderTopColor: `${SEMANTIC_ACTIONS.success}14`,
   },
   quickTipText: {
     flex: 1,
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
   emptyProgressBar: {
     width: '60%',
     height: 6,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: SPACING[2],

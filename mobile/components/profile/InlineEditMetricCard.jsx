@@ -160,7 +160,7 @@ export default function InlineEditMetricCard({
   // Interpolate glow border color
   const borderColor = glowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(107, 78, 255, 0.1)', 'rgba(139, 92, 246, 0.4)'],
+    outputRange: [`${SEMANTIC_ACTIONS.success}1A`, 'rgba(139, 92, 246, 0.4)'],
   });
 
   return (
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: RADIUS.xl,
     borderWidth: 1.5,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     ...PREMIUM_SHADOW,
   },
   touchable: {
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderWidth: 1,
     borderColor: 'transparent',
   },

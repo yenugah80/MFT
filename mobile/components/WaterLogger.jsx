@@ -353,7 +353,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
             <TextInput
               style={styles.customInput}
               placeholder="Enter ml"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor=TEXT.tertiary
               keyboardType="numeric"
               value={customAmount}
               onChangeText={setCustomAmount}
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: TEXT.secondary,
   },
   waveContainer: {
     height: 200,
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#374151',
+    color: TEXT.primary,
     marginBottom: 12,
   },
   presetsRow: {
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   },
   quickIncrementLabel: {
     fontSize: 13,
-    color: '#6b7280',
+    color: TEXT.secondary,
     fontWeight: '600',
   },
   quickIncrementButton: {
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6b7280',
+    color: TEXT.secondary,
   },
   // Success overlay - celebration moment
   successOverlay: {

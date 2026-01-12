@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 16,
-    color: '#6b7280',
+    color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,

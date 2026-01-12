@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     padding: SPACING[6],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     ...SHADOWS.md,
   },
   profileSection: {
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: 'rgba(107, 78, 255, 0.2)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}33`,
     justifyContent: 'center',
     alignItems: 'center',
   },

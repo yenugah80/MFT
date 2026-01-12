@@ -1339,7 +1339,7 @@ export default function DashboardContent() {
   return (
     <>
       <LinearGradient
-        colors={['#F8FAFC', '#F1F5F9', '#E2E8F0']}
+        colors={['#F8FAFC', SURFACES.background.secondary, SURFACES.background.tertiary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={[styles.container]}
@@ -1791,14 +1791,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple (was white glass)
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`, // Soft brand purple (was white glass)
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   focusModeButtonActive: {
-    backgroundColor: 'rgba(107, 78, 255, 0.15)', // Stronger purple when active (was gold)
+    backgroundColor: `${SEMANTIC_ACTIONS.success}26`, // Stronger purple when active (was gold)
     borderColor: 'rgba(107, 78, 255, 0.3)',
   },
   focusModeIndicator: {
@@ -1848,10 +1848,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple tint
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`, // Soft brand purple tint
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   syncDot: {
     width: 6,
@@ -1872,7 +1872,7 @@ const styles = StyleSheet.create({
   infoCard: {
     marginBottom: SPACING[4],
     backgroundColor: 'rgba(107, 78, 255, 0.05)', // Purple tint
-    borderColor: 'rgba(107, 78, 255, 0.2)', // Purple border
+    borderColor: `${SEMANTIC_ACTIONS.success}33`, // Purple border
   },
   anomalyHeader: {
     flexDirection: 'row',
@@ -1882,7 +1882,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING[3],
@@ -1902,7 +1902,7 @@ const styles = StyleSheet.create({
     color: '#6B4EFF', // Brand purple
   },
   percentageBadge: {
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}26`,
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
@@ -2166,7 +2166,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING[3],
@@ -2219,7 +2219,7 @@ const styles = StyleSheet.create({
   hydrationDivider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(107, 78, 255, 0.2)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}33`,
   },
   hydrationTapHint: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -2291,7 +2291,7 @@ const styles = StyleSheet.create({
   filterChip: {
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
     backgroundColor: SURFACES.background.secondary,
     overflow: 'hidden',
     minHeight: 44,
@@ -2322,7 +2322,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -2361,7 +2361,7 @@ const styles = StyleSheet.create({
   coverageBar: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     overflow: 'hidden',
   },
   coverageFill: {
@@ -2370,7 +2370,7 @@ const styles = StyleSheet.create({
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     marginVertical: SPACING[3],
   },
   summarySectionTitle: {
@@ -2425,7 +2425,7 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     paddingVertical: SPACING[3],
     borderRadius: RADIUS.lg,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderWidth: 1,
     borderColor: 'rgba(107, 78, 255, 0.3)',
   },
@@ -2457,7 +2457,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.secondary,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   proteinName: {
     flex: 1,
@@ -2480,7 +2480,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: 'rgba(107, 78, 255, 0.3)',
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
   },
   proteinHistoryButtonText: {
     fontSize: TYPOGRAPHY.size.sm,

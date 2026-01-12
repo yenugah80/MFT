@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.secondary,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   mealName: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.md,
     color: TEXT.primary,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
     minHeight: 100,
   },
   charCount: {

@@ -365,7 +365,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                 <TextInput
                   style={styles.noteInput}
                   placeholder="Add a private note (optional)"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor=TEXT.tertiary
                   value={note}
                   onChangeText={setNote}
                   multiline
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   },
   sliderTrack: {
     height: 40,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: TEXT.tertiary,
     borderRadius: RADIUS.full,
     position: 'relative',
     justifyContent: 'center',
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
   tagOption: {
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: '#f3f4f6',
+    backgroundColor: TEXT.tertiary,
     borderRadius: RADIUS.full,
     borderWidth: 1,
     borderColor: '#e5e7eb',
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[5],
     paddingVertical: SPACING[4],
     borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    borderTopColor: TEXT.tertiary,
   },
   cancelButton: {
     flex: 1,

@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
     padding: SPACING[3],
     marginBottom: SPACING[2],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   itemHeader: {
     flexDirection: 'row',
@@ -895,7 +895,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   microRow: {
     flexDirection: 'row',
@@ -903,7 +903,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[2],
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: SURFACES.divider,
   },
   microInfo: {
     flex: 1,
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
   microDVBar: {
     flex: 1,
     height: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
   },
@@ -963,7 +963,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   ingredientsContainer: {
     gap: SPACING[3],
@@ -973,7 +973,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   ingredientsHeader: {
     flexDirection: 'row',
@@ -1020,7 +1020,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[1],
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: SURFACES.divider,
   },
   componentName: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -1064,7 +1064,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[3],
     backgroundColor: SURFACES.background.primary,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
     ...SHADOWS.lg,
   },
   footerButton: {

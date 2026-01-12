@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: RADIUS.lg,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(107, 78, 255, 0.03)',
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderStyle: 'dashed',
   },
   emptyTitle: {

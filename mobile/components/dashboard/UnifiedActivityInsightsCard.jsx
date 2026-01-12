@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
 
   // Insights
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     justifyContent: 'center',
     alignItems: 'center',
   },

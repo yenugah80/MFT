@@ -99,7 +99,7 @@ export default function RecommendationStatsCard() {
             cx="60"
             cy="60"
             r={CIRCLE_RADIUS}
-            stroke="#E2E8F0"
+            stroke=SURFACES.background.tertiary
             strokeWidth="8"
             fill="none"
           />
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: 3,
     overflow: 'hidden',
   },

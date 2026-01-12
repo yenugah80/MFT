@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   shareButton: {
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderWidth: 1.5,
     borderColor: `${SEMANTIC_ACTIONS.success}33`,
   },

@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
   },
   detailConfidenceBar: {
     height: 8,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: SPACING[1],
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[4],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 78, 255, 0.08)',
+    borderTopColor: `${SEMANTIC_ACTIONS.success}14`,
   },
   footerText: {
     fontSize: TYPOGRAPHY.size.xs,

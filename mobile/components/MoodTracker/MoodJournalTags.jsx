@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     backgroundColor: SURFACES.background.secondary,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   tagText: {
     fontSize: TYPOGRAPHY.size.sm,

@@ -770,7 +770,7 @@ const HealthMetric = ({ icon, label, score, color, gradientColors, size = 70 }) 
     if (score >= 80) return '#10B981';
     if (score >= 60) return '#3B82F6';
     if (score >= 40) return '#F59E0B';
-    return '#94A3B8';
+    return TEXT.tertiary;
   };
 
   const strokeWidth = 6;
@@ -865,7 +865,7 @@ const WellnessScoreCard = ({ score, compact = false }) => {
     if (score >= 60) return { icon: 'sparkles', text: 'Good', colors: ['#8B5CF6', '#7C3AED'] };
     if (score >= 40) return { icon: 'leaf', text: 'Fair', colors: ['#F59E0B', '#D97706'] };
     // Neutral state for Day 0 / low scores - not punishing, just starting
-    if (score > 0) return { icon: 'leaf-outline', text: 'Building', colors: ['#6B7280', '#4B5563'] };
+    if (score > 0) return { icon: 'leaf-outline', text: 'Building', colors: ['#6B7280', TEXT.secondary] };
     return { icon: 'water-outline', text: 'Ready', colors: ['#9CA3AF', '#6B7280'] };
   };
 
@@ -1820,7 +1820,7 @@ const styles = StyleSheet.create({
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     marginVertical: SPACING[2],
   },
   impactCard: {

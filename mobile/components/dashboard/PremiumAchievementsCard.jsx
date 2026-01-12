@@ -119,7 +119,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
             <Animated.View style={[styles.modalGlow, { opacity: glowAnim }]} />
             
             <ExpoLinearGradient
-              colors={['#1F2937', '#111827']}
+              colors={['#1F2937', TEXT.primary]}
               style={styles.modalCard}
             >
               <View style={styles.modalIconContainer}>
@@ -148,7 +148,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
 
                 <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
                   <ExpoLinearGradient
-                    colors={['#374151', '#1F2937']}
+                    colors={[TEXT.primary, '#1F2937']}
                     style={styles.actionButtonGradient}
                   >
                     <Ionicons name="share-social" size={20} color="#FFF" style={{ marginRight: 8 }} />

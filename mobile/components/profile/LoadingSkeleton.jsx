@@ -52,7 +52,7 @@ export function SkeletonCard({ lines = 3 }) {
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: RADIUS.md,
   },
   card: {
@@ -60,6 +60,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     padding: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
 });

@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   quickActionText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     fontFamily: fonts.strong,
   },
   quickActionValue: {

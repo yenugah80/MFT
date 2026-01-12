@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
   },
   strengthText: {
     fontSize: 11,

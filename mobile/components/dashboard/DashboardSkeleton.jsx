@@ -302,14 +302,14 @@ const styles = StyleSheet.create({
 
   // Base skeleton styling
   skeletonBase: {
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderRadius: RADIUS.lg,
   },
   circle: {
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   line: {
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderRadius: RADIUS.sm,
   },
 
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     padding: SPACING[5],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     shadowColor: '#6B4EFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 90,
     borderWidth: 12,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   budgetHeader: {
     flexDirection: 'row',
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   scoreRow: {
     flexDirection: 'row',
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[3],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   sectionHeader: {
     flexDirection: 'row',

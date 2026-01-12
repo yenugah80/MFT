@@ -259,12 +259,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#374151',
+    color: TEXT.primary,
     fontFamily: fonts.strong,
   },
   sectionText: {
     fontSize: 15,
-    color: '#4B5563',
+    color: TEXT.secondary,
     fontFamily: fonts.regular,
   },
   highlight: {
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   analysisText: {
     fontSize: 15,
-    color: '#4B5563',
+    color: TEXT.secondary,
     lineHeight: 24,
     fontFamily: fonts.regular,
   },
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 12,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
   },
   chartSegment: {
     height: '100%',

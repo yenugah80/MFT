@@ -228,7 +228,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
             <View style={styles.headerRight}>
               <Text style={[styles.numericScore, { color: textPrimary }]}>{score}/100</Text>
               {historical && showTrends && (
-                <View style={[styles.trendBadge, { backgroundColor: isDark ? 'rgba(107, 78, 255, 0.2)' : 'rgba(107, 78, 255, 0.1)' }]}>
+                <View style={[styles.trendBadge, { backgroundColor: isDark ? `${SEMANTIC_ACTIONS.success}33` : `${SEMANTIC_ACTIONS.success}1A` }]}>
                   <Ionicons
                     name={
                       historical.trendDirection === 'improving' ? 'trending-up' :
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     borderRadius: 8,
   },
   trendText: {

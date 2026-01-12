@@ -552,7 +552,7 @@ export default function HydrationTracker({
               <LinearGradient
                 colors={customAmount && parseInt(customAmount, 10) > 0
                   ? SURFACES.gradient.blue
-                  : ['#E5E7EB', '#D1D5DB']}
+                  : [SURFACES.divider, '#D1D5DB']}
                 style={styles.addCustomButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
   mainStatDivider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   goalReachedBanner: {
     flexDirection: 'row',
@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 30,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
 
   // Timeline

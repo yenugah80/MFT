@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   attributionHeader: {
     flexDirection: 'row',
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   attributionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     marginLeft: 6,
   },
   attributionList: {
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#6B4EFF',
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   editTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     marginBottom: 12,
   },
   editButtons: {
@@ -280,16 +280,16 @@ const styles = StyleSheet.create({
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.2)',
+    borderColor: `${SEMANTIC_ACTIONS.success}33`,
   },
   editButtonSecondary: {
     backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   editButtonText: {
     fontSize: 13,

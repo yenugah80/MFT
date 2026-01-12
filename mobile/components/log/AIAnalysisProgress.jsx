@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   stepTextActive: {
-    color: '#111827',
+    color: TEXT.primary,
     fontWeight: '600',
   },
   stepTextComplete: {

@@ -22,7 +22,7 @@ const BRAND = {
 };
 
 const TEXT = {
-  primary: '#111827',
+  primary: TEXT.primary,
   secondary: '#6B7280',
   tertiary: '#9CA3AF'
 };
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
     overflow: 'hidden'
   },
 
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     marginVertical: SPACING.sm
   },
 
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     paddingTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
     backgroundColor: '#F3F4F6',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,

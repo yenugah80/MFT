@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   timeline: {
     paddingLeft: SPACING[1],
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING[3],

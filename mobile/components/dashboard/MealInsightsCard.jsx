@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}26`,
   },
 
   // Meals list
@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
   historyStatDivider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   trendBadge: {
     flexDirection: 'row',
@@ -869,7 +869,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING[2],

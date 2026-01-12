@@ -19,8 +19,8 @@ const STRENGTH_LABELS = {
 };
 
 const STRENGTH_COLORS = {
-  1: '#94A3B8',
-  2: '#CBD5E1',
+  1: TEXT.tertiary,
+  2: TEXT.tertiary,
   3: '#FCD34D',
   4: '#FBBF24',
   5: '#F97316',
@@ -56,7 +56,7 @@ export default function PreferenceStrengthSelector({
 
   const getGradientColors = (strength) => {
     const colorMap = {
-      1: ['#F1F5F9', '#CBD5E1'],
+      1: [SURFACES.background.secondary, TEXT.tertiary],
       2: ['#F0F9FF', '#BFDBFE'],
       3: ['#FFFBF0', '#FED7AA'],
       4: ['#FEF3C7', '#FBBF24'],
@@ -96,7 +96,7 @@ export default function PreferenceStrengthSelector({
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={isSelected ? gradientColors : ['#F3F4F6', '#E5E7EB']}
+                colors={isSelected ? gradientColors : ['#F3F4F6', SURFACES.divider]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[

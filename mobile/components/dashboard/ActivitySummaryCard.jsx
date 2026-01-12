@@ -58,7 +58,7 @@ export default function ActivitySummaryCard() {
     if (percentage >= 100) return '#10B981';
     if (percentage >= 80) return '#F59E0B';
     if (percentage >= 50) return '#6366F1';
-    return '#94A3B8';
+    return TEXT.tertiary;
   };
 
   const progressColor = getProgressColor(weeklyProgress.percentage);

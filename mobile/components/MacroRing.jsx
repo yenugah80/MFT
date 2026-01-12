@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   unit: {
     fontSize: 11,
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginTop: 2,
   },
   label: {

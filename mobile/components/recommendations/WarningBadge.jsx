@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   moreWarnings: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderColor: '#9CA3AF',
   },
   inlineBadge: {

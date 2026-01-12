@@ -81,7 +81,7 @@ const WellnessScoreRing = ({ score = 0, size = 56, strokeWidth = 5 }) => {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(107, 78, 255, 0.1)"
+          stroke=`${SEMANTIC_ACTIONS.success}1A`
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -142,11 +142,11 @@ const EnhancedMoodCard = ({
   // Theme-aware backgrounds
   const containerBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F6F8FC';
   const sectionBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#F8FAFE';
-  const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0';
+  const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : SURFACES.background.tertiary;
   const statsGridBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#F3F6FB';
   const hintBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F3F6FB';
   const pillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : '#EEF2F6';
-  const confidencePillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0';
+  const confidencePillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : SURFACES.background.tertiary;
 
   const latestMood = insights?.latestMood || null;
   const moodColors = latestMood?.mood
@@ -242,7 +242,7 @@ const EnhancedMoodCard = ({
         </View>
         <View style={styles.intensityContainer}>
           <Text style={[styles.intensityLabel, { color: textTertiary }]}>Intensity</Text>
-          <View style={[styles.intensityBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }]}>
+          <View style={[styles.intensityBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : SURFACES.background.tertiary }]}>
             <View
               style={[
                 styles.intensityFill,
@@ -260,7 +260,7 @@ const EnhancedMoodCard = ({
       {/* Wellness Score Section - Redesigned for simplicity */}
       {showWellnessScore && wellnessScore !== null && wellnessScore?.score != null && (
         <TouchableOpacity
-          style={[styles.wellnessSection, { backgroundColor: sectionBg, borderColor: isDark ? 'rgba(107, 78, 255, 0.25)' : 'rgba(107, 78, 255, 0.15)' }]}
+          style={[styles.wellnessSection, { backgroundColor: sectionBg, borderColor: isDark ? 'rgba(107, 78, 255, 0.25)' : `${SEMANTIC_ACTIONS.success}26` }]}
           onPress={onOpenInsights}
           activeOpacity={0.8}
         >
@@ -380,7 +380,7 @@ const MiniSparkline = ({ data, width, height }) => {
   const { colors, isDark } = useTheme();
 
   // Theme-aware colors for sparkline
-  const lineStroke = isDark ? 'rgba(255,255,255,0.2)' : '#E2E8F0';
+  const lineStroke = isDark ? 'rgba(255,255,255,0.2)' : SURFACES.background.tertiary;
   const pathStroke = isDark ? '#A78BFF' : '#475569';
   const dotFill = isDark ? '#FFFFFF' : '#0F172A';
   const emptyTextColor = colors.text.tertiary;
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     backgroundColor: '#F8FAFE',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: SURFACES.background.tertiary,
   },
   wellnessSection: {
     marginHorizontal: SPACING[4],
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     backgroundColor: '#F8FAFE',
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[3],
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     backgroundColor: '#F8FAFE',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: SURFACES.background.tertiary,
   },
   moodHeader: {
     flexDirection: 'row',
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   intensityBar: {
     flex: 1,
     height: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
   },
@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFE',
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: SURFACES.background.tertiary,
   },
   recommendationHeader: {
     flexDirection: 'row',
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     backgroundColor: '#EEF2F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: SURFACES.background.tertiary,
   },
   trendBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[2],
     paddingVertical: 2,
     borderRadius: RADIUS.full,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: SURFACES.background.tertiary,
   },
   confidenceText: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: SURFACES.background.tertiary,
     marginHorizontal: SPACING[2],
   },
   statValue: {

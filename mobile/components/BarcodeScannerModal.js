@@ -270,7 +270,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'black' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA', padding: 20 },
-  permissionText: { marginTop: 20, fontSize: 16, textAlign: 'center', color: '#374151' },
+  permissionText: { marginTop: 20, fontSize: 16, textAlign: 'center', color: TEXT.primary },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 40 },
   header: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   closeButton: { position: 'absolute', left: 20, padding: 5 },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
   bottomLeft: { bottom: 0, left: 0, borderTopWidth: 0, borderRightWidth: 0 },
   bottomRight: { bottom: 0, right: 0, borderTopWidth: 0, borderLeftWidth: 0 },
-  scanInstruction: { color: '#E5E7EB', marginTop: 20, fontSize: 16, textAlign: 'center' },
+  scanInstruction: { color: SURFACES.divider, marginTop: 20, fontSize: 16, textAlign: 'center' },
   rescanButton: { marginTop: 20, borderRadius: 12, overflow: 'hidden' },
   rescanButtonGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
   rescanButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },

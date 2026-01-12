@@ -178,7 +178,7 @@ export default function FoodNutriScoreCard({
         activeOpacity={0.8}
       >
         <LinearGradient
-          colors={['#F8FAFC', '#F1F5F9']}
+          colors={['#F8FAFC', SURFACES.background.secondary]}
           style={styles.compactGradient}
         >
           <View style={styles.compactLeft}>

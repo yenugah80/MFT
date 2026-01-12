@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   legendValue: {
     fontSize: 13,
-    color: '#374151',
+    color: TEXT.primary,
     fontWeight: '600',
   },
   macroGrid: {
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   macroBoxLabel: {
     fontSize: 12,

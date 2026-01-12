@@ -97,7 +97,7 @@ const QualityBadge = ({ quality, score }) => {
         return {
           icon: 'help-circle',
           color: TEXT.tertiary,
-          gradient: ['#94A3B8', '#64748B'],
+          gradient: [TEXT.tertiary, TEXT.secondary],
           label: 'No Data',
         };
     }

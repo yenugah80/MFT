@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginBottom: 4,
   },
   value: {
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: TEXT.tertiary,
     marginTop: 2,
   },
 });

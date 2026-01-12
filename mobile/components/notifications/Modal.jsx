@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 14,
-    color: '#6b7280',
+    color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
@@ -149,12 +149,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: TEXT.tertiary,
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6b7280',
+    color: TEXT.secondary,
   },
   confirmButton: {
     backgroundColor: '#3b82f6',

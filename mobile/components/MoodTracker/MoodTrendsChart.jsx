@@ -154,7 +154,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
                   y1={y}
                   x2={CHART_WIDTH - PADDING.right}
                   y2={y}
-                  stroke="#E5E7EB"
+                  stroke=SURFACES.divider
                   strokeWidth={1}
                   strokeDasharray="4,4"
                 />
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   tooltipMood: {
     fontSize: TYPOGRAPHY.size.md,

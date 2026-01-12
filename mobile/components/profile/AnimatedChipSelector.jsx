@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     backgroundColor: SURFACES.card.primary,
     borderWidth: 1.5,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
     ...SHADOWS.sm,
   },
   chipDisabled: {

@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[4],
     paddingBottom: SPACING[4],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.1)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   nutriScoreInfo: {
     flex: 1,
@@ -949,7 +949,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 78, 255, 0.1)',
+    borderTopColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
 
   // ──────────────────────────────────────────────
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[5],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   netCarbsContent: {
     flexDirection: 'row',

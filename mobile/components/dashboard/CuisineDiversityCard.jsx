@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 30,
-    backgroundColor: '#E5E7EB'
+    backgroundColor: SURFACES.divider
   },
   breakdown: {
     marginTop: SPACING[3]
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   barContainer: {
     height: 24,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
     marginBottom: SPACING[1]

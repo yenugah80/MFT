@@ -33,7 +33,7 @@ const MicrosCoverageSection = ({ micros, onViewAll }) => {
           size={120}
           strokeWidth={12}
           color={coverageColor}
-          backgroundColor="#f3f4f6"
+          backgroundColor=TEXT.tertiary
         >
           <View style={styles.ringCenter}>
             <Text style={styles.coverageValue}>{coverage}%</Text>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   coverageLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginTop: 2,
   },
   coverageInfo: {
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   coverageSubtitle: {
     fontSize: 13,
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginBottom: 4,
   },
   coverageStatus: {
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   barsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginBottom: 16,
   },
   viewAllButton: {
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: TEXT.tertiary,
     textAlign: 'center',
   },
 });

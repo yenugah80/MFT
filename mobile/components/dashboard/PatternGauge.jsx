@@ -57,7 +57,7 @@ export function PatternGauge({
             cx={cx}
             cy={cy}
             r={radius}
-            stroke="#E5E7EB"
+            stroke=SURFACES.divider
             strokeWidth={6}
             fill="none"
             strokeDasharray={circumference}

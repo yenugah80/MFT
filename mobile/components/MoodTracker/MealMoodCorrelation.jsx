@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     padding: SPACING[3],
     marginBottom: SPACING[2],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   mealHeader: {
     flexDirection: 'row',
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   macroBarTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
   },
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
     gap: SPACING[2],
   },
   detailRow: {

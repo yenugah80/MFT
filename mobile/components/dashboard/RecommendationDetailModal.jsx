@@ -67,9 +67,9 @@ const COLORS = {
   warning: '#F59E0B',
   danger: '#EF4444',
   neutral100: '#F3F4F6',
-  neutral200: '#E5E7EB',
-  neutral600: '#4B5563',
-  neutral900: '#111827',
+  neutral200: SURFACES.divider,
+  neutral600: TEXT.secondary,
+  neutral900: TEXT.primary,
   white: '#FFFFFF',
 };
 

@@ -36,8 +36,8 @@ const STRENGTH_LABELS = {
 };
 
 const STRENGTH_COLORS = {
-  1: '#94A3B8',
-  2: '#CBD5E1',
+  1: TEXT.tertiary,
+  2: TEXT.tertiary,
   3: '#FCD34D',
   4: '#FBBF24',
   5: '#F97316',
@@ -106,7 +106,7 @@ export default function CuisinePreferencesSection({ preferences = [], isEditing 
                           styles.strengthDot,
                           {
                             backgroundColor:
-                              index < strength ? STRENGTH_COLORS[strength] : '#E2E8F0',
+                              index < strength ? STRENGTH_COLORS[strength] : SURFACES.background.tertiary,
                           },
                         ]}
                       />

@@ -901,7 +901,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: SPACING[5],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.1)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}1A`,
     gap: SPACING[2],
   },
   headerElderly: {

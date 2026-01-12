@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.secondary,
     borderRadius: RADIUS.xl,
     borderWidth: 2,
-    borderColor: 'rgba(107, 78, 255, 0.2)',
+    borderColor: `${SEMANTIC_ACTIONS.success}33`,
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[4],
     minHeight: 50,

@@ -61,7 +61,7 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   if (!recentFoods || (recentFoods.length === 0 && !searchQuery)) {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="time-outline" size={48} color="#E5E7EB" />
+        <Ionicons name="time-outline" size={48} color=SURFACES.divider />
         <Text style={styles.emptyText}>No recent foods found.</Text>
         <Text style={styles.emptySubtext}>Foods you log will appear here.</Text>
       </View>
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   searchInput: {
     flex: 1,
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
   },
   emptySubtext: {
     marginTop: 4,

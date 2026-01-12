@@ -88,8 +88,8 @@ export default function InsightNudge({
       switch (type) {
         case 'welcome':
           return {
-            bg: 'rgba(107, 78, 255, 0.08)',
-            border: 'rgba(107, 78, 255, 0.15)',
+            bg: `${SEMANTIC_ACTIONS.success}14`,
+            border: `${SEMANTIC_ACTIONS.success}26`,
             icon: colors.brand.primary,
             text: textSecondary,
             actionText: colors.brand.primary,

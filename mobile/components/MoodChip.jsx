@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   },
   note: {
     fontSize: 13,
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginTop: 2,
   },
   emptyContainer: {

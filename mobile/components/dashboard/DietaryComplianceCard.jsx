@@ -53,7 +53,7 @@ export default function DietaryComplianceCard({ score = 0, todaysMeals = [] }) {
               cx="60"
               cy="60"
               r={CIRCLE_RADIUS}
-              stroke="#E5E7EB"
+              stroke=SURFACES.divider
               strokeWidth="8"
               fill="none"
             />
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 30,
-    backgroundColor: '#E5E7EB'
+    backgroundColor: SURFACES.divider
   },
   message: {
     fontSize: 13,

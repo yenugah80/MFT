@@ -40,7 +40,7 @@ export default function AccountActions({ onSignOut }) {
           activeOpacity={0.7}
           onPress={() => router.push("/profile/preferences")}
         >
-          <View style={[styles.iconContainer, { backgroundColor: 'rgba(107, 78, 255, 0.1)' }]}>
+          <View style={[styles.iconContainer, { backgroundColor: `${SEMANTIC_ACTIONS.success}1A` }]}>
             <Ionicons name="settings-outline" size={ICON_SIZES.sm} color={BRAND.primary} />
           </View>
           <Text style={styles.settingText}>App Preferences</Text>
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     ...SHADOWS.md,
   },
   sectionTitle: {
