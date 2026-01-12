@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, SEMANTIC } from '../../constants/premiumTheme';
 
 /**
  * Unit picker options
@@ -59,7 +59,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
 
   // Get confidence color
   const confidence = item.sourceEvidence?.[0]?.confidence || 0.5;
-  const confidenceColor = confidence >= 0.7 ? '#10B981' : confidence >= 0.5 ? '#F59E0B' : '#EF4444';
+  const confidenceColor = confidence >= 0.7 ? SEMANTIC_ACTIONS.success : confidence >= 0.5 ? SEMANTIC_ACTIONS.warning : SEMANTIC_ACTIONS.danger;
 
   return (
     <View style={styles.card}>
@@ -76,7 +76,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
           accessible
           accessibilityLabel="Remove item"
         >
-          <Ionicons name="close" size={16} color="#9CA3AF" />
+          <Ionicons name="close" size={16} color={TEXT.tertiary} />
         </TouchableOpacity>
       </View>
 
@@ -255,7 +255,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
                     accessible
                     accessibilityLabel={`Remove ${ingredient.name || ingredient.foodName || 'ingredient'}`}
                   >
-                    <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                    <Ionicons name="close-circle" size={18} color={TEXT.tertiary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -337,7 +337,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
                           accessibilityLabel={`Remove ${name}`}
                         >
                           <View style={styles.removeButtonInner}>
-                            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                            <Ionicons name="trash-outline" size={14} color={SEMANTIC_ACTIONS.danger} />
                           </View>
                         </TouchableOpacity>
                       )}
@@ -427,17 +427,17 @@ function DetailRow({ label, value }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 16,
     padding: 18,
     marginBottom: 14,
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 5,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: SURFACES.divider,
   },
   header: {
     flexDirection: 'row',
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     flex: 1,
     marginRight: 8,
   },
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: SURFACES.divider,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   portionButton: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: SURFACES.divider,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   },
   portionText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
     textAlign: 'center',
   },
   editingRow: {
@@ -489,21 +489,21 @@ const styles = StyleSheet.create({
   },
   quantityInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderWidth: 1,
-    borderColor: '#6B4EFF',
+    borderColor: BRAND.primary,
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 16,
-    color: '#1F2937',
+    color: TEXT.primary,
   },
   unitButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderWidth: 1,
-    borderColor: '#6B4EFF',
+    borderColor: BRAND.primary,
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -511,15 +511,15 @@ const styles = StyleSheet.create({
   },
   unitButtonText: {
     fontSize: 16,
-    color: '#1F2937',
+    color: TEXT.primary,
     fontWeight: '500',
   },
   unitButtonArrow: {
     fontSize: 10,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   applyButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: SEMANTIC_ACTIONS.success,
     width: 36,
     height: 36,
     borderRadius: 8,
@@ -528,11 +528,11 @@ const styles = StyleSheet.create({
   },
   applyButtonText: {
     fontSize: 18,
-    color: '#FFFFFF',
+    color: TEXT.white,
     fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: SEMANTIC_ACTIONS.danger,
     width: 36,
     height: 36,
     borderRadius: 8,
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 18,
-    color: '#FFFFFF',
+    color: TEXT.white,
     fontWeight: '600',
   },
   unitPicker: {
@@ -551,27 +551,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
     padding: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
   },
   unitOption: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderWidth: 1,
     borderColor: SURFACES.divider,
   },
   unitOptionSelected: {
-    backgroundColor: '#6B4EFF',
-    borderColor: '#6B4EFF',
+    backgroundColor: BRAND.primary,
+    borderColor: BRAND.primary,
   },
   unitOptionText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   unitOptionTextSelected: {
-    color: '#FFFFFF',
+    color: TEXT.white,
     fontWeight: '600',
   },
   macrosRow: {
@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   caloriesBadge: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: SEMANTIC.info.bg,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -590,11 +590,11 @@ const styles = StyleSheet.create({
   caloriesText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#6B4EFF',
+    color: BRAND.primary,
   },
   caloriesLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   macrosGrid: {
     flex: 1,
@@ -624,7 +624,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   expandButton: {
     paddingVertical: 8,
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
   },
   expandButtonText: {
     fontSize: 14,
-    color: '#6B4EFF',
+    color: BRAND.primary,
     fontWeight: '500',
   },
   details: {
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
   },
   detailSectionNote: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
     marginBottom: 8,
   },
   detailGrid: {
@@ -670,17 +670,17 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   detailValue: {
     fontSize: 14,
-    color: '#1F2937',
+    color: TEXT.primary,
     fontWeight: '500',
   },
   warning: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: SEMANTIC.warning.bg,
     padding: 12,
     borderRadius: 8,
     marginTop: 12,
@@ -692,12 +692,12 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     fontSize: 13,
-    color: '#92400E',
+    color: SEMANTIC.warning.text,
   },
   infoNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#EEF2FF',
+    backgroundColor: SEMANTIC.info.bg,
     padding: 10,
     borderRadius: 8,
     marginTop: 10,
@@ -710,31 +710,31 @@ const styles = StyleSheet.create({
   infoNoteText: {
     flex: 1,
     fontSize: 12,
-    color: '#4338CA',
+    color: SEMANTIC.info.text,
     lineHeight: 16,
   },
   // Component breakdown styles
   componentsNote: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: SEMANTIC.warning.bg,
     padding: 8,
     borderRadius: 6,
     marginBottom: 10,
   },
   componentsNoteText: {
     fontSize: 11,
-    color: '#92400E',
+    color: SEMANTIC.warning.text,
     textAlign: 'center',
   },
   componentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#6B4EFF',
+    borderLeftColor: BRAND.primary,
   },
   componentInfo: {
     flex: 1,
@@ -743,12 +743,12 @@ const styles = StyleSheet.create({
   componentName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     marginBottom: 2,
   },
   componentPortion: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   componentMacros: {
     alignItems: 'flex-end',
@@ -756,27 +756,27 @@ const styles = StyleSheet.create({
   componentCalories: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B4EFF',
+    color: BRAND.primary,
     marginBottom: 2,
   },
   componentMacroText: {
     fontSize: 11,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   // Compact component display (always visible)
   componentsSection: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     padding: 12,
     borderRadius: 8,
     marginTop: 12,
     marginBottom: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#10B981',
+    borderLeftColor: SEMANTIC_ACTIONS.success,
   },
   componentsSectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     marginBottom: 8,
   },
   componentRowCompact: {
@@ -793,11 +793,11 @@ const styles = StyleSheet.create({
   componentCaloriesCompact: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#10B981',
+    color: SEMANTIC_ACTIONS.success,
   },
   showMoreComponents: {
     fontSize: 11,
-    color: '#6B7280',
+    color: TEXT.secondary,
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -810,44 +810,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   estimatedBadge: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: SEMANTIC.warning.bg,
     borderWidth: 1,
-    borderColor: '#FBBF24',
+    borderColor: SEMANTIC_ACTIONS.warning,
   },
   userSpecifiedBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: SEMANTIC.success.bg,
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: SEMANTIC.success.light,
   },
   learnedBadge: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: SEMANTIC.info.bg,
     borderWidth: 1,
-    borderColor: '#7DD3FC',
+    borderColor: SEMANTIC.info.light,
   },
   portionSourceText: {
     fontSize: 11,
     fontWeight: '600',
   },
   estimatedText: {
-    color: '#92400E',
+    color: SEMANTIC.warning.text,
   },
   userSpecifiedText: {
-    color: '#15803D',
+    color: SEMANTIC.success.dark,
   },
   learnedText: {
-    color: '#0369A1',
+    color: SEMANTIC.info.dark,
   },
   // Complex recipe warning
   complexRecipeWarning: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#E0F2FE',
+    backgroundColor: SEMANTIC.info.bg,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
     gap: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#0284C7',
+    borderLeftColor: SEMANTIC.info.base,
   },
   complexRecipeIcon: {
     fontSize: 14,
@@ -856,16 +856,16 @@ const styles = StyleSheet.create({
   complexRecipeText: {
     flex: 1,
     fontSize: 12,
-    color: '#0C4A6E',
+    color: SEMANTIC.info.dark,
     lineHeight: 16,
   },
   // Collapsed group styles
   collapsedGroupSection: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
     marginBottom: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#8B5CF6',
+    borderLeftColor: BRAND.primary,
     overflow: 'hidden',
   },
   collapsedGroupHeader: {
@@ -877,19 +877,19 @@ const styles = StyleSheet.create({
   },
   collapsedGroupToggle: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   collapsedGroupTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
   },
   collapsedItemsList: {
     borderTopWidth: 1,
     borderTopColor: SURFACES.divider,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
   },
   collapsedItem: {
     marginBottom: 8,
@@ -897,12 +897,12 @@ const styles = StyleSheet.create({
   collapsedItemName: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#1F2937',
+    color: TEXT.primary,
     marginBottom: 2,
   },
   collapsedItemDetail: {
     fontSize: 11,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   // Ingredient delete button styles - Premium UX
   componentRightSection: {
@@ -921,9 +921,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: SEMANTIC.danger.bg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: SEMANTIC.danger.light,
     justifyContent: 'center',
     alignItems: 'center',
   },

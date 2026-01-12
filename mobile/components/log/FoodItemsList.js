@@ -77,16 +77,16 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: TEXT.primary,
     marginBottom: 15,
     fontFamily: fonts.display,
   },
   itemCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 15,
     padding: 20,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -98,13 +98,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: SURFACES.divider,
     paddingBottom: 10,
   },
   itemName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: TEXT.primary,
     flex: 1,
     marginRight: 10,
     fontFamily: fonts.strong,
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 15,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   portionLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginRight: 8,
     fontFamily: fonts.regular,
   },
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     paddingVertical: 0, // Override default TextInput padding
     fontFamily: fonts.display,
   },
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   portionUnitText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginRight: 4,
     fontFamily: fonts.regular,
   },
@@ -163,11 +163,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   unitPickerContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 10,
     maxHeight: 200,
     width: 150,
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -177,11 +177,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: SURFACES.divider,
   },
   unitPickerItemText: {
     fontSize: 16,
-    color: '#1F2937',
+    color: TEXT.primary,
     fontFamily: fonts.regular,
   },
   nutritionGrid: {
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   nutritionItem: {
     width: '48%', // Two columns
     marginBottom: 10,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
@@ -201,20 +201,20 @@ const styles = StyleSheet.create({
   },
   nutritionLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginBottom: 4,
     fontFamily: fonts.regular,
   },
   nutritionValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     fontFamily: fonts.strong,
   },
   micronutrientsSection: {
     marginTop: 15,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: SURFACES.divider,
     paddingTop: 15,
   },
   micronutrientsHeader: {
@@ -226,12 +226,12 @@ const styles = StyleSheet.create({
   micronutrientsTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: TEXT.primary,
     fontFamily: fonts.strong,
   },
   micronutrientsNote: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
     fontFamily: fonts.regular,
   },
   micronutrientsGrid: {
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   microItem: {
     width: '48%', // Two columns
     marginBottom: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 6,
     padding: 8,
     borderWidth: 1,
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   microName: {
     fontSize: 11,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginBottom: 2,
     fontFamily: fonts.regular,
   },
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   microValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     fontFamily: fonts.strong,
     marginRight: 4,
   },
@@ -277,6 +277,6 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: SURFACES.divider,
   },
 });
