@@ -1,7 +1,20 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, AccessibilityInfo } from 'react-native';
 import { ProgressBar } from './ProgressBar';
 import { TEXT, SURFACES } from '../../constants/premiumTheme';
+
+// Single source of truth for stage progression
+const STAGE_PROGRESSION = {
+  DISCOVERER: { duration: 1, color: '#DBEAFE', emoji: '🌱', name: 'Discoverer' },
+  BUILDER: { duration: 5, color: '#FEF3C7', emoji: '🏗️', name: 'Builder' },
+  TRACKER: { duration: 23, color: '#FED7AA', emoji: '📊', name: 'Tracker' },
+  OPTIMIZER: { duration: 60, color: '#FDBA74', emoji: '⚡', name: 'Optimizer' },
+  MASTER: { duration: 90, color: '#BBEF63', emoji: '🧠', name: 'Master' },
+  CHAMPION: { duration: 185, color: '#A7F3D0', emoji: '👑', name: 'Champion' },
+  ELITE: { duration: Infinity, color: '#BAE6FD', emoji: '🏆', name: 'Elite' },
+};
+
+const STAGE_ORDER = ['DISCOVERER', 'BUILDER', 'TRACKER', 'OPTIMIZER', 'MASTER', 'CHAMPION', 'ELITE'];
 
 /**
  * LifecycleStageIndicator
@@ -9,92 +22,111 @@ import { TEXT, SURFACES } from '../../constants/premiumTheme';
  * Shows user's current lifecycle stage and progress to next stage.
  * Displayed in footer of dashboard.
  *
- * Stages:
- * - DISCOVERER (0-1d) - Blue
- * - BUILDER (2-6d) - Yellow
- * - TRACKER (7-29d) - Amber
- * - OPTIMIZER (30-89d) - Orange
- * - MASTER (90-179d) - Green
- * - CHAMPION (180-364d) - Emerald
- * - ELITE (365+d) - Blue
+ * Uses single source of truth (STAGE_PROGRESSION) to compute progress accurately.
  *
  * @param {Object} props
- * @param {string} props.stage - Current lifecycle stage
- * @param {number} props.daysInStage - Days user has been in current stage
- * @param {number} props.daysToNextStage - Days until next stage
+ * @param {string} props.stage - Current lifecycle stage key
+ * @param {number} props.daysSinceStart - Total days since user started (single source of truth)
  * @returns {JSX.Element}
  */
 export function LifecycleStageIndicator({
-  stage,
-  daysInStage,
-  daysToNextStage,
+  stage = 'DISCOVERER',
+  daysSinceStart = 0,
 }) {
-  const stageColors = {
-    DISCOVERER: '#DBEAFE',  // Light blue
-    BUILDER: '#FEF3C7',     // Yellow
-    TRACKER: '#FED7AA',     // Amber
-    OPTIMIZER: '#FDBA74',   // Orange
-    MASTER: '#BBEF63',      // Green
-    CHAMPION: '#A7F3D0',    // Emerald
-    ELITE: '#BAE6FD',       // Blue
-  };
+  const stageData = useMemo(() => {
+    const current = STAGE_PROGRESSION[stage];
+    if (!current) return null;
 
-  const stageEmojis = {
-    DISCOVERER: '🌱',
-    BUILDER: '🏗️',
-    TRACKER: '📊',
-    OPTIMIZER: '⚡',
-    MASTER: '🧠',
-    CHAMPION: '👑',
-    ELITE: '🏆',
-  };
+    // Find next stage
+    const currentIndex = STAGE_ORDER.indexOf(stage);
+    const nextIndex = currentIndex + 1;
+    const nextStageName = nextIndex < STAGE_ORDER.length
+      ? STAGE_ORDER[nextIndex]
+      : stage;
+    const nextStage = STAGE_PROGRESSION[nextStageName];
 
-  const stageNames = {
-    DISCOVERER: 'Discoverer',
-    BUILDER: 'Builder',
-    TRACKER: 'Tracker',
-    OPTIMIZER: 'Optimizer',
-    MASTER: 'Master',
-    CHAMPION: 'Champion',
-    ELITE: 'Elite',
-  };
+    // Calculate cumulative days for this stage start (sum of all previous stage durations)
+    let stageDaysStart = 0;
+    for (let i = 0; i < currentIndex; i++) {
+      stageDaysStart += STAGE_PROGRESSION[STAGE_ORDER[i]].duration;
+    }
 
-  const nextStageMap = {
-    DISCOVERER: 'BUILDER',
-    BUILDER: 'TRACKER',
-    TRACKER: 'OPTIMIZER',
-    OPTIMIZER: 'MASTER',
-    MASTER: 'CHAMPION',
-    CHAMPION: 'ELITE',
-    ELITE: 'ELITE',
-  };
+    // Days into current stage
+    const daysInStage = daysSinceStart - stageDaysStart;
 
-  const nextStage = nextStageMap[stage] || stage;
-  const stageColor = stageColors[stage] || '#F3F4F6';
-  const emoji = stageEmojis[stage] || '✨';
-  const stageName = stageNames[stage] || stage;
-  const nextStageName = stageNames[nextStage] || nextStage;
+    // Days until next stage (clamped to 0)
+    const daysToNextStage = Math.max(
+      0,
+      current.duration - daysInStage
+    );
 
-  // Progress to next stage (0-1)
-  const progressPercent = daysToNextStage > 0
-    ? Math.max(0, 1 - (daysToNextStage / (daysInStage + daysToNextStage)))
-    : 1;
+    // Progress to next stage (0-1, clamped)
+    const progressPercent = current.duration === Infinity
+      ? 1
+      : Math.min(
+          1,
+          Math.max(0, daysInStage / current.duration)
+        );
+
+    return {
+      current,
+      nextStage,
+      daysInStage,
+      daysToNextStage,
+      progressPercent,
+      isElite: stage === 'ELITE',
+    };
+  }, [stage, daysSinceStart]);
+
+  if (!stageData) return null;
+
+  const {
+    current,
+    nextStage,
+    daysToNextStage,
+    progressPercent,
+    isElite,
+  } = stageData;
 
   return (
-    <View style={[styles.container, { backgroundColor: stageColor }]}>
+    <View
+      style={[styles.container, { backgroundColor: current.color }]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Your lifecycle stage: ${current.name}`}
+      accessibilityValue={{
+        min: 0,
+        max: 100,
+        now: Math.round(progressPercent * 100),
+        text: isElite
+          ? `Elite unlocked. Long-term patterns now enabled.`
+          : `${daysToNextStage} more days to ${nextStage.name}`,
+      }}
+    >
       {/* Stage Badge */}
       <View style={styles.header}>
-        <Text style={styles.emoji}>{emoji}</Text>
-        <Text style={styles.stageName}>
-          Your Stage: {stageName}
+        <Text
+          style={styles.emoji}
+          accessible={false}
+        >
+          {current.emoji}
+        </Text>
+        <Text
+          style={styles.stageName}
+          accessibilityRole="header"
+        >
+          Your Stage: {current.name}
         </Text>
       </View>
 
       {/* Progress to Next Stage */}
-      {stage !== 'ELITE' && (
+      {!isElite && (
         <View style={styles.progressSection}>
-          <Text style={styles.nextStageText}>
-            {daysToNextStage} more days → {nextStageName}
+          <Text
+            style={styles.nextStageText}
+            accessibilityLabel={`${daysToNextStage} more days until ${nextStage.name} stage`}
+          >
+            {daysToNextStage} more days → {nextStage.name}
           </Text>
           <View style={styles.progressBar}>
             <ProgressBar
@@ -109,9 +141,13 @@ export function LifecycleStageIndicator({
       )}
 
       {/* Elite Status */}
-      {stage === 'ELITE' && (
-        <Text style={styles.eliteText}>
-          You've reached the elite level! 🎉
+      {isElite && (
+        <Text
+          style={styles.eliteText}
+          accessibilityRole="header"
+          accessibilityLabel="Elite unlocked. Long-term patterns now enabled."
+        >
+          Elite unlocked — long-term patterns now enabled.
         </Text>
       )}
     </View>
