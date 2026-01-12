@@ -13,28 +13,28 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SEMANTIC, SEMANTIC_ACTIONS, NUTRISCORE, HEALTH_SCORE } from '../../constants/premiumTheme';
 
 /**
  * Confidence badge color and text (0.0-1.0)
  */
 function getConfidenceBadge(confidence) {
   const score = confidence || 0.7;
-  if (score >= 0.95) return { color: '#10B981', bg: '#D1FAE5', text: 'Strong estimate', icon: '✓✓' };
-  if (score >= 0.85) return { color: '#3B82F6', bg: '#DBEAFE', text: 'Typical estimate', icon: '✓' };
-  if (score >= 0.70) return { color: '#F59E0B', bg: '#FEF3C7', text: 'Reasonable estimate', icon: '~' };
-  if (score >= 0.50) return { color: '#F97316', bg: '#FFEDD5', text: 'Rough estimate', icon: '?' };
-  return { color: '#EF4444', bg: '#FEE2E2', text: 'Needs adjustment', icon: '!' };
+  if (score >= 0.95) return { color: SEMANTIC.success.base, bg: SEMANTIC.success.bg, text: 'Strong estimate', icon: '✓✓' };
+  if (score >= 0.85) return { color: SEMANTIC.info.base, bg: SEMANTIC.info.bg, text: 'Typical estimate', icon: '✓' };
+  if (score >= 0.70) return { color: SEMANTIC_ACTIONS.warning, bg: '#FEF3C7', text: 'Reasonable estimate', icon: '~' };
+  if (score >= 0.50) return { color: SEMANTIC_ACTIONS.primary, bg: '#FFEDD5', text: 'Rough estimate', icon: '?' };
+  return { color: SEMANTIC_ACTIONS.danger, bg: '#FEE2E2', text: 'Needs adjustment', icon: '!' };
 }
 
 /**
  * Health score color gradient (0-100)
  */
 function getHealthScoreColor(score) {
-  if (score >= 80) return '#10B981'; // Green
-  if (score >= 60) return '#F59E0B'; // Amber
-  if (score >= 40) return '#F97316'; // Orange
-  return '#EF4444'; // Red
+  if (score >= 80) return SEMANTIC_ACTIONS.success; // Green
+  if (score >= 60) return SEMANTIC_ACTIONS.warning; // Amber
+  if (score >= 40) return SEMANTIC_ACTIONS.primary; // Orange
+  return SEMANTIC_ACTIONS.danger; // Red
 }
 
 /**
@@ -96,14 +96,14 @@ function MacroPieChart({ protein, carbs, fat }) {
   return (
     <View style={styles.pieContainer}>
       <View style={styles.pieRow}>
-        <View style={[styles.pieSegment, { backgroundColor: '#3B82F6', flex: proteinPct || 0.1 }]} />
-        <View style={[styles.pieSegment, { backgroundColor: '#10B981', flex: carbsPct || 0.1 }]} />
-        <View style={[styles.pieSegment, { backgroundColor: '#F59E0B', flex: fatPct || 0.1 }]} />
+        <View style={[styles.pieSegment, { backgroundColor: SEMANTIC.info.base, flex: proteinPct || 0.1 }]} />
+        <View style={[styles.pieSegment, { backgroundColor: SEMANTIC_ACTIONS.success, flex: carbsPct || 0.1 }]} />
+        <View style={[styles.pieSegment, { backgroundColor: SEMANTIC_ACTIONS.warning, flex: fatPct || 0.1 }]} />
       </View>
       <View style={styles.pieLegend}>
-        <LegendItem color="#3B82F6" label="Protein" value={`${Math.round(proteinPct)}%`} />
-        <LegendItem color="#10B981" label="Carbs" value={`${Math.round(carbsPct)}%`} />
-        <LegendItem color="#F59E0B" label="Fat" value={`${Math.round(fatPct)}%`} />
+        <LegendItem color={SEMANTIC.info.base} label="Protein" value={`${Math.round(proteinPct)}%`} />
+        <LegendItem color={SEMANTIC_ACTIONS.success} label="Carbs" value={`${Math.round(carbsPct)}%`} />
+        <LegendItem color={SEMANTIC_ACTIONS.warning} label="Fat" value={`${Math.round(fatPct)}%`} />
       </View>
     </View>
   );
@@ -459,7 +459,7 @@ export function NutritionCard({ foodLog, onSave, onCancel }) {
             disabled={isSaving}
           >
             {isSaving ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={TEXT.white} size="small" />
             ) : (
               <Text style={styles.saveButtonText}>Save to Log</Text>
             )}
@@ -490,7 +490,7 @@ function DetailItem({ label, value, unit }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 16,
     padding: 16,
     maxHeight: '80%',
@@ -504,12 +504,12 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1F2937',
+    color: TEXT.primary,
     marginBottom: 4,
   },
   cookingMethod: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
     fontStyle: 'italic',
   },
   healthScoreContainer: {
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   },
   healthScoreCaption: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
     marginBottom: 8,
   },
   sectionTitle: {
@@ -553,11 +553,11 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 48,
     fontWeight: '700',
-    color: '#6B4EFF',
+    color: SEMANTIC.info.base,
   },
   caloriesLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -577,11 +577,11 @@ const styles = StyleSheet.create({
   },
   estimatedLabel: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
   },
   toggleIcon: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   pieContainer: {
     marginBottom: 12,
@@ -612,12 +612,12 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   legendValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
   },
   macroGrid: {
     flexDirection: 'row',
@@ -630,15 +630,15 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: TEXT.primary,
   },
   macroLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginTop: 4,
   },
   detailedCarbs: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
     padding: 12,
     marginTop: 8,
@@ -650,12 +650,12 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
   },
   detailValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
   },
   microsContainer: {
     gap: 8,
@@ -679,12 +679,12 @@ const styles = StyleSheet.create({
   },
   microBarFill: {
     height: '100%',
-    backgroundColor: '#6B4EFF',
+    backgroundColor: SEMANTIC.info.base,
     borderRadius: 4,
   },
   microValue: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
     minWidth: 60,
     textAlign: 'right',
   },
@@ -698,10 +698,10 @@ const styles = StyleSheet.create({
   },
   ingredientsNote: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
   },
   ingredientItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
     padding: 12,
   },
@@ -713,12 +713,12 @@ const styles = StyleSheet.create({
   ingredientName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     flex: 1,
   },
   ingredientCalories: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.secondary,
     fontWeight: '500',
   },
   ingredientDetails: {
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
   },
   ingredientDescription: {
     fontSize: 13,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginBottom: 8,
   },
   ingredientMacros: {
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: SURFACES.background.secondary,
     alignItems: 'center',
   },
   cancelButtonText: {
@@ -764,17 +764,17 @@ const styles = StyleSheet.create({
     flex: 2,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: '#6B4EFF',
+    backgroundColor: SEMANTIC.info.base,
     alignItems: 'center',
   },
   saveButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: TEXT.tertiary,
     opacity: 0.6,
   },
   saveButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: TEXT.white,
   },
   // Enhanced UI Styles
   headerTop: {
@@ -797,14 +797,14 @@ const styles = StyleSheet.create({
   },
   servingSize: {
     fontSize: 13,
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginTop: 2,
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: SEMANTIC.info.bg,
     borderLeftWidth: 3,
-    borderLeftColor: '#3B82F6',
+    borderLeftColor: SEMANTIC.info.base,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 13,
-    color: '#1E40AF',
+    color: TEXT.primary,
     lineHeight: 18,
   },
   infoBold: {
@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#FEF3C7',
     borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
+    borderLeftColor: SEMANTIC_ACTIONS.warning,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
   },
   warningBoxHigh: {
     backgroundColor: '#FEE2E2',
-    borderLeftColor: '#EF4444',
+    borderLeftColor: SEMANTIC_ACTIONS.danger,
   },
   warningIcon: {
     fontSize: 16,
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     fontSize: 13,
-    color: '#92400E',
+    color: TEXT.primary,
     lineHeight: 18,
   },
   analysisNotesHeader: {
@@ -855,11 +855,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   analysisNotesBox: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
     padding: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#6B4EFF',
+    borderLeftColor: SEMANTIC.info.base,
   },
   analysisNotesText: {
     fontSize: 13,
