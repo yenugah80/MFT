@@ -55,13 +55,25 @@ export const SURFACES = {
   },
 };
 
-// TEXT HIERARCHY - WCAG AA Compliant Contrast
-// Warm grays with peach/rose undertone for playful, encouraging feel
+// TEXT HIERARCHY - WCAG AA Compliant Contrast with Premium Glossy Gradients
+// Premium iridescent gradients replacing flat grays - maintains full accessibility
 export const TEXT = {
-  primary: '#2D2522',       // Warm charcoal - friendly, readable
-  secondary: '#5D534D',     // Warm taupe - approachable labels
-  tertiary: '#8A7F78',      // Warm stone - soft secondary info
-  muted: '#B5ACA5',         // Warm sand - gentle hints
+  // Primary text - Deep gradient with subtle iridescence
+  primary: '#2D2522',       // Fallback: Warm charcoal - friendly, readable
+  primaryGradient: ['#2D2522', '#1A1815', '#3D3633'],  // Deep charcoal → Rich espresso
+
+  // Secondary text - Medium gradient for labels
+  secondary: '#5D534D',     // Fallback: Warm taupe
+  secondaryGradient: ['#5D534D', '#4A4440', '#6B6360'],  // Taupe → Deep brown
+
+  // Tertiary text - Light glossy gradient
+  tertiary: '#8A7F78',      // Fallback: Warm stone
+  tertiaryGradient: ['#8A7F78', '#9E9892', '#7D7A74'],  // Stone → Silver-gray
+
+  // Muted text - Ultra-premium subtle gradient
+  muted: '#B5ACA5',         // Fallback: Warm sand
+  mutedGradient: ['#B5ACA5', '#A89E97', '#C5BBAF'],  // Sand → Pearl
+
   white: '#FFFFFF',
   onPurple: '#FFFFFF',      // Text ON purple backgrounds
   onPurpleSecondary: '#EEF5F4',
@@ -100,14 +112,26 @@ export const SEMANTIC = {
   },
 };
 
-// SEMANTIC ACTION COLORS - Professional, accessible
+// SEMANTIC ACTION COLORS - Professional, accessible with Premium Glossy Gradients
 export const SEMANTIC_ACTIONS = {
   primary: '#6B82AD',     // Main actions (submit, confirm) - professional blue
+  primaryGradient: ['#6B82AD', '#4A5F8C', '#8FA3C7'],  // Deep blue → Light blue
+
   success: '#6B9B76',     // Goal achieved, positive actions - sage green
+  successGradient: ['#6B9B76', '#4A7856', '#8CBC91'],  // Deep sage → Light green
+
   warning: '#D89B36',     // Approaching limit, caution - muted amber
+  warningGradient: ['#D89B36', '#B67F1F', '#E8B965'],  // Deep amber → Light gold
+
   danger: '#C96B6B',      // Over limit, delete actions - muted red
+  dangerGradient: ['#C96B6B', '#A84848', '#E09B9B'],  // Deep red → Light rose
+
   info: '#6B82AD',        // Insights, informational - professional blue
-  muted: '#C4BBB5',       // Disabled, inactive - warm muted (encouraging)
+  infoGradient: ['#6B82AD', '#4A5F8C', '#B9C7E0'],  // Deep blue → Soft blue
+
+  // Disabled/muted - Premium glossy gray gradient
+  muted: '#C4BBB5',       // Fallback: warm muted
+  mutedGradient: ['#C4BBB5', '#D4CCBE', '#A89E97'],  // Medium-light → Medium-dark
 };
 
 // CELEBRATION COLORS - For achievements and celebrations
@@ -734,6 +758,34 @@ export const ICONS = {
   right: 'chevron-forward',
 };
 
+// PREMIUM SKELETON LOADERS - Glossy gradient animations
+export const SKELETON_GRADIENTS = {
+  // Premium shimmer effect - Iridescent white to pearl
+  shimmer: ['#F0EEE8', '#FFFFFF', '#F5F2ED'],
+  // Deep loading gradient - Sophisticated gray animation
+  deepShimmer: ['#E5E1DB', '#F0ECEA', '#DBD6D0'],
+  // Premium blue loading
+  blueShimmer: ['#E0E6F0', '#F0F5FC', '#E8EEF6'],
+  // Warm glow loading
+  warmShimmer: ['#F5F0EA', '#FFFBF7', '#F0E8E0'],
+  // Glossy pearl gradient
+  pearlShimmer: ['#E8E6E2', '#F8F7F5', '#E0DDDA'],
+  // Metal effect loading
+  metalShimmer: ['#D8D4CE', '#F0EFED', '#D0CCCA'],
+};
+
+// GLOSSY BACKGROUND GRADIENTS - Premium smooth transitions
+export const GLOSSY_BACKGROUNDS = {
+  // Soft white with iridescent tint
+  glossyWhite: ['#FFFFFF', '#FEFDFB', '#FFFFFF'],
+  // Premium warm cream
+  glossyCream: ['#FDF9F7', '#FEFBF8', '#F9F5F0'],
+  // Subtle pearl effect
+  glossyPearl: ['#F8F7F6', '#FFFFFF', '#F5F4F2'],
+  // Elegant neutral
+  glossyNeutral: ['#F2F0ED', '#FCFBFA', '#EBE9E6'],
+};
+
 // HELPER: Get semantic color based on state
 export const getSemanticColor = (state) => {
   switch (state) {
@@ -813,6 +865,10 @@ export const PREMIUM_THEME = {
   VIBRANT_WELLNESS,
   CONFIDENCE_COLORS,
   GRADE_COLORS,
+  NUTRISCORE,
+  HEALTH_SCORE,
+  SKELETON_GRADIENTS,
+  GLOSSY_BACKGROUNDS,
 };
 
 export default PREMIUM_THEME;
