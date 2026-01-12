@@ -80,6 +80,7 @@ function mapReasonToOverrideType(reason: string): string {
 
 /**
  * Fetch orchestrator results for the authenticated user
+ * Falls back to mock data if endpoint returns 404 (during development)
  */
 const fetchOrchestrator = async (): Promise<OrchestratorResult> => {
   try {
@@ -98,9 +99,80 @@ const fetchOrchestrator = async (): Promise<OrchestratorResult> => {
     return data;
   } catch (error) {
     console.error('[useOrchestrator] Error fetching orchestrator:', error);
+
+    // Development fallback: Return mock data when endpoint is not yet deployed
+    if (error?.response?.status === 404) {
+      console.log('[useOrchestrator] Endpoint not found (404) - using mock data');
+      return getMockOrchestratorData();
+    }
+
     throw error;
   }
 };
+
+/**
+ * Mock orchestrator response for development/testing
+ * Used when backend hasn't been deployed yet
+ */
+function getMockOrchestratorData(): OrchestratorResult {
+  const now = new Date();
+  return {
+    success: true,
+    userId: 'mock-user',
+    decision: {
+      type: 'SPEAK',
+      headline: 'You\'re consuming high-NOVA foods',
+      subtitle: 'Ultra-processed foods may be affecting your mood and energy',
+      confidence: 0.82,
+      confidenceLabel: 'High',
+      actions: [
+        {
+          icon: 'leaf',
+          text: 'View whole foods',
+          description: 'Explore unprocessed alternatives',
+          type: 'navigate',
+          metadata: { path: '/insights' },
+        },
+      ],
+    },
+    correlations: [
+      {
+        id: 1,
+        pattern: 'High NOVA food intake → Energy dips',
+        confidence: 0.78,
+        occurrences: 12,
+        affectedDomains: ['energy', 'mood'],
+        whatHappens: 'When you eat more processed foods, energy typically drops 2-4 hours later',
+        evidence: [
+          { date: '2024-01-10', strength: 0.85, context: 'After snacking on chips', tags: ['snack'] },
+          { date: '2024-01-09', strength: 0.72, context: 'Lunch with takeout', tags: ['lunch'] },
+        ],
+      },
+      {
+        id: 2,
+        pattern: 'Dehydration → Poor focus',
+        confidence: 0.71,
+        occurrences: 8,
+        affectedDomains: ['focus', 'clarity'],
+        whatHappens: 'Water intake below 2L correlates with reduced focus in afternoon',
+        evidence: [
+          { date: '2024-01-10', strength: 0.80, context: 'Only 1.5L water logged', tags: ['hydration'] },
+        ],
+      },
+    ],
+    lifecycle: {
+      stage: 'TRACKER',
+      daysSinceStart: 15,
+      daysInCurrentStage: 8,
+      daysToNextStage: 15,
+    },
+    learningState: {
+      canShowCorrelations: true,
+      canShowPredictions: false,
+    },
+    timestamp: now.toISOString(),
+  };
+}
 
 /**
  * Hook to fetch daily intelligence from orchestrator
