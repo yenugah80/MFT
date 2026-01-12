@@ -29,7 +29,7 @@ import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { BRAND, SURFACES, TEXT, SHADOWS , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
-import { predictTomorrowScore , SEMANTIC_ACTIONS } from '../../utils/foodMoodScore';
+import { predictTomorrowScore } from '../../utils/foodMoodScore';
 
 /**
  * Prediction Factor Card
