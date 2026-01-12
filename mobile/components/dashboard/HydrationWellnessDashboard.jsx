@@ -1027,6 +1027,7 @@ export default function HydrationWellnessDashboard({
   const smartAdvice = getSmartAdvice(percentage);
   const remaining = Math.max(goalMl - currentMl, 0);
   const { logCountToday, largestGapMinutesToday } = analyzeTodayEvents(intakeEvents);
+  const hasLoggedToday = logCountToday > 0;
   const lastLogTimestamp = getLastLogTimestampToday(intakeEvents) ?? getLastLogTimestamp(intakeEvents, lastLoggedAt);
   const lastLogMinutes = lastLogTimestamp
     ? (now.getTime() - lastLogTimestamp) / (1000 * 60)
