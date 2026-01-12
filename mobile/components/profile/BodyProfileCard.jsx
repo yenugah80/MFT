@@ -36,6 +36,9 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
+  SEMANTIC_ACTIONS,
+  getMutedToVibrantSolid,
+  getMutedToVibrantColor,
 } from '../../constants/premiumTheme';
 
 // Activity level configuration with visual representation
@@ -54,7 +57,7 @@ const GENDER_OPTIONS = [
 ];
 
 // Circular Progress Ring
-function ProgressRing({ progress, size = 60, strokeWidth = 6, color = BRAND.primary }) {
+function ProgressRing({ progress, size = 60, strokeWidth = 6, color = SEMANTIC_ACTIONS.success }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -66,7 +69,7 @@ function ProgressRing({ progress, size = 60, strokeWidth = 6, color = BRAND.prim
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(107, 78, 255, 0.1)"
+          stroke={`${color}20`}
           strokeWidth={strokeWidth}
           fill="transparent"
         />
@@ -577,7 +580,7 @@ const styles = StyleSheet.create({
   // Divider
   divider: {
     height: 1,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}14`',
     marginVertical: SPACING[3],
   },
 
@@ -628,7 +631,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[3],
   },
   activityContainer: {
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}0D`',
     borderRadius: RADIUS.xl,
     padding: SPACING[4],
   },
@@ -664,7 +667,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}26`',
   },
   activityBarActive: {
     backgroundColor: BRAND.primary,
@@ -772,7 +775,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[5],
     paddingHorizontal: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}14`',
     borderRadius: RADIUS.xl,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -799,7 +802,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING[4],
-    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}0D`',
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[3],
     borderWidth: 2,
@@ -807,7 +810,7 @@ const styles = StyleSheet.create({
   },
   activityOptionActive: {
     borderColor: BRAND.primary,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}1A`',
   },
   activityOptionEmoji: {
     fontSize: 28,
@@ -838,10 +841,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 20,
     borderRadius: 3,
-    backgroundColor: 'rgba(107, 78, 255, 0.15)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}26`',
   },
   activityOptionBarActive: {
-    backgroundColor: 'rgba(107, 78, 255, 0.4)',
+    backgroundColor: '`${SEMANTIC_ACTIONS.success}66`',
   },
   activityOptionBarActiveSelected: {
     backgroundColor: BRAND.primary,

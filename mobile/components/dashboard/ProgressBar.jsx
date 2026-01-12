@@ -68,7 +68,7 @@ export function ProgressBar({
                 width: `${segmentWidth}%`,
                 height,
                 marginRight: index < segments - 1 ? 4 : 0,
-                backgroundColor: index < filledSegments ? SEMANTIC_ACTIONS.success : '#E5E7EB',
+                backgroundColor: index < filledSegments ? SEMANTIC_ACTIONS.success : '#F0E8F8',
               },
             ]}
           />
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   barContainer: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F0E8F8',
     borderRadius: 8,
     overflow: 'hidden',
   },

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { SEMANTIC_ACTIONS, TEXT, SURFACES, getMutedToVibrantSolid } from '../constants/premiumTheme';
 
 const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
 
@@ -9,8 +10,8 @@ const CircularProgress = ({
   maxValue,                 // REQUIRED
   size = 120,
   strokeWidth = 10,
-  color = '#4f46e5',
-  backgroundColor = '#e5e7eb',
+  color = SEMANTIC_ACTIONS.primary,  // Vibrant orange
+  backgroundColor = `${SEMANTIC_ACTIONS.primary}20`,  // Vibrant with transparency
   label,
   unit,
   showPercent = true,
@@ -107,27 +108,27 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: TEXT.primary,
   },
   unit: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6b7280',
+    color: TEXT.secondary,
   },
   percent: {
     fontSize: 12,
-    color: '#6b7280',
+    color: TEXT.secondary,
     marginTop: 2,
   },
   label: {
     marginTop: 8,
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
   },
   noGoalText: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: TEXT.tertiary,
     fontWeight: '500',
   },
 });
