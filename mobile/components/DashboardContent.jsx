@@ -390,18 +390,18 @@ export default function DashboardContent() {
       const result = await acceptRecommendationAction(recommendation);
 
       if (result.success) {
-        notify.success(result.message || 'Added to food log!');
+        notify?.success(result.message || 'Added to food log!');
         setRecommendationModalVisible(false);
         setSelectedRecommendation(null);
 
         // Refresh dashboard to show updated nutrition
         await refetch();
       } else {
-        notify.error(result.error || 'Failed to add to log');
+        notify?.error(result.error || 'Failed to add to log');
       }
     } catch (error) {
       console.error('[Dashboard] Failed to accept recommendation:', error);
-      notify.error(error?.response?.data?.error || 'Failed to add to log');
+      notify?.error(error?.response?.data?.error || 'Failed to add to log');
     } finally {
       setAcceptingRecommendation(false);
     }
@@ -412,7 +412,7 @@ export default function DashboardContent() {
     try {
       await trackInteraction(recommendation.id, 'reject', { reason });
 
-      notify.info('Thanks for the feedback!');
+      notify?.info('Thanks for the feedback!');
       setRecommendationModalVisible(false);
       setSelectedRecommendation(null);
     } catch (error) {
@@ -427,15 +427,15 @@ export default function DashboardContent() {
     try {
       const response = await apiClient.post('/api/nutrition/goals', goalUpdates);
       if (response?.data?.success) {
-        notify.success('Goal updated!');
+        notify?.success('Goal updated!');
         // Refresh dashboard data
         await refetch();
       } else {
-        notify.error('Failed to update goal');
+        notify?.error('Failed to update goal');
       }
     } catch (error) {
       console.error('[Dashboard] Failed to update goals:', error);
-      notify.error(error?.response?.data?.error || 'Failed to update goal');
+      notify?.error(error?.response?.data?.error || 'Failed to update goal');
     }
   }, [refetch, notify]);
 
@@ -450,7 +450,7 @@ export default function DashboardContent() {
     try {
       const result = await apiClient.post('/gamification/check-streak', { currentStreak });
       if (result.awarded) {
-        notify.success(result.message);
+        notify?.success(result.message);
         refetch(); // Refresh to show new freeze count
       }
     } catch (error) {
@@ -986,7 +986,7 @@ export default function DashboardContent() {
 
   const handleShareInsights = async () => {
     if (!moodInsights.length && !insightsMessage) {
-      notify.error('No insights to share yet.');
+      notify?.error('No insights to share yet.');
       return;
     }
 
@@ -1007,7 +1007,7 @@ export default function DashboardContent() {
       await Share.share({ message });
     } catch (error) {
       console.error('[Dashboard] Failed to share insights:', error);
-      notify.error('Unable to share insights right now.');
+      notify?.error('Unable to share insights right now.');
     }
   };
 
@@ -1041,7 +1041,7 @@ export default function DashboardContent() {
         router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
         break;
       default:
-        notify.info(insight.action);
+        notify?.info(insight.action);
     }
   };
 
@@ -1212,7 +1212,7 @@ export default function DashboardContent() {
           onNotificationPress={() => {
             // Scroll to allergen warnings or show notification modal
             if (allergenWarnings.length > 0) {
-              notify.info(`${allergenWarnings.length} allergen warning${allergenWarnings.length > 1 ? 's' : ''} detected`);
+              notify?.info(`${allergenWarnings.length} allergen warning${allergenWarnings.length > 1 ? 's' : ''} detected`);
             }
           }}
           // User lifecycle props - for returning user welcome message
@@ -1289,11 +1289,21 @@ export default function DashboardContent() {
         {/* ============================================ */}
         {hasAnyData && !isOnboarding && (
           <DailyIntelligenceErrorBoundary>
-            <DailyIntelligenceBehaviorSection
-              orchestratorData={orchestratorData}
-              onRequestDismiss={handleDismissRequest}
-              onAction={handleIntelligenceAction}
-            />
+            {orchestratorLoading ? (
+              // Show placeholder while loading
+              <View style={[styles.card, { paddingVertical: 16 }]}>
+                <View style={{ paddingHorizontal: 16 }}>
+                  <View style={{ height: 16, backgroundColor: '#E5E1DB', borderRadius: 4, marginBottom: 12 }} />
+                  <View style={{ height: 12, backgroundColor: '#F0ECEA', borderRadius: 4, width: '70%' }} />
+                </View>
+              </View>
+            ) : orchestratorData ? (
+              <DailyIntelligenceBehaviorSection
+                orchestratorData={orchestratorData}
+                onRequestDismiss={handleDismissRequest}
+                onAction={handleIntelligenceAction}
+              />
+            ) : null}
           </DailyIntelligenceErrorBoundary>
         )}
 
@@ -1410,7 +1420,7 @@ export default function DashboardContent() {
         {/* LIFECYCLE STAGE FOOTER - User progression */}
         {/* Shows current stage and progress to next milestone */}
         {/* ============================================ */}
-        {hasAnyData && !isOnboarding && (
+        {hasAnyData && !isOnboarding && !orchestratorLoading && orchestratorData && (
           <LifecycleStageFooter
             orchestratorData={orchestratorData}
           />
@@ -1668,7 +1678,7 @@ export default function DashboardContent() {
         onAccept={handleAcceptRecommendation}
         onReject={handleRejectRecommendation}
         onSaveForLater={(rec) => {
-          notify.info('Saved for later!');
+          notify?.info('Saved for later!');
           setRecommendationModalVisible(false);
         }}
       />
