@@ -98,14 +98,14 @@ const fetchOrchestrator = async (): Promise<OrchestratorResult> => {
 
     return data;
   } catch (error) {
-    console.error('[useOrchestrator] Error fetching orchestrator:', error);
-
     // Development fallback: Return mock data when endpoint is not yet deployed
-    if (error?.response?.status === 404) {
-      console.log('[useOrchestrator] Endpoint not found (404) - using mock data');
+    const status = error?.response?.status || (error as any)?.status;
+    if (status === 404) {
+      console.log('[useOrchestrator] Orchestrator endpoint not found (404) - using mock data for development');
       return getMockOrchestratorData();
     }
 
+    console.error('[useOrchestrator] Error fetching orchestrator:', error);
     throw error;
   }
 };
