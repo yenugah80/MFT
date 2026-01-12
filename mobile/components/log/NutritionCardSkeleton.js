@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text } from 'react-native';
+import { SURFACES } from '../../constants/premiumTheme';
 
 export const NutritionCardSkeleton = ({ onCancel }) => {
   // Use a ref for the animated value to persist across renders

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { FoodItemCard } from './FoodItemCard'; // 🆕 Use rich item card
+import { SURFACES } from '../../constants/premiumTheme';
 
 // Assuming fonts are defined globally or passed as props
 const fonts = {
