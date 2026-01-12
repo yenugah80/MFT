@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { NutriScorePill } from '../NutriScoreBadge';
-import { SURFACES } from '../../constants/premiumTheme';
+import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SEMANTIC } from '../../constants/premiumTheme';
 
 export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,7 +45,7 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#6B4EFF" />
+        <ActivityIndicator size="small" color={BRAND.primary} />
         <Text style={styles.loadingText}>Loading recent foods...</Text>
       </View>
     );
@@ -62,7 +62,7 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   if (!recentFoods || (recentFoods.length === 0 && !searchQuery)) {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="time-outline" size={48} color=SURFACES.divider />
+        <Ionicons name="time-outline" size={48} color={TEXT.tertiary} />
         <Text style={styles.emptyText}>No recent foods found.</Text>
         <Text style={styles.emptySubtext}>Foods you log will appear here.</Text>
       </View>
@@ -77,7 +77,7 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
         activeOpacity={0.7}
       >
         <View style={styles.foodIcon}>
-          <Ionicons name="restaurant-outline" size={20} color="#6B4EFF" />
+          <Ionicons name="restaurant-outline" size={20} color={BRAND.primary} />
         </View>
         <View style={styles.foodInfo}>
           <View style={styles.foodHeader}>
@@ -92,7 +92,7 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
             </Text>
             {item.healthScore && (
               <View style={styles.healthScoreSmall}>
-                <Ionicons name="heart" size={10} color="#4CAF50" />
+                <Ionicons name="heart" size={10} color={SEMANTIC_ACTIONS.success} />
                 <Text style={styles.healthScoreText}>{item.healthScore}</Text>
               </View>
             )}
@@ -107,7 +107,7 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
         style={styles.quickAddButton}
         onPress={() => onQuickAdd && onQuickAdd(item)}
       >
-        <Ionicons name="flash-outline" size={20} color="#6B4EFF" />
+        <Ionicons name="flash-outline" size={20} color={BRAND.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -115,17 +115,17 @@ export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#9CA3AF" />
+        <Ionicons name="search" size={20} color={TEXT.tertiary} />
         <TextInput 
           style={styles.searchInput}
           placeholder="Search recent foods..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={TEXT.tertiary}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+            <Ionicons name="close-circle" size={18} color={TEXT.tertiary} />
           </TouchableOpacity>
         )}
       </View>
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: 16,
-    color: '#1F2937',
+    color: TEXT.primary,
   },
   loadingContainer: {
     padding: 20,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: '#6B7280',
+    color: TEXT.secondary,
     fontSize: 14,
   },
   errorContainer: {
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    color: '#EF4444',
+    color: SEMANTIC_ACTIONS.danger,
     fontSize: 14,
   },
   emptyContainer: {
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   emptySubtext: {
     marginTop: 4,
     fontSize: 14,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
   },
   listContent: {
     paddingBottom: 20,
@@ -201,11 +201,11 @@ const styles = StyleSheet.create({
   rowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: SURFACES.divider,
     paddingRight: 8,
   },
   foodItem: {
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: SEMANTIC.info.bg,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: TEXT.primary,
     flex: 1,
     marginRight: 8,
   },
@@ -247,16 +247,16 @@ const styles = StyleSheet.create({
   foodMeta: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B4EFF',
+    color: BRAND.primary,
   },
   foodServing: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
   },
   healthScoreSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: SEMANTIC.success.bg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
@@ -265,11 +265,11 @@ const styles = StyleSheet.create({
   healthScoreText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: SEMANTIC_ACTIONS.success,
   },
   quickAddButton: {
     padding: 10,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: SEMANTIC.info.bg,
     borderRadius: 10,
     marginRight: 4,
   },

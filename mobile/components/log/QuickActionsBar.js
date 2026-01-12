@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 const fonts = {
   display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
@@ -18,7 +18,7 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         activeOpacity={0.7}
         accessibilityLabel="Log your mood"
       >
-        <Ionicons name="happy-outline" size={20} color="#6B4EFF" />
+        <Ionicons name="happy-outline" size={20} color={BRAND.primary} />
         <Text style={styles.quickActionText}>Mood</Text>
       </TouchableOpacity>
 
@@ -28,7 +28,7 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         activeOpacity={0.7}
         accessibilityLabel="Log your water intake"
       >
-        <Ionicons name="water-outline" size={20} color="#6B4EFF" />
+        <Ionicons name="water-outline" size={20} color={BRAND.primary} />
         <Text style={styles.quickActionText}>Water</Text>
       </TouchableOpacity>
 
@@ -38,7 +38,7 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         activeOpacity={0.7}
         accessibilityLabel="Open logged meals history"
       >
-        <Ionicons name="flame-outline" size={20} color="#FF6B4E" />
+        <Ionicons name="flame-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
         <Text style={styles.quickActionValue}>{logCount || 0}</Text>
         <Text style={styles.quickActionLabel}>logged</Text>
       </TouchableOpacity>
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   },
   quickActionChip: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -77,12 +77,12 @@ const styles = StyleSheet.create({
   quickActionValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FF6B4E',
+    color: SEMANTIC_ACTIONS.primary,
     fontFamily: fonts.display,
   },
   quickActionLabel: {
     fontSize: 11,
-    color: '#6B7280',
+    color: TEXT.secondary,
     fontFamily: fonts.regular,
   },
 });
