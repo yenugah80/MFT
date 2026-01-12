@@ -81,7 +81,7 @@ const WellnessScoreRing = ({ score = 0, size = 56, strokeWidth = 5 }) => {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke=`${SEMANTIC_ACTIONS.success}1A`
+          stroke={`${SEMANTIC_ACTIONS.success}1A`}
           strokeWidth={strokeWidth}
           fill="none"
         />
