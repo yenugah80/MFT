@@ -20,6 +20,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 import {
   Modal,
   View,

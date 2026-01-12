@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { TEXT, SURFACES, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';

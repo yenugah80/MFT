@@ -13,6 +13,7 @@
  */
 
 import React from 'react';
+import { SURFACES } from '../../constants/premiumTheme';
 import { View, StyleSheet } from 'react-native';
 import { LifecycleStageIndicator } from './LifecycleStageIndicator';
 import { SPACING } from '../../constants/designTokens';

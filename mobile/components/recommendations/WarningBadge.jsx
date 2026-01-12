@@ -5,6 +5,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { SURFACES } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';

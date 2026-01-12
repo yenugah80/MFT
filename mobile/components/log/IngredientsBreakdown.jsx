@@ -12,6 +12,7 @@
  */
 
 import React, { useState } from 'react';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 

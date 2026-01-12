@@ -1,4 +1,5 @@
 import React from 'react';
+import { TEXT } from '../constants/premiumTheme';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { reportCrash } from '../services/crashReporting';

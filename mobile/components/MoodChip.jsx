@@ -1,4 +1,5 @@
 import React from 'react';
+import { TEXT } from '../constants/premiumTheme';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 /**

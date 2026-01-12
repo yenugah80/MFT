@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { TEXT } from '../constants/premiumTheme';
 import {
   View,
   Text,

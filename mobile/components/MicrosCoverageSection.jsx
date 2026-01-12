@@ -1,4 +1,5 @@
 import React from 'react';
+import { TEXT } from '../constants/premiumTheme';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import CircularProgress from './CircularProgress';
 import MicroBar from './MicroBar';

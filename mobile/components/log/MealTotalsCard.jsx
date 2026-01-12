@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 import {
   View,
   Text,

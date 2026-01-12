@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
+import { SURFACES } from '../../constants/premiumTheme';
 import { Animated, StyleSheet } from 'react-native';
 import { RADIUS } from '../../constants/designTokens';
 import { LUXURY_SURFACES } from '../../constants/luxuryTheme';

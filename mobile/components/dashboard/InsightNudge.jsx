@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';

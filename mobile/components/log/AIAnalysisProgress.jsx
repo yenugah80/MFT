@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { TEXT, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
