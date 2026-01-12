@@ -36,6 +36,22 @@ import {
 
 /**
  * ============================================
+ * HELPER UTILITIES
+ * ============================================
+ */
+
+/**
+ * Convert confidence (0-1) to human-readable label
+ */
+function getConfidenceLabel(confidence) {
+  if (confidence >= 0.8) return 'Very High';
+  if (confidence >= 0.6) return 'High';
+  if (confidence >= 0.4) return 'Moderate';
+  return 'Low';
+}
+
+/**
+ * ============================================
  * LIFECYCLE STAGE DETECTION
  * ============================================
  */
@@ -508,22 +524,74 @@ export async function orchestrateDailyRecommendations(userId) {
     // Step 7: Generate message
     const message = generateMessage(decision, decision.correlation, lifecycleStage);
 
-    // Step 8: Prepare output for dashboard
+    // Step 8: Calculate stage progression
+    // Single source of truth for stage durations
+    const STAGE_PROGRESSION = {
+      DISCOVERER: { duration: 1 },
+      BUILDER: { duration: 5 },
+      TRACKER: { duration: 23 },
+      OPTIMIZER: { duration: 60 },
+      MASTER: { duration: 90 },
+      CHAMPION: { duration: 185 },
+      ELITE: { duration: Infinity },
+    };
+
+    const STAGE_ORDER = ['DISCOVERER', 'BUILDER', 'TRACKER', 'OPTIMIZER', 'MASTER', 'CHAMPION', 'ELITE'];
+    const currentIndex = STAGE_ORDER.indexOf(lifecycleStage.stage);
+
+    // Calculate days in current stage and days to next
+    let stageDaysStart = 0;
+    for (let i = 0; i < currentIndex; i++) {
+      stageDaysStart += STAGE_PROGRESSION[STAGE_ORDER[i]].duration;
+    }
+    const daysInCurrentStage = userMetrics.totalDaysWithLogs - stageDaysStart;
+    const stageDuration = STAGE_PROGRESSION[lifecycleStage.stage].duration;
+    const daysToNextStage = Math.max(0, stageDuration - daysInCurrentStage);
+
+    // Step 9: Prepare output for dashboard (corrected schema)
     const output = {
+      success: true,
       userId,
-      orchestratedAt: new Date(),
-      lifecycleStage: lifecycleStage.stage,
-      decision: decision.type,
-      message,
+
+      // Decision envelope (what to show)
+      decision: {
+        type: decision.type,
+        headline: message.headline,
+        subtitle: message.subtitle,
+        confidence: decision.correlation?.confidence || 0,
+        confidenceLabel: getConfidenceLabel(decision.correlation?.confidence || 0),
+        actions: message.actions,
+        visualComponent: message.visual?.type,
+      },
+
+      // Supporting correlations
       correlations: correlations
         .slice(0, lifecycleStage.correlationsToShow)
         .map(c => ({
           id: c.id,
-          ruleName: c.ruleName,
-          expectedOutcome: c.expectedOutcome,
+          pattern: c.ruleName,
           confidence: parseFloat(c.confidence),
+          occurrences: c.occurrences,
           affectedDomains: c.affectedDomains,
+          whatHappens: c.expectedOutcome,
+          evidence: [],
         })),
+
+      // User's journey
+      lifecycle: {
+        stage: lifecycleStage.stage,
+        daysSinceStart: userMetrics.totalDaysWithLogs,
+        daysInCurrentStage: Math.max(0, daysInCurrentStage),
+        daysToNextStage: daysToNextStage,
+      },
+
+      // Learning readiness
+      learningState: {
+        canShowCorrelations: userMetrics.totalDaysWithLogs >= 10,
+        canShowPredictions: userMetrics.totalDaysWithLogs >= 20,
+      },
+
+      timestamp: new Date().toISOString(),
     };
 
     console.log(`[Orchestrator] Daily orchestration complete for user ${userId}`);
