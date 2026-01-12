@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, BRAND } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 /**
  * ProgressBar
@@ -38,7 +38,7 @@ export function ProgressBar({
   const renderLinear = () => (
     <View style={[styles.barContainer, { height }]}>
       <LinearGradient
-        colors={['#34D399', BRAND.emerald]}
+        colors={SEMANTIC_ACTIONS.successGradient}  // Vibrant emerald to mint
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={[
@@ -68,7 +68,7 @@ export function ProgressBar({
                 width: `${segmentWidth}%`,
                 height,
                 marginRight: index < segments - 1 ? 4 : 0,
-                backgroundColor: index < filledSegments ? BRAND.emerald : '#E5E7EB',
+                backgroundColor: index < filledSegments ? SEMANTIC_ACTIONS.success : '#E5E7EB',
               },
             ]}
           />
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   filledBar: {
-    backgroundColor: BRAND.emerald,
+    backgroundColor: SEMANTIC_ACTIONS.success,  // Fallback for non-gradient cases
   },
   segmentedContainer: {
     flexDirection: 'row',
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   percentLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: BRAND.emerald,
+    color: SEMANTIC_ACTIONS.success,  // Vibrant green
   },
   amountLabel: {
     fontSize: 12,
