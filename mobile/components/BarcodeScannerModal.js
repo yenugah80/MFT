@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useFoodAnalysis } from '../hooks/useFoodAnalysis';
 import { useNotification } from '../providers/NotificationProvider';
-import { SURFACES, TEXT } from '../constants/premiumTheme';
+import { SURFACES, TEXT, SEMANTIC_ACTIONS, BRAND } from '../constants/premiumTheme';
 
 export default function BarcodeScannerModal({ visible, onClose }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -100,7 +100,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
     return (
       <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
         <View style={styles.centered}>
-          <Ionicons name="camera-off" size={64} color="#DC2626" />
+          <Ionicons name="camera-off" size={64} color={SEMANTIC_ACTIONS.danger} />
           <Text style={styles.permissionText}>Camera not available on this device.</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={styles.closeButtonText}>Close</Text>
@@ -114,7 +114,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
     return (
       <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#6B4EFF" />
+          <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.permissionText}>Requesting camera permission...</Text>
         </View>
       </Modal>
@@ -125,7 +125,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
     return (
       <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
         <View style={styles.centered}>
-          <Ionicons name="camera-off" size={64} color="#DC2626" />
+          <Ionicons name="camera-off" size={64} color={SEMANTIC_ACTIONS.danger} />
           <Text style={styles.permissionText}>No access to camera. Please enable it in settings.</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={styles.closeButtonText}>Close</Text>
@@ -142,7 +142,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
         <View style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={30} color="#FFFFFF" />
+              <Ionicons name="close" size={30} color={TEXT.white} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Barcode/Product Photo</Text>
             <View style={{ width: 40 }} />
@@ -163,9 +163,9 @@ export default function BarcodeScannerModal({ visible, onClose }) {
               disabled={isProcessingPhoto}
             >
               {isProcessingPhoto ? (
-                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                <ActivityIndicator size="small" color={TEXT.white} style={{ marginRight: 8 }} />
               ) : (
-                <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Ionicons name="checkmark-circle-outline" size={20} color={TEXT.white} style={{ marginRight: 8 }} />
               )}
               <Text style={styles.photoButtonText}>
                 {isProcessingPhoto ? 'Analyzing...' : 'Analyze Photo'}
@@ -177,8 +177,8 @@ export default function BarcodeScannerModal({ visible, onClose }) {
               onPress={handleClearPhoto}
               disabled={isProcessingPhoto}
             >
-              <Ionicons name="close-circle-outline" size={20} color="#DC2626" style={{ marginRight: 8 }} />
-              <Text style={[styles.photoButtonText, { color: '#DC2626' }]}>Change Photo</Text>
+              <Ionicons name="close-circle-outline" size={20} color={SEMANTIC_ACTIONS.danger} style={{ marginRight: 8 }} />
+              <Text style={[styles.photoButtonText, { color: SEMANTIC_ACTIONS.danger }]}>Change Photo</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -200,7 +200,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
           <View style={styles.overlay}>
             <View style={styles.header}>
               <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                <Ionicons name="close" size={30} color="#FFFFFF" />
+                <Ionicons name="close" size={30} color={TEXT.white} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Scan Barcode</Text>
             </View>
@@ -215,7 +215,7 @@ export default function BarcodeScannerModal({ visible, onClose }) {
             >
               {foodAnalysis.isAnalyzing ? (
                 <View style={styles.analysisOverlay}>
-                  <ActivityIndicator size="large" color="#FFFFFF" style={{ marginBottom: 10 }} />
+                  <ActivityIndicator size="large" color={TEXT.white} style={{ marginBottom: 10 }} />
                   <Text style={styles.analysisText}>Analyzing product...</Text>
                 </View>
               ) : (
@@ -230,19 +230,19 @@ export default function BarcodeScannerModal({ visible, onClose }) {
 
             <Text style={styles.scanInstruction}>Align the barcode within the frame</Text>
             <Text style={styles.scanInstruction}>
-              <Ionicons name="scan-outline" size={20} color="#FFFFFF" />
+              <Ionicons name="scan-outline" size={20} color={TEXT.white} />
               Scanning for barcodes...
             </Text>
 
             {scanned && !foodAnalysis.isAnalyzing && (
               <TouchableOpacity style={styles.rescanButton} onPress={() => setScanned(false)}>
                 <LinearGradient
-                  colors={['#6B4EFF', '#8B6EFF']}
+                  colors={SURFACES.gradient.blue}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.rescanButtonGradient}
                 >
-                  <Ionicons name="scan-circle-outline" size={24} color="#FFFFFF" />
+                  <Ionicons name="scan-circle-outline" size={24} color={TEXT.white} />
                   <Text style={styles.rescanButtonText}>Tap to Rescan</Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -251,12 +251,12 @@ export default function BarcodeScannerModal({ visible, onClose }) {
             {!scanned && (
               <TouchableOpacity style={styles.photoUploadButton} onPress={handlePhotoUpload}>
                 <LinearGradient
-                  colors={['#8B6EFF', '#A08FFF']}
+                  colors={SURFACES.gradient.blue}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.photoUploadGradient}
                 >
-                  <Ionicons name="image-outline" size={24} color="#FFFFFF" />
+                  <Ionicons name="image-outline" size={24} color={TEXT.white} />
                   <Text style={styles.photoUploadText}>Or Upload Photo</Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -270,13 +270,13 @@ export default function BarcodeScannerModal({ visible, onClose }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'black' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA', padding: 20 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SURFACES.background.secondary, padding: 20 },
   permissionText: { marginTop: 20, fontSize: 16, textAlign: 'center', color: TEXT.primary },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 40 },
+  overlay: { flex: 1, backgroundColor: SURFACES.card.overlay, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 40 },
   header: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   closeButton: { position: 'absolute', left: 20, padding: 5 },
-  closeButtonText: { color: '#6B4EFF', fontSize: 16, fontWeight: 'bold' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' },
+  closeButtonText: { color: BRAND.primary, fontSize: 16, fontWeight: 'bold' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: TEXT.white },
   scannerFrame: {
     width: 260,
     height: 260,
@@ -289,12 +289,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   analysisOverlay: { alignItems: 'center', justifyContent: 'center' },
-  analysisText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  analysisText: { color: TEXT.white, fontSize: 16, fontWeight: '600' },
   corner: {
     position: 'absolute',
     width: 30,
     height: 30,
-    borderColor: '#FFFFFF',
+    borderColor: TEXT.white,
     borderWidth: 4,
   },
   topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
@@ -303,18 +303,18 @@ const styles = StyleSheet.create({
   scanInstruction: { color: SURFACES.divider, marginTop: 20, fontSize: 16, textAlign: 'center' },
   rescanButton: { marginTop: 20, borderRadius: 12, overflow: 'hidden' },
   rescanButtonGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
-  rescanButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  rescanButtonText: { color: TEXT.white, fontSize: 16, fontWeight: '600', marginLeft: 8 },
   // 🆕 PHOTO UPLOAD STYLES
   photoUploadButton: { marginTop: 12, borderRadius: 12, overflow: 'hidden' },
   photoUploadGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
-  photoUploadText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  photoUploadText: { color: TEXT.white, fontSize: 16, fontWeight: '600', marginLeft: 8 },
   // 🆕 PHOTO PREVIEW STYLES
-  photoPreviewContainer: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#000000', marginVertical: 20 },
+  photoPreviewContainer: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: 'black', marginVertical: 20 },
   photoPreview: { width: '90%', height: '90%', borderRadius: 12, resizeMode: 'contain' },
-  photoHint: { color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingHorizontal: 20, marginBottom: 20 },
+  photoHint: { color: TEXT.tertiary, fontSize: 14, textAlign: 'center', paddingHorizontal: 20, marginBottom: 20 },
   photoActionContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingBottom: 40 },
   photoButton: { flex: 1, borderRadius: 12, overflow: 'hidden' },
-  analyzeButton: { backgroundColor: '#6B4EFF' },
-  clearButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DC2626' },
-  photoButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  analyzeButton: { backgroundColor: BRAND.primary },
+  clearButton: { backgroundColor: TEXT.white, borderWidth: 1, borderColor: SEMANTIC_ACTIONS.danger },
+  photoButtonText: { color: TEXT.white, fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });
