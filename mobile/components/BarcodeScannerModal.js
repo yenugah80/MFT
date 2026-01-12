@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useFoodAnalysis } from '../hooks/useFoodAnalysis';
 import { useNotification } from '../providers/NotificationProvider';
-import { SURFACES } from '../constants/premiumTheme';
+import { SURFACES, TEXT } from '../constants/premiumTheme';
 
 export default function BarcodeScannerModal({ visible, onClose }) {
   const [permission, requestPermission] = useCameraPermissions();
