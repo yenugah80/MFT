@@ -5,24 +5,23 @@
  * Used by DailyIntelligenceCard and dashboard to display SPEAK/REINFORCE/PREDICT/SILENT decisions
  */
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/services/apiClient';
 
 /**
- * Response from orchestrator service
+ * Complete response from orchestrator service (Phase 6 corrected schema)
  */
 export interface OrchestratorResult {
   success: boolean;
   userId: string;
-  stage: string;
-  daysSinceStart: number;
+
+  // Main decision and supporting patterns
   decision: {
     type: 'SPEAK' | 'REINFORCE' | 'PREDICT' | 'SILENT';
     headline: string;
     subtitle?: string;
     confidence: number;
-    confidenceLabel: string;
-    correlationId?: number;
+    confidenceLabel: 'Low' | 'Moderate' | 'High' | 'Very High';
     actions?: Array<{
       icon: string;
       text: string;
@@ -30,80 +29,135 @@ export interface OrchestratorResult {
       type: string;
       metadata?: Record<string, any>;
     }>;
+    visualComponent?: string;
   };
-  correlations?: Array<{
+
+  // Supporting correlations/patterns
+  correlations: Array<{
     id: number;
     pattern: string;
     confidence: number;
-    isHidden?: boolean;
+    occurrences: number;
+    affectedDomains: string[];
+    whatHappens: string;
+    evidence: Array<{
+      date: string;
+      strength: number;
+      context?: string;
+      tags?: string[];
+    }>;
   }>;
-  recommendations?: Array<{
-    id: number;
-    type: string;
-    food: string;
-    reason: string;
-    confidence: number;
-  }>;
+
+  // User's journey through lifecycle
+  lifecycle: {
+    stage: string;
+    daysSinceStart: number;
+    daysInCurrentStage: number;
+    daysToNextStage: number;
+  };
+
+  // Feature readiness based on data quantity
+  learningState: {
+    canShowCorrelations: boolean;
+    canShowPredictions: boolean;
+  };
+
   timestamp: string;
+}
+
+/**
+ * Map dismissal reason to override type for backend
+ */
+function mapReasonToOverrideType(reason: string): string {
+  const mapping: Record<string, string> = {
+    'not_relevant': 'USER_DISMISSED',
+    'temporary': 'TEMPORARY_DISMISS',
+    'fixed': 'RESOLVED',
+    'never_show': 'DEACTIVATION',
+  };
+  return mapping[reason] || 'USER_DISMISSED';
 }
 
 /**
  * Fetch orchestrator results for the authenticated user
  */
 const fetchOrchestrator = async (): Promise<OrchestratorResult> => {
-  const response = await apiClient.post('/orchestrator/run', {});
-  const data = response?.data ?? response;
+  try {
+    const response = await apiClient.post('/orchestrator/run', {});
+    const data = response?.data ?? response;
 
-  if (data === undefined || data === null) {
-    throw new Error('Orchestrator returned no data');
+    if (data === undefined || data === null) {
+      throw new Error('Orchestrator returned no data');
+    }
+
+    // Validate required fields exist
+    if (!data.decision) {
+      throw new Error('Invalid orchestrator response: missing decision');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('[useOrchestrator] Error fetching orchestrator:', error);
+    throw error;
   }
-
-  return data;
 };
 
 /**
  * Hook to fetch daily intelligence from orchestrator
+ * Single fetch point for the entire dashboard
  */
 export const useOrchestrator = () => {
-  return useQuery({
+  return useQuery<OrchestratorResult, Error>({
     queryKey: ['orchestrator'],
     queryFn: fetchOrchestrator,
-    // Fresh orchestrator data important - refresh every 60 seconds
+    // Fresh orchestrator data important - refresh every 60 seconds (stale)
     staleTime: 60 * 1000,
-    // Cache for 10 minutes
+    // Cache in memory for 10 minutes
     gcTime: 10 * 60 * 1000,
+    // Always fetch on mount (in case user was offline)
     refetchOnMount: true,
+    // Retry failed requests twice before giving up
+    retry: 2,
+    // Don't retry on 4xx errors, only on network/5xx
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 
 /**
- * Hook to send feedback on a correlation (dismiss, helpful, etc.)
+ * Hook to send feedback on a correlation dismissal
+ *
+ * Maps dismissal reasons to backend override types:
+ * - "not_relevant" → USER_DISMISSED (-0.2 confidence, permanent)
+ * - "temporary" → TEMPORARY_DISMISS (-0.1 confidence, 7 days)
+ * - "fixed" → RESOLVED (-0.05 confidence, 30 days)
+ * - "never_show" → DEACTIVATION (permanent hide)
  *
  * Usage:
  * const { mutate: sendFeedback } = useCorrelationFeedback();
- * sendFeedback({ correlationId: 123, overrideType: 'USER_DISMISSED', userReason: 'Not relevant' });
+ * sendFeedback({ correlationId: 123, reason: 'not_relevant' });
  */
 export const useCorrelationFeedback = () => {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (feedback: {
       correlationId: number;
-      overrideType:
-        | 'USER_DISMISSED'
-        | 'TEMPORARY_DISMISS'
-        | 'RESOLVED'
-        | 'DEACTIVATION'
-        | 'HELPFUL_FEEDBACK'
-        | 'NOT_HELPFUL_FEEDBACK';
-      userReason?: string;
+      reason: 'not_relevant' | 'temporary' | 'fixed' | 'never_show';
     }) => {
+      const overrideType = mapReasonToOverrideType(feedback.reason);
       const response = await apiClient.post(
         `/correlations/${feedback.correlationId}/feedback`,
-        {
-          overrideType: feedback.overrideType,
-          userReason: feedback.userReason,
-        }
+        { overrideType }
       );
       return response?.data ?? response;
+    },
+    // After successful feedback, invalidate orchestrator cache to refresh
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['orchestrator'] });
+    },
+    // Log errors for debugging
+    onError: (error) => {
+      console.error('[useCorrelationFeedback] Error sending feedback:', error);
     },
   });
 };

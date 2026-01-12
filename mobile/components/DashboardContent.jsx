@@ -63,6 +63,7 @@ import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
 import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehaviorSection";
 import { LifecycleStageFooter } from "./dashboard/LifecycleStageFooter";
 import { DismissReasonSelector } from "./dashboard/DismissReasonSelector";
+import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErrorBoundary";
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -294,30 +295,35 @@ export default function DashboardContent() {
   }, []);
 
   const handleCorrelationDismiss = useCallback((reasonId) => {
-    if (dismissingCorrelationId) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      sendCorrelationFeedback(
-        { correlationId: dismissingCorrelationId, reason: reasonId },
-        {
-          onSuccess: () => {
-            setDismissingCorrelationId(null);
-            notify?.({
-              type: 'success',
-              title: 'Pattern dismissed',
-              message: 'Thank you for the feedback',
-            });
-          },
-          onError: (error) => {
-            console.error('[Dashboard] Feedback error:', error);
-            notify?.({
-              type: 'error',
-              title: 'Could not save feedback',
-              message: 'Please try again',
-            });
-          },
-        }
-      );
-    }
+    if (!dismissingCorrelationId) return;
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    // Send feedback (reasonId maps to: 'not_relevant' | 'temporary' | 'fixed' | 'never_show')
+    // Hook's onSuccess will invalidate orchestrator cache automatically
+    sendCorrelationFeedback(
+      { correlationId: dismissingCorrelationId, reason: reasonId },
+      {
+        // Additional handlers for user feedback
+        onSuccess: () => {
+          setDismissingCorrelationId(null);
+          notify?.({
+            type: 'success',
+            title: 'Pattern dismissed',
+            message: 'Thank you for the feedback',
+          });
+        },
+        onError: (error) => {
+          console.error('[Dashboard] Feedback error:', error);
+          // Keep modal open on error so user can retry
+          notify?.({
+            type: 'error',
+            title: 'Could not save feedback',
+            message: 'Please try again',
+          });
+        },
+      }
+    );
   }, [dismissingCorrelationId, sendCorrelationFeedback, notify]);
 
   const handleCorrelationCancel = useCallback(() => {
@@ -1282,11 +1288,13 @@ export default function DashboardContent() {
         {/* Shows decision cards, pattern insights, lifecycle stage */}
         {/* ============================================ */}
         {hasAnyData && !isOnboarding && (
-          <DailyIntelligenceBehaviorSection
-            orchestratorData={orchestratorData}
-            onRequestDismiss={handleDismissRequest}
-            onAction={handleIntelligenceAction}
-          />
+          <DailyIntelligenceErrorBoundary>
+            <DailyIntelligenceBehaviorSection
+              orchestratorData={orchestratorData}
+              onRequestDismiss={handleDismissRequest}
+              onAction={handleIntelligenceAction}
+            />
+          </DailyIntelligenceErrorBoundary>
         )}
 
         {/* ============================================ */}
