@@ -21,7 +21,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { TEXT, BRAND, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { TEXT, BRAND, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Lottie mood animation sources
 const MOOD_LOTTIE_SOURCES = {

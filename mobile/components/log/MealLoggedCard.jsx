@@ -31,19 +31,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
-import {
-  BRAND,
-  TEXT,
-  SEMANTIC,
-  TYPOGRAPHY,
-  SPACING,
-  RADIUS,
-  SHADOWS,
-  ICON_SIZES,
-  SURFACES,
-  MACRO_COLORS,
-  NUTRISCORE,
-} from '../../constants/premiumTheme';
+import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, MACRO_COLORS, NUTRISCORE, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { NutriScoreGlow, HealthScoreBadge } from '../NutriScoreBadge';
 
 // ============================================================================

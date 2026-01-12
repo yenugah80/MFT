@@ -24,17 +24,7 @@ import * as Haptics from 'expo-haptics';
 import EditableSection from '../EditableSection';
 import TagInput from '../TagInput';
 import { DIETARY_PRESETS } from '../../constants/profileConfig';
-import {
-  BRAND,
-  SURFACES,
-  TEXT,
-  SEMANTIC,
-  TYPOGRAPHY,
-  SPACING,
-  RADIUS,
-  SHADOWS,
-  ANIMATION,
-} from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Animated chip component with spring animation
 const AnimatedChip = ({ label, isSelected, onPress, index, isEditing }) => {

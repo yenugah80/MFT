@@ -54,7 +54,7 @@ import ModernStatCard from "./dashboard/ModernStatCard";
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
-import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
+import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS as PREMIUM_SHADOWS, SEMANTIC_ACTIONS } from '../constants/premiumTheme';
 
 // Modern color palette for dashboard
 import {

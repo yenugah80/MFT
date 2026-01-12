@@ -8,7 +8,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TYPOGRAPHY, SPACING } from '../../constants/designTokens';
-import { SEMANTIC } from '../../constants/premiumTheme';
+import { SEMANTIC, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
 
 /**

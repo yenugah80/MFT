@@ -23,7 +23,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Premium shadow with purple tint
 const PREMIUM_SHADOW = {

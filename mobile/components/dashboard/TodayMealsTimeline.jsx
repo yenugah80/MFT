@@ -8,7 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
-import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // NutriScore badge colors
 const NUTRISCORE_COLORS = {

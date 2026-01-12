@@ -36,17 +36,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 
-import {
-  BRAND,
-  TEXT,
-  SEMANTIC,
-  TYPOGRAPHY,
-  SPACING,
-  RADIUS,
-  SHADOWS,
-  ICON_SIZES,
-  SURFACES,
-} from '../../constants/premiumTheme';
+import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // ============================================================================
 // CONSTANTS

@@ -23,7 +23,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
-import { BRAND, TEXT, SURFACES, SHADOWS, SEMANTIC, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SHADOWS, SEMANTIC, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Tab options - Stats shows aggregate data, Insights shows AI tips
 const TABS = [

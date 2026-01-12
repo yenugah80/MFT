@@ -25,18 +25,7 @@ import * as Haptics from 'expo-haptics';
 
 import EditableSection from '../EditableSection';
 import { PRIMARY_GOAL_OPTIONS } from '../../constants/profileConfig';
-import {
-  BRAND,
-  SURFACES,
-  TEXT,
-  SEMANTIC,
-  TYPOGRAPHY,
-  SPACING,
-  RADIUS,
-  SHADOWS,
-  ANIMATION,
-  MACRO_COLORS,
-} from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, MACRO_COLORS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Goal option icons
 const GOAL_ICONS = {

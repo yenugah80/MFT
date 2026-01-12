@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
 import { useTheme } from '../../../providers/ThemeProvider';
-import { BRAND, TEXT, SURFACES } from '../../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SEMANTIC_ACTIONS } from '../../../constants/premiumTheme';
 
 // Macro colors
 const MACRO_COLORS = {

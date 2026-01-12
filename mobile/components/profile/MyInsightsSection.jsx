@@ -39,7 +39,7 @@ import RecommendationStatsCard from './RecommendationStatsCard';
 import DietaryComplianceCard from '../dashboard/DietaryComplianceCard';
 import CuisineDiversityCard from '../dashboard/CuisineDiversityCard';
 
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {

@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from "react";
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../constants/premiumTheme";
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS, SEMANTIC_ACTIONS } from '../constants/premiumTheme';
 import SaveSuccessAnimation from "./profile/SaveSuccessAnimation";
 import { createFadeSlideAnimation, ANIMATION_TIMING } from "../utils/profileAnimations";
 

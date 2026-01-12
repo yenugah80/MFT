@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, SURFACES, TEXT, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, SHADOWS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { detectPatterns } from '../../utils/foodMoodScore';
 
 /**

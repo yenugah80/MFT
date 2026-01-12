@@ -29,16 +29,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import {
-  BRAND,
-  SURFACES,
-  TEXT,
-  TYPOGRAPHY,
-  SPACING,
-  RADIUS,
-  SHADOWS,
-  ANIMATION,
-} from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 /**
  * Individual Animated Chip

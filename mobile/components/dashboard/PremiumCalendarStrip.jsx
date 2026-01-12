@@ -40,15 +40,7 @@ const MOOD_LOTTIE_SOURCES = {
   sad: require('../../constants/lottie/mood-sad.json'),
 };
 
-import {
-  BRAND,
-  SURFACES,
-  TEXT,
-  TYPOGRAPHY,
-  SPACING,
-  RADIUS,
-  CARD_SYSTEM,
-} from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAY_WIDTH = (SCREEN_WIDTH - 48) / 7;

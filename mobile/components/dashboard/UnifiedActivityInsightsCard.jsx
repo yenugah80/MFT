@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
-import { BRAND, TEXT, SURFACES, SHADOWS, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SHADOWS, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Tab configuration
 const TABS = [

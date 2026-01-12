@@ -7,7 +7,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import { SPACING, RADIUS } from '../../constants/designTokens';
-import { SURFACES, BRAND } from '../../constants/premiumTheme';
+import { SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 // Shared shimmer animation hook
 function useShimmer() {
