@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, BRAND, SURFACES, RADIUS, SPACING, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, RADIUS, SPACING, SHADOWS , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 const ChipSelector = ({
   title,
@@ -22,7 +22,7 @@ const ChipSelector = ({
   onSelectionChange,
   multiSelect = true,
   renderLabel,
-}) => {
+, SEMANTIC_ACTIONS }) => {
   // Helper to extract ID from string or object format
   const getItemId = (item) => {
     if (!item) return '';

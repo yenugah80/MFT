@@ -28,8 +28,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, SURFACES, TEXT, SHADOWS } from '../../constants/premiumTheme';
-import { predictTomorrowScore } from '../../utils/foodMoodScore';
+import { BRAND, SURFACES, TEXT, SHADOWS , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { predictTomorrowScore , SEMANTIC_ACTIONS } from '../../utils/foodMoodScore';
 
 /**
  * Prediction Factor Card

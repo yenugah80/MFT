@@ -1,7 +1,7 @@
 import { View, Text, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from 'expo-linear-gradient';
-import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../../constants/premiumTheme";
+import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS , SEMANTIC_ACTIONS } from "../../constants/premiumTheme";
 
 /**
  * BasicsSection - Premium Profile Header
@@ -10,7 +10,7 @@ import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from
  * Personal metrics (age, weight, height, etc.) are now in MetricsGridSection
  * with inline editing support.
  */
-export default function BasicsSection({ basics, user }) {
+export default function BasicsSection({ basics, user , SEMANTIC_ACTIONS }) {
   return (
     <View style={styles.card}>
       <View style={styles.profileSection}>
