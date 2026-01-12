@@ -13,6 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 
 /**
  * Unit picker options
@@ -474,7 +475,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   portionText: {
     fontSize: 14,
@@ -559,7 +560,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   unitOptionSelected: {
     backgroundColor: '#6B4EFF',
@@ -602,7 +603,7 @@ const styles = StyleSheet.create({
   },
   macroText: {
     fontSize: 14,
-    color: '#4B5563',
+    color: TEXT.secondary,
     fontWeight: '500',
   },
   badge: {
@@ -638,7 +639,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
   },
   detailSection: {
     marginBottom: 16,
@@ -651,7 +652,7 @@ const styles = StyleSheet.create({
   detailSectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     marginBottom: 8,
   },
   detailSectionNote: {
@@ -786,7 +787,7 @@ const styles = StyleSheet.create({
   },
   componentNameCompact: {
     fontSize: 13,
-    color: '#4B5563',
+    color: TEXT.secondary,
     flex: 1,
   },
   componentCaloriesCompact: {
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
   },
   collapsedItemsList: {
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
     paddingVertical: 8,
     paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',

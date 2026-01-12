@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { TEXT, SURFACES } from '../constants/premiumTheme';
 import {
   calculateWeeklyGoalProgress,
   getActivityBreakdown,
@@ -142,13 +143,13 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>7-Day Activity Trend</Text>
-          <View style={[styles.trendBadge, { backgroundColor: trend.trend === 'up' ? '#10B98120' : trend.trend === 'down' ? '#EF444420' : '#94A3B820' }]}>
+          <View style={[styles.trendBadge, { backgroundColor: trend.trend === 'up' ? '#10B98120' : trend.trend === 'down' ? '#EF444420' : `${TEXT.secondary}20` }]}>
             <Ionicons
               name={trend.trend === 'up' ? 'trending-up' : trend.trend === 'down' ? 'trending-down' : 'remove'}
               size={16}
-              color={trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : '#94A3B8'}
+              color={trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : TEXT.secondary}
             />
-            <Text style={[styles.trendText, { color: trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : '#94A3B8' }]}>
+            <Text style={[styles.trendText, { color: trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : TEXT.secondary }]}>
               {trend.changePercentage > 0 ? '+' : ''}{trend.changePercentage}%
             </Text>
           </View>
@@ -168,7 +169,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
               ? '#F59E0B' // Medium - Orange
               : day.calories > 0
               ? '#8B5CF6' // Light - Purple
-              : '#E5E7EB'; // Rest - Gray
+              : SURFACES.divider; // Rest - Light divider
 
             return (
               <View key={index} style={styles.chartBar}>
@@ -262,7 +263,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
       {/* Empty State */}
       {activities.length === 0 && (
         <View style={styles.emptyState}>
-          <Ionicons name="fitness-outline" size={64} color="#CBD5E1" />
+          <Ionicons name="fitness-outline" size={64} color={TEXT.tertiary} />
           <Text style={styles.emptyTitle}>No Activity Data Yet</Text>
           <Text style={styles.emptyText}>
             Start logging your workouts to see insights and trends!
@@ -297,7 +298,7 @@ const getCategoryColor = (index) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9', // Lighter, brighter background
+    backgroundColor: SURFACES.background.secondary, // Lighter, brighter background
   },
   summaryCard: {
     marginHorizontal: 20,
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: TEXT.secondary,
     marginTop: 4,
   },
   summaryStats: {
@@ -416,13 +417,13 @@ const styles = StyleSheet.create({
   streakLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: TEXT.secondary,
     marginTop: 4,
   },
   streakDivider: {
     width: 1,
     height: 40,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: SURFACES.background.tertiary,
   },
   streakCongrats: {
     fontSize: 14,
@@ -470,7 +471,7 @@ const styles = StyleSheet.create({
   breakdownPercentage: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: TEXT.secondary,
     width: 40,
     textAlign: 'right',
   },
@@ -502,7 +503,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '70%',
     justifyContent: 'flex-end',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 4,
   },
   chartBarFill: {
@@ -513,17 +514,17 @@ const styles = StyleSheet.create({
   chartBarLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748B',
+    color: TEXT.secondary,
   },
   chartBarValue: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: TEXT.tertiary,
   },
   trendComparison: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: TEXT.secondary,
     textAlign: 'center',
     backgroundColor: '#F8FAFC',
     paddingVertical: 8,
@@ -542,7 +543,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: SURFACES.background.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: SURFACES.background.secondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
   exerciseStats: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: TEXT.secondary,
     marginTop: 2,
   },
   recommendationsList: {
@@ -596,7 +597,7 @@ const styles = StyleSheet.create({
   recommendationMessage: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#64748B',
+    color: TEXT.secondary,
     lineHeight: 20,
     marginBottom: 12,
   },
@@ -621,14 +622,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#64748B',
+    color: TEXT.secondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: TEXT.tertiary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,

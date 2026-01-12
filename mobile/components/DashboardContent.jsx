@@ -67,7 +67,7 @@ import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErr
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
-import { BRAND, SURFACES, TEXT, SEMANTIC, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
+import { BRAND, SURFACES, TEXT, SEMANTIC, SEMANTIC_ACTIONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
 
 // Utility functions
 import { generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
@@ -1783,15 +1783,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple (was white glass)
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`, // Vibrant emerald
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   focusModeButtonActive: {
-    backgroundColor: 'rgba(107, 78, 255, 0.15)', // Stronger purple when active (was gold)
-    borderColor: 'rgba(107, 78, 255, 0.3)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}26`, // Vibrant emerald when active
+    borderColor: `${SEMANTIC_ACTIONS.success}4D`,
   },
   focusModeIndicator: {
     flexDirection: 'row',
@@ -1840,10 +1840,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)', // Soft brand purple tint
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`, // Vibrant emerald tint
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   syncDot: {
     width: 6,
@@ -2169,7 +2169,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING[3],
@@ -2222,7 +2222,7 @@ const styles = StyleSheet.create({
   hydrationDivider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(107, 78, 255, 0.2)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}33`,
   },
   hydrationTapHint: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -2294,7 +2294,7 @@ const styles = StyleSheet.create({
   filterChip: {
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
     backgroundColor: SURFACES.background.secondary,
     overflow: 'hidden',
     minHeight: 44,
@@ -2325,7 +2325,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -2364,7 +2364,7 @@ const styles = StyleSheet.create({
   coverageBar: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     overflow: 'hidden',
   },
   coverageFill: {
@@ -2373,7 +2373,7 @@ const styles = StyleSheet.create({
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     marginVertical: SPACING[3],
   },
   summarySectionTitle: {
@@ -2428,9 +2428,9 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     paddingVertical: SPACING[3],
     borderRadius: RADIUS.lg,
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.3)',
+    borderColor: `${SEMANTIC_ACTIONS.success}4D`,
   },
   insightsCtaText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -2460,7 +2460,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.secondary,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   proteinName: {
     flex: 1,
@@ -2482,8 +2482,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[2],
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.3)',
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    borderColor: `${SEMANTIC_ACTIONS.success}4D`,
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
   },
   proteinHistoryButtonText: {
     fontSize: TYPOGRAPHY.size.sm,

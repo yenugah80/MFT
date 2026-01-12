@@ -13,6 +13,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 
 /**
  * Confidence badge color and text (0.0-1.0)
@@ -522,12 +523,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     marginBottom: 8,
   },
   healthScoreBar: {
     height: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 4,
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
     marginBottom: 16,
   },
   caloriesValue: {
@@ -667,12 +668,12 @@ const styles = StyleSheet.create({
   microName: {
     flex: 1,
     fontSize: 14,
-    color: '#374151',
+    color: TEXT.primary,
   },
   microBarContainer: {
     flex: 2,
     height: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: SURFACES.divider,
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -689,7 +690,7 @@ const styles = StyleSheet.create({
   },
   hydrationText: {
     fontSize: 14,
-    color: '#374151',
+    color: TEXT.primary,
     paddingVertical: 4,
   },
   ingredientsContainer: {
@@ -724,7 +725,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
   },
   ingredientDescription: {
     fontSize: 13,
@@ -737,7 +738,7 @@ const styles = StyleSheet.create({
   },
   ingredientMacro: {
     fontSize: 12,
-    color: '#374151',
+    color: TEXT.primary,
     fontWeight: '500',
   },
   actions: {
@@ -745,7 +746,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
   },
   cancelButton: {
     flex: 1,
@@ -757,7 +758,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
   },
   saveButton: {
     flex: 2,
@@ -862,7 +863,7 @@ const styles = StyleSheet.create({
   },
   analysisNotesText: {
     fontSize: 13,
-    color: '#374151',
+    color: TEXT.primary,
     lineHeight: 19,
     fontStyle: 'normal',
   },

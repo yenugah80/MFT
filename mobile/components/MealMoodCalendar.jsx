@@ -20,6 +20,7 @@ import {
   SURFACES,
   BRAND,
   SEMANTIC,
+  SEMANTIC_ACTIONS,
 } from '../constants/premiumTheme';
 import { generateStoryLine } from '../utils/healthCalculations';
 import { formatDateLocal } from '../utils/dateHelpers';
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
     borderWidth: 1.5,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
     overflow: 'hidden',
   },
 
@@ -378,10 +379,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: 'rgba(107, 78, 255, 0.08)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.15)',
+    borderColor: `${SEMANTIC_ACTIONS.success}26`,
   },
   expandButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -393,14 +394,14 @@ const styles = StyleSheet.create({
   calendarContainer: {
     paddingHorizontal: SPACING[3],
     paddingBottom: SPACING[4],
-    backgroundColor: 'rgba(107, 78, 255, 0.02)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}05`,
   },
   weekHeader: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: SPACING[3],
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(107, 78, 255, 0.08)',
+    borderBottomColor: `${SEMANTIC_ACTIONS.success}14`,
     marginBottom: SPACING[2],
   },
   weekDayText: {
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
   todayCell: {
     borderWidth: 2,
     borderColor: BRAND.primary,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   dayText: {
     fontSize: 13,
@@ -459,7 +460,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING[3],
     paddingBottom: SPACING[2],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 78, 255, 0.08)',
+    borderTopColor: `${SEMANTIC_ACTIONS.success}14`,
     marginTop: SPACING[2],
   },
   legendItem: {
@@ -502,7 +503,7 @@ const styles = StyleSheet.create({
   sheetHandle: {
     width: 48,
     height: 5,
-    backgroundColor: 'rgba(107, 78, 255, 0.2)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}33`,
     borderRadius: 3,
     alignSelf: 'center',
     marginBottom: SPACING[5],
@@ -528,11 +529,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(107, 78, 255, 0.2)',
+    borderColor: `${SEMANTIC_ACTIONS.success}33`,
   },
   storyLine: {
     flexDirection: 'row',
@@ -543,7 +544,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[5],
     borderWidth: 1,
-    borderColor: 'rgba(107, 78, 255, 0.1)',
+    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   storyText: {
     fontSize: TYPOGRAPHY.size.base,
@@ -593,7 +594,7 @@ const styles = StyleSheet.create({
   shareButton: {
     backgroundColor: 'rgba(107, 78, 255, 0.08)',
     borderWidth: 1.5,
-    borderColor: 'rgba(107, 78, 255, 0.2)',
+    borderColor: `${SEMANTIC_ACTIONS.success}33`,
   },
   shareButtonText: {
     color: BRAND.primary,

@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { TEXT } from '../../constants/premiumTheme';
 import { useSubscription, PRODUCTS, PRICING } from '../../contexts/SubscriptionContext';
 import { trackEvent, Events } from '../../services/analytics';
 
@@ -112,7 +113,7 @@ export default function Paywall({ visible, onClose, highlightTier = 'premium' })
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Ionicons name="close" size={28} color="#6b7280" />
+            <Ionicons name="close" size={28} color={TEXT.secondary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Upgrade Your Experience</Text>
           <View style={styles.closeButton} />
@@ -290,7 +291,7 @@ export default function Paywall({ visible, onClose, highlightTier = 'premium' })
             disabled={isRestoring}
           >
             {isRestoring ? (
-              <ActivityIndicator color="#6b7280" size="small" />
+              <ActivityIndicator color={TEXT.secondary} size="small" />
             ) : (
               <Text style={styles.restoreText}>Restore Purchases</Text>
             )}
@@ -318,7 +319,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: TEXT.tertiary,
   },
   closeButton: {
     width: 44,
@@ -360,13 +361,13 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: TEXT.secondary,
     textAlign: 'center',
     paddingHorizontal: 20,
   },
   planToggle: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: TEXT.tertiary,
     borderRadius: 12,
     padding: 4,
     marginBottom: 20,
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
   toggleText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#6b7280',
+    color: TEXT.secondary,
   },
   toggleTextActive: {
     color: '#1f2937',
@@ -439,7 +440,7 @@ const styles = StyleSheet.create({
   priceCardTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6b7280',
+    color: TEXT.secondary,
   },
   priceCardPrice: {
     fontSize: 24,
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
   },
   priceCardPeriod: {
     fontSize: 13,
-    color: '#9ca3af',
+    color: TEXT.tertiary,
   },
   savingsBadge: {
     position: 'absolute',
@@ -482,14 +483,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: TEXT.tertiary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   featureText: {
     fontSize: 15,
-    color: '#374151',
+    color: TEXT.primary,
     flex: 1,
   },
   testimonial: {
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 34,
     borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    borderTopColor: TEXT.tertiary,
     backgroundColor: '#fff',
   },
   purchaseButton: {
@@ -544,12 +545,12 @@ const styles = StyleSheet.create({
   },
   restoreText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: TEXT.secondary,
     textDecorationLine: 'underline',
   },
   termsText: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: TEXT.tertiary,
     textAlign: 'center',
     lineHeight: 16,
   },

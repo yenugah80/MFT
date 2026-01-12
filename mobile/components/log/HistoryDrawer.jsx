@@ -15,6 +15,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { TEXT, SURFACES } from '../../constants/premiumTheme';
 
 /**
  * Format timestamp to readable date
@@ -420,7 +421,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: SURFACES.divider,
   },
   headerActions: {
     flexDirection: 'row',
@@ -453,7 +454,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   compareToggleActive: {
     backgroundColor: '#6B4EFF',
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF2FF',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: SURFACES.divider,
   },
   selectionHintText: {
     fontSize: 14,
@@ -582,7 +583,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: SURFACES.divider,
   },
   comparisonTitle: {
     fontSize: 20,
@@ -618,7 +619,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   healthierText: {
     fontSize: 16,
@@ -629,7 +630,7 @@ const styles = StyleSheet.create({
   neutralText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4B5563',
+    color: TEXT.secondary,
     textAlign: 'center',
   },
   comparisonRow: {
@@ -648,7 +649,7 @@ const styles = StyleSheet.create({
   },
   comparisonDataRow: {
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: SURFACES.divider,
     paddingVertical: 12,
   },
   comparisonDataRowHighlight: {
@@ -657,7 +658,7 @@ const styles = StyleSheet.create({
   comparisonLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     marginBottom: 8,
   },
   comparisonValues: {
@@ -701,7 +702,7 @@ const styles = StyleSheet.create({
   },
   detailStat: {
     fontSize: 14,
-    color: '#111827',
+    color: TEXT.primary,
   },
   detailActions: {
     flexDirection: 'row',
@@ -724,7 +725,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: SURFACES.divider,
   },
   secondaryActionText: {
     color: '#1F2937',

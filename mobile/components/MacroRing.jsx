@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import CircularProgress from './CircularProgress';
+import { TEXT } from '../constants/premiumTheme';
 
 /**
  * Macro nutrient display with circular progress
@@ -52,12 +53,12 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: TEXT.primary,
     marginTop: 8,
   },
   target: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: TEXT.tertiary,
     marginTop: 2,
   },
 });
