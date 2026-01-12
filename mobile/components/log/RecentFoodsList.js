@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { NutriScorePill } from '../NutriScoreBadge';
+import { SURFACES } from '../../constants/premiumTheme';
 
 export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
