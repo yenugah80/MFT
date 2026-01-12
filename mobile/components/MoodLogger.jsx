@@ -365,7 +365,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                 <TextInput
                   style={styles.noteInput}
                   placeholder="Add a private note (optional)"
-                  placeholderTextColor=TEXT.tertiary
+                  placeholderTextColor={TEXT.tertiary}
                   value={note}
                   onChangeText={setNote}
                   multiline

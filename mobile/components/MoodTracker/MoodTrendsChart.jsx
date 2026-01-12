@@ -154,7 +154,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
                   y1={y}
                   x2={CHART_WIDTH - PADDING.right}
                   y2={y}
-                  stroke=SURFACES.divider
+                  stroke={SURFACES.divider}
                   strokeWidth={1}
                   strokeDasharray="4,4"
                 />

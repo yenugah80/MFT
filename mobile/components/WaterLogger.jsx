@@ -353,7 +353,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
             <TextInput
               style={styles.customInput}
               placeholder="Enter ml"
-              placeholderTextColor=TEXT.tertiary
+              placeholderTextColor={TEXT.tertiary}
               keyboardType="numeric"
               value={customAmount}
               onChangeText={setCustomAmount}

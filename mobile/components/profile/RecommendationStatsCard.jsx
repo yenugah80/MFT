@@ -99,7 +99,7 @@ export default function RecommendationStatsCard() {
             cx="60"
             cy="60"
             r={CIRCLE_RADIUS}
-            stroke=SURFACES.background.tertiary
+            stroke={SURFACES.background.tertiary}
             strokeWidth="8"
             fill="none"
           />

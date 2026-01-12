@@ -53,7 +53,7 @@ export default function DietaryComplianceCard({ score = 0, todaysMeals = [] }) {
               cx="60"
               cy="60"
               r={CIRCLE_RADIUS}
-              stroke=SURFACES.divider
+              stroke={SURFACES.divider}
               strokeWidth="8"
               fill="none"
             />
