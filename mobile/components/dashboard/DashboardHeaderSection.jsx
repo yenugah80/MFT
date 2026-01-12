@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../providers/ThemeProvider';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
+import { SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 /**
  * Enhanced Dashboard Header Section
@@ -77,18 +78,18 @@ export default function DashboardHeaderSection({
   const brandPrimary = colors.brand.primary;
   const brandSecondary = colors.brand.secondary;
 
-  // Get color for calorie progress
+  // Get colors for calorie progress - vibrant orange to gold gradient
   const getCalorieColor = () => {
-    if (caloriePercent >= 90 && caloriePercent <= 110) return brandSecondary;
-    if (caloriePercent > 110) return brandSecondary;
-    return brandPrimary;
+    // Over goal: use warning gradient
+    if (caloriePercent > 110) return SEMANTIC_ACTIONS.warningGradient;
+    // On track: use primary gradient (orange to gold)
+    return SEMANTIC_ACTIONS.primaryGradient;  // ['#FF8A50', '#FFD700']
   };
 
-  // Get color for water progress
+  // Get colors for water progress - vibrant cyan to blue gradient
   const getWaterColor = () => {
-    if (waterProgress >= 100) return brandSecondary;
-    if (waterProgress > 0) return brandPrimary;
-    return brandPrimary;
+    // Hydration is primary goal, always use info gradient
+    return SEMANTIC_ACTIONS.infoGradient;  // ['#00E5FF', '#0096FF']
   };
 
   // Get time-based icon
@@ -280,23 +281,23 @@ export default function DashboardHeaderSection({
         {/* Calories */}
         <View style={localStyles.quickStat}>
           <View style={[localStyles.quickStatIcon, { backgroundColor: subtleBg }]}>
-            <Ionicons name="flame-outline" size={16} color={getCalorieColor()} />
+            <Ionicons name="flame-outline" size={16} color={getCalorieColor()[0]} />
           </View>
           <Text style={[localStyles.quickStatTitle, { color: textSecondary }]}>Calories</Text>
           <View style={localStyles.quickStatContent}>
-            <Text style={[localStyles.quickStatValue, { color: getCalorieColor() }]}>
+            <Text style={[localStyles.quickStatValue, { color: getCalorieColor()[0] }]}>
               {Math.round(todayCalories)}
             </Text>
             <Text style={[localStyles.quickStatLabel, { color: textTertiary }]}>/{calorieGoal} cal</Text>
           </View>
           <View style={[localStyles.miniProgressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.08)' }]}>
-            <View
+            <LinearGradient
+              colors={getCalorieColor()}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
               style={[
                 localStyles.miniProgressFill,
-                {
-                  width: `${Math.min(caloriePercent, 100)}%`,
-                  backgroundColor: getCalorieColor()
-                }
+                { width: `${Math.min(caloriePercent, 100)}%` }
               ]}
             />
           </View>
@@ -308,23 +309,23 @@ export default function DashboardHeaderSection({
         {/* Water - Show absolute liters for consistency with calories */}
         <View style={localStyles.quickStat}>
           <View style={[localStyles.quickStatIcon, { backgroundColor: subtleBg }]}>
-            <Ionicons name="water-outline" size={16} color={getWaterColor()} />
+            <Ionicons name="water-outline" size={16} color={getWaterColor()[0]} />
           </View>
           <Text style={[localStyles.quickStatTitle, { color: textSecondary }]}>Water</Text>
           <View style={localStyles.quickStatContent}>
-            <Text style={[localStyles.quickStatValue, { color: getWaterColor() }]}>
+            <Text style={[localStyles.quickStatValue, { color: getWaterColor()[0] }]}>
               {waterIntakeLiters.toFixed(1)}
             </Text>
             <Text style={[localStyles.quickStatLabel, { color: textTertiary }]}>/{waterGoalLiters.toFixed(1)} L</Text>
           </View>
           <View style={[localStyles.miniProgressContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.08)' }]}>
-            <View
+            <LinearGradient
+              colors={getWaterColor()}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
               style={[
                 localStyles.miniProgressFill,
-                {
-                  width: `${Math.min(waterProgress, 100)}%`,
-                  backgroundColor: getWaterColor()
-                }
+                { width: `${Math.min(waterProgress, 100)}%` }
               ]}
             />
           </View>
