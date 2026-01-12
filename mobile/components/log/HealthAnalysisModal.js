@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity, ScrollView, Platform, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SURFACES, TEXT } from '../../constants/premiumTheme';
+import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const fonts = {
   display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
@@ -21,7 +21,7 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
       case 'C': return '#FECB02'; // Yellow
       case 'D': return '#EE8100'; // Orange
       case 'E': return '#E63E11'; // Red
-      default: return '#9CA3AF';
+      default: return TEXT.tertiary;
     }
   };
 
@@ -67,10 +67,10 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
             <Text style={styles.title}>Health Analysis</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity onPress={handleShare} style={styles.iconButton}>
-                <Ionicons name="share-social-outline" size={24} color="#6B4EFF" />
+                <Ionicons name="share-social-outline" size={24} color={SEMANTIC_ACTIONS.primary} />
               </TouchableOpacity>
               <TouchableOpacity onPress={onClose} style={styles.iconButton}>
-                <Ionicons name="close" size={24} color="#6B7280" />
+                <Ionicons name="close" size={24} color={TEXT.tertiary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -102,7 +102,7 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
             {totalMacros > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="pie-chart-outline" size={20} color="#6B4EFF" />
+                  <Ionicons name="pie-chart-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
                   <Text style={styles.sectionTitle}>Nutrient Balance</Text>
                 </View>
                 
@@ -135,7 +135,7 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
             {cookingMethod && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="flame-outline" size={20} color="#6B4EFF" />
+                  <Ionicons name="flame-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
                   <Text style={styles.sectionTitle}>Cooking Method</Text>
                 </View>
                 <Text style={styles.sectionText}>
@@ -148,7 +148,7 @@ export const HealthAnalysisModal = ({ visible, onClose, data }) => {
             {analysis && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="analytics-outline" size={20} color="#6B4EFF" />
+                  <Ionicons name="analytics-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
                   <Text style={styles.sectionTitle}>AI Reasoning</Text>
                 </View>
                 <Text style={styles.analysisText}>{analysis}</Text>
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.background.primary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     height: '70%',
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: TEXT.primary,
     fontFamily: fonts.display,
   },
   headerActions: {
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#1F2937',
+    color: TEXT.primary,
     marginBottom: 24,
     textAlign: 'center',
     fontFamily: fonts.display,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   scoreLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: TEXT.tertiary,
     fontFamily: fonts.strong,
   },
   scoreCircle: {
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.display,
   },
   section: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: SURFACES.card.background,
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   },
   highlight: {
     fontWeight: '700',
-    color: '#6B4EFF',
+    color: SEMANTIC_ACTIONS.primary,
   },
   analysisText: {
     fontSize: 15,
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: TEXT.tertiary,
     fontFamily: fonts.strong,
   },
 });
