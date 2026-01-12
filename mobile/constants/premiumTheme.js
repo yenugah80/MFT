@@ -4,14 +4,14 @@
  * Consistent across Log, Dashboard, and Profile
  */
 
-// PRIMARY BRAND COLORS - Apple Health Inspired Professional
+// PRIMARY BRAND COLORS - Vibrant Modern Style
 export const BRAND = {
-  primary: '#8FA3C7',        // Muted professional blue
-  primaryLight: '#B9C7E0',   // Light blue (Apple Health)
-  primaryDark: '#6B82AD',    // Dark blue
-  secondary: '#C4AE9E',      // Warm sand
-  secondaryLight: '#EBDBD3', // Light sand (Apple Health)
-  accent: '#D89B7D',         // Muted coral
+  primary: '#6B4EFF',        // Vibrant purple (main brand color)
+  primaryLight: '#8B6EFF',   // Light purple
+  primaryDark: '#5A3EE0',    // Dark purple
+  secondary: '#FF6B9D',      // Vibrant pink
+  secondaryLight: '#FF8DB3', // Light pink
+  accent: '#00D9FF',         // Vibrant cyan
 };
 
 // BACKGROUND & SURFACES
@@ -34,14 +34,14 @@ export const SURFACES = {
     border: 'rgba(138, 127, 120, 0.08)',  // Warm border
   },
   gradient: {
-    primary: ['#6B82AD', '#B9C7E0'],      // Muted blue gradient (professional)
-    secondary: ['#C4AE9E', '#EBDBD3'],    // Warm sand gradient (Apple Health)
-    accent: ['#D89B7D', '#E9C4B8'],       // Muted coral gradient
-    success: ['#6B9B76', '#A8C9A5'],      // Sage green gradient (professional)
-    warning: ['#D89B36', '#E8B965'],      // Muted amber gradient
-    danger: ['#C96B6B', '#E09B9B'],       // Muted red gradient
-    purple: ['#7B8CAD', '#B0B8C1'],       // Soft purple-gray
-    blue: ['#6B82AD', '#B9C7E0'],         // Professional blue
+    primary: ['#6B4EFF', '#8B6EFF'],      // Vibrant purple gradient
+    secondary: ['#FF6B9D', '#FF8DB3'],    // Vibrant pink gradient
+    accent: ['#00D9FF', '#00E5FF'],       // Vibrant cyan gradient
+    success: ['#10B981', '#34D399'],      // Vibrant emerald gradient
+    warning: ['#F59E0B', '#FBBF24'],      // Vibrant amber gradient
+    danger: ['#EF4444', '#F87171'],       // Vibrant red gradient
+    purple: ['#6B4EFF', '#8B6EFF'],       // Vibrant purple
+    blue: ['#3B82F6', '#60A5FA'],         // Vibrant blue
     pink: ['#D89B7D', '#E9C4B8'],         // Muted coral
     // Professional Pastel Gradients - Apple Health inspired
     pastelPeach: ['#FAF8F5', '#F5F0E8'],  // Warm white to sand
