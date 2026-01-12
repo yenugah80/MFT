@@ -17,8 +17,13 @@
         "NSPhotoLibraryUsageDescription": "Photo library access is required to select food images from your device",
         "NSMicrophoneUsageDescription": "Microphone access is required for voice food logging feature",
         "NSLocalNetworkUsageDescription": "Local network access for enhanced connectivity",
-        "UIRequiredDeviceCapabilities": ["armv7"]
+        "UIRequiredDeviceCapabilities": [
+          "armv7"
+        ]
       }
+    },
+    "android": {
+      "package": "com.harikay.myfoodtrackermain"
     }
   }
 }

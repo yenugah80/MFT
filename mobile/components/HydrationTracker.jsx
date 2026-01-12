@@ -375,7 +375,7 @@ export default function HydrationTracker({
 
           {goalReached && (
             <View style={styles.goalReachedBanner}>
-              <Ionicons name="sparkles" size={20} color="#10B981" />
+              <Ionicons name="sparkles" size={20} color={SEMANTIC.success.base} />
               <Text style={styles.goalReachedText}>Amazing! Goal achieved! 🎉</Text>
             </View>
           )}
@@ -411,7 +411,7 @@ export default function HydrationTracker({
             if (shouldAvoid) {
               return (
                 <View style={styles.beverageWarning}>
-                  <Ionicons name="warning" size={16} color="#F59E0B" />
+                  <Ionicons name="warning" size={16} color={SEMANTIC.warning.base} />
                   <Text style={styles.beverageWarningText}>
                     {bevInfo?.label || selectedBeverage} is not recommended at this time
                   </Text>
@@ -421,7 +421,7 @@ export default function HydrationTracker({
             if (warning) {
               return (
                 <View style={styles.beverageWarning}>
-                  <Ionicons name="information-circle" size={16} color="#3B82F6" />
+                  <Ionicons name="information-circle" size={16} color={SEMANTIC.info.base} />
                   <Text style={styles.beverageWarningText}>{warning}</Text>
                 </View>
               );
@@ -429,7 +429,7 @@ export default function HydrationTracker({
             if (pairing) {
               return (
                 <View style={styles.beverageTip}>
-                  <Ionicons name="bulb-outline" size={16} color="#10B981" />
+                  <Ionicons name="bulb-outline" size={16} color={SEMANTIC.success.base} />
                   <Text style={styles.beverageTipText}>
                     Tip: {pairing.reason}
                   </Text>
@@ -439,7 +439,7 @@ export default function HydrationTracker({
             if (bevInfo?.tip && selectedBeverage !== 'water') {
               return (
                 <View style={styles.beverageTip}>
-                  <Ionicons name="leaf-outline" size={16} color="#10B981" />
+                  <Ionicons name="leaf-outline" size={16} color={SEMANTIC.success.base} />
                   <Text style={styles.beverageTipText}>{bevInfo.tip}</Text>
                 </View>
               );
@@ -791,7 +791,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[2],
-    backgroundColor: '#D1FAE5',
+    backgroundColor: SEMANTIC.success.bg,
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[4],
     borderRadius: RADIUS.full,
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
   goalReachedText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: '#059669',
+    color: SEMANTIC.success.base,
   },
 
   // Beverage Selector
@@ -829,15 +829,15 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: '#FEF3C7',
+    backgroundColor: SEMANTIC.warning.bg,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: '#F59E0B30',
+    borderColor: `${SEMANTIC.warning.base}30`,
   },
   beverageWarningText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
-    color: '#92400E',
+    color: SEMANTIC.warning.base,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   beverageTip: {
@@ -847,15 +847,15 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: '#ECFDF5',
+    backgroundColor: SEMANTIC.success.bg,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: '#10B98130',
+    borderColor: `${SEMANTIC.success.base}30`,
   },
   beverageTipText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
-    color: '#065F46',
+    color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   beverageChip: {
@@ -1141,7 +1141,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 100,
-    backgroundColor: '#EF4444',
+    backgroundColor: SEMANTIC.danger.base,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -1150,7 +1150,7 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
   },
   deleteText: {
-    color: '#FFF',
+    color: TEXT.white,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
@@ -1229,7 +1229,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: RADIUS.full,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: SEMANTIC.info.bg,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING[4],
