@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
-import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, MOOD_PALETTE, BRAND, TEXT, SEMANTIC_ACTIONS, SURFACES } from '../../constants/premiumTheme';
+import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, MOOD_PALETTE, BRAND, TEXT, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
 
 import MoodIcon3D from '../MoodTracker/MoodIcon3D';
