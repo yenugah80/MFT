@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { TEXT, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,28 +15,28 @@ const ANALYSIS_STEPS = [
     icon: 'eye-outline',
     text: 'Analyzing image',
     duration: 1500,
-    color: '#6B4EFF',
+    color: BRAND.primary,
   },
   {
     id: 2,
     icon: 'search-outline',
     text: 'Identifying foods and portions',
     duration: 2000,
-    color: '#3B82F6',
+    color: SEMANTIC.info.base,
   },
   {
     id: 3,
     icon: 'calculator-outline',
     text: 'Estimating nutrition from public data',
     duration: 1500,
-    color: '#10B981',
+    color: SEMANTIC_ACTIONS.success,
   },
   {
     id: 4,
     icon: 'checkmark-circle-outline',
     text: 'Finalizing estimate',
     duration: 1000,
-    color: '#22C55E',
+    color: SEMANTIC_ACTIONS.success,
   },
 ];
 
@@ -72,7 +72,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
     <View style={styles.container}>
       {/* Trust Badge */}
       <View style={styles.trustBadge}>
-        <Ionicons name="shield-checkmark" size={20} color="#22C55E" />
+        <Ionicons name="shield-checkmark" size={20} color={SEMANTIC_ACTIONS.success} />
         <Text style={styles.trustText}>AI-assisted • Estimate in progress</Text>
       </View>
 
@@ -112,7 +112,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
                 <Ionicons
                   name={isComplete ? 'checkmark-circle' : step.icon}
                   size={22}
-                  color={isActive || isComplete ? step.color : '#9CA3AF'}
+                  color={isActive || isComplete ? step.color : TEXT.tertiary}
                 />
               </View>
 
@@ -135,7 +135,7 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
               </View>
 
               {isComplete && (
-                <Ionicons name="checkmark" size={18} color="#22C55E" />
+                <Ionicons name="checkmark" size={18} color={SEMANTIC_ACTIONS.success} />
               )}
             </View>
           );
@@ -146,21 +146,21 @@ export default function AIAnalysisProgress({ mode = 'photo' }) {
       <View style={styles.sourcesContainer}>
         <Text style={styles.sourcesTitle}>Data Sources:</Text>
         <View style={styles.sourcesList}>
-          <SourceBadge icon="flask-outline" text="Public nutrition data" color="#3B82F6" />
-          <SourceBadge icon="eye-outline" text="Vision model" color="#10B981" />
-          <SourceBadge icon="library-outline" text="Common portion guides" color="#F59E0B" />
+          <SourceBadge icon="flask-outline" text="Public nutrition data" color={SEMANTIC.info.base} />
+          <SourceBadge icon="eye-outline" text="Vision model" color={SEMANTIC_ACTIONS.success} />
+          <SourceBadge icon="library-outline" text="Common portion guides" color={SEMANTIC_ACTIONS.warning} />
         </View>
       </View>
 
       {/* Confidence Indicator */}
       <View style={styles.confidenceContainer}>
         <LinearGradient
-          colors={['#10B981', '#22C55E']}
+          colors={SEMANTIC_ACTIONS.successGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.confidenceGradient}
         >
-          <Ionicons name="analytics-outline" size={16} color="#FFFFFF" />
+          <Ionicons name="analytics-outline" size={16} color={TEXT.white} />
           <Text style={styles.confidenceText}>
             Estimate ready for review
           </Text>
@@ -186,12 +186,12 @@ function SourceBadge({ icon, text, color }) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderRadius: 16,
     padding: 20,
     marginHorizontal: 16,
     marginTop: 12,
-    shadowColor: '#000',
+    shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -203,18 +203,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: SEMANTIC.success.bg,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: SEMANTIC.success.light,
   },
   trustText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#166534',
+    color: SEMANTIC.success.dark,
     marginLeft: 6,
   },
 
@@ -227,19 +227,19 @@ const styles = StyleSheet.create({
   progressTrack: {
     flex: 1,
     height: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: SURFACES.divider,
     borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6B4EFF',
+    backgroundColor: BRAND.primary,
     borderRadius: 4,
   },
   progressPercent: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#6B4EFF',
+    color: BRAND.primary,
     marginLeft: 12,
     minWidth: 40,
   },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   stepText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: TEXT.secondary,
     fontWeight: '500',
   },
   stepTextActive: {
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   stepTextComplete: {
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
   },
 
   // Loading Dots
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#6B4EFF',
+    backgroundColor: BRAND.primary,
     marginRight: 4,
   },
   dot1: {
@@ -309,14 +309,14 @@ const styles = StyleSheet.create({
   // Sources
   sourcesContainer: {
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: SURFACES.divider,
     paddingTop: 16,
     marginBottom: 12,
   },
   sourcesTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: TEXT.secondary,
     marginBottom: 8,
   },
   sourcesList: {
@@ -352,14 +352,14 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: TEXT.white,
     marginLeft: 6,
   },
 
   // Help Text
   helpText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: TEXT.tertiary,
     textAlign: 'center',
     fontStyle: 'italic',
   },
