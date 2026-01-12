@@ -184,8 +184,8 @@ export default function DashboardHeaderSection({
             </LinearGradient>
           </View>
           <View style={localStyles.brandTextContainer}>
-            <Text style={[localStyles.brandName, { color: textPrimary }]}>Nutri</Text>
-            <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Food intelligence</Text>
+            <Text style={[localStyles.brandName, { color: textPrimary }]}>My-Food-Tracker</Text>
+            <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Your Wellness Companion</Text>
           </View>
         </View>
         {/* PRO badge - TODO: Show only for premium users once payment system is implemented */}
