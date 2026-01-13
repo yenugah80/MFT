@@ -113,7 +113,7 @@ const MoodInsightCard = ({
           <Ionicons
             name="refresh"
             size={ICON_SIZES.md}
-            color={loading ? TEXT.tertiary : SEMANTIC.info.base}
+            color={loading ? SEMANTIC.info.light : SEMANTIC.info.base}
             style={loading ? styles.spinning : null}
           />
         </TouchableOpacity>
@@ -186,7 +186,7 @@ const MoodInsightCard = ({
                   <Ionicons
                     name={expandedInsights.has(index) ? 'chevron-up' : 'chevron-down'}
                     size={ICON_SIZES.sm}
-                    color={TEXT.tertiary}
+                    color={SEMANTIC.info.base}
                   />
                 </View>
               </TouchableOpacity>
@@ -214,7 +214,7 @@ const MoodInsightCard = ({
       {/* Empty State */}
       {!loading && !minDataMessage && insights.length === 0 && (
         <View style={styles.emptyState}>
-          <Ionicons name="analytics-outline" size={48} color={TEXT.tertiary} />
+          <Ionicons name="analytics-outline" size={48} color={SEMANTIC.info.base} />
           <Text style={styles.emptyText}>No insights yet</Text>
           <Text style={styles.emptySubtext}>
             We need more data to generate meaningful insights
@@ -225,7 +225,7 @@ const MoodInsightCard = ({
       {/* Professional Disclaimer */}
       {!loading && insights.length > 0 && (
         <View style={styles.disclaimer}>
-          <Ionicons name="shield-checkmark" size={ICON_SIZES.xs} color={TEXT.tertiary} />
+          <Ionicons name="shield-checkmark" size={ICON_SIZES.xs} color={SEMANTIC.info.base} />
           <Text style={styles.disclaimerText}>
             AI-generated insights. Consult a healthcare professional for medical advice.
           </Text>
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[0.5],
   },
   refreshButton: {
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[3],
   },
   minDataContainer: {
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   },
   minDataSubtext: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     textAlign: 'center',
     marginTop: SPACING[2],
   },
@@ -306,12 +306,12 @@ const styles = StyleSheet.create({
     maxHeight: 600,
   },
   insightCard: {
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: SEMANTIC.info.light,
     borderRadius: RADIUS.lg,
     padding: SPACING[4],
     marginBottom: SPACING[3],
     borderWidth: 1,
-    borderColor: SURFACES.divider,
+    borderColor: SEMANTIC.info.base,
   },
   insightHeader: {
     flexDirection: 'row',
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   },
   insightType: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[0.5],
   },
   insightHeaderRight: {
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   },
   insightMessage: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: TEXT.primary,
     lineHeight: 20,
     marginBottom: SPACING[2],
   },
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
+    borderTopColor: SEMANTIC.info.base,
   },
   suggestionsTitle: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   suggestionText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: TEXT.primary,
     lineHeight: 18,
   },
   emptyState: {
@@ -412,12 +412,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[3],
   },
   emptySubtext: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[1],
     textAlign: 'center',
   },
@@ -428,12 +428,12 @@ const styles = StyleSheet.create({
     marginTop: SPACING[4],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
+    borderTopColor: SEMANTIC.info.light,
   },
   disclaimerText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     lineHeight: 16,
   },
 });

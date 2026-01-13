@@ -60,6 +60,7 @@ export function useMoodLog() {
       queryClient.invalidateQueries({ queryKey: ['moodLogs'] });
       queryClient.invalidateQueries({ queryKey: ['moodTrends'] });
       queryClient.invalidateQueries({ queryKey: ['moodInsights'] });
+      queryClient.invalidateQueries({ queryKey: ['moodToday'] });
     },
   });
 

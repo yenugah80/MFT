@@ -105,8 +105,10 @@ export default function HydrationTracker({
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
   }, []);
 
-  const percentage = Math.min((currentIntake / dailyGoal) * 100, 100);
-  const remainingLiters = Math.max(dailyGoal - currentIntake, 0);
+  // Guard against division by zero - default to 2L if goal is 0 or invalid
+  const safeGoal = dailyGoal > 0 ? dailyGoal : 2.0;
+  const percentage = Math.min((currentIntake / safeGoal) * 100, 100);
+  const remainingLiters = Math.max(safeGoal - currentIntake, 0);
   const remainingMl = Math.round(remainingLiters * 1000);
   const goalReached = percentage >= 100;
 
@@ -315,7 +317,7 @@ export default function HydrationTracker({
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconContainer}>
-                <Ionicons name="water" size={ICON_SIZES.xl} color={TEXT.white} />
+                <Ionicons name="water" size={ICON_SIZES.lg} color={TEXT.white} />
               </View>
               <View>
                 <Text style={styles.headerTitle}>Hydration Tracker</Text>
@@ -335,8 +337,8 @@ export default function HydrationTracker({
           <View style={styles.progressContainer}>
             <HydrationProgressRing
               percentage={percentage}
-              size={200}
-              strokeWidth={14}
+              size={160}
+              strokeWidth={12}
               reduceMotion={reduceMotion}
               milestones={MILESTONES}
               styles={styles}
@@ -612,15 +614,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING[4],
-    paddingBottom: SPACING[8],
+    padding: SPACING[3],
+    paddingBottom: SPACING[6],
   },
 
   // Header
   headerCard: {
     borderRadius: RADIUS.xl,
-    padding: SPACING[5],
-    marginBottom: SPACING[4],
+    padding: SPACING[4],
+    marginBottom: SPACING[3],
     ...SHADOWS.info,
   },
   headerContent: {
@@ -634,8 +636,8 @@ const styles = StyleSheet.create({
     gap: SPACING[3],
   },
   headerIconContainer: {
-    width: 64,
-    height: 64,
+    width: 52,
+    height: 52,
     borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
@@ -643,19 +645,19 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.size['2xl'],
+    fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.extrabold,
     color: TEXT.white,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.xs,
     color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: SPACING[1],
+    marginTop: SPACING[0.5],
   },
   goalBadge: {
-    width: 52,
-    height: 52,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.full,
     backgroundColor: SEMANTIC.warning.bg,
     justifyContent: 'center',
@@ -667,8 +669,8 @@ const styles = StyleSheet.create({
   visualizationCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[6],
-    marginBottom: SPACING[4],
+    padding: SPACING[4],
+    marginBottom: SPACING[3],
     alignItems: 'center',
     ...SHADOWS.lg,
   },
@@ -676,9 +678,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING[6],
-    width: 220,
-    height: 220,
+    marginBottom: SPACING[4],
+    width: 180,
+    height: 180,
   },
   ringWrapper: {
     position: 'absolute',
@@ -693,16 +695,16 @@ const styles = StyleSheet.create({
   progressCenter: {
     position: 'absolute',
     alignItems: 'center',
-    gap: SPACING[2],
+    gap: SPACING[1],
   },
   progressPercentage: {
-    fontSize: TYPOGRAPHY.size['4xl'],
+    fontSize: TYPOGRAPHY.size['3xl'],
     fontWeight: TYPOGRAPHY.weight.black,
     color: SEMANTIC.info.base,
     letterSpacing: -1,
   },
   progressLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
@@ -713,10 +715,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[1],
     backgroundColor: SEMANTIC.info.bg,
-    paddingVertical: SPACING[1],
+    paddingVertical: SPACING[0.5],
     paddingHorizontal: SPACING[2],
     borderRadius: RADIUS.full,
-    marginTop: SPACING[2],
+    marginTop: SPACING[1],
   },
   nextMilestoneText: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -766,25 +768,25 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[4],
-    marginBottom: SPACING[4],
+    gap: SPACING[6],
+    marginBottom: SPACING[3],
   },
   mainStat: {
     alignItems: 'center',
   },
   mainStatValue: {
-    fontSize: TYPOGRAPHY.size['2xl'],
+    fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: SEMANTIC.info.base,
   },
   mainStatLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
-    marginTop: 4,
+    marginTop: 2,
   },
   mainStatDivider: {
     width: 1,
-    height: 40,
+    height: 32,
     backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   goalReachedBanner: {
@@ -806,15 +808,15 @@ const styles = StyleSheet.create({
   beverageSelectorCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
     ...SHADOWS.sm,
   },
   sectionLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.secondary,
-    marginBottom: SPACING[3],
+    marginBottom: SPACING[2],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -904,8 +906,8 @@ const styles = StyleSheet.create({
   quickAddCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
     ...SHADOWS.sm,
   },
   quickAddGrid: {
@@ -914,7 +916,7 @@ const styles = StyleSheet.create({
   },
   quickAddTile: {
     flex: 1,
-    height: 72,
+    height: 60,
   },
   quickAddTileWrapper: {
     flex: 1,

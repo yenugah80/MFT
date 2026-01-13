@@ -26,6 +26,7 @@ export const SURFACES = {
     gradientCool: ['#F8FAFC', '#F1F5F9', '#EFF6F5'],  // Soft mint-blue
     gradientSunrise: ['#FDF9F6', '#FBF5EF', '#F9F1E8'],  // Morning glow
   },
+  divider: '#E5E1DB',             // Warm subtle divider
   card: {
     primary: '#FFFFFF',
     glass: 'rgba(255, 255, 255, 0.92)',
@@ -254,7 +255,9 @@ export const TYPOGRAPHY = {
 // SPACING (4pt grid)
 export const SPACING = {
   0: 0,
+  0.5: 2,    // Half-step for fine adjustments
   1: 4,
+  1.5: 6,    // 1.5x step
   2: 8,
   3: 12,
   4: 16,
@@ -502,7 +505,7 @@ export const MACRO_COLORS = {
 };
 
 // MOOD COLORS (8 core moods for premium MoodTracker)
-// VIBRANT colors - NO soft/muted tones
+// VIBRANT GLOWY colors - Premium look like legacy design, NO muted/grayish tones
 export const MOOD_PALETTE = {
   happy: {
     base: '#FBBF24',      // VIBRANT amber/gold
@@ -512,7 +515,7 @@ export const MOOD_PALETTE = {
     gradient: ['#FBBF24', '#FCD34D', '#FDE68A'],
   },
   calm: {
-    base: '#06B6D4',      // VIBRANT cyan
+    base: '#06B6D4',      // VIBRANT cyan (legacy glowy)
     light: '#22D3EE',
     dark: '#0891B2',
     bg: '#ECFEFF',
@@ -526,39 +529,39 @@ export const MOOD_PALETTE = {
     gradient: ['#8B5CF6', '#A78BFA', '#C4B5FD'],
   },
   energized: {
-    base: '#F97316',      // VIBRANT orange
-    light: '#FB923C',
-    dark: '#EA580C',
-    bg: '#FFF7ED',
-    gradient: ['#F97316', '#FB923C', '#FDBA74'],
+    base: '#10B981',      // VIBRANT emerald green (legacy glowy)
+    light: '#34D399',
+    dark: '#059669',
+    bg: '#ECFDF5',
+    gradient: ['#10B981', '#34D399', '#6EE7B7'],
   },
   neutral: {
-    base: '#8A7F78',      // Warm stone (friendly)
-    light: '#B5ACA5',
-    dark: '#5D534D',
-    bg: '#F7F5F4',        // Warm white
-    gradient: ['#8A7F78', '#B5ACA5', '#D9D4D0'],
+    base: '#3B82F6',      // VIBRANT blue (legacy glowy - NO gray)
+    light: '#60A5FA',
+    dark: '#2563EB',
+    bg: '#EFF6FF',
+    gradient: ['#3B82F6', '#60A5FA', '#93C5FD'],
   },
   tired: {
-    base: '#A78BFA',      // VIBRANT violet
-    light: '#C4B5FD',
-    dark: '#8B5CF6',
-    bg: '#F5F3FF',
-    gradient: ['#A78BFA', '#C4B5FD', '#DDD6FE'],
+    base: '#C084FC',      // Soft orchid/lavender - dreamy, low-energy
+    light: '#E9D5FF',
+    dark: '#A855F7',
+    bg: '#FAF5FF',
+    gradient: ['#C084FC', '#D8B4FE', '#E9D5FF'],
   },
   stressed: {
-    base: '#F43F5E',      // VIBRANT rose
-    light: '#FB7185',
-    dark: '#E11D48',
-    bg: '#FFF1F2',
-    gradient: ['#F43F5E', '#FB7185', '#FDA4AF'],
+    base: '#DC2626',      // True red - serious tension, not cheerful
+    light: '#FCA5A5',
+    dark: '#B91C1C',
+    bg: '#FEF2F2',
+    gradient: ['#DC2626', '#EF4444', '#F87171'],
   },
   sad: {
-    base: '#6366F1',      // VIBRANT indigo
-    light: '#818CF8',
-    dark: '#4F46E5',
-    bg: '#EEF2FF',
-    gradient: ['#6366F1', '#818CF8', '#A5B4FC'],
+    base: '#2563EB',      // VIBRANT royal blue - deeper, melancholic
+    light: '#60A5FA',
+    dark: '#1D4ED8',
+    bg: '#EFF6FF',
+    gradient: ['#2563EB', '#3B82F6', '#60A5FA'],
   },
   // Future expansion (Phase 4+): angry, anxious, excited, relaxed
 };

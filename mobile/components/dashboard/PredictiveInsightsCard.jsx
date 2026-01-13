@@ -1,17 +1,15 @@
 /**
- * PredictiveInsightsCard - Tomorrow's Forecast
+ * PredictiveInsightsCard - Your Body Intelligence
  *
  * THE killer feature that no other app has.
- * Predicts how the user will feel tomorrow based on today's choices.
+ * Learns YOUR unique patterns and predicts how you'll feel based on today's choices.
  *
- * "Last 4 times you had pasta + wine at night, you felt sluggish the next morning"
- *
- * Production-grade with:
- * - AI-powered predictions based on historical patterns
- * - Confidence indicators
- * - Actionable suggestions
- * - Beautiful animations
- * - Full accessibility
+ * Features:
+ * - PERSONALIZED learning that adapts to your body's responses
+ * - Progressive insights that get smarter over time
+ * - Evidence-based recommendations from medical research
+ * - Shows when insights are personalized vs science-based
+ * - Beautiful animations and full accessibility
  */
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
@@ -29,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { BRAND, SURFACES, TEXT, SHADOWS , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
-import { predictTomorrowScore } from '../../utils/foodMoodScore';
+import { analyzeBodyIntelligence } from '../../utils/bodyIntelligenceEngine';
 
 /**
  * Prediction Factor Card
@@ -57,8 +55,8 @@ function PredictionFactor({ factor, index }) {
   }, [slideAnim, opacityAnim, index]);
 
   const isPositive = factor.impact > 0;
-  const impactColor = isPositive ? '#10B981' : '#F59E0B';
-  const impactBg = isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)';
+  const impactColor = isPositive ? SEMANTIC_ACTIONS.success : SEMANTIC_ACTIONS.warning;
+  const impactBg = isPositive ? `${SEMANTIC_ACTIONS.success}1A` : `${SEMANTIC_ACTIONS.warning}1A`;
 
   return (
     <Animated.View
@@ -187,13 +185,24 @@ function ScorePrediction({ currentScore, predictedScore, confidence }) {
         </View>
       </View>
 
-      {/* Confidence indicator */}
-      <View style={styles.confidenceIndicator}>
-        <Ionicons name="analytics" size={12} color={TEXT.tertiary} />
-        <Text style={styles.confidenceLabel}>
-          {Math.round(confidence * 100)}% prediction confidence
-        </Text>
-      </View>
+      {/* Confidence indicator - only show when confidence is meaningful (>40%) */}
+      {confidence > 0.4 && (
+        <View style={styles.confidenceIndicator}>
+          <Ionicons name="analytics" size={12} color={TEXT.tertiary} />
+          <Text style={styles.confidenceLabel}>
+            {Math.round(confidence * 100)}% prediction confidence
+          </Text>
+        </View>
+      )}
+      {/* Low data message when confidence is too low */}
+      {confidence <= 0.4 && (
+        <View style={styles.confidenceIndicator}>
+          <Ionicons name="information-circle-outline" size={12} color={TEXT.tertiary} />
+          <Text style={styles.confidenceLabel}>
+            Keep logging for more accurate predictions
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -204,6 +213,8 @@ function ScorePrediction({ currentScore, predictedScore, confidence }) {
 export default function PredictiveInsightsCard({
   todaysMeals = [],
   todaysMood = null,
+  todaysWater = 0,
+  goals = {},
   currentScore = 50,
   historicalPatterns = [],
   onViewHistory,
@@ -213,15 +224,25 @@ export default function PredictiveInsightsCard({
   const cardAnim = useRef(new Animated.Value(0)).current;
   const expandAnim = useRef(new Animated.Value(0)).current;
 
-  // Calculate predictions
+  // Calculate predictions using ML-powered Body Intelligence Engine
   const prediction = useMemo(() => {
-    return predictTomorrowScore({
+    // Build historical data from mood trends
+    const historicalData = historicalPatterns.map(entry => ({
+      date: entry.loggedDate || entry.date,
+      meals: entry.meals || [],
+      mood: entry.intensity ? { intensity: entry.intensity, type: entry.moodType || entry.type } : null,
+      water: entry.waterIntake || entry.water || 0,
+    }));
+
+    return analyzeBodyIntelligence({
       todaysMeals,
       todaysMood,
+      todaysWater,
+      historicalData,
+      goals,
       currentScore,
-      historicalPatterns,
     });
-  }, [todaysMeals, todaysMood, currentScore, historicalPatterns]);
+  }, [todaysMeals, todaysMood, todaysWater, goals, currentScore, historicalPatterns]);
 
   // Entrance animation
   useEffect(() => {
@@ -248,9 +269,10 @@ export default function PredictiveInsightsCard({
     setExpanded(!expanded);
   };
 
-  const { predictedScore, change, confidence, predictions, summary } = prediction;
+  const { predictedScore, change, confidence, predictions, summary, learningStatus } = prediction;
   const hasPredictions = predictions.length > 0;
   const isPositiveOutlook = change >= 0;
+  const isPersonalized = learningStatus?.isPersonalized || false;
 
   // Don't show if no predictions
   if (!hasPredictions && todaysMeals.length < 2) {
@@ -268,11 +290,11 @@ export default function PredictiveInsightsCard({
           style={styles.emptyGradient}
         >
           <View style={styles.emptyIconContainer}>
-            <Ionicons name="sparkles" size={32} color={BRAND.primary} />
+            <Ionicons name="body" size={32} color={BRAND.primary} />
           </View>
-          <Text style={styles.emptyTitle}>Tomorrow&apos;s Forecast</Text>
+          <Text style={styles.emptyTitle}>Your Body Intelligence</Text>
           <Text style={styles.emptyText}>
-            Log more meals today to unlock predictions about how you&apos;ll feel tomorrow
+            Log meals to unlock personalized insights about how your body responds to food
           </Text>
           <View style={styles.emptyProgress}>
             <View style={styles.emptyProgressBar}>
@@ -302,8 +324,8 @@ export default function PredictiveInsightsCard({
       <LinearGradient
         colors={
           isPositiveOutlook
-            ? ['rgba(16, 185, 129, 0.08)', `${SEMANTIC_ACTIONS.success}0D`]
-            : ['rgba(245, 158, 11, 0.08)', `${SEMANTIC_ACTIONS.success}0D`]
+            ? [`${SEMANTIC_ACTIONS.success}14`, `${SEMANTIC_ACTIONS.success}0A`]
+            : [`${SEMANTIC_ACTIONS.warning}14`, `${SEMANTIC_ACTIONS.warning}0A`]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -315,43 +337,53 @@ export default function PredictiveInsightsCard({
           onPress={handleToggleExpand}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={`Tomorrow's forecast: ${predictedScore} points`}
+          accessibilityLabel={`Body insights: predicted score ${predictedScore}`}
           accessibilityHint="Tap to expand details"
         >
           <View style={styles.headerLeft}>
             <View style={[
               styles.iconContainer,
-              { backgroundColor: isPositiveOutlook ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)' }
+              { backgroundColor: isPositiveOutlook ? `${SEMANTIC_ACTIONS.success}26` : `${SEMANTIC_ACTIONS.warning}26` }
             ]}>
               <Ionicons
-                name={isPositiveOutlook ? 'sunny' : 'partly-sunny'}
+                name={isPositiveOutlook ? 'trending-up' : 'analytics'}
                 size={24}
-                color={isPositiveOutlook ? '#10B981' : '#F59E0B'}
+                color={isPositiveOutlook ? SEMANTIC_ACTIONS.success : SEMANTIC_ACTIONS.warning}
               />
             </View>
             <View style={styles.headerText}>
               <View style={styles.titleRow}>
-                <Text style={styles.title}>Tomorrow&apos;s Forecast</Text>
-                <View style={styles.aiBadge}>
-                  <Ionicons name="sparkles" size={10} color={BRAND.primary} />
-                  <Text style={styles.aiText}>AI</Text>
-                </View>
+                <Text style={styles.title}>Your Body Insights</Text>
+                {isPersonalized ? (
+                  <View style={styles.personalizedBadge}>
+                    <Ionicons name="person" size={10} color={SEMANTIC_ACTIONS.success} />
+                    <Text style={styles.personalizedText}>Personalized</Text>
+                  </View>
+                ) : (
+                  <View style={styles.aiBadge}>
+                    <Ionicons name="flask" size={10} color={BRAND.primary} />
+                    <Text style={styles.aiText}>Science</Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.subtitle}>{summary}</Text>
             </View>
           </View>
           <View style={styles.headerRight}>
-            <View style={[
-              styles.predictionBadge,
-              { backgroundColor: isPositiveOutlook ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)' }
-            ]}>
-              <Text style={[
-                styles.predictionValue,
-                { color: isPositiveOutlook ? '#10B981' : '#F59E0B' }
+            {/* Only show change badge when there's an actual change */}
+            {change !== 0 && (
+              <View style={[
+                styles.predictionBadge,
+                { backgroundColor: isPositiveOutlook ? `${SEMANTIC_ACTIONS.success}26` : `${SEMANTIC_ACTIONS.warning}26` }
               ]}>
-                {change >= 0 ? '+' : ''}{change}
-              </Text>
-            </View>
+                <Text style={[
+                  styles.predictionValue,
+                  { color: isPositiveOutlook ? SEMANTIC_ACTIONS.success : SEMANTIC_ACTIONS.warning }
+                ]}>
+                  {change >= 0 ? '+' : ''}{change}
+                </Text>
+              </View>
+            )}
             <Ionicons
               name={expanded ? 'chevron-up' : 'chevron-down'}
               size={20}
@@ -367,11 +399,29 @@ export default function PredictiveInsightsCard({
           confidence={confidence}
         />
 
-        {/* Expanded Content - Prediction Factors */}
+        {/* Expanded Content - Body Insights */}
         {expanded && hasPredictions && (
           <Animated.View style={styles.expandedContent}>
             <View style={styles.divider} />
-            <Text style={styles.factorsTitle}>What&apos;s affecting tomorrow</Text>
+
+            {/* Learning Status Indicator */}
+            {learningStatus && (
+              <View style={styles.learningStatusRow}>
+                <Ionicons
+                  name={isPersonalized ? 'checkmark-circle' : 'hourglass-outline'}
+                  size={14}
+                  color={isPersonalized ? SEMANTIC_ACTIONS.success : TEXT.tertiary}
+                />
+                <Text style={[
+                  styles.learningStatusText,
+                  isPersonalized && styles.learningStatusPersonalized
+                ]}>
+                  {learningStatus.message}
+                </Text>
+              </View>
+            )}
+
+            <Text style={styles.factorsTitle}>What your body is telling you</Text>
             {predictions.map((factor, index) => (
               <PredictionFactor key={factor.factor} factor={factor} index={index} />
             ))}
@@ -384,7 +434,7 @@ export default function PredictiveInsightsCard({
                 activeOpacity={0.7}
               >
                 <Ionicons name="time-outline" size={16} color={BRAND.primary} />
-                <Text style={styles.historyButtonText}>View History</Text>
+                <Text style={styles.historyButtonText}>View Patterns</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -463,6 +513,20 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.bold,
     color: BRAND.primary,
   },
+  personalizedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: `${SEMANTIC_ACTIONS.success}15`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  personalizedText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: SEMANTIC_ACTIONS.success,
+  },
   subtitle: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
@@ -524,10 +588,10 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.primary,
   },
   scoreBarImprovement: {
-    backgroundColor: '#10B981',
+    backgroundColor: SEMANTIC_ACTIONS.success,
   },
   scoreBarDecline: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: SEMANTIC_ACTIONS.warning,
   },
   scoreValue: {
     width: 40,
@@ -546,10 +610,10 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
   },
   scoreImprovement: {
-    color: '#10B981',
+    color: SEMANTIC_ACTIONS.success,
   },
   scoreDecline: {
-    color: '#F59E0B',
+    color: SEMANTIC_ACTIONS.warning,
   },
   changeText: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -557,10 +621,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   changeTextUp: {
-    color: '#10B981',
+    color: SEMANTIC_ACTIONS.success,
   },
   changeTextDown: {
-    color: '#F59E0B',
+    color: SEMANTIC_ACTIONS.warning,
   },
   arrowContainer: {
     alignItems: 'center',
@@ -589,6 +653,25 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     marginBottom: SPACING[3],
+  },
+  learningStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[2],
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: RADIUS.md,
+  },
+  learningStatusText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    flex: 1,
+  },
+  learningStatusPersonalized: {
+    color: SEMANTIC_ACTIONS.success,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
   factorsTitle: {
     fontSize: TYPOGRAPHY.size.sm,

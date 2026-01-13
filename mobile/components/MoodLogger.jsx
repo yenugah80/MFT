@@ -21,8 +21,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { useMoodLog } from '../hooks/useMoodLog';
 import MoodIcon3D from './MoodTracker/MoodIcon3D';
+import apiClient from '../services/apiClient';
 import {
   MOOD_PALETTE,
   SPACING,
@@ -30,13 +32,22 @@ import {
   TYPOGRAPHY,
   TEXT,
   SURFACES,
+  SEMANTIC_ACTIONS,
 } from '../constants/premiumTheme';
 
-// Tag categories for mood context
+// Helper to convert hex to rgba
+const hexToRgba = (hex, alpha) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// Tag categories for mood context with vibrant colors
 const TAG_CATEGORIES = {
-  sleep: { label: 'Sleep', icon: 'moon', options: ['Poor', 'Fair', 'Good', 'Excellent'] },
-  exercise: { label: 'Exercise', icon: 'barbell', options: ['None', 'Light', 'Moderate', 'Intense'] },
-  social: { label: 'Social', icon: 'people', options: ['Alone', 'Friends', 'Family', 'Crowded'] },
+  sleep: { label: 'Sleep', icon: 'moon', options: ['Poor', 'Fair', 'Good', 'Excellent'], color: MOOD_PALETTE.focused.base },
+  exercise: { label: 'Exercise', icon: 'barbell', options: ['None', 'Light', 'Moderate', 'Intense'], color: SEMANTIC_ACTIONS.success },
+  social: { label: 'Social', icon: 'people', options: ['Alone', 'Friends', 'Family', 'Crowded'], color: MOOD_PALETTE.calm.base },
 };
 
 /**
@@ -74,7 +85,7 @@ const IntensitySlider = ({ value, onChange, moodColor, label = 'Intensity', help
         <Text style={[styles.sliderValue, { color: moodColor }]}>{value}/10</Text>
       </View>
       <View
-        style={styles.sliderTrack}
+        style={[styles.sliderTrack, { backgroundColor: hexToRgba(moodColor, 0.25) }]}
         onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
         onStartShouldSetResponder={() => true}
         onResponderGrant={handleSlide}
@@ -98,31 +109,33 @@ const IntensitySlider = ({ value, onChange, moodColor, label = 'Intensity', help
             },
           ]}
         >
-          <Text style={styles.sliderThumbText}>{value}</Text>
+          <Text style={[styles.sliderThumbText, { color: TEXT.primary }]}>{value}</Text>
         </Animated.View>
       </View>
       <View style={styles.sliderLabels}>
-        <Text style={styles.sliderLabelText}>Low</Text>
-        <Text style={styles.sliderLabelText}>High</Text>
+        <Text style={[styles.sliderLabelText, { color: moodColor }]}>Low</Text>
+        <Text style={[styles.sliderLabelText, { color: moodColor }]}>High</Text>
       </View>
       {helperText ? (
-        <Text style={styles.sliderHelperText}>{helperText}</Text>
+        <Text style={[styles.sliderHelperText, { color: TEXT.tertiary }]}>{helperText}</Text>
       ) : null}
     </View>
   );
 };
 
 /**
- * Tag Selection Component
+ * Tag Selection Component with vibrant category colors
  */
 const TagSelector = ({ category, selectedValue, onSelect }) => {
-  const { label, icon, options } = TAG_CATEGORIES[category];
+  const { label, icon, options, color } = TAG_CATEGORIES[category];
 
   return (
     <View style={styles.tagCategory}>
       <View style={styles.tagHeader}>
-        <Ionicons name={icon} size={16} color={TEXT.secondary} />
-        <Text style={styles.tagLabel}>{label}</Text>
+        <View style={[styles.tagIconContainer, { backgroundColor: color }]}>
+          <Ionicons name={icon} size={14} color={TEXT.white} />
+        </View>
+        <Text style={[styles.tagLabel, { color: color }]}>{label}</Text>
       </View>
       <View style={styles.tagOptions}>
         {options.map((option) => (
@@ -130,7 +143,10 @@ const TagSelector = ({ category, selectedValue, onSelect }) => {
             key={option}
             style={[
               styles.tagOption,
-              selectedValue === option && styles.tagOptionSelected,
+              {
+                backgroundColor: selectedValue === option ? color : hexToRgba(color, 0.2),
+                borderColor: color,
+              },
             ]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -140,7 +156,7 @@ const TagSelector = ({ category, selectedValue, onSelect }) => {
             <Text
               style={[
                 styles.tagOptionText,
-                selectedValue === option && styles.tagOptionTextSelected,
+                { color: selectedValue === option ? TEXT.white : color },
               ]}
             >
               {option}
@@ -155,6 +171,44 @@ const TagSelector = ({ category, selectedValue, onSelect }) => {
 /**
  * Main Premium MoodLogger Component
  */
+/**
+ * MoodHistoryEntry - Single mood history item
+ */
+const MoodHistoryEntry = ({ entry, moodTypes }) => {
+  const moodMeta = moodTypes.find(m => m.key === entry.mood) || moodTypes[4]; // Default to neutral
+  const moodColors = MOOD_PALETTE[entry.mood] || MOOD_PALETTE.neutral;
+  const time = new Date(entry.loggedDate).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+
+  return (
+    <View style={[styles.historyEntry, { borderLeftColor: moodColors.base }]}>
+      <View style={[styles.historyMoodIcon, { backgroundColor: moodColors.light }]}>
+        <Text style={styles.historyEmoji}>{moodMeta.emoji}</Text>
+      </View>
+      <View style={styles.historyContent}>
+        <Text style={[styles.historyMoodLabel, { color: moodColors.base }]}>
+          {moodMeta.label}
+        </Text>
+        <View style={styles.historyMeta}>
+          <Text style={styles.historyTime}>{time}</Text>
+          {entry.intensity && (
+            <View style={[styles.historyIntensityBadge, { backgroundColor: hexToRgba(moodColors.base, 0.15) }]}>
+              <Text style={[styles.historyIntensityText, { color: moodColors.base }]}>
+                {entry.intensity}/10
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+      {entry.note && (
+        <Ionicons name="document-text-outline" size={14} color={TEXT.tertiary} />
+      )}
+    </View>
+  );
+};
+
 export default function MoodLogger({ visible, onClose, onSuccess }) {
   const { logMood, isLogging, moodTypes } = useMoodLog();
   const [selectedMood, setSelectedMood] = useState(null);
@@ -163,6 +217,18 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   const [tags, setTags] = useState({});
   const [note, setNote] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
+
+  // Fetch today's mood history
+  const { data: moodHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ['moodToday'],
+    queryFn: async () => {
+      const response = await apiClient.get('/mood/today');
+      return response || [];
+    },
+    staleTime: 30000,
+    enabled: visible, // Only fetch when modal is visible
+  });
 
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -206,8 +272,8 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
     // Validate energy level (1-10)
     const validatedEnergyLevel = Math.max(1, Math.min(10, Math.round(energyLevel)));
 
-    // Validate note length (max 500 characters)
-    const trimmedNote = note.trim().substring(0, 500);
+    // Validate note length (max 200 characters, matches UI maxLength)
+    const trimmedNote = note.trim().substring(0, 200);
 
     // Validate mood is in allowed list
     const validMoods = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
@@ -282,6 +348,53 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
           </LinearGradient>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Today's Mood History */}
+            {moodHistory && moodHistory.length > 0 && (
+              <View style={styles.historySection}>
+                <TouchableOpacity
+                  style={styles.historyHeader}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowHistory(!showHistory);
+                  }}
+                >
+                  <View style={styles.historyHeaderLeft}>
+                    <Ionicons name="time-outline" size={18} color={MOOD_PALETTE.calm.base} />
+                    <Text style={styles.historyTitle}>Today&apos;s Moods</Text>
+                    <View style={[styles.historyCountBadge, { backgroundColor: MOOD_PALETTE.calm.base }]}>
+                      <Text style={styles.historyCountText}>{moodHistory.length}</Text>
+                    </View>
+                  </View>
+                  <Ionicons
+                    name={showHistory ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={MOOD_PALETTE.calm.base}
+                  />
+                </TouchableOpacity>
+
+                {showHistory && (
+                  <View style={styles.historyList}>
+                    {historyLoading ? (
+                      <ActivityIndicator size="small" color={MOOD_PALETTE.calm.base} />
+                    ) : (
+                      moodHistory.slice(0, 5).map((entry) => (
+                        <MoodHistoryEntry
+                          key={entry.id || entry.clientEventId}
+                          entry={entry}
+                          moodTypes={moodTypes}
+                        />
+                      ))
+                    )}
+                    {moodHistory.length > 5 && (
+                      <Text style={styles.historyMore}>
+                        +{moodHistory.length - 5} more entries today
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Mood Selection with 3D Lottie */}
             <View style={styles.moodGrid}>
               {moodTypes.map((mood) => (
@@ -327,19 +440,19 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
             {selectedMood && (
               <View style={styles.section}>
                 <TouchableOpacity
-                  style={styles.advancedToggle}
+                  style={[styles.advancedToggle, { backgroundColor: hexToRgba(moodColors.base, 0.15), borderWidth: 1, borderColor: hexToRgba(moodColors.base, 0.3) }]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowAdvanced(!showAdvanced);
                   }}
                 >
-                  <Text style={styles.advancedToggleText}>
+                  <Text style={[styles.advancedToggleText, { color: TEXT.primary }]}>
                     Add Context (Optional)
                   </Text>
                   <Ionicons
                     name={showAdvanced ? 'chevron-up' : 'chevron-down'}
                     size={20}
-                    color={TEXT.secondary}
+                    color={moodColors.base}
                   />
                 </TouchableOpacity>
 
@@ -361,9 +474,9 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
             {/* Note Input */}
             {selectedMood && (
               <View style={styles.section}>
-                <Text style={styles.noteLabel}>Note (Optional)</Text>
+                <Text style={[styles.noteLabel, { color: TEXT.primary }]}>Note (Optional)</Text>
                 <TextInput
-                  style={styles.noteInput}
+                  style={[styles.noteInput, { borderColor: moodColors.base }]}
                   placeholder="Add a private note (optional)"
                   placeholderTextColor={TEXT.tertiary}
                   value={note}
@@ -371,19 +484,19 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   multiline
                   maxLength={200}
                 />
-                <Text style={styles.charCount}>{note.length}/200</Text>
+                <Text style={[styles.charCount, { color: moodColors.base }]}>{note.length}/200</Text>
               </View>
             )}
           </ScrollView>
 
           {/* Action Buttons */}
-          <View style={styles.actions}>
+          <View style={[styles.actions, { borderTopColor: moodColors?.light || MOOD_PALETTE.neutral.light }]}>
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={[styles.cancelButton, { borderColor: moodColors?.base || MOOD_PALETTE.neutral.base }]}
               onPress={onClose}
               disabled={isLogging}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={[styles.cancelButtonText, { color: moodColors?.base || MOOD_PALETTE.neutral.base }]}>Cancel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -420,7 +533,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
@@ -483,7 +596,6 @@ const styles = StyleSheet.create({
   },
   sliderTrack: {
     height: 40,
-    backgroundColor: TEXT.tertiary,
     borderRadius: RADIUS.full,
     position: 'relative',
     justifyContent: 'center',
@@ -500,7 +612,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.card.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -508,7 +620,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   sliderThumbText: {
-    color: TEXT.white,
     fontWeight: TYPOGRAPHY.weight.bold,
     fontSize: TYPOGRAPHY.size.base,
   },
@@ -519,11 +630,10 @@ const styles = StyleSheet.create({
   },
   sliderLabelText: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
   sliderHelperText: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
     textAlign: 'center',
     marginTop: SPACING[1],
   },
@@ -533,13 +643,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: '#f9fafb',
     borderRadius: RADIUS.lg,
   },
   advancedToggleText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
   },
   tagsContainer: {
     marginTop: SPACING[3],
@@ -553,10 +661,16 @@ const styles = StyleSheet.create({
     gap: SPACING[1],
     marginBottom: SPACING[2],
   },
+  tagIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   tagLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
   },
   tagOptions: {
     flexDirection: 'row',
@@ -566,33 +680,21 @@ const styles = StyleSheet.create({
   tagOption: {
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: TEXT.tertiary,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  tagOptionSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
   },
   tagOptionText: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
-  },
-  tagOptionTextSelected: {
-    color: TEXT.white,
   },
   noteLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
     marginBottom: SPACING[2],
   },
   noteInput: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: SURFACES.background.secondary,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     fontSize: TYPOGRAPHY.size.base,
@@ -602,7 +704,6 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
     textAlign: 'right',
     marginTop: SPACING[1],
   },
@@ -612,39 +713,128 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[5],
     paddingVertical: SPACING[4],
     borderTopWidth: 1,
-    borderTopColor: TEXT.tertiary,
   },
   cancelButton: {
     flex: 1,
     paddingVertical: SPACING[3],
     borderRadius: RADIUS.lg,
     borderWidth: 2,
-    borderColor: '#e5e7eb',
     alignItems: 'center',
   },
   cancelButtonText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
   },
   saveButton: {
     flex: 1,
     paddingVertical: SPACING[3],
     borderRadius: RADIUS.lg,
-    backgroundColor: '#10b981',
+    backgroundColor: SEMANTIC_ACTIONS.success,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   saveButtonDisabled: {
-    backgroundColor: '#d1d5db',
+    backgroundColor: MOOD_PALETTE.neutral.base,
+    opacity: 0.5,
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.white,
+  },
+  // Mood History Styles
+  historySection: {
+    marginBottom: SPACING[4],
+    backgroundColor: hexToRgba(MOOD_PALETTE.calm.base, 0.08),
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  historyTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  historyCountBadge: {
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    minWidth: 22,
+    alignItems: 'center',
+  },
+  historyCountText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
+  },
+  historyList: {
+    marginTop: SPACING[3],
+    gap: SPACING[2],
+  },
+  historyEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.md,
+    padding: SPACING[2],
+    paddingLeft: SPACING[3],
+    borderLeftWidth: 3,
+    gap: SPACING[2],
+  },
+  historyMoodIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  historyEmoji: {
+    fontSize: 16,
+  },
+  historyContent: {
+    flex: 1,
+  },
+  historyMoodLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+  },
+  historyMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginTop: 2,
+  },
+  historyTime: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+  },
+  historyIntensityBadge: {
+    paddingHorizontal: SPACING[1],
+    paddingVertical: 1,
+    borderRadius: RADIUS.sm,
+  },
+  historyIntensityText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+  },
+  historyMore: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+    marginTop: SPACING[1],
+    fontStyle: 'italic',
   },
 });

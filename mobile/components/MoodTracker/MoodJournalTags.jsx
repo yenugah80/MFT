@@ -25,38 +25,48 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  SURFACES,
+  SEMANTIC_ACTIONS,
+  MOOD_PALETTE,
+  BRAND,
 } from '../../constants/premiumTheme';
+
+// Helper to convert hex to rgba
+const hexToRgba = (hex, alpha) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 const TAG_CATEGORIES = {
   sleep: {
     label: 'Sleep Quality',
     icon: 'moon',
-    color: '#8B5CF6',
+    color: MOOD_PALETTE.focused.base,    // Purple
     options: ['Poor', 'Fair', 'Good', 'Excellent'],
   },
   exercise: {
     label: 'Exercise',
     icon: 'barbell',
-    color: '#10B981',
+    color: SEMANTIC_ACTIONS.success,      // Green
     options: ['None', 'Light', 'Moderate', 'Intense'],
   },
   social: {
     label: 'Social',
     icon: 'people',
-    color: '#3B82F6',
+    color: MOOD_PALETTE.calm.base,        // Cyan
     options: ['Alone', 'With Friends', 'With Family', 'Crowded'],
   },
   weather: {
     label: 'Weather',
     icon: 'partly-sunny',
-    color: '#FBBF24',
+    color: MOOD_PALETTE.happy.base,       // Amber
     options: ['Sunny', 'Rainy', 'Cloudy', 'Snowy'],
   },
   stress: {
     label: 'Work/Stress',
     icon: 'briefcase',
-    color: '#F97316',
+    color: MOOD_PALETTE.energized.base,   // Orange
     options: ['Low', 'Medium', 'High', 'Overwhelmed'],
   },
 };
@@ -100,9 +110,9 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="pricetag" size={20} color={TEXT.secondary} />
+        <Ionicons name="pricetag" size={20} color={BRAND.primary} />
         <Text style={styles.title}>Add Context</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, { color: BRAND.primary }]}>
           {Object.keys(selected).length} selected
         </Text>
       </View>
@@ -119,7 +129,7 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
             <View key={key} style={styles.categorySection}>
               {/* Category Header */}
               <TouchableOpacity
-                style={styles.categoryHeader}
+                style={[styles.categoryHeader, { backgroundColor: hexToRgba(category.color, 0.15), borderWidth: 1, borderColor: hexToRgba(category.color, 0.3) }]}
                 onPress={() => toggleCategory(key)}
                 activeOpacity={0.7}
               >
@@ -127,16 +137,16 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
                   <View
                     style={[
                       styles.categoryIcon,
-                      { backgroundColor: `${category.color}15` },
+                      { backgroundColor: category.color },
                     ]}
                   >
                     <Ionicons
                       name={category.icon}
                       size={18}
-                      color={category.color}
+                      color={TEXT.white}
                     />
                   </View>
-                  <Text style={styles.categoryLabel}>{category.label}</Text>
+                  <Text style={[styles.categoryLabel, { color: category.color }]}>{category.label}</Text>
                   {hasSelection && (
                     <View
                       style={[
@@ -153,7 +163,7 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
                 <Ionicons
                   name={isExpanded ? 'chevron-up' : 'chevron-down'}
                   size={20}
-                  color={TEXT.tertiary}
+                  color={category.color}
                 />
               </TouchableOpacity>
 
@@ -168,8 +178,8 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
                         key={option}
                         style={[
                           styles.tagChip,
-                          isSelected && {
-                            backgroundColor: category.color,
+                          {
+                            backgroundColor: isSelected ? category.color : hexToRgba(category.color, 0.25),
                             borderColor: category.color,
                           },
                         ]}
@@ -179,7 +189,7 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
                         <Text
                           style={[
                             styles.tagText,
-                            isSelected && styles.tagTextSelected,
+                            { color: isSelected ? TEXT.white : category.color },
                           ]}
                         >
                           {option}
@@ -203,8 +213,8 @@ const MoodJournalTags = ({ selected = {}, onChange }) => {
             if (onChange) onChange({});
           }}
         >
-          <Ionicons name="close-circle" size={18} color={TEXT.tertiary} />
-          <Text style={styles.clearButtonText}>Clear All</Text>
+          <Ionicons name="close-circle" size={18} color={MOOD_PALETTE.stressed.base} />
+          <Text style={[styles.clearButtonText, { color: MOOD_PALETTE.stressed.base }]}>Clear All</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -229,8 +239,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
   categoriesContainer: {
     maxHeight: 400,
@@ -244,7 +253,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
-    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.lg,
   },
   categoryHeaderLeft: {
@@ -262,8 +270,7 @@ const styles = StyleSheet.create({
   },
   categoryLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
   selectionBadge: {
     paddingVertical: SPACING[1],
@@ -273,7 +280,7 @@ const styles = StyleSheet.create({
   selectionBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#FFFFFF',
+    color: TEXT.white,
   },
   optionsContainer: {
     flexDirection: 'row',
@@ -286,18 +293,11 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[3],
     borderRadius: RADIUS.full,
-    backgroundColor: SURFACES.background.secondary,
-    borderWidth: 1.5,
-    borderColor: SURFACES.divider,
+    borderWidth: 2,
   },
   tagText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.secondary,
-  },
-  tagTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
   clearButton: {
     flexDirection: 'row',
@@ -309,8 +309,7 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
 });
 

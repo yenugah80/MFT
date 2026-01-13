@@ -1,15 +1,15 @@
 /**
- * PatternDetectiveCard - AI Pattern Discovery
+ * PatternDetectiveCard - Your Body Patterns
  *
- * Surfaces patterns the user would never find themselves.
- * "When you eat breakfast before 8am, your mood averages 7.2 vs 5.1"
+ * Discovers YOUR unique food-mood correlations that you wouldn't find yourself.
+ * "Your mood averages 7.2 when you have protein at breakfast vs 5.1 without"
  *
- * Production-grade with:
- * - Smart pattern detection from historical data
- * - Visual pattern strength indicators
+ * Features:
+ * - Personal pattern detection from YOUR historical data
+ * - Progressive learning that gets smarter over time
+ * - Visual confidence indicators
  * - Actionable recommendations
- * - Confidence scoring
- * - Premium animations
+ * - Beautiful animations
  */
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { BRAND, SURFACES, TEXT, SHADOWS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
-import { detectPatterns } from '../../utils/foodMoodScore';
+import { getDiscoveredPatterns } from '../../utils/bodyIntelligenceEngine';
 
 /**
  * Confidence Stars
@@ -49,7 +49,7 @@ function ConfidenceStars({ confidence }) {
                 : 'star-outline'
           }
           size={12}
-          color={i < fullStars || (i === fullStars && hasHalfStar) ? '#F59E0B' : TEXT.muted}
+          color={i < fullStars || (i === fullStars && hasHalfStar) ? SEMANTIC_ACTIONS.warning : TEXT.muted}
         />
       ))}
     </View>
@@ -98,12 +98,12 @@ function PatternCard({ pattern, index, onPress, isActive }) {
 
   const isPositive = pattern.type === 'positive';
   const isInfo = pattern.type === 'info';
-  const typeColor = isPositive ? '#10B981' : isInfo ? BRAND.primary : '#F59E0B';
+  const typeColor = isPositive ? SEMANTIC_ACTIONS.success : isInfo ? BRAND.primary : SEMANTIC_ACTIONS.warning;
   const typeBg = isPositive
-    ? 'rgba(16, 185, 129, 0.1)'
+    ? `${SEMANTIC_ACTIONS.success}1A`
     : isInfo
-      ? `${BRAND.primary}10`
-      : 'rgba(245, 158, 11, 0.1)';
+      ? `${BRAND.primary}1A`
+      : `${SEMANTIC_ACTIONS.warning}1A`;
 
   return (
     <Animated.View
@@ -186,7 +186,7 @@ function PatternDetail({ pattern, onClose, onTryAction }) {
   if (!pattern) return null;
 
   const isPositive = pattern.type === 'positive';
-  const typeColor = isPositive ? '#10B981' : '#F59E0B';
+  const typeColor = isPositive ? SEMANTIC_ACTIONS.success : SEMANTIC_ACTIONS.warning;
 
   return (
     <View style={styles.detailContainer}>
@@ -235,7 +235,7 @@ function PatternDetail({ pattern, onClose, onTryAction }) {
           )}
           {pattern.stats.hydrated && (
             <View style={styles.detailStatItem}>
-              <Text style={[styles.detailStatValue, { color: '#10B981' }]}>
+              <Text style={[styles.detailStatValue, { color: SEMANTIC_ACTIONS.success }]}>
                 {pattern.stats.hydrated}
               </Text>
               <Text style={styles.detailStatLabel}>Well hydrated</Text>
@@ -243,7 +243,7 @@ function PatternDetail({ pattern, onClose, onTryAction }) {
           )}
           {pattern.stats.dehydrated && (
             <View style={styles.detailStatItem}>
-              <Text style={[styles.detailStatValue, { color: '#F59E0B' }]}>
+              <Text style={[styles.detailStatValue, { color: SEMANTIC_ACTIONS.warning }]}>
                 {pattern.stats.dehydrated}
               </Text>
               <Text style={styles.detailStatLabel}>Low water</Text>
@@ -288,9 +288,9 @@ export default function PatternDetectiveCard({
   const [selectedPattern, setSelectedPattern] = useState(null);
   const cardAnim = useRef(new Animated.Value(0)).current;
 
-  // Detect patterns
+  // Detect patterns using ML-powered Body Intelligence Engine
   const patterns = useMemo(() => {
-    return detectPatterns({ foodLogs, moodLogs, waterLogs, days });
+    return getDiscoveredPatterns({ foodLogs, moodLogs, waterLogs, days });
   }, [foodLogs, moodLogs, waterLogs, days]);
 
   // Entrance animation
@@ -308,8 +308,15 @@ export default function PatternDetectiveCard({
     onPatternPress?.(pattern);
   };
 
-  const hasPatterns = patterns.length > 0 && patterns[0].id !== 'need-data';
-  const needsMoreData = patterns.length > 0 && patterns[0].id === 'need-data';
+  // Determine display state based on pattern types
+  const noDataAtAll = patterns.length > 0 && patterns[0].id === 'no-data';
+  const hasSummaryOnly = patterns.length > 0 && patterns.some(p => p.id === 'data-summary');
+  const hasRealPatterns = patterns.length > 0 && patterns.some(p =>
+    !['no-data', 'data-summary', 'encourage-logging', 'need-data'].includes(p.id)
+  );
+  // Show patterns if we have real patterns OR summary data (always show something useful)
+  const hasPatterns = patterns.length > 0 && patterns[0].id !== 'no-data';
+  const needsMoreData = noDataAtAll;
 
   return (
     <Animated.View
@@ -319,7 +326,7 @@ export default function PatternDetectiveCard({
       ]}
     >
       <LinearGradient
-        colors={[SURFACES.card.primary, 'rgba(139, 92, 246, 0.03)']}
+        colors={[SURFACES.card.primary, `${BRAND.primary}08`]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.cardGradient}
@@ -328,20 +335,22 @@ export default function PatternDetectiveCard({
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.iconContainer}>
-              <Ionicons name="search" size={22} color={BRAND.primary} />
+              <Ionicons name="pulse" size={22} color={BRAND.primary} />
             </View>
             <View>
               <View style={styles.titleRow}>
-                <Text style={styles.title}>Pattern Detective</Text>
+                <Text style={styles.title}>Your Body Patterns</Text>
                 <View style={styles.aiBadge}>
-                  <Ionicons name="sparkles" size={10} color={BRAND.primary} />
-                  <Text style={styles.aiText}>AI</Text>
+                  <Ionicons name="analytics" size={10} color={BRAND.primary} />
+                  <Text style={styles.aiText}>Learning</Text>
                 </View>
               </View>
               <Text style={styles.subtitle}>
-                {hasPatterns
-                  ? `${patterns.length} pattern${patterns.length > 1 ? 's' : ''} discovered`
-                  : 'Analyzing your data...'}
+                {hasRealPatterns
+                  ? `${patterns.filter(p => !['data-summary', 'encourage-logging'].includes(p.id)).length} unique pattern${patterns.filter(p => !['data-summary', 'encourage-logging'].includes(p.id)).length !== 1 ? 's' : ''} found in your data`
+                  : hasSummaryOnly
+                    ? 'Building your personal profile'
+                    : 'Ready to learn your patterns'}
               </Text>
             </View>
           </View>
@@ -357,15 +366,29 @@ export default function PatternDetectiveCard({
             <Text style={styles.needsDataText}>{patterns[0].message}</Text>
             <View style={styles.needsDataProgress}>
               <View style={styles.progressItem}>
-                <Ionicons name="restaurant-outline" size={16} color={TEXT.secondary} />
-                <Text style={styles.progressText}>
-                  {foodLogs.length}/10 meals
+                <Ionicons
+                  name={foodLogs.length >= 5 ? "checkmark-circle" : "restaurant-outline"}
+                  size={16}
+                  color={foodLogs.length >= 5 ? SEMANTIC_ACTIONS.success : TEXT.secondary}
+                />
+                <Text style={[
+                  styles.progressText,
+                  foodLogs.length >= 5 && { color: SEMANTIC_ACTIONS.success }
+                ]}>
+                  {foodLogs.length >= 5 ? `${foodLogs.length} meals ✓` : `${foodLogs.length}/5 meals`}
                 </Text>
               </View>
               <View style={styles.progressItem}>
-                <Ionicons name="happy-outline" size={16} color={TEXT.secondary} />
-                <Text style={styles.progressText}>
-                  {moodLogs.length}/5 moods
+                <Ionicons
+                  name={moodLogs.length >= 3 ? "checkmark-circle" : "happy-outline"}
+                  size={16}
+                  color={moodLogs.length >= 3 ? SEMANTIC_ACTIONS.success : TEXT.secondary}
+                />
+                <Text style={[
+                  styles.progressText,
+                  moodLogs.length >= 3 && { color: SEMANTIC_ACTIONS.success }
+                ]}>
+                  {moodLogs.length >= 3 ? `${moodLogs.length} moods ✓` : `${moodLogs.length}/3 moods`}
                 </Text>
               </View>
             </View>

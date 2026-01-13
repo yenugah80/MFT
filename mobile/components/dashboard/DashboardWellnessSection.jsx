@@ -62,7 +62,7 @@ export default function DashboardWellnessSection({
 
         <View style={styles.wellnessDivider} />
 
-        {/* Enhanced Mood Card with Wellness Score */}
+        {/* Enhanced Mood Card with Wellness Score & History */}
         <EnhancedMoodCard
           insights={moodInsights}
           loading={moodInsightsLoading}

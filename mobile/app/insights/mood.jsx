@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MoodInsightCard from '../../components/MoodTracker/MoodInsightCard';
 import PredictiveInsightsCard from '../../components/dashboard/PredictiveInsightsCard';
 import PatternDetectiveCard from '../../components/dashboard/PatternDetectiveCard';
+import LoggingCalendar from '../../components/MoodTracker/LoggingCalendar';
 import { useNotification } from '../../providers/NotificationProvider';
 import { useDashboard } from '../../hooks/useDashboard';
 import { useMoodTrends } from '../../hooks/useMoodTrends';
@@ -348,6 +349,19 @@ export default function MoodInsightsScreen() {
           </Text>
         </View>
 
+        {/* Logging Calendar - Visual activity overview */}
+        <View style={styles.sectionContainer}>
+          <LoggingCalendar
+            moodLogs={moodTrendsData?.data || []}
+            foodLogs={historicalFoodLogs}
+            waterLogs={historicalWaterLogs}
+            days={insightsDays}
+            onDayPress={(day) => {
+              notify.info(`${day.date.toLocaleDateString()}: ${day.moodCount} moods, ${day.mealCount} meals`);
+            }}
+          />
+        </View>
+
         {insightsError && <Text style={styles.errorText}>{insightsError}</Text>}
 
         <MoodInsightCard
@@ -360,10 +374,11 @@ export default function MoodInsightsScreen() {
         {/* Predictive Insights - Tomorrow's Forecast */}
         {dashboardData?.today && (
           <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Tomorrow&apos;s Forecast</Text>
             <PredictiveInsightsCard
               todaysMeals={dashboardData.today.foodLogs || []}
               todaysMood={dashboardData.today.moodLogs?.[0] || null}
+              todaysWater={dashboardData.today.waterIntakeLiters || 0}
+              goals={dashboardData.goals || {}}
               currentScore={calculateFoodMoodScore({
                 calories: dashboardData.today.nutrition?.totalCalories || 0,
                 calorieGoal: dashboardData.goals?.dailyCalories || 2000,
@@ -378,7 +393,6 @@ export default function MoodInsightsScreen() {
 
         {/* Pattern Detective - Discover Your Patterns */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Discover Your Patterns</Text>
           <PatternDetectiveCard
             foodLogs={historicalFoodLogs}
             moodLogs={moodTrendsData?.data || []}

@@ -78,7 +78,7 @@ const MealMoodCorrelation = ({ meals = [], currentMood = null }) => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Ionicons name="restaurant" size={20} color={TEXT.secondary} />
+          <Ionicons name="restaurant" size={20} color={SEMANTIC.warning.base} />
           <Text style={styles.title}>Recent Meals</Text>
         </View>
         <View style={styles.emptyState}>
@@ -93,7 +93,7 @@ const MealMoodCorrelation = ({ meals = [], currentMood = null }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="restaurant" size={20} color={TEXT.secondary} />
+        <Ionicons name="restaurant" size={20} color={SEMANTIC.warning.base} />
         <Text style={styles.title}>Recent Meals (4h window)</Text>
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{meals.length}</Text>
@@ -137,7 +137,7 @@ const MealMoodCorrelation = ({ meals = [], currentMood = null }) => {
                 <Ionicons
                   name={isExpanded ? 'chevron-up' : 'chevron-down'}
                   size={16}
-                  color={TEXT.tertiary}
+                  color={SEMANTIC.warning.base}
                 />
               </View>
             </View>
@@ -268,12 +268,12 @@ const styles = StyleSheet.create({
     color: TEXT.white,
   },
   mealCard: {
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: SEMANTIC.warning.light,
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     marginBottom: SPACING[2],
     borderWidth: 1,
-    borderColor: SURFACES.divider,
+    borderColor: SEMANTIC.warning.base,
   },
   mealHeader: {
     flexDirection: 'row',
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   },
   mealTime: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.warning.base,
     marginTop: SPACING[0.5],
   },
   mealHeaderRight: {
@@ -321,13 +321,13 @@ const styles = StyleSheet.create({
   macroLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.secondary,
+    color: TEXT.primary,
     width: 12,
   },
   macroBarTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: SURFACES.divider,
+    backgroundColor: SEMANTIC.warning.light,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
   },
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.secondary,
+    color: TEXT.primary,
     width: 32,
     textAlign: 'right',
   },
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingTop: SPACING[3],
     borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
+    borderTopColor: SEMANTIC.warning.base,
     gap: SPACING[2],
   },
   detailRow: {
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: SEMANTIC.warning.base,
   },
   detailValue: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -370,11 +370,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.secondary,
+    color: SEMANTIC.warning.base,
   },
   emptySubtext: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.warning.base,
     marginTop: SPACING[1],
     textAlign: 'center',
   },

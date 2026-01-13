@@ -125,7 +125,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
           <PeriodSelector period={period} onChange={onPeriodChange} />
         </View>
         <View style={styles.emptyState}>
-          <Ionicons name="analytics-outline" size={48} color={TEXT.tertiary} />
+          <Ionicons name="analytics-outline" size={48} color={SEMANTIC.info.base} />
           <Text style={styles.emptyText}>No mood data yet</Text>
           <Text style={styles.emptySubtext}>Start logging your mood to see trends</Text>
         </View>
@@ -154,7 +154,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
                   y1={y}
                   x2={CHART_WIDTH - PADDING.right}
                   y2={y}
-                  stroke={SURFACES.divider}
+                  stroke={SEMANTIC.info.light}
                   strokeWidth={1}
                   strokeDasharray="4,4"
                 />
@@ -162,7 +162,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
                   x={PADDING.left - 10}
                   y={y + 4}
                   fontSize={10}
-                  fill={TEXT.tertiary}
+                  fill={SEMANTIC.info.base}
                   textAnchor="end"
                 >
                   {value}
@@ -201,7 +201,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
                     outputRange: [0, isSelected ? 8 : 6],
                   }) || 6}
                   fill={moodColor}
-                  stroke="#FFFFFF"
+                  stroke={TEXT.white}
                   strokeWidth={2}
                   onPress={() => handlePointPress(point, i)}
                 />
@@ -212,7 +212,9 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
           {/* X-axis labels */}
           {points.map((point, i) => {
             // Show every nth label to avoid crowding
-            const showLabel = period === 'day' || i % Math.ceil(points.length / 5) === 0;
+            // Guard against NaN when points.length is small (Math.ceil returns 0 for empty, causing i % 0 = NaN)
+            const labelInterval = Math.max(1, Math.ceil(points.length / 5));
+            const showLabel = period === 'day' || i % labelInterval === 0;
             if (!showLabel) return null;
 
             const label = formatDate(point.date, period);
@@ -222,7 +224,7 @@ const MoodTrendsChart = ({ data = [], period = 'week', onPeriodChange }) => {
                 x={point.x}
                 y={CHART_HEIGHT - 5}
                 fontSize={10}
-                fill={TEXT.tertiary}
+                fill={SEMANTIC.info.base}
                 textAnchor="middle"
               >
                 {label}
@@ -326,7 +328,7 @@ const styles = StyleSheet.create({
   },
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: SEMANTIC.info.light,
     borderRadius: RADIUS.lg,
     padding: SPACING[1],
   },
@@ -341,7 +343,7 @@ const styles = StyleSheet.create({
   periodText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.secondary,
+    color: SEMANTIC.info.base,
   },
   periodTextActive: {
     color: TEXT.white,
@@ -352,7 +354,7 @@ const styles = StyleSheet.create({
   },
   tooltip: {
     position: 'absolute',
-    backgroundColor: SURFACES.background.primary,
+    backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.md,
     padding: SPACING[2],
     minWidth: 120,
@@ -361,8 +363,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    borderWidth: 1,
-    borderColor: SURFACES.divider,
+    borderWidth: 2,
+    borderColor: SEMANTIC.info.base,
   },
   tooltipMood: {
     fontSize: TYPOGRAPHY.size.md,
@@ -372,12 +374,12 @@ const styles = StyleSheet.create({
   },
   tooltipIntensity: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: SEMANTIC.info.base,
     marginBottom: SPACING[0.5],
   },
   tooltipDate: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
   },
   legend: {
     flexDirection: 'row',
@@ -398,7 +400,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
+    color: SEMANTIC.info.base,
   },
   emptyState: {
     alignItems: 'center',
@@ -408,12 +410,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[3],
   },
   emptySubtext: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     marginTop: SPACING[1],
   },
 });

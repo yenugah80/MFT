@@ -20,6 +20,8 @@ import {
   RADIUS,
   TYPOGRAPHY,
   SHADOWS,
+  TEXT,
+  SURFACES,
 } from '../../constants/premiumTheme';
 
 // Lottie animation sources for 8 core moods
@@ -84,6 +86,14 @@ const MoodIcon3D = ({
   const wasSelectedRef = useRef(selected);
   const animationFinishedRef = useRef(false);
   const fallbackTimerRef = useRef(null);
+
+  // Define lottieSource and moodColors early so they can be used in useEffect
+  const lottieSource = MOOD_LOTTIE_SOURCES[mood];
+  const moodColors = MOOD_PALETTE[mood];
+  const label = mood.charAt(0).toUpperCase() + mood.slice(1);
+  const forceFallback =
+    FORCE_FALLBACK_MOODS.has(mood) || (Platform.OS === 'android' && !ANDROID_LOTTIE_ALLOWLIST.has(mood));
+  const renderMode = Platform.OS === 'android' ? 'SOFTWARE' : 'AUTOMATIC';
 
   useEffect(() => {
     if (autoPlay) return;
@@ -171,14 +181,6 @@ const MoodIcon3D = ({
       onSelect(mood);
     }
   };
-
-  const moodColors = MOOD_PALETTE[mood];
-  const label = mood.charAt(0).toUpperCase() + mood.slice(1);
-
-  const lottieSource = MOOD_LOTTIE_SOURCES[mood];
-  const forceFallback =
-    FORCE_FALLBACK_MOODS.has(mood) || (Platform.OS === 'android' && !ANDROID_LOTTIE_ALLOWLIST.has(mood));
-  const renderMode = Platform.OS === 'android' ? 'SOFTWARE' : 'AUTOMATIC';
 
   return (
     <TouchableOpacity
@@ -271,7 +273,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   iconWrapperSelected: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: SURFACES.card.primary,
   },
   iconContainer: {
     justifyContent: 'center',
@@ -286,7 +288,6 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: -4,
     borderRadius: RADIUS.xl,
-    opacity: 0.3,
   },
   selectionDot: {
     position: 'absolute',
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[1],
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: '#6B7280',
+    color: TEXT.primary,
   },
   fallbackContainer: {
     width: '100%',

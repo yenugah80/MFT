@@ -21,15 +21,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, MOOD_PALETTE, BRAND, TEXT, SEMANTIC_ACTIONS, SURFACES } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
 
 import MoodIcon3D from '../MoodTracker/MoodIcon3D';
 
-const SPARKLINE_WIDTH = 200;
-const SPARKLINE_HEIGHT = 64;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /**
@@ -134,10 +132,8 @@ const EnhancedMoodCard = ({
   const containerBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F6F8FC';
   const sectionBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#F8FAFE';
   const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : SURFACES.background.tertiary;
-  const statsGridBg = isDark ? 'rgba(255, 255, 255, 0.05)' : '#F3F6FB';
   const hintBg = isDark ? 'rgba(255, 255, 255, 0.08)' : '#F3F6FB';
   const pillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : '#EEF2F6';
-  const confidencePillBg = isDark ? 'rgba(255, 255, 255, 0.1)' : SURFACES.background.tertiary;
 
   const latestMood = insights?.latestMood || null;
   const moodColors = latestMood?.mood
@@ -148,7 +144,6 @@ const EnhancedMoodCard = ({
     : getPastelGradient(latestMood?.mood);
   const lastLoggedLabel = useMemo(() => formatLastLogged(latestMood?.loggedDate), [latestMood?.loggedDate]);
   const stats = insights?.stats || null;
-  const trendData = insights?.trendData || [];
   const trendSummary = insights?.trendSummary || { direction: 'flat', delta: null, lastIntensity: null };
   const confidenceLevel = insights?.confidenceLevel || 'low';
   const dataQuality = insights?.dataQuality || { totalLogs: 0, daysWithLogs: 0 };
@@ -275,163 +270,34 @@ const EnhancedMoodCard = ({
         </TouchableOpacity>
       )}
 
-      {/* Trend Panel */}
-      {flags.showTrend && Array.isArray(trendData) && trendData.length > 0 && (
+      {/* View Insights Button */}
+      {onOpenInsights && (
         <TouchableOpacity
-          style={[styles.trendPanel, { backgroundColor: sectionBg, borderColor }]}
+          style={[styles.insightsButton, { backgroundColor: sectionBg, borderColor }]}
           onPress={onOpenInsights}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Open mood insights"
-          accessibilityHint="Opens detailed mood insights and history"
         >
-          <View style={styles.trendHeaderRow}>
-            <Text style={[styles.trendLabel, { color: textSecondary }]}>7-Day Trend</Text>
-            <View style={[styles.trendBadge, { backgroundColor: pillBg, borderColor }]}>
-              <Ionicons
-                name={trendSummary.direction === 'up' ? 'trending-up' : trendSummary.direction === 'down' ? 'trending-down' : 'remove'}
-                size={12}
-                color={trendSummary.direction === 'up' ? '#0F766E' : trendSummary.direction === 'down' ? '#B45309' : textTertiary}
-              />
-              <Text style={[styles.trendBadgeText, { color: textSecondary }]}>
-                {trendSummary.direction === 'up'
-                  ? 'Up'
-                  : trendSummary.direction === 'down'
-                  ? 'Down'
-                  : trendSummary.direction === 'flat'
-                  ? 'Flat'
-                  : 'Insufficient'}
-              </Text>
-            </View>
+          <View style={styles.insightsButtonLeft}>
+            <Ionicons name="analytics-outline" size={18} color={moodColors?.base || textSecondary} />
+            <Text style={[styles.insightsButtonText, { color: textPrimary }]}>View Insights & Trends</Text>
           </View>
-          <MiniSparkline data={trendData} width={SPARKLINE_WIDTH} height={SPARKLINE_HEIGHT} />
-          {latestMood?.energyLevel && (
-            <View style={styles.energyPill}>
-              <Ionicons name="flash" size={ICON_SIZES.xs} color="#F59E0B" />
-              <Text style={styles.energyText}>
-                Energy {latestMood?.energyLevel}/10
-              </Text>
-            </View>
-          )}
+          <View style={styles.insightsButtonRight}>
+            {trendSummary?.direction && trendSummary.direction !== 'insufficient' && (
+              <View style={[styles.trendBadge, { backgroundColor: pillBg }]}>
+                <Ionicons
+                  name={trendSummary.direction === 'up' ? 'trending-up' : trendSummary.direction === 'down' ? 'trending-down' : 'remove'}
+                  size={12}
+                  color={trendSummary.direction === 'up' ? '#0F766E' : trendSummary.direction === 'down' ? '#B45309' : textTertiary}
+                />
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={16} color={textTertiary} />
+          </View>
         </TouchableOpacity>
       )}
 
-      {/* Quick Stats Grid */}
-      {flags.showStats && stats && (
-        <View style={styles.statsSection}>
-          <View style={styles.statsHeaderRow}>
-            <Text style={[styles.statsLabel, { color: textSecondary }]}>This Week</Text>
-            <View style={[styles.confidencePill, { backgroundColor: confidencePillBg }]}>
-              <Text style={[styles.confidenceText, { color: textSecondary }]}>{confidenceLevel} confidence</Text>
-            </View>
-          </View>
-          <View style={[styles.statsGrid, { backgroundColor: statsGridBg }]}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: textPrimary }]}>{stats.avgMood || '--'}</Text>
-              <Text style={[styles.statLabel, { color: textTertiary }]}>Avg</Text>
-            </View>
-
-            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
-
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: textPrimary }]}>
-                {stats.bestDay ? formatDayKey(stats.bestDay) : '--'}
-              </Text>
-              <Text style={[styles.statLabel, { color: textTertiary }]}>Best</Text>
-            </View>
-
-            <View style={[styles.statDivider, { backgroundColor: borderColor }]} />
-
-            <View style={styles.statItem}>
-              <Ionicons
-                name={stats.patternsDetected ? 'checkmark-circle' : 'close-circle'}
-                size={ICON_SIZES.md}
-                color={stats.patternsDetected ? '#0F766E' : textTertiary}
-              />
-              <Text style={[styles.statLabel, { color: textTertiary }]}>Pattern</Text>
-            </View>
-          </View>
-          <Text style={[styles.statsFootnote, { color: textTertiary }]}>
-            Based on {dataQuality.totalLogs} log{dataQuality.totalLogs === 1 ? '' : 's'} over {dataQuality.daysWithLogs} day{dataQuality.daysWithLogs === 1 ? '' : 's'}.
-          </Text>
-          <Text style={[styles.progressHint, { color: textSecondary }]}>
-            Insights sharpen as you log across more days.
-          </Text>
-        </View>
-      )}
-
-    </View>
-  );
-};
-
-/**
- * Mini Sparkline Component
- */
-const MiniSparkline = ({ data, width, height }) => {
-  const { colors, isDark } = useTheme();
-
-  // Theme-aware colors for sparkline
-  const lineStroke = isDark ? 'rgba(255,255,255,0.2)' : SURFACES.background.tertiary;
-  const pathStroke = isDark ? '#A78BFF' : '#475569';
-  const dotFill = isDark ? '#FFFFFF' : '#0F172A';
-  const emptyTextColor = colors.text.tertiary;
-
-  const { path, lastPoint } = useMemo(() => {
-    if (!data.length) return { path: '', lastPoint: null };
-
-    const maxIntensity = 10;
-    const minIntensity = 0;
-    let d = '';
-    let lastValid = null;
-
-    data.forEach((point, i) => {
-      const intensity = point.intensity;
-      if (!Number.isFinite(intensity)) return;
-      const x = (i / Math.max(data.length - 1, 1)) * width;
-      const y =
-        height -
-        ((intensity - minIntensity) / (maxIntensity - minIntensity)) * height;
-
-      d += d ? ` L ${x} ${y}` : `M ${x} ${y}`;
-      lastValid = { x, y, value: intensity };
-    });
-
-    return { path: d, lastPoint: lastValid };
-  }, [data, width, height]);
-
-  if (data.length === 0) {
-    return (
-      <View style={[styles.sparklineContainer, { width, height }]}>
-        <Text style={[styles.sparklineEmpty, { color: emptyTextColor }]}>Trend builds as you log</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.sparklineContainer, { width, height }]}>
-      <Svg width={width} height={height}>
-        <Line
-          x1={0}
-          y1={height - 1}
-          x2={width}
-          y2={height - 1}
-          stroke={lineStroke}
-          strokeWidth={1}
-        />
-        {path ? (
-          <Path
-            d={path}
-            fill="none"
-            stroke={pathStroke}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ) : null}
-        {lastPoint ? (
-          <Circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={dotFill} />
-        ) : null}
-      </Svg>
     </View>
   );
 };
@@ -569,6 +435,32 @@ const styles = StyleSheet.create({
   wellnessDescription: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
+  },
+  insightsButton: {
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[3],
+    padding: SPACING[3],
+    borderRadius: RADIUS.lg,
+    backgroundColor: '#F8FAFE',
+    borderWidth: 1,
+    borderColor: SURFACES.background.tertiary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  insightsButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  insightsButtonText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  insightsButtonRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
   },
   trendPanel: {
     marginHorizontal: SPACING[4],

@@ -18,7 +18,6 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -27,6 +26,7 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
+  SEMANTIC,
 } from '../../constants/premiumTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -36,15 +36,19 @@ const THUMB_SIZE = 40;
 const MoodIntensitySlider = ({
   value = 5,
   onChange,
-  moodColor = '#3B82F6',
+  moodColor = SEMANTIC.info.base,  // Default to theme blue
+  moodBgColor = null,  // Light version of mood color for track
   disabled = false,
 }) => {
-  const position = useRef(new Animated.Value(((value - 1) / 9) * (SLIDER_WIDTH - THUMB_SIZE))).current;
+  // Clamp value to valid range (1-10)
+  const clampedValue = Math.max(1, Math.min(10, value || 5));
+  const position = useRef(new Animated.Value(((clampedValue - 1) / 9) * (SLIDER_WIDTH - THUMB_SIZE))).current;
   const lastHapticValue = useRef(value);
 
   useEffect(() => {
     // Update position when value changes externally
-    const targetPosition = ((value - 1) / 9) * (SLIDER_WIDTH - THUMB_SIZE);
+    const safeValue = Math.max(1, Math.min(10, value || 5));
+    const targetPosition = ((safeValue - 1) / 9) * (SLIDER_WIDTH - THUMB_SIZE);
     Animated.spring(position, {
       toValue: targetPosition,
       tension: 300,
@@ -119,42 +123,27 @@ const MoodIntensitySlider = ({
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Intensity</Text>
-        <View style={styles.valueBadge}>
+        <Text style={[styles.title, { color: moodColor }]}>Intensity</Text>
+        <View style={[styles.valueBadge, { backgroundColor: moodBgColor || `${moodColor}20`, borderWidth: 1, borderColor: moodColor }]}>
           <Text style={[styles.valueText, { color: moodColor }]}>{value}/10</Text>
         </View>
       </View>
 
       {/* Slider Track */}
       <View style={styles.sliderContainer}>
-        {/* Gradient Track */}
-        <LinearGradient
-          colors={[`${moodColor}40`, moodColor]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.track}
+        {/* Background Track - Light mood color */}
+        <View style={[styles.track, { backgroundColor: moodBgColor || `${moodColor}30` }]} />
+
+        {/* Filled Track (shows progress) - Full mood color */}
+        <Animated.View
+          style={[
+            styles.filledTrack,
+            {
+              backgroundColor: moodColor,
+              width: Animated.add(position, THUMB_SIZE / 2),
+            },
+          ]}
         />
-
-        {/* Step Indicators */}
-        <View style={styles.stepsContainer}>
-          {[...Array(10)].map((_, i) => {
-            const stepValue = i + 1;
-            const isActive = stepValue <= value;
-
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.stepIndicator,
-                  isActive && {
-                    backgroundColor: moodColor,
-                    transform: [{ scale: 1.2 }],
-                  },
-                ]}
-              />
-            );
-          })}
-        </View>
 
         {/* Draggable Thumb */}
         <Animated.View
@@ -174,13 +163,13 @@ const MoodIntensitySlider = ({
 
       {/* Labels */}
       <View style={styles.labelsContainer}>
-        <Text style={styles.label}>Low</Text>
-        <Text style={styles.label}>Medium</Text>
-        <Text style={styles.label}>High</Text>
+        <Text style={[styles.label, { color: moodColor }]}>Low</Text>
+        <Text style={[styles.label, { color: moodColor }]}>Medium</Text>
+        <Text style={[styles.label, { color: moodColor }]}>High</Text>
       </View>
 
       {/* Intensity Description */}
-      <Text style={styles.description}>
+      <Text style={[styles.description, { color: moodColor }]}>
         {getIntensityLabel(value)} intensity
       </Text>
     </View>
@@ -203,7 +192,6 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
   },
   valueBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     paddingVertical: SPACING[1],
     paddingHorizontal: SPACING[3],
     borderRadius: RADIUS.full,
@@ -220,21 +208,12 @@ const styles = StyleSheet.create({
   track: {
     height: 8,
     borderRadius: RADIUS.sm,
-    opacity: 0.3,
   },
-  stepsContainer: {
+  filledTrack: {
     position: 'absolute',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: SLIDER_WIDTH - THUMB_SIZE,
-    paddingHorizontal: THUMB_SIZE / 2,
-  },
-  stepIndicator: {
-    width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D1D5DB',
-    transition: 'all 0.2s',
+    borderRadius: RADIUS.sm,
+    left: 0,
   },
   thumbContainer: {
     position: 'absolute',
@@ -248,12 +227,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: TEXT.white,
   },
   thumbValue: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.black,
-    color: '#FFFFFF',
+    color: TEXT.white,
   },
   labelsContainer: {
     flexDirection: 'row',
@@ -262,16 +241,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   description: {
     marginTop: SPACING[2],
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.semibold,
     textAlign: 'center',
   },
 });

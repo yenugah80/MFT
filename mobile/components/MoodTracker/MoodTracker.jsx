@@ -246,7 +246,7 @@ const MoodTracker = ({
                 style={styles.closeButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="close" size={ICON_SIZES.lg} color={TEXT.white} />
+                <Ionicons name="close" size={ICON_SIZES.lg} color={TEXT.primary} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>How are you feeling?</Text>
               <View style={styles.headerSpacer} />
@@ -285,6 +285,7 @@ const MoodTracker = ({
                 value={intensity}
                 onChange={setIntensity}
                 moodColor={moodColors?.base}
+                moodBgColor={moodColors?.light}
               />
             </View>
 
@@ -295,6 +296,7 @@ const MoodTracker = ({
                 value={energyLevel}
                 onChange={setEnergyLevel}
                 moodColor={SEMANTIC.warning.base}
+                moodBgColor={MOOD_PALETTE.happy.light}
               />
             </View>
 
@@ -302,16 +304,16 @@ const MoodTracker = ({
             {recentMeals && recentMeals.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="restaurant" size={ICON_SIZES.sm} color={TEXT.secondary} />
+                  <Ionicons name="restaurant" size={ICON_SIZES.sm} color={SEMANTIC.warning.base} />
                   <Text style={styles.sectionLabel}>Recent Meals (4h window)</Text>
                 </View>
                 <View style={styles.mealsContainer}>
                   {recentMeals.slice(0, 3).map((meal, index) => (
-                    <View key={index} style={styles.mealChip}>
+                    <View key={index} style={[styles.mealChip, { backgroundColor: moodColors?.light, borderColor: moodColors?.base }]}>
                       <Text style={styles.mealName} numberOfLines={1}>
                         {meal.foodName}
                       </Text>
-                      <Text style={styles.mealTime}>
+                      <Text style={[styles.mealTime, { color: moodColors?.base }]}>
                         {Math.round((new Date() - new Date(meal.timestamp)) / 60000)}m ago
                       </Text>
                     </View>
@@ -333,11 +335,11 @@ const MoodTracker = ({
                   <Ionicons
                     name="pricetag"
                     size={ICON_SIZES.sm}
-                    color={TEXT.secondary}
+                    color={moodColors?.base}
                   />
                   <Text style={styles.sectionLabel}>Add Context</Text>
                   {Object.keys(tags).length > 0 && (
-                    <View style={styles.tagCountBadge}>
+                    <View style={[styles.tagCountBadge, { backgroundColor: moodColors?.base }]}>
                       <Text style={styles.tagCountText}>
                         {Object.keys(tags).length}
                       </Text>
@@ -347,7 +349,7 @@ const MoodTracker = ({
                 <Ionicons
                   name={showTags ? 'chevron-up' : 'chevron-down'}
                   size={ICON_SIZES.sm}
-                  color={TEXT.tertiary}
+                  color={moodColors?.base}
                 />
               </TouchableOpacity>
 
@@ -360,9 +362,9 @@ const MoodTracker = ({
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>What&apos;s on your mind?</Text>
               <TextInput
-                style={styles.noteInput}
+                style={[styles.noteInput, { backgroundColor: moodColors?.light, borderColor: moodColors?.base }]}
                 placeholder="Add a private note (optional)"
-                placeholderTextColor={TEXT.tertiary}
+                placeholderTextColor={moodColors?.base}
                 value={note}
                 onChangeText={setNote}
                 maxLength={200}
@@ -370,7 +372,7 @@ const MoodTracker = ({
                 numberOfLines={4}
                 textAlignVertical="top"
               />
-              <Text style={styles.charCount}>
+              <Text style={[styles.charCount, { color: moodColors?.base }]}>
                 {note.length}/200
               </Text>
             </View>
@@ -448,7 +450,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: TEXT.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -494,10 +496,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[3],
     paddingHorizontal: SPACING[4],
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: SEMANTIC.warning.light,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: SURFACES.divider,
+    borderColor: SEMANTIC.warning.base,
   },
   mealName: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -509,7 +511,7 @@ const styles = StyleSheet.create({
   mealTime: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.tertiary,
+    color: SEMANTIC.warning.base,
   },
   collapsibleHeader: {
     flexDirection: 'row',
@@ -543,12 +545,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.md,
     color: TEXT.primary,
     borderWidth: 1,
-    borderColor: SURFACES.divider,
+    borderColor: SEMANTIC.info.base,
     minHeight: 100,
   },
   charCount: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: SEMANTIC.info.base,
     textAlign: 'right',
     marginTop: SPACING[1],
   },
