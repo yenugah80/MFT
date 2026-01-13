@@ -1,13 +1,6 @@
 {
+  "rules": {},
   "ignoreFiles": [
-    "node_modules/**",
-    "**/node_modules/**",
-    "**/*.js",
-    "**/*.jsx",
-    "**/*.ts",
-    "**/*.tsx",
-    "build/**",
-    "dist/**",
-    ".expo/**"
+    "**/*"
   ]
 }
