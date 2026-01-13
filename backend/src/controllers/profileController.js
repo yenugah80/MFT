@@ -340,6 +340,7 @@ export async function getProfile(req, res) {
               region: profilesTable.region,
               cookingStyle: profilesTable.cookingStyle,
               notifications: profilesTable.notifications,
+              onboardingCompletedAt: profilesTable.onboardingCompletedAt,
               createdAt: profilesTable.createdAt,
               updatedAt: profilesTable.updatedAt,
             })
