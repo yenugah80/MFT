@@ -9,9 +9,12 @@ import {
   orchestrateDailyRecommendations,
   orchestrateAllUsers,
 } from '../services/recommendationOrchestratorService.js';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Require authentication for all orchestrator routes
+router.use(requireAuth);
 
 /**
  * POST /api/orchestrator/run
@@ -19,7 +22,7 @@ const router = express.Router();
  * Trigger orchestration for authenticated user
  * Called manually or by daily cron
  */
-router.post('/run', requireAuth(), async (req, res) => {
+router.post('/run', async (req, res) => {
   try {
     const userId = req.auth.userId;
 
