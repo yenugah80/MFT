@@ -20,8 +20,8 @@ import {
   userPortionPreferencesTable,
   profilesTable,
 } from '../db/schema.js';
-import { eq, and, desc, limit, sql } from 'drizzle-orm';
-import { openaiClient } from '../config/openai.js';
+import { eq, and, desc, sql } from 'drizzle-orm';
+import { openaiClient } from './apiClients/OpenAIClient.js';
 
 /**
  * Resolve a generic intent to specific food recommendations

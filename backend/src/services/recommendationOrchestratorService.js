@@ -196,7 +196,7 @@ export function decideRecommendationType(correlations, lifecycleStage, userMetri
   }
 
   // PREDICT: Lifecycle stage allows predictions (MASTER+)
-  if (lifecycleStage.stage in ['MASTER', 'CHAMPION', 'ELITE']) {
+  if (['MASTER', 'CHAMPION', 'ELITE'].includes(lifecycleStage.stage)) {
     const predictiveCorrelations = sorted.filter(c => c.confidence >= lifecycleStage.minConfidence);
     if (predictiveCorrelations.length > 0) {
       return {
@@ -357,7 +357,7 @@ function generateReinforceMessage(correlation, lifecycleStage) {
       {
         icon: '⭐',
         text: 'Keep the streak',
-        description: 'You're on the right track',
+        description: "You're on the right track",
       },
     ];
   } else {

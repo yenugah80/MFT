@@ -11,7 +11,7 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
-import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification } from "../services/gamificationRewardService.js";
+import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification, backfillXPFromHistory } from "../services/gamificationRewardService.js";
 import { calculateLevel } from "../utils/levelCalculator.js";
 import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
@@ -1039,10 +1039,12 @@ router.get("/dashboard", async (req, res) => {
       gamificationRow = await initializeGamification(userId, db);
     }
 
-    // Calculate level info to include nextLevelXp
+    // Calculate level info from XP - this is the source of truth, not DB level
+    // CRITICAL FIX: Always use freshly calculated level, not potentially stale DB value
     const levelInfo = calculateLevel(gamificationRow?.xp || 0);
     const gamificationWithLevel = {
       ...gamificationRow,
+      level: levelInfo.level,           // Override DB level with calculated level
       nextLevelXp: levelInfo.nextLevelXp,
       currentLevelXp: levelInfo.currentLevelXP,
       progressPercent: levelInfo.progressPercent,
@@ -1096,6 +1098,32 @@ router.get("/dashboard", async (req, res) => {
   } catch (error) {
     console.error("[Dashboard] Error:", error);
     errors.internal(res, 'Failed to fetch dashboard data');
+  }
+});
+
+/**
+ * POST /api/nutrition/backfill-xp
+ * Calculates and awards XP from all historical logs
+ * Use this to credit users with XP they should have earned before XP system was added
+ */
+router.post("/backfill-xp", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    console.log(`[Backfill] Starting XP backfill for user ${userId}`);
+
+    const result = await backfillXPFromHistory(userId, db);
+
+    res.json({
+      success: true,
+      message: `Backfilled ${result.totalXP} XP from your historical logs!`,
+      ...result,
+    });
+  } catch (err) {
+    console.error("[Backfill] Error:", err);
+    res.status(500).json({
+      error: "Failed to backfill XP",
+      details: err.message,
+    });
   }
 });
 

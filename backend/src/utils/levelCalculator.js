@@ -1,15 +1,22 @@
 // Level Calculator Utility for Gamification System
-// Uses exponential scaling: baseXP * (level ^ 1.3)
+// Uses balanced scaling that rewards consistent logging
+// Target: Level up every ~5-7 days of consistent logging (3 meals/day = 30 XP)
 
 /**
  * Calculate XP required to reach a specific level
- * Formula: 1000 * (level ^ 1.3)
+ * Formula: 100 + (50 * level) - creates achievable progression
+ * Level 2: 200 XP (~7 days)
+ * Level 3: 350 XP (~12 days total)
+ * Level 5: 650 XP (~22 days total)
+ * Level 10: 1150 XP (~38 days total)
  * @param {number} level - Target level
  * @returns {number} XP required for that level
  */
 export function getXPForLevel(level) {
   if (level <= 1) return 0;
-  return Math.floor(1000 * Math.pow(level, 1.3));
+  // Gentle progression: 100 base + 50 per level
+  // This means each level requires slightly more XP but stays achievable
+  return 100 + (50 * level);
 }
 
 /**

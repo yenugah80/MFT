@@ -20,6 +20,10 @@ const fetchDashboard = async (): Promise<DashboardData> => {
   if (__DEV__) {
     console.log('[Dashboard] gamification.streak:', data?.gamification?.streak);
     console.log('[Dashboard] trends.currentStreak:', data?.trends?.currentStreak);
+    console.log('[Dashboard] gamification.xp:', data?.gamification?.xp);
+    console.log('[Dashboard] gamification.level:', data?.gamification?.level);
+    console.log('[Dashboard] gamification.nextLevelXp:', data?.gamification?.nextLevelXp);
+    console.log('[Dashboard] gamification.progressPercent:', data?.gamification?.progressPercent);
   }
   return data;
 };

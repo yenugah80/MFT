@@ -15,6 +15,56 @@ import {
 // Streak milestones that trigger celebrations
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 150, 200, 365];
 
+// ============================================================================
+// XP REWARDS BY LOG TYPE
+// Balanced to reward all healthy behaviors equally
+// ============================================================================
+const XP_REWARDS = {
+  food: { first: 10, subsequent: 5, dailyCap: 3 },      // First 3 meals: 10 XP, then 5 XP
+  water: { base: 5, goalBonus: 10 },                     // 5 XP per log, +10 bonus for hitting daily goal
+  mood: { base: 8 },                                     // 8 XP per mood log (encourages reflection)
+  activity: { base: 10, intensityMultiplier: 0.5 },      // 10 XP base + bonus for intensity/duration
+};
+
+/**
+ * Calculate XP for any log type
+ * @param {string} logType - 'food' | 'water' | 'mood' | 'activity'
+ * @param {Object} context - Additional context (e.g., logNumber, hitGoal, duration)
+ * @returns {number} XP to award
+ */
+export function calculateLogXP(logType, context = {}) {
+  const rewards = XP_REWARDS[logType];
+  if (!rewards) return 5; // Default fallback
+
+  switch (logType) {
+    case 'food':
+      // First 3 meals of the day get bonus XP
+      const logNumber = context.logNumber || 1;
+      return logNumber <= rewards.dailyCap ? rewards.first : rewards.subsequent;
+
+    case 'water':
+      // Base XP + bonus if this log hits daily goal
+      let waterXP = rewards.base;
+      if (context.hitDailyGoal) waterXP += rewards.goalBonus;
+      return waterXP;
+
+    case 'mood':
+      // Flat XP for mood tracking (important for mental health)
+      return rewards.base;
+
+    case 'activity':
+      // Base XP + bonus based on duration (1 XP per 5 minutes, capped at 20 bonus)
+      let activityXP = rewards.base;
+      if (context.durationMinutes) {
+        activityXP += Math.min(Math.floor(context.durationMinutes / 5), 20);
+      }
+      return activityXP;
+
+    default:
+      return 5;
+  }
+}
+
 /**
  * Calculate XP to award for a meal log
  * Rules: First 3 meals = 10 XP each, meals 4+ = 5 XP each
@@ -380,6 +430,112 @@ export async function initializeGamification(userId, dbConn = db) {
     return newGamification;
   } catch (error) {
     console.error("[GamificationReward] Error initializing gamification:", error);
+    throw error;
+  }
+}
+
+/**
+ * Backfill XP from historical logs
+ * Calculates XP that should have been awarded for all past logs
+ * @param {string} userId - User ID
+ * @param {Object} dbConn - Database connection
+ * @returns {Promise<Object>} Backfill results with XP breakdown
+ */
+export async function backfillXPFromHistory(userId, dbConn = db) {
+  try {
+    console.log(`[GamificationReward] Starting XP backfill for user ${userId}`);
+
+    // Import tables
+    const { foodLogTable, waterLogTable, moodLogTable } = await import("../db/schema.js");
+
+    // Count food logs (10 XP for first 3 per day, 5 XP for rest)
+    const foodLogsResult = await dbConn.execute(sql`
+      SELECT DATE(logged_at) as log_date, COUNT(*) as count
+      FROM food_logs
+      WHERE user_id = ${userId}
+      GROUP BY DATE(logged_at)
+    `);
+    const foodLogsByDay = foodLogsResult.rows || [];
+    let foodXP = 0;
+    foodLogsByDay.forEach(day => {
+      const count = parseInt(day.count) || 0;
+      // First 3 meals = 10 XP each, rest = 5 XP each
+      const bonusMeals = Math.min(count, 3);
+      const regularMeals = Math.max(0, count - 3);
+      foodXP += bonusMeals * 10 + regularMeals * 5;
+    });
+
+    // Count water logs (5 XP each)
+    const waterLogsResult = await dbConn.execute(sql`
+      SELECT COUNT(*) as count FROM water_logs WHERE user_id = ${userId}
+    `);
+    const waterCount = parseInt(waterLogsResult.rows?.[0]?.count) || 0;
+    const waterXP = waterCount * 5;
+
+    // Count mood logs (8 XP each)
+    const moodLogsResult = await dbConn.execute(sql`
+      SELECT COUNT(*) as count FROM mood_logs WHERE user_id = ${userId}
+    `);
+    const moodCount = parseInt(moodLogsResult.rows?.[0]?.count) || 0;
+    const moodXP = moodCount * 8;
+
+    // Count activity logs (10 XP base + duration bonus)
+    const activityLogsResult = await dbConn.execute(sql`
+      SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes, COUNT(*) as count
+      FROM activity_logs
+      WHERE user_id = ${userId}
+    `);
+    const activityCount = parseInt(activityLogsResult.rows?.[0]?.count) || 0;
+    const totalActivityMinutes = parseInt(activityLogsResult.rows?.[0]?.total_minutes) || 0;
+    // 10 XP per log + 1 XP per 5 minutes (capped at 20 bonus per log)
+    const activityXP = activityCount * 10 + Math.min(Math.floor(totalActivityMinutes / 5), activityCount * 20);
+
+    const totalXP = foodXP + waterXP + moodXP + activityXP;
+
+    console.log(`[GamificationReward] Backfill calculation:
+      Food: ${foodLogsByDay.length} days, ${foodXP} XP
+      Water: ${waterCount} logs, ${waterXP} XP
+      Mood: ${moodCount} logs, ${moodXP} XP
+      Activity: ${activityCount} logs, ${activityXP} XP
+      TOTAL: ${totalXP} XP`);
+
+    // Update gamification table with backfilled XP
+    const levelInfo = calculateLevel(totalXP);
+
+    await dbConn
+      .insert(gamificationTable)
+      .values({
+        userId,
+        xp: totalXP,
+        level: levelInfo.level,
+        streak: 0, // Streak would need separate calculation
+        badges: [],
+      })
+      .onConflictDoUpdate({
+        target: gamificationTable.userId,
+        set: {
+          xp: totalXP,
+          level: levelInfo.level,
+        },
+      });
+
+    console.log(`[GamificationReward] Backfill complete for user ${userId}: ${totalXP} XP, Level ${levelInfo.level}`);
+
+    return {
+      success: true,
+      totalXP,
+      breakdown: {
+        food: { days: foodLogsByDay.length, xp: foodXP },
+        water: { logs: waterCount, xp: waterXP },
+        mood: { logs: moodCount, xp: moodXP },
+        activity: { logs: activityCount, minutes: totalActivityMinutes, xp: activityXP },
+      },
+      level: levelInfo.level,
+      nextLevelXP: levelInfo.nextLevelXP,
+      progressPercent: levelInfo.progressPercent,
+    };
+  } catch (error) {
+    console.error("[GamificationReward] Error backfilling XP:", error);
     throw error;
   }
 }

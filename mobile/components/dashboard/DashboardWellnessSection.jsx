@@ -23,6 +23,7 @@ export default function DashboardWellnessSection({
   today,
   goals,
   gamification,
+  streak = 0, // CRITICAL FIX: Use dedicated streak prop (from trends.currentStreak) not gamification.streak
   hydrationEvents,
   hydrationLastLoggedAt,
   hydrationCelebratedKey,
@@ -46,7 +47,7 @@ export default function DashboardWellnessSection({
         <HydrationWellnessDashboard
           currentIntake={today?.waterIntakeLiters || 0}
           dailyGoal={goals?.waterLiters || 2.0}
-          streak={gamification?.streak || 0}
+          streak={streak}
           intakeEvents={hydrationEvents}
           lastLoggedAt={hydrationLastLoggedAt}
           celebratedTodayKey={hydrationCelebratedKey}

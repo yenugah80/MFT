@@ -41,7 +41,7 @@ import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
 // DashboardPrimaryCard removed - redundant with FoodMoodScoreCard hero + CompactDashboardTiles
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
-import DashboardNutritionSection from "./dashboard/DashboardNutritionSection";
+// DashboardNutritionSection removed - replaced with comprehensive NutritionDetailsSection
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 // RemainingBudgetCard removed - redundant with InsightNudge system
@@ -59,6 +59,9 @@ import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 // Premium dashboard enhancements - compact tiles
 import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
 
+// NEW: Comprehensive nutrition details component with integrated progress rings and macro breakdown
+import NutritionDetailsSection from "./dashboard/NutritionDetailsSection";
+
 // Behavioral Health Intelligence System - Phase 6
 import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehaviorSection";
 import { LifecycleStageFooter } from "./dashboard/LifecycleStageFooter";
@@ -68,6 +71,7 @@ import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErr
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
 import { BRAND, SURFACES, TEXT, SEMANTIC, SEMANTIC_ACTIONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
+import { BOLD_GRADIENTS, WELLNESS_COLORS, DEPTH_SHADOWS } from "../constants/modernColorPalette";
 
 // Utility functions
 import { generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
@@ -442,9 +446,10 @@ export default function DashboardContent() {
   // ============================================================================
   // GAMIFICATION LOGIC
   // ============================================================================
-  
+
   // Track previous streak to detect increments
-  const prevStreakRef = useRef(data?.gamification?.streak);
+  // CRITICAL FIX: Use trends.currentStreak (fresh calculation) not gamification.streak (stale DB row)
+  const prevStreakRef = useRef(data?.trends?.currentStreak);
 
   const checkStreakReward = useCallback(async (currentStreak) => {
     try {
@@ -460,13 +465,14 @@ export default function DashboardContent() {
   }, [notify, refetch]);
 
   useEffect(() => {
-    if (data?.gamification?.streak && prevStreakRef.current !== undefined) {
-      if (data.gamification.streak > prevStreakRef.current) {
-        checkStreakReward(data.gamification.streak);
+    const currentStreak = data?.trends?.currentStreak;
+    if (currentStreak && prevStreakRef.current !== undefined) {
+      if (currentStreak > prevStreakRef.current) {
+        checkStreakReward(currentStreak);
       }
     }
-    prevStreakRef.current = data?.gamification?.streak;
-  }, [data?.gamification?.streak, checkStreakReward]);
+    prevStreakRef.current = currentStreak;
+  }, [data?.trends?.currentStreak, checkStreakReward]);
 
   // Check if a freeze was consumed (Logic: if streak preserved but logged date gap > 1 day)
   // For now, we can trigger this manually or based on a backend flag in 'data'
@@ -852,7 +858,7 @@ export default function DashboardContent() {
       proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
       currentHydration: currentWater,
       hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
-      streak: parseDecimal(data.gamification?.streak, 0),
+      streak: parseDecimal(data.trends?.currentStreak, 0),
       timeOfDay: new Date().getHours(),
     });
   }, [data]);
@@ -876,7 +882,7 @@ export default function DashboardContent() {
       today: data.today,
       goals: data.goals,
       historicalData: data.trends?.weekSummaries || [],
-      streak: parseDecimal(data.gamification?.streak, 0),
+      streak: parseDecimal(data.trends?.currentStreak, 0),
     });
 
     // Transform to format expected by EnhancedMoodCard
@@ -1148,6 +1154,63 @@ export default function DashboardContent() {
   const hasAnyData = !isNewUser;
   const hasTodayData = hasLoggedToday;
 
+  // CRITICAL FIX: Override cold start messaging when user actually has data
+  // The orchestrator mock returns "Building your health baseline" on 404
+  // But returning users should see stage-appropriate messaging
+  const correctedOrchestratorData = useMemo(() => {
+    if (!orchestratorData) return null;
+
+    const decision = orchestratorData?.decision || orchestratorData?.message;
+    const isColdStartMock = decision?.headline === 'Building your health baseline';
+
+    // If user has actual data, override the cold start message
+    if (isColdStartMock && hasAnyData && userLifecycle) {
+      const totalDays = userLifecycle.totalDaysWithLogs || 0;
+      const totalMeals = userLifecycle.totalMealsLogged || 0;
+
+      // Determine appropriate headline based on actual stage
+      let newHeadline = decision.headline;
+      let newSubtitle = decision.subtitle;
+      let newType = decision.type;
+
+      if (totalDays >= 30) {
+        newHeadline = 'Welcome back, pattern pro';
+        newSubtitle = 'Your health journey continues';
+        newType = 'SILENT';
+      } else if (totalDays >= 7) {
+        newHeadline = 'Building strong habits';
+        newSubtitle = `${totalDays} days tracked. Insights are forming.`;
+        newType = 'REINFORCE';
+      } else if (totalMeals >= 3 || totalDays >= 2) {
+        newHeadline = 'Great start!';
+        newSubtitle = hasLoggedToday
+          ? 'Keep the momentum going today'
+          : 'Continue where you left off';
+        newType = 'REINFORCE';
+      } else if (totalMeals >= 1) {
+        newHeadline = 'You\'re on your way';
+        newSubtitle = 'A few more logs unlock your patterns';
+        newType = 'REINFORCE';
+      }
+
+      return {
+        ...orchestratorData,
+        decision: {
+          ...decision,
+          type: newType,
+          headline: newHeadline,
+          subtitle: newSubtitle,
+        },
+        lifecycle: {
+          ...orchestratorData.lifecycle,
+          stage: userLifecycle.stage?.toUpperCase() || orchestratorData.lifecycle?.stage,
+        },
+      };
+    }
+
+    return orchestratorData;
+  }, [orchestratorData, hasAnyData, userLifecycle, hasLoggedToday]);
+
   const displayName = user?.firstName
     || user?.fullName?.split(' ')?.[0]
     || 'there';
@@ -1164,7 +1227,7 @@ export default function DashboardContent() {
   return (
     <>
       <LinearGradient
-        colors={['#FDF9F6', '#FAF5F0', '#F8F3EE']}
+        colors={BOLD_GRADIENTS.dashboard}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.container}
@@ -1197,7 +1260,7 @@ export default function DashboardContent() {
           // Enhanced header props
           userInitials={user?.firstName?.[0]?.toUpperCase() || user?.fullName?.[0]?.toUpperCase() || 'U'}
           userImageUrl={user?.imageUrl || null}
-          streak={parseDecimal(gamification?.streak, 0)}
+          streak={parseDecimal(trends?.currentStreak, 0)}
           todayCalories={parseCalories(today?.nutrition?.totalCalories)}
           calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
           waterProgress={calculatePercentage(
@@ -1246,7 +1309,7 @@ export default function DashboardContent() {
           <PremiumCalendarStrip
             data={calendarData}
             selectedDate={null}
-            currentStreak={parseDecimal(gamification?.streak, 0)}
+            currentStreak={parseDecimal(trends?.currentStreak, 0)}
             onDateSelect={(dateOrObj) => {
               // Handle both Date object and { dateKey } from day detail modal
               const dateKey = dateOrObj?.dateKey || (dateOrObj instanceof Date ? dateOrObj.toISOString().split('T')[0] : null);
@@ -1266,21 +1329,79 @@ export default function DashboardContent() {
             today={today}
             goals={goals}
             moodLogs={today?.moodLogs || []}
-            streak={parseDecimal(gamification?.streak, 0)}
+            streak={parseDecimal(trends?.currentStreak, 0)}
             historicalScores={[]}
             onViewDetails={() => router.push('/insights/mood')}
           />
         )}
 
         {/* ============================================ */}
-        {/* COMPACT TILES - Glassmorphic quick stats row */}
-        {/* Shows: Macros donut, Hydration bar, Streak pill */}
+        {/* NUTRITION DETAILS - Comprehensive nutrition breakdown */}
+        {/* Shows: Progress rings, macro bars, quick stats */}
+        {/* Expandable card with all nutrition data integrated */}
+        {/* Smart empty state for returning users when no data today */}
+        {/* ============================================ */}
+        <NutritionDetailsSection
+          today={today}
+          goals={goals}
+          streak={parseDecimal(trends?.currentStreak, 0)}
+          userHistory={{
+            totalDays: parseDecimal(gamification?.totalLoggingDays, 0),
+            yesterdayCalories: data?.trends?.yesterdayCalories || 0,
+            yesterdayMeals: data?.trends?.yesterdayMeals || 0,
+            avgCalories: data?.trends?.avgCalories || 0,
+          }}
+        />
+
+        {/* ============================================ */}
+        {/* QUICK ANALYTICS - Navigation to dedicated screens */}
         {/* ============================================ */}
         {hasAnyData && (
-          <CompactDashboardTiles
-            today={today}
-            onTapMacros={() => setNutritionExpanded(true)}
-          />
+          <View style={styles.analyticsSection}>
+            <Text style={styles.analyticsSectionTitle}>Explore Analytics</Text>
+            <View style={styles.analyticsGrid}>
+              <TouchableOpacity
+                style={styles.analyticsCard}
+                onPress={() => router.push('/insights/food-analytics')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.analyticsIconContainer, { backgroundColor: '#10B98115' }]}>
+                  <Ionicons name="restaurant" size={20} color="#10B981" />
+                </View>
+                <Text style={styles.analyticsCardTitle}>Food</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.analyticsCard}
+                onPress={() => router.push('/insights/activity-analytics')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.analyticsIconContainer, { backgroundColor: '#F5910015' }]}>
+                  <Ionicons name="barbell" size={20} color="#F59100" />
+                </View>
+                <Text style={styles.analyticsCardTitle}>Activity</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.analyticsCard}
+                onPress={() => router.push('/insights/hydration-analytics')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.analyticsIconContainer, { backgroundColor: '#3B82F615' }]}>
+                  <Ionicons name="water" size={20} color="#3B82F6" />
+                </View>
+                <Text style={styles.analyticsCardTitle}>Hydration</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.analyticsCard}
+                onPress={() => router.push('/insights')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.analyticsIconContainer, { backgroundColor: '#8B5CF615' }]}>
+                  <Ionicons name="stats-chart" size={20} color="#8B5CF6" />
+                </View>
+                <Text style={styles.analyticsCardTitle}>All</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* ============================================ */}
@@ -1297,9 +1418,9 @@ export default function DashboardContent() {
                   <View style={{ height: 12, backgroundColor: '#F0ECEA', borderRadius: 4, width: '70%' }} />
                 </View>
               </View>
-            ) : orchestratorData ? (
+            ) : correctedOrchestratorData ? (
               <DailyIntelligenceBehaviorSection
-                orchestratorData={orchestratorData}
+                orchestratorData={correctedOrchestratorData}
                 onRequestDismiss={handleDismissRequest}
                 onAction={handleIntelligenceAction}
               />
@@ -1309,15 +1430,17 @@ export default function DashboardContent() {
 
         {/* ============================================ */}
         {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
-        {/* Only show after user logs today AND past onboarding phase */}
+        {/* CRITICAL FIX: Show for ANY user with data, not just today's loggers! */}
+        {/* Power users need to see their level/streak even before logging today */}
         {/* ============================================ */}
-        {hasLoggedToday && !isOnboarding && (
+        {hasAnyData && !isOnboarding && (
           <PremiumAchievementsCard
             level={parseDecimal(gamification?.level, 1)}
             xp={parseDecimal(gamification?.xp, 0)}
-            streak={parseDecimal(gamification?.streak, 0)}
+            streak={parseDecimal(trends?.currentStreak, 0)}
             nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
             streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
+            isReturningUser={isReturning || hasAnyData}
           />
         )}
 
@@ -1369,19 +1492,9 @@ export default function DashboardContent() {
 
 
         {/* ============================================ */}
-        {/* NUTRITION SECTION - Collapsible */}
+        {/* OLD NUTRITION SECTION - REMOVED */}
+        {/* Now integrated into comprehensive NutritionDetailsSection above */}
         {/* ============================================ */}
-        <DashboardNutritionSection
-          styles={styles}
-          expanded={nutritionExpanded}
-          onToggle={() => setNutritionExpanded(!nutritionExpanded)}
-          today={today}
-          goals={goals}
-          aggregatedMicros={aggregatedMicros}
-          macroAssessment={macroAssessment}
-          uniqueFoodLogs={uniqueFoodLogs}
-          onLogMeal={() => router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } })}
-        />
 
         {/* ============================================ */}
         {/* WELLNESS SECTION - Collapsible */}
@@ -1393,6 +1506,7 @@ export default function DashboardContent() {
           today={today}
           goals={goals}
           gamification={gamification}
+          streak={parseDecimal(trends?.currentStreak, 0)}
           hydrationEvents={hydrationEvents}
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
@@ -1420,9 +1534,9 @@ export default function DashboardContent() {
         {/* LIFECYCLE STAGE FOOTER - User progression */}
         {/* Shows current stage and progress to next milestone */}
         {/* ============================================ */}
-        {hasAnyData && !isOnboarding && !orchestratorLoading && orchestratorData && (
+        {hasAnyData && !isOnboarding && !orchestratorLoading && correctedOrchestratorData && (
           <LifecycleStageFooter
-            orchestratorData={orchestratorData}
+            orchestratorData={correctedOrchestratorData}
           />
         )}
           </ScrollView>
@@ -1705,6 +1819,47 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING[5],
     paddingBottom: SPACING[16],
+  },
+  // Analytics Section
+  analyticsSection: {
+    marginTop: SPACING[4],
+    marginBottom: SPACING[2],
+  },
+  analyticsSectionTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+    marginBottom: SPACING[3],
+  },
+  analyticsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  analyticsCard: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING[3],
+    marginHorizontal: SPACING[1],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  analyticsIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING[1],
+  },
+  analyticsCardTitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.secondary,
   },
   centerContainer: {
     flex: 1,
