@@ -498,21 +498,31 @@ export async function orchestrateDailyRecommendations(userId) {
 
     console.log(`[Orchestrator] User ${userId} stage: ${lifecycleStage.stage}`);
 
-    // Step 4: Compute correlations
-    const correlationResult = await computeUserCorrelations(userId, {
-      windowTypes: lifecycleStage.windowTypes,
-    });
+    // Step 4: Compute correlations (with graceful error handling for schema mismatches)
+    let correlations = [];
+    try {
+      const correlationResult = await computeUserCorrelations(userId, {
+        windowTypes: lifecycleStage.windowTypes,
+      });
 
-    // Save computed correlations
-    for (const correlation of correlationResult.correlations) {
-      await saveCorrelation(userId, correlation);
+      // Save computed correlations
+      for (const correlation of correlationResult.correlations) {
+        try {
+          await saveCorrelation(userId, correlation);
+        } catch (saveErr) {
+          console.warn(`[Orchestrator] Failed to save correlation: ${saveErr.message}`);
+        }
+      }
+
+      // Step 5: Fetch all active correlations for this user
+      correlations = await getUserCorrelations(userId, {
+        minConfidence: lifecycleStage.minConfidence,
+        limit: lifecycleStage.correlationsToShow + 2, // Get a few extra for decision logic
+      });
+    } catch (correlationError) {
+      console.warn(`[Orchestrator] Correlation engine error (falling back to empty): ${correlationError.message}`);
+      correlations = [];
     }
-
-    // Step 5: Fetch all active correlations for this user
-    const correlations = await getUserCorrelations(userId, {
-      minConfidence: lifecycleStage.minConfidence,
-      limit: lifecycleStage.correlationsToShow + 2, // Get a few extra for decision logic
-    });
 
     console.log(`[Orchestrator] Found ${correlations.length} correlations for user ${userId}`);
 

@@ -1135,30 +1135,15 @@ export default function DashboardContent() {
     );
   }
 
-  if (!data) return null;
-
-  const { today, goals, gamification, trends, recentWeight, userLifecycle } = data;
-
-  // ============================================================================
-  // USER LIFECYCLE DETECTION - Single source of truth from backend
-  // Properly distinguishes: brand new user vs returning user who missed a day
-  // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
-  // ============================================================================
-  const isNewUser = userLifecycle?.stage === 'brand_new';
-  const isOnboarding = ['brand_new', 'onboarding'].includes(userLifecycle?.stage);
-  const isReturning = userLifecycle?.isReturning ?? false;
-  const hasLoggedToday = userLifecycle?.hasLoggedToday ?? false;
-  const daysSinceLastLog = userLifecycle?.daysSinceLastLog;
-
-  // Legacy compatibility flags (for components still using old names)
-  const hasAnyData = !isNewUser;
-  const hasTodayData = hasLoggedToday;
-
-  // CRITICAL FIX: Override cold start messaging when user actually has data
-  // The orchestrator mock returns "Building your health baseline" on 404
-  // But returning users should see stage-appropriate messaging
+  // CRITICAL FIX: useMemo MUST be called before any early returns (React hooks rules)
+  // Override cold start messaging when user actually has data
   const correctedOrchestratorData = useMemo(() => {
-    if (!orchestratorData) return null;
+    if (!orchestratorData || !data) return null;
+
+    const userLifecycle = data?.userLifecycle;
+    const isNewUser = userLifecycle?.stage === 'brand_new';
+    const hasAnyData = !isNewUser;
+    const hasLoggedToday = userLifecycle?.hasLoggedToday ?? false;
 
     const decision = orchestratorData?.decision || orchestratorData?.message;
     const isColdStartMock = decision?.headline === 'Building your health baseline';
@@ -1209,7 +1194,26 @@ export default function DashboardContent() {
     }
 
     return orchestratorData;
-  }, [orchestratorData, hasAnyData, userLifecycle, hasLoggedToday]);
+  }, [orchestratorData, data]);
+
+  if (!data) return null;
+
+  const { today, goals, gamification, trends, recentWeight, userLifecycle } = data;
+
+  // ============================================================================
+  // USER LIFECYCLE DETECTION - Single source of truth from backend
+  // Properly distinguishes: brand new user vs returning user who missed a day
+  // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
+  // ============================================================================
+  const isNewUser = userLifecycle?.stage === 'brand_new';
+  const isOnboarding = ['brand_new', 'onboarding'].includes(userLifecycle?.stage);
+  const isReturning = userLifecycle?.isReturning ?? false;
+  const hasLoggedToday = userLifecycle?.hasLoggedToday ?? false;
+  const daysSinceLastLog = userLifecycle?.daysSinceLastLog;
+
+  // Legacy compatibility flags (for components still using old names)
+  const hasAnyData = !isNewUser;
+  const hasTodayData = hasLoggedToday;
 
   const displayName = user?.firstName
     || user?.fullName?.split(' ')?.[0]
