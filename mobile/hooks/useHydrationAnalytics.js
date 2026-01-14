@@ -101,8 +101,13 @@ export function useColdStartStage(options = {}) {
   const query = useQuery({
     queryKey: HYDRATION_ANALYTICS_KEYS.coldStart(),
     queryFn: async () => {
-      const response = await apiClient.get('/hydration/analytics/cold-start');
-      return response.data;
+      try {
+        // apiClient.get already returns data directly, not response wrapper
+        const data = await apiClient.get('/hydration/analytics/cold-start');
+        return data;
+      } catch {
+        return { stage: 'day0', distinctDays: 0 };
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -128,9 +133,19 @@ export function useHydrationPrediction(options = {}) {
   const query = useQuery({
     queryKey: HYDRATION_ANALYTICS_KEYS.prediction(),
     queryFn: async () => {
-      const params = meetingCount ? { meetingCount } : {};
-      const response = await apiClient.get('/hydration/analytics/prediction/tomorrow', { params });
-      return response.data;
+      try {
+        const params = meetingCount ? { meetingCount } : {};
+        // apiClient.get already returns data directly, not response wrapper
+        const data = await apiClient.get('/hydration/analytics/prediction/tomorrow', { params });
+        return data;
+      } catch {
+        // Return fallback prediction on error
+        return {
+          hasPrediction: false,
+          predictedMl: 2000,
+          factors: [],
+        };
+      }
     },
     enabled,
     staleTime: 60 * 60 * 1000, // 1 hour (predictions don't change often)
@@ -156,12 +171,12 @@ export function useInsightFeedback() {
 
   const mutation = useMutation({
     mutationFn: async ({ insightType, insightId, feedback }) => {
-      const response = await apiClient.post('/hydration/analytics/feedback', {
+      // apiClient.post already returns data directly
+      return await apiClient.post('/hydration/analytics/feedback', {
         insightType,
         insightId,
         ...feedback,
       });
-      return response.data;
     },
     onSuccess: () => {
       // Invalidate dashboard to refresh dismissed insights
@@ -208,10 +223,10 @@ export function useRefreshPrediction() {
 
   const mutation = useMutation({
     mutationFn: async ({ meetingCount } = {}) => {
-      const response = await apiClient.post('/hydration/analytics/prediction/refresh', {
+      // apiClient.post already returns data directly
+      return await apiClient.post('/hydration/analytics/prediction/refresh', {
         meetingCount,
       });
-      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HYDRATION_ANALYTICS_KEYS.prediction() });
@@ -238,8 +253,8 @@ export function useUpdateOnboardingStage() {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.post('/hydration/analytics/profile/refresh-stage');
-      return response.data;
+      // apiClient.post already returns data directly
+      return await apiClient.post('/hydration/analytics/profile/refresh-stage');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HYDRATION_ANALYTICS_KEYS.dashboard() });

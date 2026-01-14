@@ -10,6 +10,7 @@ import { BlurView } from 'expo-blur';
 import Svg, { Circle, G } from 'react-native-svg';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
 import { TEXT, SHADOWS, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { MODERN_MACROS } from '../../constants/modernColorPalette';
 
 // Mini Donut Chart for macros
 function MiniDonut({ protein, carbs, fat, size = 48 }) {
@@ -45,7 +46,7 @@ function MiniDonut({ protein, carbs, fat, size = 48 }) {
           cx={center}
           cy={center}
           r={radius}
-          stroke="#3B82F6"
+          stroke={MODERN_MACROS.protein.base}
           strokeWidth={strokeWidth}
           strokeDasharray={`${proteinStroke} ${circumference - proteinStroke}`}
           strokeDashoffset={0}
@@ -57,7 +58,7 @@ function MiniDonut({ protein, carbs, fat, size = 48 }) {
           cx={center}
           cy={center}
           r={radius}
-          stroke="#10B981"
+          stroke={MODERN_MACROS.carbs.base}
           strokeWidth={strokeWidth}
           strokeDasharray={`${carbsStroke} ${circumference - carbsStroke}`}
           strokeDashoffset={-proteinStroke}
@@ -69,7 +70,7 @@ function MiniDonut({ protein, carbs, fat, size = 48 }) {
           cx={center}
           cy={center}
           r={radius}
-          stroke="#F59E0B"
+          stroke={MODERN_MACROS.fat.base}
           strokeWidth={strokeWidth}
           strokeDasharray={`${fatStroke} ${circumference - fatStroke}`}
           strokeDashoffset={-(proteinStroke + carbsStroke)}

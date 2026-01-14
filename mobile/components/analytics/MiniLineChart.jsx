@@ -87,7 +87,7 @@ export default function MiniLineChart({
                   y1={y}
                   x2={width - padding}
                   y2={y}
-                  stroke={SURFACES.card}
+                  stroke={SURFACES.divider || '#E5E7EB'}
                   strokeWidth={1}
                 />
               );

@@ -11,6 +11,7 @@ import {
   TextInput,
   StyleSheet,
   Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, SEMANTIC } from '../../constants/premiumTheme';
@@ -51,10 +52,26 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
     setEditingQuantity(false);
   };
 
-  const handleRemoveIngredient = (ingredientIndex) => {
-    if (onRemoveIngredient) {
-      onRemoveIngredient(item.itemId, ingredientIndex);
-    }
+  const handleRemoveIngredient = (ingredientIndex, ingredientName) => {
+    if (!onRemoveIngredient) return;
+
+    // Show confirmation dialog before removing
+    Alert.alert(
+      'Remove Item?',
+      `Are you sure you want to remove "${ingredientName || 'this item'}"? This will update the meal's nutrition totals.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => onRemoveIngredient(item.itemId, ingredientIndex),
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   // Get confidence color
@@ -233,7 +250,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
         (item.ingredients && item.ingredients.length > 0)) && (
         <View style={styles.componentsSection}>
           <Text style={styles.componentsSectionTitle}>
-            🥘 Ingredients (estimated):
+            🍽️ What's inside (estimated):
           </Text>
           {/* Use components if available, otherwise use ingredients */}
           {(item.components || item.ingredients || []).slice(0, 3).map((ingredient, index) => (
@@ -248,7 +265,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
                 </Text>
                 {onRemoveIngredient && (
                   <TouchableOpacity
-                    onPress={() => handleRemoveIngredient(index)}
+                    onPress={() => handleRemoveIngredient(index, ingredient.name || ingredient.foodName || (typeof ingredient === 'string' ? ingredient : 'this item'))}
                     style={styles.ingredientRemoveButton}
                     activeOpacity={0.6}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -294,11 +311,11 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
             (item.ingredients && item.ingredients.length > 0)) && (
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>
-                🥘 Ingredient Breakdown
+                🍽️ What's in this dish
               </Text>
               <View style={styles.componentsNote}>
                 <Text style={styles.componentsNoteText}>
-                  Estimated ingredients. Tap any to adjust or remove.
+                  Estimated breakdown. Tap any to adjust or remove.
                 </Text>
               </View>
               {(item.components || item.ingredients || []).map((ingredient, index) => {
@@ -329,7 +346,7 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
                       </View>
                       {onRemoveIngredient && (
                         <TouchableOpacity
-                          onPress={() => handleRemoveIngredient(index)}
+                          onPress={() => handleRemoveIngredient(index, name)}
                           style={styles.ingredientRemoveButtonLarge}
                           activeOpacity={0.6}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

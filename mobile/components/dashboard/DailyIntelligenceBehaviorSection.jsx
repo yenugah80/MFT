@@ -23,8 +23,11 @@ import {
   StyleSheet,
   Animated,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 // Components
 import { DailyIntelligenceCard } from './DailyIntelligenceCard';
@@ -43,6 +46,8 @@ export default function DailyIntelligenceBehaviorSection({
   onRequestDismiss,      // ← Callback to parent (NO modal state here)
   onAction,
 }) {
+  const router = useRouter();
+
   // Animation for section entry
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -116,13 +121,27 @@ export default function DailyIntelligenceBehaviorSection({
       {/* Supporting Correlations */}
       {orchestratorData?.learningState?.canShowCorrelations !== false && correlations?.length > 0 && (
         <View style={componentStyles.correlationsWrapper}>
-          <Text
-            style={componentStyles.correlationsTitle}
-            accessibilityRole="header"
-            accessibilityLabel="Other Patterns"
-          >
-            Other Patterns
-          </Text>
+          <View style={componentStyles.correlationsHeader}>
+            <Text
+              style={componentStyles.correlationsTitle}
+              accessibilityRole="header"
+              accessibilityLabel="Other Patterns"
+            >
+              Other Patterns
+            </Text>
+            <TouchableOpacity
+              style={componentStyles.viewAllButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/insights/patterns');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="View all pattern insights"
+            >
+              <Text style={componentStyles.viewAllText}>View All</Text>
+              <Ionicons name="arrow-forward" size={14} color="#8B5CF6" />
+            </TouchableOpacity>
+          </View>
           <FlatList
             scrollEnabled={false}
             data={correlations}
@@ -148,8 +167,10 @@ export default function DailyIntelligenceBehaviorSection({
         </View>
       )}
 
-      {/* Learning hint */}
-      {orchestratorData?.learningState?.canShowCorrelations === false && (
+      {/* Learning hint - only show for truly new users (DISCOVERER stage), not returning users
+          Returning users with data shouldn't see generic "log more" messages */}
+      {orchestratorData?.learningState?.canShowCorrelations === false &&
+       ['DISCOVERER', 'ONBOARDING'].includes(orchestratorData?.lifecycle?.stage) && (
         <View style={componentStyles.hintContainer}>
           <Text style={componentStyles.hintText}>
             Log more meals to discover patterns
@@ -176,11 +197,33 @@ const componentStyles = StyleSheet.create({
     marginTop: SPACING[3],
   },
 
+  correlationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
+  },
+
   correlationsTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: TEXT.primary,
-    marginBottom: SPACING[2],
+  },
+
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: SPACING[1],
+    paddingHorizontal: SPACING[2],
+    borderRadius: 12,
+    backgroundColor: '#F5F3FF',
+  },
+
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8B5CF6',
   },
 
   correlationCardContainer: {

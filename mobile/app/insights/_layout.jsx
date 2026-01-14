@@ -2,28 +2,29 @@
  * Insights Stack Layout
  *
  * Provides consistent navigation header styling for all insight screens
+ * Uses premium theme for modern, cohesive appearance
  */
 
 import { Stack } from 'expo-router';
-import { COLORS, TYPOGRAPHY } from '../../constants/designSystem';
+import { TEXT, SURFACES, TYPOGRAPHY, BRAND } from '../../constants/premiumTheme';
 
 export default function InsightsLayout() {
   return (
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: COLORS.surface.primary,
+          backgroundColor: SURFACES.background.primary,
         },
         headerTitleStyle: {
-          fontSize: TYPOGRAPHY.size.headline,
+          fontSize: TYPOGRAPHY.size.lg,
           fontWeight: TYPOGRAPHY.weight.semibold,
-          color: COLORS.text.primary,
+          color: TEXT.primary,
         },
-        headerTintColor: COLORS.brand.primary,
+        headerTintColor: BRAND.primary,
         headerShadowVisible: false,
         headerBackTitle: 'Back',
         contentStyle: {
-          backgroundColor: COLORS.surface.primary,
+          backgroundColor: SURFACES.background.primary,
         },
       }}
     />

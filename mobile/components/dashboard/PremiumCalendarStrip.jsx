@@ -78,10 +78,14 @@ function getMonthDates(year, month) {
   return dates;
 }
 
-// Format date key for data lookup
+// Format date key for data lookup - use LOCAL timezone to match DashboardContent
+// IMPORTANT: Do NOT use toISOString() as it converts to UTC causing timezone mismatches
 function formatDateKey(date) {
   if (!date) return null;
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // Single day cell
@@ -300,7 +304,8 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
     for (let i = 0; i < days; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
-      const key = date.toISOString().split('T')[0];
+      // Use local timezone for date key (not UTC)
+      const key = formatDateKey(date);
       const data = allData[key];
 
       if (data && (data.logged || data.calories > 0)) {
@@ -951,6 +956,7 @@ export default function PremiumCalendarStrip({
         onClose={() => setSelectedDayDetail(null)}
         dayData={selectedDayDetail?.dayData}
         dateKey={selectedDayDetail?.dateKey}
+        allData={data}
         onViewHistory={(dateKey) => onDateSelect?.({ dateKey })}
       />
     </View>

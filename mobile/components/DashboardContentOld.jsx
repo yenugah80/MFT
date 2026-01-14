@@ -49,8 +49,7 @@ import ProgressMilestonesCard from "./dashboard/ProgressMilestonesCard";
 import GlassCard from "./GlassCard";
 import GlowingButton from "./GlowingButton";
 import FadeInView from "./FadeInView";
-import ModernWellnessCard from "./dashboard/ModernWellnessCard";
-import ModernStatCard from "./dashboard/ModernStatCard";
+// Note: ModernWellnessCard and ModernStatCard moved to experimental folder - not used in this file
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";

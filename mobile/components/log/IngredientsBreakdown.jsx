@@ -22,11 +22,7 @@ const BRAND = {
   error: '#EF4444'
 };
 
-const TEXT = {
-  primary: TEXT.primary,
-  secondary: '#6B7280',
-  tertiary: '#9CA3AF'
-};
+// TEXT is imported from premiumTheme - removed duplicate local definition
 
 const SPACING = {
   xs: 4,
@@ -61,7 +57,7 @@ export function IngredientsBreakdown({ ingredients = [] }) {
           <Ionicons name="restaurant-outline" size={20} color={BRAND.primary} />
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>
-              Ingredients ({ingredients.length})
+              What you logged ({ingredients.length})
             </Text>
             <Text style={styles.headerSubtitle}>
               {Math.round(totalCalories)} cal

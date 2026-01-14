@@ -6,7 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC } from "../utils/timezone.js";
 import { generateMoodInsights, generateBasicMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
-import { updateStreak } from "../services/gamificationRewardService.js";
+import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
 
 const router = express.Router();
 
@@ -144,6 +144,15 @@ router.post("/log", async (req, res) => {
         console.log(`[MoodLog] Streak updated: ${streakResult.streak}, incremented: ${streakResult.streakIncremented}`);
       } catch (streakError) {
         console.error("[MoodLog] Streak update failed (non-fatal):", streakError);
+      }
+
+      // Award XP for mood log (encourages mental health tracking)
+      try {
+        const xpToAward = calculateLogXP('mood');
+        const xpResult = await awardXP(userId, xpToAward, 'mood_log', db);
+        console.log(`[MoodLog] XP awarded: +${xpToAward} XP (total: ${xpResult.newXP}, level: ${xpResult.newLevel})`);
+      } catch (xpError) {
+        console.error("[MoodLog] XP award failed (non-fatal):", xpError);
       }
 
       // Trigger async correlation analysis (don't await)

@@ -250,16 +250,16 @@ export default function InsightDetailsSheet({
     }
   }, [visible, slideAnim, fadeAnim, screenHeight]);
 
-  if (!recommendation) return null;
-
-  // Extract data
-  const { who, what, when, where, why, how, howMuch, confidence, status } = recommendation;
+  // Extract data BEFORE early return to use in hooks
+  // (React hooks must be called unconditionally)
+  const { who, what, when, where, why, how, howMuch, confidence, status } = recommendation || {};
 
   const typeConfig = TYPE_CONFIG[what?.type] || TYPE_CONFIG.food;
   const urgencyConfig = URGENCY_CONFIG[when?.urgency] || URGENCY_CONFIG.low;
 
   // Build full narrative - the story, not the framework
   const narrative = useMemo(() => {
+    if (!recommendation) return '';
     const paragraphs = [];
 
     // Opening: The observation/problem
@@ -290,24 +290,27 @@ export default function InsightDetailsSheet({
     }
 
     return paragraphs.join('\n\n');
-  }, [who, what, when, where, why]);
+  }, [recommendation, who, what, when, where, why]);
 
   // Build chips content
-  const chips = useMemo(() => ({
-    what: what?.action || null,
-    why: why?.healthBenefit || why?.primaryReason || null,
-    who: who?.personalization || `For you (${who?.persona || 'personalized'})`,
-    where: where?.context
-      ? `${where.context.charAt(0).toUpperCase()}${where.context.slice(1)}`
-      : where?.preparation || null,
-    when: when?.specificTime || when?.timing || null,
-    how: how?.instructions?.[0] ||
-         (how?.difficulty ? `${how.difficulty} (${how.timeRequired})` : null),
-    howMuch: howMuch?.quantity ||
-             (howMuch?.nutritionImpact?.[0]
-               ? `${howMuch.nutritionImpact[0].nutrient}: ${howMuch.nutritionImpact[0].percentDV}% DV`
-               : null),
-  }), [who, what, when, where, why, how, howMuch]);
+  const chips = useMemo(() => {
+    if (!recommendation) return {};
+    return {
+      what: what?.action || null,
+      why: why?.healthBenefit || why?.primaryReason || null,
+      who: who?.personalization || `For you (${who?.persona || 'personalized'})`,
+      where: where?.context
+        ? `${where.context.charAt(0).toUpperCase()}${where.context.slice(1)}`
+        : where?.preparation || null,
+      when: when?.specificTime || when?.timing || null,
+      how: how?.instructions?.[0] ||
+           (how?.difficulty ? `${how.difficulty} (${how.timeRequired})` : null),
+      howMuch: howMuch?.quantity ||
+               (howMuch?.nutritionImpact?.[0]
+                 ? `${howMuch.nutritionImpact[0].nutrient}: ${howMuch.nutritionImpact[0].percentDV}% DV`
+                 : null),
+    };
+  }, [recommendation, who, what, when, where, why, how, howMuch]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {
@@ -394,6 +397,9 @@ export default function InsightDetailsSheet({
     }
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [what, why, chips, confidence]);
+
+  // Early return AFTER all hooks
+  if (!recommendation) return null;
 
   return (
     <Modal

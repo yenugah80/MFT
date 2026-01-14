@@ -42,6 +42,11 @@ import orchestratorRouter from "./routes/orchestrator.js";
 import resolverRouterNew from "./routes/resolver.js";
 import learningRouter from "./routes/learning.js";
 import expiryRouter from "./routes/expiry.js";
+import activityRouter from "./routes/activity.js";
+import mlAnalyticsRouter from "./routes/mlAnalytics.js";
+import mtlPredictionsRouter from "./routes/mtlPredictions.js";
+import unifiedAnalyticsRouter from "./routes/unifiedAnalytics.js";
+import remindersRouter from "./routes/reminders.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 
@@ -145,9 +150,131 @@ export async function ensureRecommendationsHistoryTable() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_history_shown_at" ON "recommendations_history" ("shown_at");`);
 
     recommendationsTableEnsured = true;
-    console.log('✅ Recommendations history table verified');
+    console.log('[Database] Recommendations history table verified');
   } catch (err) {
-    console.error('❌ Failed to ensure recommendations_history table:', err);
+    console.error('[Database] Failed to ensure recommendations_history table:', err);
+  }
+}
+
+// Ensure ML infrastructure tables exist for Thompson Sampling, A/B Testing, Drift Detection
+// Note: These tables support production ML capabilities with full audit trails
+let mlTablesEnsured = false;
+export async function ensureMLTables() {
+  if (mlTablesEnsured) return;
+  try {
+    // Thompson Sampling arms table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "recommendation_arms" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "arm_key" TEXT NOT NULL,
+        "alpha" DECIMAL(10,4) NOT NULL DEFAULT 1,
+        "beta" DECIMAL(10,4) NOT NULL DEFAULT 1,
+        "trials" INTEGER NOT NULL DEFAULT 0,
+        "successes" INTEGER NOT NULL DEFAULT 0,
+        "last_updated" TIMESTAMP DEFAULT NOW(),
+        "metadata" JSONB DEFAULT '{}',
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        UNIQUE("user_id", "arm_key")
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_arms_user_id" ON "recommendation_arms" ("user_id");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_arms_arm_key" ON "recommendation_arms" ("arm_key");`);
+
+    // A/B Test definitions table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "ab_test_definitions" (
+        "id" SERIAL PRIMARY KEY,
+        "experiment_id" TEXT NOT NULL UNIQUE,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "variants" JSONB NOT NULL,
+        "traffic_percentage" DECIMAL(5,2) DEFAULT 100,
+        "status" TEXT DEFAULT 'active',
+        "start_date" TIMESTAMP DEFAULT NOW(),
+        "end_date" TIMESTAMP,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // A/B Test assignments table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "ab_test_assignments" (
+        "id" SERIAL PRIMARY KEY,
+        "experiment_id" TEXT NOT NULL,
+        "user_id" TEXT NOT NULL,
+        "variant" TEXT NOT NULL,
+        "assigned_at" TIMESTAMP DEFAULT NOW(),
+        "metadata" JSONB DEFAULT '{}',
+        UNIQUE("experiment_id", "user_id")
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_ab_assign_user_id" ON "ab_test_assignments" ("user_id");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_ab_assign_experiment" ON "ab_test_assignments" ("experiment_id");`);
+
+    // Drift detection metrics table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "drift_metrics" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "metric_type" TEXT NOT NULL,
+        "cusum_pos" DECIMAL(10,4) DEFAULT 0,
+        "cusum_neg" DECIMAL(10,4) DEFAULT 0,
+        "ewma_value" DECIMAL(10,4),
+        "reference_mean" DECIMAL(10,4),
+        "drift_detected" BOOLEAN DEFAULT FALSE,
+        "last_drift_at" TIMESTAMP,
+        "observation_count" INTEGER DEFAULT 0,
+        "updated_at" TIMESTAMP DEFAULT NOW(),
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        UNIQUE("user_id", "metric_type")
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_drift_user_id" ON "drift_metrics" ("user_id");`);
+
+    // Lagged correlations table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "lagged_correlations" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "signal1" TEXT NOT NULL,
+        "signal2" TEXT NOT NULL,
+        "optimal_lag" INTEGER NOT NULL,
+        "correlation" DECIMAL(6,4) NOT NULL,
+        "p_value" DECIMAL(10,8),
+        "is_significant" BOOLEAN DEFAULT FALSE,
+        "granger_p_value" DECIMAL(10,8),
+        "direction" TEXT,
+        "computed_at" TIMESTAMP DEFAULT NOW(),
+        "window_days" INTEGER DEFAULT 30
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_lagged_user_id" ON "lagged_correlations" ("user_id");`);
+
+    // Feature interactions table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "feature_interactions" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "feature1" TEXT NOT NULL,
+        "feature2" TEXT NOT NULL,
+        "outcome" TEXT NOT NULL,
+        "interaction_effect" DECIMAL(8,4),
+        "effect_size" DECIMAL(6,4),
+        "p_value" DECIMAL(10,8),
+        "interaction_type" TEXT,
+        "is_significant" BOOLEAN DEFAULT FALSE,
+        "computed_at" TIMESTAMP DEFAULT NOW(),
+        "sample_size" INTEGER,
+        "metadata" JSONB DEFAULT '{}'
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_interactions_user_id" ON "feature_interactions" ("user_id");`);
+
+    mlTablesEnsured = true;
+    console.log('[Database] ML infrastructure tables verified (Thompson Sampling, A/B Testing, Drift Detection)');
+  } catch (err) {
+    console.error('[Database] Failed to ensure ML tables:', err);
   }
 }
 
@@ -282,6 +409,26 @@ app.use("/api/learning", learningRouter);
 // Mount Expiry Router (Recommendation lifecycle management)
 app.use("/api/expiry", expiryRouter);
 
+// Mount Activity Router (Activity Analytics & Recommendations)
+app.use("/api/activity", activityRouter);
+
+// Mount ML Analytics Router (Thompson Sampling, A/B Testing, Drift Detection)
+// Note: This router provides machine learning enhanced recommendations with full
+// transparency metadata for regulatory compliance (FDA, EU AI Act)
+app.use("/api/ml", mlAnalyticsRouter);
+
+// Mount MTL Predictions Router (Multi-Task Learning health predictions)
+// Note: Provides personalized health outcome predictions with uncertainty estimates
+app.use("/api/mtl", mtlPredictionsRouter);
+
+// Mount Unified Analytics Router (Multi-timeframe analytics with graceful degradation)
+// Note: Provides daily/weekly/monthly analytics with missing data handling
+app.use("/api/analytics", unifiedAnalyticsRouter);
+
+// Mount Smart Reminders Router (Intelligent notification scheduling)
+// Note: Zomato/Swiggy-style friendly reminders based on user patterns
+app.use("/api/reminders", remindersRouter);
+
 /* -------------------------------------------
    EXISTING ROUTES
 -------------------------------------------- */
@@ -407,13 +554,14 @@ app.listen(PORT, "0.0.0.0", async () => {
   });
 
   // Initialize database schema on startup
-  console.log('📦 Initializing database schema...');
+  console.log('[Database] Initializing schema...');
   try {
     await ensureProfilesTableShape();
     await ensureRecommendationsHistoryTable();
-    console.log('✅ Database initialized successfully');
+    await ensureMLTables();
+    console.log('[Database] Schema initialization complete');
   } catch (err) {
-    console.error('⚠️ Database initialization warning:', err.message);
+    console.error('[Database] Initialization warning:', err.message);
     // Continue running even if init fails - tables might already exist
   }
 

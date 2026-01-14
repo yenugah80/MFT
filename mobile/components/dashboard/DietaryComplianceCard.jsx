@@ -8,7 +8,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
-import { BRAND, TEXT, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SHADOWS, RADIUS, SPACING, SURFACES } from '../../constants/premiumTheme';
 import { getComplianceLevel } from '../../utils/complianceCalculations';
 
 const CIRCLE_RADIUS = 50;

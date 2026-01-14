@@ -5,7 +5,7 @@
  * Shows upgrade prompt for free users.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   StyleSheet,
   RefreshControl,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ import { useNotification } from '../providers/NotificationProvider';
 import Recommendation5W2HCard from '../components/recommendations/Recommendation5W2HCard';
 import InsightDetailsSheet from '../components/recommendations/InsightDetailsSheet';
 import FadeInView from '../components/FadeInView';
+import { useRecommendations } from '../hooks/useRecommendations';
 
 import {
   PREMIUM_COLORS,
@@ -33,185 +35,69 @@ import {
   SHADOWS,
 } from '../constants/premiumDesignSystem';
 
-// Mock recommendations (replace with API call)
-const MOCK_RECOMMENDATIONS = [
-  {
-    id: '1',
+/**
+ * Transform API recommendation to 5W2H format for UI display
+ */
+function transformTo5W2H(rec) {
+  if (!rec) return null;
+
+  // If already in 5W2H format, return as-is
+  if (rec.who && rec.what && rec.why) {
+    return rec;
+  }
+
+  // Transform from API format to 5W2H format
+  return {
+    id: rec.id || `rec-${Date.now()}`,
     who: {
-      userId: 'user123',
-      persona: 'health-conscious',
-      relevanceScore: 92,
-      personalization: 'Based on your vitamin K pattern',
+      userId: rec.userId || 'user',
+      persona: rec.persona || 'health-conscious',
+      relevanceScore: rec.relevanceScore || Math.round((rec.confidence || 0.7) * 100),
+      personalization: rec.personalization || rec.why || 'Based on your patterns',
     },
     what: {
-      type: 'food',
-      action: 'Add leafy greens to your next meal',
-      specifics: ['Spinach', 'Kale', 'Mixed greens'],
-      alternatives: ['Broccoli', 'Brussels sprouts'],
+      type: rec.type || 'food',
+      action: rec.title || rec.action || rec.name || 'Recommendation',
+      specifics: rec.specifics || (rec.name ? [rec.name] : []),
+      alternatives: rec.alternatives || [],
     },
     when: {
-      timing: 'next-meal',
-      specificTime: 'Lunch or dinner',
-      frequency: '3x per week',
-      urgency: 'medium',
+      timing: rec.timing || 'today',
+      specificTime: rec.specificTime || rec.when || 'Any time',
+      frequency: rec.frequency || 'As needed',
+      urgency: rec.urgency || 'medium',
     },
     where: {
-      context: 'any',
-      preparation: 'Add 1 cup raw or ½ cup cooked to any dish',
-      purchaseHint: 'Available at most grocery stores',
+      context: rec.context || 'any',
+      preparation: rec.preparation || rec.how || '',
+      purchaseHint: rec.purchaseHint || null,
     },
     why: {
-      primaryReason: 'Your vitamin K intake is 34% below optimal this week',
-      dataPoints: [
-        { label: 'Current intake', value: '66% of target' },
-        { label: 'Days tracked', value: '14 days' },
-      ],
-      healthBenefit: 'Supports bone health and blood clotting',
-      scienceSource: 'USDA FoodData Central',
+      primaryReason: rec.why || rec.reason || 'Based on your health patterns',
+      dataPoints: rec.dataPoints || [],
+      healthBenefit: rec.healthBenefit || rec.benefit || '',
+      scienceSource: rec.source || 'Your logged patterns',
     },
     how: {
-      instructions: [
-        'Add 1 cup raw spinach to salads',
-        'Sauté ½ cup with garlic as a side',
-        'Blend into smoothies',
-      ],
-      difficulty: 'easy',
-      timeRequired: '2 minutes',
-      tips: ['Fresh or frozen both work well'],
+      instructions: rec.instructions || (rec.how ? [rec.how] : []),
+      difficulty: rec.difficulty || 'easy',
+      timeRequired: rec.timeRequired || '5 minutes',
+      tips: rec.tips || [],
     },
     howMuch: {
-      quantity: '1 cup raw or ½ cup cooked',
-      metricAmount: 30,
-      metricUnit: 'g',
-      nutritionImpact: [
-        { nutrient: 'Vitamin K', amount: 145, percentDV: 120 },
-        { nutrient: 'Folate', amount: 58, percentDV: 15 },
-      ],
+      quantity: rec.quantity || rec.servingSize || '',
+      metricAmount: rec.metricAmount || 0,
+      metricUnit: rec.metricUnit || 'g',
+      nutritionImpact: rec.nutritionImpact || [],
     },
     confidence: {
-      score: 87,
-      dataPoints: 14,
-      source: 'USDA + Your patterns',
+      score: Math.round((rec.confidence || 0.7) * 100),
+      dataPoints: rec.dataPointsCount || 14,
+      source: rec.source || 'Your patterns + Nutrition science',
     },
-    status: 'pending',
-  },
-  {
-    id: '2',
-    who: {
-      userId: 'user123',
-      persona: 'health-conscious',
-      relevanceScore: 85,
-      personalization: 'Based on your hydration patterns',
-    },
-    what: {
-      type: 'hydration',
-      action: 'Drink water before your afternoon meetings',
-      specifics: ['Water', 'Herbal tea'],
-      alternatives: ['Sparkling water'],
-    },
-    when: {
-      timing: 'today',
-      specificTime: 'Before 2pm',
-      frequency: 'Daily',
-      urgency: 'low',
-    },
-    where: {
-      context: 'office',
-      preparation: 'Keep a water bottle at your desk',
-      purchaseHint: null,
-    },
-    why: {
-      primaryReason: 'Your energy dips 67% more often when dehydrated before 2pm',
-      dataPoints: [
-        { label: 'Pattern detected', value: '12 instances' },
-        { label: 'Correlation', value: '67%' },
-      ],
-      healthBenefit: 'Maintains cognitive performance and energy',
-      scienceSource: 'Your logged patterns',
-    },
-    how: {
-      instructions: [
-        'Set a reminder for 1:30pm',
-        'Drink 8oz water before meetings',
-        'Notice your energy levels after',
-      ],
-      difficulty: 'easy',
-      timeRequired: '1 minute',
-      tips: ['Room temperature water absorbs faster'],
-    },
-    howMuch: {
-      quantity: '8oz (1 glass)',
-      metricAmount: 250,
-      metricUnit: 'ml',
-      nutritionImpact: [],
-    },
-    confidence: {
-      score: 78,
-      dataPoints: 12,
-      source: 'Your logged patterns',
-    },
-    status: 'pending',
-  },
-  {
-    id: '3',
-    who: {
-      userId: 'user123',
-      persona: 'busy-professional',
-      relevanceScore: 80,
-      personalization: 'Based on your breakfast habits',
-    },
-    what: {
-      type: 'food',
-      action: 'Add protein to your morning meal',
-      specifics: ['Eggs', 'Greek yogurt', 'Cottage cheese'],
-      alternatives: ['Protein shake', 'Nuts'],
-    },
-    when: {
-      timing: 'next-meal',
-      specificTime: 'Breakfast tomorrow',
-      frequency: 'Daily',
-      urgency: 'medium',
-    },
-    where: {
-      context: 'home',
-      preparation: 'Quick 5-minute prep options available',
-      purchaseHint: null,
-    },
-    why: {
-      primaryReason: 'Your morning meals average only 12g protein (target: 25g)',
-      dataPoints: [
-        { label: 'Average breakfast protein', value: '12g' },
-        { label: 'Recommended', value: '25g' },
-      ],
-      healthBenefit: 'Sustains energy and reduces mid-morning cravings',
-      scienceSource: 'Nutrition guidelines + Your patterns',
-    },
-    how: {
-      instructions: [
-        'Add 2 eggs to your breakfast (12g protein)',
-        'Or include 1 cup Greek yogurt (17g protein)',
-        'Combine with your usual breakfast',
-      ],
-      difficulty: 'easy',
-      timeRequired: '5 minutes',
-      tips: ['Prep hard-boiled eggs in advance'],
-    },
-    howMuch: {
-      quantity: '2 eggs or 1 cup Greek yogurt',
-      metricAmount: 100,
-      metricUnit: 'g',
-      nutritionImpact: [
-        { nutrient: 'Protein', amount: 12, percentDV: 24 },
-      ],
-    },
-    confidence: {
-      score: 82,
-      dataPoints: 21,
-      source: 'Nutrition guidelines + Your patterns',
-    },
-    status: 'pending',
-  },
-];
+    status: rec.status || 'pending',
+  };
+}
 
 function UpgradePrompt({ onUpgrade }) {
   return (
@@ -254,32 +140,57 @@ export default function RecommendationsScreen() {
   const subscription = useSubscription();
   const isPremium = subscription?.isPremium ?? false;
 
-  const [refreshing, setRefreshing] = useState(false);
-  const [recommendations, setRecommendations] = useState(MOCK_RECOMMENDATIONS);
   const [selectedRec, setSelectedRec] = useState(null);
   const [showDetailsSheet, setShowDetailsSheet] = useState(false);
+
+  // Fetch real recommendations from API
+  const {
+    recommendations: apiRecommendations,
+    isLoading,
+    error,
+    refetch,
+    trackInteraction,
+  } = useRecommendations({ enabled: isPremium });
+
+  // Transform API recommendations to 5W2H format
+  const recommendations = useMemo(() => {
+    if (!apiRecommendations || apiRecommendations.length === 0) {
+      return [];
+    }
+    return apiRecommendations.map(transformTo5W2H).filter(Boolean);
+  }, [apiRecommendations]);
+
+  const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // In real app, fetch from API
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
-  const handleComplete = useCallback((rec) => {
-    setRecommendations(prev =>
-      prev.map(r => r.id === rec.id ? { ...r, status: 'completed' } : r)
-    );
-    notify.success('Recommendation marked as complete!');
-  }, [notify]);
+  const handleComplete = useCallback(async (rec) => {
+    try {
+      // Track acceptance via API
+      await trackInteraction?.(rec.id, 'accept');
+      notify.success('Recommendation marked as complete!');
+      // Refetch to get updated list
+      refetch();
+    } catch (err) {
+      notify.error('Failed to mark as complete');
+    }
+  }, [notify, trackInteraction, refetch]);
 
-  const handleDismiss = useCallback((rec) => {
-    setRecommendations(prev =>
-      prev.map(r => r.id === rec.id ? { ...r, status: 'dismissed' } : r)
-    );
-  }, []);
+  const handleDismiss = useCallback(async (rec) => {
+    try {
+      // Track rejection via API
+      await trackInteraction?.(rec.id, 'reject');
+      // Refetch to get updated list
+      refetch();
+    } catch (err) {
+      // Silent failure for dismiss
+    }
+  }, [trackInteraction, refetch]);
 
   const handleUpgrade = useCallback(() => {
     router.push('/profile/subscription');
@@ -330,13 +241,32 @@ export default function RecommendationsScreen() {
                 <View style={styles.header}>
                   <Text style={styles.headerTitle}>Your Personalized Actions</Text>
                   <Text style={styles.headerSubtitle}>
-                    Based on {recommendations.length * 14} days of data
+                    {recommendations.length > 0
+                      ? `${recommendations.length} recommendations based on your patterns`
+                      : 'Building your personalized recommendations'}
                   </Text>
                 </View>
               </FadeInView>
 
+              {/* Loading State */}
+              {isLoading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={PREMIUM_COLORS.brand.primary} />
+                  <Text style={styles.loadingText}>Analyzing your patterns...</Text>
+                </View>
+              )}
+
+              {/* Error State */}
+              {error && !isLoading && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="cloud-offline-outline" size={48} color={PREMIUM_COLORS.text.tertiary} />
+                  <Text style={styles.errorTitle}>Couldn't load recommendations</Text>
+                  <Text style={styles.errorText}>{error.message || 'Please try again later'}</Text>
+                </View>
+              )}
+
               {/* Pending Recommendations */}
-              {pendingRecs.length > 0 && (
+              {!isLoading && pendingRecs.length > 0 && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Suggested Actions</Text>
                   {pendingRecs.map((rec, index) => (
@@ -460,6 +390,38 @@ const styles = StyleSheet.create({
   },
   completedCard: {
     opacity: 0.7,
+  },
+
+  // Loading State
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING[12],
+  },
+  loadingText: {
+    marginTop: SPACING[3],
+    fontSize: TYPOGRAPHY.size.body,
+    color: PREMIUM_COLORS.text.secondary,
+  },
+
+  // Error State
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING[12],
+    paddingHorizontal: SPACING[4],
+  },
+  errorTitle: {
+    fontSize: TYPOGRAPHY.size.headline,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: PREMIUM_COLORS.text.primary,
+    marginTop: SPACING[4],
+    marginBottom: SPACING[2],
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.size.body,
+    color: PREMIUM_COLORS.text.tertiary,
+    textAlign: 'center',
   },
 
   // Empty State

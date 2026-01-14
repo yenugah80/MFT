@@ -168,7 +168,7 @@ export default function IngredientsSection({ ingredients, isComplex = false, tot
         onPress={() => setExpanded(!expanded)}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`Ingredients section, ${ingredients.length} items, ${expanded ? 'collapse' : 'expand'}`}
+        accessibilityLabel={`Meal items section, ${ingredients.length} items, ${expanded ? 'collapse' : 'expand'}`}
       >
         <View style={styles.headerLeft}>
           <Ionicons
@@ -177,7 +177,7 @@ export default function IngredientsSection({ ingredients, isComplex = false, tot
             color={BRAND.primary}
           />
           <Text style={[styles.sectionTitle, { color: textPrimary }]}>
-            Ingredient Breakdown
+            Meal Items
           </Text>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{ingredients.length}</Text>
@@ -204,7 +204,7 @@ export default function IngredientsSection({ ingredients, isComplex = false, tot
 
           {hasNutritionData && (
             <Text style={[styles.nutritionHint, { color: textSecondary }]}>
-              Per-ingredient nutrition breakdown
+              Per-item nutrition breakdown
             </Text>
           )}
 

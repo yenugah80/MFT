@@ -34,15 +34,11 @@ import {
 } from '../../constants/premiumTheme';
 
 // Analytics components
-import DomainAnalyticsCard from '../../components/analytics/DomainAnalyticsCard';
 import TimeframeSelector from '../../components/analytics/TimeframeSelector';
 import PremiumCalendarStrip from '../../components/dashboard/PremiumCalendarStrip';
 
-// Hooks for quick stats
+// Hooks for calendar data
 import { useDashboard } from '../../hooks/useDashboard';
-import { useHydrationAnalytics } from '../../hooks/useHydrationAnalytics';
-import { useMoodTrends } from '../../hooks/useMoodInsights';
-import { useActivityAnalytics } from '../../hooks/useActivityAnalytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -163,65 +159,8 @@ export default function InsightsIndex() {
   const router = useRouter();
   const [timeframe, setTimeframe] = useState('weekly');
 
-  // Data hooks for quick stats
+  // Dashboard data for calendar
   const { data: dashboard } = useDashboard();
-  const { analytics: hydrationData } = useHydrationAnalytics();
-  const { data: moodData } = useMoodTrends({ period: 'week' });
-  const { analytics: activityData } = useActivityAnalytics();
-
-  // Build quick stats data for each domain using TODAY's actual data from dashboard
-  // CRITICAL FIX: Use dashboard.today.* for TODAY's data, not analytics patterns
-  const todayWaterLiters = dashboard?.today?.waterIntakeLiters || 0;
-  const todayWaterGlasses = Math.round(todayWaterLiters * 4); // 1 liter ≈ 4 glasses (250ml each)
-
-  // Get today's mood from moodLogs
-  const todayMoodLogs = dashboard?.today?.moodLogs || [];
-  const todayMoodScore = todayMoodLogs.length > 0
-    ? todayMoodLogs.reduce((sum, log) => {
-        // Convert mood string to score (1-5)
-        const moodScores = { sad: 1, stressed: 2, neutral: 3, calm: 4, happy: 5, energized: 5 };
-        return sum + (moodScores[log.mood] || log.energyLevel || 3);
-      }, 0) / todayMoodLogs.length
-    : null;
-
-  // Get today's activity directly from dashboard (preferred) or analytics
-  const todayActivityMinutes = dashboard?.today?.activityMinutes > 0
-    ? dashboard.today.activityMinutes
-    : (activityData?.weekData?.find(d => d?.date === new Date().toISOString().split('T')[0])?.minutes || null);
-
-  const quickStats = {
-    nutrition: {
-      value: dashboard?.today?.nutrition?.totalCalories || null,
-      goal: dashboard?.goals?.dailyCalories || 2000,
-      trend: dashboard?.trends?.caloriesTrend ? {
-        direction: dashboard.trends.caloriesTrend > 0 ? 'up' : 'down',
-        change: Math.abs(dashboard.trends.caloriesTrend),
-      } : null,
-    },
-    hydration: {
-      value: todayWaterLiters > 0 ? todayWaterGlasses : null, // Show glasses if we have water logged
-      goal: Math.round((dashboard?.goals?.waterLiters || 2) * 4), // Convert goal to glasses
-      trend: hydrationData?.patterns?.streak > 0 ? {
-        direction: 'up',
-        change: hydrationData.patterns.streak,
-      } : null,
-    },
-    mood: {
-      value: todayMoodScore ? Math.round(todayMoodScore * 10) / 10 : null, // Use TODAY's mood
-      trend: moodData?.trend ? {
-        direction: moodData.trend,
-        change: moodData.change || 0,
-      } : null,
-    },
-    activity: {
-      value: todayActivityMinutes, // Use TODAY's activity minutes
-      goal: 30, // Daily recommendation (150/week = ~22-30/day)
-      trend: activityData?.patterns?.streak > 0 ? {
-        direction: 'up',
-        change: activityData.patterns.streak,
-      } : null,
-    },
-  };
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -235,17 +174,6 @@ export default function InsightsIndex() {
   const handleItemPress = useCallback((route) => {
     Haptics.selectionAsync();
     router.push(route);
-  }, [router]);
-
-  const handleDomainPress = useCallback((domain) => {
-    Haptics.selectionAsync();
-    const routes = {
-      nutrition: '/insights/food-analytics',
-      hydration: '/insights/hydration-analytics',
-      mood: '/insights/mood',
-      activity: '/insights/activity-analytics',
-    };
-    router.push(routes[domain] || '/insights');
   }, [router]);
 
   return (
@@ -293,48 +221,6 @@ export default function InsightsIndex() {
             data={dashboard?.calendarData || {}}
             currentStreak={dashboard?.gamification?.currentStreak || 0}
           />
-        </View>
-
-        {/* Quick Stats - Today's Overview */}
-        <View style={styles.quickStatsSection}>
-          <Text style={styles.quickStatsTitle}>Today at a Glance</Text>
-          <View style={styles.quickStatsGrid}>
-            <DomainAnalyticsCard
-              domain="nutrition"
-              data={quickStats.nutrition}
-              timeframe={timeframe}
-              trend={quickStats.nutrition.trend}
-              goal={quickStats.nutrition.goal}
-              onPress={() => handleDomainPress('nutrition')}
-              compact
-            />
-            <DomainAnalyticsCard
-              domain="hydration"
-              data={quickStats.hydration}
-              timeframe={timeframe}
-              trend={quickStats.hydration.trend}
-              goal={quickStats.hydration.goal}
-              onPress={() => handleDomainPress('hydration')}
-              compact
-            />
-            <DomainAnalyticsCard
-              domain="mood"
-              data={quickStats.mood}
-              timeframe={timeframe}
-              trend={quickStats.mood.trend}
-              onPress={() => handleDomainPress('mood')}
-              compact
-            />
-            <DomainAnalyticsCard
-              domain="activity"
-              data={quickStats.activity}
-              timeframe={timeframe}
-              trend={quickStats.activity.trend}
-              goal={quickStats.activity.goal}
-              onPress={() => handleDomainPress('activity')}
-              compact
-            />
-          </View>
         </View>
 
         {/* Sections */}
@@ -475,21 +361,6 @@ const styles = StyleSheet.create({
   calendarSection: {
     marginHorizontal: SPACING[4],
     marginTop: SPACING[4],
-  },
-
-  // Quick Stats
-  quickStatsSection: {
-    marginTop: SPACING[4],
-    paddingHorizontal: SPACING[4],
-  },
-  quickStatsTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[3],
-  },
-  quickStatsGrid: {
-    gap: SPACING[2],
   },
 
   // Section

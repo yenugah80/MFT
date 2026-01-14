@@ -189,6 +189,7 @@ export default function PremiumAchievementsCard({
   streak = 0,
   nextLevelXp, // Can be passed from backend or calculated
   streakFreezes = 0,
+  isReturningUser = false, // True if user has previous data (not brand new)
 }) {
   const { colors, isDark } = useTheme();
 
@@ -218,15 +219,26 @@ export default function PremiumAchievementsCard({
   const safeTarget = Math.max(1, calculatedNextLevelXp);
   const progress = Math.min(safeXp / safeTarget, 1); // Cap at 100%
   const rankTitle = useMemo(() => getRankTitle(level), [level]);
-  const streakDisplayValue = streak > 0 ? String(streak) : 'Start';
-  const streakLabelText = streak > 0 ? 'Day Streak' : 'Start Today';
+  // CRITICAL FIX: Different messaging for returning users vs brand new users
+  // Brand new: "Start" / "Start Today"
+  // Returning user with broken streak: "Restart" / "Continue Today"
+  const streakDisplayValue = streak > 0
+    ? String(streak)
+    : (isReturningUser ? 'Restart' : 'Start');
+  const streakLabelText = streak > 0
+    ? 'Day Streak'
+    : (isReturningUser ? 'Continue Today' : 'Start Today');
   const streakGlowColor = streak > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(107, 130, 173, 0.18)';
   const streakMessage = useMemo(() => {
-    if (streak === 0) return 'Log a meal, water, or mood to spark your streak';
+    if (streak === 0) {
+      return isReturningUser
+        ? 'Log today to restart your streak'
+        : 'Log a meal, water, or mood to spark your streak';
+    }
     if (streak < 7) return 'Keep the fire burning!';
     if (streak < 30) return 'Amazing consistency!';
-    return "You&apos;re on a legendary run!";
-  }, [streak]);
+    return "You're on a legendary run!";
+  }, [streak, isReturningUser]);
 
   // 1.5 Level Up Detection
   const [showLevelUp, setShowLevelUp] = useState(false);

@@ -26,7 +26,7 @@ import { TEXT, BRAND, SURFACES } from '../../constants/premiumTheme';
  * @param {number} size - Diameter in pixels (default 100)
  * @param {number} strokeWidth - Ring thickness (default 10)
  * @param {string} color - Progress color (default BRAND.primary)
- * @param {string} backgroundColor - Track color (default SURFACES.card)
+ * @param {string} backgroundColor - Track color (default SURFACES.background.secondary)
  * @param {boolean} showPercentage - Show % text in center (default true)
  * @param {ReactNode} children - Custom content in center
  */
@@ -35,7 +35,7 @@ export default function CircularProgress({
   size = 100,
   strokeWidth = 10,
   color = BRAND.primary,
-  backgroundColor = SURFACES.card,
+  backgroundColor = SURFACES.background?.secondary || '#F3F4F6',
   showPercentage = true,
   children,
 }) {

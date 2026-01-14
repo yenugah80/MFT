@@ -5,7 +5,7 @@
 
 import React, { useEffect } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
-import { SPACING, RADIUS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { SPACING, RADIUS, SEMANTIC_ACTIONS, SURFACES } from '../../constants/premiumTheme';
 import { createPulseAnimation } from '../../utils/profileAnimations';
 
 export default function LoadingSkeleton({ width = '100%', height = 20, style }) {

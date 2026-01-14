@@ -728,6 +728,7 @@ function alignDataByDate({ foodLogs, moodLogs, waterLogs, activityLogs, sleepLog
   // Process food logs
   foodLogs.forEach(log => {
     const dateKey = getDateKey(log.loggedDate || log.date);
+    if (!dateKey) return; // Skip logs with invalid dates
     if (!dateMap.has(dateKey)) {
       dateMap.set(dateKey, { date: dateKey, meals: [], moods: [], water: 0, activities: [], sleep: null });
     }
@@ -737,6 +738,7 @@ function alignDataByDate({ foodLogs, moodLogs, waterLogs, activityLogs, sleepLog
   // Process mood logs
   moodLogs.forEach(log => {
     const dateKey = getDateKey(log.loggedDate || log.date);
+    if (!dateKey) return; // Skip logs with invalid dates
     if (!dateMap.has(dateKey)) {
       dateMap.set(dateKey, { date: dateKey, meals: [], moods: [], water: 0, activities: [], sleep: null });
     }
@@ -746,6 +748,7 @@ function alignDataByDate({ foodLogs, moodLogs, waterLogs, activityLogs, sleepLog
   // Process water logs
   waterLogs.forEach(log => {
     const dateKey = getDateKey(log.loggedDate || log.date);
+    if (!dateKey) return; // Skip logs with invalid dates
     if (!dateMap.has(dateKey)) {
       dateMap.set(dateKey, { date: dateKey, meals: [], moods: [], water: 0, activities: [], sleep: null });
     }
@@ -755,6 +758,7 @@ function alignDataByDate({ foodLogs, moodLogs, waterLogs, activityLogs, sleepLog
   // Process activity logs
   activityLogs.forEach(log => {
     const dateKey = getDateKey(log.loggedDate || log.date);
+    if (!dateKey) return; // Skip logs with invalid dates
     if (!dateMap.has(dateKey)) {
       dateMap.set(dateKey, { date: dateKey, meals: [], moods: [], water: 0, activities: [], sleep: null });
     }
@@ -764,20 +768,37 @@ function alignDataByDate({ foodLogs, moodLogs, waterLogs, activityLogs, sleepLog
   // Process sleep logs
   sleepLogs.forEach(log => {
     const dateKey = getDateKey(log.loggedDate || log.date);
+    if (!dateKey) return; // Skip logs with invalid dates
     if (!dateMap.has(dateKey)) {
       dateMap.set(dateKey, { date: dateKey, meals: [], moods: [], water: 0, activities: [], sleep: null });
     }
     dateMap.get(dateKey).sleep = log;
   });
 
-  // Convert to array and sort by date
+  // Convert to array and sort by date (filter out any null date entries)
   return Array.from(dateMap.values())
+    .filter(entry => entry.date != null)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
 function getDateKey(dateInput) {
+  if (!dateInput) return null;
+
+  // Handle different date input formats
   const date = new Date(dateInput);
-  return date.toISOString().split('T')[0];
+
+  // Check for invalid date (NaN check)
+  if (isNaN(date.getTime())) {
+    console.warn('[MultiFactorAnalytics] Invalid date input:', dateInput);
+    return null;
+  }
+
+  try {
+    return date.toISOString().split('T')[0];
+  } catch (error) {
+    console.warn('[MultiFactorAnalytics] Date conversion failed:', dateInput, error.message);
+    return null;
+  }
 }
 
 // ============================================================================

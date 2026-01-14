@@ -6,7 +6,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
 import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../utils/schemaGuards.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
-import { updateStreak } from "../services/gamificationRewardService.js";
+import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
+import { nutritionGoalsTable } from "../db/schema.js";
 
 const router = express.Router();
 
@@ -115,6 +116,38 @@ router.post("/log", async (req, res) => {
         console.log(`[WaterLog] Streak updated: ${streakResult.streak}, incremented: ${streakResult.streakIncremented}`);
       } catch (streakError) {
         console.error("[WaterLog] Streak update failed (non-fatal):", streakError);
+      }
+
+      // Award XP for water log
+      try {
+        // Check if user hit daily goal with this log
+        const { start, end } = getLocalDayRange(offsetMinutes);
+        const todayLogs = await db
+          .select()
+          .from(waterLogTable)
+          .where(and(
+            eq(waterLogTable.userId, userId),
+            gte(waterLogTable.loggedDate, start),
+            lte(waterLogTable.loggedDate, end)
+          ));
+
+        const totalToday = todayLogs.reduce((sum, log) =>
+          sum + parseFloat(log.hydrationLiters || log.amountLiters || 0), 0);
+
+        // Get user's water goal
+        const [goals] = await db
+          .select()
+          .from(nutritionGoalsTable)
+          .where(eq(nutritionGoalsTable.userId, userId))
+          .limit(1);
+        const waterGoal = parseFloat(goals?.waterLiters) || 2.0;
+        const hitDailyGoal = totalToday >= waterGoal;
+
+        const xpToAward = calculateLogXP('water', { hitDailyGoal });
+        const xpResult = await awardXP(userId, xpToAward, 'water_log', db);
+        console.log(`[WaterLog] XP awarded: +${xpToAward} XP (total: ${xpResult.newXP}, level: ${xpResult.newLevel})`);
+      } catch (xpError) {
+        console.error("[WaterLog] XP award failed (non-fatal):", xpError);
       }
     }
 

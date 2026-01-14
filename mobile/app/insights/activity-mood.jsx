@@ -7,24 +7,32 @@
  * Shows both acute (immediate) and chronic (long-term) benefits
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import ActivityMoodCard from '../../components/analytics/ActivityMoodCard';
 import CircularProgress from '../../components/analytics/CircularProgress';
-import MiniBarChart from '../../components/analytics/MiniBarChart';
 
 import { useMoodTrends } from '../../hooks/useMoodTrends';
 
-import { TEXT, BRAND, SURFACES, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
+import {
+  TEXT,
+  BRAND,
+  SURFACES,
+  SEMANTIC,
+  SHADOWS,
+  TYPOGRAPHY,
+  SPACING,
+  RADIUS,
+  VIBRANT_WELLNESS,
+} from '../../constants/premiumTheme';
 import { SCIENTIFIC_PRIORS, CONFIG, EVIDENCE_TERMINOLOGY } from '../../utils/multiFactorAnalytics';
 
 export default function ActivityMoodScreen() {
-  const router = useRouter();
   const [timeRange, setTimeRange] = useState(30);
 
   const { data: moodData } = useMoodTrends({ days: timeRange });
@@ -71,12 +79,12 @@ export default function ActivityMoodScreen() {
           {/* Acute Benefits */}
           <View style={styles.benefitCard}>
             <LinearGradient
-              colors={[SEMANTIC.success + '20', SURFACES.card]}
+              colors={[`${SEMANTIC.success.base}20`, SURFACES.card.primary]}
               style={styles.benefitGradient}
             >
               <View style={styles.benefitHeader}>
                 <View style={styles.benefitIcon}>
-                  <Ionicons name="flash" size={28} color={SEMANTIC.success} />
+                  <Ionicons name="flash" size={28} color={SEMANTIC.success.base} />
                 </View>
                 <View style={styles.benefitTitle}>
                   <Text style={styles.benefitName}>Immediate Benefits</Text>
@@ -86,7 +94,7 @@ export default function ActivityMoodScreen() {
                   percentage={acuteEffect.effect * 100}
                   size={60}
                   strokeWidth={6}
-                  color={SEMANTIC.success}
+                  color={SEMANTIC.success.base}
                   showPercentage={false}
                 >
                   <Text style={styles.progressText}>+{Math.round(acuteEffect.effect * 100)}%</Text>
@@ -101,7 +109,7 @@ export default function ActivityMoodScreen() {
                   <Text style={styles.benefitStatText}>{acuteEffect.duration}</Text>
                 </View>
                 <View style={styles.benefitStat}>
-                  <Ionicons name="shield-checkmark-outline" size={16} color={SEMANTIC.success} />
+                  <Ionicons name="shield-checkmark-outline" size={16} color={SEMANTIC.success.base} />
                   <Text style={styles.benefitStatText}>
                     {EVIDENCE_TERMINOLOGY.getConfidenceLabel(acuteEffect.confidence)}
                   </Text>
@@ -113,12 +121,12 @@ export default function ActivityMoodScreen() {
           {/* Chronic Benefits */}
           <View style={styles.benefitCard}>
             <LinearGradient
-              colors={[SEMANTIC.info + '20', SURFACES.card]}
+              colors={[`${SEMANTIC.info.base}20`, SURFACES.card.primary]}
               style={styles.benefitGradient}
             >
               <View style={styles.benefitHeader}>
-                <View style={[styles.benefitIcon, { backgroundColor: SEMANTIC.info + '20' }]}>
-                  <Ionicons name="trending-up" size={28} color={SEMANTIC.info} />
+                <View style={[styles.benefitIcon, { backgroundColor: `${SEMANTIC.info.base}20` }]}>
+                  <Ionicons name="trending-up" size={28} color={SEMANTIC.info.base} />
                 </View>
                 <View style={styles.benefitTitle}>
                   <Text style={styles.benefitName}>Long-Term Benefits</Text>
@@ -128,10 +136,10 @@ export default function ActivityMoodScreen() {
                   percentage={chronicEffect.effect * 100}
                   size={60}
                   strokeWidth={6}
-                  color={SEMANTIC.info}
+                  color={SEMANTIC.info.base}
                   showPercentage={false}
                 >
-                  <Text style={[styles.progressText, { color: SEMANTIC.info }]}>
+                  <Text style={[styles.progressText, { color: SEMANTIC.info.base }]}>
                     +{Math.round(chronicEffect.effect * 100)}%
                   </Text>
                 </CircularProgress>
@@ -145,7 +153,7 @@ export default function ActivityMoodScreen() {
                   <Text style={styles.benefitStatText}>{chronicEffect.dosage}</Text>
                 </View>
                 <View style={styles.benefitStat}>
-                  <Ionicons name="shield-checkmark-outline" size={16} color={SEMANTIC.info} />
+                  <Ionicons name="shield-checkmark-outline" size={16} color={SEMANTIC.info.base} />
                   <Text style={styles.benefitStatText}>
                     {EVIDENCE_TERMINOLOGY.getConfidenceLabel(chronicEffect.confidence)}
                   </Text>
@@ -157,7 +165,7 @@ export default function ActivityMoodScreen() {
           {/* Cognitive Protection */}
           <View style={styles.benefitCard}>
             <LinearGradient
-              colors={[BRAND.primary + '20', SURFACES.card]}
+              colors={[BRAND.primary + '20', SURFACES.card.primary]}
               style={styles.benefitGradient}
             >
               <View style={styles.benefitHeader}>
@@ -207,7 +215,7 @@ export default function ActivityMoodScreen() {
           <View style={styles.guidelinesCard}>
             <View style={styles.guidelineItem}>
               <View style={styles.guidelineIcon}>
-                <Ionicons name="walk" size={24} color={SEMANTIC.info} />
+                <Ionicons name="walk" size={24} color={SEMANTIC.info.base} />
               </View>
               <View style={styles.guidelineContent}>
                 <Text style={styles.guidelineTitle}>Moderate Activity</Text>
@@ -223,8 +231,8 @@ export default function ActivityMoodScreen() {
             <View style={styles.guidelineDivider} />
 
             <View style={styles.guidelineItem}>
-              <View style={[styles.guidelineIcon, { backgroundColor: SEMANTIC.success + '20' }]}>
-                <Ionicons name="fitness" size={24} color={SEMANTIC.success} />
+              <View style={[styles.guidelineIcon, { backgroundColor: `${SEMANTIC.success.base}20` }]}>
+                <Ionicons name="fitness" size={24} color={SEMANTIC.success.base} />
               </View>
               <View style={styles.guidelineContent}>
                 <Text style={styles.guidelineTitle}>Vigorous Activity</Text>
@@ -252,7 +260,7 @@ export default function ActivityMoodScreen() {
                 {acuteEffect.sources.join(' • ')}
               </Text>
               <View style={styles.evidenceBadge}>
-                <Ionicons name="shield-checkmark" size={14} color={SEMANTIC.success} />
+                <Ionicons name="shield-checkmark" size={14} color={SEMANTIC.success.base} />
                 <Text style={styles.evidenceText}>
                   {EVIDENCE_TERMINOLOGY.getCausalFraming(acuteEffect.evidenceLevel)} - {EVIDENCE_TERMINOLOGY.getConfidenceLabel(acuteEffect.confidence)}
                 </Text>
@@ -286,63 +294,63 @@ export default function ActivityMoodScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SURFACES.background,
+    backgroundColor: SURFACES.background.primary,
   },
   content: {
-    padding: 16,
-    gap: 16,
+    padding: SPACING[4],
+    gap: SPACING[4],
   },
   timeRangeContainer: {
     flexDirection: 'row',
-    gap: 8,
-    backgroundColor: SURFACES.card,
-    padding: 4,
-    borderRadius: 12,
+    gap: SPACING[2],
+    backgroundColor: SURFACES.card.primary,
+    padding: SPACING[1],
+    borderRadius: RADIUS.md,
   },
   timeRangeButton: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
   },
   timeRangeButtonActive: {
-    backgroundColor: BRAND.primary,
+    backgroundColor: VIBRANT_WELLNESS.activity.solid,
   },
   timeRangeText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.tertiary,
   },
   timeRangeTextActive: {
-    color: '#FFFFFF',
+    color: TEXT.white,
   },
   section: {
-    gap: 12,
+    gap: SPACING[3],
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   benefitCard: {
-    borderRadius: 16,
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    ...SHADOWS.medium,
+    ...SHADOWS.md,
   },
   benefitGradient: {
-    padding: 16,
-    gap: 12,
+    padding: SPACING[4],
+    gap: SPACING[3],
   },
   benefitHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING[3],
   },
   benefitIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: SEMANTIC.success + '20',
+    backgroundColor: `${SEMANTIC.success.base}20`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -350,54 +358,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   benefitName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   benefitSubtitle: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginTop: 2,
   },
   progressText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: SEMANTIC.success,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: SEMANTIC.success.base,
   },
   benefitDescription: {
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     lineHeight: 18,
   },
   benefitStats: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 4,
+    gap: SPACING[4],
+    marginTop: SPACING[1],
   },
   benefitStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: SPACING[1.5],
   },
   benefitStatText: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
   },
   guidelinesCard: {
-    backgroundColor: SURFACES.card,
-    padding: 16,
-    borderRadius: 16,
-    ...SHADOWS.medium,
+    backgroundColor: SURFACES.card.primary,
+    padding: SPACING[4],
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.md,
   },
   guidelineItem: {
     flexDirection: 'row',
-    gap: 12,
+    gap: SPACING[3],
   },
   guidelineIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: SEMANTIC.info + '20',
+    backgroundColor: `${SEMANTIC.info.base}20`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -405,101 +413,101 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   guidelineTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   guidelineTarget: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: BRAND.primary,
-    marginTop: 4,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: VIBRANT_WELLNESS.activity.solid,
+    marginTop: SPACING[1],
   },
   guidelineExample: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
-    marginTop: 4,
+    marginTop: SPACING[1],
   },
   guidelineDivider: {
     height: 1,
-    backgroundColor: SURFACES.elevated,
-    marginVertical: 16,
+    backgroundColor: SURFACES.divider,
+    marginVertical: SPACING[4],
   },
   sourcesCard: {
     flexDirection: 'row',
-    backgroundColor: SURFACES.card,
-    padding: 16,
-    borderRadius: 16,
-    gap: 12,
-    ...SHADOWS.medium,
+    backgroundColor: SURFACES.card.primary,
+    padding: SPACING[4],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[3],
+    ...SHADOWS.md,
   },
   sourcesIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: BRAND.primary + '20',
+    backgroundColor: `${VIBRANT_WELLNESS.activity.solid}20`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sourcesContent: {
     flex: 1,
-    gap: 6,
+    gap: SPACING[1.5],
   },
   sourcesTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   sourcesText: {
-    fontSize: 11,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     lineHeight: 15,
   },
   evidenceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: SPACING[1],
     alignSelf: 'flex-start',
-    backgroundColor: SEMANTIC.success + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: `${SEMANTIC.success.base}20`,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: RADIUS.md,
   },
   evidenceText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: SEMANTIC.success,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: SEMANTIC.success.base,
   },
   ctaCard: {
-    backgroundColor: BRAND.primary + '10',
-    padding: 24,
-    borderRadius: 16,
+    backgroundColor: `${VIBRANT_WELLNESS.activity.solid}10`,
+    padding: SPACING[6],
+    borderRadius: RADIUS.lg,
     alignItems: 'center',
-    gap: 12,
-    ...SHADOWS.small,
+    gap: SPACING[3],
+    ...SHADOWS.sm,
   },
   ctaTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
     textAlign: 'center',
   },
   ctaText: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   ctaButton: {
-    backgroundColor: BRAND.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
+    backgroundColor: VIBRANT_WELLNESS.activity.solid,
+    paddingHorizontal: SPACING[8],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.md,
+    marginTop: SPACING[2],
   },
   ctaButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.white,
   },
 });

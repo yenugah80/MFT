@@ -16,6 +16,7 @@ import {
   StyleSheet,
   RefreshControl,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ import { useNotification } from '../../providers/NotificationProvider';
 import PredictiveInsightCard from '../../components/insights/PredictiveInsightCard';
 import CorrelationCard, { CorrelationCardCompact } from '../../components/insights/CorrelationCard';
 import FadeInView from '../../components/FadeInView';
+import { usePredictiveInsights, useCorrelations } from '../../hooks/useInsights';
 
 import {
   PREMIUM_COLORS,
@@ -35,68 +37,6 @@ import {
   RADIUS,
   SHADOWS,
 } from '../../constants/premiumDesignSystem';
-
-// Mock data for demonstration
-const MOCK_PREDICTIONS = {
-  energy: {
-    statement: 'Based on your meal timing, you may experience an energy dip around 2-3pm today.',
-    hourlyLevels: [75, 82, 78, 45, 55, 72, 68],
-    prevention: 'Have a protein-rich snack at 1pm to maintain steady energy',
-  },
-  mood: {
-    statement: 'We noticed a pattern: high-sugar lunches correlate with lower afternoon mood scores.',
-    moodScores: [7, 6, 8, 4, 7, 8, 7],
-    factor: 'High-sugar lunches',
-    percentage: 67,
-    suggestion: 'Try a balanced lunch with protein and fiber',
-  },
-  nutrient: {
-    statement: 'At your current rate, you may fall short on vitamin K and iron this week.',
-    nutrients: [
-      { name: 'Vitamin K', current: 66, target: 100, projected: 72, unit: 'mcg' },
-      { name: 'Iron', current: 58, target: 100, projected: 62, unit: 'mg' },
-      { name: 'Fiber', current: 78, target: 100, projected: 85, unit: 'g' },
-    ],
-    recommendation: 'Add leafy greens to 2 meals to hit your vitamin K target',
-  },
-};
-
-const MOCK_CORRELATIONS = [
-  {
-    id: '1',
-    factor: 'eat breakfast before 8am',
-    outcome: 'more water logged',
-    type: 'positive',
-    correlation: 23,
-    dataPoints: 21,
-    instances: 15,
-    confidence: 78,
-    explanation: 'Early eaters tend to be more mindful about hydration throughout the day.',
-    suggestion: 'Keep up the early breakfast habit to maintain good hydration',
-  },
-  {
-    id: '2',
-    factor: 'high-sugar lunch',
-    outcome: 'afternoon tiredness',
-    type: 'negative',
-    correlation: 67,
-    dataPoints: 18,
-    instances: 12,
-    confidence: 72,
-    explanation: 'Sugar spikes lead to crashes, affecting your energy in the afternoon.',
-    suggestion: 'Try protein + fiber at lunch to avoid the crash',
-  },
-  {
-    id: '3',
-    factor: 'skip dinner logging',
-    outcome: 'lower mood next morning',
-    type: 'negative',
-    correlation: 45,
-    dataPoints: 14,
-    instances: 8,
-    confidence: 65,
-  },
-];
 
 function UpgradePrompt({ onUpgrade }) {
   return (
@@ -141,14 +81,30 @@ export default function PredictiveInsightsScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  // Fetch real data from API
+  const {
+    energyPrediction,
+    moodPrediction,
+    nutrientPrediction,
+    dataPoints,
+    isLoading: predictionsLoading,
+    refetch: refetchPredictions,
+  } = usePredictiveInsights({ enabled: isPremium });
+
+  const {
+    correlations,
+    isLoading: correlationsLoading,
+    refetch: refetchCorrelations,
+  } = useCorrelations({ enabled: isPremium, limit: 5 });
+
+  const isLoading = predictionsLoading || correlationsLoading;
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // In real app, fetch from API
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+    await Promise.all([refetchPredictions(), refetchCorrelations()]);
+    setRefreshing(false);
+  }, [refetchPredictions, refetchCorrelations]);
 
   const handlePredictionAction = useCallback((type) => {
     notify.success(`Action for ${type} prediction!`);
@@ -196,81 +152,124 @@ export default function PredictiveInsightsScreen() {
                 <View style={styles.header}>
                   <Text style={styles.headerTitle}>What Your Data Predicts</Text>
                   <Text style={styles.headerSubtitle}>
-                    Based on 21 days of patterns
+                    Based on {dataPoints || 0} days of patterns
                   </Text>
                 </View>
               </FadeInView>
+
+              {/* Loading State */}
+              {isLoading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={PREMIUM_COLORS.brand.primary} />
+                  <Text style={styles.loadingText}>Analyzing your patterns...</Text>
+                </View>
+              )}
 
               {/* Energy Prediction */}
-              <FadeInView animation="floatIn" delay={100}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Today's Forecast</Text>
-                  <PredictiveInsightCard
-                    type="energy"
-                    prediction={MOCK_PREDICTIONS.energy}
-                    confidence={82}
-                    dataPoints={21}
-                    onAction={() => handlePredictionAction('energy')}
-                    style={styles.card}
-                  />
-                </View>
-              </FadeInView>
+              {energyPrediction && (
+                <FadeInView animation="floatIn" delay={100}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Today's Forecast</Text>
+                    <PredictiveInsightCard
+                      type="energy"
+                      prediction={{
+                        statement: energyPrediction.statement,
+                        hourlyLevels: energyPrediction.hourlyLevels,
+                        prevention: energyPrediction.suggestion,
+                      }}
+                      confidence={Math.round((energyPrediction.confidence || 0) * 100)}
+                      dataPoints={dataPoints}
+                      onAction={() => handlePredictionAction('energy')}
+                      style={styles.card}
+                    />
+                  </View>
+                </FadeInView>
+              )}
 
               {/* Mood Correlation */}
-              <FadeInView animation="floatIn" delay={200}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Mood Patterns</Text>
-                  <PredictiveInsightCard
-                    type="mood"
-                    prediction={MOCK_PREDICTIONS.mood}
-                    confidence={72}
-                    dataPoints={18}
-                    onAction={() => handlePredictionAction('mood')}
-                    style={styles.card}
-                  />
-                </View>
-              </FadeInView>
+              {moodPrediction && (
+                <FadeInView animation="floatIn" delay={200}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Mood Patterns</Text>
+                    <PredictiveInsightCard
+                      type="mood"
+                      prediction={{
+                        statement: moodPrediction.statement,
+                        moodScores: moodPrediction.moodScores,
+                        factor: moodPrediction.factor,
+                        percentage: moodPrediction.percentage,
+                        suggestion: moodPrediction.suggestion,
+                      }}
+                      confidence={Math.round((moodPrediction.confidence || 0) * 100)}
+                      dataPoints={dataPoints}
+                      onAction={() => handlePredictionAction('mood')}
+                      style={styles.card}
+                    />
+                  </View>
+                </FadeInView>
+              )}
 
               {/* Nutrient Projections */}
-              <FadeInView animation="floatIn" delay={300}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>This Week's Trajectory</Text>
-                  <PredictiveInsightCard
-                    type="nutrient"
-                    prediction={MOCK_PREDICTIONS.nutrient}
-                    confidence={78}
-                    dataPoints={14}
-                    onAction={() => handlePredictionAction('nutrient')}
-                    style={styles.card}
-                  />
-                </View>
-              </FadeInView>
+              {nutrientPrediction && (
+                <FadeInView animation="floatIn" delay={300}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>This Week's Trajectory</Text>
+                    <PredictiveInsightCard
+                      type="nutrient"
+                      prediction={{
+                        statement: nutrientPrediction.statement,
+                        nutrients: nutrientPrediction.nutrients,
+                        recommendation: nutrientPrediction.suggestion,
+                      }}
+                      confidence={Math.round((nutrientPrediction.confidence || 0) * 100)}
+                      dataPoints={dataPoints}
+                      onAction={() => handlePredictionAction('nutrient')}
+                      style={styles.card}
+                    />
+                  </View>
+                </FadeInView>
+              )}
 
               {/* Discovered Correlations */}
-              <FadeInView animation="floatIn" delay={400}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Discovered Patterns</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Behavioral connections we've found in your data
-                  </Text>
-                  {MOCK_CORRELATIONS.map((correlation, idx) => (
-                    <CorrelationCard
-                      key={correlation.id}
-                      factor={correlation.factor}
-                      outcome={correlation.outcome}
-                      type={correlation.type}
-                      correlation={correlation.correlation}
-                      dataPoints={correlation.dataPoints}
-                      instances={correlation.instances}
-                      confidence={correlation.confidence}
-                      explanation={correlation.explanation}
-                      suggestion={correlation.suggestion}
-                      onPress={() => handleCorrelationPress(correlation)}
-                      style={styles.correlationCard}
-                    />
-                  ))}
-                </View>
-              </FadeInView>
+              {correlations.length > 0 && (
+                <FadeInView animation="floatIn" delay={400}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Discovered Patterns</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Behavioral connections we've found in your data
+                    </Text>
+                    {correlations.map((correlation, idx) => (
+                      <CorrelationCard
+                        key={correlation.id || idx}
+                        factor={correlation.pattern?.split(' → ')[0] || 'Pattern'}
+                        outcome={correlation.pattern?.split(' → ')[1] || 'detected'}
+                        type={correlation.type || 'neutral'}
+                        correlation={Math.round((correlation.confidence || 0) * 100)}
+                        dataPoints={correlation.occurrences || 0}
+                        instances={correlation.occurrences || 0}
+                        confidence={Math.round((correlation.confidence || 0) * 100)}
+                        explanation={correlation.explanation}
+                        suggestion={correlation.suggestion}
+                        onPress={() => handleCorrelationPress(correlation)}
+                        style={styles.correlationCard}
+                      />
+                    ))}
+                  </View>
+                </FadeInView>
+              )}
+
+              {/* No Data State */}
+              {!isLoading && !energyPrediction && !moodPrediction && !nutrientPrediction && correlations.length === 0 && (
+                <FadeInView animation="fadeIn" delay={100}>
+                  <View style={styles.emptyState}>
+                    <Ionicons name="analytics-outline" size={48} color={PREMIUM_COLORS.text.tertiary} />
+                    <Text style={styles.emptyStateTitle}>Building Your Predictions</Text>
+                    <Text style={styles.emptyStateText}>
+                      Keep logging meals, mood, and hydration to unlock personalized predictions and patterns.
+                    </Text>
+                  </View>
+                </FadeInView>
+              )}
 
               {/* Data quality note */}
               <FadeInView animation="fadeIn" delay={500}>
@@ -339,6 +338,39 @@ const styles = StyleSheet.create({
   },
   correlationCard: {
     marginBottom: SPACING[4],
+  },
+
+  // Loading State
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING[10],
+  },
+  loadingText: {
+    marginTop: SPACING[3],
+    fontSize: TYPOGRAPHY.size.body,
+    color: PREMIUM_COLORS.text.secondary,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING[10],
+    paddingHorizontal: SPACING[4],
+  },
+  emptyStateTitle: {
+    fontSize: TYPOGRAPHY.size.headline,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: PREMIUM_COLORS.text.primary,
+    marginTop: SPACING[4],
+    marginBottom: SPACING[2],
+  },
+  emptyStateText: {
+    fontSize: TYPOGRAPHY.size.body,
+    color: PREMIUM_COLORS.text.tertiary,
+    textAlign: 'center',
+    lineHeight: TYPOGRAPHY.size.body * 1.4,
   },
 
   // Data quality note

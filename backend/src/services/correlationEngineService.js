@@ -258,6 +258,173 @@ function detectStressEatingPattern(stressIntensity, mealCount, expectedMeals, ca
 }
 
 /**
+ * Rule: High Caffeine → Energy Spike + Later Crash
+ *
+ * WHAT: Multiple caffeinated beverages correlate with energy spikes and crashes
+ * WHY: Caffeine blocks adenosine, causing energy spike followed by crash
+ * WHEN: 3-6 hours after consumption
+ * HOW AFFECTS: Energy levels, mood stability, sleep quality
+ */
+function detectCaffeineEnergyPattern(waterSignals, moodSignals, windowHours = 6) {
+  if (!waterSignals || !moodSignals || waterSignals.length === 0) return null;
+
+  // Count caffeine beverages (coffee, tea, energy drinks)
+  const caffeineBeverages = waterSignals.filter(w =>
+    ['coffee', 'tea', 'energy'].includes(w.beverageType?.toLowerCase())
+  );
+
+  if (caffeineBeverages.length < 2) return null;
+
+  // Look for energy crashes 3-6 hours after caffeine
+  const crashes = [];
+  for (const caffeine of caffeineBeverages) {
+    for (const mood of moodSignals) {
+      const timeLag = getHoursBetween(caffeine.loggedTime, mood.loggedTime);
+      if (timeLag >= 3 && timeLag <= windowHours && mood.isLowEnergy) {
+        crashes.push({ caffeine, mood, timeLag });
+      }
+    }
+  }
+
+  if (crashes.length === 0) return null;
+
+  return {
+    ruleName: 'caffeine_energy_crash',
+    correlationType: 'beverage_energy',
+    severity: 'moderate',
+    strength: Math.min(crashes.length / 2, 1.0),
+    confidence: 0.65,
+    evidence: {
+      caffeineCount: caffeineBeverages.length,
+      crashCount: crashes.length,
+      beverageTypes: [...new Set(caffeineBeverages.map(c => c.beverageType))],
+      avgTimeLag: Math.round(crashes.reduce((sum, c) => sum + c.timeLag, 0) / crashes.length * 60),
+    },
+  };
+}
+
+/**
+ * Rule: Evening Caffeine → Poor Sleep Quality
+ *
+ * WHAT: Coffee/tea after 4pm correlates with poor sleep
+ * WHY: Caffeine has 6-hour half-life, blocks sleep signals
+ * WHEN: 16:00+ caffeine → that night's sleep
+ * HOW AFFECTS: Sleep quality, next-day energy, recovery
+ */
+function detectEveningCaffeineSleepImpact(waterSignals, moodSignals) {
+  if (!waterSignals || !moodSignals) return null;
+
+  // Find caffeine after 4pm
+  const eveningCaffeine = waterSignals.filter(w => {
+    const hour = w.loggedTime.getHours();
+    return hour >= 16 && ['coffee', 'tea', 'energy'].includes(w.beverageType?.toLowerCase());
+  });
+
+  if (eveningCaffeine.length === 0) return null;
+
+  // Look for poor sleep indicators next day
+  const poorSleepMoods = moodSignals.filter(m =>
+    m.sleepQuality === 'poor' && m.loggedTime.getHours() < 12
+  );
+
+  if (poorSleepMoods.length === 0) return null;
+
+  return {
+    ruleName: 'evening_caffeine_sleep_impact',
+    correlationType: 'beverage_sleep',
+    severity: 'moderate',
+    strength: Math.min(eveningCaffeine.length * 0.4, 1.0),
+    confidence: 0.7,
+    evidence: {
+      eveningCaffeineCount: eveningCaffeine.length,
+      lastCaffeineTime: Math.max(...eveningCaffeine.map(c => c.loggedTime.getHours())),
+      beverageTypes: [...new Set(eveningCaffeine.map(c => c.beverageType))],
+      poorSleepCount: poorSleepMoods.length,
+    },
+  };
+}
+
+/**
+ * Rule: Beverage Variety → Better Hydration Compliance
+ *
+ * WHAT: Users who drink variety of beverages hit hydration goals more often
+ * WHY: Variety makes hydration more enjoyable and sustainable
+ * WHEN: Daily pattern
+ * HOW AFFECTS: Hydration consistency, goal achievement
+ */
+function detectBeverageVarietyHydration(waterSignals, hydrationGoal) {
+  if (!waterSignals || waterSignals.length < 3) return null;
+
+  // Calculate beverage variety
+  const beverageTypes = new Set(waterSignals.map(w => w.beverageType || 'water'));
+  const variety = beverageTypes.size;
+
+  // Calculate total hydration
+  const totalHydration = waterSignals.reduce((sum, w) => sum + w.hydrationLiters, 0);
+  const goalPercent = (totalHydration / hydrationGoal) * 100;
+
+  // High variety + high goal achievement = positive correlation
+  const isHighVariety = variety >= 3;
+  const isGoalMet = goalPercent >= 80;
+
+  if (!isHighVariety || !isGoalMet) return null;
+
+  return {
+    ruleName: 'beverage_variety_compliance',
+    correlationType: 'beverage_hydration',
+    severity: 'positive',
+    strength: Math.min((variety / 5) * (goalPercent / 100), 1.0),
+    confidence: 0.6,
+    evidence: {
+      beverageVariety: variety,
+      beverageTypes: [...beverageTypes],
+      totalHydration,
+      goalPercent: Math.round(goalPercent),
+    },
+  };
+}
+
+/**
+ * Rule: Alcohol → Next-Day Mood Impact
+ *
+ * WHAT: Alcohol consumption correlates with lower next-day mood/energy
+ * WHY: Alcohol disrupts sleep, dehydrates, affects neurotransmitters
+ * WHEN: Evening alcohol → next morning
+ * HOW AFFECTS: Sleep quality, mood, energy, hydration
+ */
+function detectAlcoholMoodImpact(waterSignals, nextDayMoods) {
+  if (!waterSignals || !nextDayMoods) return null;
+
+  // Check for alcohol (if tracked as beverage type)
+  const alcoholSignals = waterSignals.filter(w =>
+    w.beverageType?.toLowerCase() === 'alcohol'
+  );
+
+  if (alcoholSignals.length === 0) return null;
+
+  // Look for low mood/energy next morning
+  const lowMoodMornings = nextDayMoods.filter(m =>
+    m.loggedTime.getHours() < 12 &&
+    (m.isLowEnergy || m.isNegativeMood || m.sleepQuality === 'poor')
+  );
+
+  if (lowMoodMornings.length === 0) return null;
+
+  return {
+    ruleName: 'alcohol_mood_impact',
+    correlationType: 'beverage_mood',
+    severity: 'moderate',
+    strength: 0.7,
+    confidence: 0.6,
+    evidence: {
+      alcoholCount: alcoholSignals.length,
+      lowMoodMornings: lowMoodMornings.length,
+      avgMorningEnergy: Math.round(lowMoodMornings.reduce((s, m) => s + m.energyLevel, 0) / lowMoodMornings.length * 10) / 10,
+    },
+  };
+}
+
+/**
  * Rule: Late Heavy Meal → Poor Sleep → Morning Sluggishness
  *
  * WHAT: Heavy meals after 9pm predict poor sleep and low morning energy
@@ -536,7 +703,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
     if (dayMoods.length > 0) {
       for (const mood of dayMoods) {
         const dehydrationMatch = detectDehydrationFatigue(dailyWater, mood, hydrationGoal);
-        if (dehydrationMatch && confidence >= 0.5) {
+        if (dehydrationMatch && dehydrationMatch.confidence >= 0.5) {
           correlations.push({
             correlationType: 'hydration_mood',
             ruleName: 'dehydration_fatigue_mood',
@@ -567,6 +734,84 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
         }
       }
     }
+  }
+
+  // Rule 3: Caffeine Energy Pattern (multiple caffeine → energy crash)
+  const caffeinePattern = detectCaffeineEnergyPattern(waterSignals, moodSignals);
+  if (caffeinePattern && caffeinePattern.confidence >= 0.5) {
+    correlations.push({
+      correlationType: 'beverage_energy',
+      ruleName: 'caffeine_energy_crash',
+      signalA: 'caffeine_intake',
+      signalAValue: caffeinePattern.evidence.caffeineCount,
+      signalAUnit: 'drinks',
+      signalB: 'energy_crash',
+      signalBValue: caffeinePattern.evidence.crashCount,
+      signalBUnit: 'occurrences',
+      windowType,
+      strength: Math.round(caffeinePattern.strength * 100) / 100,
+      confidence: Math.round(caffeinePattern.confidence * 100) / 100,
+      occurrences: caffeinePattern.evidence.crashCount,
+      healthImpactSeverity: 'moderate',
+      affectedDomains: ['energy', 'focus', 'mood_stability'],
+      expectedOutcome: 'Multiple caffeine drinks lead to energy crashes 3-6 hours later. Try spacing out caffeine intake or switching to lower-caffeine options in the afternoon.',
+      lastObservedDate: new Date().toISOString().split('T')[0],
+      firstObservedDate: new Date().toISOString().split('T')[0],
+      isActive: true,
+      evidenceJson: caffeinePattern.evidence,
+    });
+  }
+
+  // Rule 4: Evening Caffeine Sleep Impact
+  const eveningCaffeineMatch = detectEveningCaffeineSleepImpact(waterSignals, moodSignals);
+  if (eveningCaffeineMatch && eveningCaffeineMatch.confidence >= 0.5) {
+    correlations.push({
+      correlationType: 'beverage_sleep',
+      ruleName: 'evening_caffeine_sleep_impact',
+      signalA: 'evening_caffeine',
+      signalAValue: eveningCaffeineMatch.evidence.eveningCaffeineCount,
+      signalAUnit: 'drinks',
+      signalB: 'poor_sleep',
+      signalBValue: eveningCaffeineMatch.evidence.poorSleepCount,
+      signalBUnit: 'mornings',
+      windowType,
+      strength: Math.round(eveningCaffeineMatch.strength * 100) / 100,
+      confidence: Math.round(eveningCaffeineMatch.confidence * 100) / 100,
+      occurrences: eveningCaffeineMatch.evidence.eveningCaffeineCount,
+      healthImpactSeverity: 'moderate',
+      affectedDomains: ['sleep', 'energy', 'recovery'],
+      expectedOutcome: `Caffeine after 4pm is affecting your sleep. Last caffeine at ${eveningCaffeineMatch.evidence.lastCaffeineTime}:00 may delay sleep onset. Try cutting caffeine by 2pm.`,
+      lastObservedDate: new Date().toISOString().split('T')[0],
+      firstObservedDate: new Date().toISOString().split('T')[0],
+      isActive: true,
+      evidenceJson: eveningCaffeineMatch.evidence,
+    });
+  }
+
+  // Rule 5: Beverage Variety → Better Hydration
+  const varietyMatch = detectBeverageVarietyHydration(waterSignals, hydrationGoal);
+  if (varietyMatch && varietyMatch.confidence >= 0.5) {
+    correlations.push({
+      correlationType: 'beverage_hydration',
+      ruleName: 'beverage_variety_compliance',
+      signalA: 'beverage_variety',
+      signalAValue: varietyMatch.evidence.beverageVariety,
+      signalAUnit: 'types',
+      signalB: 'hydration_goal',
+      signalBValue: varietyMatch.evidence.goalPercent,
+      signalBUnit: 'percent',
+      windowType,
+      strength: Math.round(varietyMatch.strength * 100) / 100,
+      confidence: Math.round(varietyMatch.confidence * 100) / 100,
+      occurrences: 1,
+      healthImpactSeverity: 'positive',
+      affectedDomains: ['hydration', 'goal_compliance'],
+      expectedOutcome: `Great job! Drinking ${varietyMatch.evidence.beverageVariety} different beverages helps you stay hydrated. Keep the variety going!`,
+      lastObservedDate: new Date().toISOString().split('T')[0],
+      firstObservedDate: new Date().toISOString().split('T')[0],
+      isActive: true,
+      evidenceJson: varietyMatch.evidence,
+    });
   }
 
   return correlations;

@@ -14,18 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { TEXT, SURFACES, SEMANTIC, SEMANTIC_ACTIONS, NUTRISCORE, HEALTH_SCORE } from '../../constants/premiumTheme';
-
-/**
- * Confidence badge color and text (0.0-1.0)
- */
-function getConfidenceBadge(confidence) {
-  const score = confidence || 0.7;
-  if (score >= 0.95) return { color: SEMANTIC.success.base, bg: SEMANTIC.success.bg, text: 'Strong estimate', icon: '✓✓' };
-  if (score >= 0.85) return { color: SEMANTIC.info.base, bg: SEMANTIC.info.bg, text: 'Typical estimate', icon: '✓' };
-  if (score >= 0.70) return { color: SEMANTIC_ACTIONS.warning, bg: '#FEF3C7', text: 'Reasonable estimate', icon: '~' };
-  if (score >= 0.50) return { color: SEMANTIC_ACTIONS.primary, bg: '#FFEDD5', text: 'Rough estimate', icon: '?' };
-  return { color: SEMANTIC_ACTIONS.danger, bg: '#FEE2E2', text: 'Needs adjustment', icon: '!' };
-}
+import { getConfidenceBadge, getConfidenceDescription } from '../../utils/confidenceUtils';
 
 /**
  * Health score color gradient (0-100)
@@ -42,18 +31,37 @@ function getHealthScoreColor(score) {
  */
 const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium'];
 
+function toText(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return '';
+}
+
+function toNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 /**
  * Validate macro-calorie consistency
  * Formula: Calories = (Protein × 4) + (Carbs × 4) + (Fat × 9)
  */
 function validateMacros(calories, protein, carbs, fat) {
-  if (!calories) {
+  // Handle null/undefined/NaN calories (but allow 0)
+  const cal = toNumber(calories, null);
+  if (cal === null || cal <= 0) {
     return { level: null, message: null };
   }
 
-  const calculatedCalories = (protein * 4) + (carbs * 4) + (fat * 9);
-  const difference = Math.abs(calories - calculatedCalories);
-  const percentageOff = (difference / calories) * 100;
+  // Ensure macros are numbers, defaulting to 0
+  const prot = toNumber(protein, 0);
+  const carb = toNumber(carbs, 0);
+  const fatVal = toNumber(fat, 0);
+
+  const calculatedCalories = (prot * 4) + (carb * 4) + (fatVal * 9);
+  const difference = Math.abs(cal - calculatedCalories);
+  // Safe division - cal is guaranteed > 0 at this point
+  const percentageOff = (difference / cal) * 100;
 
   if (percentageOff > 30) {
     return {
@@ -66,17 +74,6 @@ function validateMacros(calories, protein, carbs, fat) {
     level: 'info',
     message: 'Calories are estimated from macros and typical preparation.',
   };
-}
-
-function toText(value) {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
-  return '';
-}
-
-function toNumber(value, fallback = 0) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : fallback;
 }
 
 /**

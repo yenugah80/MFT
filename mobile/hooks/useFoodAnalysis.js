@@ -31,8 +31,44 @@ import { normalizeNutritionData, detectAggregatedData } from '../utils/nutrition
 
 // Module-level cache to persist analysis result across component remounts
 // This prevents loss of analysis data when the tabs layout re-renders
+// IMPORTANT: This cache is cleared on user change and has a max age
 let cachedAnalysisResult = null;
 let cachedInputText = '';
+let cacheTimestamp = 0;
+let cachedUserId = null;
+
+// Cache expiration time (5 minutes)
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * Clear the module-level cache
+ * Call this when user logs out or when starting fresh
+ */
+export function clearFoodAnalysisCache() {
+  cachedAnalysisResult = null;
+  cachedInputText = '';
+  cacheTimestamp = 0;
+  cachedUserId = null;
+  console.log('[useFoodAnalysis] Cache cleared');
+}
+
+/**
+ * Check if cache is valid (not expired and same user)
+ */
+function isCacheValid(userId) {
+  if (!cachedAnalysisResult) return false;
+  if (cachedUserId && cachedUserId !== userId) {
+    // User changed - clear cache
+    clearFoodAnalysisCache();
+    return false;
+  }
+  if (Date.now() - cacheTimestamp > CACHE_MAX_AGE_MS) {
+    // Cache expired
+    clearFoodAnalysisCache();
+    return false;
+  }
+  return true;
+}
 
 // ============================================================================
 // CONSTANTS
@@ -736,22 +772,38 @@ export function useFoodAnalysis() {
   // STATE & REFS
   // ============================================================================
 
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const isAnalyzingRef = useRef(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
 
-  // Multi-item analysis state (initialize from cache to survive remounts)
-  const [analysisResult, setAnalysisResultState] = useState(cachedAnalysisResult);
-  const [inputText, setInputTextState] = useState(cachedInputText);
+  // Multi-item analysis state (initialize from cache only if valid)
+  const [analysisResult, setAnalysisResultState] = useState(() => {
+    return isCacheValid(userId) ? cachedAnalysisResult : null;
+  });
+  const [inputText, setInputTextState] = useState(() => {
+    return isCacheValid(userId) ? cachedInputText : '';
+  });
 
-  // Wrapper to update both state and cache
+  // Clear cache when user changes
+  useEffect(() => {
+    if (userId && cachedUserId && cachedUserId !== userId) {
+      clearFoodAnalysisCache();
+      setAnalysisResultState(null);
+      setInputTextState('');
+    }
+    cachedUserId = userId;
+  }, [userId]);
+
+  // Wrapper to update both state and cache with timestamp
   const setAnalysisResult = useCallback((result) => {
     cachedAnalysisResult = result;
+    cacheTimestamp = Date.now();
+    cachedUserId = userId;
     setAnalysisResultState(result);
-  }, []);
+  }, [userId]);
 
   const setInputText = useCallback((text) => {
     cachedInputText = text;

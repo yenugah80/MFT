@@ -1,284 +1,276 @@
+/**
+ * DailyIntelligenceCard - World Class Redesign
+ *
+ * Design Philosophy:
+ * - ONE clear message - what matters right now
+ * - ZERO jargon - no ML metrics, no internal types
+ * - EMOTIONAL design - celebrate wins, gentle nudges
+ * - ACTIONABLE - always one clear next step
+ *
+ * Inspired by: Apple Health, Oura Ring, Headspace
+ */
+
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
-import { ActionItem } from './ActionItem';
-import { QuietConfidenceCard } from './QuietConfidenceCard';
-import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import * as Haptics from 'expo-haptics';
+
+import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
+import { COLORS, GRADIENTS, getInsightColor } from '../../constants/unifiedColors';
+import { getDecisionDisplay, ICON_SIZES } from '../../constants/iconSystem';
 
 /**
- * DailyIntelligenceCard
- *
- * Main recommendation display component.
- * Shows orchestrator decisions (SPEAK, REINFORCE, PREDICT, SILENT).
- *
- * For SILENT: Shows QuietConfidenceCard instead
- * For others: Shows main insight + actions + confidence label
- *
- * @param {Object} props
- * @param {string} props.type - 'SPEAK' | 'REINFORCE' | 'PREDICT' | 'SILENT'
- * @param {string} props.headline - Main insight headline
- * @param {string} props.subtitle - Supporting text (2 lines max)
- * @param {Object} props.visual - { type: 'gauge'|'progress'|'sparkline', data: {...} }
- * @param {Array} props.actions - [{ icon, text, description, onTap, onSuccess }, ...]
- * @param {number} props.confidence - 0-1 confidence value
- * @param {string} props.confidenceLabel - 'Low' | 'Moderate' | 'High' | 'Very High'
- * @param {string} props.lifecycleStage - User's current stage for styling
- * @param {React.ReactNode} props.visualComponent - Pre-rendered visual component (optional)
- * @returns {JSX.Element}
+ * InsightBadge - Small colored indicator
  */
-export function DailyIntelligenceCard({
-  type = 'SPEAK',
-  headline,
-  subtitle,
-  visual,
-  actions = [],
-  confidence,
-  confidenceLabel = 'Moderate',
-  lifecycleStage = 'TRACKER',
-  visualComponent,
-}) {
-  const { buttonLayout, padding, gap, actionColumns } = useResponsiveLayout();
+function InsightBadge({ type }) {
+  const display = getDecisionDisplay(type);
+  const colorScheme = getInsightColor(type);
 
-  // SILENT decision: Show quiet confirmation instead
-  if (type === 'SILENT') {
-    return <QuietConfidenceCard />;
-  }
+  return (
+    <View style={[styles.badge, { backgroundColor: colorScheme.bg }]}>
+      <Ionicons name={display.icon} size={14} color={colorScheme.color} />
+      <Text style={[styles.badgeText, { color: colorScheme.color }]}>
+        {display.label}
+      </Text>
+    </View>
+  );
+}
 
-  // Get color based on decision type
-  const getTypeColor = () => {
-    switch (type) {
-      case 'SPEAK':
-        return '#3B82F6'; // Blue - new insight
-      case 'REINFORCE':
-        return BRAND.emerald; // Green - keep going
-      case 'PREDICT':
-        return '#F59E0B'; // Amber - heads up
-      default:
-        return '#6B7280'; // Gray - neutral
-    }
+/**
+ * ActionButton - Clean, tappable action
+ */
+function ActionButton({ icon, label, onPress }) {
+  const handlePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress?.();
   };
 
-  // Get icon based on decision type
-  const getTypeIcon = () => {
-    switch (type) {
-      case 'SPEAK':
-        return '🔗'; // Pattern link
-      case 'REINFORCE':
-        return '✓'; // Checkmark
-      case 'PREDICT':
-        return '🔮'; // Crystal ball
-      default:
-        return '💡'; // Lightbulb
+  return (
+    <TouchableOpacity
+      style={styles.actionButton}
+      onPress={handlePress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <LinearGradient
+        colors={GRADIENTS.premium}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.actionGradient}
+      >
+        <Ionicons name={icon} size={18} color={COLORS.text.inverse} />
+        <Text style={styles.actionLabel}>{label}</Text>
+        <Ionicons name="chevron-forward" size={16} color={COLORS.text.inverse} />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+/**
+ * Main Card Component
+ */
+export function DailyIntelligenceCard({
+  type = 'SILENT',
+  headline,
+  subtitle,
+  actions = [],
+  onAction,
+}) {
+  // SILENT type = everything is on track, show minimal UI
+  if (type === 'SILENT' || !headline) {
+    return (
+      <View style={styles.quietContainer}>
+        <View style={styles.quietContent}>
+          <View style={styles.quietIconContainer}>
+            <Ionicons
+              name="checkmark-circle"
+              size={32}
+              color={COLORS.status.success}
+            />
+          </View>
+          <View style={styles.quietText}>
+            <Text style={styles.quietTitle}>You're on track</Text>
+            <Text style={styles.quietSubtitle}>
+              Keep doing what you're doing
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  const colorScheme = getInsightColor(type);
+  const primaryAction = actions[0];
+
+  const handleActionPress = () => {
+    if (primaryAction) {
+      onAction?.(primaryAction);
     }
   };
 
   return (
-    <View style={[styles.container, { marginHorizontal: padding }]}>
-      <LinearGradient
-        colors={['#FFFFFF', '#F9FAFB']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradient}
-      >
-        <View style={styles.content}>
-          {/* Header: Icon + Headline */}
-          <View style={styles.header}>
-            <Text style={styles.typeIcon}>{getTypeIcon()}</Text>
-            <Text
-              style={[
-                styles.headline,
-                lifecycleStage === 'DISCOVERER' && styles.headlineDiscoverer,
-              ]}
-              numberOfLines={2}
-            >
-              {headline}
-            </Text>
-          </View>
+    <View style={styles.container}>
+      {/* Left accent bar */}
+      <View style={[styles.accentBar, { backgroundColor: colorScheme.color }]} />
 
-          {/* Subtitle */}
-          {subtitle && (
-            <Text style={styles.subtitle} numberOfLines={2}>
-              {subtitle}
-            </Text>
-          )}
+      <View style={styles.content}>
+        {/* Header: Badge */}
+        <InsightBadge type={type} />
 
-          {/* Visual Component (Gauge / Progress / Sparkline) */}
-          {visualComponent && (
-            <View style={styles.visualContainer}>
-              {visualComponent}
-            </View>
-          )}
+        {/* Main Message */}
+        <Text style={styles.headline} numberOfLines={2}>
+          {headline}
+        </Text>
 
-          {/* Actions - Responsive Layout */}
-          {actions && actions.length > 0 && (
-            <View style={[
-              styles.actionsContainer,
-              buttonLayout === 'stack' && styles.actionsStack,
-              buttonLayout === 'twoCol' && styles.actionsTwoCol,
-              buttonLayout === 'threeCol' && styles.actionsThreeCol,
-              { gap },
-            ]}>
-              {actions.map((action, index) => (
-                <ActionItem
-                  key={index}
-                  icon={action.icon}
-                  text={action.text}
-                  description={action.description}
-                  onTap={action.onTap}
-                  onSuccess={action.onSuccess}
-                />
-              ))}
-            </View>
-          )}
+        {/* Supporting Text */}
+        {subtitle && (
+          <Text style={styles.subtitle} numberOfLines={2}>
+            {subtitle}
+          </Text>
+        )}
 
-          {/* Confidence Label + Metadata */}
-          <View style={styles.footer}>
-            <Text style={styles.confidenceLabel}>
-              Confidence: <Text style={styles.confidenceBold}>{confidenceLabel}</Text>
-            </Text>
-            {confidence && (
-              <Text style={styles.confidencePercent}>
-                {Math.round(confidence * 100)}%
-              </Text>
-            )}
-          </View>
-
-          {/* Type Badge */}
-          <View
-            style={[
-              styles.typeBadge,
-              { borderLeftColor: getTypeColor() },
-            ]}
-          >
-            <Text style={styles.typeBadgeText}>{type}</Text>
-          </View>
-        </View>
-      </LinearGradient>
+        {/* Primary Action */}
+        {primaryAction && (
+          <ActionButton
+            icon={primaryAction.icon || 'arrow-forward-outline'}
+            label={primaryAction.text || 'Learn more'}
+            onPress={handleActionPress}
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Main container
   container: {
-    marginBottom: 20,
-    borderRadius: 12,
+    backgroundColor: COLORS.background.secondary,
+    borderRadius: RADIUS.xl,
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[4],
+    flexDirection: 'row',
     overflow: 'hidden',
 
-    // Shadow iOS
+    // Premium shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  // Left accent indicator
+  accentBar: {
+    width: 4,
+  },
+
+  // Content area
+  content: {
+    flex: 1,
+    padding: SPACING[4],
+    gap: SPACING[3],
+  },
+
+  // Badge styles
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[1],
+    borderRadius: RADIUS.full,
+  },
+  badgeText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+  },
+
+  // Typography
+  headline: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.text.primary,
+    lineHeight: 26,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.regular,
+    color: COLORS.text.secondary,
+    lineHeight: 20,
+  },
+
+  // Action button
+  actionButton: {
+    marginTop: SPACING[2],
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  actionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+  },
+  actionLabel: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.inverse,
+  },
+
+  // Quiet state (everything on track)
+  quietContainer: {
+    backgroundColor: COLORS.status.successBg,
+    borderRadius: RADIUS.xl,
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[4],
+    padding: SPACING[4],
+
+    // Subtle shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
-
-    // Shadow Android
     elevation: 2,
   },
-  gradient: {
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-  },
-  content: {
-    gap: 12,
-  },
-
-  // Header: Icon + Headline
-  header: {
+  quietContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING[3],
   },
-  typeIcon: {
-    fontSize: 24,
-    lineHeight: 24,
-  },
-  headline: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
-    color: TEXT.primary,
-    lineHeight: 24,
-  },
-  headlineDiscoverer: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-
-  // Subtitle
-  subtitle: {
-    fontSize: 14,
-    color: TEXT.secondary,
-    lineHeight: 20,
-    marginTop: 4,
-  },
-
-  // Visual Container
-  visualContainer: {
-    marginVertical: 12,
-    height: 100,
+  quietIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.background.secondary,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-
-  // Actions Container - Responsive Layouts
-  actionsContainer: {
-    marginVertical: 12,
+  quietText: {
+    flex: 1,
   },
-  actionsStack: {
-    // Mobile <375px: Vertical stack
-    flexDirection: 'column',
+  quietTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.primary,
   },
-  actionsTwoCol: {
-    // Mobile 375-600px: 2 columns
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  actionsThreeCol: {
-    // Tablet 600px+: 3 columns
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-
-  // Footer: Confidence + Metadata
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
-  },
-  confidenceLabel: {
-    fontSize: 13,
-    color: TEXT.tertiary,
-  },
-  confidenceBold: {
-    fontWeight: '600',
-    color: TEXT.secondary,
-  },
-  confidencePercent: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BRAND.emerald,
-  },
-
-  // Type Badge (left border indicator)
-  typeBadge: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    borderLeftWidth: 4,
-  },
-  typeBadgeText: {
-    // Hidden, only for accessibility
-    fontSize: 0,
+  quietSubtitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.secondary,
+    marginTop: 2,
   },
 });
+
+export default DailyIntelligenceCard;

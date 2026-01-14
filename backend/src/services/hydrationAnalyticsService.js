@@ -196,14 +196,21 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
       )
       .orderBy(desc(waterLogTable.loggedDate));
 
-    if (logs.length < 5) {
+    // Return early if no logs at all
+    if (logs.length === 0) {
       return {
         hasEnoughData: false,
-        dataPoints: logs.length,
+        hasBasicData: false,
+        dataPoints: 0,
         timespan: `${days} days`,
-        message: 'Not enough data for pattern analysis',
+        message: 'No hydration data logged yet',
+        patterns: null,
       };
     }
+
+    // Even with few logs, return real data (not zeros)
+    // hasEnoughData refers to pattern detection, not basic stats
+    const hasEnoughForPatterns = logs.length >= 5;
 
     // Calculate hourly distribution
     const hourlyDistribution = new Array(24).fill(0);
@@ -284,8 +291,37 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
     const waterVolume = beverageBreakdown.water?.volume || 0;
     const coffeeToWaterRatio = waterVolume > 0 ? coffeeVolume / waterVolume : 0;
 
+    // Get user's goal for percentage calculation
+    const [goals] = await db
+      .select()
+      .from(nutritionGoalsTable)
+      .where(eq(nutritionGoalsTable.userId, userId))
+      .limit(1);
+
+    const goalLiters = parseFloat(goals?.waterLiters) || 2.0;
+    const goalMl = Math.round(goalLiters * 1000);
+
+    // Calculate avgMl and avgPercentage (what frontend expects)
+    const avgMl = Math.round(avgDaily * 1000);
+    const avgPercentage = goalLiters > 0 ? (avgDaily / goalLiters) * 100 : 0;
+
+    // Calculate streak - consecutive days meeting goal (most recent)
+    const sortedDates = Object.keys(dailyTotals).sort().reverse(); // Most recent first
+    let streak = 0;
+    for (const dateKey of sortedDates) {
+      const dailyLiters = dailyTotals[dateKey];
+      if (dailyLiters >= goalLiters * 0.8) { // 80% of goal counts for streak
+        streak++;
+      } else {
+        break; // Streak broken
+      }
+    }
+
+    // Always return data - hasEnoughData is for advanced pattern detection only
+    // Basic stats (avgMl, streak, avgPercentage) are shown even with 1 log
     return {
-      hasEnoughData: true,
+      hasEnoughData: hasEnoughForPatterns,
+      hasBasicData: logs.length > 0, // New field for frontend to use
       dataPoints: logs.length,
       timespan: `${days} days`,
       algorithmVersion: CONFIG.ALGORITHM_VERSION,
@@ -301,6 +337,12 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
         weekendDrop: avgWeekday > 0 ? (avgWeekday - avgWeekend) / avgWeekday : 0,
         periodDistribution,
         coffeeToWaterRatio,
+        // Fields expected by frontend - always calculated
+        avgMl,
+        avgPercentage: Math.round(avgPercentage),
+        streak,
+        goalMl,
+        daysLogged: Object.keys(dailyTotals).length,
       },
 
       // Explainability data
@@ -566,9 +608,13 @@ export async function getAnalyticsDashboard(userId) {
       }
     });
 
+    // Return patterns if ANY data exists (hasBasicData), not just when hasEnoughData
+    // This ensures returning users see their real stats, not zeros
     return {
       coldStart,
-      patterns: patterns.hasEnoughData ? patterns.patterns : null,
+      patterns: (patterns.hasBasicData || patterns.hasEnoughData) ? patterns.patterns : null,
+      hasEnoughForPatterns: patterns.hasEnoughData,
+      hasBasicData: patterns.hasBasicData,
       persona: persona.persona,
       personaConfidence: persona.confidence,
       prediction: prediction.hasPrediction ? prediction : null,

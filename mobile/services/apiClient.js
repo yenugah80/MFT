@@ -266,5 +266,56 @@ class ApiClient {
 }
 
 const apiClient = new ApiClient();
+
+/**
+ * Backend Warmup - fires immediately on module load
+ * Wakes up Render.com backend while user is still seeing splash screen
+ * This dramatically reduces perceived latency on cold starts
+ */
+let warmupPromise = null;
+export function warmupBackend() {
+  if (warmupPromise) return warmupPromise;
+
+  warmupPromise = (async () => {
+    const startTime = Date.now();
+    console.log('[API] 🔥 Warming up backend...');
+
+    try {
+      // Use a simple HEAD request to /health - minimal data transfer
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s for cold start
+
+      const response = await fetch(`${apiClient.baseURL.replace('/api', '')}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' },
+      });
+
+      clearTimeout(timeout);
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        console.log(`[API] ✅ Backend warm (${duration}ms)`);
+        apiClient.isHealthy = true;
+        apiClient.consecutiveFailures = 0;
+      } else {
+        console.log(`[API] ⚠️ Backend responded with ${response.status} (${duration}ms)`);
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      if (error.name === 'AbortError') {
+        console.log(`[API] ⏱️ Warmup timeout after ${duration}ms - backend may still be starting`);
+      } else {
+        console.log(`[API] ⚠️ Warmup failed (${duration}ms): ${error.message}`);
+      }
+    }
+  })();
+
+  return warmupPromise;
+}
+
+// Fire warmup immediately when module loads (before auth)
+warmupBackend();
+
 export default apiClient;
 export { ApiClient };

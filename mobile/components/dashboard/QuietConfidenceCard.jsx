@@ -1,37 +1,43 @@
+/**
+ * QuietConfidenceCard - World Class Redesign
+ *
+ * Shows when everything is on track - a calm, reassuring state.
+ * No action needed, just positive reinforcement.
+ *
+ * Design: Minimal, calming, celebratory without being loud
+ */
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
 
-/**
- * QuietConfidenceCard
- *
- * Displays when orchestrator decides SILENT (no new patterns to show).
- * Instead of empty space, shows calm confirmation that habits are aligned.
- *
- * Props: None - static confirmation message
- *
- * @returns {JSX.Element}
- */
+import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
+import { COLORS, GRADIENTS } from '../../constants/unifiedColors';
+
 export function QuietConfidenceCard() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#ECFDF5', '#D1FAE5']}  // Subtle light green gradient
+        colors={[COLORS.status.successBg, '#D1FAE5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
         <View style={styles.content}>
-          {/* Checkmark Icon */}
-          <Text style={styles.icon}>✓</Text>
+          {/* Success icon */}
+          <View style={styles.iconContainer}>
+            <Ionicons
+              name="checkmark-circle"
+              size={48}
+              color={COLORS.status.success}
+            />
+          </View>
 
-          {/* Headline */}
-          <Text style={styles.headline}>You're On Track Today</Text>
-
-          {/* Subtitle - explains what this means */}
+          {/* Message */}
+          <Text style={styles.headline}>You're on track</Text>
           <Text style={styles.subtitle}>
-            Your habits align with your goals. No changes needed right now.
+            Your habits align with your goals. Keep it up!
           </Text>
         </View>
       </LinearGradient>
@@ -41,48 +47,48 @@ export function QuietConfidenceCard() {
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
-    marginBottom: 20,
-    borderRadius: 12,
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[4],
+    borderRadius: RADIUS.xl,
     overflow: 'hidden',
 
-    // Shadow for iOS
+    // Subtle shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
-
-    // Shadow for Android
     elevation: 2,
   },
+
   gradient: {
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    paddingVertical: SPACING[6],
+    paddingHorizontal: SPACING[5],
     alignItems: 'center',
-    minHeight: 120,
-    justifyContent: 'center',
   },
+
   content: {
     alignItems: 'center',
-    maxWidth: 320,
+    gap: SPACING[2],
   },
-  icon: {
-    fontSize: 48,
-    marginBottom: 12,
-    color: BRAND.emerald,
-    lineHeight: 48,
+
+  iconContainer: {
+    marginBottom: SPACING[2],
   },
+
   headline: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: TEXT.primary,
-    marginBottom: 8,
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.primary,
     textAlign: 'center',
   },
+
   subtitle: {
-    fontSize: 14,
-    color: TEXT.secondary,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
+    maxWidth: 280,
   },
 });
+
+export default QuietConfidenceCard;

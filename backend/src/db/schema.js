@@ -962,3 +962,287 @@ export const correlationEvidenceTable = pgTable(
     dateIdx: index("corr_evidence_date_idx").on(table.observationDate),
   })
 );
+
+// ============================================================================
+// MACHINE LEARNING INFRASTRUCTURE TABLES
+// ============================================================================
+
+// Thompson Sampling Arms - Tracks multi-armed bandit state per user per recommendation type
+export const recommendationArmsTable = pgTable(
+  "recommendation_arms",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Arm identification (recommendationType:mealType:timeBucket)
+    armKey: text("arm_key").notNull(),
+
+    // Beta distribution parameters (conjugate prior for Bernoulli)
+    alpha: decimal("alpha", { precision: 10, scale: 4 }).notNull().default("1.0"), // Successes + prior
+    beta: decimal("beta", { precision: 10, scale: 4 }).notNull().default("1.0"),   // Failures + prior
+
+    // Trial counts
+    trials: integer("trials").default(0),
+    successes: integer("successes").default(0),
+
+    // Temporal tracking
+    lastUpdated: timestamp("last_updated").defaultNow(),
+    firstTrialAt: timestamp("first_trial_at"),
+
+    // Metadata (JSON for flexibility)
+    metadata: json("metadata").default({}),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userArmUniqueIdx: unique("rec_arms_user_arm_unique").on(table.userId, table.armKey),
+    userIdx: index("rec_arms_user_idx").on(table.userId),
+    armKeyIdx: index("rec_arms_arm_key_idx").on(table.armKey),
+    trialsIdx: index("rec_arms_trials_idx").on(table.trials),
+    // CHECK constraints
+    alphaCheck: check("rec_arms_alpha_check", sql`${table.alpha} > 0`),
+    betaCheck: check("rec_arms_beta_check", sql`${table.beta} > 0`),
+    trialsCheck: check("rec_arms_trials_check", sql`${table.trials} >= 0`),
+    successesCheck: check("rec_arms_successes_check", sql`${table.successes} >= 0 AND ${table.successes} <= ${table.trials}`),
+  })
+);
+
+// A/B Test Assignments - Tracks user experiment assignments
+export const abTestAssignmentsTable = pgTable(
+  "ab_test_assignments",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Experiment identification
+    experimentId: text("experiment_id").notNull(),
+    experimentName: text("experiment_name").notNull(),
+
+    // Assignment
+    variantId: text("variant_id").notNull(), // 'control', 'treatment_a', 'treatment_b'
+    assignedAt: timestamp("assigned_at").defaultNow(),
+    assignmentReason: text("assignment_reason"), // 'random', 'stratified', 'deterministic'
+
+    // Exposure tracking
+    firstExposedAt: timestamp("first_exposed_at"),
+    exposureCount: integer("exposure_count").default(0),
+
+    // Outcome tracking
+    conversionAt: timestamp("conversion_at"),
+    primaryMetricValue: decimal("primary_metric_value", { precision: 10, scale: 4 }),
+    secondaryMetricsJson: json("secondary_metrics_json").default({}),
+
+    // Experiment state
+    isActive: boolean("is_active").default(true),
+    concludedAt: timestamp("concluded_at"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userExperimentUniqueIdx: unique("ab_test_user_experiment_unique").on(table.userId, table.experimentId),
+    experimentIdx: index("ab_test_experiment_idx").on(table.experimentId),
+    variantIdx: index("ab_test_variant_idx").on(table.experimentId, table.variantId),
+    activeIdx: index("ab_test_active_idx").on(table.isActive),
+  })
+);
+
+// A/B Test Definitions - Defines experiments
+export const abTestDefinitionsTable = pgTable(
+  "ab_test_definitions",
+  {
+    id: serial("id").primaryKey(),
+    experimentId: text("experiment_id").notNull().unique(),
+    experimentName: text("experiment_name").notNull(),
+    description: text("description"),
+
+    // Hypothesis
+    hypothesis: text("hypothesis"),
+    primaryMetric: text("primary_metric").notNull(), // 'acceptance_rate', 'mood_improvement', etc.
+    secondaryMetrics: json("secondary_metrics").default([]),
+
+    // Variants
+    variants: json("variants").notNull(), // [{id: 'control', name: 'Control', weight: 0.5}, ...]
+
+    // Statistical configuration
+    minimumSampleSize: integer("minimum_sample_size").default(100),
+    significanceLevel: decimal("significance_level", { precision: 4, scale: 3 }).default("0.05"),
+    statisticalPower: decimal("statistical_power", { precision: 4, scale: 3 }).default("0.80"),
+    minimumDetectableEffect: decimal("minimum_detectable_effect", { precision: 5, scale: 4 }),
+
+    // Targeting
+    targetUserSegment: json("target_user_segment").default({}), // {minDays: 7, maxDays: null, region: null}
+    trafficAllocation: decimal("traffic_allocation", { precision: 3, scale: 2 }).default("1.00"), // 0-1
+
+    // Lifecycle
+    status: text("status").default("draft"), // 'draft', 'running', 'paused', 'concluded'
+    startedAt: timestamp("started_at"),
+    pausedAt: timestamp("paused_at"),
+    concludedAt: timestamp("concluded_at"),
+    conclusionReason: text("conclusion_reason"), // 'reached_significance', 'reached_sample_size', 'manual'
+
+    // Results
+    winningVariant: text("winning_variant"),
+    pValue: decimal("p_value", { precision: 6, scale: 5 }),
+    confidenceInterval: json("confidence_interval"), // {lower: 0.02, upper: 0.08}
+    effectSize: decimal("effect_size", { precision: 6, scale: 4 }),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index("ab_test_def_status_idx").on(table.status),
+    statusCheck: check("ab_test_def_status_check", sql`${table.status} IN ('draft', 'running', 'paused', 'concluded')`),
+  })
+);
+
+// Drift Detection Metrics - Tracks model performance over time for drift detection
+export const driftMetricsTable = pgTable(
+  "drift_metrics",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Metric identification
+    metricType: text("metric_type").notNull(), // 'correlation_strength', 'acceptance_rate', 'prediction_accuracy'
+    correlationId: integer("correlation_id").references(() => userCorrelationsTable.id, { onDelete: "set null" }),
+
+    // Time window
+    windowStart: timestamp("window_start").notNull(),
+    windowEnd: timestamp("window_end").notNull(),
+    windowDays: integer("window_days").notNull(),
+
+    // Statistical metrics
+    metricValue: decimal("metric_value", { precision: 10, scale: 6 }).notNull(),
+    sampleSize: integer("sample_size").notNull(),
+    standardError: decimal("standard_error", { precision: 10, scale: 6 }),
+
+    // CUSUM (Cumulative Sum) for drift detection
+    cusumValue: decimal("cusum_value", { precision: 10, scale: 6 }),
+    cusumUpperThreshold: decimal("cusum_upper_threshold", { precision: 10, scale: 6 }),
+    cusumLowerThreshold: decimal("cusum_lower_threshold", { precision: 10, scale: 6 }),
+
+    // Drift detection
+    driftDetected: boolean("drift_detected").default(false),
+    driftDirection: text("drift_direction"), // 'positive', 'negative', null
+    driftMagnitude: decimal("drift_magnitude", { precision: 6, scale: 4 }),
+    driftConfidence: decimal("drift_confidence", { precision: 4, scale: 3 }),
+
+    // Actions
+    alertTriggered: boolean("alert_triggered").default(false),
+    retrainingTriggered: boolean("retraining_triggered").default(false),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userMetricIdx: index("drift_metrics_user_metric_idx").on(table.userId, table.metricType),
+    windowIdx: index("drift_metrics_window_idx").on(table.windowStart, table.windowEnd),
+    driftIdx: index("drift_metrics_drift_idx").on(table.driftDetected),
+    metricTypeCheck: check("drift_metric_type_check", sql`${table.metricType} IN ('correlation_strength', 'acceptance_rate', 'prediction_accuracy', 'feature_distribution')`),
+  })
+);
+
+// Lagged Correlations - Stores discovered optimal lags between signals
+export const laggedCorrelationsTable = pgTable(
+  "lagged_correlations",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Signal pair
+    signalA: text("signal_a").notNull(), // 'sugar_intake', 'hydration_level', 'activity_minutes'
+    signalB: text("signal_b").notNull(), // 'mood_score', 'energy_level', 'sleep_quality'
+
+    // Discovered optimal lag
+    optimalLagHours: decimal("optimal_lag_hours", { precision: 6, scale: 2 }).notNull(),
+    lagSearchRangeMin: integer("lag_search_range_min").default(0), // hours
+    lagSearchRangeMax: integer("lag_search_range_max").default(48), // hours
+
+    // Correlation at optimal lag
+    correlationAtOptimalLag: decimal("correlation_at_optimal_lag", { precision: 5, scale: 4 }).notNull(),
+    pValueAtOptimalLag: decimal("p_value_at_optimal_lag", { precision: 8, scale: 7 }),
+
+    // Cross-correlation function (JSON for storing correlation at each lag)
+    crossCorrelationJson: json("cross_correlation_json"), // [{lag: 0, r: 0.2}, {lag: 1, r: 0.35}, ...]
+
+    // Statistical quality
+    sampleSize: integer("sample_size").notNull(),
+    confidenceInterval: json("confidence_interval"), // {lower: 0.2, upper: 0.5}
+    isStatisticallySignificant: boolean("is_statistically_significant").default(false),
+
+    // Granger causality test results
+    grangerFStatistic: decimal("granger_f_statistic", { precision: 10, scale: 4 }),
+    grangerPValue: decimal("granger_p_value", { precision: 8, scale: 7 }),
+    causalDirection: text("causal_direction"), // 'A_causes_B', 'B_causes_A', 'bidirectional', 'no_causality'
+
+    // Metadata
+    lastComputedAt: timestamp("last_computed_at").defaultNow(),
+    isActive: boolean("is_active").default(true),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userSignalsUniqueIdx: unique("lagged_corr_user_signals_unique").on(table.userId, table.signalA, table.signalB),
+    userIdx: index("lagged_corr_user_idx").on(table.userId),
+    signalPairIdx: index("lagged_corr_signals_idx").on(table.signalA, table.signalB),
+    activeIdx: index("lagged_corr_active_idx").on(table.isActive),
+  })
+);
+
+// Feature Interactions - Stores discovered interaction effects between features
+export const featureInteractionsTable = pgTable(
+  "feature_interactions",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Interacting features
+    featureA: text("feature_a").notNull(), // 'high_protein'
+    featureB: text("feature_b").notNull(), // 'well_hydrated'
+    targetOutcome: text("target_outcome").notNull(), // 'mood_score', 'energy_level'
+
+    // Main effects
+    effectA: decimal("effect_a", { precision: 8, scale: 5 }), // Effect of A alone
+    effectB: decimal("effect_b", { precision: 8, scale: 5 }), // Effect of B alone
+    effectAB: decimal("effect_ab", { precision: 8, scale: 5 }), // Combined effect when both present
+
+    // Interaction effect (synergy or antagonism)
+    interactionEffect: decimal("interaction_effect", { precision: 8, scale: 5 }).notNull(), // effectAB - (effectA + effectB)
+    interactionType: text("interaction_type"), // 'synergistic', 'antagonistic', 'additive'
+
+    // Statistical measures
+    interactionPValue: decimal("interaction_p_value", { precision: 8, scale: 7 }),
+    interactionConfidenceInterval: json("interaction_confidence_interval"), // {lower: 0.1, upper: 0.3}
+    sampleSizeBothPresent: integer("sample_size_both_present"),
+    sampleSizeTotal: integer("sample_size_total"),
+
+    // Practical significance
+    cohenD: decimal("cohen_d", { precision: 6, scale: 4 }), // Effect size
+    isPracticallySignificant: boolean("is_practically_significant").default(false), // |d| > 0.2
+
+    // Metadata
+    lastComputedAt: timestamp("last_computed_at").defaultNow(),
+    isActive: boolean("is_active").default(true),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userFeaturesUniqueIdx: unique("feat_interaction_user_unique").on(table.userId, table.featureA, table.featureB, table.targetOutcome),
+    userIdx: index("feat_interaction_user_idx").on(table.userId),
+    outcomeIdx: index("feat_interaction_outcome_idx").on(table.targetOutcome),
+    activeIdx: index("feat_interaction_active_idx").on(table.isActive),
+    interactionTypeCheck: check("feat_interaction_type_check", sql`${table.interactionType} IS NULL OR ${table.interactionType} IN ('synergistic', 'antagonistic', 'additive')`),
+  })
+);

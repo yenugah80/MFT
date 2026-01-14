@@ -1,439 +1,349 @@
-import React, { useState } from 'react';
+/**
+ * CorrelationCard - World Class Redesign
+ *
+ * Design Philosophy:
+ * - VISUAL FIRST - show the pattern, not describe it
+ * - ONE tap = ONE action - no modal inception
+ * - 3 pieces of info MAX in compact view
+ * - Expandable details are OPTIONAL, not required
+ *
+ * Inspired by: Oura Ring insights, Apple Health trends
+ */
+
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
-import { ProgressBar } from './ProgressBar';
-import { DismissReasonSelector } from './DismissReasonSelector';
+
+import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
+import { COLORS, getDomainColor } from '../../constants/unifiedColors';
+import { getDomainIcon, PATTERN_ICONS } from '../../constants/iconSystem';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 /**
- * CorrelationCard
- *
- * Displays a discovered pattern (correlation).
- * Compact view shows headline + confidence.
- * Tap to expand and see full details.
- *
- * @param {Object} props
- * @param {string} props.id - Unique correlation ID
- * @param {string} props.icon - Emoji icon (e.g., "🔗")
- * @param {string} props.headline - Pattern headline
- * @param {string} props.pattern - Pattern description (e.g., "High-NOVA meals → mood dips")
- * @param {number} props.confidence - Confidence 0-1
- * @param {number} props.occurrences - Times seen
- * @param {Array<string>} props.affectedDomains - ["mood", "energy"]
- * @param {string} props.whatHappens - "When you eat..."
- * @param {string} props.whyHappens - "Because blood sugar..."
- * @param {string} props.whenSeeIt - "Every time after..."
- * @param {string} props.healthImpact - "This affects your focus"
- * @param {Array<string>} props.recommendations - ["Add protein", "Include fiber"]
- * @param {Function} props.onDismiss - Called with (correlationId, reason)
- * @param {Function} [props.onKeepWatching] - Called when user keeps pattern active
- * @returns {JSX.Element}
+ * DomainPill - Small colored tag for affected areas
+ */
+function DomainPill({ domain }) {
+  const { color, bg } = getDomainColor(domain);
+  const icon = getDomainIcon(domain);
+
+  return (
+    <View style={[styles.domainPill, { backgroundColor: bg }]}>
+      <Ionicons name={icon} size={12} color={color} />
+      <Text style={[styles.domainText, { color }]}>{domain}</Text>
+    </View>
+  );
+}
+
+/**
+ * StrengthIndicator - Visual dots showing pattern strength
+ */
+function StrengthIndicator({ strength = 0 }) {
+  // Convert 0-1 to 1-5 dots
+  const filledDots = Math.min(Math.round(strength * 5), 5);
+
+  return (
+    <View style={styles.strengthContainer}>
+      {[1, 2, 3, 4, 5].map((dot) => (
+        <View
+          key={dot}
+          style={[
+            styles.strengthDot,
+            dot <= filledDots && styles.strengthDotFilled,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Main CorrelationCard Component
  */
 export function CorrelationCard({
   id,
-  icon = '🔗',
-  headline,
   pattern,
-  confidence,
-  occurrences,
+  confidence = 0,
+  occurrences = 0,
   affectedDomains = [],
   whatHappens,
-  whyHappens,
-  whenSeeIt,
-  healthImpact,
-  recommendations = [],
   onDismiss,
-  onKeepWatching,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showDismissModal, setShowDismissModal] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const handleDismiss = async (reason) => {
-    setShowDismissModal(false);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onDismiss?.(id, reason);
+  // Get primary domain for accent color
+  const primaryDomain = affectedDomains[0] || 'energy';
+  const { color: accentColor } = getDomainColor(primaryDomain);
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded(!isExpanded);
   };
 
-  const handleKeepWatching = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onKeepWatching?.(id);
+  const handleDismiss = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onDismiss?.(id, 'not_relevant');
+  };
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 3,
+      useNativeDriver: true,
+    }).start();
   };
 
   return (
-    <>
-      {/* Compact View */}
-      {!isExpanded && (
-        <TouchableOpacity
-          style={styles.compactCard}
-          onPress={() => {
-            setIsExpanded(true);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          activeOpacity={0.7}
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={headline}
-          accessibilityHint="Double tap to expand pattern details"
-        >
-          <View style={styles.compactContent}>
-            {/* Icon + Headline */}
-            <View style={styles.compactHeader}>
-              <Text style={styles.icon}>{icon}</Text>
-              <Text style={styles.compactHeadline}>{headline}</Text>
-            </View>
+    <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+        accessibilityLabel={pattern}
+        accessibilityHint={isExpanded ? 'Tap to collapse' : 'Tap to see details'}
+      >
+        {/* Left accent */}
+        <View style={[styles.accent, { backgroundColor: accentColor }]} />
 
-            {/* Pattern Description */}
-            <Text style={styles.patternText} numberOfLines={2}>
-              {pattern}
-            </Text>
-
-            {/* Progress Bar */}
-            <View style={styles.progressContainer}>
-              <ProgressBar
-                current={confidence}
-                goal={1}
-                showPercent={false}
-                unit=""
-                height={6}
+        <View style={styles.content}>
+          {/* Main row: Icon + Pattern + Expand */}
+          <View style={styles.mainRow}>
+            <View style={[styles.iconContainer, { backgroundColor: `${accentColor}15` }]}>
+              <Ionicons
+                name={PATTERN_ICONS.correlation}
+                size={20}
+                color={accentColor}
               />
             </View>
 
-            {/* Footer */}
-            <View style={styles.compactFooter}>
-              <Text style={styles.occurrences}>
-                {occurrences}x seen
+            <View style={styles.textContainer}>
+              <Text style={styles.pattern} numberOfLines={2}>
+                {pattern}
               </Text>
-              <View style={styles.domainBadges}>
-                {affectedDomains.slice(0, 2).map((domain) => (
-                  <Text key={domain} style={styles.domainBadge}>
-                    {domain}
-                  </Text>
-                ))}
+              <View style={styles.metaRow}>
+                <StrengthIndicator strength={confidence} />
+                <Text style={styles.occurrences}>
+                  {occurrences}× observed
+                </Text>
               </View>
             </View>
+
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={COLORS.text.tertiary}
+            />
           </View>
 
-          {/* Expand Indicator */}
-          <Text style={styles.expandIndicator}>→</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Expanded View (Bottom Sheet) */}
-      {isExpanded && (
-        <View style={styles.expandedCard}>
-          {/* Close Button */}
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => {
-              setIsExpanded(false);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel="Close details"
-          >
-            <Text style={styles.closeIcon}>←</Text>
-            <Text style={styles.expandedHeadline}>{headline}</Text>
-          </TouchableOpacity>
-
-          {/* Details Sections */}
-          <View style={styles.detailsContainer}>
-            {/* WHAT'S HAPPENING */}
-            {whatHappens && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>WHAT'S HAPPENING</Text>
-                <Text style={styles.sectionContent}>{whatHappens}</Text>
-              </View>
-            )}
-
-            {/* WHY THIS HAPPENS */}
-            {whyHappens && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>WHY THIS HAPPENS</Text>
-                <Text style={styles.sectionContent}>{whyHappens}</Text>
-              </View>
-            )}
-
-            {/* WHEN WE SEE IT */}
-            {whenSeeIt && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>WHEN WE SEE IT</Text>
-                <Text style={styles.sectionContent}>{whenSeeIt}</Text>
-              </View>
-            )}
-
-            {/* HOW IT AFFECTS YOUR HEALTH */}
-            {healthImpact && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>HOW IT AFFECTS YOUR HEALTH</Text>
-                <Text style={styles.sectionContent}>{healthImpact}</Text>
-              </View>
-            )}
-
-            {/* WHAT'S RECOMMENDED */}
-            {recommendations.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>WHAT'S RECOMMENDED</Text>
-                {recommendations.map((rec, index) => (
-                  <Text key={index} style={styles.recommendation}>
-                    {index + 1}. {rec}
-                  </Text>
-                ))}
-              </View>
-            )}
-
-            {/* Confidence Display */}
-            <View style={styles.confidenceSection}>
-              <ProgressBar
-                current={confidence}
-                goal={1}
-                label="Confidence"
-                showPercent
-                height={8}
-              />
+          {/* Domain pills */}
+          {affectedDomains.length > 0 && (
+            <View style={styles.domainsRow}>
+              {affectedDomains.slice(0, 3).map((domain) => (
+                <DomainPill key={domain} domain={domain} />
+              ))}
             </View>
-          </View>
+          )}
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.dismissButton}
-              onPress={() => {
-                setShowDismissModal(true);
-              }}
-              activeOpacity={0.7}
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss pattern"
-            >
-              <Text style={styles.dismissButtonText}>Dismiss</Text>
-            </TouchableOpacity>
+          {/* Expanded content */}
+          {isExpanded && (
+            <View style={styles.expandedContent}>
+              {/* What happens explanation */}
+              {whatHappens && (
+                <View style={styles.explanationBox}>
+                  <Text style={styles.explanationText}>{whatHappens}</Text>
+                </View>
+              )}
 
-            <TouchableOpacity
-              style={styles.keepButton}
-              onPress={handleKeepWatching}
-              activeOpacity={0.7}
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel="Keep watching pattern"
-            >
-              <Text style={styles.keepButtonText}>Keep Watching</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Close expanded view when user dismisses */}
-          <TouchableOpacity
-            style={styles.collapseOverlay}
-            onPress={() => setIsExpanded(false)}
-          />
+              {/* Action row */}
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.dismissButton}
+                  onPress={handleDismiss}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss this pattern"
+                >
+                  <Ionicons
+                    name="close-outline"
+                    size={18}
+                    color={COLORS.text.secondary}
+                  />
+                  <Text style={styles.dismissText}>Not relevant</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
-      )}
-
-      {/* Dismiss Modal */}
-      <DismissReasonSelector
-        visible={showDismissModal}
-        headline={headline}
-        onDismiss={handleDismiss}
-        onCancel={() => setShowDismissModal(false)}
-      />
-    </>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Compact View
-  compactCard: {
-    backgroundColor: SURFACES.background,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-
-    // Shadow iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-
-    // Shadow Android
-    elevation: 1,
-  },
-  compactContent: {
-    flex: 1,
-    gap: 8,
-  },
-  compactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  icon: {
-    fontSize: 20,
-  },
-  compactHeadline: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: TEXT.primary,
-  },
-  patternText: {
-    fontSize: 12,
-    color: TEXT.secondary,
-    lineHeight: 16,
-  },
-  progressContainer: {
-    marginVertical: 4,
-  },
-  compactFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  occurrences: {
-    fontSize: 11,
-    color: TEXT.tertiary,
-  },
-  domainBadges: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  domainBadge: {
-    fontSize: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: '#F3F4F6',
-    color: TEXT.secondary,
-    borderRadius: 4,
+  container: {
+    backgroundColor: COLORS.background.secondary,
+    borderRadius: RADIUS.xl,
+    marginBottom: SPACING[3],
     overflow: 'hidden',
-  },
-  expandIndicator: {
-    fontSize: 18,
-    color: TEXT.tertiary,
-  },
-
-  // Expanded View
-  expandedCard: {
-    backgroundColor: SURFACES.background,
-    borderRadius: 12,
-    marginBottom: 12,
-    overflow: 'hidden',
-
-    // Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  closeButton: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACES.divider,
-    gap: 8,
-  },
-  closeIcon: {
-    fontSize: 18,
-    color: TEXT.secondary,
-  },
-  expandedHeadline: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: TEXT.primary,
-  },
-
-  // Details Container
-  detailsContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 16,
-  },
-  section: {
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: TEXT.primary,
-    letterSpacing: 0.5,
-  },
-  sectionContent: {
-    fontSize: 14,
-    color: TEXT.secondary,
-    lineHeight: 20,
-  },
-  recommendation: {
-    fontSize: 14,
-    color: TEXT.secondary,
-    lineHeight: 20,
-    marginVertical: 2,
-  },
-  confidenceSection: {
-    paddingVertical: 8,
-  },
-
-  // Action Buttons
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  dismissButton: {
-    flex: 0.4,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 44,
-  },
-  dismissButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: TEXT.primary,
-  },
-  keepButton: {
-    flex: 0.6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: BRAND.emerald,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 44,
 
     // Shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  keepButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
-  // Collapse Overlay (behind expanded card)
-  collapseOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  accent: {
+    width: 4,
+  },
+
+  content: {
+    flex: 1,
+    padding: SPACING[4],
+    gap: SPACING[3],
+  },
+
+  // Main row
+  mainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[3],
+  },
+
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  textContainer: {
+    flex: 1,
+    gap: SPACING[1],
+  },
+
+  pattern: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.primary,
+    lineHeight: 22,
+  },
+
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    marginTop: SPACING[1],
+  },
+
+  // Strength dots
+  strengthContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+
+  strengthDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.border.light,
+  },
+
+  strengthDotFilled: {
+    backgroundColor: COLORS.brand.primary,
+  },
+
+  occurrences: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.tertiary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+
+  // Domain pills
+  domainsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[2],
+  },
+
+  domainPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 4,
+    borderRadius: RADIUS.md,
+  },
+
+  domainText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    textTransform: 'capitalize',
+  },
+
+  // Expanded content
+  expandedContent: {
+    paddingTop: SPACING[2],
+    gap: SPACING[3],
+  },
+
+  explanationBox: {
+    backgroundColor: COLORS.background.tertiary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+  },
+
+  explanationText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.secondary,
+    lineHeight: 20,
+  },
+
+  // Action row
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+
+  dismissButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+  },
+
+  dismissText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text.secondary,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
 });
+
+export default CorrelationCard;

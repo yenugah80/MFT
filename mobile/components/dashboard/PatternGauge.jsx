@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { TEXT, BRAND } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES } from '../../constants/premiumTheme';
 
 /**
  * PatternGauge

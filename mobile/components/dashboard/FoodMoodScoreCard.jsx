@@ -25,6 +25,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-na
 import * as Haptics from 'expo-haptics';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { BRAND, TEXT, SEMANTIC, SURFACES } from '../../constants/premiumTheme';
+import { BOLD_GRADIENTS, WELLNESS_COLORS } from '../../constants/modernColorPalette';
 import { calculateFoodMoodScore } from '../../utils/foodMoodScore';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -67,10 +68,11 @@ function ScoreRing({ score, size = 120, strokeWidth = 10 }) {
   }, [score, animatedValue, pulseAnim]);
 
   const getScoreGradient = (s) => {
-    if (s >= 80) return [SEMANTIC.success.base, SEMANTIC.success.light];
-    if (s >= 60) return [BRAND.primaryDark, BRAND.primary];
-    if (s >= 40) return [BRAND.primary, BRAND.primaryLight];
-    return [SEMANTIC.warning.base, SEMANTIC.warning.light];
+    // Use vibrant wellness gradients
+    if (s >= 80) return [WELLNESS_COLORS.fitness.base, WELLNESS_COLORS.fitness.light]; // Vibrant green
+    if (s >= 60) return WELLNESS_COLORS.mood.gradient.slice(0, 2); // Vibrant purple/magenta
+    if (s >= 40) return WELLNESS_COLORS.energy.gradient.slice(0, 2); // Vibrant orange
+    return [WELLNESS_COLORS.hydration.base, WELLNESS_COLORS.hydration.light]; // Vibrant cyan
   };
 
   const colors = getScoreGradient(score);

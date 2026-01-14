@@ -1,4 +1,16 @@
-import React, { useState, useRef } from 'react';
+/**
+ * ActionItem - World Class Redesign
+ *
+ * Design Philosophy:
+ * - ONLY Ionicons - no emojis, ever
+ * - Clear visual feedback on press
+ * - Accessible and touch-friendly (44pt minimum)
+ * - Consistent with design system
+ *
+ * Inspired by: Apple Settings, iOS action buttons
+ */
+
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -6,227 +18,241 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { TEXT, BRAND } from '../../constants/premiumTheme';
+
+import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
+import { COLORS, GRADIENTS } from '../../constants/unifiedColors';
+import { ACTION_ICONS } from '../../constants/iconSystem';
 
 /**
- * ActionItem
+ * ActionItem Component
  *
- * Clickable action button with:
- * - Haptic feedback on press
- * - Navigation to relevant screen
- * - Post-action success feedback (checkmark + haptic + message)
- * - Scale animation on press
- *
- * @param {Object} props
- * @param {string} props.icon - Emoji icon (e.g., "🥗")
- * @param {string} props.text - Action text (e.g., "Add protein")
- * @param {string} props.description - Description (e.g., "Stabilizes blood sugar")
- * @param {Function} props.onTap - Async function for navigation/action
- * @param {Function} [props.onSuccess] - Called after success state completes
- * @returns {JSX.Element}
+ * @param {string} icon - Ionicon name (e.g., 'add-circle-outline')
+ * @param {string} text - Primary label
+ * @param {string} description - Secondary description
+ * @param {Function} onTap - Callback when pressed
+ * @param {string} variant - 'primary' | 'secondary' | 'ghost'
  */
-export function ActionItem({ icon, text, description, onTap, onSuccess }) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  // Animation refs
+export function ActionItem({
+  icon = 'arrow-forward-outline',
+  text = 'Take action',
+  description = '',
+  onTap,
+  variant = 'primary',
+}) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  const handlePress = async () => {
-    // Prevent multiple taps
-    if (isLoading) return;
+  // Ensure icon is always an Ionicon name
+  const iconName = typeof icon === 'string' && icon.length > 2 ? icon : 'arrow-forward-outline';
 
-    setIsLoading(true);
-
-    try {
-      // Press feedback - medium haptic
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      // Scale animation: 1.0 → 0.98 → 1.0 (subtle press effect)
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.98,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Execute the action (typically navigation)
-      await onTap?.();
-
-      // Success feedback - success notification
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success
-      );
-
-      // Show success state with checkmark
-      setShowSuccess(true);
-
-      // Fade in success message
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-
-      // Auto-hide after 2 seconds
-      setTimeout(() => {
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start(() => {
-          setShowSuccess(false);
-        });
-      }, 2000);
-
-      // Callback after success
-      onSuccess?.();
-    } catch (error) {
-      // Error feedback
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Error
-      );
-      console.error('[ActionItem] Error:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
   };
 
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={[
-          styles.button,
-          isLoading && styles.buttonActive,
-        ]}
-        onPress={handlePress}
-        disabled={isLoading}
-        activeOpacity={0.7}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={text}
-        accessibilityHint={description}
-      >
-        <Animated.View
-          style={[
-            styles.buttonContent,
-            { transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <Text style={styles.icon}>{icon}</Text>
-          <Text style={styles.text}>{text}</Text>
-          <Text style={styles.description}>{description}</Text>
-        </Animated.View>
-      </TouchableOpacity>
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 3,
+      useNativeDriver: true,
+    }).start();
+  };
 
-      {/* Success Overlay - appears after action completes */}
-      {showSuccess && (
-        <Animated.View
-          style={[
-            styles.successOverlay,
-            { opacity: opacityAnim },
-          ]}
-          pointerEvents="none"
+  const handlePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onTap?.();
+  };
+
+  // Primary variant - gradient background
+  if (variant === 'primary') {
+    return (
+      <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
+        <TouchableOpacity
+          onPress={handlePress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={text}
+          accessibilityHint={description}
         >
-          <Text style={styles.successIcon}>✓</Text>
-          <Text style={styles.successText}>Nice choice</Text>
-          <Text style={styles.successSubtext}>
-            This supports energy stability
-          </Text>
-        </Animated.View>
-      )}
-    </View>
+          <LinearGradient
+            colors={GRADIENTS.premium}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradientContent}
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons name={iconName} size={24} color={COLORS.text.inverse} />
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.primaryText}>{text}</Text>
+              {description ? (
+                <Text style={styles.primaryDescription} numberOfLines={1}>
+                  {description}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={COLORS.text.inverse}
+              style={styles.chevron}
+            />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  // Secondary variant - outlined
+  if (variant === 'secondary') {
+    return (
+      <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
+        <TouchableOpacity
+          onPress={handlePress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          style={styles.secondaryContent}
+          accessibilityRole="button"
+          accessibilityLabel={text}
+        >
+          <View style={styles.secondaryIconContainer}>
+            <Ionicons name={iconName} size={22} color={COLORS.brand.primary} />
+          </View>
+          <View style={styles.textContainer}>
+            <Text style={styles.secondaryText}>{text}</Text>
+            {description ? (
+              <Text style={styles.secondaryDescription} numberOfLines={1}>
+                {description}
+              </Text>
+            ) : null}
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={COLORS.text.tertiary}
+          />
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  // Ghost variant - minimal
+  return (
+    <TouchableOpacity
+      onPress={handlePress}
+      style={styles.ghostContent}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={text}
+    >
+      <Ionicons name={iconName} size={20} color={COLORS.brand.primary} />
+      <Text style={styles.ghostText}>{text}</Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    minHeight: 80,
-    minWidth: 70,
+    marginBottom: SPACING[2],
   },
-  button: {
-    flex: 1,
-    backgroundColor: BRAND.emerald,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+
+  // Primary variant (gradient)
+  gradientContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    gap: SPACING[3],
+
+    // Shadow for depth
+    shadowColor: COLORS.brand.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  textContainer: {
+    flex: 1,
+    gap: 2,
+  },
+
+  primaryText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: COLORS.text.inverse,
+  },
+
+  primaryDescription: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+
+  chevron: {
+    opacity: 0.8,
+  },
+
+  // Secondary variant (outlined)
+  secondaryContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,  // iOS/Android minimum touch target
-
-    // Shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-
-    // Shadow for Android
-    elevation: 3,
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    backgroundColor: COLORS.background.secondary,
+    borderWidth: 1,
+    borderColor: COLORS.border.light,
+    gap: SPACING[3],
   },
-  buttonActive: {
-    backgroundColor: '#059669',  // Darker emerald
-    opacity: 0.9,
-  },
-  buttonContent: {
+
+  secondaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${COLORS.brand.primary}10`,
     alignItems: 'center',
-  },
-  icon: {
-    fontSize: 28,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  text: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  description: {
-    fontSize: 12,
-    color: '#D1D5DB',
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-
-  // Success overlay (appears on top of button)
-  successOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: BRAND.emerald,
-    borderRadius: 12,
     justifyContent: 'center',
+  },
+
+  secondaryText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: COLORS.text.primary,
+  },
+
+  secondaryDescription: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.tertiary,
+  },
+
+  // Ghost variant (minimal)
+  ghostContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[2],
   },
-  successIcon: {
-    fontSize: 32,
-    color: '#FFFFFF',
-    marginBottom: 6,
-    lineHeight: 32,
-  },
-  successText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  successSubtext: {
-    fontSize: 11,
-    color: '#D1D5DB',
-    textAlign: 'center',
-    lineHeight: 13,
+
+  ghostText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: COLORS.brand.primary,
   },
 });
+
+export default ActionItem;

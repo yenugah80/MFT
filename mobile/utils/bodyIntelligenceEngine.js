@@ -48,6 +48,108 @@ const CONFIG = {
   MIN_SAMPLES_FOR_PERSONALIZATION: 14,
   MIN_SAMPLES_FOR_HIGH_CONFIDENCE: 30,
 
+  // ========================================================================
+  // PROGRESSIVE PERSONALIZATION TIERS
+  // Unlocks features incrementally as user logs more data
+  // ========================================================================
+  PERSONALIZATION_TIERS: {
+    // Day 1-3: Onboarding phase - generic recommendations only
+    ONBOARDING: {
+      minDays: 0,
+      maxDays: 3,
+      label: 'Getting Started',
+      confidence: 0.3,
+      priorWeight: 0.95, // 95% scientific prior, 5% personal
+      features: {
+        showGenericTips: true,
+        showCorrelations: false,
+        showPredictions: false,
+        showPersonalInsights: false,
+        showDriftDetection: false,
+      },
+      messaging: {
+        status: 'Building your baseline',
+        encouragement: 'Log for {remaining} more days to unlock patterns',
+      },
+    },
+    // Day 4-7: Early patterns - simple correlations visible
+    EARLY_PATTERNS: {
+      minDays: 4,
+      maxDays: 7,
+      label: 'Discovering Patterns',
+      confidence: 0.5,
+      priorWeight: 0.8, // 80% prior, 20% personal
+      features: {
+        showGenericTips: true,
+        showCorrelations: true, // Basic food→mood patterns
+        showPredictions: false,
+        showPersonalInsights: false,
+        showDriftDetection: false,
+      },
+      messaging: {
+        status: 'Early patterns emerging',
+        encouragement: '{remaining} days until personalized insights',
+      },
+    },
+    // Day 8-14: Learning phase - Bayesian updates with wide intervals
+    LEARNING: {
+      minDays: 8,
+      maxDays: 14,
+      label: 'Learning Your Patterns',
+      confidence: 0.65,
+      priorWeight: 0.6, // 60% prior, 40% personal
+      features: {
+        showGenericTips: true,
+        showCorrelations: true,
+        showPredictions: true, // Early predictions with disclaimers
+        showPersonalInsights: true, // Basic personal insights
+        showDriftDetection: false,
+      },
+      messaging: {
+        status: 'Personalizing recommendations',
+        encouragement: '{remaining} days until high-confidence insights',
+      },
+    },
+    // Day 15-30: Personalized phase - narrower confidence intervals
+    PERSONALIZED: {
+      minDays: 15,
+      maxDays: 30,
+      label: 'Personalized',
+      confidence: 0.8,
+      priorWeight: 0.4, // 40% prior, 60% personal
+      features: {
+        showGenericTips: true,
+        showCorrelations: true,
+        showPredictions: true,
+        showPersonalInsights: true,
+        showDriftDetection: false, // Not enough data for drift
+      },
+      messaging: {
+        status: 'Personalized to your patterns',
+        encouragement: 'Building long-term insights',
+      },
+    },
+    // Day 31+: Elite phase - full drift detection & multi-factor
+    ELITE: {
+      minDays: 31,
+      maxDays: Infinity,
+      label: 'Elite Insights',
+      confidence: 0.9,
+      priorWeight: 0.2, // 20% prior, 80% personal data dominates
+      features: {
+        showGenericTips: true,
+        showCorrelations: true,
+        showPredictions: true,
+        showPersonalInsights: true,
+        showDriftDetection: true, // Pattern shift detection
+      },
+      messaging: {
+        status: 'Advanced pattern analysis active',
+        encouragement: 'Your data drives your insights',
+      },
+    },
+  },
+
   // Statistical significance
   SIGNIFICANCE_LEVEL: 0.05, // p < 0.05
   MIN_EFFECT_SIZE: 0.3, // Cohen's d minimum for practical significance
@@ -1255,6 +1357,11 @@ function getConfidenceExplanation(confidence, evidenceLevel) {
  * @returns {string} Reframed message
  */
 function applyBehaviorChangeFraming(message, context = {}) {
+  // Guard against undefined/null message
+  if (!message || typeof message !== 'string') {
+    return message || '';
+  }
+
   const { isPositive } = context;
   // Future: use hasStreak, daysSinceLastGoal for adaptive framing
 
@@ -1460,6 +1567,11 @@ function generateInsights(todayData, discoveredCorrelations, goals = {}, aligned
     const rawMessage = isPositive
       ? generator.positiveMessage
       : generator.negativeMessage;
+
+    // Skip if no message available for this state
+    if (!rawMessage) {
+      return;
+    }
 
     // Apply behavior change framing for better user engagement
     const message = applyBehaviorChangeFraming(rawMessage, { isPositive });
@@ -1808,12 +1920,121 @@ function getPatternIcon(factor) {
   return icons[factor] || 'analytics-outline';
 }
 
+// ============================================================================
+// PROGRESSIVE PERSONALIZATION HELPERS
+// ============================================================================
+
+/**
+ * Get the current personalization tier based on days of data
+ * @param {number} daysWithData - Number of days with logged data
+ * @returns {Object} Current tier with features and messaging
+ */
+export function getPersonalizationTier(daysWithData) {
+  const tiers = CONFIG.PERSONALIZATION_TIERS;
+
+  if (daysWithData <= tiers.ONBOARDING.maxDays) return { ...tiers.ONBOARDING, tierKey: 'ONBOARDING' };
+  if (daysWithData <= tiers.EARLY_PATTERNS.maxDays) return { ...tiers.EARLY_PATTERNS, tierKey: 'EARLY_PATTERNS' };
+  if (daysWithData <= tiers.LEARNING.maxDays) return { ...tiers.LEARNING, tierKey: 'LEARNING' };
+  if (daysWithData <= tiers.PERSONALIZED.maxDays) return { ...tiers.PERSONALIZED, tierKey: 'PERSONALIZED' };
+  return { ...tiers.ELITE, tierKey: 'ELITE' };
+}
+
+/**
+ * Get days remaining until next tier
+ * @param {number} daysWithData - Current days of data
+ * @returns {Object} { currentTier, nextTier, daysRemaining }
+ */
+export function getDaysToNextTier(daysWithData) {
+  const tier = getPersonalizationTier(daysWithData);
+  const tiers = CONFIG.PERSONALIZATION_TIERS;
+
+  const tierOrder = ['ONBOARDING', 'EARLY_PATTERNS', 'LEARNING', 'PERSONALIZED', 'ELITE'];
+  const currentIndex = tierOrder.indexOf(tier.tierKey);
+  const nextTierKey = tierOrder[currentIndex + 1];
+
+  if (!nextTierKey || nextTierKey === 'ELITE') {
+    return {
+      currentTier: tier,
+      nextTier: null,
+      daysRemaining: 0,
+      isMaxTier: tier.tierKey === 'ELITE',
+    };
+  }
+
+  const nextTier = tiers[nextTierKey];
+  return {
+    currentTier: tier,
+    nextTier: { ...nextTier, tierKey: nextTierKey },
+    daysRemaining: nextTier.minDays - daysWithData,
+    isMaxTier: false,
+  };
+}
+
+/**
+ * Get features enabled for current tier
+ * @param {number} daysWithData - Number of days with data
+ * @returns {Object} Feature flags
+ */
+export function getTierFeatures(daysWithData) {
+  const tier = getPersonalizationTier(daysWithData);
+  return tier.features;
+}
+
+/**
+ * Get progressive prior weight for Bayesian updates
+ * As user logs more data, we trust their personal data more
+ * @param {number} daysWithData - Days of user data
+ * @returns {number} Weight for scientific prior (0-1, lower = more personal data influence)
+ */
+export function getProgressivePriorWeight(daysWithData) {
+  const tier = getPersonalizationTier(daysWithData);
+  return tier.priorWeight;
+}
+
+/**
+ * Format tier progress message with days remaining
+ * @param {number} daysWithData - Current days
+ * @returns {Object} { status, encouragement, progress }
+ */
+export function getTierProgressMessage(daysWithData) {
+  const { currentTier, nextTier, daysRemaining, isMaxTier } = getDaysToNextTier(daysWithData);
+
+  // Calculate progress percentage within current tier
+  const tierDuration = currentTier.maxDays - currentTier.minDays + 1;
+  const daysInTier = daysWithData - currentTier.minDays + 1;
+  const progressInTier = Math.min(1, daysInTier / tierDuration);
+
+  // Calculate overall progress (0-100%)
+  const overallProgress = isMaxTier
+    ? 100
+    : Math.round((daysWithData / CONFIG.MIN_SAMPLES_FOR_HIGH_CONFIDENCE) * 100);
+
+  return {
+    tierLabel: currentTier.label,
+    status: currentTier.messaging.status,
+    encouragement: currentTier.messaging.encouragement.replace('{remaining}', daysRemaining),
+    daysRemaining,
+    progressInTier: Math.round(progressInTier * 100),
+    overallProgress: Math.min(100, overallProgress),
+    isMaxTier,
+    confidence: currentTier.confidence,
+    features: currentTier.features,
+    nextTierLabel: nextTier?.label || null,
+  };
+}
+
 // Export for backward compatibility and advanced usage
 export default {
   analyzeBodyIntelligence,
   getDiscoveredPatterns,
   extractDayFeatures,
   discoverCorrelations,
+  // Progressive personalization
+  getPersonalizationTier,
+  getDaysToNextTier,
+  getTierFeatures,
+  getProgressivePriorWeight,
+  getTierProgressMessage,
   // Online learning functions
   detectDrift,
   adjustForConfounder,

@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, SURFACES } from '../../constants/premiumTheme';
 
 const STRENGTH_LABELS = {
   1: 'Open to it',

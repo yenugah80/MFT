@@ -1,24 +1,53 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { View, ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import { COLORS } from "../../constants/colors";
 import { useProfileContext } from "../../providers/ProfileProvider";
 
 const TabsLayout = () => {
   const { isSignedIn, isLoaded } = useAuth();
-  const { onboardingComplete, isLoading: profileLoading } = useProfileContext();
-
-  // Log onboarding status from ProfileProvider context
-  if (onboardingComplete !== null && isSignedIn) {
-    console.log('[TabsLayout] Onboarding complete:', onboardingComplete);
-  }
+  const { onboardingComplete, isLoading: profileLoading, error, refetchProfile } = useProfileContext();
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
-  // Redirect to onboarding if not completed (index route handles step resume)
-  // NOTE: Don't block on profileLoading - it causes tabs to unmount and lose state!
-  if (!profileLoading && !onboardingComplete) {
+  // Show loading while profile is being fetched
+  if (profileLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  // CRITICAL FIX: Handle API errors - don't redirect to onboarding on error!
+  // This was causing returning users to see onboarding when backend was slow/failing
+  if (error) {
+    console.error('[TabsLayout] Profile fetch error:', error);
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 24 }}>
+        <Ionicons name="cloud-offline-outline" size={48} color={COLORS.textLight} />
+        <Text style={{ fontSize: 18, fontWeight: '600', color: COLORS.text, marginTop: 16, textAlign: 'center' }}>
+          Connection Issue
+        </Text>
+        <Text style={{ fontSize: 14, color: COLORS.textLight, marginTop: 8, textAlign: 'center' }}>
+          Unable to load your profile. Please check your connection and try again.
+        </Text>
+        <TouchableOpacity
+          onPress={() => refetchProfile()}
+          style={{ marginTop: 24, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Only redirect to onboarding if profile loaded successfully AND onboarding is incomplete
+  // onboardingComplete is true if: onboardingCompletedAt exists OR profile has full data
+  if (onboardingComplete === false) {
+    console.log('[TabsLayout] New user detected - redirecting to onboarding');
     return <Redirect href="/onboarding" />;
   }
 

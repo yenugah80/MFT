@@ -113,6 +113,10 @@ const fetchOrchestrator = async (): Promise<OrchestratorResult> => {
 /**
  * Mock orchestrator response for development/testing
  * Used when backend hasn't been deployed yet
+ *
+ * CRITICAL: Shows "learning" state - no fake patterns!
+ * We cannot show "12x seen" correlations without actual user data.
+ * Instead, show encouraging message about building baseline.
  */
 function getMockOrchestratorData(): OrchestratorResult {
   const now = new Date();
@@ -120,54 +124,34 @@ function getMockOrchestratorData(): OrchestratorResult {
     success: true,
     userId: 'mock-user',
     decision: {
-      type: 'SPEAK',
-      headline: 'You\'re consuming high-NOVA foods',
-      subtitle: 'Ultra-processed foods may be affecting your mood and energy',
-      confidence: 0.82,
-      confidenceLabel: 'High',
+      type: 'REINFORCE',
+      // Encouraging message while we gather data
+      headline: 'Building your health baseline',
+      subtitle: 'Keep logging meals to unlock personalized insights',
+      confidence: 0.5,
+      confidenceLabel: 'Moderate',
       actions: [
         {
-          icon: 'leaf',
-          text: 'View whole foods',
-          description: 'Explore unprocessed alternatives',
+          icon: 'add-circle-outline',
+          text: 'Log a meal',
+          description: 'Add your next meal to build your profile',
           type: 'navigate',
-          metadata: { path: '/insights' },
+          metadata: { path: '/(tabs)/log' },
         },
       ],
     },
-    correlations: [
-      {
-        id: 1,
-        pattern: 'High NOVA food intake → Energy dips',
-        confidence: 0.78,
-        occurrences: 12,
-        affectedDomains: ['energy', 'mood'],
-        whatHappens: 'When you eat more processed foods, energy typically drops 2-4 hours later',
-        evidence: [
-          { date: '2024-01-10', strength: 0.85, context: 'After snacking on chips', tags: ['snack'] },
-          { date: '2024-01-09', strength: 0.72, context: 'Lunch with takeout', tags: ['lunch'] },
-        ],
-      },
-      {
-        id: 2,
-        pattern: 'Dehydration → Poor focus',
-        confidence: 0.71,
-        occurrences: 8,
-        affectedDomains: ['focus', 'clarity'],
-        whatHappens: 'Water intake below 2L correlates with reduced focus in afternoon',
-        evidence: [
-          { date: '2024-01-10', strength: 0.80, context: 'Only 1.5L water logged', tags: ['hydration'] },
-        ],
-      },
-    ],
+    // NO CORRELATIONS - we don't have enough data yet!
+    // Showing "12x seen" with 0 meals would be a data integrity violation
+    correlations: [],
     lifecycle: {
-      stage: 'TRACKER',
-      daysSinceStart: 15,
-      daysInCurrentStage: 8,
-      daysToNextStage: 15,
+      stage: 'ONBOARDING',
+      daysSinceStart: 1,
+      daysInCurrentStage: 1,
+      daysToNextStage: 6, // 7 days to unlock correlations
     },
     learningState: {
-      canShowCorrelations: true,
+      // CRITICAL: Cannot show correlations without actual data
+      canShowCorrelations: false,
       canShowPredictions: false,
     },
     timestamp: now.toISOString(),

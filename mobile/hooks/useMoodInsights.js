@@ -32,3 +32,17 @@ export const useMoodInsights = ({ windowDays = DEFAULT_WINDOW_DAYS, trendDays = 
     gcTime: 5 * 60 * 1000,
   });
 };
+
+/**
+ * useMoodTrends - Alias for useMoodInsights with period-based configuration
+ * @param {Object} options - { period: 'week' | 'month' | 'quarter' }
+ */
+export const useMoodTrends = ({ period = 'week' } = {}) => {
+  const periodDays = {
+    week: 7,
+    month: 30,
+    quarter: 90,
+  };
+  const windowDays = periodDays[period] || 7;
+  return useMoodInsights({ windowDays, trendDays: Math.min(windowDays, 7) });
+};

@@ -26,6 +26,7 @@ import {
 import { generateDailyStoryLine, calculateDailyScore } from '../services/storyLineService.js';
 import { generateMoodInsights, generateBasicMoodInsights } from '../services/moodInsightService.js';
 import { errors } from '../utils/errorResponse.js';
+import { openaiClient as openai } from '../services/apiClients/OpenAIClient.js';
 
 const router = express.Router();
 
@@ -261,6 +262,402 @@ router.get('/what-to-change', async (req, res) => {
     errors.internal(res, 'Failed to generate recommendation');
   }
 });
+
+/**
+ * GET /api/insights/ai-analysis
+ * OpenAI-powered deep pattern analysis - generates comprehensive insights
+ * This is a premium feature that uses GPT-4o for sophisticated analysis
+ */
+router.get('/ai-analysis', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { days = 14 } = req.query;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
+
+    // Fetch all user data for comprehensive analysis
+    const [foodLogs, moodLogs, waterLogs, goals, summaries] = await Promise.all([
+      db.select()
+        .from(foodLogTable)
+        .where(and(
+          eq(foodLogTable.userId, userId),
+          gte(foodLogTable.loggedDate, startDate)
+        ))
+        .orderBy(desc(foodLogTable.loggedDate)),
+
+      db.select()
+        .from(moodLogTable)
+        .where(and(
+          eq(moodLogTable.userId, userId),
+          gte(moodLogTable.loggedDate, startDate)
+        ))
+        .orderBy(desc(moodLogTable.loggedDate)),
+
+      db.select()
+        .from(waterLogTable)
+        .where(and(
+          eq(waterLogTable.userId, userId),
+          gte(waterLogTable.loggedDate, startDate)
+        ))
+        .orderBy(desc(waterLogTable.loggedDate)),
+
+      db.select()
+        .from(nutritionGoalsTable)
+        .where(eq(nutritionGoalsTable.userId, userId))
+        .limit(1),
+
+      db.select()
+        .from(dailyNutritionSummaryTable)
+        .where(and(
+          eq(dailyNutritionSummaryTable.userId, userId),
+          gte(dailyNutritionSummaryTable.date, startDate)
+        ))
+        .orderBy(desc(dailyNutritionSummaryTable.date)),
+    ]);
+
+    // Check minimum data requirements
+    if (foodLogs.length < 5 || moodLogs.length < 3) {
+      return res.json({
+        success: true,
+        hasEnoughData: false,
+        message: 'Need more data for AI analysis',
+        dataStatus: {
+          foodLogs: foodLogs.length,
+          moodLogs: moodLogs.length,
+          waterLogs: waterLogs.length,
+          minimumRequired: { food: 5, mood: 3 },
+        },
+        insights: [],
+        patterns: [],
+        recommendations: [],
+      });
+    }
+
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0, dailyProtein: 100 };
+
+    // Prepare data summaries for AI
+    const dataSummary = prepareDataForAI(foodLogs, moodLogs, waterLogs, userGoals);
+
+    // Generate AI-powered insights
+    const aiInsights = await generateAIPatternAnalysis(dataSummary, userGoals);
+
+    res.json({
+      success: true,
+      hasEnoughData: true,
+      dataPoints: {
+        food: foodLogs.length,
+        mood: moodLogs.length,
+        water: waterLogs.length,
+      },
+      lookbackDays: parseInt(days),
+      ...aiInsights,
+    });
+  } catch (error) {
+    console.error('[Insights] AI analysis error:', error);
+
+    // Fallback to rule-based if AI fails
+    try {
+      const fallbackInsights = generateFallbackInsights();
+      return res.json({
+        success: true,
+        source: 'fallback',
+        ...fallbackInsights,
+      });
+    } catch (fallbackError) {
+      errors.internal(res, 'Failed to generate AI analysis');
+    }
+  }
+});
+
+/**
+ * Prepare data summary for AI analysis
+ */
+function prepareDataForAI(foodLogs, moodLogs, waterLogs, goals) {
+  // Food summary
+  const foodStats = {
+    totalMeals: foodLogs.length,
+    avgCalories: Math.round(foodLogs.reduce((sum, f) => sum + (f.calories || 0), 0) / foodLogs.length),
+    avgProtein: Math.round(foodLogs.reduce((sum, f) => sum + (f.protein || 0), 0) / foodLogs.length),
+    avgCarbs: Math.round(foodLogs.reduce((sum, f) => sum + (f.carbs || 0), 0) / foodLogs.length),
+    avgFat: Math.round(foodLogs.reduce((sum, f) => sum + (f.fats || 0), 0) / foodLogs.length),
+    avgSugar: Math.round(foodLogs.reduce((sum, f) => sum + (f.sugar || 0), 0) / foodLogs.length),
+    avgNovaScore: (foodLogs.reduce((sum, f) => sum + (f.novaScore || 1), 0) / foodLogs.length).toFixed(1),
+    mealsByTime: analyzeMealTiming(foodLogs),
+    topFoods: getTopFoods(foodLogs),
+  };
+
+  // Mood summary
+  const moodStats = {
+    totalEntries: moodLogs.length,
+    avgIntensity: (moodLogs.reduce((sum, m) => sum + (m.intensity || 5), 0) / moodLogs.length).toFixed(1),
+    avgEnergy: (moodLogs.reduce((sum, m) => sum + (m.energyLevel || 5), 0) / moodLogs.length).toFixed(1),
+    moodDistribution: getMoodDistribution(moodLogs),
+    dominantMood: getDominantMood(moodLogs),
+    moodByTime: analyzeMoodTiming(moodLogs),
+  };
+
+  // Water summary
+  const waterStats = {
+    totalLogs: waterLogs.length,
+    avgDailyIntake: calculateAvgDailyWater(waterLogs),
+    goalProgress: calculateWaterGoalProgress(waterLogs, goals.waterLiters || 2.0),
+    hydrationPattern: analyzeHydrationPattern(waterLogs),
+  };
+
+  // Temporal patterns
+  const temporalPatterns = analyzeTemporalPatterns(foodLogs, moodLogs, waterLogs);
+
+  return {
+    food: foodStats,
+    mood: moodStats,
+    water: waterStats,
+    temporal: temporalPatterns,
+    goals,
+  };
+}
+
+/**
+ * Generate AI-powered pattern analysis using OpenAI
+ */
+async function generateAIPatternAnalysis(dataSummary, goals) {
+  const systemPrompt = `You are an expert nutritionist and health data analyst. Your role is to analyze food, mood, and hydration data to identify meaningful patterns and provide actionable insights.
+
+CRITICAL RULES:
+- Use probabilistic language: "tends to", "may", "appears to correlate with", "often"
+- NEVER use diagnostic language: "you have", "you are", "definitely"
+- Focus on patterns and correlations, not causation
+- Only report patterns with sufficient evidence
+- Be encouraging and supportive
+- Provide specific, actionable recommendations
+- Reference specific numbers from the data`;
+
+  const userPrompt = `Analyze this health data and identify patterns:
+
+**FOOD DATA (${dataSummary.food.totalMeals} meals):**
+- Average daily: ${dataSummary.food.avgCalories} cal, ${dataSummary.food.avgProtein}g protein, ${dataSummary.food.avgCarbs}g carbs, ${dataSummary.food.avgFat}g fat
+- Sugar intake: avg ${dataSummary.food.avgSugar}g per meal
+- Food processing level (NOVA): ${dataSummary.food.avgNovaScore}/4
+- Meal timing: ${JSON.stringify(dataSummary.food.mealsByTime)}
+- Frequent foods: ${dataSummary.food.topFoods.join(', ')}
+
+**MOOD DATA (${dataSummary.mood.totalEntries} entries):**
+- Average intensity: ${dataSummary.mood.avgIntensity}/10
+- Average energy: ${dataSummary.mood.avgEnergy}/10
+- Dominant mood: ${dataSummary.mood.dominantMood}
+- Distribution: ${JSON.stringify(dataSummary.mood.moodDistribution)}
+- Timing patterns: ${JSON.stringify(dataSummary.mood.moodByTime)}
+
+**HYDRATION DATA (${dataSummary.water.totalLogs} logs):**
+- Daily average: ${dataSummary.water.avgDailyIntake}L
+- Goal progress: ${dataSummary.water.goalProgress}%
+- Pattern: ${dataSummary.water.hydrationPattern}
+
+**USER GOALS:**
+- Daily calories: ${goals.dailyCalories || 2000}
+- Daily protein: ${goals.dailyProtein || 100}g
+- Water target: ${goals.waterLiters || 2.0}L
+
+Provide analysis in this JSON format:
+{
+  "insights": [
+    {
+      "type": "correlation" | "prediction" | "recommendation" | "achievement",
+      "title": "Short title (5-8 words)",
+      "statement": "Clear insight with specific data references (1-2 sentences)",
+      "confidence": 0.0-1.0,
+      "evidencePoints": ["specific data point 1", "specific data point 2"],
+      "affectedDomains": ["energy", "mood", "nutrition", "hydration"],
+      "suggestion": "Specific actionable recommendation"
+    }
+  ],
+  "patterns": [
+    {
+      "pattern": "When X happens, Y tends to follow",
+      "factor": "X (cause/trigger)",
+      "outcome": "Y (effect/result)",
+      "strength": 0.0-1.0,
+      "occurrences": number,
+      "type": "positive" | "negative" | "neutral",
+      "timelag": "immediate" | "2-4 hours" | "next day"
+    }
+  ],
+  "priorityRecommendation": {
+    "title": "Top change to make",
+    "why": "Reason based on data",
+    "impact": "Expected benefit",
+    "difficulty": "easy" | "medium" | "hard"
+  },
+  "weeklyStory": "2-3 sentence narrative summarizing the week's health patterns"
+}`;
+
+  try {
+    const response = await openai.chatCompletionJSON(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      {
+        model: 'gpt-4o-mini',
+        temperature: 0.3,
+      }
+    );
+
+    // Add source attribution
+    return {
+      source: 'ai',
+      model: 'gpt-4o-mini',
+      analyzedAt: new Date().toISOString(),
+      ...response,
+    };
+  } catch (error) {
+    console.error('[AI Analysis] OpenAI call failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate fallback insights if AI fails
+ */
+function generateFallbackInsights() {
+  return {
+    insights: [
+      {
+        type: 'recommendation',
+        title: 'Keep logging for insights',
+        statement: 'Continue tracking your meals and mood to unlock personalized patterns.',
+        confidence: 0.5,
+        evidencePoints: [],
+        affectedDomains: ['nutrition'],
+        suggestion: 'Log at least 2 meals and 1 mood entry daily',
+      }
+    ],
+    patterns: [],
+    priorityRecommendation: {
+      title: 'Build your data baseline',
+      why: 'More data enables better insights',
+      impact: 'Unlock personalized recommendations',
+      difficulty: 'easy',
+    },
+    weeklyStory: 'Keep logging to build your personal health profile.',
+  };
+}
+
+// AI Helper Functions
+function analyzeMealTiming(foodLogs) {
+  const timing = { breakfast: 0, lunch: 0, dinner: 0, snacks: 0 };
+  foodLogs.forEach(log => {
+    const hour = new Date(log.loggedDate).getHours();
+    if (hour >= 5 && hour < 10) timing.breakfast++;
+    else if (hour >= 11 && hour < 14) timing.lunch++;
+    else if (hour >= 17 && hour < 21) timing.dinner++;
+    else timing.snacks++;
+  });
+  return timing;
+}
+
+function getTopFoods(foodLogs) {
+  const foodCounts = {};
+  foodLogs.forEach(log => {
+    const name = log.foodName || 'Unknown';
+    foodCounts[name] = (foodCounts[name] || 0) + 1;
+  });
+  return Object.entries(foodCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name]) => name);
+}
+
+function getMoodDistribution(moodLogs) {
+  const dist = {};
+  moodLogs.forEach(log => {
+    const mood = log.mood || 'neutral';
+    dist[mood] = (dist[mood] || 0) + 1;
+  });
+  return dist;
+}
+
+function getDominantMood(moodLogs) {
+  const dist = getMoodDistribution(moodLogs);
+  return Object.entries(dist).sort((a, b) => b[1] - a[1])[0]?.[0] || 'neutral';
+}
+
+function analyzeMoodTiming(moodLogs) {
+  const timing = { morning: [], afternoon: [], evening: [] };
+  moodLogs.forEach(log => {
+    const hour = new Date(log.loggedDate).getHours();
+    const mood = log.mood || 'neutral';
+    if (hour >= 5 && hour < 12) timing.morning.push(mood);
+    else if (hour >= 12 && hour < 18) timing.afternoon.push(mood);
+    else timing.evening.push(mood);
+  });
+  return {
+    morning: getDominantFromArray(timing.morning),
+    afternoon: getDominantFromArray(timing.afternoon),
+    evening: getDominantFromArray(timing.evening),
+  };
+}
+
+function getDominantFromArray(arr) {
+  if (!arr.length) return null;
+  const counts = {};
+  arr.forEach(item => { counts[item] = (counts[item] || 0) + 1; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+}
+
+function calculateAvgDailyWater(waterLogs) {
+  if (!waterLogs.length) return 0;
+  const dailyTotals = {};
+  waterLogs.forEach(log => {
+    const date = new Date(log.loggedDate).toISOString().split('T')[0];
+    dailyTotals[date] = (dailyTotals[date] || 0) + parseFloat(log.hydrationLiters || log.amountLiters || 0);
+  });
+  const total = Object.values(dailyTotals).reduce((sum, v) => sum + v, 0);
+  return (total / Object.keys(dailyTotals).length).toFixed(1);
+}
+
+function calculateWaterGoalProgress(waterLogs, goal) {
+  if (!waterLogs.length) return 0;
+  const dailyTotals = {};
+  waterLogs.forEach(log => {
+    const date = new Date(log.loggedDate).toISOString().split('T')[0];
+    dailyTotals[date] = (dailyTotals[date] || 0) + parseFloat(log.hydrationLiters || log.amountLiters || 0);
+  });
+  const goalDays = Object.values(dailyTotals).filter(v => v >= goal).length;
+  return Math.round((goalDays / Object.keys(dailyTotals).length) * 100);
+}
+
+function analyzeHydrationPattern(waterLogs) {
+  if (!waterLogs.length) return 'insufficient data';
+  const avgDailyWater = calculateAvgDailyWater(waterLogs);
+  if (avgDailyWater >= 2.5) return 'excellent';
+  if (avgDailyWater >= 2.0) return 'good';
+  if (avgDailyWater >= 1.5) return 'moderate';
+  return 'needs improvement';
+}
+
+function analyzeTemporalPatterns(foodLogs, moodLogs, waterLogs) {
+  // Analyze day-of-week patterns
+  const dayPatterns = {};
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  foodLogs.forEach(log => {
+    const day = days[new Date(log.loggedDate).getDay()];
+    if (!dayPatterns[day]) dayPatterns[day] = { meals: 0, avgCalories: 0 };
+    dayPatterns[day].meals++;
+    dayPatterns[day].avgCalories += log.calories || 0;
+  });
+
+  // Calculate averages
+  Object.keys(dayPatterns).forEach(day => {
+    if (dayPatterns[day].meals > 0) {
+      dayPatterns[day].avgCalories = Math.round(dayPatterns[day].avgCalories / dayPatterns[day].meals);
+    }
+  });
+
+  return { byDayOfWeek: dayPatterns };
+}
 
 // ============================================================================
 // HELPER FUNCTIONS
