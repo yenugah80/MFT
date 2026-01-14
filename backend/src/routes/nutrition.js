@@ -922,13 +922,21 @@ router.get("/dashboard", async (req, res) => {
         .limit(1),
 
       // Today's activity logs (raw SQL since table isn't in Drizzle schema)
-      db.execute(sql`
-        SELECT * FROM activity_logs
-        WHERE user_id = ${userId}
-        AND logged_at >= ${todayStart}
-        AND logged_at <= ${todayEnd}
-        ORDER BY logged_at DESC
-      `),
+      // Wrapped in try-catch to handle missing table gracefully
+      (async () => {
+        try {
+          return await db.execute(sql`
+            SELECT * FROM activity_logs
+            WHERE user_id = ${userId}
+            AND logged_at >= ${todayStart}
+            AND logged_at <= ${todayEnd}
+            ORDER BY logged_at DESC
+          `);
+        } catch (err) {
+          console.warn('[Dashboard] activity_logs query failed (table may not exist):', err.message);
+          return { rows: [] };
+        }
+      })(),
     ]);
 
     // Extract today's activity logs from raw SQL result
