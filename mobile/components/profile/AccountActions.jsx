@@ -1,15 +1,72 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import apiClient from "../../services/apiClient";
 import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 export default function AccountActions({ onSignOut }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [isSyncingXP, setIsSyncingXP] = useState(false);
+
+  const handleSyncXP = async () => {
+    setIsSyncingXP(true);
+    try {
+      const response = await apiClient.post('/nutrition/backfill-xp');
+      const data = response.data;
+
+      // Invalidate dashboard to show updated XP
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
+      Alert.alert(
+        '🎉 XP Synced!',
+        `You earned ${data.totalXP} XP from your history!\n\n` +
+        `📝 Food logs: ${data.breakdown.food.xp} XP\n` +
+        `💧 Water logs: ${data.breakdown.water.xp} XP\n` +
+        `😊 Mood logs: ${data.breakdown.mood.xp} XP\n` +
+        `🏃 Activity: ${data.breakdown.activity.xp} XP\n\n` +
+        `You are now Level ${data.level}!`,
+        [{ text: 'Awesome!' }]
+      );
+    } catch (error) {
+      console.error('XP sync error:', error);
+      Alert.alert(
+        'Sync Failed',
+        'Could not sync your XP. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSyncingXP(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Account</Text>
+
+        {/* Sync XP from History */}
+        <TouchableOpacity
+          style={styles.settingRow}
+          activeOpacity={0.7}
+          onPress={handleSyncXP}
+          disabled={isSyncingXP}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: 'rgba(168, 85, 247, 0.1)' }]}>
+            {isSyncingXP ? (
+              <ActivityIndicator size="small" color="#A855F7" />
+            ) : (
+              <Ionicons name="sparkles" size={ICON_SIZES.sm} color="#A855F7" />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingText}>Sync XP from History</Text>
+            <Text style={styles.settingSubtext}>Credit XP for past logs</Text>
+          </View>
+          <Ionicons name="refresh" size={ICON_SIZES.sm} color={TEXT.muted} />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.settingRow}
@@ -134,6 +191,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
+  },
+  settingSubtext: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.muted,
+    marginTop: 2,
   },
   signOutButton: {
     backgroundColor: SEMANTIC.danger.bg,
