@@ -811,6 +811,7 @@ router.get("/dashboard", async (req, res) => {
       streakMoodLogs,
       goals,
       gamification,
+      todayActivityLogsResult,
     ] = await Promise.all([
       // Today's nutrition summary
       db.select()
@@ -919,7 +920,19 @@ router.get("/dashboard", async (req, res) => {
         .from(gamificationTable)
         .where(eq(gamificationTable.userId, userId))
         .limit(1),
+
+      // Today's activity logs (raw SQL since table isn't in Drizzle schema)
+      db.execute(sql`
+        SELECT * FROM activity_logs
+        WHERE user_id = ${userId}
+        AND logged_at >= ${todayStart}
+        AND logged_at <= ${todayEnd}
+        ORDER BY logged_at DESC
+      `),
     ]);
+
+    // Extract today's activity logs from raw SQL result
+    const todayActivityLogs = todayActivityLogsResult?.rows || [];
 
     // Calculate today's water total
     const todayWaterTotal = todayWaterLogs.reduce((sum, log) => {
@@ -1066,6 +1079,8 @@ router.get("/dashboard", async (req, res) => {
         waterLogs: todayWaterLogs,
         foodLogs: todayFoodLogs,
         moodLogs: todayMoodLogs,
+        activityLogs: todayActivityLogs,
+        activityMinutes: todayActivityLogs.reduce((sum, log) => sum + (parseInt(log.duration_minutes) || 0), 0),
         hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
       goals: goals[0] || null,
