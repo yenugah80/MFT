@@ -70,7 +70,7 @@ export function useMLPredictions(options = {}) {
     queryKey: date ? [...QUERY_KEYS.predictions, date] : QUERY_KEYS.predictions,
     queryFn: () => fetchPredictions(date),
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 30 * 60 * 1000, // 30 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     retryDelay: 1000,
   });
@@ -80,7 +80,7 @@ export function useMLPredictions(options = {}) {
     queryKey: QUERY_KEYS.status,
     queryFn: fetchStatus,
     staleTime: 10 * 60 * 1000, // 10 minutes (changes less frequently)
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000, // 1 hour
     retry: 2,
   });
 
@@ -138,7 +138,7 @@ export function useMLForecast(days = 3) {
     queryKey: QUERY_KEYS.forecast(days),
     queryFn: () => fetchForecast(days),
     staleTime: 10 * 60 * 1000,
-    cacheTime: 30 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     retry: 2,
   });
 }

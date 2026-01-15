@@ -10,8 +10,8 @@ const queryClient = new QueryClient({
     queries: {
       // Cache data for 5 minutes by default
       staleTime: 5 * 60 * 1000,
-      // Keep unused data in cache for 10 minutes
-      cacheTime: 10 * 60 * 1000,
+      // Keep unused data in cache for 10 minutes (gcTime replaces deprecated cacheTime in React Query v5)
+      gcTime: 10 * 60 * 1000,
       // Retry failed requests 2 times
       retry: 2,
       // Retry with exponential backoff
