@@ -327,28 +327,122 @@ async function resolveTextMode(query, draftId, mealType, userId) {
 /**
  * PHOTO MODE RESOLVER
  * Pipeline: OpenAI vision → USDA/OFF search per detected food
+ *
+ * CRITICAL FIX: analyzeImage returns a single food object with:
+ * { foodName, description, calories, protein, carbs, fats, ingredients, confidence, isComplex }
+ * NOT an array of foods. We handle both structures for robustness.
  */
 async function resolvePhotoMode(imageBase64, draftId, mealType) {
   // Step 1: Vision analysis
   const visionResult = await FoodService.analyzeImage(imageBase64);
 
-  if (!visionResult || !visionResult.foods) {
+  // Handle null or failed analysis
+  if (!visionResult) {
+    console.error('[Resolve] Photo analysis returned null');
+    return createErrorDraft(draftId, 'photo', 'Could not analyze image', mealType);
+  }
+
+  // Normalize the response structure
+  // analyzeImage returns a single object with foodName, not a foods array
+  let detectedFoods = [];
+
+  if (visionResult.foods && Array.isArray(visionResult.foods)) {
+    // If it's already an array (future-proofing)
+    detectedFoods = visionResult.foods;
+  } else if (visionResult.foodName) {
+    // Single food object from vision analysis - this is the expected structure
+    console.log(`[Resolve] Photo detected: "${visionResult.foodName}" with confidence ${visionResult.confidence}`);
+
+    // Check if we got a valid food name (not "Unknown Food" or similar)
+    if (visionResult.foodName === 'Unknown Food' || !visionResult.foodName.trim()) {
+      return createErrorDraft(draftId, 'photo', 'Could not identify food in image', mealType);
+    }
+
+    detectedFoods = [{
+      name: visionResult.foodName,
+      description: visionResult.description,
+      estimatedAmount: 1,
+      estimatedUnit: visionResult.servingSize || 'serving',
+      confidence: visionResult.confidence || 0.7,
+      // Include pre-analyzed nutrition from vision to avoid double API calls
+      preAnalyzedNutrition: {
+        calories: visionResult.calories,
+        protein: visionResult.protein,
+        carbs: visionResult.carbs,
+        fat: visionResult.fats || visionResult.fat,
+        fiber: visionResult.fiber,
+        sugar: visionResult.sugar,
+        sodium: visionResult.sodium,
+        micros: visionResult.micros
+      },
+      ingredients: visionResult.ingredients || [],
+      isComplex: visionResult.isComplex || false
+    }];
+  } else {
+    console.error('[Resolve] Photo analysis returned unexpected structure:', Object.keys(visionResult));
     return createErrorDraft(draftId, 'photo', 'Could not detect food in image', mealType);
+  }
+
+  if (detectedFoods.length === 0) {
+    return createErrorDraft(draftId, 'photo', 'No food detected in image', mealType);
   }
 
   // Step 2: Resolve each detected food
   const items = [];
-  for (const detectedFood of visionResult.foods) {
-    const resolvedItem = await resolveGenericFood({
-      name: detectedFood.name,
-      quantity: detectedFood.estimatedAmount,
-      unit: detectedFood.estimatedUnit,
-      confidence: detectedFood.confidence
-    });
+  for (const detectedFood of detectedFoods) {
+    // If we have pre-analyzed nutrition from vision, use it directly
+    // This avoids an extra API call since vision already provides nutrition
+    let resolvedItem;
+
+    if (detectedFood.preAnalyzedNutrition && detectedFood.preAnalyzedNutrition.calories > 0) {
+      // Use nutrition from vision analysis directly
+      resolvedItem = {
+        itemId: uuidv4(),
+        name: detectedFood.name,
+        portion: {
+          amount: detectedFood.estimatedAmount || 1,
+          unit: detectedFood.estimatedUnit || 'serving',
+          gramsEquivalent: 100,
+          servingText: detectedFood.estimatedUnit || 'serving',
+          isEstimated: true
+        },
+        macros: {
+          calories_kcal: detectedFood.preAnalyzedNutrition.calories || 0,
+          protein_g: detectedFood.preAnalyzedNutrition.protein || 0,
+          carbs_g: detectedFood.preAnalyzedNutrition.carbs || 0,
+          fat_g: detectedFood.preAnalyzedNutrition.fat || 0,
+          fiber_g: detectedFood.preAnalyzedNutrition.fiber || 0,
+          sugar_g: detectedFood.preAnalyzedNutrition.sugar || 0,
+          sodium_mg: detectedFood.preAnalyzedNutrition.sodium || 0
+        },
+        micros: detectedFood.preAnalyzedNutrition.micros || {},
+        ingredients: detectedFood.ingredients || [],
+        isComplex: detectedFood.isComplex || false,
+        scores: {},
+        sourceEvidence: [{
+          source: 'OpenAI_Vision',
+          sourceId: 'gpt-4o-vision',
+          confidence: detectedFood.confidence || 0.7,
+          fetchedAt: new Date().toISOString(),
+          fieldsProvided: ['macros', 'micros', 'ingredients']
+        }],
+        flags: ['photo_analyzed', 'portion_estimated']
+      };
+
+      console.log(`[Resolve] ✅ Using vision nutrition for "${detectedFood.name}": ${resolvedItem.macros.calories_kcal} kcal`);
+    } else {
+      // Fallback: resolve nutrition via smartNutritionResolver
+      resolvedItem = await resolveGenericFood({
+        name: detectedFood.name,
+        quantity: detectedFood.estimatedAmount,
+        unit: detectedFood.estimatedUnit,
+        confidence: detectedFood.confidence
+      });
+    }
 
     // Flag low-confidence detections
     if (detectedFood.confidence < 0.7) {
-      resolvedItem.flags.push('low_confidence', 'portion_estimated');
+      resolvedItem.flags.push('low_confidence');
     }
 
     items.push(resolvedItem);
