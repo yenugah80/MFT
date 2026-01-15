@@ -48,9 +48,10 @@ function describeArc(cx, cy, radius, startAngle, endAngle) {
 
 function polarToCartesian(cx, cy, radius, angleInDegrees) {
   const angleInRadians = ((angleInDegrees - 180) * Math.PI) / 180.0;
+  // Round to avoid floating-point precision issues in native SVG rendering
   return {
-    x: cx + radius * Math.cos(angleInRadians),
-    y: cy + radius * Math.sin(angleInRadians),
+    x: Math.round((cx + radius * Math.cos(angleInRadians)) * 100) / 100,
+    y: Math.round((cy + radius * Math.sin(angleInRadians)) * 100) / 100,
   };
 }
 
@@ -169,19 +170,23 @@ export default function HalfGaugeChart({
   // Accessibility
   const a11yLabel = accessibilityLabel || `${label}: ${value}${unit} of ${maxValue}${unit}, ${Math.round(percentage)}% complete`;
 
+  // Ensure integer dimensions to avoid native rendering precision issues
+  const viewHeight = Math.round(size / 2 + 40);
+  const svgHeight = Math.round(size / 2 + strokeWidth);
+
   return (
     <View
-      style={[styles.container, { width: size, height: size / 2 + 40 }, style]}
+      style={[styles.container, { width: size, height: viewHeight }, style]}
       accessible={true}
       accessibilityLabel={a11yLabel}
       accessibilityRole="progressbar"
       accessibilityValue={{
         min: 0,
-        max: maxValue,
-        now: value,
+        max: Math.round(maxValue),
+        now: Math.round(value),
       }}
     >
-      <Svg width={size} height={size / 2 + strokeWidth} viewBox={`0 0 ${size} ${size / 2 + strokeWidth}`}>
+      <Svg width={size} height={svgHeight} viewBox={`0 0 ${size} ${svgHeight}`}>
         <Defs>
           {/* Meter-style gradient: Red (left) -> Yellow (middle) -> Green (right) */}
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -290,9 +295,13 @@ export function MiniHalfGauge({
   const bgPath = describeArc(cx, cy, radius, 0, 180);
   const progressPath = describeArc(cx, cy, radius, 0, progressAngle);
 
+  // Ensure integer dimensions to avoid native rendering precision issues
+  const viewHeight = Math.round(size / 2 + 20);
+  const svgHeight = Math.round(size / 2 + strokeWidth);
+
   return (
-    <View style={[styles.miniContainer, { width: size, height: size / 2 + 20 }, style]}>
-      <Svg width={size} height={size / 2 + strokeWidth} viewBox={`0 0 ${size} ${size / 2 + strokeWidth}`}>
+    <View style={[styles.miniContainer, { width: size, height: viewHeight }, style]}>
+      <Svg width={size} height={svgHeight} viewBox={`0 0 ${size} ${svgHeight}`}>
         <Defs>
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
             <Stop offset="0%" stopColor={progressGradient[0]} />
@@ -339,9 +348,13 @@ export function ComparisonGauge({
   const cy = size / 2;
   const baseRadius = (size - strokeWidth * metrics.length * 2) / 2;
 
+  // Ensure integer dimensions to avoid native rendering precision issues
+  const viewHeight = Math.round(size / 2 + 40);
+  const svgHeight = Math.round(size / 2 + strokeWidth * metrics.length);
+
   return (
-    <View style={[styles.comparisonContainer, { width: size, height: size / 2 + 40 }, style]}>
-      <Svg width={size} height={size / 2 + strokeWidth * metrics.length} viewBox={`0 0 ${size} ${size / 2 + strokeWidth * metrics.length}`}>
+    <View style={[styles.comparisonContainer, { width: size, height: viewHeight }, style]}>
+      <Svg width={size} height={svgHeight} viewBox={`0 0 ${size} ${svgHeight}`}>
         {metrics.map((metric, index) => {
           const radius = baseRadius + index * (strokeWidth + 4);
           const percentage = Math.min((metric.value / metric.maxValue) * 100, 100);
