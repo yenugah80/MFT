@@ -162,6 +162,59 @@ let mlTablesEnsured = false;
 export async function ensureMLTables() {
   if (mlTablesEnsured) return;
   try {
+    // User correlations table (stores discovered patterns between signals)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "user_correlations" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "correlation_type" TEXT NOT NULL,
+        "rule_name" TEXT NOT NULL,
+        "signal_a" TEXT NOT NULL,
+        "signal_a_value" DECIMAL(10,2),
+        "signal_a_unit" TEXT,
+        "signal_b" TEXT NOT NULL,
+        "signal_b_value" DECIMAL(10,2),
+        "signal_b_unit" TEXT,
+        "window_type" TEXT NOT NULL,
+        "time_lag_minutes" INTEGER,
+        "strength" DECIMAL(3,2) NOT NULL,
+        "confidence" DECIMAL(3,2) NOT NULL,
+        "occurrences" INTEGER NOT NULL DEFAULT 0,
+        "health_impact_severity" TEXT,
+        "affected_domains" JSONB DEFAULT '[]',
+        "expected_outcome" TEXT,
+        "evidence_json" JSONB,
+        "last_observed_date" TEXT,
+        "first_observed_date" TEXT,
+        "is_active" BOOLEAN DEFAULT TRUE,
+        "computed_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW(),
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        UNIQUE("user_id", "correlation_type", "rule_name", "window_type")
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_user_corr_user_active" ON "user_correlations" ("user_id", "is_active");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_user_corr_confidence" ON "user_correlations" ("user_id", "confidence");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_user_corr_type" ON "user_correlations" ("correlation_type");`);
+
+    // Correlation evidence table (supports user_correlations)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "correlation_evidence" (
+        "id" SERIAL PRIMARY KEY,
+        "correlation_id" INTEGER REFERENCES "user_correlations"("id") ON DELETE CASCADE,
+        "observation_date" TEXT,
+        "food_log_id" INTEGER,
+        "mood_log_id" INTEGER,
+        "water_log_id" INTEGER,
+        "signal_a_actual" DECIMAL(10,2),
+        "signal_b_actual" DECIMAL(10,2),
+        "tags_json" JSONB,
+        "hour_of_day" INTEGER,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_corr_evidence_correlation" ON "correlation_evidence" ("correlation_id");`);
+
     // Thompson Sampling arms table
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "recommendation_arms" (
