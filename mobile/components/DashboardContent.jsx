@@ -1082,59 +1082,6 @@ export default function DashboardContent() {
     return 'Updated recently';
   }, [insightsMeta]);
 
-  // Loading state - comprehensive skeleton that mirrors app layout
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          <DashboardSkeleton />
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // Error state
-  if (error) {
-    const errorDetails = getErrorDetails(error);
-
-    return (
-      <View style={styles.centerContainer}>
-        <View style={styles.errorIconContainer}>
-          <Ionicons name={errorDetails.icon} size={64} color={TEXT.tertiary} />
-        </View>
-        <Text style={styles.errorTitle}>{errorDetails.title}</Text>
-        <Text style={styles.errorText}>
-          {errorDetails.message}
-        </Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            refetch();
-          }}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={errorDetails.action}
-          accessibilityHint="Attempts to reload the dashboard data"
-        >
-          <LinearGradient
-            colors={SURFACES.gradient.primary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.retryGradient}
-          >
-            <Ionicons name="refresh" size={20} color="#FFF" style={{ marginRight: 8 }} />
-            <Text style={styles.retryText}>{errorDetails.action}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   // CRITICAL FIX: useMemo MUST be called before any early returns (React hooks rules)
   // Override cold start messaging when user actually has data
   const correctedOrchestratorData = useMemo(() => {
@@ -1195,6 +1142,59 @@ export default function DashboardContent() {
 
     return orchestratorData;
   }, [orchestratorData, data]);
+
+  // Loading state - comprehensive skeleton that mirrors app layout
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.surface.background.primary }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <DashboardSkeleton />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    const errorDetails = getErrorDetails(error);
+
+    return (
+      <View style={styles.centerContainer}>
+        <View style={styles.errorIconContainer}>
+          <Ionicons name={errorDetails.icon} size={64} color={TEXT.tertiary} />
+        </View>
+        <Text style={styles.errorTitle}>{errorDetails.title}</Text>
+        <Text style={styles.errorText}>
+          {errorDetails.message}
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            refetch();
+          }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={errorDetails.action}
+          accessibilityHint="Attempts to reload the dashboard data"
+        >
+          <LinearGradient
+            colors={SURFACES.gradient.primary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.retryGradient}
+          >
+            <Ionicons name="refresh" size={20} color="#FFF" style={{ marginRight: 8 }} />
+            <Text style={styles.retryText}>{errorDetails.action}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (!data) return null;
 
@@ -1335,7 +1335,7 @@ export default function DashboardContent() {
             moodLogs={today?.moodLogs || []}
             streak={parseDecimal(trends?.currentStreak, 0)}
             historicalScores={[]}
-            onViewDetails={() => router.push('/insights/mood')}
+            onViewDetails={() => router.push('/insights')}
           />
         )}
 

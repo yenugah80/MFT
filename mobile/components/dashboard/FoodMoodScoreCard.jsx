@@ -338,7 +338,7 @@ export default function FoodMoodScoreCard({
 
           {/* Tap hint */}
           <View style={styles.actionRow}>
-            <Text style={styles.actionText}>View breakdown</Text>
+            <Text style={styles.actionText}>View all insights</Text>
             <Ionicons name="arrow-forward" size={14} color={TEXT.secondary} />
           </View>
         </LinearGradient>
