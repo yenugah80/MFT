@@ -150,8 +150,32 @@ router.post("/analyze-image", async (req, res) => {
       rawItems: rawItems
     });
 
-    console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
-    res.json({ success: true, data: unifiedResponse });
+    // CRITICAL FIX: Add top-level foodName for backwards compatibility
+    // The frontend's buildFoodLog expects raw.foodName, but unifiedResponse has items[0].name
+    const foodName = rawItems[0]?.name || result.title || result.foodName || 'Unknown Food';
+
+    console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, foodName="${foodName}", healthScore=${unifiedResponse.healthScore}`);
+
+    res.json({
+      success: true,
+      data: {
+        ...unifiedResponse,
+        // Add backwards-compatible fields at top level
+        foodName,
+        title: foodName,
+        name: foodName,
+        calories: unifiedResponse.totals?.calories || 0,
+        protein: unifiedResponse.totals?.protein || 0,
+        carbs: unifiedResponse.totals?.carbs || 0,
+        fat: unifiedResponse.totals?.fat || 0,
+        fiber: unifiedResponse.totals?.fiber || 0,
+        sugar: unifiedResponse.totals?.sugar || 0,
+        sodium: unifiedResponse.totals?.sodium || 0,
+        servingSize: rawItems[0]?.canonical?.portion?.unit || 'serving',
+        micros: rawItems[0]?.canonical?.nutrition?.micros || {},
+        ingredients: rawItems[0]?.ingredients || [],
+      }
+    });
   } catch (error) {
     console.error("[FoodAnalyzeImage] Error:", error);
     res.status(500).json({ error: "Image analysis failed" });
