@@ -86,7 +86,14 @@ const OnboardingGuard = ({ children }) => {
 
         // Profile fetch failed - handle error
         if (profileError) {
-          console.error('[OnboardingGuard] ❌ Profile fetch error from context:', profileError);
+          // 401 errors are expected when auth token isn't ready - use log not error
+          const is401 = profileError?.message?.includes('401') || profileError?.status === 401;
+          if (is401) {
+            console.log('[OnboardingGuard] ⏳ Auth token not ready yet, waiting...');
+            isCheckingRef.current = false;
+            return;
+          }
+          console.warn('[OnboardingGuard] Profile fetch issue:', profileError?.message || profileError);
 
           // Try to recover with AsyncStorage draft
           try {
@@ -152,7 +159,7 @@ const OnboardingGuard = ({ children }) => {
               router.replace('/(tabs)/dashboard');
               console.log('[OnboardingGuard] ✅ Redirect called successfully');
             } catch (navigationError) {
-              console.error('[OnboardingGuard] ❌ Redirect failed:', navigationError);
+              console.warn('[OnboardingGuard] Redirect failed:', navigationError);
               // If redirect fails, show error state instead of getting stuck
               setError({
                 message: 'Navigation failed. This may be a routing issue.',

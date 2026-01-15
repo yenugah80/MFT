@@ -144,7 +144,8 @@ export async function requestNotificationPermissions() {
     console.log('[PushNotifications] Permission granted');
     return true;
   } catch (error) {
-    console.error('[PushNotifications] Error requesting permissions:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Error requesting permissions:', error?.message || error);
     return false;
   }
 }
@@ -188,7 +189,8 @@ export async function getExpoPushToken() {
       throw nativeError;
     }
   } catch (error) {
-    console.error('[PushNotifications] Error getting push token:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Error getting push token:', error?.message || error);
     return null;
   }
 }
@@ -207,9 +209,18 @@ export async function registerPushTokenWithBackend(token) {
       console.log('[PushNotifications] Token registered with backend');
       return true;
     }
+
+    // Handle 202 response (profile not ready yet)
+    if (response.retryAfterProfileCreation) {
+      console.log('[PushNotifications] Profile not ready, will retry later');
+      return false;
+    }
+
     return false;
   } catch (error) {
-    console.error('[PushNotifications] Failed to register token:', error);
+    // Use console.warn to avoid red error screen in development
+    // Push token registration failure is non-critical
+    console.warn('[PushNotifications] Failed to register token (non-critical):', error?.message || error);
     return false;
   }
 }
@@ -223,7 +234,8 @@ export async function unregisterPushToken() {
     console.log('[PushNotifications] Token unregistered from backend');
     return true;
   } catch (error) {
-    console.error('[PushNotifications] Failed to unregister token:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to unregister token:', error?.message || error);
     return false;
   }
 }
@@ -280,7 +292,8 @@ export async function setupPushNotifications() {
 
     return result;
   } catch (error) {
-    console.error('[PushNotifications] Setup error:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Setup error:', error?.message || error);
     return result;
   }
 }
@@ -360,7 +373,8 @@ export async function scheduleDailyReminder(hour = 12, minute = 0) {
     console.log('[PushNotifications] Daily reminder scheduled:', identifier);
     return identifier;
   } catch (error) {
-    console.error('[PushNotifications] Failed to schedule daily reminder:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to schedule daily reminder:', error?.message || error);
     return null;
   }
 }
@@ -405,7 +419,8 @@ export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
     console.log('[PushNotifications] Hydration reminders scheduled:', identifiers);
     return identifiers;
   } catch (error) {
-    console.error('[PushNotifications] Failed to schedule hydration reminders:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to schedule hydration reminders:', error?.message || error);
     return [];
   }
 }
@@ -431,7 +446,8 @@ export async function cancelScheduledNotifications(category) {
 
     console.log(`[PushNotifications] Cancelled ${toCancel.length} ${category} notifications`);
   } catch (error) {
-    console.error('[PushNotifications] Failed to cancel notifications:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to cancel notifications:', error?.message || error);
   }
 }
 
@@ -447,7 +463,8 @@ export async function cancelAllScheduledNotifications() {
     await Notifications.cancelAllScheduledNotificationsAsync();
     console.log('[PushNotifications] All scheduled notifications cancelled');
   } catch (error) {
-    console.error('[PushNotifications] Failed to cancel all notifications:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to cancel all notifications:', error?.message || error);
   }
 }
 
@@ -472,7 +489,8 @@ export async function showLocalNotification({ title, body, data = {} }) {
     });
     return identifier;
   } catch (error) {
-    console.error('[PushNotifications] Failed to show local notification:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to show local notification:', error?.message || error);
     return null;
   }
 }
@@ -504,7 +522,8 @@ export async function setBadgeCount(count) {
   try {
     await Notifications.setBadgeCountAsync(count);
   } catch (error) {
-    console.error('[PushNotifications] Failed to set badge count:', error);
+    // Use console.warn to avoid red error screen in development
+    console.warn('[PushNotifications] Failed to set badge count:', error?.message || error);
   }
 }
 

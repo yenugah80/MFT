@@ -24,7 +24,19 @@ const TabsLayout = () => {
   // CRITICAL FIX: Handle API errors - don't redirect to onboarding on error!
   // This was causing returning users to see onboarding when backend was slow/failing
   if (error) {
-    console.error('[TabsLayout] Profile fetch error:', error);
+    // 401 errors are expected when auth token isn't ready yet - don't show error screen
+    const is401 = error?.message?.includes('401') || error?.response?.status === 401;
+    if (is401) {
+      console.log('[TabsLayout] Auth token not ready, waiting...');
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      );
+    }
+
+    // Log non-401 errors as warnings (not errors to avoid red screen in dev)
+    console.warn('[TabsLayout] Profile fetch error:', error);
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 24 }}>
         <Ionicons name="cloud-offline-outline" size={48} color={COLORS.textLight} />

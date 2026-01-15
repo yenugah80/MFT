@@ -41,6 +41,25 @@ export async function savePushToken(req, res) {
       });
     }
 
+    // Check if profile exists first (foreign key constraint)
+    const [profile] = await req.db
+      .select({ userId: profilesTable.userId })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (!profile) {
+      // Profile doesn't exist yet - gracefully skip push token registration
+      // This can happen when push token registration runs before profile creation
+      console.log(`[savePushToken] Profile not found for user ${userId} - will retry after profile creation`);
+      return res.status(202).json({
+        success: false,
+        tokenRegistered: false,
+        message: 'Profile not ready yet, push token will be registered after profile creation',
+        retryAfterProfileCreation: true
+      });
+    }
+
     const updated = await req.db
       .insert(accountSettingsTable)
       .values({
@@ -66,6 +85,16 @@ export async function savePushToken(req, res) {
       expoPushToken: updated[0]?.expoPushToken
     });
   } catch (error) {
+    // Handle foreign key constraint violation gracefully
+    if (error.code === '23503') { // PostgreSQL foreign key violation
+      console.log(`[savePushToken] Profile not found (FK error) for user ${req.auth?.userId}`);
+      return res.status(202).json({
+        success: false,
+        tokenRegistered: false,
+        message: 'Profile not ready yet',
+        retryAfterProfileCreation: true
+      });
+    }
     console.error('[savePushToken] Error saving push token:', error);
     sendDevError(res, error);
   }

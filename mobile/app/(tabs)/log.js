@@ -24,7 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Hooks
-import { useFoodAnalysis } from '../../hooks/useFoodAnalysis';
+import { useFoodAnalysis, getMealTypeFromTime } from '../../hooks/useFoodAnalysis';
 // SWITCHED: Using Instant Voice (On-Device) for immediate feedback
 import { useServerVoice } from '../../hooks/useServerVoice';
 import { useFoodLog } from '../../hooks/useFoodLog';
@@ -482,9 +482,12 @@ export default function LogScreen() {
 
     try {
       const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+      // CRITICAL FIX: Set mealType based on URL param or auto-detect from time
+      const effectiveMealType = mealType || foodData.mealType || getMealTypeFromTime();
       const foodDataWithId = {
         ...foodData,
         source: foodData.source || analysisSource,
+        mealType: effectiveMealType,
         clientEventId,
         sourceMeta: {
           source: analysisSource,
@@ -530,6 +533,8 @@ export default function LogScreen() {
     try {
       const mealEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
       const baseTimestamp = Date.now();
+      // CRITICAL FIX: Set mealType based on URL param or auto-detect from time
+      const effectiveMealType = mealType || getMealTypeFromTime();
       let totalCalories = 0;
       let totalProtein = 0;
       let totalCarbs = 0;
@@ -546,6 +551,7 @@ export default function LogScreen() {
           timestamp: baseTimestamp + index, // deterministic per item to avoid collisions
           status: 'pending',
           source: 'text',
+          mealType: effectiveMealType, // CRITICAL FIX: Include mealType
           sourceMeta: {
             source: 'text',
             type: 'multi',

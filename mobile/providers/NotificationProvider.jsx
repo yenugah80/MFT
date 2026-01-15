@@ -113,7 +113,8 @@ export const NotificationProvider = ({ children }) => {
         await syncNotificationSchedules();
       }
     } catch (error) {
-      console.error('[NotificationProvider] Push setup error:', error);
+      // Use console.warn to avoid red error screen in development
+      console.warn('[NotificationProvider] Push setup error (non-critical):', error?.message || error);
       // Graceful degradation - don't crash if native module unavailable
       setPushStatus((prev) => ({
         ...prev,
@@ -152,7 +153,8 @@ export const NotificationProvider = ({ children }) => {
 
       console.log('[NotificationProvider] Notification schedules synced');
     } catch (error) {
-      console.error('[NotificationProvider] Failed to sync schedules:', error);
+      // Use console.warn to avoid red error screen in development
+      console.warn('[NotificationProvider] Failed to sync schedules (non-critical):', error?.message || error);
     }
   }, []);
 
