@@ -786,6 +786,14 @@ Return JSON:
           `Food: ${result.foodName}`
         );
 
+        // Log micros for debugging
+        const microsKeys = Object.keys(result.micros || {});
+        if (microsKeys.length > 0) {
+          console.log(`[OpenAI] Micros detected: ${microsKeys.join(', ')}`);
+        } else {
+          console.log(`[OpenAI] No micros in response. Raw micros: ${JSON.stringify(json.micros || 'none')}`);
+        }
+
       } catch (normalizationError) {
         console.error('[OpenAI] Schema normalization failed:', normalizationError.message);
         // Fallback to raw data if normalization fails
