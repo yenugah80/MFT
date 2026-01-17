@@ -5,6 +5,7 @@ import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC } from "../utils/timezone.js";
 import { generateMoodInsights, generateBasicMoodInsights, analyzeMoodMealCorrelation } from "../services/moodInsightService.js";
+import { getMoodIntelligence } from "../services/moodRecommendationEngine.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
 
@@ -457,6 +458,36 @@ router.post("/insights", async (req, res) => {
   } catch (error) {
     console.error("[MoodInsights] Error:", error);
     errors.internal(res, 'Failed to generate mood insights');
+  }
+});
+
+/**
+ * GET /api/mood/intelligence
+ * AI-powered mood recommendations and personalized wellness insights
+ * Uses pattern recognition across mood, food, sleep, and activity data
+ */
+router.get("/intelligence", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    console.log(`[MoodIntelligence] Generating intelligence for user: ${userId}`);
+
+    const intelligence = await getMoodIntelligence(userId);
+
+    if (!intelligence) {
+      return res.status(404).json({
+        error: 'Insufficient data',
+        message: 'Not enough data to generate mood intelligence. Keep logging your mood, food, and activities.',
+        dataRequired: {
+          moodLogs: 5,
+          daysActive: 3
+        }
+      });
+    }
+
+    res.json(intelligence);
+  } catch (error) {
+    console.error("[MoodIntelligence] Error:", error);
+    errors.internal(res, 'Failed to generate mood intelligence');
   }
 });
 

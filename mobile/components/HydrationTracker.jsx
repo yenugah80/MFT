@@ -1036,7 +1036,7 @@ const StatsCard = ({ beverageHistory, dailyGoal }) => {
   return (
     <View style={styles.statsCard}>
       <View style={styles.statsHeader}>
-        <Ionicons name="stats-chart" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
+        <Ionicons name="stats-chart" size={ICON_SIZES.md} color={BRAND.primary} />
         <Text style={styles.statsTitle}>Today's Stats</Text>
       </View>
 
@@ -2210,18 +2210,18 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: SEMANTIC.info.base,
+    color: BRAND.primary, // Brand purple for consistency
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: '#7C93B2', // Soft blue-gray - matches hydration theme
+    color: BRAND.primaryLight, // Light purple label
     fontWeight: TYPOGRAPHY.weight.medium,
     marginTop: 4,
   },
   statDivider: {
     width: 1,
     height: 30,
-    backgroundColor: 'rgba(107, 78, 255, 0.1)',
+    backgroundColor: `${BRAND.primary}25`, // Brand-consistent divider
   },
 
   // Timeline
