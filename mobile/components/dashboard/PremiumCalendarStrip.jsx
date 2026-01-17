@@ -24,6 +24,7 @@ import {
   Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import LottieView from 'lottie-react-native';
 import { generateStoryLine } from '../../utils/healthCalculations';
@@ -88,6 +89,25 @@ function formatDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+// Check if a date is in the past (before today)
+function isPastDate(date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  return checkDate < today;
+}
+
+// Check if a date is yesterday
+function isYesterday(date) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  return checkDate.getTime() === yesterday.getTime();
+}
+
 // Single day cell
 function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) {
   // Hooks must be called unconditionally before any early returns
@@ -106,6 +126,10 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
   const hasWater = (dayData.water > 0) || (dayData.hydrationPercent > 0);
   const hasAnyData = hasFood || hasMood || hasWater;
 
+  // Check if this is a missed day (past date with no activity)
+  const isMissedDay = isPastDate(date) && !hasAnyData;
+  const isYesterdayMissed = isYesterday(date) && !hasAnyData;
+
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.sequence([
@@ -123,6 +147,8 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
           compact && styles.dayCellCompact,
           isToday && styles.dayCellToday,
           isSelected && styles.dayCellSelected,
+          isMissedDay && styles.dayCellMissed,
+          isYesterdayMissed && styles.dayCellYesterdayMissed,
         ]}
         onPress={handlePress}
         activeOpacity={0.7}
@@ -132,12 +158,13 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
           compact && styles.dayNumberCompact,
           isToday && styles.dayNumberToday,
           isSelected && styles.dayNumberSelected,
+          isMissedDay && styles.dayNumberMissed,
         ]}>
           {date.getDate()}
         </Text>
 
-        {/* Data indicators - max 2 dots, or single combined for all 3 */}
-        {hasAnyData && (
+        {/* Data indicators or missed indicator */}
+        {hasAnyData ? (
           <View style={styles.indicators}>
             {hasFood && hasMood && hasWater ? (
               // All 3 activities logged - show single combined indicator
@@ -151,7 +178,11 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
               </>
             )}
           </View>
-        )}
+        ) : isMissedDay ? (
+          <View style={styles.indicators}>
+            <View style={[styles.indicator, styles.indicatorMissed]} />
+          </View>
+        ) : null}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -260,10 +291,17 @@ function MonthGridModal({ visible, onClose, year, month, data, onDateSelect, onM
 }
 
 // Comprehensive Wellness Stats Modal - Full day/period stats
-function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
+function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, currentStreak = 0 }) {
+  const router = useRouter();
   const [selectedPeriod, setSelectedPeriod] = useState('day');
 
   if (!visible) return null;
+
+  // Check if viewing yesterday and if it's a missed day (for backfill option)
+  const isViewingYesterday = dateKey && isYesterday(new Date(dateKey));
+  const hasDataForDay = dayData?.logged || dayData?.calories > 0 ||
+    dayData?.meals > 0 || dayData?.foodCount > 0;
+  const canBackfill = isViewingYesterday && !hasDataForDay;
 
   // Get Lottie source for mood display
   const getMoodLottie = (moodType, avgMood) => {
@@ -271,6 +309,14 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
     if (avgMood >= 4) return MOOD_LOTTIE_SOURCES.happy;
     if (avgMood >= 2.5) return MOOD_LOTTIE_SOURCES.neutral;
     return MOOD_LOTTIE_SOURCES.sad;
+  };
+
+  // Handle backfill - navigate to log screen with yesterday's date
+  const handleBackfill = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onClose();
+    // Navigate to log screen with date parameter for backfilling
+    router.push({ pathname: '/(tabs)/log', params: { backfillDate: dateKey } });
   };
 
   const periods = [
@@ -539,12 +585,42 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {} }) {
           ) : (
             <View style={dayDetailStyles.emptyState}>
               <Ionicons name="calendar-outline" size={56} color={TEXT.muted} />
-              <Text style={dayDetailStyles.emptyTitle}>Your stats</Text>
-              <Text style={dayDetailStyles.emptyText}>
-                {selectedPeriod === 'day'
-                  ? 'Stats appear as you log food, mood & water'
-                  : `Stats will populate as you log`}
+              <Text style={dayDetailStyles.emptyTitle}>
+                {canBackfill ? 'Missed Yesterday?' : 'Your stats'}
               </Text>
+              <Text style={dayDetailStyles.emptyText}>
+                {canBackfill
+                  ? 'You can still log yesterday\'s meals to maintain your streak!'
+                  : selectedPeriod === 'day'
+                    ? 'Stats appear as you log food, mood & water'
+                    : 'Stats will populate as you log'}
+              </Text>
+
+              {/* Backfill Button for Yesterday */}
+              {canBackfill && (
+                <TouchableOpacity style={dayDetailStyles.backfillBtn} onPress={handleBackfill}>
+                  <Ionicons name="add-circle" size={20} color={TEXT.white} />
+                  <Text style={dayDetailStyles.backfillBtnText}>Log Yesterday&apos;s Meals</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Streak Info Card (Day view with streak) */}
+          {selectedPeriod === 'day' && currentStreak > 0 && (
+            <View style={dayDetailStyles.streakInfoCard}>
+              <View style={dayDetailStyles.streakInfoIcon}>
+                <Ionicons name="flame" size={22} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={dayDetailStyles.streakInfoTitle}>Current Streak</Text>
+                <Text style={dayDetailStyles.streakInfoValue}>{currentStreak} day{currentStreak !== 1 ? 's' : ''}</Text>
+              </View>
+              {!hasDataForDay && (
+                <View style={dayDetailStyles.streakWarningBadge}>
+                  <Text style={dayDetailStyles.streakWarningBadgeText}>Log to keep!</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -840,6 +916,74 @@ const dayDetailStyles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: BRAND.primary,
   },
+
+  // Backfill button
+  backfillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[5],
+    backgroundColor: BRAND.primary,
+    borderRadius: RADIUS.xl,
+    marginTop: SPACING[4],
+    shadowColor: BRAND.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  backfillBtnText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
+  },
+
+  // Streak info card
+  streakInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    marginBottom: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  streakInfoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING[3],
+  },
+  streakInfoTitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  streakInfoValue: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#EF4444',
+    marginTop: 2,
+  },
+  streakWarningBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  streakWarningBadgeText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
+  },
 });
 
 export default function PremiumCalendarStrip({
@@ -849,11 +993,26 @@ export default function PremiumCalendarStrip({
   currentStreak = 0,
   style,
 }) {
+  const router = useRouter();
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [showMonthGrid, setShowMonthGrid] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState(null);
+
+  // Check if user has logged anything today
+  const todayKey = formatDateKey(today);
+  const todayData = data?.[todayKey] || {};
+  const hasLoggedToday = (todayData.meals > 0) || (todayData.foodCount > 0) ||
+    (todayData.calories > 0) || (todayData.moodCount > 0) ||
+    (todayData.water > 0) || (todayData.hydrationPercent > 0);
+
+  // Check if it's evening (after 6 PM) - streak at risk time
+  const currentHour = today.getHours();
+  const isEvening = currentHour >= 18;
+
+  // Show streak at risk warning if user has streak, hasn't logged today, and it's evening
+  const showStreakWarning = currentStreak > 0 && !hasLoggedToday && isEvening;
 
   // Handle day tap - show detail modal
   const handleDayPress = useCallback((date) => {
@@ -881,8 +1040,32 @@ export default function PremiumCalendarStrip({
     setShowMonthGrid(true);
   };
 
+  const handleLogNow = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('/(tabs)/log');
+  };
+
   return (
     <View style={[styles.container, style]}>
+      {/* Streak At Risk Warning */}
+      {showStreakWarning && (
+        <TouchableOpacity style={styles.streakWarning} onPress={handleLogNow} activeOpacity={0.8}>
+          <View style={styles.streakWarningContent}>
+            <Ionicons name="warning" size={20} color="#F59E0B" />
+            <View style={styles.streakWarningText}>
+              <Text style={styles.streakWarningTitle}>Streak at risk!</Text>
+              <Text style={styles.streakWarningSubtitle}>
+                Log something before midnight to keep your {currentStreak}-day streak
+              </Text>
+            </View>
+          </View>
+          <View style={styles.streakWarningAction}>
+            <Text style={styles.streakWarningActionText}>Log Now</Text>
+            <Ionicons name="chevron-forward" size={16} color={BRAND.primary} />
+          </View>
+        </TouchableOpacity>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -892,14 +1075,6 @@ export default function PremiumCalendarStrip({
         </View>
 
         <View style={styles.headerRight}>
-          {/* Streak Badge */}
-          {currentStreak > 0 && (
-            <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={14} color="#EF4444" />
-              <Text style={styles.streakText}>{currentStreak}</Text>
-            </View>
-          )}
-
           <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAll}>
             <Ionicons name="calendar-outline" size={16} color={BRAND.primary} />
           </TouchableOpacity>
@@ -957,6 +1132,7 @@ export default function PremiumCalendarStrip({
         dayData={selectedDayDetail?.dayData}
         dateKey={selectedDayDetail?.dateKey}
         allData={data}
+        currentStreak={currentStreak}
         onViewHistory={(dateKey) => onDateSelect?.({ dateKey })}
       />
     </View>
@@ -1098,6 +1274,69 @@ const styles = StyleSheet.create({
     width: 12,
     height: 6,
     borderRadius: 3,
+  },
+  indicatorMissed: {
+    backgroundColor: '#9CA3AF', // Gray - indicates missed day
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderColor: 'rgba(107, 114, 128, 0.3)',
+  },
+
+  // Missed day styles
+  dayCellMissed: {
+    backgroundColor: 'rgba(156, 163, 175, 0.08)',
+  },
+  dayCellYesterdayMissed: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderStyle: 'dashed',
+  },
+  dayNumberMissed: {
+    color: TEXT.tertiary,
+  },
+
+  // Streak warning banner
+  streakWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  streakWarningContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  streakWarningText: {
+    marginLeft: SPACING[3],
+    flex: 1,
+  },
+  streakWarningTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#B45309',
+  },
+  streakWarningSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
+    marginTop: 2,
+  },
+  streakWarningAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakWarningActionText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: BRAND.primary,
   },
 
   // Modal styles

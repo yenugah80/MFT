@@ -43,6 +43,8 @@ import resolverRouterNew from "./routes/resolver.js";
 import learningRouter from "./routes/learning.js";
 import expiryRouter from "./routes/expiry.js";
 import activityRouter from "./routes/activity.js";
+import sleepRouter from "./routes/sleep.js";
+import stressRouter from "./routes/stress.js";
 import mlAnalyticsRouter from "./routes/mlAnalytics.js";
 import mtlPredictionsRouter from "./routes/mtlPredictions.js";
 import unifiedAnalyticsRouter from "./routes/unifiedAnalytics.js";
@@ -331,6 +333,65 @@ export async function ensureMLTables() {
   }
 }
 
+// Ensure Sleep and Stress tracking tables exist
+let sleepStressTablesEnsured = false;
+export async function ensureSleepStressTables() {
+  if (sleepStressTablesEnsured) return;
+  try {
+    // Sleep log table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "sleep_log" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "bed_time" TIMESTAMP NOT NULL,
+        "wake_time" TIMESTAMP NOT NULL,
+        "duration_minutes" INTEGER NOT NULL CHECK (duration_minutes > 0 AND duration_minutes <= 1440),
+        "quality" INTEGER NOT NULL CHECK (quality >= 1 AND quality <= 10),
+        "tags" JSONB DEFAULT '{}',
+        "notes" TEXT,
+        "sleep_date" TEXT NOT NULL,
+        "client_event_id" TEXT,
+        "day_key" TEXT,
+        "timezone_offset" INTEGER,
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "sleep_log_user_date_idx" ON "sleep_log" ("user_id", "sleep_date");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "sleep_log_user_day_key_idx" ON "sleep_log" ("user_id", "day_key");`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "sleep_log_user_sleep_date_unique" ON "sleep_log" ("user_id", "sleep_date");`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "sleep_log_user_client_event_id_unique" ON "sleep_log" ("user_id", "client_event_id") WHERE "client_event_id" IS NOT NULL;`);
+
+    // Stress log table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "stress_log" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "level" INTEGER NOT NULL CHECK (level >= 1 AND level <= 10),
+        "triggers" JSONB DEFAULT '[]',
+        "physical_symptoms" JSONB DEFAULT '{}',
+        "coping_used" JSONB DEFAULT '[]',
+        "notes" TEXT,
+        "logged_date" TEXT NOT NULL,
+        "client_event_id" TEXT,
+        "day_key" TEXT,
+        "timezone_offset" INTEGER,
+        "logged_at" TIMESTAMP DEFAULT NOW(),
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "stress_log_user_date_idx" ON "stress_log" ("user_id", "logged_date");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "stress_log_user_day_key_idx" ON "stress_log" ("user_id", "day_key");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "stress_log_user_level_idx" ON "stress_log" ("user_id", "level");`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "stress_log_user_client_event_id_unique" ON "stress_log" ("user_id", "client_event_id") WHERE "client_event_id" IS NOT NULL;`);
+
+    sleepStressTablesEnsured = true;
+    console.log('[Database] Sleep and Stress tracking tables verified');
+  } catch (err) {
+    console.error('[Database] Failed to ensure Sleep/Stress tables:', err);
+  }
+}
 
 // CORS configuration – restrict to trusted origins only (security fix)
 // Allow your frontend domains and mobile app deep links
@@ -464,6 +525,12 @@ app.use("/api/expiry", expiryRouter);
 
 // Mount Activity Router (Activity Analytics & Recommendations)
 app.use("/api/activity", activityRouter);
+
+// Mount Sleep Router (Sleep Tracking & Trends)
+app.use("/api/sleep", sleepRouter);
+
+// Mount Stress Router (Stress Tracking & Patterns)
+app.use("/api/stress", stressRouter);
 
 // Mount ML Analytics Router (Thompson Sampling, A/B Testing, Drift Detection)
 // Note: This router provides machine learning enhanced recommendations with full
@@ -612,6 +679,7 @@ app.listen(PORT, "0.0.0.0", async () => {
     await ensureProfilesTableShape();
     await ensureRecommendationsHistoryTable();
     await ensureMLTables();
+    await ensureSleepStressTables();
     console.log('[Database] Schema initialization complete');
   } catch (err) {
     console.error('[Database] Initialization warning:', err.message);

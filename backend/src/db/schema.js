@@ -179,6 +179,9 @@ export const foodLogTable = pgTable(
     protein: integer("protein"),
     carbs: integer("carbs"),
     fats: integer("fats"),
+    fiber: integer("fiber"), // Fiber in grams (new column)
+    sugar: integer("sugar"), // Sugar in grams (new column)
+    sodium: integer("sodium"), // Sodium in mg (new column)
     servingSize: text("serving_size"),
     mealType: text("meal_type"), // 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
@@ -226,6 +229,9 @@ export const foodLogTable = pgTable(
     proteinCheck: check("food_protein_check", sql`${table.protein} IS NULL OR (${table.protein} >= 0 AND ${table.protein} <= 500)`),
     carbsCheck: check("food_carbs_check", sql`${table.carbs} IS NULL OR (${table.carbs} >= 0 AND ${table.carbs} <= 1000)`),
     fatsCheck: check("food_fats_check", sql`${table.fats} IS NULL OR (${table.fats} >= 0 AND ${table.fats} <= 500)`),
+    fiberCheck: check("food_fiber_check", sql`${table.fiber} IS NULL OR (${table.fiber} >= 0 AND ${table.fiber} <= 200)`),
+    sugarCheck: check("food_sugar_check", sql`${table.sugar} IS NULL OR (${table.sugar} >= 0 AND ${table.sugar} <= 500)`),
+    sodiumCheck: check("food_sodium_check", sql`${table.sodium} IS NULL OR (${table.sodium} >= 0 AND ${table.sodium} <= 10000)`),
     mealTypeCheck: check("meal_type_check", sql`${table.mealType} IS NULL OR ${table.mealType} IN ('breakfast', 'lunch', 'dinner', 'snack')`),
     nutriscoreCheck: check("nutriscore_check", sql`${table.nutriscore} IS NULL OR ${table.nutriscore} IN ('A', 'B', 'C', 'D', 'E')`),
     ecoscoreCheck: check("ecoscore_check", sql`${table.ecoscore} IS NULL OR ${table.ecoscore} IN ('A', 'B', 'C', 'D', 'E')`),
@@ -1195,6 +1201,169 @@ export const laggedCorrelationsTable = pgTable(
     userIdx: index("lagged_corr_user_idx").on(table.userId),
     signalPairIdx: index("lagged_corr_signals_idx").on(table.signalA, table.signalB),
     activeIdx: index("lagged_corr_active_idx").on(table.isActive),
+  })
+);
+
+// ============================================================================
+// ACTIVITY TRACKING TABLE
+// Full MET-based activity logging with idempotency
+// ============================================================================
+
+export const activityLogTable = pgTable(
+  "activity_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Activity details
+    type: text("type").notNull().default("general"), // running, cycling, walking, gym, swimming, yoga, sports, hiking, dancing, hiit, strength, cardio, flexibility, general
+    durationMinutes: integer("duration_minutes").notNull(),
+    intensity: text("intensity").notNull().default("moderate"), // light, moderate, vigorous
+
+    // MET-based calorie calculation
+    metValue: decimal("met_value", { precision: 4, scale: 2 }),
+    caloriesBurned: integer("calories_burned"),
+
+    // Optional tracking fields
+    heartRateAvg: integer("heart_rate_avg"),
+    distanceKm: decimal("distance_km", { precision: 6, scale: 2 }),
+    steps: integer("steps"),
+    notes: text("notes"),
+
+    // Idempotency support
+    clientEventId: text("client_event_id"),
+
+    // Timezone normalization
+    dayKey: text("day_key"), // YYYY-MM-DD at log time
+    timezoneOffset: integer("timezone_offset"), // minutes from UTC
+
+    loggedAt: timestamp("logged_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    // Indexes for performance
+    userDateIdx: index("activity_log_user_date_idx").on(table.userId, table.loggedAt),
+    userDayKeyIdx: index("activity_log_user_day_key_idx").on(table.userId, table.dayKey),
+    userTypeIdx: index("activity_log_user_type_idx").on(table.userId, table.type),
+    // Unique constraint for idempotency
+    userClientEventIdUnique: unique("activity_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
+    // CHECK constraints
+    durationCheck: check("activity_duration_check", sql`${table.durationMinutes} > 0 AND ${table.durationMinutes} <= 1440`),
+    typeCheck: check("activity_type_check", sql`${table.type} IN ('running', 'cycling', 'walking', 'gym', 'swimming', 'yoga', 'sports', 'hiking', 'dancing', 'hiit', 'strength', 'cardio', 'flexibility', 'general')`),
+    intensityCheck: check("activity_intensity_check", sql`${table.intensity} IN ('light', 'moderate', 'vigorous')`),
+    caloriesCheck: check("activity_calories_check", sql`${table.caloriesBurned} IS NULL OR (${table.caloriesBurned} >= 0 AND ${table.caloriesBurned} <= 10000)`),
+    heartRateCheck: check("activity_heart_rate_check", sql`${table.heartRateAvg} IS NULL OR (${table.heartRateAvg} >= 30 AND ${table.heartRateAvg} <= 250)`),
+    distanceCheck: check("activity_distance_check", sql`${table.distanceKm} IS NULL OR (${table.distanceKm} >= 0 AND ${table.distanceKm} <= 500)`),
+  })
+);
+
+// ============================================================================
+// SLEEP TRACKING TABLE
+// Dedicated sleep logging with quality and context tags
+// ============================================================================
+
+export const sleepLogTable = pgTable(
+  "sleep_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Sleep times
+    bedTime: timestamp("bed_time").notNull(),
+    wakeTime: timestamp("wake_time").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(), // Calculated: wakeTime - bedTime
+
+    // Quality assessment (1-10)
+    quality: integer("quality").notNull(),
+
+    // Context tags that may affect sleep
+    tags: json("tags").default({}), // { caffeine: true, alcohol: true, exercise: true, stress: true, screenTime: true, lateFood: true }
+
+    // Notes
+    notes: text("notes"),
+
+    // Date tracking (the night of sleep, e.g., "2024-01-15" for sleeping night of Jan 15)
+    sleepDate: text("sleep_date").notNull(), // YYYY-MM-DD
+
+    // Idempotency support
+    clientEventId: text("client_event_id"),
+
+    // Timezone normalization
+    dayKey: text("day_key"),
+    timezoneOffset: integer("timezone_offset"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    // Indexes
+    userDateIdx: index("sleep_log_user_date_idx").on(table.userId, table.sleepDate),
+    userDayKeyIdx: index("sleep_log_user_day_key_idx").on(table.userId, table.dayKey),
+    // Unique constraints
+    userSleepDateUnique: unique("sleep_log_user_sleep_date_unique").on(table.userId, table.sleepDate),
+    userClientEventIdUnique: unique("sleep_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
+    // CHECK constraints
+    durationCheck: check("sleep_duration_check", sql`${table.durationMinutes} > 0 AND ${table.durationMinutes} <= 1440`),
+    qualityCheck: check("sleep_quality_check", sql`${table.quality} >= 1 AND ${table.quality} <= 10`),
+  })
+);
+
+// ============================================================================
+// STRESS TRACKING TABLE
+// Dedicated stress logging with triggers, symptoms, and coping strategies
+// ============================================================================
+
+export const stressLogTable = pgTable(
+  "stress_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Stress level (1-10)
+    level: integer("level").notNull(),
+
+    // Triggers (what caused the stress)
+    triggers: json("triggers").default([]), // ['work', 'relationships', 'health', 'finances', 'family', 'social', 'other']
+
+    // Physical symptoms experienced
+    physicalSymptoms: json("physical_symptoms").default({}), // { headache: true, tension: true, fatigue: true, heartRacing: true, digestive: true, insomnia: true }
+
+    // Coping strategies used
+    copingUsed: json("coping_used").default([]), // ['meditation', 'exercise', 'breathing', 'social', 'nature', 'music', 'rest']
+
+    // Notes
+    notes: text("notes"),
+
+    // Date tracking
+    loggedDate: text("logged_date").notNull(), // YYYY-MM-DD
+
+    // Idempotency support
+    clientEventId: text("client_event_id"),
+
+    // Timezone normalization
+    dayKey: text("day_key"),
+    timezoneOffset: integer("timezone_offset"),
+
+    loggedAt: timestamp("logged_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    // Indexes
+    userDateIdx: index("stress_log_user_date_idx").on(table.userId, table.loggedDate),
+    userDayKeyIdx: index("stress_log_user_day_key_idx").on(table.userId, table.dayKey),
+    userLevelIdx: index("stress_log_user_level_idx").on(table.userId, table.level),
+    // Unique constraint for idempotency
+    userClientEventIdUnique: unique("stress_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
+    // CHECK constraints
+    levelCheck: check("stress_level_check", sql`${table.level} >= 1 AND ${table.level} <= 10`),
   })
 );
 

@@ -30,6 +30,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import LottieView from 'lottie-react-native';
 import Svg, {
   Defs,
   LinearGradient as SvgGradient,
@@ -39,6 +40,13 @@ import Svg, {
   Rect,
   ClipPath,
 } from 'react-native-svg';
+
+// Lottie Animation Assets
+const LOTTIE_ANIMATIONS = {
+  celebration: require('../../assets/animations/celebration.json'),
+  success: require('../../assets/animations/success.json'),
+  streak: require('../../assets/animations/streak.json'),
+};
 
 import GlassCard from './GlassCard';
 import {
@@ -64,40 +72,42 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - SPACING[8];
 
 // ============================================================================
-// HEALTH IMPACT CALCULATOR - Links hydration to health metrics
+// HOURLY INTAKE CHART - Real data visualization
 // ============================================================================
 
-const calculateHealthImpact = (percentage) => {
-  // Energy: 0-30% = Low, 30-70% = Medium, 70-100% = High, 100%+ = Optimal
-  const energy = Math.min(percentage * 1.2, 100);
+/**
+ * Build hourly intake data from today's water logs
+ * Shows actual logged amounts per hour for bar chart
+ */
+const buildHourlyIntake = (events = []) => {
+  const hourlyData = Array(24).fill(0).map((_, hour) => ({
+    hour,
+    amount: 0,
+    label: hour === 0 ? '12a' : hour < 12 ? `${hour}a` : hour === 12 ? '12p' : `${hour - 12}p`,
+  }));
 
-  // Mental Clarity: Peaks at 80-100% hydration
-  const clarity = percentage >= 80 ? 95 + (percentage - 80) * 0.25 : percentage * 1.1;
+  if (!Array.isArray(events) || events.length === 0) {
+    return hourlyData;
+  }
 
-  // Skin Health: Gradual improvement, significant boost at 60%+
-  const skin = percentage >= 60 ? 60 + (percentage - 60) * 1.0 : percentage;
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
 
-  // Physical Performance: Correlates strongly with hydration
-  const performance = Math.min(percentage * 1.15, 100);
+  events.forEach((event) => {
+    const timestamp = typeof event?.timestamp === 'number' ? event.timestamp : Date.parse(event?.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp < startOfDay || timestamp >= endOfDay) return;
 
-  // Mood: Improves significantly after 50% hydration
-  const mood = percentage >= 50 ? 50 + (percentage - 50) * 0.9 : percentage * 0.8;
+    const eventDate = new Date(timestamp);
+    const hour = eventDate.getHours();
+    const amount = Number(event?.rawAmountMl ?? event?.amountMl) || 0;
 
-  // Focus: Critical for brain function
-  const focus = Math.min(percentage * 1.1, 100);
+    if (hour >= 0 && hour < 24 && amount > 0) {
+      hourlyData[hour].amount += amount;
+    }
+  });
 
-  // Stress Relief: Hydration helps manage stress
-  const stressRelief = Math.min(percentage * 0.9, 85);
-
-  return {
-    energy: Math.round(energy),
-    clarity: Math.round(clarity),
-    skin: Math.round(skin),
-    performance: Math.round(performance),
-    mood: Math.round(mood),
-    focus: Math.round(focus),
-    stressRelief: Math.round(stressRelief),
-  };
+  return hourlyData;
 };
 
 // ============================================================================
@@ -570,59 +580,31 @@ const getFeedbackState = ({
 };
 
 // ============================================================================
-// CONFETTI CELEBRATION SYSTEM
+// LOTTIE CELEBRATION OVERLAY - Premium goal celebration
 // ============================================================================
-const ConfettiParticle = ({ delay = 0 }) => {
-  const translateY = useRef(new Animated.Value(-20)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const rotate = useRef(new Animated.Value(0)).current;
+const CelebrationOverlay = ({ visible, onComplete }) => {
+  const lottieRef = useRef(null);
 
   useEffect(() => {
-    const randomX = (Math.random() - 0.5) * 150;
+    if (visible && lottieRef.current) {
+      lottieRef.current.play();
+    }
+  }, [visible]);
 
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: 400,
-        duration: 2500,
-        delay,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateX, {
-        toValue: randomX,
-        duration: 2500,
-        delay,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 2500,
-        delay,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rotate, {
-        toValue: Math.random() * 360,
-        duration: 2500,
-        delay,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const colors = ['#60A5FA', '#3B82F6', '#2563EB', '#93C5FD', '#BFDBFE'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
+  if (!visible) return null;
 
   return (
-    <Animated.View
-      style={[
-        styles.confettiParticle,
-        {
-          backgroundColor: color,
-          transform: [{ translateY }, { translateX }, { rotate: rotate.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }],
-          opacity,
-        },
-      ]}
-    />
+    <View style={styles.celebrationOverlay} pointerEvents="none">
+      <LottieView
+        ref={lottieRef}
+        source={LOTTIE_ANIMATIONS.celebration}
+        autoPlay
+        loop={false}
+        speed={1.2}
+        onAnimationFinish={onComplete}
+        style={styles.celebrationLottie}
+      />
+    </View>
   );
 };
 
@@ -665,11 +647,12 @@ const WaveProgress = ({ percentage, size = 140 }) => {
   });
 
   const getWaveColor = () => {
-    if (normalizedPercentage >= 100) return ['#10B981', '#059669'];
-    if (normalizedPercentage >= 75) return ['#2563EB', '#1D4ED8'];
-    if (normalizedPercentage >= 50) return ['#3B82F6', '#2563EB'];
-    if (normalizedPercentage >= 25) return ['#60A5FA', '#3B82F6'];
-    return ['#8594cfff', '#60A5FA'];
+    // Water blue progression matching hero card - Ultramarine, Prussian, Indigo
+    if (normalizedPercentage >= 100) return ['#5B8DEE', '#3B6DD9']; // Bright Ultramarine - goal achieved!
+    if (normalizedPercentage >= 75) return ['#4169E1', '#2E4A7D']; // Ultramarine → Prussian - almost there
+    if (normalizedPercentage >= 50) return ['#6B8DD9', '#4169E1']; // Sky Ultramarine - good progress
+    if (normalizedPercentage >= 25) return ['#87A8E8', '#6B8DD9']; // Misty Blue - building
+    return ['#A8C4F5', '#87A8E8']; // Light Misty → Misty Blue - just started
   };
 
   const [color1, color2] = getWaveColor();
@@ -725,10 +708,24 @@ const WaveProgress = ({ percentage, size = 140 }) => {
 
       {/* Percentage overlay */}
       <View style={styles.waveTextOverlay}>
-        <Text style={styles.wavePercentage}>{Math.round(percentage)}%</Text>
-        <Text style={styles.waveLabel}>
-          {percentage >= 100 ? '🎉 Goal!' : percentage >= 50 ? 'On Track' : percentage > 0 ? 'Building' : ''}
-        </Text>
+        {normalizedPercentage >= 100 ? (
+          <View style={styles.goalAchievedContainer}>
+            <LottieView
+              source={LOTTIE_ANIMATIONS.success}
+              autoPlay
+              loop={false}
+              style={styles.goalSuccessLottie}
+            />
+            <Text style={styles.wavePercentageDone}>Done!</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.wavePercentage}>{Math.round(percentage)}%</Text>
+            <Text style={styles.waveLabel}>
+              {percentage >= 50 ? 'On Track' : percentage > 0 ? 'Building' : ''}
+            </Text>
+          </>
+        )}
       </View>
     </View>
     </View>
@@ -736,98 +733,72 @@ const WaveProgress = ({ percentage, size = 140 }) => {
 };
 
 // ============================================================================
-// HEALTH METRIC INDICATOR - Premium gradient ring with score
+// HOURLY INTAKE BAR CHART - Real visualization of today's water intake
 // ============================================================================
 
-const HealthMetric = ({ icon, label, score, color, gradientColors, size = 70 }) => {
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
+const HourlyIntakeChart = ({ hourlyData, maxAmount }) => {
+  const currentHour = new Date().getHours();
+  const barWidth = 12;
+  const chartHeight = 80;
+  const maxBarHeight = chartHeight - 20;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(progressAnim, {
-        toValue: score,
-        tension: 40,
-        friction: 8,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [score]);
+  // Find max for scaling (use at least 500ml for visible bars)
+  const effectiveMax = Math.max(maxAmount || 500, 500);
 
-  const getStatusIcon = () => {
-    if (score >= 80) return 'sparkles';
-    if (score >= 60) return 'fitness';
-    if (score >= 40) return 'thumbs-up';
-    return 'water';
-  };
-
-  const getStatusColor = () => {
-    if (score >= 80) return '#10B981';
-    if (score >= 60) return '#3B82F6';
-    if (score >= 40) return '#F59E0B';
-    return TEXT.tertiary;
-  };
-
-  const strokeWidth = 6;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  const strokeDashoffset = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: [circumference, 0],
-  });
+  // Show hours from 6am to 11pm (waking hours)
+  const visibleHours = hourlyData.slice(6, 23);
 
   return (
-    <Animated.View style={[styles.healthMetric, { transform: [{ scale: scaleAnim }] }]}>
-      <View style={styles.metricRing}>
-        <Svg width={size} height={size}>
-          <Defs>
-            <SvgGradient id={`gradient-${label}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor={gradientColors[0]} stopOpacity="1" />
-              <Stop offset="100%" stopColor={gradientColors[1]} stopOpacity="1" />
-            </SvgGradient>
-          </Defs>
-
-          {/* Background ring */}
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={`${color}1A`}
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-
-          {/* Progress ring */}
-          <AnimatedCircle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={`url(#gradient-${label})`}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          />
-        </Svg>
-
-        {/* Center content */}
-        <View style={styles.metricCenter}>
-          <Ionicons name={getStatusIcon()} size={18} color={getStatusColor()} />
-          <Text style={[styles.metricScore, { color }]}>{score}%</Text>
-        </View>
+    <View style={styles.hourlyChartContainer}>
+      <View style={styles.hourlyChartHeader}>
+        <Ionicons name="bar-chart-outline" size={16} color={SEMANTIC.info.base} />
+        <Text style={styles.hourlyChartTitle}>Today's Intake</Text>
       </View>
 
-      <Text style={styles.metricLabel}>{label}</Text>
-    </Animated.View>
+      <View style={[styles.hourlyChartBars, { height: chartHeight }]}>
+        {visibleHours.map((hourData, index) => {
+          const actualHour = hourData.hour;
+          const barHeight = hourData.amount > 0
+            ? Math.max(4, (hourData.amount / effectiveMax) * maxBarHeight)
+            : 2;
+          const isCurrentHour = actualHour === currentHour;
+          const isPastHour = actualHour < currentHour;
+          const hasIntake = hourData.amount > 0;
+
+          return (
+            <View key={actualHour} style={styles.hourlyBarColumn}>
+              <View
+                style={[
+                  styles.hourlyBar,
+                  {
+                    height: barHeight,
+                    backgroundColor: hasIntake
+                      ? (isCurrentHour ? '#0EA5E9' : '#60A5FA')
+                      : (isPastHour ? '#E2E8F0' : '#F1F5F9'),
+                    borderRadius: 4,
+                  },
+                ]}
+              />
+              {(actualHour === 6 || actualHour === 12 || actualHour === 18 || actualHour === 22) && (
+                <Text style={styles.hourlyLabel}>{hourData.label}</Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Legend */}
+      <View style={styles.hourlyChartLegend}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#60A5FA' }]} />
+          <Text style={styles.legendText}>Logged</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#0EA5E9' }]} />
+          <Text style={styles.legendText}>Current hour</Text>
+        </View>
+      </View>
+    </View>
   );
 };
 
@@ -900,68 +871,51 @@ const WellnessScoreCard = ({ score, compact = false }) => {
 };
 
 // ============================================================================
-// STREAK COUNTER - Premium fire effect
+// STREAK COUNTER - Premium Lottie fire effect
 // ============================================================================
 
 const StreakCounter = ({ streak }) => {
-  const flameAnim = useRef(new Animated.Value(0)).current;
+  const lottieRef = useRef(null);
 
   useEffect(() => {
-    if (streak > 0) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(flameAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(flameAnim, {
-            toValue: 0,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+    if (streak > 0 && lottieRef.current) {
+      lottieRef.current.play();
     }
   }, [streak]);
 
-  const flameScale = flameAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.2],
-  });
-
-  const flameOpacity = flameAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.8, 1],
-  });
-
   if (streak === 0) return null;
+
+  const getStreakStatus = () => {
+    if (streak >= 30) return { message: 'Legendary!', colors: ['#FEF3C7', '#FDE68A', '#F59E0B'] };
+    if (streak >= 14) return { message: 'Amazing!', colors: ['#FEF3C7', '#FDE68A'] };
+    if (streak >= 7) return { message: 'Great job!', colors: ['#FEF3C7', '#FDE68A'] };
+    return { message: 'Keep it up!', colors: ['#FEF3C7', '#FDE68A'] };
+  };
+
+  const status = getStreakStatus();
 
   return (
     <LinearGradient
-      colors={['#FEF3C7', '#FDE68A']}
+      colors={status.colors.slice(0, 2)}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.streakCard}
     >
-      <Animated.View
-        style={[
-          styles.streakFlame,
-          {
-            transform: [{ scale: flameScale }],
-            opacity: flameOpacity,
-          },
-        ]}
-      >
-        <Text style={styles.streakEmoji}>🔥</Text>
-      </Animated.View>
+      <View style={styles.streakFlame}>
+        <LottieView
+          ref={lottieRef}
+          source={LOTTIE_ANIMATIONS.streak}
+          autoPlay
+          loop
+          speed={0.8}
+          style={styles.streakLottie}
+        />
+      </View>
 
       <View style={styles.streakInfo}>
         <Text style={styles.streakCount}>{streak}</Text>
         <Text style={styles.streakLabel}>Day Streak</Text>
-        <Text style={styles.streakMessage}>
-          {streak >= 30 ? 'Legendary!' : streak >= 14 ? 'Amazing!' : streak >= 7 ? 'Great job!' : 'Keep it up!'}
-        </Text>
+        <Text style={styles.streakMessage}>{status.message}</Text>
       </View>
     </LinearGradient>
   );
@@ -1007,6 +961,7 @@ export default function HydrationWellnessDashboard({
   celebratedTodayKey,
   onCelebrate,
   onOpenFullTracker,
+  onViewHistory, // Navigate to hydration history/insights
 }) {
   const safeCurrentIntake = parseLiters(currentIntake);
   const safeGoal = parseGoal(dailyGoal, 2.0, 0.5, 10);
@@ -1021,9 +976,15 @@ export default function HydrationWellnessDashboard({
   const currentMl = derivedTodayMl;
   const goalMl = Math.round(safeGoal * 1000);
   const percentage = Math.min(calculatePercentage(currentMl, goalMl, 120), 120);
-  const baseMetrics = calculateHealthImpact(percentage);
   const beverageSummary = useMemo(() => buildBeverageSummary(intakeEvents), [intakeEvents]);
   const beverageInsight = useMemo(() => getBeverageInsight(beverageSummary), [beverageSummary]);
+
+  // Build hourly intake data for bar chart (REAL data)
+  const hourlyIntakeData = useMemo(() => buildHourlyIntake(intakeEvents), [intakeEvents]);
+  const maxHourlyAmount = useMemo(() =>
+    Math.max(...hourlyIntakeData.map(h => h.amount), 0),
+    [hourlyIntakeData]
+  );
 
   const smartAdvice = getSmartAdvice(percentage);
   const remaining = Math.max(goalMl - currentMl, 0);
@@ -1053,33 +1014,10 @@ export default function HydrationWellnessDashboard({
     largestGapMinutesToday,
   }), [beverageSummary, feedback.status, logCountToday, largestGapMinutesToday]);
 
-  const rhythmAdjustedMetrics = applyRhythmPenalty(
-    baseMetrics,
-    lastLogMinutes,
-    largestGapMinutesToday,
-    logCountToday,
-    dayProgress
-  );
-  const overhydrationAdjustedMetrics = applyOverhydrationPenalty(
-    rhythmAdjustedMetrics,
-    percentage,
-    dayProgress
-  );
-  const wellnessScore = calculateWellnessScore(overhydrationAdjustedMetrics, feedback.status);
-  const healthMetrics = {
-    ...overhydrationAdjustedMetrics,
-    wellness: wellnessScore,
-  };
-  
   const [showConfetti, setShowConfetti] = useState(false);
-  const [metricDeltaNote, setMetricDeltaNote] = useState(null);
-  const [activeSection, setActiveSection] = useState('physical');
-  const [showInsights, setShowInsights] = useState(false);
   const [dailyInsight, setDailyInsight] = useState(null);
   const isCompact = SCREEN_WIDTH < 360;
-  const previousMetricsRef = useRef(null);
   const previousPercentageRef = useRef(percentage);
-  const lastSnapshotRef = useRef(null);
   const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   const leadMessage = useMemo(
     () => getHydrationLeadMessage(dailyInsight, feedback.status),
@@ -1110,70 +1048,12 @@ export default function HydrationWellnessDashboard({
     }
   }, [streak]);
 
+  // FIX: Always use real-time insight from actual beverage data, no caching
+  // This prevents stale tips like "Lots of coffee today" when no coffee was logged
   useEffect(() => {
-    let isActive = true;
-
-    const loadDailyInsight = async () => {
-      const stored = await getItem(STORAGE_KEYS.HYDRATION_DAILY_INSIGHT);
-      if (!isActive) return;
-
-      if (stored?.dateKey === todayKey && typeof stored?.message === 'string') {
-        setDailyInsight(stored.message);
-        return;
-      }
-
-      if (insightCandidate) {
-        setDailyInsight(insightCandidate);
-        await setItem(STORAGE_KEYS.HYDRATION_DAILY_INSIGHT, {
-          dateKey: todayKey,
-          message: insightCandidate,
-        });
-      } else {
-        setDailyInsight(null);
-      }
-    };
-
-    loadDailyInsight();
-
-    return () => {
-      isActive = false;
-    };
-  }, [insightCandidate, todayKey]);
-
-  useEffect(() => {
-    const nowTime = Date.now();
-    const snapshot = lastSnapshotRef.current;
-    const shouldCompare =
-      !snapshot ||
-      (Number.isFinite(lastLogTimestamp) && lastLogTimestamp !== snapshot.lastLogTimestamp) ||
-      nowTime - snapshot.timestamp >= 30 * 60 * 1000;
-
-    if (!shouldCompare) return;
-
-    const previous = previousMetricsRef.current;
-    if (previous) {
-      const focusDelta = healthMetrics.focus - previous.focus;
-      const clarityDelta = healthMetrics.clarity - previous.clarity;
-      const stressDelta = healthMetrics.stressRelief - previous.stressRelief;
-      let note = null;
-
-      if (focusDelta < -5 && lastLogMinutes > 120) {
-        note = 'Long gap since last hydration reduced focus.';
-      } else if (clarityDelta < -5 && percentage > 110) {
-        note = 'Early heavy intake can reduce mental clarity.';
-      } else if (stressDelta < -5 && feedback.paceDelta < -200) {
-        note = 'Falling behind pace softened stress resilience.';
-      }
-
-      setMetricDeltaNote(note);
-    }
-
-    previousMetricsRef.current = healthMetrics;
-    lastSnapshotRef.current = {
-      timestamp: nowTime,
-      lastLogTimestamp,
-    };
-  }, [healthMetrics, lastLogMinutes, lastLogTimestamp, percentage, feedback.paceDelta]);
+    // Always use the freshly calculated insight from real beverage data
+    setDailyInsight(insightCandidate);
+  }, [insightCandidate]);
 
   const handleOpenFull = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1182,253 +1062,152 @@ export default function HydrationWellnessDashboard({
     }
   };
 
+  const handleViewHistory = async () => {
+    await Haptics.selectionAsync();
+    if (onViewHistory) {
+      onViewHistory();
+    }
+  };
+
+  // Water Blue gradients - Ultramarine, Prussian, Indigo (NO teal/cyan)
+  const getProgressGradient = () => {
+    if (percentage >= 100) return ['#5B8DEE', '#3B6DD9', '#1B4F9E']; // Bright Ultramarine → Deep Prussian - complete!
+    if (percentage >= 75) return ['#4169E1', '#2E4A7D', '#1A237E']; // Ultramarine → Indigo - almost there
+    if (percentage >= 50) return ['#6B8DD9', '#4169E1', '#2E4A7D']; // Sky Ultramarine → Ultramarine - good
+    if (percentage >= 25) return ['#87A8E8', '#6B8DD9', '#4169E1']; // Misty Blue → Sky Ultramarine - building
+    return ['#A8C4F5', '#87A8E8', '#6B8DD9']; // Light Misty → Misty Blue - starting
+  };
+
   return (
-    <View
-      style={styles.container}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <LinearGradient
-            colors={SURFACES.gradient.blue}
-            style={styles.headerIconContainer}
-          >
-            <Ionicons name="water" size={24} color="#FFF" />
-          </LinearGradient>
-          <View>
-            <Text style={styles.headerTitle}>Hydration Wellness</Text>
-            <Text style={styles.headerSubtitle}>Health & Mind Connection</Text>
+    <View style={styles.container}>
+      {/* Premium Hero Card with Gradient Background */}
+      <LinearGradient
+        colors={getProgressGradient()}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroCard}
+      >
+        {/* 3D Decorative circles for depth and visual interest */}
+        <View style={styles.heroDecorCircle1} />
+        <View style={styles.heroDecorCircle2} />
+        <View style={styles.heroDecorCircle3} />
+
+        {/* Header Row inside gradient */}
+        <View style={styles.heroHeader}>
+          <View style={styles.heroTitleRow}>
+            <Ionicons name="water" size={22} color="rgba(255,255,255,0.95)" />
+            <Text style={styles.heroTitle}>Hydration</Text>
+          </View>
+          {/* Daily goal indicator */}
+          <View style={styles.goalIndicator}>
+            <Text style={styles.goalIndicatorText}>{Math.round(percentage)}%</Text>
           </View>
         </View>
-      </View>
 
-      {/* Main Progress & Wellness Score */}
-      <GlassCard padding="lg" style={styles.mainCard}>
-        <View style={[styles.mainContent, isCompact && styles.mainContentCompact]}>
-          <WaveProgress percentage={percentage} size={isCompact ? 120 : 140} />
+        {/* Main Content Row */}
+        <View style={styles.heroContent}>
+          {/* Wave Progress on left */}
+          <View style={styles.heroWaveContainer}>
+            <WaveProgress percentage={percentage} size={isCompact ? 100 : 115} />
+          </View>
 
-          <View style={styles.mainStats}>
-            <Text style={styles.mainInsight}>{leadMessage}</Text>
-            <View style={styles.statRowSecondary}>
-              <Text style={styles.mainValueSecondary}>{currentMl}ml</Text>
-              <Text style={styles.mainLabel}>of {goalMl}ml</Text>
+          {/* Stats on right */}
+          <View style={styles.heroStatsContainer}>
+            <View style={styles.heroIntakeRow}>
+              <Text style={styles.heroIntakeValue}>{currentMl}</Text>
+              <Text style={styles.heroIntakeUnit}>ml</Text>
             </View>
-            <Text style={styles.remainingText}>
-              {remaining > 0 ? `${remaining}ml to goal` : '🎉 Goal reached!'}
+            <Text style={styles.heroGoalText}>of {goalMl}ml goal</Text>
+
+            {/* Progress bar */}
+            <View style={styles.heroProgressBar}>
+              <View style={[styles.heroProgressFill, { width: `${Math.min(percentage, 100)}%` }]} />
+            </View>
+
+            {/* Status message */}
+            <Text style={styles.heroStatusText}>
+              {percentage >= 100 ? '🎉 Goal complete!' : `${remaining}ml remaining`}
             </Text>
           </View>
         </View>
-      </GlassCard>
 
-      {/* Behavior Feedback - Only show after user logs something */}
-      {hasLoggedToday && (
-        <GlassCard padding="md" style={styles.feedbackCard}>
-          <View style={styles.feedbackHeader}>
-            <View style={[styles.feedbackIcon, { backgroundColor: `${feedback.accent}20` }]}>
-              <Ionicons name={feedback.icon} size={20} color={feedback.accent} />
-            </View>
-            <View style={styles.feedbackTitleBlock}>
-              <Text style={styles.feedbackTitle}>{feedback.title}</Text>
-              <Text style={styles.feedbackSubtitle}>Explains the why and next step</Text>
-            </View>
-          </View>
-
-          <View style={styles.feedbackContent}>
-            {isCompact ? (
-              <View style={styles.feedbackCompactBlock}>
-                <Text style={styles.feedbackInlineText}>
-                  <Text style={styles.feedbackInlineLabel}>Why: </Text>
-                  {feedback.reason}
-                </Text>
-                <Text style={styles.feedbackInlineText}>
-                  <Text style={styles.feedbackInlineLabel}>Next: </Text>
-                  {feedback.nextStep}
-                </Text>
-              </View>
-            ) : (
-              <>
-                <View style={styles.feedbackRow}>
-                  <Text style={styles.feedbackLabel}>Why</Text>
-                  <Text style={styles.feedbackValue}>{feedback.reason}</Text>
-                </View>
-                <View style={styles.feedbackRow}>
-                  <Text style={styles.feedbackLabel}>Next</Text>
-                  <Text style={styles.feedbackValue}>{feedback.nextStep}</Text>
-                </View>
-              </>
+        {/* Status Badge at bottom */}
+        {hasLoggedToday && (
+          <View style={styles.heroStatusBadge}>
+            <Ionicons name={feedback.icon} size={14} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.heroStatusBadgeText}>{feedback.title}</Text>
+            {lastLogMinutes && (
+              <Text style={styles.heroLastLogText}>· {formatTimeAgo(lastLogMinutes)}</Text>
             )}
-            <View style={styles.pacingRow}>
-              <View style={styles.pacingHeader}>
-                <Text style={styles.pacingLabel}>Pace check</Text>
-                <Text style={styles.pacingValue}>
-                  {currentMl}ml / {feedback.expectedMl}ml by now
-                </Text>
-              </View>
-              <View style={styles.pacingTrack}>
-                <View style={[styles.pacingFill, { width: `${clamp(calculatePercentage(currentMl, feedback.expectedMl || 1, 100), 0, 100)}%`, backgroundColor: feedback.accent }]} />
-                <View style={[styles.pacingMarker, { left: `${clamp(dayProgress * 100, 0, 100)}%` }]} />
-              </View>
-            </View>
-            <Text style={styles.smartAdviceText}>{smartAdvice}</Text>
-            {metricDeltaNote && (
-              <Text style={styles.metricDeltaText}>{metricDeltaNote}</Text>
-            )}
-            {todayEventTotal > 0 && (
-              <Text style={styles.logMetaText}>
-                {todayEventTotal}ml logged today {lastLogMinutes ? `• last log ${formatTimeAgo(lastLogMinutes)}` : ''}
-              </Text>
-            )}
-          </View>
-        </GlassCard>
-      )}
-
-      <View style={styles.sectionDivider} />
-
-      {/* Wellness Score */}
-      <WellnessScoreCard score={healthMetrics.wellness} compact={isCompact} />
-
-      {/* Streak */}
-      {streak > 0 && <StreakCounter streak={streak} />}
-
-      <View style={styles.sectionDivider} />
-
-      {/* Hydration Benefits (Segmented) */}
-      <GlassCard padding="md" style={styles.impactCard}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="water" size={20} color={BRAND.primary} />
-            <Text style={styles.sectionTitle}>Hydration Benefits</Text>
-          </View>
-          <Text style={styles.sectionSubtitle}>How water helps your body & mind</Text>
-        </View>
-
-        <View style={[styles.segmentedToggle, isCompact && styles.segmentedToggleCompact]}>
-          <TouchableOpacity
-            onPress={() => setActiveSection('physical')}
-            style={styles.segmentedButton}
-            activeOpacity={0.8}
-          >
-            {activeSection === 'physical' ? (
-              <LinearGradient
-                colors={['#FFFFFF', '#F4F7FF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.segmentedPill, styles.segmentedPillActive]}
-              >
-                <Text style={[styles.segmentedText, styles.segmentedTextActive]}>
-                  Physical
-                </Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.segmentedPill}>
-                <Text style={styles.segmentedText}>Physical</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveSection('mental')}
-            style={styles.segmentedButton}
-            activeOpacity={0.8}
-          >
-            {activeSection === 'mental' ? (
-              <LinearGradient
-                colors={['#FFFFFF', '#F4F7FF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.segmentedPill, styles.segmentedPillActive]}
-              >
-                <Text style={[styles.segmentedText, styles.segmentedTextActive]}>
-                  Mental
-                </Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.segmentedPill}>
-                <Text style={styles.segmentedText}>Mental</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {percentage === 0 ? (
-          <View style={styles.emptyStateContainer}>
-            <View style={styles.emptyStateIconRow}>
-              <View style={[styles.emptyStateIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                <Ionicons name="water-outline" size={24} color="#3B82F6" />
-              </View>
-            </View>
-            <Text style={styles.emptyStateTitle}>Log water to unlock benefits</Text>
-            <Text style={styles.emptyStateSubtitle}>
-              Stay hydrated to boost energy, focus, and mood
-            </Text>
-          </View>
-        ) : activeSection === 'physical' ? (
-          <View style={styles.metricsGrid}>
-            <HealthMetric
-              icon="flash"
-              label="Energy"
-              score={healthMetrics.energy}
-              color="#F59E0B"
-              gradientColors={['#F59E0B', '#D97706']}
-              size={isCompact ? 60 : 70}
-            />
-            <HealthMetric
-              icon="barbell"
-              label="Performance"
-              score={healthMetrics.performance}
-              color="#10B981"
-              gradientColors={['#10B981', '#059669']}
-              size={isCompact ? 60 : 70}
-            />
-          </View>
-        ) : (
-          <View style={styles.metricsGrid}>
-            <HealthMetric
-              icon="sparkles"
-              label="Focus"
-              score={healthMetrics.focus}
-              color="#3B82F6"
-              gradientColors={['#3B82F6', '#2563EB']}
-              size={isCompact ? 60 : 70}
-            />
-            <HealthMetric
-              icon="happy"
-              label="Mood"
-              score={healthMetrics.mood}
-              color="#14B8A6"
-              gradientColors={['#14B8A6', '#0D9488']}
-              size={isCompact ? 60 : 70}
-            />
           </View>
         )}
-      </GlassCard>
+      </LinearGradient>
 
-
-      {/* Open Full Tracker Button */}
-      <TouchableOpacity
-        style={styles.fullTrackerButton}
-        onPress={handleOpenFull}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={SURFACES.gradient.primary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fullTrackerGradient}
-        >
-          <Ionicons name="water" size={24} color="#FFF" />
-          <Text style={styles.fullTrackerText}>Open Full Tracker</Text>
-          <Ionicons name="arrow-forward" size={20} color="#FFF" />
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* Confetti Overlay */}
-      {showConfetti && (
-        <View style={styles.confettiContainer} pointerEvents="none">
-          {Array.from({ length: 40 }).map((_, i) => (
-            <ConfettiParticle key={i} delay={i * 40} />
-          ))}
+      {/* Contextual Insight Card - Only when there's something important */}
+      {hasLoggedToday && (feedback.status === 'behind' || feedback.status === 'rhythm' || feedback.status === 'low_logs') && (
+        <View style={[styles.insightCard, { borderLeftColor: '#4169E1' }]}>
+          <View style={styles.insightContent}>
+            <Ionicons name="bulb-outline" size={18} color="#4169E1" />
+            <Text style={styles.insightText}>{smartAdvice}</Text>
+          </View>
+          <View style={styles.paceProgressContainer}>
+            <View style={styles.paceTrack}>
+              <View
+                style={[
+                  styles.paceFill,
+                  {
+                    width: `${clamp(calculatePercentage(currentMl, feedback.expectedMl || 1, 100), 0, 100)}%`,
+                    backgroundColor: '#4169E1'
+                  }
+                ]}
+              />
+            </View>
+            <Text style={styles.paceLabel}>
+              {currentMl}ml of {feedback.expectedMl}ml expected
+            </Text>
+          </View>
         </View>
       )}
+
+      {/* Hourly chart removed - available in History page */}
+
+      {/* Action Buttons Row */}
+      <View style={styles.actionButtonsRow}>
+        {/* Open Full Tracker - Primary */}
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={handleOpenFull}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#5B8DEE', '#4169E1', '#2E4A7D']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.primaryButtonGradient}
+          >
+            <Ionicons name="add-circle" size={20} color="#FFF" />
+            <Text style={styles.primaryButtonText}>Log Water</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* View Insights - Secondary with icon */}
+        {onViewHistory && (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleViewHistory}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="analytics" size={18} color={BRAND.primary} />
+            <Text style={styles.secondaryButtonText}>History</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Lottie Celebration Overlay - Premium Goal Achievement */}
+      <CelebrationOverlay
+        visible={showConfetti}
+        onComplete={() => setShowConfetti(false)}
+      />
     </View>
   );
 }
@@ -1439,78 +1218,242 @@ export default function HydrationWellnessDashboard({
 
 const styles = StyleSheet.create({
   container: {
-    // Removed flex: 1 to allow natural height in dashboard
     width: '100%',
   },
 
-  // Header
-  header: {
-    marginBottom: SPACING[4],
+  // Premium Hero Card with 3D Gradient - Water Blues
+  heroCard: {
+    borderRadius: RADIUS.xl + 4,
+    padding: SPACING[4],
+    marginBottom: SPACING[3],
+    position: 'relative',
+    overflow: 'hidden',
+    // 3D depth shadow effect with Ultramarine
+    shadowColor: '#4169E1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 12,
+    // Inner light effect simulated with border
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerLeft: {
+  heroDecorCircle1: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    // 3D blur effect
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+  },
+  heroDecorCircle2: {
+    position: 'absolute',
+    bottom: -30,
+    left: -30,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  heroDecorCircle3: {
+    position: 'absolute',
+    top: 40,
+    left: '40%',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  heroHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: SPACING[3],
-  },
-  headerIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: RADIUS.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.md,
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    marginTop: SPACING[1],
-  },
-
-  // Main Card
-  mainCard: {
     marginBottom: SPACING[3],
   },
-  mainContent: {
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  heroTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: 'rgba(255,255,255,0.95)',
+  },
+  goalIndicator: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[1] + 2,
+    borderRadius: RADIUS.full,
+  },
+  goalIndicatorText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: '#FFF',
+  },
+  heroContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[4],
   },
-  mainContentCompact: {
-    gap: SPACING[3],
+  heroWaveContainer: {
+    // 3D depth effect for wave
+    shadowColor: 'rgba(0,0,0,0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+    borderRadius: RADIUS.full,
   },
-  mainStats: {
+  heroStatsContainer: {
     flex: 1,
-  },
-  statRowSecondary: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
     gap: SPACING[1],
   },
-  mainInsight: {
+  heroIntakeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  heroIntakeValue: {
+    fontSize: 36,
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: '#FFF',
+    letterSpacing: -1,
+  },
+  heroIntakeUnit: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[2],
+    color: 'rgba(255,255,255,0.8)',
   },
-  mainValueSecondary: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: SEMANTIC.info.base,
+  heroGoalText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: 'rgba(255,255,255,0.75)',
   },
-  mainLabel: {
+  heroProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: RADIUS.full,
+    marginTop: SPACING[2],
+    overflow: 'hidden',
+  },
+  heroProgressFill: {
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: RADIUS.full,
+  },
+  heroStatusText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: SPACING[1],
+  },
+  heroStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    alignSelf: 'flex-start',
+  },
+  heroStatusBadgeText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: 'rgba(255,255,255,0.95)',
+  },
+  heroLastLogText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: 'rgba(255,255,255,0.7)',
+  },
+
+  // Insight Card with 3D accent
+  insightCard: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.lg + 2,
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
+    gap: SPACING[2],
+    borderLeftWidth: 4,
+    // 3D shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+
+  // Chart Card with 3D depth
+  chartCard: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.lg + 2,
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
+    // 3D shadow effect
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    // Subtle border for depth
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[3],
+  },
+  chartTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  chartTitle: {
     fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  chartSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.muted,
   },
-  remainingText: {
+  insightContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  insightText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    marginTop: SPACING[1],
-    marginBottom: SPACING[3],
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.primary,
+  },
+  paceProgressContainer: {
+    gap: SPACING[1],
+  },
+  paceTrack: {
+    height: 4,
+    backgroundColor: SURFACES.muted,
+    borderRadius: RADIUS.full,
+    overflow: 'hidden',
+  },
+  paceFill: {
+    height: '100%',
+    borderRadius: RADIUS.full,
+  },
+  paceLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.muted,
+    textAlign: 'right',
   },
 
   // Mini Quick Add
@@ -1553,6 +1496,23 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  goalAchievedContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalSuccessLottie: {
+    width: 48,
+    height: 48,
+  },
+  wavePercentageDone: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.black,
+    color: TEXT.white,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    marginTop: -SPACING[2],
   },
 
   // Wellness Score Card
@@ -2007,42 +1967,144 @@ const styles = StyleSheet.create({
     marginTop: SPACING[2],
   },
 
-  // Full Tracker Button
-  fullTrackerButton: {
-    marginTop: SPACING[4],
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    ...SHADOWS.lg,
+  // Action Buttons Row with 3D Effects
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+    marginTop: SPACING[1],
   },
-  fullTrackerGradient: {
+  primaryButton: {
+    flex: 1,
+    borderRadius: RADIUS.lg + 2,
+    overflow: 'hidden',
+    // 3D depth effect with Ultramarine shadow
+    shadowColor: '#4169E1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  primaryButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING[2],
-    paddingVertical: SPACING[4],
-    paddingHorizontal: SPACING[6],
+    paddingVertical: SPACING[3] + 2,
+    paddingHorizontal: SPACING[4],
+    // Inner highlight for 3D effect
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.3)',
   },
-  fullTrackerText: {
-    fontSize: TYPOGRAPHY.size.lg,
+  primaryButtonText: {
+    fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.white,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.lg + 2,
+    // 3D depth effect
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    // Inner border for depth
+    borderWidth: 1,
+    borderColor: `${BRAND.primary}20`,
+  },
+  secondaryButtonText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: BRAND.primary,
   },
 
-  // Confetti
-  confettiContainer: {
+  // Hourly Intake Chart
+  hourlyChartContainer: {
+    gap: SPACING[3],
+  },
+  hourlyChartHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  hourlyChartTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  hourlyChartBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING[1],
+  },
+  hourlyBarColumn: {
+    alignItems: 'center',
+    flex: 1,
+    gap: SPACING[1],
+  },
+  hourlyBar: {
+    width: 8,
+    minHeight: 2,
+  },
+  hourlyLabel: {
+    fontSize: 9,
+    color: TEXT.muted,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  hourlyChartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: SPACING[4],
+    marginTop: SPACING[2],
+    paddingTop: SPACING[2],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.muted,
+  },
+
+  // Lottie Celebration Overlay
+  celebrationOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
     zIndex: 100,
   },
-  confettiParticle: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    top: 0,
+  celebrationLottie: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH,
+  },
+
+  // Streak Lottie
+  streakLottie: {
+    width: 64,
+    height: 64,
   },
 });

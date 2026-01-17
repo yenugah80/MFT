@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   },
   learningStats: {
     flexDirection: 'row',
-    backgroundColor: SURFACES.elevated,
+    backgroundColor: SURFACES.background.secondary,
     padding: 12,
     borderRadius: 12,
   },

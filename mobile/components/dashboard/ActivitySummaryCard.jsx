@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { calculateWeeklyGoalProgress } from '../../utils/activityAnalytics';
-import { TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { getAdjustedCalorieGoal } from '../../utils/activityNutrition';
+import { TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY, SEMANTIC, BRAND } from '../../constants/premiumTheme';
 
 const STORAGE_KEY = '@activity_log';
 
@@ -13,9 +16,15 @@ const STORAGE_KEY = '@activity_log';
  * Shows today's workout stats and weekly progress
  */
 export default function ActivitySummaryCard() {
+  const router = useRouter();
   const [todayActivities, setTodayActivities] = useState([]);
   const [allActivities, setAllActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleViewInsights = () => {
+    Haptics.selectionAsync();
+    router.push('/insights/activity-insights');
+  };
 
   useEffect(() => {
     loadActivities();
@@ -53,20 +62,36 @@ export default function ActivitySummaryCard() {
   const todayDuration = todayActivities.reduce((sum, a) => sum + (a.duration || 0), 0);
   const weeklyProgress = calculateWeeklyGoalProgress(allActivities);
 
-  // Get progress color
+  // Calculate earned food calories from activity
+  const calorieAdjustment = useMemo(() => {
+    if (todayActivities.length === 0) return null;
+
+    // Transform activities to format expected by getAdjustedCalorieGoal
+    const formattedActivities = todayActivities.map(activity => ({
+      type: activity.type || 'general',
+      durationMinutes: activity.duration || 0,
+      intensity: activity.intensity || 'moderate',
+    }));
+
+    // Use a base of 2000 cal (this is just for calculation, actual goal comes from user profile)
+    const result = getAdjustedCalorieGoal(2000, formattedActivities);
+    return result;
+  }, [todayActivities]);
+
+  // Get progress color (using brand purple)
   const getProgressColor = (percentage) => {
     if (percentage >= 100) return '#10B981';
-    if (percentage >= 80) return '#F59E0B';
-    if (percentage >= 50) return '#6366F1';
+    if (percentage >= 80) return BRAND.primary;
+    if (percentage >= 50) return BRAND.primaryLight;
     return TEXT.tertiary;
   };
 
   const progressColor = getProgressColor(weeklyProgress.percentage);
 
   return (
-    <View style={styles.container}>
+    <TouchableOpacity style={styles.container} onPress={handleViewInsights} activeOpacity={0.9}>
       <LinearGradient
-        colors={['#F0FDF4', '#ECFDF5']}
+        colors={['#F5F3FF', '#EEE8FF']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -74,8 +99,12 @@ export default function ActivitySummaryCard() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <Ionicons name="fitness" size={20} color="#10B981" />
+            <Ionicons name="fitness" size={20} color={BRAND.primary} />
             <Text style={styles.title}>Activity</Text>
+          </View>
+          <View style={styles.insightsBadge}>
+            <Ionicons name="sparkles" size={12} color={BRAND.primary} />
+            <Text style={styles.insightsBadgeText}>Insights</Text>
           </View>
         </View>
 
@@ -103,6 +132,24 @@ export default function ActivitySummaryCard() {
             <Text style={styles.statLabel}>workout{todayActivities.length !== 1 ? 's' : ''}</Text>
           </View>
         </View>
+
+        {/* Earned Food Calories Banner - Only show if activity earned extra calories */}
+        {calorieAdjustment?.extraCaloriesEarned > 0 && (
+          <View style={styles.earnedCaloriesBanner}>
+            <View style={styles.earnedCaloriesIcon}>
+              <Ionicons name="restaurant" size={18} color="#10B981" />
+            </View>
+            <View style={styles.earnedCaloriesContent}>
+              <Text style={styles.earnedCaloriesTitle}>
+                +{calorieAdjustment.extraCaloriesEarned} cal earned
+              </Text>
+              <Text style={styles.earnedCaloriesSubtitle}>
+                Extra food calories from today's activity
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={TEXT.tertiary} />
+          </View>
+        )}
 
         {/* Weekly Progress */}
         <View style={styles.weeklySection}>
@@ -157,7 +204,7 @@ export default function ActivitySummaryCard() {
         </View>
 
       </LinearGradient>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -169,7 +216,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     padding: SPACING[5],
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: `${BRAND.primary}30`,
     ...SHADOWS.md,
   },
   header: {
@@ -188,6 +235,20 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
+  insightsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${BRAND.primary}15`,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  insightsBadgeText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: BRAND.primary,
+  },
   todayStats: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -197,7 +258,7 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: `${BRAND.primary}20`,
   },
   statItem: {
     alignItems: 'center',
@@ -217,7 +278,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: `${BRAND.primary}30`,
   },
   weeklySection: {
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
@@ -225,7 +286,7 @@ const styles = StyleSheet.create({
     padding: SPACING[3],
     marginBottom: SPACING[3],
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: `${BRAND.primary}20`,
   },
   weeklyHeader: {
     flexDirection: 'row',
@@ -252,7 +313,7 @@ const styles = StyleSheet.create({
   },
   progressBarBg: {
     height: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: `${BRAND.primary}20`,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
     marginBottom: 6,
@@ -273,12 +334,45 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: SPACING[2],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(16, 185, 129, 0.15)',
+    borderTopColor: `${BRAND.primary}25`,
   },
   insightText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.secondary,
     flex: 1,
+  },
+  // Earned Calories Banner Styles
+  earnedCaloriesBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    marginTop: SPACING[3],
+    borderWidth: 1,
+    borderColor: '#10B98130',
+    gap: SPACING[3],
+  },
+  earnedCaloriesIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#10B98120',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  earnedCaloriesContent: {
+    flex: 1,
+  },
+  earnedCaloriesTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#059669',
+  },
+  earnedCaloriesSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
+    marginTop: 2,
   },
 });

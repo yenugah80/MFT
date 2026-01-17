@@ -1,7 +1,12 @@
 /**
- * NutriScoreCard Component
- * Official Nutri-Score A-E grading system
- * Adapted for meal summary screen with glassmorphism styling
+ * NutritionGradeCard Component
+ * Simplified A-E nutrition quality grade
+ *
+ * NOTE: This is an ESTIMATED grade based on available nutrition data.
+ * It is NOT the official European Nutri-Score® which requires
+ * specific data points (saturated fat, fruit/veg %) that AI estimation
+ * cannot reliably provide. We use a similar visual format for familiarity
+ * but call it "Nutrition Grade" to avoid confusion with the official label.
  */
 
 import React from 'react';
@@ -10,19 +15,20 @@ import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
 import { useTheme } from '../../../providers/ThemeProvider';
 
 /**
- * Official Nutri-Score colors
+ * Nutrition grade colors (inspired by Nutri-Score but not branded)
  */
-const NUTRI_SCORE_GRADES = [
+const NUTRITION_GRADES = [
   { letter: 'A', color: '#038141', label: 'Excellent' },
   { letter: 'B', color: '#85BB2F', label: 'Good' },
-  { letter: 'C', color: '#FECB02', label: 'Fair' },
-  { letter: 'D', color: '#EE8100', label: 'Poor' },
-  { letter: 'E', color: '#E63E11', label: 'Bad' },
+  { letter: 'C', color: '#FECB02', label: 'Moderate' },
+  { letter: 'D', color: '#EE8100', label: 'Limited' },
+  { letter: 'E', color: '#E63E11', label: 'Poor' },
 ];
 
 /**
- * Calculate Nutri-Score grade from nutrition data
- * Based on: positive factors (protein, fiber, vitamins) vs negative factors (sugar, saturated fat, sodium)
+ * Calculate nutrition grade from available data
+ * Uses positive factors (protein, fiber) vs negative factors (sugar, fat, sodium)
+ * This is a simplified estimate, not the official Nutri-Score algorithm
  */
 function calculateNutriScoreGrade(item) {
   if (!item?.macros) return 'C'; // Default to middle grade
@@ -35,36 +41,38 @@ function calculateNutriScoreGrade(item) {
   const fat = macros.fat_g || 0;
   const sodium = macros.sodium_mg || 0;
 
-  // Calculate positive points (0-15)
+  // Calculate positive points (0-10) - simplified, honest scoring
   let positivePoints = 0;
-  // Protein: up to 5 points
-  positivePoints += Math.min(5, Math.floor(protein / 3.2));
-  // Fiber: up to 5 points
-  positivePoints += Math.min(5, Math.floor(fiber / 0.9));
-  // Fruits/vegetables (estimate from fiber): up to 5 points
+  // Protein: up to 5 points (good for satiety)
+  positivePoints += Math.min(5, Math.floor(protein / 4));
+  // Fiber: up to 5 points (good for digestion)
+  // NOTE: Not double-counting as "fruit/veg" since we can't estimate that from fiber alone
   positivePoints += Math.min(5, Math.floor(fiber / 1.5));
 
-  // Calculate negative points (0-40)
+  // Calculate negative points (0-30) - adjusted for realistic meal portions
   let negativePoints = 0;
-  // Energy: up to 10 points
-  negativePoints += Math.min(10, Math.floor(calories / 335));
-  // Saturated fat (estimate as 40% of fat): up to 10 points
-  const saturatedFat = fat * 0.4;
-  negativePoints += Math.min(10, Math.floor(saturatedFat / 1));
-  // Sugar: up to 10 points
-  negativePoints += Math.min(10, Math.floor(sugar / 4.5));
-  // Sodium: up to 10 points
-  negativePoints += Math.min(10, Math.floor(sodium / 90));
+  // Energy: up to 10 points (400 kcal = 1 point, normal meal = ~2 points)
+  negativePoints += Math.min(10, Math.floor(calories / 400));
+  // Saturated fat (estimate as 35% of fat): up to 10 points
+  const saturatedFat = fat * 0.35;
+  negativePoints += Math.min(10, Math.floor(saturatedFat / 1.5));
+  // Sugar: up to 5 points (more lenient - 6g = 1 point)
+  negativePoints += Math.min(5, Math.floor(sugar / 6));
+  // Sodium: up to 5 points (150mg = 1 point, more realistic for meals)
+  negativePoints += Math.min(5, Math.floor(sodium / 150));
 
-  // Calculate final score
+  // Calculate final score (realistic range: -10 to +20 for most meals)
   const finalScore = negativePoints - positivePoints;
 
-  // Convert to letter grade
-  if (finalScore <= -1) return 'A';
-  if (finalScore <= 2) return 'B';
-  if (finalScore <= 10) return 'C';
-  if (finalScore <= 18) return 'D';
-  return 'E';
+  // Convert to letter grade - adjusted for realistic meal scoring
+  // Healthy meal: high protein/fiber, low sugar/sodium → negative score → A/B
+  // Balanced meal: moderate everything → low positive score → B/C
+  // Indulgent meal: high sugar/fat, low protein/fiber → high positive → D/E
+  if (finalScore <= 0) return 'A';   // Net positive nutrition
+  if (finalScore <= 4) return 'B';   // Slightly negative but acceptable
+  if (finalScore <= 8) return 'C';   // Average/neutral
+  if (finalScore <= 12) return 'D';  // Below average
+  return 'E';                        // Poor nutritional balance
 }
 
 export default function NutriScoreCard({ item, compact = false }) {
@@ -73,55 +81,62 @@ export default function NutriScoreCard({ item, compact = false }) {
   const textSecondary = colors.text.secondary;
 
   const currentGrade = calculateNutriScoreGrade(item);
-  const gradeInfo = NUTRI_SCORE_GRADES.find(g => g.letter === currentGrade);
+  const gradeInfo = NUTRITION_GRADES.find(g => g.letter === currentGrade);
 
   return (
     <View
       style={[
         styles.container,
         compact && styles.containerCompact,
-        { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.03)' },
+        // No background in compact mode - it's embedded in parent card
+        !compact && { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.03)' },
       ]}
       accessible={true}
       accessibilityRole="text"
-      accessibilityLabel={`Nutri-Score grade: ${currentGrade}. ${gradeInfo?.label || ''}`}
+      accessibilityLabel={`Nutrition grade: ${currentGrade}. ${gradeInfo?.label || ''}`}
     >
-      {!compact && (
+      {!compact ? (
         <View style={styles.header}>
-          <Text style={[styles.title, { color: textPrimary }]}>Nutri-Score</Text>
+          <Text style={[styles.title, { color: textPrimary }]}>Nutrition Grade</Text>
           <Text style={[styles.subtitle, { color: textSecondary }]}>
-            Nutritional quality rating
+            Estimated quality rating
           </Text>
         </View>
+      ) : (
+        <Text style={[styles.compactLabel, { color: textSecondary }]}>
+          Nutrition Grade
+        </Text>
       )}
 
       {/* A-E Grade Bar */}
-      <View style={styles.gradeBar}>
-        {NUTRI_SCORE_GRADES.map((grade, index) => {
+      <View style={[styles.gradeBar, compact && styles.gradeBarCompact]}>
+        {NUTRITION_GRADES.map((grade, index) => {
           const isActive = grade.letter === currentGrade;
           const isLeftEdge = index === 0;
-          const isRightEdge = index === NUTRI_SCORE_GRADES.length - 1;
+          const isRightEdge = index === NUTRITION_GRADES.length - 1;
 
           return (
             <View
               key={grade.letter}
               style={[
                 styles.gradeBlock,
+                compact && styles.gradeBlockCompact,
                 {
                   backgroundColor: isActive ? grade.color : `${grade.color}30`,
-                  borderTopLeftRadius: isLeftEdge ? 10 : 0,
-                  borderBottomLeftRadius: isLeftEdge ? 10 : 0,
-                  borderTopRightRadius: isRightEdge ? 10 : 0,
-                  borderBottomRightRadius: isRightEdge ? 10 : 0,
+                  borderTopLeftRadius: isLeftEdge ? (compact ? 6 : 10) : 0,
+                  borderBottomLeftRadius: isLeftEdge ? (compact ? 6 : 10) : 0,
+                  borderTopRightRadius: isRightEdge ? (compact ? 6 : 10) : 0,
+                  borderBottomRightRadius: isRightEdge ? (compact ? 6 : 10) : 0,
                 },
-                isActive && styles.gradeBlockActive,
+                isActive && !compact && styles.gradeBlockActive,
               ]}
             >
               <Text
                 style={[
                   styles.gradeLetter,
+                  compact && styles.gradeLetterCompact,
                   { color: isActive ? '#FFFFFF' : `${grade.color}80` },
-                  isActive && styles.gradeLetterActive,
+                  isActive && !compact && styles.gradeLetterActive,
                 ]}
               >
                 {grade.letter}
@@ -147,7 +162,7 @@ export default function NutriScoreCard({ item, compact = false }) {
 }
 
 // Export for use in other components
-export { calculateNutriScoreGrade, NUTRI_SCORE_GRADES };
+export { calculateNutriScoreGrade, NUTRITION_GRADES };
 
 const styles = StyleSheet.create({
   container: {
@@ -156,7 +171,16 @@ const styles = StyleSheet.create({
     marginVertical: SPACING[2],
   },
   containerCompact: {
-    padding: SPACING[3],
+    padding: 0,
+    marginVertical: 0,
+    borderRadius: 0,
+  },
+  compactLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    marginBottom: SPACING[2],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   header: {
     marginBottom: SPACING[3],
@@ -174,11 +198,18 @@ const styles = StyleSheet.create({
     height: 48,
     gap: 3,
   },
+  gradeBarCompact: {
+    height: 32,
+    gap: 2,
+  },
   gradeBlock: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     opacity: 0.5,
+  },
+  gradeBlockCompact: {
+    opacity: 0.6,
   },
   gradeBlockActive: {
     opacity: 1,
@@ -194,6 +225,9 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.black,
     letterSpacing: -0.5,
+  },
+  gradeLetterCompact: {
+    fontSize: TYPOGRAPHY.size.base,
   },
   gradeLetterActive: {
     fontSize: TYPOGRAPHY.size['3xl'],

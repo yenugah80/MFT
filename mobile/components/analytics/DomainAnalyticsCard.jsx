@@ -87,7 +87,7 @@ const DomainAnalyticsCard = ({
     }
     return {
       icon: 'trending-down',
-      color: domain === 'mood' ? SEMANTIC.error : (change < 0 ? SEMANTIC.error : SEMANTIC.success),
+      color: domain === 'mood' ? SEMANTIC.danger : (change < 0 ? SEMANTIC.danger : SEMANTIC.success),
       text: `-${Math.abs(change)}%`,
     };
   };
@@ -236,7 +236,7 @@ const DomainAnalyticsCard = ({
         )}
 
         {/* Data Quality Indicator */}
-        {data?.dataQuality && (
+        {data?.dataQuality !== undefined && (
           <View style={styles.qualityIndicator}>
             <Ionicons
               name={data.dataQuality >= 0.7 ? 'checkmark-circle' : 'information-circle'}
@@ -244,7 +244,32 @@ const DomainAnalyticsCard = ({
               color={data.dataQuality >= 0.7 ? SEMANTIC.success : TEXT.tertiary}
             />
             <Text style={styles.qualityText}>
-              {data.dataQuality >= 0.7 ? 'Good data coverage' : `${Math.round(data.dataQuality * 100)}% data coverage`}
+              {(() => {
+                const quality = data.dataQuality;
+                const percent = Math.round(quality * 100);
+                if (quality >= 0.9) {
+                  return domain === 'nutrition' ? 'Complete meal data' :
+                         domain === 'hydration' ? 'Hydration fully tracked' :
+                         domain === 'mood' ? 'Mood patterns captured' :
+                         domain === 'activity' ? 'Activity well logged' : 'Excellent coverage';
+                }
+                if (quality >= 0.7) {
+                  return domain === 'nutrition' ? `${percent}% of meals logged` :
+                         domain === 'hydration' ? `${percent}% hydration tracked` :
+                         domain === 'mood' ? `${percent}% mood data captured` :
+                         domain === 'activity' ? `${percent}% activity recorded` : 'Good coverage';
+                }
+                if (quality >= 0.4) {
+                  return domain === 'nutrition' ? `${percent}% - log more meals` :
+                         domain === 'hydration' ? `${percent}% - track more water` :
+                         domain === 'mood' ? `${percent}% - add mood check-ins` :
+                         domain === 'activity' ? `${percent}% - log more activity` : `${percent}% coverage`;
+                }
+                return domain === 'nutrition' ? 'Log meals for insights' :
+                       domain === 'hydration' ? 'Track water for patterns' :
+                       domain === 'mood' ? 'Check in for mood trends' :
+                       domain === 'activity' ? 'Log activity to track' : 'Start logging';
+              })()}
             </Text>
           </View>
         )}

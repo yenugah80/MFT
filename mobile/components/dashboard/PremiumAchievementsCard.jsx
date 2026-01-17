@@ -427,13 +427,13 @@ export default function PremiumAchievementsCard({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[3],
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[3],
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.md,

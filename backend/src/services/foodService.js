@@ -557,12 +557,20 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
    * NOW USING: Industrial-grade OpenAI client with cost tracking, vision model optimization
    */
   analyzeImage: async (base64Image, options = {}) => {
-    // Delegate to industrial-grade client
-    const aiResult = await openaiClient.analyzeImage(base64Image, options);
-    if (!aiResult) return null;
+    try {
+      // Delegate to industrial-grade client
+      const aiResult = await openaiClient.analyzeImage(base64Image, options);
+      if (!aiResult) {
+        throw new Error('AI returned no result for image analysis');
+      }
 
-    // Transform to match FoodService format
-    return FoodService.transformAIResponse(aiResult);
+      // Transform to match FoodService format
+      return FoodService.transformAIResponse(aiResult);
+    } catch (error) {
+      console.error(`[FoodService] Image analysis failed:`, error.message);
+      // Re-throw with context preserved
+      throw error;
+    }
   },
 
   // ------------- AI: Text-based fallback -------------

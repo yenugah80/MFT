@@ -13,6 +13,7 @@ export const DAILY_VALUES = {
   vitaminB3: { value: 16, unit: 'mg' },  // Niacin
   vitaminB6: { value: 1.7, unit: 'mg' },
   vitaminB9: { value: 400, unit: 'µg' }, // Folate (or Folic Acid)
+  folate: { value: 400, unit: 'µg' },    // Alias for vitaminB9
   vitaminB12: { value: 2.4, unit: 'µg' },
   biotin: { value: 30, unit: 'µg' },
   pantothenicAcid: { value: 5, unit: 'mg' },

@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F6F8FC',
     borderRadius: RADIUS.xl,
     overflow: 'hidden',
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[2],
     ...SHADOWS.lg,
   },
   header: {

@@ -1,30 +1,64 @@
 /**
  * Micronutrient Coverage Calculations
  *
- * Industry-standard micronutrient tracking based on RDAs
+ * Industry-standard micronutrient tracking based on FDA 2020-2025 DV standards
  */
 
-// Reference Daily Intake (RDI) values - FDA standard
-export const MICRO_RDI = {
-  // Minerals
-  calcium: { value: 1000, unit: 'mg', label: 'Calcium', category: 'mineral' },
-  iron: { value: 18, unit: 'mg', label: 'Iron', category: 'mineral' },
-  magnesium: { value: 400, unit: 'mg', label: 'Magnesium', category: 'mineral' },
-  potassium: { value: 3500, unit: 'mg', label: 'Potassium', category: 'mineral' },
-  zinc: { value: 11, unit: 'mg', label: 'Zinc', category: 'mineral' },
-  sodium: { value: 2300, unit: 'mg', label: 'Sodium', category: 'mineral' },
+import { DAILY_VALUES } from '../constants/dailyValues';
 
-  // Vitamins
-  vitaminA: { value: 900, unit: 'mcg', label: 'Vitamin A', category: 'vitamin' },
-  vitaminC: { value: 90, unit: 'mg', label: 'Vitamin C', category: 'vitamin' },
-  vitaminD: { value: 20, unit: 'mcg', label: 'Vitamin D', category: 'vitamin' },
-  vitaminE: { value: 15, unit: 'mg', label: 'Vitamin E', category: 'vitamin' },
-  vitaminK: { value: 120, unit: 'mcg', label: 'Vitamin K', category: 'vitamin' },
-  vitaminB12: { value: 2.4, unit: 'mcg', label: 'Vitamin B12', category: 'vitamin' },
-  folate: { value: 400, unit: 'mcg', label: 'Folate', category: 'vitamin' },
+// Reference Daily Intake (RDI) values - derived from DAILY_VALUES for consistency
+// Enhanced with labels and categories for display
+// Keys use camelCase as canonical format
+const MICRO_RDI_BASE = {
+  // Minerals (values from DAILY_VALUES)
+  calcium: { value: DAILY_VALUES.calcium.value, unit: 'mg', label: 'Calcium', category: 'mineral' },
+  iron: { value: DAILY_VALUES.iron.value, unit: 'mg', label: 'Iron', category: 'mineral' },
+  magnesium: { value: DAILY_VALUES.magnesium.value, unit: 'mg', label: 'Magnesium', category: 'mineral' },
+  potassium: { value: DAILY_VALUES.potassium.value, unit: 'mg', label: 'Potassium', category: 'mineral' },
+  zinc: { value: DAILY_VALUES.zinc.value, unit: 'mg', label: 'Zinc', category: 'mineral' },
+  sodium: { value: DAILY_VALUES.sodium.value, unit: 'mg', label: 'Sodium', category: 'mineral', isLimit: true },
+
+  // Vitamins (values from DAILY_VALUES)
+  vitaminA: { value: DAILY_VALUES.vitaminA.value, unit: 'mcg', label: 'Vitamin A', category: 'vitamin' },
+  vitaminC: { value: DAILY_VALUES.vitaminC.value, unit: 'mg', label: 'Vitamin C', category: 'vitamin' },
+  vitaminD: { value: DAILY_VALUES.vitaminD.value, unit: 'mcg', label: 'Vitamin D', category: 'vitamin' },
+  vitaminE: { value: DAILY_VALUES.vitaminE.value, unit: 'mg', label: 'Vitamin E', category: 'vitamin' },
+  vitaminK: { value: DAILY_VALUES.vitaminK.value, unit: 'mcg', label: 'Vitamin K', category: 'vitamin' },
+  vitaminB12: { value: DAILY_VALUES.vitaminB12.value, unit: 'mcg', label: 'Vitamin B12', category: 'vitamin' },
+  folate: { value: DAILY_VALUES.folate.value, unit: 'mcg', label: 'Folate', category: 'vitamin' },
 
   // Other
   fiber: { value: 28, unit: 'g', label: 'Fiber', category: 'other' },
+};
+
+/**
+ * Normalize micronutrient key to canonical camelCase format
+ * Handles: vitamin_a -> vitaminA, vitamin_c -> vitaminC, etc.
+ */
+export const normalizeMicroKey = (key) => {
+  if (!key) return key;
+
+  // Handle snake_case vitamins: vitamin_a -> vitaminA
+  const snakeCaseVitamin = key.match(/^vitamin_([a-z])(\d*)$/i);
+  if (snakeCaseVitamin) {
+    const letter = snakeCaseVitamin[1].toUpperCase();
+    const number = snakeCaseVitamin[2] || '';
+    return `vitamin${letter}${number}`;
+  }
+
+  return key;
+};
+
+// Export MICRO_RDI with snake_case aliases for compatibility
+export const MICRO_RDI = {
+  ...MICRO_RDI_BASE,
+  // Snake_case aliases (for dashboard aggregation compatibility)
+  vitamin_a: MICRO_RDI_BASE.vitaminA,
+  vitamin_c: MICRO_RDI_BASE.vitaminC,
+  vitamin_d: MICRO_RDI_BASE.vitaminD,
+  vitamin_e: MICRO_RDI_BASE.vitaminE,
+  vitamin_k: MICRO_RDI_BASE.vitaminK,
+  vitamin_b12: MICRO_RDI_BASE.vitaminB12,
 };
 
 /**
@@ -42,7 +76,8 @@ export const parseMicroValue = (valueStr) => {
  * Calculate percentage of RDI for a micronutrient
  */
 export const calculateMicroPercentage = (microKey, value) => {
-  const rdi = MICRO_RDI[microKey];
+  // Normalize key to handle both formats
+  const rdi = MICRO_RDI[microKey] || MICRO_RDI[normalizeMicroKey(microKey)];
   if (!rdi) return 0;
 
   const numericValue = parseMicroValue(value);
@@ -65,8 +100,10 @@ export const calculateMicrosCoverage = (micros) => {
   let weightedSum = 0;
 
   Object.entries(micros).forEach(([key, value]) => {
+    const normalizedKey = normalizeMicroKey(key);
     const percentage = calculateMicroPercentage(key, value);
-    const weight = coreMicros.includes(key) ? 1.5 : 1.0;
+    // Check both original and normalized key for core micros
+    const weight = coreMicros.includes(key) || coreMicros.includes(normalizedKey) ? 1.5 : 1.0;
 
     weightedSum += Math.min(percentage, 120) * weight; // Cap at 120% to avoid over-representation
     totalWeight += weight;
@@ -85,14 +122,17 @@ export const getMicrosWithPercentages = (micros) => {
 
   return Object.entries(micros)
     .map(([key, value]) => {
-      const rdi = MICRO_RDI[key];
+      // Try direct lookup first, then normalized key
+      const rdi = MICRO_RDI[key] || MICRO_RDI[normalizeMicroKey(key)];
       if (!rdi) return null;
 
       const numericValue = parseMicroValue(value);
       const percentage = calculateMicroPercentage(key, numericValue);
+      // Use normalized key for consistency in sorting
+      const normalizedKey = normalizeMicroKey(key);
 
       return {
-        key,
+        key: normalizedKey,
         label: rdi.label,
         value: numericValue,
         unit: rdi.unit,
@@ -143,6 +183,7 @@ export const getMicrosCoverageColor = (percentage) => {
 
 export default {
   MICRO_RDI,
+  normalizeMicroKey,
   parseMicroValue,
   calculateMicroPercentage,
   calculateMicrosCoverage,

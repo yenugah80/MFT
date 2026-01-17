@@ -71,6 +71,7 @@ export interface FoodLog {
   sugar?: number;
   sugarAlcohols?: number;
   netCarbs?: number; // Calculated: carbs - fiber - sugarAlcohols
+  sodium?: number; // Sodium in mg
 
   // Hydration
   hydration?: Hydration;
@@ -201,6 +202,7 @@ export function transformBackendToFoodLog(backendData: any): FoodLog {
 
       fiber: typeof backendData.fiber === 'number' ? backendData.fiber : undefined,
       sugar: typeof backendData.sugar === 'number' ? backendData.sugar : undefined,
+      sodium: typeof backendData.sodium === 'number' ? backendData.sodium : undefined,
       sugarAlcohols: typeof backendData.sugarAlcohols === 'number' ? backendData.sugarAlcohols : undefined,
       netCarbs: backendData.netCarbs || calculateNetCarbs(backendData),
 
@@ -266,12 +268,20 @@ export function transformFoodLogToBackend(log: FoodLog): any {
       ? new Date(log.loggedDate).toISOString()
       : (log.timestamp ? new Date(log.timestamp).toISOString() : new Date().toISOString());
 
+    // Validate fiber/sugar/sodium (new columns)
+    const fiber = typeof log.fiber === 'number' && !isNaN(log.fiber) ? Math.round(log.fiber) : null;
+    const sugar = typeof log.sugar === 'number' && !isNaN(log.sugar) ? Math.round(log.sugar) : null;
+    const sodium = typeof log.sodium === 'number' && !isNaN(log.sodium) ? Math.round(log.sodium) : null;
+
     return {
       foodName: log.foodName,
       calories,
       protein,
       carbs,
       fats: fat,
+      fiber, // NEW: include fiber
+      sugar, // NEW: include sugar
+      sodium, // NEW: include sodium
       servingSize: log.servingSize,
       mealType: log.mealType,
       micros: (log.micros && typeof log.micros === 'object') ? log.micros : {},

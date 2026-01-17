@@ -53,10 +53,15 @@ function setInCache(key, data) {
 }
 
 /**
- * Key micronutrients to focus on for initial version
- * These 5 are the most commonly tracked and clinically relevant
+ * Key micronutrients to track - expanded to include vitamins
+ * These are the most commonly tracked and clinically relevant
  */
-export const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium'];
+export const KEY_MICRONUTRIENTS = [
+  // Minerals
+  'calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'sodium',
+  // Vitamins
+  'vitaminA', 'vitaminC', 'vitaminD', 'vitaminB12', 'folate'
+];
 
 // Micronutrients definition with daily values (FDA/NIH standards)
 export const MICRONUTRIENTS = {
@@ -212,30 +217,46 @@ async function tryUSDAEstimation(foodName, portion) {
  */
 async function tryAIEstimation(foodName, portion, macros) {
   try {
-    // Only request the 5 key micronutrients for initial version
-    const prompt = `You are a nutrition expert. Estimate the KEY MINERAL content for the following food:
+    // Request key micronutrients: minerals + vitamins
+    const prompt = `You are a nutrition expert. Estimate the key micronutrient content for the following food:
 
 Food: ${foodName}
 Portion: ${portion}
 Macronutrients: ${macros.calories} kcal, ${macros.protein}g protein, ${macros.carbs}g carbs, ${macros.fats}g fat
 
-Provide realistic estimates for ONLY these 5 key minerals (all in mg):
+Provide realistic estimates for these key micronutrients:
+
+MINERALS (all in mg):
 - calcium
 - iron
 - magnesium
 - potassium
+- zinc
 - sodium
 
-Return ONLY valid JSON with these exact keys and numeric values in mg. Example:
+VITAMINS (use specified units):
+- vitaminA (in mcg RAE)
+- vitaminC (in mg)
+- vitaminD (in mcg)
+- vitaminB12 (in mcg)
+- folate (in mcg DFE)
+
+Return ONLY valid JSON with these exact keys and numeric values. Example:
 {
   "calcium": 300,
   "iron": 2.5,
   "magnesium": 40,
   "potassium": 350,
-  "sodium": 150
+  "zinc": 1.2,
+  "sodium": 150,
+  "vitaminA": 45,
+  "vitaminC": 12,
+  "vitaminD": 0.5,
+  "vitaminB12": 0.3,
+  "folate": 25
 }
 
-Only include minerals where you have reasonable confidence.`;
+Only include nutrients where you have reasonable confidence. Omit nutrients with zero or negligible amounts.`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

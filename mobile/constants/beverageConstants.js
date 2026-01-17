@@ -6,184 +6,345 @@
  * All hydration-related constants in one place.
  * Used by: HydrationTracker, PremiumHydrationCard, useWaterLog
  *
- * HYDRATION FACTORS (Science-based):
- * - Water: 1.0 (100% - baseline reference)
- * - Tea: 0.9 (90% - minimal caffeine in most teas)
- * - Milk: 0.87 (87% - studies show excellent hydration + nutrients)
- * - Juice: 0.8 (80% - sugar increases osmotic load slightly)
- * - Smoothie: 0.85 (85% - fiber slows absorption but still hydrating)
- * - Coffee: 0.5 (50% - caffeine is mild diuretic at high doses)
- * - Electrolyte: 1.1 (110% - sodium helps retain water)
- * - Soda: 0.6 (high sugar, some caffeine reduces effectiveness)
+ * HYDRATION FACTORS (Research-based - Beverage Hydration Index study):
+ * Source: https://ajcn.nutrition.org/article/S0002-9165(22)06556-X/fulltext
+ *
+ * Key findings that differ from common beliefs:
+ * - Coffee: ~1.0 (NO significant difference from water - myth debunked!)
+ * - Tea: ~1.0 (same as water)
+ * - Milk: 1.50-1.58 (BETTER than water due to fat/protein slowing emptying)
+ * - Orange juice: 1.39 (sugar + potassium aid retention)
+ *
+ * CAFFEINE CONTENT (mg per 250ml serving):
+ * - Coffee: ~95mg (varies by brew)
+ * - Tea: ~47mg (black), ~28mg (green)
+ * - Soda: ~25-45mg
+ * - Energy drinks: ~80mg
+ * Daily limit recommendation: 400mg (FDA)
  */
 
 // ============================================================================
-// HYDRATION FACTORS
+// HYDRATION FACTORS (Research-backed)
 // ============================================================================
 export const BEVERAGE_FACTORS = {
   water: 1.0,
-  coffee: 0.5,
-  tea: 0.9,
-  juice: 0.8,
-  milk: 0.87,
+  coffee: 1.0,        // Updated: Research shows no significant diuretic effect
+  tea: 1.0,           // Updated: Same as water
+  juice: 1.39,        // Updated: OJ hydrates better than water (BHI study)
+  milk: 1.50,         // Updated: Excellent retention (was 0.87)
+  milkSkim: 1.58,     // New: Skim milk is best hydrator
   electrolyte: 1.1,
-  smoothie: 0.85,
-  soda: 0.6,       // High sugar, some caffeine
-  sparkling: 1.0,  // Sparkling water = water
-  coconut: 1.05,   // Coconut water - natural electrolytes
-  herbal: 1.0,     // Herbal tea (no caffeine) = water
-  sports: 1.05,    // Sports drinks - similar to electrolyte
+  smoothie: 1.1,      // Updated: Similar to milk-based drinks
+  soda: 1.0,          // Updated: Research shows same as water (but avoid for sugar)
+  sparkling: 1.0,
+  coconut: 1.05,
+  herbal: 1.0,
+  sports: 1.05,
+  alcohol_beer: 0.85,   // New: Alcohol has diuretic effect
+  alcohol_wine: 0.80,   // New: Higher alcohol = more diuretic
+  alcohol_spirits: 0.70, // New: Spirits are most diuretic
+  energy: 1.0,          // New: Energy drinks (caffeine doesn't dehydrate)
 };
 
 // ============================================================================
-// BEVERAGE TYPES - Full metadata for UI
+// CAFFEINE CONTENT (mg per 250ml serving)
+// ============================================================================
+export const CAFFEINE_CONTENT = {
+  water: 0,
+  sparkling: 0,
+  herbal: 0,
+  milk: 0,
+  milkSkim: 0,
+  juice: 0,
+  coconut: 0,
+  smoothie: 0,        // Unless contains coffee/matcha
+  coffee: 95,         // Average brewed coffee
+  espresso: 63,       // Per 30ml shot (often add 2 shots)
+  tea: 47,            // Black tea
+  teaGreen: 28,       // Green tea
+  teaMatcha: 70,      // Matcha (concentrated)
+  soda: 35,           // Cola average
+  sodaCaffeineFree: 0,
+  energy: 80,         // Energy drinks average
+  sports: 0,          // Most sports drinks are caffeine-free
+  electrolyte: 0,
+  alcohol_beer: 0,
+  alcohol_wine: 0,
+  alcohol_spirits: 0,
+};
+
+// Daily caffeine limit (FDA recommendation)
+export const DAILY_CAFFEINE_LIMIT = 400; // mg
+
+// Caffeine warning thresholds
+export const CAFFEINE_THRESHOLDS = {
+  moderate: 200,  // Consider slowing down
+  high: 300,      // Approaching limit
+  limit: 400,     // Daily limit reached
+  excessive: 500, // Over recommended limit
+};
+
+// ============================================================================
+// BEVERAGE TYPES - Full metadata for UI (Updated with research-backed values)
 // ============================================================================
 export const BEVERAGE_TYPES = {
   water: {
     id: 'water',
     hydrationFactor: BEVERAGE_FACTORS.water,
+    caffeine: CAFFEINE_CONTENT.water,
     icon: 'water',
     color: '#3B82F6',
     label: 'Water',
     emoji: '💧',
-    description: 'Perfect hydration',
-    tip: 'The gold standard - your body absorbs it directly',
+    description: '100% hydration',
+    healthNote: null,
     pairWith: null,
-    warning: null,
+    sleepImpact: null,
   },
   sparkling: {
     id: 'sparkling',
     hydrationFactor: BEVERAGE_FACTORS.sparkling,
+    caffeine: CAFFEINE_CONTENT.sparkling,
     icon: 'sparkles',
     color: '#06B6D4',
     label: 'Sparkling',
     emoji: '🫧',
-    description: 'Same as still water',
-    tip: 'Carbonation doesn\'t affect hydration - enjoy!',
+    description: '100% hydration',
+    healthNote: null,
     pairWith: null,
-    warning: null,
+    sleepImpact: null,
   },
   coffee: {
     id: 'coffee',
     hydrationFactor: BEVERAGE_FACTORS.coffee,
+    caffeine: CAFFEINE_CONTENT.coffee,
     icon: 'cafe',
     color: '#78350F',
     label: 'Coffee',
     emoji: '☕',
-    description: '50% hydration credit',
-    tip: 'Caffeine is a mild diuretic - pair with water',
-    pairWith: 'water',
-    warning: 'Consider a glass of water alongside your coffee',
+    description: '100% hydration + 95mg caffeine',
+    healthNote: 'Counts toward caffeine limit (400mg/day)',
+    pairWith: null,
+    sleepImpact: 'Avoid 6+ hours before bed',
   },
   tea: {
     id: 'tea',
     hydrationFactor: BEVERAGE_FACTORS.tea,
+    caffeine: CAFFEINE_CONTENT.tea,
     icon: 'leaf',
     color: '#059669',
     label: 'Tea',
     emoji: '🍵',
-    description: '90% hydration credit',
-    tip: 'Green and black tea have less caffeine than coffee',
+    description: '100% hydration + 47mg caffeine',
+    healthNote: 'Contains antioxidants',
     pairWith: null,
-    warning: null,
+    sleepImpact: 'Moderate caffeine - watch evening intake',
   },
   herbal: {
     id: 'herbal',
     hydrationFactor: BEVERAGE_FACTORS.herbal,
+    caffeine: CAFFEINE_CONTENT.herbal,
     icon: 'flower',
     color: '#A855F7',
     label: 'Herbal Tea',
     emoji: '🌸',
-    description: '100% hydration credit',
-    tip: 'Caffeine-free - counts the same as water!',
+    description: '100% hydration, caffeine-free',
+    healthNote: 'Great evening choice',
     pairWith: null,
-    warning: null,
+    sleepImpact: null,
   },
   juice: {
     id: 'juice',
     hydrationFactor: BEVERAGE_FACTORS.juice,
+    caffeine: CAFFEINE_CONTENT.juice,
     icon: 'wine',
     color: '#F59E0B',
     label: 'Juice',
     emoji: '🧃',
-    description: '80% hydration credit',
-    tip: 'Natural sugars slightly reduce absorption rate',
-    pairWith: 'water',
-    warning: 'High in natural sugars - moderate intake',
+    description: '139% hydration (better than water!)',
+    healthNote: 'High in natural sugars',
+    pairWith: null,
+    sleepImpact: null,
   },
   milk: {
     id: 'milk',
     hydrationFactor: BEVERAGE_FACTORS.milk,
+    caffeine: CAFFEINE_CONTENT.milk,
     icon: 'nutrition',
-    color: '#FEFCE8',
+    color: '#F5F5DC',
     label: 'Milk',
     emoji: '🥛',
-    description: '87% hydration credit',
-    tip: 'Protein and fat slow stomach emptying, aiding retention',
+    description: '150% hydration (best hydrator!)',
+    healthNote: 'Protein + fat = better water retention',
     pairWith: null,
-    warning: null,
+    sleepImpact: null,
   },
   electrolyte: {
     id: 'electrolyte',
     hydrationFactor: BEVERAGE_FACTORS.electrolyte,
+    caffeine: CAFFEINE_CONTENT.electrolyte,
     icon: 'flash',
     color: '#0EA5E9',
     label: 'Electrolyte',
     emoji: '⚡',
-    description: '110% hydration credit',
-    tip: 'Sodium helps your body retain water longer',
+    description: '110% hydration',
+    healthNote: 'Best after exercise or sweating',
     pairWith: null,
-    warning: 'Best after exercise or in hot weather',
+    sleepImpact: null,
   },
   coconut: {
     id: 'coconut',
     hydrationFactor: BEVERAGE_FACTORS.coconut,
+    caffeine: CAFFEINE_CONTENT.coconut,
     icon: 'leaf',
     color: '#84CC16',
     label: 'Coconut Water',
     emoji: '🥥',
-    description: '105% hydration credit',
-    tip: 'Natural electrolytes - great for rehydration',
+    description: '105% hydration',
+    healthNote: 'Natural electrolytes',
     pairWith: null,
-    warning: null,
+    sleepImpact: null,
   },
   smoothie: {
     id: 'smoothie',
     hydrationFactor: BEVERAGE_FACTORS.smoothie,
+    caffeine: CAFFEINE_CONTENT.smoothie,
     icon: 'ice-cream',
     color: '#EC4899',
     label: 'Smoothie',
     emoji: '🥤',
-    description: '85% hydration credit',
-    tip: 'Blended fiber doesn\'t reduce water absorption much',
+    description: '110% hydration',
+    healthNote: 'Check added sugar content',
     pairWith: null,
-    warning: 'Check added sugar content',
+    sleepImpact: null,
   },
   soda: {
     id: 'soda',
     hydrationFactor: BEVERAGE_FACTORS.soda,
+    caffeine: CAFFEINE_CONTENT.soda,
     icon: 'beer',
     color: '#EF4444',
     label: 'Soda',
     emoji: '🥤',
-    description: '60% hydration credit',
-    tip: 'High sugar and sometimes caffeine reduce effectiveness',
-    pairWith: 'water',
-    warning: 'High sugar - not ideal for hydration',
+    description: '100% hydration + 35mg caffeine',
+    healthNote: 'High sugar content',
+    pairWith: null,
+    sleepImpact: null,
   },
   sports: {
     id: 'sports',
     hydrationFactor: BEVERAGE_FACTORS.sports,
+    caffeine: CAFFEINE_CONTENT.sports,
     icon: 'fitness',
     color: '#22C55E',
     label: 'Sports Drink',
     emoji: '🏃',
-    description: '105% hydration credit',
-    tip: 'Designed for rapid rehydration during exercise',
+    description: '105% hydration',
+    healthNote: 'Best during/after exercise',
     pairWith: null,
-    warning: 'Contains added sugars - best during activity',
+    sleepImpact: null,
+  },
+  energy: {
+    id: 'energy',
+    hydrationFactor: BEVERAGE_FACTORS.energy,
+    caffeine: CAFFEINE_CONTENT.energy,
+    icon: 'flash',
+    color: '#FBBF24',
+    label: 'Energy Drink',
+    emoji: '⚡',
+    description: '100% hydration + 80mg caffeine',
+    healthNote: 'High caffeine - limit intake',
+    pairWith: null,
+    sleepImpact: 'Avoid 8+ hours before bed',
+  },
+  alcohol_beer: {
+    id: 'alcohol_beer',
+    hydrationFactor: BEVERAGE_FACTORS.alcohol_beer,
+    caffeine: CAFFEINE_CONTENT.alcohol_beer,
+    icon: 'beer',
+    color: '#D97706',
+    label: 'Beer',
+    emoji: '🍺',
+    description: '85% hydration (alcohol is diuretic)',
+    healthNote: 'Disrupts REM sleep',
+    pairWith: 'water',
+    sleepImpact: 'Affects sleep quality even in small amounts',
+  },
+  alcohol_wine: {
+    id: 'alcohol_wine',
+    hydrationFactor: BEVERAGE_FACTORS.alcohol_wine,
+    caffeine: CAFFEINE_CONTENT.alcohol_wine,
+    icon: 'wine',
+    color: '#7C3AED',
+    label: 'Wine',
+    emoji: '🍷',
+    description: '80% hydration',
+    healthNote: 'Disrupts REM sleep',
+    pairWith: 'water',
+    sleepImpact: 'Avoid 3-4 hours before bed',
+  },
+  alcohol_spirits: {
+    id: 'alcohol_spirits',
+    hydrationFactor: BEVERAGE_FACTORS.alcohol_spirits,
+    caffeine: CAFFEINE_CONTENT.alcohol_spirits,
+    icon: 'flask',
+    color: '#6B7280',
+    label: 'Spirits',
+    emoji: '🥃',
+    description: '70% hydration',
+    healthNote: 'Most dehydrating alcoholic drink',
+    pairWith: 'water',
+    sleepImpact: 'Significantly disrupts sleep',
   },
 };
+
+// ============================================================================
+// BEVERAGE CATEGORIES - For organized UI display
+// ============================================================================
+export const BEVERAGE_CATEGORIES = [
+  {
+    id: 'water',
+    label: 'Water',
+    icon: 'water',
+    color: '#3B82F6',
+    beverages: ['water', 'sparkling'],
+  },
+  {
+    id: 'hot',
+    label: 'Hot Drinks',
+    icon: 'cafe',
+    color: '#78350F',
+    beverages: ['coffee', 'tea', 'herbal'],
+  },
+  {
+    id: 'cold',
+    label: 'Cold Drinks',
+    icon: 'ice-cream',
+    color: '#06B6D4',
+    beverages: ['juice', 'smoothie', 'soda', 'coconut'],
+  },
+  {
+    id: 'dairy',
+    label: 'Dairy',
+    icon: 'nutrition',
+    color: '#F5F5DC',
+    beverages: ['milk'],
+  },
+  {
+    id: 'sports',
+    label: 'Sports & Energy',
+    icon: 'fitness',
+    color: '#22C55E',
+    beverages: ['sports', 'electrolyte', 'energy'],
+  },
+  {
+    id: 'alcohol',
+    label: 'Alcohol',
+    icon: 'wine',
+    color: '#7C3AED',
+    beverages: ['alcohol_beer', 'alcohol_wine', 'alcohol_spirits'],
+  },
+];
 
 // ============================================================================
 // QUICK ADD SIZES - Standardized across the app
@@ -259,12 +420,14 @@ export const TIME_BASED_TIPS = {
 };
 
 // ============================================================================
-// BEVERAGE PAIRING RULES
+// BEVERAGE PAIRING RULES (Updated based on research)
 // ============================================================================
 export const PAIRING_RULES = {
-  coffee: { pairWith: 'water', ratio: '1:1', reason: 'Offset caffeine\'s diuretic effect' },
-  juice: { pairWith: 'water', ratio: '1:0.5', reason: 'Balance sugar intake' },
-  soda: { pairWith: 'water', ratio: '1:1', reason: 'High sugar reduces hydration' },
+  // Note: Coffee/tea no longer need water pairing for hydration (myth debunked)
+  // But alcohol DOES need water pairing
+  alcohol_beer: { pairWith: 'water', ratio: '1:1', reason: 'Alcohol is diuretic - water helps' },
+  alcohol_wine: { pairWith: 'water', ratio: '1:1', reason: 'Offset dehydration from alcohol' },
+  alcohol_spirits: { pairWith: 'water', ratio: '1:2', reason: 'Spirits are most dehydrating' },
 };
 
 // ============================================================================
@@ -342,9 +505,153 @@ export function shouldAvoidBeverage(type) {
   return tips.avoid?.includes(normalized) || false;
 }
 
+// ============================================================================
+// CAFFEINE TRACKING FUNCTIONS
+// ============================================================================
+
+/**
+ * Get caffeine content for a beverage type (mg per 250ml)
+ * @param {string} type - Beverage type
+ * @returns {number} Caffeine in mg
+ */
+export function getCaffeineContent(type) {
+  const normalized = (type || 'water').toLowerCase();
+  return CAFFEINE_CONTENT[normalized] ?? 0;
+}
+
+/**
+ * Calculate caffeine from a beverage log
+ * @param {number} amountLiters - Amount in liters
+ * @param {string} beverageType - Type of beverage
+ * @returns {number} Caffeine in mg
+ */
+export function calculateCaffeine(amountLiters, beverageType) {
+  const caffeinePerLiter = getCaffeineContent(beverageType) * 4; // Convert from per-250ml to per-liter
+  return Math.round(amountLiters * caffeinePerLiter);
+}
+
+/**
+ * Get caffeine status based on total daily intake
+ * @param {number} totalCaffeine - Total caffeine in mg
+ * @returns {object} Status with level, message, color
+ */
+export function getCaffeineStatus(totalCaffeine) {
+  if (totalCaffeine <= CAFFEINE_THRESHOLDS.moderate) {
+    return {
+      level: 'low',
+      message: 'Caffeine intake is low',
+      color: '#10B981',
+      icon: 'checkmark-circle',
+    };
+  }
+  if (totalCaffeine <= CAFFEINE_THRESHOLDS.high) {
+    return {
+      level: 'moderate',
+      message: 'Moderate caffeine intake',
+      color: '#F59E0B',
+      icon: 'alert-circle',
+    };
+  }
+  if (totalCaffeine <= CAFFEINE_THRESHOLDS.limit) {
+    return {
+      level: 'high',
+      message: 'Approaching daily limit (400mg)',
+      color: '#F97316',
+      icon: 'warning',
+    };
+  }
+  return {
+    level: 'excessive',
+    message: 'Over recommended daily limit',
+    color: '#EF4444',
+    icon: 'close-circle',
+  };
+}
+
+/**
+ * Get contextual caffeine message based on time and intake
+ * @param {number} totalCaffeine - Total daily caffeine
+ * @returns {string|null} Contextual message or null
+ */
+export function getCaffeineTimeWarning(totalCaffeine) {
+  const hour = new Date().getHours();
+
+  // Evening/night caffeine warning
+  if (hour >= 14 && totalCaffeine > 0) {
+    const hoursUntilBed = Math.max(0, 22 - hour); // Assume 10pm bedtime
+    if (hoursUntilBed < 6) {
+      return 'Caffeine this late may affect your sleep';
+    }
+  }
+
+  // Morning high intake warning
+  if (hour < 12 && totalCaffeine > 200) {
+    return 'High morning caffeine - consider spacing out intake';
+  }
+
+  return null;
+}
+
+/**
+ * Check if beverage is alcoholic
+ * @param {string} type - Beverage type
+ * @returns {boolean}
+ */
+export function isAlcoholicBeverage(type) {
+  const normalized = (type || '').toLowerCase();
+  return normalized.startsWith('alcohol_');
+}
+
+/**
+ * Get sleep impact warning for beverage
+ * @param {string} type - Beverage type
+ * @returns {string|null} Sleep impact message or null
+ */
+export function getSleepImpact(type) {
+  const info = getBeverageInfo(type);
+  return info.sleepImpact || null;
+}
+
+/**
+ * Get dynamic health note based on context
+ * @param {string} type - Beverage type
+ * @param {object} context - { totalCaffeine, hour, activityLevel }
+ * @returns {string|null} Contextual health note
+ */
+export function getDynamicHealthNote(type, context = {}) {
+  const info = getBeverageInfo(type);
+  const { totalCaffeine = 0, hour = new Date().getHours(), recentActivity = false } = context;
+
+  // Contextual notes override static ones
+  if (info.caffeine > 0 && hour >= 16) {
+    return 'Evening caffeine may affect sleep quality';
+  }
+
+  if (isAlcoholicBeverage(type) && hour < 12) {
+    return 'Early alcohol consumption not recommended';
+  }
+
+  if (type === 'electrolyte' || type === 'sports') {
+    if (recentActivity) {
+      return 'Great choice after exercise!';
+    }
+    return 'Best consumed during/after physical activity';
+  }
+
+  if (info.caffeine > 0 && totalCaffeine + info.caffeine > DAILY_CAFFEINE_LIMIT) {
+    return `This would put you over the ${DAILY_CAFFEINE_LIMIT}mg daily limit`;
+  }
+
+  return info.healthNote;
+}
+
 export default {
   BEVERAGE_FACTORS,
   BEVERAGE_TYPES,
+  BEVERAGE_CATEGORIES,
+  CAFFEINE_CONTENT,
+  CAFFEINE_THRESHOLDS,
+  DAILY_CAFFEINE_LIMIT,
   QUICK_ADD_SIZES,
   WATER_PRESETS,
   HYDRATION_MILESTONES,
@@ -358,4 +665,11 @@ export default {
   getBeverageWarning,
   getPairingRecommendation,
   shouldAvoidBeverage,
+  getCaffeineContent,
+  calculateCaffeine,
+  getCaffeineStatus,
+  getCaffeineTimeWarning,
+  isAlcoholicBeverage,
+  getSleepImpact,
+  getDynamicHealthNote,
 };

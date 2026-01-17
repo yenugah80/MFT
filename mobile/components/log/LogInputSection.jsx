@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,16 @@ export default function LogInputSection({
   setShowVoiceModal,
   handlePhotoFromLibrary,
 }) {
+  // Handler for analyze/retry button - clears error first, then runs analysis
+  const handleAnalyze = useCallback(() => {
+    // Clear any existing error before retrying
+    if (foodAnalysis.error) {
+      foodAnalysis.clearError?.();
+    }
+    // Trigger the analysis
+    foodAnalysis.runAnalysis();
+  }, [foodAnalysis]);
+
   return (
     <>
       <View style={styles.modeSelector}>
@@ -126,13 +136,16 @@ export default function LogInputSection({
           <View style={styles.inputCard}>
             <View style={styles.inputHeader}>
               <Ionicons name="text" size={24} color="#6B4EFF" />
-              <Text style={styles.inputLabel}>Describe your meal</Text>
+              <View>
+                <Text style={styles.inputLabel}>Describe your meal</Text>
+                <Text style={styles.inputSubtitle}>Understand what&apos;s in your food</Text>
+              </View>
             </View>
 
             <TextInput
               style={[styles.textInputLarge, isTextFocused && styles.textInputFocused]}
-              placeholder="Describe your meal — anything you savored"
-              placeholderTextColor="#6B7280"
+              placeholder="Describe your meal in your own words..."
+              placeholderTextColor="#9CA3AF"
               value={foodAnalysis.inputText}
               onChangeText={foodAnalysis.setInputText}
               multiline
@@ -146,10 +159,24 @@ export default function LogInputSection({
 
             {!foodAnalysis.inputText && !isAnalyzing && (
               <View style={styles.infoBox}>
-                <Ionicons name="information-circle" size={20} color="#6B4EFF" />
+                <Ionicons name="sparkles" size={20} color="#6B4EFF" />
                 <Text style={styles.infoText}>
-                  Type your food and pause - AI analyzes automatically
+                  We&apos;ll estimate calories and nutrients for you
                 </Text>
+              </View>
+            )}
+
+            {/* Error state - show when analysis failed */}
+            {foodAnalysis.error && !isAnalyzing && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={20} color="#DC2626" />
+                <Text style={styles.errorText}>{foodAnalysis.error}</Text>
+                <TouchableOpacity
+                  onPress={() => foodAnalysis.clearError?.()}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
             )}
 
@@ -157,7 +184,7 @@ export default function LogInputSection({
               <View style={styles.analysisStatus}>
                 <ActivityIndicator size="small" color="#6B4EFF" />
                 <Text style={styles.analysisStatusText}>
-                  Analyzing nutrition... {Math.round(foodAnalysis.progress)}%
+                  Analyzing nutrition...
                 </Text>
               </View>
             )}
@@ -181,9 +208,9 @@ export default function LogInputSection({
                 styles.analyzeButton,
                 isAnalyzing && styles.analyzeButtonDisabled,
               ]}
-              onPress={foodAnalysis.runAnalysis}
+              onPress={handleAnalyze}
               disabled={isAnalyzing}
-              accessibilityLabel={isAnalyzing ? 'Analyzing meal' : 'Analyze meal'}
+              accessibilityLabel={isAnalyzing ? 'Analyzing meal' : 'Analyze meal to get nutrition info'}
             >
               <LinearGradient
                 colors={['#6B4EFF', '#8B6EFF']}
@@ -193,14 +220,22 @@ export default function LogInputSection({
               >
                 {isAnalyzing ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : foodAnalysis.error ? (
+                  <Ionicons name="refresh" size={18} color="#FFFFFF" />
                 ) : (
                   <Ionicons name="sparkles-outline" size={18} color="#FFFFFF" />
                 )}
                 <Text style={styles.analyzeText}>
-                  {isAnalyzing ? 'Analyzing...' : 'Analyze / Retry'}
+                  {isAnalyzing ? 'Analyzing...' : foodAnalysis.error ? 'Retry Analysis' : 'Analyze Meal'}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
+            {/* Helper text under button - hide when there's an error */}
+            {!isAnalyzing && foodAnalysis.inputText && !foodAnalysis.error && (
+              <Text style={styles.analyzeHint}>
+                We&apos;ll estimate calories, macros &amp; key nutrients
+              </Text>
+            )}
           </View>
         </View>
       )}

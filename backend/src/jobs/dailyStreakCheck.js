@@ -1,5 +1,17 @@
-// Daily Streak Check Cron Job
-// Runs at 12:05 AM UTC daily to validate streaks and reset if user missed a day
+/**
+ * Daily Streak Check Cron Job
+ *
+ * TIMEZONE HANDLING:
+ * - Cron runs at 00:05 UTC (a single trigger point)
+ * - For EACH user, we use their stored timezoneOffset to calculate their local "yesterday"
+ * - Example: User in UTC+5:30 at 00:05 UTC → their local time is 5:35 AM
+ *   → their "yesterday" is fully complete → safe to check
+ * - Example: User in UTC-12 at 00:05 UTC → their local time is 12:05 PM previous day
+ *   → their "yesterday" is 2 days ago in UTC → we check that day
+ *
+ * This means all users get checked based on THEIR local day, not UTC.
+ * Streak freeze is consumed if user missed their local yesterday.
+ */
 
 import cron from 'cron';
 import { db } from '../config/db.js';
@@ -9,7 +21,7 @@ import { addDaysUTC, getLocalDayRange } from '../utils/timezone.js';
 
 /**
  * Initialize the daily streak check cron job
- * Runs at 00:05 UTC every day (5 minutes after midnight to allow for timezone variations)
+ * Runs at 00:05 UTC - uses each user's timezone to calculate their local day
  */
 export function initStreakCronJob() {
   // Schedule: "5 0 * * *" = At 00:05 (12:05 AM) every day
@@ -37,7 +49,14 @@ export function initStreakCronJob() {
 
         for (const { userId, timezoneOffset, streak, streakFreezes } of allUsers) {
           try {
-            const offsetMinutes = Number.isFinite(timezoneOffset) ? timezoneOffset : 0;
+            // CRITICAL: Skip users without stored timezone - they'll be checked on next login
+            // DO NOT default to UTC (0) as this causes incorrect streak resets for non-UTC users
+            if (!Number.isFinite(timezoneOffset)) {
+              console.log(`[Streak] ⏭️ Skipping user ${userId}: no timezone stored (will check on next activity)`);
+              continue;
+            }
+
+            const offsetMinutes = timezoneOffset;
             const yesterdayBase = addDaysUTC(new Date(), -1);
             const { start: yesterdayStart, end: yesterdayEnd } = getLocalDayRange(offsetMinutes, yesterdayBase);
 

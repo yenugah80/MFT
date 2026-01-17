@@ -281,15 +281,24 @@ export function MiniHalfGauge({
   gradient,
   label,
   style,
+  showActualValue = true, // Show actual percentage even if > 100%
 }) {
   const cx = size / 2;
   const cy = size / 2;
   const radius = (size - strokeWidth) / 2;
-  const percentage = Math.min((value / maxValue) * 100, 100);
-  const progressAngle = (percentage / 100) * 180;
 
-  const progressColor = getProgressColor(percentage, color);
-  const progressGradient = getProgressGradient(percentage, gradient);
+  // Calculate actual percentage (can be > 100%)
+  const actualPercentage = (value / maxValue) * 100;
+  // Cap visual progress at 100% for the arc
+  const visualPercentage = Math.min(actualPercentage, 100);
+  const progressAngle = (visualPercentage / 100) * 180;
+  const isOver = actualPercentage > 100;
+
+  // Use danger color if over 100%, otherwise calculate based on progress
+  const progressColor = isOver ? SEMANTIC.danger.base : getProgressColor(actualPercentage, color);
+  const progressGradient = isOver
+    ? [SEMANTIC.danger.base, SEMANTIC.danger.dark || SEMANTIC.danger.base]
+    : getProgressGradient(actualPercentage, gradient);
   const gradientId = `mini-gauge-${Math.random().toString(36).substr(2, 9)}`;
 
   const bgPath = describeArc(cx, cy, radius, 0, 180);
@@ -298,6 +307,9 @@ export function MiniHalfGauge({
   // Ensure integer dimensions to avoid native rendering precision issues
   const viewHeight = Math.round(size / 2 + 20);
   const svgHeight = Math.round(size / 2 + strokeWidth);
+
+  // Display value: show actual percentage (e.g., 254%) if showActualValue is true
+  const displayValue = showActualValue ? Math.round(actualPercentage) : Math.round(visualPercentage);
 
   return (
     <View style={[styles.miniContainer, { width: size, height: viewHeight }, style]}>
@@ -327,7 +339,7 @@ export function MiniHalfGauge({
       </Svg>
       <View style={styles.miniCenter}>
         <Text style={[styles.miniValue, { color: progressColor }]}>
-          {Math.round(percentage)}%
+          {displayValue}%
         </Text>
         {label && <Text style={styles.miniLabel}>{label}</Text>}
       </View>

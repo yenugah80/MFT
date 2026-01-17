@@ -1,239 +1,223 @@
 /**
- * Hydration-Cognition Correlation Screen
+ * Hydration Insights Screen
  *
- * Deep-dive analysis of Hydration ↔ Mood/Cognition relationship
- * Key insight: U-shaped curve (both dehydration AND overhydration harmful)
- *
- * Based on CDC NHANES research
+ * Simple view: Your hydration status, trend, and recommendations
+ * No research, no explanations - just what you need to know
  */
 
-import React, { useState, useMemo } from 'react';
-import { View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  View,
+  ScrollView,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import HydrationCognitionCard from '../../components/analytics/HydrationCognitionCard';
-import GaugeChart from '../../components/analytics/GaugeChart';
-import MiniLineChart from '../../components/analytics/MiniLineChart';
 
 import { useMoodTrends } from '../../hooks/useMoodTrends';
 import { useWaterLog } from '../../hooks/useWaterLog';
 
-import { TEXT, BRAND, SURFACES, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
-import { analyzeMultiFactorCorrelations, CONFIG, EVIDENCE_TERMINOLOGY } from '../../utils/multiFactorAnalytics';
+import {
+  TEXT,
+  BRAND,
+  SURFACES,
+  SEMANTIC,
+  SHADOWS,
+  TYPOGRAPHY,
+  SPACING,
+  RADIUS,
+  VIBRANT_WELLNESS,
+} from '../../constants/premiumTheme';
+
+// Target: 8-12 glasses (2000-3000ml)
+const TARGET_MIN = 2000;
+const TARGET_MAX = 3000;
 
 export default function HydrationCognitionScreen() {
   const router = useRouter();
-  const [timeRange, setTimeRange] = useState(30);
+  const [timeRange, setTimeRange] = useState(7);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { logs: waterLogs } = useWaterLog();
-  const { data: moodData } = useMoodTrends({ days: timeRange });
+  const { logs: waterLogs, isLoading: waterLoading, error: waterError, refetch: refetchWater } = useWaterLog();
+  const { data: moodData, isLoading: moodLoading, error: moodError, refetch: refetchMood } = useMoodTrends({ days: timeRange });
   const moodLogs = moodData?.data || [];
 
-  const analysis = useMemo(() => {
-    return analyzeMultiFactorCorrelations({
-      foodLogs: [],
-      moodLogs,
-      waterLogs,
-      activityLogs: [],
-      sleepLogs: [],
-    });
-  }, [waterLogs, moodLogs]);
+  const isLoading = waterLoading || moodLoading;
+  const error = waterError || moodError;
 
-  // Calculate daily hydration trend
-  const dailyHydration = useMemo(() => {
-    const last7Days = waterLogs.slice(-7);
-    return last7Days.map(log => log.amount || 0);
+  // Calculate average hydration
+  const avgHydration = useMemo(() => {
+    if (!waterLogs.length) return 0;
+    const recent = waterLogs.slice(-7);
+    return Math.round(recent.reduce((sum, log) => sum + (log.amount || 0), 0) / recent.length);
   }, [waterLogs]);
 
-  const avgHydration = dailyHydration.length > 0
-    ? dailyHydration.reduce((sum, val) => sum + val, 0) / dailyHydration.length
-    : 0;
+  // Simple status
+  const status = useMemo(() => {
+    if (avgHydration === 0) return { text: 'Start Tracking', color: TEXT.tertiary, icon: 'water-outline' };
+    if (avgHydration < TARGET_MIN) return { text: 'Drink More', color: SEMANTIC.warning.base, icon: 'arrow-up' };
+    if (avgHydration > TARGET_MAX) return { text: 'Maybe Ease Up', color: SEMANTIC.info.base, icon: 'arrow-down' };
+    return { text: 'On Track!', color: SEMANTIC.success.base, icon: 'checkmark-circle' };
+  }, [avgHydration]);
 
-  if (!analysis.canAnalyze) {
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Promise.all([refetchWater?.(), refetchMood?.()]);
+    setRefreshing(false);
+  }, [refetchWater, refetchMood]);
+
+  const handleBack = useCallback(() => {
+    Haptics.selectionAsync();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/insights');
+    }
+  }, [router]);
+
+  // Loading state
+  if (isLoading && !waterLogs.length) {
     return (
-      <>
-        <Stack.Screen options={{ title: 'Hydration → Cognition', headerShown: true }} />
-        <View style={styles.container}>
-          <View style={styles.emptyState}>
-            <Ionicons name="water-outline" size={64} color={TEXT.tertiary} />
-            <Text style={styles.emptyTitle}>Not Enough Data</Text>
-            <Text style={styles.emptyText}>{analysis.message}</Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={() => router.back()}>
-              <Text style={styles.emptyButtonText}>Go Back</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </>
+      <View style={styles.centerContainer}>
+        <Stack.Screen
+          options={{
+            title: 'Hydration',
+            headerShown: true,
+            headerStyle: { backgroundColor: SURFACES.background.primary },
+            headerTintColor: TEXT.primary,
+            headerLeft: () => (
+              <TouchableOpacity
+                onPress={handleBack}
+                style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Go back"
+                accessibilityRole="button"
+              >
+                <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <ActivityIndicator size="large" color={VIBRANT_WELLNESS.hydration.solid} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
     );
   }
 
-  const hydrationAnalysis = analysis.correlations.hydration_mood;
+  // Error state
+  if (error && !waterLogs.length) {
+    return (
+      <View style={styles.centerContainer}>
+        <Stack.Screen
+          options={{
+            title: 'Hydration',
+            headerShown: true,
+            headerStyle: { backgroundColor: SURFACES.background.primary },
+            headerTintColor: TEXT.primary,
+            headerLeft: () => (
+              <TouchableOpacity
+                onPress={handleBack}
+                style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Go back"
+                accessibilityRole="button"
+              >
+                <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <Ionicons name="alert-circle-outline" size={48} color={SEMANTIC.danger.base} />
+        <Text style={styles.errorText}>Couldn't load data</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={onRefresh}
+          accessibilityLabel="Try again"
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Hydration → Cognition', headerShown: true }} />
-
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Time Range Selector */}
-        <View style={styles.timeRangeContainer}>
-          {[7, 30, 90].map(days => (
+      <Stack.Screen
+        options={{
+          title: 'Hydration',
+          headerShown: true,
+          headerStyle: { backgroundColor: SURFACES.background.primary },
+          headerTintColor: TEXT.primary,
+          headerLeft: () => (
             <TouchableOpacity
-              key={days}
-              style={[styles.timeRangeButton, timeRange === days && styles.timeRangeButtonActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setTimeRange(days);
-              }}
+              onPress={handleBack}
+              style={styles.headerButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
             >
-              <Text style={[styles.timeRangeText, timeRange === days && styles.timeRangeTextActive]}>
-                {days}d
-              </Text>
+              <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
             </TouchableOpacity>
-          ))}
+          ),
+        }}
+      />
+
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={VIBRANT_WELLNESS.hydration.solid}
+            colors={[VIBRANT_WELLNESS.hydration.solid]}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Status Card */}
+        <View style={styles.statusCard}>
+          <View style={[styles.statusIcon, { backgroundColor: `${status.color}20` }]}>
+            <Ionicons name={status.icon} size={32} color={status.color} />
+          </View>
+          <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+          <Text style={styles.avgText}>
+            {avgHydration > 0 ? `${avgHydration} ml/day average` : 'Log water to see your average'}
+          </Text>
+          <View style={styles.targetRow}>
+            <Text style={styles.targetLabel}>Target:</Text>
+            <Text style={styles.targetValue}>{TARGET_MIN}-{TARGET_MAX} ml/day</Text>
+          </View>
         </View>
 
-        {/* Expanded Card */}
+        {/* Correlation Card - shows how hydration affects mood */}
         <HydrationCognitionCard waterLogs={waterLogs} moodLogs={moodLogs} compact={false} />
 
-        {/* Current Status */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Hydration Status</Text>
-          <View style={styles.statusCard}>
-            <GaugeChart
-              value={(avgHydration / CONFIG.HYDRATION_OPTIMAL_MAX) * 100}
-              size={160}
-              zones={[
-                { min: 0, max: 33, color: SEMANTIC.error, label: 'Low' },
-                { min: 33, max: 67, color: SEMANTIC.success, label: 'Optimal' },
-                { min: 67, max: 100, color: SEMANTIC.warning, label: 'High' },
-              ]}
-            />
-            <View style={styles.statusDetails}>
-              <View style={styles.statusRow}>
-                <Text style={styles.statusLabel}>Current Average</Text>
-                <Text style={styles.statusValue}>{Math.round(avgHydration)} ml/day</Text>
-              </View>
-              <View style={styles.statusRow}>
-                <Text style={styles.statusLabel}>Optimal Range</Text>
-                <Text style={styles.statusValue}>
-                  {CONFIG.HYDRATION_OPTIMAL_MIN}-{CONFIG.HYDRATION_OPTIMAL_MAX} ml
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Trend Chart */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>7-Day Hydration Trend</Text>
-          <View style={styles.chartCard}>
-            <MiniLineChart
-              data={dailyHydration}
-              labels={['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].slice(-dailyHydration.length)}
-              width={SURFACES.width || 280}
-              height={120}
-              color={BRAND.accent}
-              showGrid={true}
-            />
-            {/* Optimal range indicator */}
-            <View style={styles.rangeIndicators}>
-              <View style={styles.rangeIndicator}>
-                <View style={[styles.rangeDot, { backgroundColor: SEMANTIC.success }]} />
-                <Text style={styles.rangeLabel}>Optimal Range</Text>
-              </View>
-              <View style={styles.rangeIndicator}>
-                <View style={[styles.rangeDot, { backgroundColor: SEMANTIC.error }]} />
-                <Text style={styles.rangeLabel}>Dehydration ({'<'}{CONFIG.HYDRATION_DEHYDRATION}ml)</Text>
-              </View>
-              <View style={styles.rangeIndicator}>
-                <View style={[styles.rangeDot, { backgroundColor: SEMANTIC.warning }]} />
-                <Text style={styles.rangeLabel}>Overhydration ({'>'}{CONFIG.HYDRATION_OVERHYDRATION}ml)</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* U-Shaped Curve Explanation */}
-        {hydrationAnalysis.type === 'curvilinear' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Why U-Shaped?</Text>
-            <View style={styles.scienceCard}>
-              <View style={styles.scienceIcon}>
-                <Ionicons name="flask" size={32} color={BRAND.primary} />
-              </View>
-              <Text style={styles.scienceTitle}>CDC NHANES Research Finding</Text>
-              <Text style={styles.scienceText}>
-                {hydrationAnalysis.warning}
-              </Text>
-              <View style={styles.mechanismBox}>
-                <Text style={styles.mechanismLabel}>Mechanism:</Text>
-                <Text style={styles.mechanismText}>{hydrationAnalysis.mechanism}</Text>
-              </View>
-              <View style={styles.evidenceBadge}>
-                <Ionicons name="shield-checkmark" size={16} color={SEMANTIC.success} />
-                <Text style={styles.evidenceText}>
-                  {EVIDENCE_TERMINOLOGY.getCausalFraming(hydrationAnalysis.evidenceLevel)}
-                </Text>
-              </View>
-            </View>
+        {/* Simple Recommendation */}
+        {avgHydration > 0 && avgHydration < TARGET_MIN && (
+          <View style={[styles.tipCard, { borderLeftColor: SEMANTIC.warning.base }]}>
+            <Ionicons name="water" size={24} color={SEMANTIC.warning.base} />
+            <Text style={styles.tipText}>
+              Try adding {Math.round((TARGET_MIN - avgHydration) / 250)} more glasses to reach your goal
+            </Text>
           </View>
         )}
 
-        {/* Recommendations */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personalized Recommendations</Text>
-
-          {avgHydration < CONFIG.HYDRATION_DEHYDRATION && (
-            <View style={[styles.recommendationCard, { borderLeftColor: SEMANTIC.error }]}>
-              <Ionicons name="alert-circle" size={24} color={SEMANTIC.error} />
-              <View style={styles.recommendationContent}>
-                <Text style={styles.recommendationTitle}>Increase Hydration</Text>
-                <Text style={styles.recommendationText}>
-                  You&apos;re averaging {Math.round(avgHydration)}ml/day, which is below optimal.
-                  Try to reach at least {CONFIG.HYDRATION_OPTIMAL_MIN}ml/day for better cognition.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {avgHydration > CONFIG.HYDRATION_OVERHYDRATION && (
-            <View style={[styles.recommendationCard, { borderLeftColor: SEMANTIC.warning }]}>
-              <Ionicons name="warning" size={24} color={SEMANTIC.warning} />
-              <View style={styles.recommendationContent}>
-                <Text style={styles.recommendationTitle}>Moderate Hydration</Text>
-                <Text style={styles.recommendationText}>
-                  You&apos;re averaging {Math.round(avgHydration)}ml/day, which may be too high.
-                  Overhydration can dilute electrolytes. Aim for {CONFIG.HYDRATION_OPTIMAL_MIN}-{CONFIG.HYDRATION_OPTIMAL_MAX}ml/day.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {avgHydration >= CONFIG.HYDRATION_OPTIMAL_MIN && avgHydration <= CONFIG.HYDRATION_OPTIMAL_MAX && (
-            <View style={[styles.recommendationCard, { borderLeftColor: SEMANTIC.success }]}>
-              <Ionicons name="checkmark-circle" size={24} color={SEMANTIC.success} />
-              <View style={styles.recommendationContent}>
-                <Text style={styles.recommendationTitle}>Perfect Balance!</Text>
-                <Text style={styles.recommendationText}>
-                  Your hydration is in the optimal range. Keep it up!
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Research Sources */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Scientific Sources</Text>
-          <View style={styles.sourcesCard}>
-            <Ionicons name="library" size={24} color={BRAND.primary} />
-            <Text style={styles.sourcesText}>
-              {hydrationAnalysis.sources?.join(' • ') || 'CDC NHANES 2011-2014 • PMC Hydration-Cognition Studies'}
-            </Text>
+        {avgHydration >= TARGET_MIN && avgHydration <= TARGET_MAX && (
+          <View style={[styles.tipCard, { borderLeftColor: SEMANTIC.success.base }]}>
+            <Ionicons name="checkmark-circle" size={24} color={SEMANTIC.success.base} />
+            <Text style={styles.tipText}>Great job staying hydrated! Keep it up.</Text>
           </View>
-        </View>
+        )}
       </ScrollView>
     </>
   );
@@ -242,218 +226,98 @@ export default function HydrationCognitionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SURFACES.background,
+    backgroundColor: SURFACES.background.primary,
   },
   content: {
-    padding: 16,
-    gap: 16,
+    padding: SPACING[4],
+    paddingBottom: SPACING[10],
+    gap: SPACING[4],
   },
-  timeRangeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: SURFACES.card,
-    padding: 4,
-    borderRadius: 12,
-  },
-  timeRangeButton: {
+  centerContainer: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: SURFACES.background.primary,
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: SPACING[6],
+    gap: SPACING[3],
   },
-  timeRangeButtonActive: {
-    backgroundColor: BRAND.primary,
+  headerButton: {
+    padding: SPACING[2],
   },
-  timeRangeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: TEXT.tertiary,
+  loadingText: {
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.secondary,
   },
-  timeRangeTextActive: {
-    color: '#FFFFFF',
+  errorText: {
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.secondary,
   },
-  section: {
-    gap: 12,
+  retryButton: {
+    backgroundColor: VIBRANT_WELLNESS.hydration.solid,
+    paddingHorizontal: SPACING[6],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.md,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: TEXT.primary,
+  retryButtonText: {
+    color: TEXT.white,
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
+
+  // Status Card
   statusCard: {
-    backgroundColor: SURFACES.card,
-    padding: 20,
-    borderRadius: 16,
+    backgroundColor: SURFACES.card.primary,
+    padding: SPACING[6],
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
-    gap: 20,
-    ...SHADOWS.medium,
+    gap: SPACING[3],
+    ...SHADOWS.md,
   },
-  statusDetails: {
-    width: '100%',
-    gap: 12,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-  statusLabel: {
-    fontSize: 14,
-    color: TEXT.tertiary,
-  },
-  statusValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  chartCard: {
-    backgroundColor: SURFACES.card,
-    padding: 16,
-    borderRadius: 16,
-    ...SHADOWS.medium,
-  },
-  rangeIndicators: {
-    marginTop: 16,
-    gap: 8,
-  },
-  rangeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rangeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  rangeLabel: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-  },
-  scienceCard: {
-    backgroundColor: SURFACES.card,
-    padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    gap: 12,
-    ...SHADOWS.medium,
-  },
-  scienceIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: BRAND.primary + '20',
+  statusIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scienceTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: TEXT.primary,
-    textAlign: 'center',
+  statusText: {
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontWeight: TYPOGRAPHY.weight.bold,
   },
-  scienceText: {
-    fontSize: 14,
+  avgText: {
+    fontSize: TYPOGRAPHY.size.base,
     color: TEXT.secondary,
-    textAlign: 'center',
-    lineHeight: 20,
   },
-  mechanismBox: {
-    backgroundColor: SURFACES.elevated,
-    padding: 12,
-    borderRadius: 8,
-    width: '100%',
+  targetRow: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+    marginTop: SPACING[1],
   },
-  mechanismLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: TEXT.secondary,
-    marginBottom: 4,
-  },
-  mechanismText: {
-    fontSize: 12,
+  targetLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
-    lineHeight: 16,
-    fontStyle: 'italic',
   },
-  evidenceBadge: {
+  targetValue: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.secondary,
+  },
+
+  // Tip Card
+  tipCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: SEMANTIC.success + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  evidenceText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: SEMANTIC.success,
-  },
-  recommendationCard: {
-    flexDirection: 'row',
-    backgroundColor: SURFACES.card,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
+    backgroundColor: SURFACES.card.primary,
+    padding: SPACING[4],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[3],
     borderLeftWidth: 4,
-    ...SHADOWS.small,
-  },
-  recommendationContent: {
-    flex: 1,
-    gap: 4,
-  },
-  recommendationTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  recommendationText: {
-    fontSize: 13,
-    color: TEXT.secondary,
-    lineHeight: 18,
-  },
-  sourcesCard: {
-    flexDirection: 'row',
-    backgroundColor: SURFACES.card,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    ...SHADOWS.small,
-  },
-  sourcesText: {
-    flex: 1,
-    fontSize: 12,
-    color: TEXT.tertiary,
-    lineHeight: 16,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
-    gap: 16,
+    ...SHADOWS.sm,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-  },
-  emptyButton: {
-    backgroundColor: BRAND.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  emptyButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+  tipText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    lineHeight: 20,
   },
 });

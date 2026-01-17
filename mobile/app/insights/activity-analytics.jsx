@@ -1,18 +1,15 @@
 /**
- * Activity Analytics Screen
+ * Activity Analytics Screen - Production Grade
  *
- * ISOLATED activity analytics - shows ONLY activity data:
- * - Weekly CDC progress and activity metrics from useActivityAnalytics
- * - Activity-specific predictions and recommendations from useActivityAnalytics
- * - Activity persona based on movement patterns
- *
- * Cross-category data (activity-mood correlations, energy predictions) belongs in:
- * - /insights/activity-mood - Activity-mood pattern analysis
- * - /insights/multi-factor-analytics - Cross-category correlations
- * - /insights/predictive - Multi-factor predictions
+ * Design Philosophy:
+ * - Time-aware coaching (morning/afternoon/evening context)
+ * - Adaptive to user's current day progress
+ * - Premium visual design with cohesive colors
+ * - Single clear priority, not multiple competing cards
+ * - Real data visualization
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,11 +20,12 @@ import {
   Dimensions,
   ActivityIndicator,
   AccessibilityInfo,
+  Animated,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Rect, Defs, LinearGradient as SvgGradient, Stop, G, Line, Circle } from 'react-native-svg';
+import Svg, { Rect, Defs, LinearGradient as SvgGradient, Stop, G, Circle, Line, Text as SvgText } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -37,24 +35,337 @@ import {
   SPACING,
   RADIUS,
   CARD_SYSTEM,
-  VIBRANT_WELLNESS,
   SEMANTIC,
   BRAND,
+  SHADOWS,
 } from '../../constants/premiumTheme';
 
 import HalfGaugeChart from '../../components/insights/HalfGaugeChart';
-import ColdStartCard from '../../components/insights/ColdStartCard';
-// Note: RelatedInsights removed - this screen shows ONLY activity data
-
 import { useActivityAnalytics, calculateActivityStreak } from '../../hooks/useActivityAnalytics';
-// Note: useCorrelations removed - cross-category correlations belong in /insights/activity-mood
-
-// Responsive layout for small devices
 import { getResponsiveGaugeSize, IS_SMALL_DEVICE } from '../../utils/responsiveLayout';
+
+// Note: ColdStartCard removed - hero card handles all user stages including new users
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GAUGE_CONFIG = getResponsiveGaugeSize('standard');
-const CDC_WEEKLY_GOAL = 150; // CDC recommends 150 min/week of moderate activity
+const CDC_WEEKLY_GOAL = 150;
+const CDC_DAILY_AVG = Math.round(CDC_WEEKLY_GOAL / 7);
+
+// Premium Activity Colors - Using Brand Purple
+const ACTIVITY_COLORS = {
+  primary: BRAND.primary,           // Brand purple
+  primaryDark: BRAND.primaryDark,
+  primaryLight: BRAND.primaryLight,
+  gradient: [BRAND.primary, BRAND.primaryDark],
+  gradientLight: [BRAND.primaryLight, BRAND.primary],
+  surface: '#F5F3FF',               // Light purple surface
+  surfaceLight: '#FAF8FF',
+  text: '#4C1D95',                  // Dark purple text
+  accent: BRAND.accent,
+};
+
+// ============================================================================
+// TIME-AWARE COACH ENGINE
+// ============================================================================
+
+function getTimeOfDay() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+function getTimeAwareCoaching(coldStart, metrics, todayMinutes = 0) {
+  const timeOfDay = getTimeOfDay();
+  const totalLogs = coldStart?.totalLogs || 0;
+  const distinctDays = coldStart?.distinctDays || 0;
+  const { weeklyMinutes, streak, daysActive } = metrics;
+  const hasLoggedToday = todayMinutes > 0;
+  const metDailyGoal = todayMinutes >= CDC_DAILY_AVG;
+
+  // Time-specific greetings and suggestions
+  const timeContext = {
+    morning: {
+      greeting: 'Good morning',
+      prime: 'Morning movement sets the tone for your day',
+      suggestion: hasLoggedToday
+        ? 'Great start! Keep the momentum going.'
+        : 'A quick walk before lunch boosts focus all day.',
+      optimalWindow: '6am - 10am',
+      benefit: 'Morning exercise increases alertness and metabolism',
+    },
+    afternoon: {
+      greeting: 'Good afternoon',
+      prime: 'Beat the afternoon slump with movement',
+      suggestion: hasLoggedToday
+        ? 'Nice work today! A short walk can refresh your focus.'
+        : 'Even a 10-minute walk clears afternoon brain fog.',
+      optimalWindow: '12pm - 2pm',
+      benefit: 'Afternoon activity prevents energy crashes',
+    },
+    evening: {
+      greeting: 'Good evening',
+      prime: 'Wind down with gentle movement',
+      suggestion: hasLoggedToday
+        ? metDailyGoal ? "You've hit today's target! Rest well." : 'A light walk could complete your day.'
+        : 'An evening stroll aids sleep quality.',
+      optimalWindow: '5pm - 8pm',
+      benefit: 'Light evening activity improves sleep',
+    },
+    night: {
+      greeting: 'Good night',
+      prime: 'Rest is part of the journey',
+      suggestion: hasLoggedToday
+        ? "Great effort today. Tomorrow's a new day!"
+        : "Rest well. Tomorrow offers new opportunities.",
+      optimalWindow: 'Tomorrow morning',
+      benefit: 'Quality sleep enhances recovery',
+    },
+  };
+
+  const time = timeContext[timeOfDay];
+
+  // Stage-based coaching with time awareness
+  if (totalLogs === 0) {
+    return {
+      stage: 'new',
+      headline: time.greeting,
+      subhead: 'Ready to start your journey?',
+      message: time.prime,
+      action: {
+        primary: 'Log your first activity',
+        secondary: time.suggestion,
+      },
+      stats: {
+        show: false,
+      },
+      tip: {
+        icon: 'time-outline',
+        text: `Best time: ${time.optimalWindow}`,
+        subtext: time.benefit,
+      },
+      progress: {
+        percent: 0,
+        label: 'Day 1 starts now',
+      },
+    };
+  }
+
+  if (distinctDays < 7) {
+    const remaining = 7 - distinctDays;
+    return {
+      stage: 'building',
+      headline: hasLoggedToday ? 'Keep going!' : time.greeting,
+      subhead: `${distinctDays} day${distinctDays > 1 ? 's' : ''} of activity logged`,
+      message: hasLoggedToday
+        ? `${todayMinutes} minutes today. ${time.suggestion}`
+        : time.suggestion,
+      action: {
+        primary: hasLoggedToday ? 'Add more activity' : 'Log today\'s activity',
+        secondary: `${remaining} more day${remaining > 1 ? 's' : ''} to unlock patterns`,
+      },
+      stats: {
+        show: true,
+        items: [
+          { value: distinctDays, label: 'Days', icon: 'calendar-outline' },
+          { value: streak, label: 'Streak', icon: 'flame-outline', highlight: streak > 0 },
+          { value: todayMinutes, label: 'Today', icon: 'today-outline' },
+        ],
+      },
+      tip: {
+        icon: 'sparkles-outline',
+        text: streak > 0 ? `${streak}-day streak!` : 'Start a streak today',
+        subtext: 'Consistency builds lasting habits',
+      },
+      progress: {
+        percent: Math.round((distinctDays / 7) * 100),
+        label: `${distinctDays}/7 days to insights`,
+      },
+    };
+  }
+
+  // Established user with week+ of data
+  const weeklyPercent = Math.round((weeklyMinutes / CDC_WEEKLY_GOAL) * 100);
+  const todayPercent = Math.round((todayMinutes / CDC_DAILY_AVG) * 100);
+
+  if (weeklyMinutes >= CDC_WEEKLY_GOAL) {
+    return {
+      stage: 'achieved',
+      headline: 'Goal Achieved!',
+      subhead: `${weeklyMinutes} minutes this week`,
+      message: hasLoggedToday
+        ? `${todayMinutes} min today. ${time.suggestion}`
+        : time.suggestion,
+      action: {
+        primary: 'Keep it up',
+        secondary: 'You\'ve exceeded the CDC recommendation',
+      },
+      stats: {
+        show: true,
+        items: [
+          { value: weeklyMinutes, label: 'Weekly', icon: 'trending-up', highlight: true },
+          { value: streak, label: 'Streak', icon: 'flame-outline', highlight: streak > 2 },
+          { value: daysActive, label: 'Active', icon: 'checkmark-circle-outline' },
+        ],
+      },
+      tip: {
+        icon: 'trophy-outline',
+        text: 'CDC goal exceeded',
+        subtext: 'Your commitment is paying off',
+      },
+      progress: {
+        percent: Math.min(weeklyPercent, 100),
+        label: `${weeklyPercent}% of weekly goal`,
+      },
+    };
+  }
+
+  // Progressing toward goal
+  return {
+    stage: 'progressing',
+    headline: hasLoggedToday ? `${todayMinutes} min today` : time.greeting,
+    subhead: `${weeklyMinutes} of ${CDC_WEEKLY_GOAL} min this week`,
+    message: time.suggestion,
+    action: {
+      primary: hasLoggedToday ? 'Add more activity' : 'Log activity',
+      secondary: `${CDC_WEEKLY_GOAL - weeklyMinutes} min to weekly goal`,
+    },
+    stats: {
+      show: true,
+      items: [
+        { value: `${weeklyPercent}%`, label: 'Weekly', icon: 'analytics-outline' },
+        { value: streak, label: 'Streak', icon: 'flame-outline', highlight: streak > 0 },
+        { value: `${todayPercent}%`, label: 'Today', icon: 'today-outline' },
+      ],
+    },
+    tip: {
+      icon: 'time-outline',
+      text: `Best time: ${time.optimalWindow}`,
+      subtext: time.benefit,
+    },
+    progress: {
+      percent: weeklyPercent,
+      label: `${weeklyPercent}% of CDC goal`,
+    },
+  };
+}
+
+// ============================================================================
+// WEEK CHART COMPONENT
+// ============================================================================
+
+function WeekChart({ weekData, goal = CDC_DAILY_AVG }) {
+  const chartWidth = SCREEN_WIDTH - SPACING[8];
+  const chartHeight = IS_SMALL_DEVICE ? 90 : 110;
+  const barWidth = IS_SMALL_DEVICE ? 26 : 32;
+  const spacing = (chartWidth - 7 * barWidth) / 6;
+
+  const data = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return (weekData || []).map((day, i) => ({
+      label: day?.label || ['S', 'M', 'T', 'W', 'T', 'F', 'S'][i],
+      minutes: day?.minutes || 0,
+      isToday: day?.date === today,
+      metGoal: (day?.minutes || 0) >= goal,
+    }));
+  }, [weekData, goal]);
+
+  const maxVal = Math.max(goal * 1.5, ...data.map(d => d.minutes));
+
+  return (
+    <View style={styles.chartWrapper}>
+      <Svg width={chartWidth} height={chartHeight + 32}>
+        <Defs>
+          <SvgGradient id="activeBar" x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor={ACTIVITY_COLORS.primary} />
+            <Stop offset="100%" stopColor={ACTIVITY_COLORS.primaryDark} />
+          </SvgGradient>
+          <SvgGradient id="goalBar" x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor={SEMANTIC.success.base} />
+            <Stop offset="100%" stopColor="#059669" />
+          </SvgGradient>
+        </Defs>
+
+        {/* Goal line */}
+        <Line
+          x1={0}
+          y1={chartHeight - (goal / maxVal) * chartHeight}
+          x2={chartWidth}
+          y2={chartHeight - (goal / maxVal) * chartHeight}
+          stroke={ACTIVITY_COLORS.primaryLight}
+          strokeWidth={1}
+          strokeDasharray="4,4"
+          opacity={0.5}
+        />
+
+        {data.map((d, i) => {
+          const h = Math.max((d.minutes / maxVal) * chartHeight, 4);
+          const x = i * (barWidth + spacing);
+          const y = chartHeight - h;
+
+          return (
+            <G key={i}>
+              {/* Track */}
+              <Rect
+                x={x}
+                y={0}
+                width={barWidth}
+                height={chartHeight}
+                rx={barWidth / 2}
+                fill={SURFACES.card.secondary}
+                opacity={0.4}
+              />
+              {/* Bar */}
+              <Rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={h}
+                rx={barWidth / 2}
+                fill={d.metGoal ? 'url(#goalBar)' : 'url(#activeBar)'}
+                opacity={d.isToday ? 1 : 0.85}
+              />
+              {/* Today dot */}
+              {d.isToday && (
+                <Circle cx={x + barWidth / 2} cy={chartHeight + 12} r={3} fill={BRAND.primary} />
+              )}
+              {/* Value */}
+              {d.minutes > 0 && (
+                <SvgText
+                  x={x + barWidth / 2}
+                  y={y - 4}
+                  fontSize={9}
+                  fill={TEXT.secondary}
+                  textAnchor="middle"
+                  fontWeight="600"
+                >
+                  {d.minutes}
+                </SvgText>
+              )}
+            </G>
+          );
+        })}
+      </Svg>
+
+      {/* Labels */}
+      <View style={styles.chartLabels}>
+        {data.map((d, i) => (
+          <Text
+            key={i}
+            style={[
+              styles.chartLabel,
+              d.isToday && styles.chartLabelToday,
+              { width: barWidth, marginRight: i < 6 ? spacing : 0 },
+            ]}
+          >
+            {d.label}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -64,96 +375,74 @@ export default function ActivityAnalyticsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Accessibility
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
-    return () => subscription?.remove();
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
+    return () => sub?.remove();
   }, []);
 
-  // Real data hooks - ONLY activity-specific data
-  // Cross-category correlations belong in /insights/activity-mood
-  const {
-    analytics,
-    isLoading: activityLoading,
-    error: activityError,
-    refetch: refetchActivity,
-    coldStart,
-    persona,
-    prediction: activityPrediction,
-    recommendations: activityRecommendations,
-    weekData,
-  } = useActivityAnalytics();
+  useEffect(() => {
+    if (!reducedMotion) {
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    } else {
+      fadeAnim.setValue(1);
+    }
+  }, [reducedMotion, fadeAnim]);
 
-  const isLoading = activityLoading;
-  // Critical error if main activity data fails
-  const hasError = !!activityError;
+  const { analytics, isLoading, error, refetch, coldStart, weekData, persona } = useActivityAnalytics();
 
-  // Calculate activity metrics from real data
-  const activityMetrics = useMemo(() => {
+  // Metrics
+  const metrics = useMemo(() => {
     const data = weekData || [];
-    const weeklyMinutes = data.reduce((sum, day) => sum + (day?.minutes || 0), 0);
+    const weeklyMinutes = data.reduce((sum, d) => sum + (d?.minutes || 0), 0);
     const cdcProgress = Math.min((weeklyMinutes / CDC_WEEKLY_GOAL) * 100, 150);
     const streak = calculateActivityStreak(data);
     const daysActive = data.filter(d => (d?.minutes || 0) > 0).length;
 
-    // Determine status
-    let status;
-    if (cdcProgress >= 100) {
-      status = { label: 'Goal Met', color: SEMANTIC.success.base, icon: 'trophy' };
-    } else if (cdcProgress >= 70) {
-      status = { label: 'On Track', color: VIBRANT_WELLNESS.activity.solid, icon: 'trending-up' };
-    } else if (cdcProgress >= 40) {
-      status = { label: 'Building', color: SEMANTIC.warning.base, icon: 'fitness' };
-    } else {
-      status = { label: 'Getting Started', color: TEXT.secondary, icon: 'walk' };
-    }
+    // Today's minutes
+    const today = new Date().toISOString().split('T')[0];
+    const todayData = data.find(d => d?.date === today);
+    const todayMinutes = todayData?.minutes || 0;
 
-    return {
-      weeklyMinutes,
-      cdcProgress,
-      streak,
-      daysActive,
-      status,
-      weekData: data,
-    };
+    return { weeklyMinutes, cdcProgress, streak, daysActive, weekData: data, todayMinutes };
   }, [weekData]);
+
+  // Time-aware coaching
+  const coach = useMemo(
+    () => getTimeAwareCoaching(coldStart, metrics, metrics.todayMinutes),
+    [coldStart, metrics]
+  );
 
   // Handlers
   const handleRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRefreshing(true);
-    await refetchActivity?.();
+    await refetch?.();
     setRefreshing(false);
-  }, [refetchActivity]);
+  }, [refetch]);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/dashboard');
-    }
+    router.canGoBack() ? router.back() : router.replace('/(tabs)/dashboard');
   }, [router]);
 
-  const handleLogActivity = useCallback(() => {
-    Haptics.selectionAsync();
+  const handleLog = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/(tabs)/log');
   }, [router]);
-
-  // Cold start check - show data if user has ANY activity logged
-  const hasAnyData = (coldStart?.totalLogs || 0) > 0 || activityMetrics.weeklyMinutes > 0;
-  const hasEnoughForPatterns = (coldStart?.distinctDays || 0) >= 7;
 
   return (
     <View style={styles.container}>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Activity Analytics',
+          title: 'Activity',
+          headerStyle: { backgroundColor: SURFACES.background.primary },
+          headerShadowVisible: false,
           headerLeft: () => (
-            <TouchableOpacity onPress={handleBack} style={styles.headerButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity onPress={handleBack} style={styles.headerBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
             </TouchableOpacity>
           ),
@@ -161,274 +450,181 @@ export default function ActivityAnalyticsScreen() {
       />
 
       <ScrollView
-        style={styles.scrollView}
+        style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={ACTIVITY_COLORS.primary} />}
       >
-        {/* Loading State */}
         {isLoading && !analytics && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={BRAND.primary} />
-            <Text style={styles.loadingText}>Loading your activity data...</Text>
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={ACTIVITY_COLORS.primary} />
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
         )}
 
-        {/* Error State */}
-        {hasError && !isLoading && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="cloud-offline-outline" size={48} color={SEMANTIC.danger.base} />
-            <Text style={styles.errorTitle}>Unable to Load Data</Text>
-            <Text style={styles.errorText}>
-              {activityError?.message || 'Please check your connection and try again.'}
-            </Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+        {error && !isLoading && (
+          <View style={styles.errorWrap}>
+            <Ionicons name="cloud-offline-outline" size={40} color={SEMANTIC.danger.base} />
+            <Text style={styles.errorTitle}>Unable to load</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={handleRefresh}>
+              <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Cold Start - Only show if user has ZERO data */}
-        {!isLoading && !hasAnyData && (
-          <ColdStartCard
-            category="activity"
-            distinctDays={coldStart?.distinctDays || 0}
-            totalLogs={coldStart?.totalLogs || 0}
-            onAction={handleLogActivity}
-            style={styles.coldStartCard}
-          />
-        )}
+        {!isLoading && !error && (
+          <Animated.View style={{ opacity: fadeAnim }}>
+            {/* ========== HERO CARD ========== */}
+            <View style={styles.heroCard}>
+              <LinearGradient
+                colors={ACTIVITY_COLORS.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroGradient}
+              >
+                <Text style={styles.heroHeadline}>{coach.headline}</Text>
+                <Text style={styles.heroSubhead}>{coach.subhead}</Text>
+                <Text style={styles.heroMessage}>{coach.message}</Text>
 
-        {/* CDC Progress Card */}
-        <View style={[styles.heroCard, CARD_SYSTEM.hero]}>
-          <LinearGradient
-            colors={SURFACES.background.gradientCool}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroGradient}
-          >
-            <View style={styles.heroHeader}>
-              <View>
-                <Text style={styles.heroTitle}>Weekly Activity</Text>
-                <Text style={[styles.heroStatus, { color: activityMetrics.status.color }]}>
-                  {activityMetrics.status.label}
-                </Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: `${activityMetrics.status.color}15` }]}>
-                <Ionicons name={activityMetrics.status.icon} size={20} color={activityMetrics.status.color} />
-              </View>
+                <TouchableOpacity style={styles.heroCTA} onPress={handleLog} activeOpacity={0.9}>
+                  <Text style={styles.heroCTAText}>{coach.action.primary}</Text>
+                  <Ionicons name="arrow-forward" size={18} color={ACTIVITY_COLORS.primary} />
+                </TouchableOpacity>
+
+                <Text style={styles.heroSecondary}>{coach.action.secondary}</Text>
+              </LinearGradient>
             </View>
 
-            <View style={styles.gaugeContainer}>
-              <HalfGaugeChart
-                value={activityMetrics.cdcProgress}
-                maxValue={100}
-                label={`${activityMetrics.weeklyMinutes} min`}
-                sublabel={`of ${CDC_WEEKLY_GOAL} min goal`}
-                size={GAUGE_CONFIG.size}
-                strokeWidth={GAUGE_CONFIG.strokeWidth}
-                animated={!reducedMotion}
-              />
-            </View>
-
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{activityMetrics.daysActive}</Text>
-                <Text style={styles.statLabel}>days active</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: SEMANTIC.success.base }]}>{activityMetrics.streak}</Text>
-                <Text style={styles.statLabel}>day streak</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{Math.round(activityMetrics.cdcProgress)}%</Text>
-                <Text style={styles.statLabel}>of goal</Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
-
-        {/* Week Chart */}
-        <WeekActivityChart weekData={activityMetrics.weekData} />
-
-        {/* Persona Card */}
-        {persona && (
-          <View style={[styles.personaCard, CARD_SYSTEM.standard]}>
-            <View style={styles.personaHeader}>
-              <View style={[styles.personaIcon, { backgroundColor: `${VIBRANT_WELLNESS.activity.solid}15` }]}>
-                <Ionicons name={persona.icon || 'person'} size={24} color={VIBRANT_WELLNESS.activity.solid} />
-              </View>
-              <View style={styles.personaContent}>
-                <Text style={styles.personaTitle}>{persona.title}</Text>
-                <Text style={styles.personaDescription}>{persona.description}</Text>
-              </View>
-            </View>
-            {persona.recommendation && (
-              <View style={styles.personaRecommendation}>
-                <Ionicons name="bulb-outline" size={14} color={BRAND.primary} />
-                <Text style={styles.personaRecommendationText}>{persona.recommendation}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Tomorrow's Activity Prediction - Activity-specific from useActivityAnalytics */}
-        {activityPrediction?.hasPrediction && (
-          <View style={[styles.predictionCard, CARD_SYSTEM.standard]}>
-            <View style={styles.predictionHeader}>
-              <View style={[styles.predictionIcon, { backgroundColor: `${SEMANTIC.info.base}15` }]}>
-                <Ionicons name="calendar" size={20} color={SEMANTIC.info.base} />
-              </View>
-              <Text style={styles.predictionTitle}>Tomorrow&apos;s Prediction</Text>
-            </View>
-            <Text style={styles.predictionStatement}>
-              Based on your patterns, you are likely to be active for about {activityPrediction.predictedMinutes} minutes tomorrow.
-            </Text>
-            {activityPrediction.factors?.length > 0 && (
-              <View style={styles.predictionFactors}>
-                {activityPrediction.factors.map((factor, idx) => (
-                  <View key={idx} style={styles.factorTag}>
-                    <Text style={styles.factorText}>{factor}</Text>
+            {/* ========== STATS ROW ========== */}
+            {coach.stats.show && (
+              <View style={styles.statsCard}>
+                {coach.stats.items.map((item, i) => (
+                  <View key={i} style={styles.statBlock}>
+                    <Ionicons
+                      name={item.icon}
+                      size={18}
+                      color={item.highlight ? ACTIVITY_COLORS.primary : TEXT.tertiary}
+                    />
+                    <Text style={[styles.statVal, item.highlight && { color: ACTIVITY_COLORS.primary }]}>
+                      {item.value}
+                    </Text>
+                    <Text style={styles.statLabel}>{item.label}</Text>
                   </View>
                 ))}
               </View>
             )}
-          </View>
-        )}
 
-        {/* AI Recommendations - Activity-specific from useActivityAnalytics */}
-        {activityRecommendations?.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Personalized Tips</Text>
-              <Text style={styles.sectionSubtitle}>Based on your activity patterns</Text>
+            {/* ========== PROGRESS SECTION ========== */}
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressTitle}>Weekly Progress</Text>
+                <Text style={styles.progressPct}>{coach.progress.percent}%</Text>
+              </View>
+
+              <View style={styles.progressBarWrap}>
+                <View style={styles.progressBarBg}>
+                  <LinearGradient
+                    colors={ACTIVITY_COLORS.gradientLight}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.progressBarFill, { width: `${Math.min(coach.progress.percent, 100)}%` }]}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.progressLabel}>{coach.progress.label}</Text>
+
+              {/* Gauge */}
+              <View style={styles.gaugeWrap}>
+                <HalfGaugeChart
+                  value={metrics.cdcProgress}
+                  maxValue={100}
+                  label={`${metrics.weeklyMinutes} min`}
+                  sublabel={`of ${CDC_WEEKLY_GOAL} min CDC goal`}
+                  size={GAUGE_CONFIG.size}
+                  strokeWidth={GAUGE_CONFIG.strokeWidth}
+                  animated={!reducedMotion}
+                  color={ACTIVITY_COLORS.primary}
+                  gradient={ACTIVITY_COLORS.gradient}
+                />
+              </View>
             </View>
 
-            {activityRecommendations.slice(0, 3).map((rec, index) => (
-              <View key={index} style={[styles.recommendationCard, CARD_SYSTEM.standard]}>
-                <View style={styles.recommendationContent}>
-                  <View style={[styles.recommendationIcon, { backgroundColor: `${VIBRANT_WELLNESS.activity.solid}15` }]}>
-                    <Ionicons name={rec.icon || 'fitness'} size={24} color={VIBRANT_WELLNESS.activity.solid} />
-                  </View>
-                  <View style={styles.recommendationText}>
-                    <Text style={styles.recommendationTitle}>{rec.title}</Text>
-                    <Text style={styles.recommendationDescription} numberOfLines={2}>{rec.description}</Text>
-                  </View>
+            {/* ========== WEEK CHART ========== */}
+            <View style={styles.chartCard}>
+              <View style={styles.chartHeader}>
+                <Text style={styles.chartTitle}>This Week</Text>
+                <View style={styles.chartLegend}>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.legendText}>Activity</Text>
+                  <View style={[styles.legendDot, { backgroundColor: SEMANTIC.success.base }]} />
+                  <Text style={styles.legendText}>Goal met</Text>
                 </View>
-                {rec.action && (
-                  <TouchableOpacity
-                    onPress={handleLogActivity}
-                    style={[styles.actionButton, { backgroundColor: VIBRANT_WELLNESS.activity.solid }]}
-                  >
-                    <Text style={styles.actionButtonText}>{rec.action}</Text>
-                    <Ionicons name="arrow-forward" size={14} color={TEXT.white} />
-                  </TouchableOpacity>
-                )}
               </View>
-            ))}
-          </>
-        )}
+              <WeekChart weekData={metrics.weekData} goal={CDC_DAILY_AVG} />
+            </View>
 
-        {/* Empty State - Show when user has data but not enough for patterns */}
-        {!isLoading && !activityRecommendations?.length && hasAnyData && !hasEnoughForPatterns && (
-          <View style={styles.emptyState}>
-            <Ionicons name="analytics-outline" size={48} color={TEXT.tertiary} />
-            <Text style={styles.emptyStateTitle}>Building Your Profile</Text>
-            <Text style={styles.emptyStateText}>
-              {coldStart?.distinctDays || 0}/7 days logged. Keep going to unlock personalized activity insights.
-            </Text>
-          </View>
+            {/* ========== COACH TIP ========== */}
+            <View style={styles.tipCard}>
+              <View style={styles.tipIcon}>
+                <Ionicons name={coach.tip.icon} size={20} color={ACTIVITY_COLORS.primary} />
+              </View>
+              <View style={styles.tipContent}>
+                <Text style={styles.tipTitle}>{coach.tip.text}</Text>
+                <Text style={styles.tipSub}>{coach.tip.subtext}</Text>
+              </View>
+            </View>
+
+            {/* ========== PERSONA (if available) ========== */}
+            {persona && (
+              <View style={styles.personaCard}>
+                <View style={styles.personaIcon}>
+                  <Ionicons name={persona.icon || 'person'} size={22} color={ACTIVITY_COLORS.primary} />
+                </View>
+                <View style={styles.personaContent}>
+                  <Text style={styles.personaTitle}>{persona.title}</Text>
+                  <Text style={styles.personaDesc}>{persona.description}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* ========== RELATED INSIGHTS ========== */}
+            <View style={styles.relatedCard}>
+              <Text style={styles.relatedTitle}>Related Insights</Text>
+
+              <TouchableOpacity
+                style={styles.relatedRow}
+                onPress={() => { Haptics.selectionAsync(); router.push('/insights/activity-mood'); }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.relatedIcon, { backgroundColor: `${SEMANTIC.success.base}12` }]}>
+                  <Ionicons name="happy-outline" size={18} color={SEMANTIC.success.base} />
+                </View>
+                <View style={styles.relatedText}>
+                  <Text style={styles.relatedRowTitle}>Activity & Mood</Text>
+                  <Text style={styles.relatedRowSub}>How movement affects your mood</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={TEXT.muted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.relatedRow}
+                onPress={() => { Haptics.selectionAsync(); router.push('/insights/hydration-analytics'); }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.relatedIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="water-outline" size={18} color="#0284C7" />
+                </View>
+                <View style={styles.relatedText}>
+                  <Text style={styles.relatedRowTitle}>Hydration</Text>
+                  <Text style={styles.relatedRowSub}>Water intake patterns</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={TEXT.muted} />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         )}
       </ScrollView>
-    </View>
-  );
-}
-
-// ============================================================================
-// WEEK ACTIVITY CHART
-// ============================================================================
-
-function WeekActivityChart({ weekData }) {
-  const chartWidth = SCREEN_WIDTH - SPACING[8];
-  const chartHeight = 120;
-  const barWidth = 32;
-
-  const data = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    // weekData is ordered by date (oldest to newest), with proper labels
-    // Use full weekday abbreviations to distinguish Tuesday (Tu) from Thursday (Th)
-    return (weekData || []).map((day, index) => ({
-      // Use 2-char label for Tu/Th disambiguation, 1-char for others
-      label: day.label || new Date(day.date).toLocaleDateString('en-US', { weekday: 'narrow' }),
-      minutes: day.minutes || 0,
-      // Compare actual dates, not index positions
-      isToday: day.date === today,
-    }));
-  }, [weekData]);
-
-  const maxValue = Math.max(60, ...data.map(d => d.minutes));
-
-  return (
-    <View style={[styles.chartCard, CARD_SYSTEM.standard]}>
-      <Text style={styles.cardTitle}>This Week</Text>
-
-      <Svg width={chartWidth} height={chartHeight + 30}>
-        <Defs>
-          <SvgGradient id="activityBar" x1="0%" y1="0%" x2="0%" y2="100%">
-            <Stop offset="0%" stopColor={VIBRANT_WELLNESS.activity.solid} />
-            <Stop offset="100%" stopColor={`${VIBRANT_WELLNESS.activity.solid}80`} />
-          </SvgGradient>
-        </Defs>
-
-        {/* Goal line - CDC recommends 150 min/week = ~21 min/day average */}
-        <Line
-          x1={0}
-          y1={chartHeight - (21 / maxValue) * chartHeight}
-          x2={chartWidth}
-          y2={chartHeight - (21 / maxValue) * chartHeight}
-          stroke={SEMANTIC.success.base}
-          strokeWidth={1}
-          strokeDasharray="4,4"
-          opacity={0.5}
-        />
-
-        {/* Bars */}
-        {data.map((day, index) => {
-          const barHeight = (day.minutes / maxValue) * chartHeight;
-          const numBars = Math.max(data.length - 1, 1);
-          const x = (index * (chartWidth - barWidth)) / numBars;
-          const y = chartHeight - barHeight;
-          // Goal met if at or above daily average (21 min) for CDC weekly goal
-          const isGoalMet = day.minutes >= 21;
-
-          return (
-            <G key={index}>
-              <Rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={Math.max(barHeight, 4)}
-                rx={barWidth / 2}
-                fill={isGoalMet ? SEMANTIC.success.base : 'url(#activityBar)'}
-                opacity={day.isToday ? 1 : 0.8}
-              />
-              {day.isToday && (
-                <Circle cx={x + barWidth / 2} cy={y - 8} r={3} fill={BRAND.primary} />
-              )}
-            </G>
-          );
-        })}
-      </Svg>
-
-      <View style={styles.dayLabels}>
-        {data.map((day, index) => (
-          <Text key={index} style={[styles.dayLabel, day.isToday && styles.dayLabelToday]}>
-            {day.label}
-          </Text>
-        ))}
-      </View>
     </View>
   );
 }
@@ -439,110 +635,157 @@ function WeekActivityChart({ weekData }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: SURFACES.background.primary },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: SPACING[4], paddingBottom: SPACING[10] },
-  headerButton: { padding: SPACING[2] },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: SPACING[4], paddingBottom: SPACING[12] },
+  headerBtn: { padding: SPACING[2] },
 
-  // Loading
-  loadingContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING[10] },
-  loadingText: { marginTop: SPACING[3], fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary },
+  // Loading/Error
+  loadingWrap: { alignItems: 'center', paddingVertical: SPACING[10] },
+  loadingText: { marginTop: SPACING[2], fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary },
+  errorWrap: { alignItems: 'center', paddingVertical: SPACING[10] },
+  errorTitle: { marginTop: SPACING[3], fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  retryBtn: { marginTop: SPACING[3], backgroundColor: ACTIVITY_COLORS.primary, paddingHorizontal: SPACING[5], paddingVertical: SPACING[2], borderRadius: RADIUS.md },
+  retryText: { color: TEXT.white, fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold },
 
-  // Cold Start
-  coldStartCard: { marginTop: SPACING[4] },
+  // Hero
+  heroCard: { marginTop: SPACING[4], borderRadius: RADIUS.xl, overflow: 'hidden', ...SHADOWS.lg },
+  heroGradient: { padding: SPACING[5] },
+  heroHeadline: { fontSize: TYPOGRAPHY.size['2xl'], fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.white, marginBottom: SPACING[1] },
+  heroSubhead: { fontSize: TYPOGRAPHY.size.base, color: 'rgba(255,255,255,0.9)', marginBottom: SPACING[2] },
+  heroMessage: { fontSize: TYPOGRAPHY.size.sm, color: 'rgba(255,255,255,0.8)', lineHeight: 20, marginBottom: SPACING[4] },
+  heroCTA: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: TEXT.white,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[5],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[2],
+    alignSelf: 'flex-start',
+  },
+  heroCTAText: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.bold, color: ACTIVITY_COLORS.primary },
+  heroSecondary: { fontSize: TYPOGRAPHY.size.xs, color: 'rgba(255,255,255,0.7)', marginTop: SPACING[3], textAlign: 'center' },
 
-  // Error State
-  errorContainer: {
-    flex: 1,
+  // Stats
+  statsCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    ...SHADOWS.sm,
+  },
+  statBlock: { alignItems: 'center', gap: SPACING[1] },
+  statVal: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  statLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary },
+
+  // Progress
+  progressCard: {
+    marginTop: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    ...SHADOWS.sm,
+  },
+  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  progressTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  progressPct: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.bold, color: ACTIVITY_COLORS.primary },
+  progressBarWrap: { marginTop: SPACING[3] },
+  progressBarBg: { height: 8, backgroundColor: ACTIVITY_COLORS.surfaceLight, borderRadius: 4, overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: 4 },
+  progressLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: SPACING[2], textAlign: 'center' },
+  gaugeWrap: { alignItems: 'center', marginTop: SPACING[4] },
+
+  // Chart
+  chartCard: {
+    marginTop: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    ...SHADOWS.sm,
+  },
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING[2] },
+  chartTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  chartLegend: { flexDirection: 'row', alignItems: 'center', gap: SPACING[1] },
+  legendDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: ACTIVITY_COLORS.primary },
+  legendText: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginRight: SPACING[2] },
+  chartWrapper: { alignItems: 'center' },
+  chartLabels: { flexDirection: 'row', marginTop: 4 },
+  chartLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, textAlign: 'center' },
+  chartLabelToday: { color: BRAND.primary, fontWeight: TYPOGRAPHY.weight.bold },
+
+  // Tip
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING[4],
+    backgroundColor: ACTIVITY_COLORS.surfaceLight,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    gap: SPACING[3],
+  },
+  tipIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: TEXT.white,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: SPACING[10],
-    paddingHorizontal: SPACING[4],
   },
-  errorTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
+  tipContent: { flex: 1 },
+  tipTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: ACTIVITY_COLORS.text },
+  tipSub: { fontSize: TYPOGRAPHY.size.xs, color: ACTIVITY_COLORS.accent, marginTop: 2 },
+
+  // Persona
+  personaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    gap: SPACING[3],
+    ...SHADOWS.sm,
   },
-  errorText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    textAlign: 'center',
-    marginTop: SPACING[2],
+  personaIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: ACTIVITY_COLORS.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  retryButton: {
-    marginTop: SPACING[4],
-    backgroundColor: BRAND.primary,
-    paddingHorizontal: SPACING[6],
-    paddingVertical: SPACING[3],
-    borderRadius: RADIUS.md,
-  },
-  retryButtonText: {
-    color: TEXT.white,
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-  },
-
-  // Hero Card
-  heroCard: { marginTop: SPACING[4], overflow: 'hidden', padding: 0 },
-  heroGradient: { padding: SPACING[4] },
-  heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  heroTitle: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
-  heroStatus: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, marginTop: 2 },
-  statusBadge: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  gaugeContainer: { alignItems: 'center', marginVertical: SPACING[2] },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: SPACING[3], paddingTop: SPACING[3], borderTopWidth: 1, borderTopColor: SURFACES.divider },
-  statItem: { alignItems: 'center' },
-  statValue: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
-  statLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
-  statDivider: { width: 1, height: 40, backgroundColor: SURFACES.divider },
-
-  // Chart Card
-  chartCard: { marginTop: SPACING[4] },
-  cardTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: SPACING[3] },
-  dayLabels: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: SPACING[1], marginTop: -20 },
-  dayLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, width: 32, textAlign: 'center' },
-  dayLabelToday: { color: BRAND.primary, fontWeight: TYPOGRAPHY.weight.bold },
-
-  // Persona Card
-  personaCard: { marginTop: SPACING[4] },
-  personaHeader: { flexDirection: 'row', alignItems: 'flex-start' },
-  personaIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   personaContent: { flex: 1 },
-  personaTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary, marginBottom: 4 },
-  personaDescription: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, lineHeight: 20 },
-  personaRecommendation: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: SURFACES.background.tertiary, padding: SPACING[2], borderRadius: RADIUS.sm, marginTop: SPACING[3], gap: SPACING[1] },
-  personaRecommendationText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: BRAND.primary, fontWeight: TYPOGRAPHY.weight.medium },
+  personaTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  personaDesc: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
 
-  // Prediction Card
-  predictionCard: { marginTop: SPACING[4] },
-  predictionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING[2] },
-  predictionIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: `${VIBRANT_WELLNESS.activity.solid}15`, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[2] },
-  predictionTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
-  predictionStatement: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, lineHeight: 20, marginBottom: SPACING[2] },
-  predictionSuggestion: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: SURFACES.background.tertiary, padding: SPACING[2], borderRadius: RADIUS.sm, gap: SPACING[1] },
-  predictionSuggestionText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: BRAND.primary, fontWeight: TYPOGRAPHY.weight.medium },
-  predictionFactors: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[1], marginTop: SPACING[2] },
-  factorTag: { backgroundColor: SURFACES.background.tertiary, paddingVertical: SPACING[1], paddingHorizontal: SPACING[2], borderRadius: RADIUS.sm },
-  factorText: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary },
-
-  // Section Header
-  sectionHeader: { marginTop: SPACING[6], marginBottom: SPACING[3] },
-  sectionTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
-  sectionSubtitle: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.tertiary, marginTop: 2 },
-
-  // Recommendation Card
-  recommendationCard: { marginTop: SPACING[3] },
-  recommendationContent: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: SPACING[3] },
-  recommendationIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
-  recommendationText: { flex: 1 },
-  recommendationTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: 2 },
-  recommendationDescription: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, lineHeight: 20 },
-  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING[2], paddingHorizontal: SPACING[4], borderRadius: RADIUS.md, gap: SPACING[1] },
-  actionButtonText: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.white },
-
-  // Empty State
-  emptyState: { alignItems: 'center', paddingVertical: SPACING[10] },
-  emptyStateTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[3] },
-  emptyStateText: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, textAlign: 'center', marginTop: SPACING[2], paddingHorizontal: SPACING[4] },
+  // Related
+  relatedCard: {
+    marginTop: SPACING[4],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    ...SHADOWS.sm,
+  },
+  relatedTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: SPACING[2] },
+  relatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  relatedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING[3],
+  },
+  relatedText: { flex: 1 },
+  relatedRowTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary },
+  relatedRowSub: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
 });

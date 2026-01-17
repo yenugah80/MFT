@@ -1,7 +1,10 @@
 /**
- * NutriScore Component
- * Official Nutri-Score A-E grading system with historical trends
- * Weighted formula based on: calorie adherence, protein adequacy, hydration, meal consistency
+ * DailyNutritionScore Component
+ * A-E grading system for daily nutrition quality
+ *
+ * NOTE: This is NOT the official European Nutri-Score®. It's a custom
+ * daily wellness score based on: calorie adherence, protein adequacy,
+ * hydration, and meal consistency. Named "Daily Score" to avoid confusion.
  */
 
 import React from 'react';
@@ -184,18 +187,19 @@ function scoreToGrade(score) {
 }
 
 /**
- * Official Nutri-Score colors
+ * Daily score grade colors (A-E visual format)
  */
-const NUTRI_SCORE_GRADES = [
-  { letter: 'A', color: '#038141', bgColor: '#038141', label: 'Excellent' }, // Dark green
-  { letter: 'B', color: '#85BB2F', bgColor: '#85BB2F', label: 'Good' },      // Light green
-  { letter: 'C', color: '#FECB02', bgColor: '#FECB02', label: 'Fair' },      // Yellow
-  { letter: 'D', color: '#EE8100', bgColor: '#EE8100', label: 'Poor' },      // Orange
-  { letter: 'E', color: '#E63E11', bgColor: '#E63E11', label: 'Bad' },       // Red
+const DAILY_SCORE_GRADES = [
+  { letter: 'A', color: '#038141', bgColor: '#038141', label: 'Excellent' },
+  { letter: 'B', color: '#85BB2F', bgColor: '#85BB2F', label: 'Good' },
+  { letter: 'C', color: '#FECB02', bgColor: '#FECB02', label: 'Moderate' },
+  { letter: 'D', color: '#EE8100', bgColor: '#EE8100', label: 'Limited' },
+  { letter: 'E', color: '#E63E11', bgColor: '#E63E11', label: 'Poor' },
 ];
 
 /**
- * NutriScore component - Official A-E grade display with historical trends
+ * DailyScoreDial component - A-E grade display with historical trends
+ * Based on calorie adherence, protein, hydration, meal consistency
  * Compact mode: Visual-only (no header, numeric score, or trends)
  */
 export default function NutriScoreDial({ data, showNumericScore = true, showTrends = true, compact = false, grade }) {
@@ -214,14 +218,14 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
       style={[styles.container, compact && styles.containerCompact]}
       accessible={true}
       accessibilityRole="text"
-      accessibilityLabel={`Nutrition grade: ${currentGrade}.${score ? ` Score: ${score} out of 100. ${message}` : ''}`}
+      accessibilityLabel={`Daily score: ${currentGrade}.${score ? ` Score: ${score} out of 100. ${message}` : ''}`}
       accessibilityHint="Your daily nutrition quality based on calories, protein, hydration, and meal consistency"
     >
       {/* Header - NOT shown in compact mode */}
       {!compact && (
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={[styles.title, { color: textPrimary }]}>Nutri-Score</Text>
+            <Text style={[styles.title, { color: textPrimary }]}>Daily Score</Text>
             <Text style={[styles.subtitle, { color: textTertiary }]}>Today</Text>
           </View>
           {showNumericScore && (
@@ -254,10 +258,10 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
 
       {/* A-E Grade Bar - Main visual element */}
       <View style={[styles.gradeBar, compact && styles.gradeBarCompact]}>
-        {NUTRI_SCORE_GRADES.map((grade, index) => {
+        {DAILY_SCORE_GRADES.map((grade, index) => {
           const isActive = grade.letter === currentGrade;
           const isLeftEdge = index === 0;
-          const isRightEdge = index === NUTRI_SCORE_GRADES.length - 1;
+          const isRightEdge = index === DAILY_SCORE_GRADES.length - 1;
 
           return (
             <View
@@ -300,7 +304,7 @@ export default function NutriScoreDial({ data, showNumericScore = true, showTren
         <View style={styles.historicalBar}>
           <Text style={[styles.historicalLabel, { color: textTertiary }]}>7-day avg: {avg7DayGrade}</Text>
           <View style={styles.historicalMini}>
-            {NUTRI_SCORE_GRADES.map((grade) => {
+            {DAILY_SCORE_GRADES.map((grade) => {
               const isActive = grade.letter === avg7DayGrade;
               return (
                 <View

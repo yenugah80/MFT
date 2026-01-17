@@ -416,11 +416,11 @@ function StatsTab({ periodData, selectedPeriod, onPeriodChange }) {
               <Ionicons
                 name={periodData.caloriesTrend > 0 ? 'arrow-up' : 'arrow-down'}
                 size={10}
-                color={periodData.caloriesTrend > 0 ? SEMANTIC.success.base : SEMANTIC.error?.base || '#EF4444'}
+                color={periodData.caloriesTrend > 0 ? SEMANTIC.success.base : SEMANTIC.danger?.base || '#EF4444'}
               />
               <Text style={[
                 styles.trendText,
-                { color: periodData.caloriesTrend > 0 ? SEMANTIC.success.base : SEMANTIC.error?.base || '#EF4444' },
+                { color: periodData.caloriesTrend > 0 ? SEMANTIC.success.base : SEMANTIC.danger?.base || '#EF4444' },
               ]}>
                 {Math.abs(periodData.caloriesTrend)}%
               </Text>

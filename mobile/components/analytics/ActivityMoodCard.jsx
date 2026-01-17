@@ -1,11 +1,8 @@
 /**
  * Activity-Mood Correlation Card
  *
- * Displays Physical Activity ↔ Mood relationship analysis
- * Based on CDC Physical Activity Guidelines showing strong evidence for
- * immediate cognitive benefits and chronic mood improvements
- *
- * Design inspired by top fitness apps with clear impact visualization
+ * Simple card showing how activity affects mood
+ * Clean, user-friendly design
  */
 
 import React, { useMemo } from 'react';
@@ -15,18 +12,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
-import CircularProgress from './CircularProgress';
-import MiniLineChart from './MiniLineChart';
-import { TEXT, BRAND, SURFACES, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
-import { analyzeMultiFactorCorrelations, SCIENTIFIC_PRIORS } from '../../utils/multiFactorAnalytics';
+import {
+  TEXT,
+  BRAND,
+  SURFACES,
+  SEMANTIC,
+  SHADOWS,
+  TYPOGRAPHY,
+  SPACING,
+  RADIUS,
+  VIBRANT_WELLNESS,
+} from '../../constants/premiumTheme';
 
-/**
- * ActivityMoodCard
- *
- * @param {Array} activityLogs - User's activity logs
- * @param {Array} moodLogs - User's mood logs
- * @param {boolean} compact - Compact mode for dashboard (default true)
- */
 export default function ActivityMoodCard({
   activityLogs = [],
   moodLogs = [],
@@ -34,60 +31,32 @@ export default function ActivityMoodCard({
 }) {
   const router = useRouter();
 
-  // Analyze correlation
-  const analysis = useMemo(() => {
-    return analyzeMultiFactorCorrelations({
-      foodLogs: [],
-      moodLogs,
-      waterLogs: [],
-      activityLogs,
-      sleepLogs: [],
-    });
-  }, [activityLogs, moodLogs]);
-
-  // Get research priors
-  const acuteEffect = SCIENTIFIC_PRIORS.ACTIVITY_MOOD.acute_exercise;
-  const chronicEffect = SCIENTIFIC_PRIORS.ACTIVITY_MOOD.chronic_exercise;
-
-  if (!analysis.canAnalyze) {
-    return (
-      <View style={styles.card}>
-        <View style={styles.header}>
-          <Ionicons name="fitness-outline" size={24} color={SEMANTIC.success} />
-          <Text style={styles.title}>Activity → Mood</Text>
-        </View>
-        <Text style={styles.insufficientData}>
-          {analysis.message}
-        </Text>
-        <Text style={styles.helpText}>
-          Track your physical activity and mood to see the powerful connection
-        </Text>
-        {/* Show research evidence even without personal data */}
-        <View style={styles.previewSection}>
-          <Text style={styles.previewTitle}>Research Shows:</Text>
-          <View style={styles.previewItem}>
-            <Ionicons name="flash" size={16} color={SEMANTIC.success} />
-            <Text style={styles.previewText}>
-              Immediate cognition boost after exercise
-            </Text>
-          </View>
-          <View style={styles.previewItem}>
-            <Ionicons name="trending-up" size={16} color={SEMANTIC.info} />
-            <Text style={styles.previewText}>
-              42% reduction in anxiety/depression with regular activity
-            </Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  const activityMoodAnalysis = analysis.correlations.activity_mood;
+  const hasData = moodLogs.length >= 3;
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/insights/activity-mood');
   };
+
+  // Empty state
+  if (!hasData) {
+    return (
+      <View style={styles.card}>
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.activity.solid}20` }]}>
+            <Ionicons name="fitness" size={24} color={VIBRANT_WELLNESS.activity.solid} />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Activity & Mood</Text>
+            <Text style={styles.subtitle}>Coming soon</Text>
+          </View>
+        </View>
+        <Text style={styles.emptyText}>
+          Activity tracking will show how exercise affects your mood
+        </Text>
+      </View>
+    );
+  }
 
   if (compact) {
     return (
@@ -95,78 +64,47 @@ export default function ActivityMoodCard({
         style={styles.card}
         onPress={handlePress}
         activeOpacity={0.7}
+        accessibilityLabel="Activity and mood insights"
+        accessibilityRole="button"
       >
-        <LinearGradient
-          colors={[SURFACES.elevated, SURFACES.card]}
-          style={styles.gradient}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Ionicons name="fitness-outline" size={24} color={SEMANTIC.success} />
-              <View>
-                <Text style={styles.title}>Activity → Mood</Text>
-                <Text style={styles.subtitle}>
-                  {analysis.daysAnalyzed} days analyzed
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.activity.solid}20` }]}>
+            <Ionicons name="fitness" size={24} color={VIBRANT_WELLNESS.activity.solid} />
           </View>
-
-          {/* Insight */}
-          <View style={styles.insightContainer}>
-            <View style={styles.insightRow}>
-              <Ionicons name="checkmark-circle" size={20} color={SEMANTIC.success} />
-              <Text style={styles.insightText}>
-                <Text style={styles.insightHighlight}>Strong evidence</Text>
-                {' '}for activity-mood connection
-              </Text>
-            </View>
-            <Text style={styles.effectText}>
-              Exercise shows immediate cognitive benefits and long-term mood improvements
-            </Text>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Activity & Mood</Text>
+            <Text style={styles.subtitle}>See the connection</Text>
           </View>
+          <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+        </View>
 
-          {/* Effect strength visualization */}
-          <View style={styles.effectsRow}>
-            <View style={styles.effectCard}>
-              <Text style={styles.effectLabel}>Acute Effect</Text>
-              <CircularProgress
-                percentage={acuteEffect.effect * 100}
-                size={50}
-                strokeWidth={5}
-                color={SEMANTIC.success}
-                showPercentage={false}
-              >
-                <Ionicons name="flash" size={16} color={SEMANTIC.success} />
-              </CircularProgress>
-              <Text style={styles.effectValue}>+{Math.round(acuteEffect.effect * 100)}%</Text>
+        <View style={styles.insightRow}>
+          <Ionicons name="trending-up" size={18} color={SEMANTIC.success.base} />
+          <Text style={styles.insightText}>
+            Movement helps improve mood and energy
+          </Text>
+        </View>
+
+        <View style={styles.benefitsRow}>
+          <View style={styles.benefitItem}>
+            <View style={[styles.benefitIcon, { backgroundColor: `${SEMANTIC.success.base}15` }]}>
+              <Ionicons name="flash" size={16} color={SEMANTIC.success.base} />
             </View>
-
-            <View style={styles.effectCard}>
-              <Text style={styles.effectLabel}>Chronic Effect</Text>
-              <CircularProgress
-                percentage={chronicEffect.effect * 100}
-                size={50}
-                strokeWidth={5}
-                color={SEMANTIC.info}
-                showPercentage={false}
-              >
-                <Ionicons name="trending-up" size={16} color={SEMANTIC.info} />
-              </CircularProgress>
-              <Text style={styles.effectValue}>+{Math.round(chronicEffect.effect * 100)}%</Text>
+            <Text style={styles.benefitLabel}>Quick Boost</Text>
+          </View>
+          <View style={styles.benefitItem}>
+            <View style={[styles.benefitIcon, { backgroundColor: `${SEMANTIC.info.base}15` }]}>
+              <Ionicons name="heart" size={16} color={SEMANTIC.info.base} />
             </View>
+            <Text style={styles.benefitLabel}>Better Mood</Text>
           </View>
-
-          {/* Evidence badge */}
-          <View style={styles.evidenceBadge}>
-            <Ionicons name="shield-checkmark" size={14} color={SEMANTIC.success} />
-            <Text style={styles.evidenceText}>
-              Strong Evidence • CDC Physical Activity Guidelines
-            </Text>
+          <View style={styles.benefitItem}>
+            <View style={[styles.benefitIcon, { backgroundColor: `${BRAND.primary}15` }]}>
+              <Ionicons name="moon" size={16} color={BRAND.primary} />
+            </View>
+            <Text style={styles.benefitLabel}>Better Sleep</Text>
           </View>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   }
@@ -174,344 +112,212 @@ export default function ActivityMoodCard({
   // Expanded view
   return (
     <View style={styles.card}>
-      <LinearGradient
-        colors={[SURFACES.elevated, SURFACES.card]}
-        style={styles.gradient}
-      >
-        {/* Header */}
-        <View style={styles.headerExpanded}>
-          <Ionicons name="fitness-outline" size={32} color={SEMANTIC.success} />
-          <View style={styles.headerTextExpanded}>
-            <Text style={styles.titleExpanded}>Activity → Mood Analysis</Text>
-            <Text style={styles.subtitleExpanded}>
-              {analysis.daysAnalyzed} days • Research-backed insights
-            </Text>
-          </View>
+      <View style={styles.headerExpanded}>
+        <View style={[styles.iconBgLarge, { backgroundColor: `${VIBRANT_WELLNESS.activity.solid}20` }]}>
+          <Ionicons name="fitness" size={32} color={VIBRANT_WELLNESS.activity.solid} />
         </View>
-
-        {/* Acute vs Chronic Effects */}
-        <View style={styles.effectsSection}>
-          <Text style={styles.sectionTitle}>Activity Impact on Mood</Text>
-
-          {/* Acute Effect */}
-          <View style={styles.effectItem}>
-            <View style={styles.effectItemHeader}>
-              <Ionicons name="flash" size={24} color={SEMANTIC.success} />
-              <Text style={styles.effectItemTitle}>Immediate Benefits</Text>
-            </View>
-            <Text style={styles.effectItemDescription}>
-              {acuteEffect.mechanism}
-            </Text>
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Effect Size</Text>
-                <Text style={[styles.statValue, { color: SEMANTIC.success }]}>
-                  +{Math.round(acuteEffect.effect * 100)}%
-                </Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Confidence</Text>
-                <Text style={styles.statValue}>
-                  {Math.round(acuteEffect.confidence * 100)}%
-                </Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Evidence</Text>
-                <Text style={styles.statValue}>{acuteEffect.evidenceLevel}</Text>
-              </View>
-            </View>
-            <Text style={styles.durationNote}>
-              Duration: {acuteEffect.duration}
-            </Text>
-          </View>
-
-          {/* Chronic Effect */}
-          <View style={styles.effectItem}>
-            <View style={styles.effectItemHeader}>
-              <Ionicons name="trending-up" size={24} color={SEMANTIC.info} />
-              <Text style={styles.effectItemTitle}>Long-Term Benefits</Text>
-            </View>
-            <Text style={styles.effectItemDescription}>
-              {chronicEffect.mechanism}
-            </Text>
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Effect Size</Text>
-                <Text style={[styles.statValue, { color: SEMANTIC.info }]}>
-                  +{Math.round(chronicEffect.effect * 100)}%
-                </Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Confidence</Text>
-                <Text style={styles.statValue}>
-                  {Math.round(chronicEffect.confidence * 100)}%
-                </Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Evidence</Text>
-                <Text style={styles.statValue}>{chronicEffect.evidenceLevel}</Text>
-              </View>
-            </View>
-            <Text style={styles.durationNote}>
-              Recommended: {chronicEffect.dosage}
-            </Text>
-          </View>
-        </View>
-
-        {/* Research Sources */}
-        <View style={styles.sourcesSection}>
-          <View style={styles.sourcesHeader}>
-            <Ionicons name="library-outline" size={18} color={BRAND.primary} />
-            <Text style={styles.sourcesTitle}>Scientific Evidence</Text>
-          </View>
-          <Text style={styles.sourcesText}>
-            {acuteEffect.sources.join(' • ')}
+        <View style={styles.headerTextExpanded}>
+          <Text style={styles.titleExpanded}>Activity & Mood</Text>
+          <Text style={styles.subtitleExpanded}>
+            How movement affects how you feel
           </Text>
         </View>
+      </View>
 
-        {/* Call to Action */}
-        <View style={styles.ctaSection}>
-          <Text style={styles.ctaText}>
-            Start logging your physical activity to see YOUR personal response pattern
-          </Text>
-        </View>
-      </LinearGradient>
+      <View style={styles.benefitsSection}>
+        <BenefitCard
+          icon="flash"
+          iconColor={SEMANTIC.success.base}
+          title="Feel Better Fast"
+          description="Even a short walk can boost your mood right away"
+        />
+        <BenefitCard
+          icon="trending-up"
+          iconColor={SEMANTIC.info.base}
+          title="Build Resilience"
+          description="Regular activity helps you handle stress better"
+        />
+        <BenefitCard
+          icon="shield"
+          iconColor={BRAND.primary}
+          title="Stay Sharp"
+          description="Movement keeps your mind clear and focused"
+        />
+      </View>
+
+      <View style={styles.tipCard}>
+        <Ionicons name="bulb" size={20} color={VIBRANT_WELLNESS.activity.solid} />
+        <Text style={styles.tipText}>
+          Track your activity to see your personal patterns
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function BenefitCard({ icon, iconColor, title, description }) {
+  return (
+    <View style={styles.benefitCard}>
+      <View style={[styles.benefitCardIcon, { backgroundColor: `${iconColor}15` }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
+      </View>
+      <View style={styles.benefitCardContent}>
+        <Text style={styles.benefitCardTitle}>{title}</Text>
+        <Text style={styles.benefitCardDesc}>{description}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...SHADOWS.medium,
-  },
-  gradient: {
-    padding: 16,
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    ...SHADOWS.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: SPACING[3],
+    marginBottom: SPACING[3],
   },
-  headerLeft: {
-    flexDirection: 'row',
+  iconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginTop: 2,
   },
-  insufficientData: {
-    fontSize: 14,
+  emptyText: {
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
-    marginTop: 8,
+    lineHeight: 20,
   },
-  helpText: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  previewSection: {
-    marginTop: 16,
-    backgroundColor: SURFACES.elevated,
-    padding: 12,
-    borderRadius: 8,
-  },
-  previewTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: TEXT.primary,
-    marginBottom: 8,
-  },
-  previewItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  previewText: {
-    fontSize: 12,
-    color: TEXT.secondary,
-    flex: 1,
-  },
-  insightContainer: {
-    marginTop: 8,
-    gap: 8,
-  },
+
+  // Insight Row
   insightRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
   },
   insightText: {
-    fontSize: 14,
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
   },
-  insightHighlight: {
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  effectText: {
-    fontSize: 13,
-    color: TEXT.tertiary,
-    lineHeight: 18,
-  },
-  effectsRow: {
+
+  // Benefits Row (Compact)
+  benefitsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    gap: SPACING[2],
   },
-  effectCard: {
+  benefitItem: {
     flex: 1,
-    backgroundColor: SURFACES.elevated,
-    padding: 12,
-    borderRadius: 12,
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING[2],
   },
-  effectLabel: {
-    fontSize: 11,
+  benefitIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  benefitLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    textAlign: 'center',
   },
-  effectValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  evidenceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'center',
-    backgroundColor: SEMANTIC.success + '20',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  evidenceText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: SEMANTIC.success,
-  },
+
+  // Expanded View
   headerExpanded: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 24,
+    gap: SPACING[4],
+    marginBottom: SPACING[4],
+  },
+  iconBgLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTextExpanded: {
     flex: 1,
   },
   titleExpanded: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   subtitleExpanded: {
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
-    marginTop: 4,
+    marginTop: SPACING[1],
   },
-  effectsSection: {
-    gap: 16,
-    marginBottom: 24,
+
+  // Benefits Section
+  benefitsSection: {
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: TEXT.secondary,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  effectItem: {
-    backgroundColor: SURFACES.elevated,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  effectItemHeader: {
+  benefitCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING[3],
+    backgroundColor: SURFACES.background.secondary,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
   },
-  effectItemTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: TEXT.primary,
+  benefitCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  effectItemDescription: {
-    fontSize: 13,
-    color: TEXT.secondary,
-    lineHeight: 18,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  stat: {
+  benefitCardContent: {
     flex: 1,
   },
-  statLabel: {
-    fontSize: 11,
-    color: TEXT.tertiary,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: '700',
+  benefitCardTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
   },
-  durationNote: {
-    fontSize: 11,
+  benefitCardDesc: {
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
-    fontStyle: 'italic',
+    marginTop: 2,
   },
-  sourcesSection: {
-    backgroundColor: SURFACES.elevated,
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  sourcesHeader: {
+
+  // Tip Card
+  tipCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: SPACING[3],
+    backgroundColor: `${VIBRANT_WELLNESS.activity.solid}10`,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
   },
-  sourcesTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  sourcesText: {
-    fontSize: 11,
-    color: TEXT.tertiary,
-    lineHeight: 16,
-  },
-  ctaSection: {
-    backgroundColor: BRAND.primary + '20',
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  ctaText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BRAND.primary,
-    textAlign: 'center',
+  tipText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
   },
 });

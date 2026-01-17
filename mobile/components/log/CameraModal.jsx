@@ -36,6 +36,7 @@ import {
   Dimensions,
   Platform,
   Alert,
+  Animated,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -139,6 +140,59 @@ async function validateImageQuality(uri) {
     console.error('[CameraModal] Quality validation failed:', error);
     return { valid: true }; // Assume valid if check fails
   }
+}
+
+// ============================================================================
+// ANIMATED CLOSE BUTTON COMPONENT
+// ============================================================================
+
+/**
+ * Interactive close button with scale animation on press
+ * Uses TouchableOpacity for better compatibility with CameraView
+ */
+function AnimatedCloseButton({ onPress, style }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.85,
+      friction: 5,
+      tension: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 5,
+      tension: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+      hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+      style={style}
+    >
+      <Animated.View
+        style={{
+          width: '100%',
+          height: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
+          transform: [{ scale: scaleAnim }],
+        }}
+      >
+        <Ionicons name="close" size={ICON_SIZES.lg} color={TEXT.white} />
+      </Animated.View>
+    </TouchableOpacity>
+  );
 }
 
 // ============================================================================
@@ -417,9 +471,10 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
             >
               {/* Top Controls */}
               <View style={styles.topControls}>
-                <TouchableOpacity style={styles.controlButton} onPress={handleClose}>
-                  <Ionicons name="close" size={ICON_SIZES.lg} color={TEXT.white} />
-                </TouchableOpacity>
+                <AnimatedCloseButton
+                  onPress={handleClose}
+                  style={styles.controlButton}
+                />
 
                 <View style={styles.topRightControls}>
                   <TouchableOpacity style={styles.controlButton} onPress={handleFlashToggle}>
@@ -520,9 +575,10 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
             <View style={styles.previewOverlay}>
               {/* Header with Close Button */}
               <View style={styles.previewHeader}>
-                <TouchableOpacity style={styles.previewCloseButton} onPress={handleClose}>
-                  <Ionicons name="close" size={ICON_SIZES.lg} color={TEXT.white} />
-                </TouchableOpacity>
+                <AnimatedCloseButton
+                  onPress={handleClose}
+                  style={styles.previewCloseButton}
+                />
                 <Text style={styles.previewTitle}>Preview</Text>
                 <View style={styles.previewCloseButton} />
               </View>
@@ -669,6 +725,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: SPACING[5],
+    zIndex: 10,
   },
   topRightControls: {
     flexDirection: 'row',
@@ -681,6 +738,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 20,
   },
   gridOverlay: {
     position: 'absolute',

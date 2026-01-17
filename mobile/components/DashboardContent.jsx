@@ -23,6 +23,7 @@ import { useMoodTrends } from "../hooks/useMoodTrends";
 import { useMoodInsights } from "../hooks/useMoodInsights";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
+import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
 import { useNotification } from "../providers/NotificationProvider";
@@ -38,6 +39,7 @@ import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
+import MinimalDashboardHeader from "./dashboard/MinimalDashboardHeader";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
 // DashboardPrimaryCard removed - redundant with FoodMoodScoreCard hero + CompactDashboardTiles
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
@@ -62,11 +64,17 @@ import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
 // NEW: Comprehensive nutrition details component with integrated progress rings and macro breakdown
 import NutritionDetailsSection from "./dashboard/NutritionDetailsSection";
 
+// Micronutrients coverage display
+import MicrosCoverageSection from "./MicrosCoverageSection";
+
 // Behavioral Health Intelligence System - Phase 6
 import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehaviorSection";
 import { LifecycleStageFooter } from "./dashboard/LifecycleStageFooter";
 import { DismissReasonSelector } from "./dashboard/DismissReasonSelector";
 import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErrorBoundary";
+
+// Notification Center - Centralized notification hub
+import NotificationCenter from "./notifications/NotificationCenter";
 
 // Design tokens - using unified premium theme
 import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
@@ -242,6 +250,10 @@ export default function DashboardContent() {
   // Behavioral Health Intelligence System - Phase 6
   const [dismissingCorrelationId, setDismissingCorrelationId] = useState(null);
 
+  // Notification Center state
+  const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
+  const [dismissedNotifications, setDismissedNotifications] = useState(new Set());
+
   // Recommendations hook (handles caching internally with 5-min cache)
   // eslint-disable-next-line no-unused-vars
   const {
@@ -259,6 +271,9 @@ export default function DashboardContent() {
 
   // Water tracking hook
   const { markHydrationCelebration } = useWaterLog();
+
+  // Activity tracking hook - for wellness score calculation
+  const { todayData: activityTodayData } = useActivityLog();
 
   // Behavioral Health Intelligence - single fetch point
   const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestrator();
@@ -863,6 +878,80 @@ export default function DashboardContent() {
     });
   }, [data]);
 
+  // Convert smartInsights and dataAnomalies to notification center format
+  const dashboardNotifications = useMemo(() => {
+    const notifications = [];
+    let idCounter = 0;
+
+    // Check for streak risk first (urgent priority)
+    const streak = parseDecimal(data?.trends?.currentStreak, 0);
+    const bestStreak = parseDecimal(data?.gamification?.bestStreak, 0);
+    const hasLoggedToday = data?.userLifecycle?.hasLoggedToday ?? false;
+
+    if (bestStreak > 0 && streak === 0 && !hasLoggedToday && !dismissedNotifications.has('streak-risk')) {
+      notifications.push({
+        id: 'streak-risk',
+        type: 'streak_risk',
+        title: 'Streak at risk!',
+        message: `Log something before midnight to keep your ${bestStreak}-day streak`,
+        actionLabel: 'Log Now',
+      });
+    }
+
+    // Convert smart insights
+    smartInsights.forEach((insight) => {
+      const notificationId = `insight-${idCounter++}`;
+      if (dismissedNotifications.has(notificationId)) return;
+
+      let type = 'insight';
+      if (insight.title?.toLowerCase().includes('protein') || insight.message?.toLowerCase().includes('protein')) {
+        type = 'low_protein';
+      } else if (insight.title?.toLowerCase().includes('calorie') || insight.message?.toLowerCase().includes('calorie')) {
+        type = 'low_calories';
+      } else if (insight.title?.toLowerCase().includes('hydrat') || insight.message?.toLowerCase().includes('water')) {
+        type = 'hydration';
+      } else if (insight.type === 'welcome') {
+        type = 'meal_reminder';
+      }
+
+      notifications.push({
+        id: notificationId,
+        type,
+        title: insight.title || insight.message?.split('.')[0],
+        message: insight.message,
+        actionLabel: insight.action,
+        insightData: insight,
+      });
+    });
+
+    // Convert data anomalies
+    dataAnomalies.forEach((anomaly) => {
+      const notificationId = `anomaly-${idCounter++}`;
+      if (dismissedNotifications.has(notificationId)) return;
+
+      let type = 'insight';
+      if (anomaly.metric === 'Protein') {
+        type = 'low_protein';
+      } else if (anomaly.metric === 'Calories') {
+        type = anomaly.tone === 'warning' ? 'low_calories' : 'insight';
+      }
+
+      notifications.push({
+        id: notificationId,
+        type,
+        title: `${anomaly.metric} Check`,
+        message: anomaly.message,
+        actionLabel: anomaly.actionLabel,
+        anomalyData: anomaly,
+      });
+    });
+
+    return notifications;
+  }, [smartInsights, dataAnomalies, dismissedNotifications, data]);
+
+  // Notification count for badge
+  const notificationCount = dashboardNotifications.length;
+
   // Assess macro balance quality
   const macroAssessment = useMemo(() => {
     if (!data?.today?.nutrition) return null;
@@ -1244,47 +1333,24 @@ export default function DashboardContent() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-        <DashboardHeaderSection
-          styles={styles}
-          headerTitle={headerTitle}
-          theme={theme}
-          focusMode={focusMode}
-          refreshing={refreshing}
-          onOpenTheme={() => setThemeModalVisible(true)}
-          onToggleFocusMode={() => {
-            const newFocusMode = !focusMode;
-            setFocusMode(newFocusMode);
-
-            if (newFocusMode) {
-              setNutritionExpanded(false);
-              setWellnessExpanded(false);
-              setProgressExpanded(false);
-            }
-          }}
-          // Enhanced header props
-          userInitials={user?.firstName?.[0]?.toUpperCase() || user?.fullName?.[0]?.toUpperCase() || 'U'}
-          userImageUrl={user?.imageUrl || null}
-          streak={parseDecimal(trends?.currentStreak, 0)}
-          todayCalories={parseCalories(today?.nutrition?.totalCalories)}
-          calorieGoal={parseGoal(goals?.dailyCalories, 2000, 800, 10000)}
-          waterProgress={calculatePercentage(
-            parseLiters(today?.waterIntakeLiters),
-            parseGoal(goals?.waterLiters, 2.0, 0.5, 10),
-            200
+        {/* MINIMAL DASHBOARD HEADER - Headspace/Calm pattern */}
+        {/* Invitation, not status report - no stats in greeting */}
+        {/* Single tappable nudge with smart routing */}
+        <MinimalDashboardHeader
+          userName={user?.firstName || user?.fullName}
+          mealsLogged={parseDecimal(today?.mealCount, 0)}
+          waterProgress={Math.round(
+            (parseLiters(today?.waterIntakeLiters) / parseGoal(goals?.waterLiters, 2.0, 0.5, 10)) * 100
           )}
-          waterIntakeLiters={parseLiters(today?.waterIntakeLiters)}
-          waterGoalLiters={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
-          wellnessScore={wellnessScore?.score ?? null}
-          hasNotifications={allergenWarnings.length > 0}
-          onNotificationPress={() => {
-            // Scroll to allergen warnings or show notification modal
-            if (allergenWarnings.length > 0) {
-              notify?.info(`${allergenWarnings.length} allergen warning${allergenWarnings.length > 1 ? 's' : ''} detected`);
-            }
-          }}
-          // User lifecycle props - for returning user welcome message
-          isReturning={isReturning}
-          daysSinceLastLog={daysSinceLastLog}
+          moodLogged={parseDecimal(today?.moodCount, 0) > 0}
+          streak={parseDecimal(trends?.currentStreak, 0)}
+          bestStreak={parseDecimal(gamification?.bestStreak, 0)}
+          notificationCount={notificationCount}
+          onMealsPress={() => router.push('/(tabs)/log')}
+          onWaterPress={() => router.push('/(tabs)/log?focus=hydration')}
+          onMoodPress={() => router.push('/(tabs)/log?focus=mood')}
+          onNotificationsPress={() => setNotificationCenterVisible(true)}
+          onSettingsPress={() => router.push('/(tabs)/profile')}
         />
 
         {/* FIRST-TIME USER ONLY - Brand new users see clean onboarding */}
@@ -1301,12 +1367,9 @@ export default function DashboardContent() {
           />
         )}
 
-        <DashboardInsightsSection
-          styles={styles}
-          smartInsights={smartInsights}
-          onInsightAction={handleInsightAction}
-          dataAnomalies={dataAnomalies}
-        />
+        {/* INLINE INSIGHTS REMOVED - Moved to Notification Center */}
+        {/* All smart insights and anomaly nudges now appear in the notification bell icon */}
+        {/* This keeps the dashboard clean and focused on data visualization */}
 
         {/* Premium Calendar Strip - Only show when user has data */}
         {hasAnyData && (
@@ -1333,9 +1396,14 @@ export default function DashboardContent() {
             today={today}
             goals={goals}
             moodLogs={today?.moodLogs || []}
-            streak={parseDecimal(trends?.currentStreak, 0)}
+            activityData={{
+              minutes: activityTodayData?.totalMinutes || 0,
+              intensity: activityTodayData?.primaryIntensity || 'moderate',
+              types: activityTodayData?.activityTypes || [],
+            }}
+            userName={user?.firstName || user?.fullName || ''}
             historicalScores={[]}
-            onViewDetails={() => router.push('/insights')}
+            onViewDetails={() => router.push('/insights/wellness-history')}
           />
         )}
 
@@ -1356,6 +1424,19 @@ export default function DashboardContent() {
             avgCalories: data?.trends?.avgCalories || 0,
           }}
         />
+
+        {/* ============================================ */}
+        {/* MICRONUTRIENTS COVERAGE - Daily micros summary */}
+        {/* Shows coverage ring and top priority nutrients */}
+        {/* ============================================ */}
+        {Object.keys(aggregatedMicros).length > 0 && (
+          <View style={styles.sectionContainer}>
+            <MicrosCoverageSection
+              micros={aggregatedMicros}
+              onViewAll={() => router.push('/insights/food-analytics')}
+            />
+          </View>
+        )}
 
         {/* ============================================ */}
         {/* QUICK ANALYTICS - Navigation to dedicated screens */}
@@ -1517,6 +1598,7 @@ export default function DashboardContent() {
           onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/insights/mood')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
+          onViewHydrationHistory={() => router.push('/insights/hydration-history')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}
@@ -1800,6 +1882,57 @@ export default function DashboardContent() {
           setRecommendationModalVisible(false);
         }}
       />
+
+      {/* Notification Center Modal */}
+      <NotificationCenter
+        visible={notificationCenterVisible}
+        onClose={() => setNotificationCenterVisible(false)}
+        notifications={dashboardNotifications}
+        onNotificationAction={(notification) => {
+          setNotificationCenterVisible(false);
+
+          // Route based on notification type for direct navigation
+          switch (notification.type) {
+            case 'streak_risk':
+            case 'meal_reminder':
+              router.push('/(tabs)/log');
+              break;
+            case 'low_protein':
+              // Go to log or show protein foods
+              if (notification.actionLabel === 'View High-Protein Foods') {
+                setProteinModalVisible(true);
+              } else {
+                router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
+              }
+              break;
+            case 'low_calories':
+              router.push({ pathname: '/(tabs)/log', params: { focus: 'meal' } });
+              break;
+            case 'hydration':
+              router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
+              break;
+            case 'achievement':
+              router.push('/(tabs)/profile');
+              break;
+            default:
+              // Fallback to insight/anomaly handlers
+              if (notification.insightData) {
+                handleInsightAction(notification.insightData);
+              } else if (notification.anomalyData?.action) {
+                notification.anomalyData.action();
+              } else {
+                router.push('/(tabs)/log');
+              }
+          }
+        }}
+        onNotificationDismiss={(notificationId) => {
+          setDismissedNotifications(prev => new Set([...prev, notificationId]));
+        }}
+        onClearAll={() => {
+          const allIds = dashboardNotifications.map(n => n.id);
+          setDismissedNotifications(new Set(allIds));
+        }}
+      />
     </>
   );
 }
@@ -1826,7 +1959,7 @@ const styles = StyleSheet.create({
   },
   // Analytics Section
   analyticsSection: {
-    marginTop: SPACING[4],
+    marginTop: SPACING[3],
     marginBottom: SPACING[2],
   },
   analyticsSectionTitle: {
@@ -2142,19 +2275,19 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[3],
   },
 
-  // Wellness Vertical Stack
+  // Wellness Vertical Stack - Tightened for compact display
   wellnessStack: {
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
+    gap: SPACING[2],
+    marginBottom: SPACING[2],
   },
   wellnessDivider: {
     height: 1,
     backgroundColor: 'rgba(0,0,0,0.06)',
   },
 
-  // Collapsible Section
+  // Collapsible Section - Reduced spacing for cleaner look
   collapsibleSection: {
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[2],
   },
   collapsibleHeader: {
     flexDirection: 'row',
@@ -2164,7 +2297,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
     ...PREMIUM_SHADOWS.sm,
-    marginBottom: SPACING[2],
+    marginBottom: SPACING[1],
   },
   collapsibleLeft: {
     flexDirection: 'row',
@@ -2197,7 +2330,7 @@ const styles = StyleSheet.create({
     color: BRAND.primary,
   },
   collapsibleContent: {
-    gap: SPACING[3],
+    gap: SPACING[2],
   },
 
   // Water section

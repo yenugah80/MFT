@@ -34,6 +34,7 @@ import {
   getNotificationPermissionStatus,
 } from '../services/pushNotifications';
 import apiClient from '../services/apiClient';
+import SmartNotificationEngine from '../services/smartNotificationEngine';
 
 const NotificationContext = createContext(null);
 
@@ -138,25 +139,92 @@ export const NotificationProvider = ({ children }) => {
 
       setPreferences(prefs);
 
-      // Schedule or cancel based on preferences
+      // Use smart notification engine for data-driven scheduling
+      const optimalTimes = await SmartNotificationEngine.getOptimalNotificationTimes();
+
+      // Schedule or cancel based on preferences AND user patterns
       if (prefs.dailyReminder) {
-        await scheduleDailyReminder(12, 0); // Noon reminder
+        // Use user's optimal meal times if available, otherwise default to noon
+        const mealHour = optimalTimes.meals?.[0] || 12;
+        await scheduleDailyReminder(mealHour, 0);
       } else {
         await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
       }
 
       if (prefs.hydrationNudges) {
-        await scheduleHydrationReminders([10, 14, 18]); // 10am, 2pm, 6pm
+        // Use user's optimal hydration times if available
+        const hydrationHours = optimalTimes.hydration?.length > 0
+          ? optimalTimes.hydration
+          : [10, 14, 18];
+        await scheduleHydrationReminders(hydrationHours);
       } else {
         await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
       }
 
-      console.log('[NotificationProvider] Notification schedules synced');
+      console.log('[NotificationProvider] Notification schedules synced with user patterns');
     } catch (error) {
       // Use console.warn to avoid red error screen in development
       console.warn('[NotificationProvider] Failed to sync schedules (non-critical):', error?.message || error);
     }
   }, []);
+
+  // Generate and show smart data-driven notification
+  const triggerSmartNotification = useCallback(async (type) => {
+    try {
+      // Check rate limiting first
+      const canSend = await SmartNotificationEngine.shouldSendNotification(type);
+      if (!canSend) {
+        console.log(`[NotificationProvider] Rate limited: ${type}`);
+        return null;
+      }
+
+      // Generate message based on actual user data
+      let notification = null;
+      switch (type) {
+        case 'hydration':
+          notification = await SmartNotificationEngine.generateHydrationMessage();
+          break;
+        case 'meal':
+          notification = await SmartNotificationEngine.generateMealMessage();
+          break;
+        case 'activity':
+          notification = await SmartNotificationEngine.generateActivityMessage();
+          break;
+        case 'mood':
+          notification = await SmartNotificationEngine.generateMoodMessage();
+          break;
+        case 'reengagement':
+          notification = await SmartNotificationEngine.generateReengagementMessage();
+          break;
+        default:
+          console.warn(`[NotificationProvider] Unknown notification type: ${type}`);
+          return null;
+      }
+
+      // Only send if we have data-driven content (no defaults!)
+      if (!notification) {
+        console.log(`[NotificationProvider] No relevant data for ${type} notification`);
+        return null;
+      }
+
+      // Record that we're sending this notification
+      await SmartNotificationEngine.recordNotificationSent(type);
+
+      // Show as in-app toast if app is foregrounded
+      addToast({
+        type: 'info',
+        message: notification.body,
+        title: notification.title,
+        duration: 4000,
+      });
+
+      console.log(`[NotificationProvider] Smart ${type} notification triggered`);
+      return notification;
+    } catch (error) {
+      console.warn(`[NotificationProvider] Failed to trigger smart notification:`, error?.message || error);
+      return null;
+    }
+  }, [addToast]);
 
   // Update preferences and sync schedules
   const updateNotificationPreferences = useCallback(async (newPrefs) => {
@@ -274,6 +342,17 @@ export const NotificationProvider = ({ children }) => {
       checkPermission: checkPermissionStatus,
       updatePreferences: updateNotificationPreferences,
       syncSchedules: syncNotificationSchedules,
+    },
+
+    // Smart data-driven notifications (Zomato-style)
+    smart: {
+      trigger: triggerSmartNotification,
+      // Expose individual generators for testing/debugging
+      generateHydration: SmartNotificationEngine.generateHydrationMessage,
+      generateMeal: SmartNotificationEngine.generateMealMessage,
+      generateActivity: SmartNotificationEngine.generateActivityMessage,
+      generateMood: SmartNotificationEngine.generateMoodMessage,
+      analyzePatterns: SmartNotificationEngine.analyzeUserPatterns,
     },
   };
 

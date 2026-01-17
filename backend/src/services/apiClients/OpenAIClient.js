@@ -14,7 +14,7 @@ import OpenAI, { toFile } from 'openai';
 import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
 import { buildImageAnalysisPrompt } from './prompts/nutritionAnalysis.js';
-import { normalizeNutritionAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
+import { normalizeNutritionAnalysis, normalizeMultiItemAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
 import { canonicalize, validateExtraction } from '../canonicalIngredients.js';
 
 class OpenAIClient extends BaseApiClient {
@@ -758,52 +758,68 @@ Return JSON:
     try {
       const json = await this.chatCompletionJSON(messages, {
         model: visionModel,
-        maxTokens: highAccuracy ? 1500 : 800, // Increased for per-ingredient nutrition breakdown
+        maxTokens: highAccuracy ? 2000 : 1000, // Increased for multi-item + per-ingredient breakdown
         temperature: 0.2, // Lower temperature for more consistent quality
       });
 
-      // Normalize and validate response using schema
+      // NEW: Use multi-item normalization to handle both single and multi-item formats
       let result;
       try {
-        result = normalizeNutritionAnalysis(json);
-
-        // Check if response has required fields
-        if (!hasRequiredFields(result)) {
-          console.warn('[OpenAI] Response missing required fields, using defaults');
-        }
-
-        // Calculate data quality score
-        const qualityScore = calculateDataQuality(result);
-
-        // Add metadata
-        result._modelUsed = visionModel;
-        result._dataQuality = qualityScore;
+        result = normalizeMultiItemAnalysis(json);
 
         // Log analysis info
         console.log(
           `[OpenAI] Vision Analysis - Model: ${visionModel}, ` +
-          `Confidence: ${result.confidence}, Quality: ${(qualityScore * 100).toFixed(0)}%, ` +
-          `Food: ${result.foodName}`
+          `Items detected: ${result.items.length}, ` +
+          `Total Calories: ${result.totals.calories}`
         );
 
-        // Log micros for debugging
-        const microsKeys = Object.keys(result.micros || {});
-        if (microsKeys.length > 0) {
-          console.log(`[OpenAI] Micros detected: ${microsKeys.join(', ')}`);
-        } else {
-          console.log(`[OpenAI] No micros in response. Raw micros: ${JSON.stringify(json.micros || 'none')}`);
-        }
+        // Log each item
+        result.items.forEach((item, idx) => {
+          console.log(`[OpenAI] Item ${idx + 1}: "${item.name}" - ${item.macros.calories} cal, confidence: ${item.confidence}`);
+
+          // Log micros for debugging
+          const microsKeys = Object.keys(item.micros || {});
+          if (microsKeys.length > 0) {
+            console.log(`[OpenAI]   Micros: ${microsKeys.join(', ')}`);
+          }
+        });
+
+        // Add metadata
+        result._modelUsed = visionModel;
+        result._isMultiItem = result.isMultiItem;
 
       } catch (normalizationError) {
         console.error('[OpenAI] Schema normalization failed:', normalizationError.message);
-        // Fallback to raw data if normalization fails
+        // Fallback to legacy single-item format
         result = {
-          foodName: json.foodName || 'Unknown Food',
-          description: json.description || 'Analyzed Meal',
-          calories: json.calories || 0,
-          protein: json.protein || 0,
-          carbs: json.carbs || 0,
-          fats: json.fats || json.fat || 0,
+          isMultiItem: false,
+          items: [{
+            name: json.foodName || json.items?.[0]?.name || 'Unknown Food',
+            description: json.description || 'Analyzed Meal',
+            macros: {
+              calories: json.calories || json.items?.[0]?.macros?.calories || 0,
+              protein: json.protein || json.items?.[0]?.macros?.protein || 0,
+              carbs: json.carbs || json.items?.[0]?.macros?.carbs || 0,
+              fat: json.fats || json.fat || json.items?.[0]?.macros?.fat || 0,
+              fiber: json.fiber || 0,
+              sugar: json.sugar || 0,
+              sodium: json.sodium || 0
+            },
+            micros: json.micros || {},
+            confidence: json.confidence || 0.7,
+            portion: { amount: 1, unit: 'serving', estimatedGrams: 100 }
+          }],
+          totals: {
+            calories: json.calories || 0,
+            protein: json.protein || 0,
+            carbs: json.carbs || 0,
+            fat: json.fats || json.fat || 0,
+            fiber: json.fiber || 0,
+            sugar: json.sugar || 0,
+            sodium: json.sodium || 0,
+            micros: json.micros || {}
+          },
           _modelUsed: visionModel,
           _normalizationError: normalizationError.message,
         };
@@ -812,7 +828,18 @@ Return JSON:
       return result;
     } catch (error) {
       console.error(`[OpenAI] Image analysis failed:`, error.message);
-      return null;
+      // Propagate error with descriptive message instead of returning null
+      const errorMessage = error.message || 'Unknown error';
+      if (errorMessage.includes('API key')) {
+        throw new Error('AI service not configured. Please contact support.');
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+        throw new Error('AI analysis timed out. Please try again.');
+      } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+        throw new Error('AI service is busy. Please try again in a moment.');
+      } else if (errorMessage.includes('invalid_api_key')) {
+        throw new Error('AI service authentication failed. Please contact support.');
+      }
+      throw new Error(`Image analysis failed: ${errorMessage}`);
     }
   }
 

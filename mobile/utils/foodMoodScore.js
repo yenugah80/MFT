@@ -1,13 +1,23 @@
 /**
- * FoodMoodScore - Your Signature Metric
- * A composite score (0-100) that captures food quality + mood + energy
- * This is THE differentiator - no other app has this
+ * Wellness Score - Holistic Health Metric
+ *
+ * A research-based composite score (0-100) from 4 core wellness domains:
+ * - Food (Nutrition): 25 points - calorie adherence, macro balance, quality
+ * - Mood: 25 points - emotional state, stability, trends
+ * - Hydration: 25 points - water intake vs goal, timing
+ * - Activity: 25 points - exercise minutes, intensity, variety
+ *
+ * Research foundations:
+ * - PMC11553003: Lifestyle Wellness Assessment methodology
+ * - PMC4207053: Hydration and cognitive function correlation
+ * - PMC9776646: Machine learning in nutrition research
+ * - Gut-brain axis: nutrition affects mood and cognition
  */
 
 /**
- * Calculate the FoodMoodScore based on multiple factors
+ * Calculate the Wellness Score based on 4 core domains
  * @param {Object} params - Score calculation parameters
- * @returns {Object} - Score details with breakdown
+ * @returns {Object} - Score details with breakdown and recommendations
  */
 export function calculateFoodMoodScore({
   // Nutrition factors
@@ -32,85 +42,166 @@ export function calculateFoodMoodScore({
   // Meal timing
   meals = [],
 
+  // Activity data (NEW)
+  activityMinutes = 0,
+  activityGoal = 30, // 30 min/day = 210 min/week (WHO recommends 150-300)
+  activityIntensity = 'moderate', // light, moderate, vigorous
+  activityTypes = [], // array of activity type strings
+
   // Historical context
   streak = 0,
 }) {
+  // 4 Core Wellness Domains - 25 points each = 100 total
   const breakdown = {
-    nutrition: 0,
-    hydration: 0,
-    mood: 0,
-    consistency: 0,
-    timing: 0,
+    nutrition: 0,    // Food quality & balance
+    mood: 0,         // Emotional wellbeing
+    hydration: 0,    // Water intake
+    activity: 0,     // Physical movement
   };
 
-  // 1. NUTRITION SCORE (0-35 points)
-  // Reward hitting targets, penalize extremes
+  // ========================================================
+  // DOMAIN 1: NUTRITION SCORE (0-25 points)
+  // Factors: Calorie adherence, protein, fiber, macro balance
+  // ========================================================
   const calorieRatio = calorieGoal > 0 ? calories / calorieGoal : 0;
   const proteinRatio = proteinGoal > 0 ? protein / proteinGoal : 0;
   const fiberRatio = fiberGoal > 0 ? fiber / fiberGoal : 0;
 
-  // Calories: Best score at 90-110% of goal
+  // Calculate macro percentages for balance scoring
+  const totalMacroGrams = protein + carbs + fats;
+  const proteinPercent = totalMacroGrams > 0 ? (protein / totalMacroGrams) * 100 : 0;
+  const carbPercent = totalMacroGrams > 0 ? (carbs / totalMacroGrams) * 100 : 0;
+  const fatPercent = totalMacroGrams > 0 ? (fats / totalMacroGrams) * 100 : 0;
+
+  // Calories: Best at 90-110% of goal (max 8 pts)
   let calorieScore = 0;
   if (calorieRatio >= 0.9 && calorieRatio <= 1.1) {
-    calorieScore = 10; // Perfect range
+    calorieScore = 8;
   } else if (calorieRatio >= 0.7 && calorieRatio <= 1.2) {
-    calorieScore = 7; // Acceptable
+    calorieScore = 6;
   } else if (calorieRatio >= 0.5 && calorieRatio <= 1.3) {
-    calorieScore = 4; // Needs work
-  } else {
-    calorieScore = 1; // Way off
+    calorieScore = 4;
+  } else if (calorieRatio > 0) {
+    calorieScore = 2;
   }
 
-  // Protein: Higher is better (up to goal)
-  const proteinScore = Math.min(proteinRatio, 1) * 15;
+  // Protein: Higher is better up to goal (max 8 pts)
+  const proteinScore = Math.min(proteinRatio, 1) * 8;
 
-  // Fiber: Higher is better (up to goal)
-  const fiberScore = Math.min(fiberRatio, 1) * 10;
+  // Fiber: Higher is better up to goal (max 4 pts)
+  const fiberScore = Math.min(fiberRatio, 1) * 4;
 
-  breakdown.nutrition = Math.round(calorieScore + proteinScore + fiberScore);
-
-  // 2. HYDRATION SCORE (0-20 points)
-  const hydrationRatio = waterGoal > 0 ? waterIntake / waterGoal : 0;
-  if (hydrationRatio >= 1) {
-    breakdown.hydration = 20;
-  } else if (hydrationRatio >= 0.8) {
-    breakdown.hydration = 16;
-  } else if (hydrationRatio >= 0.6) {
-    breakdown.hydration = 12;
-  } else if (hydrationRatio >= 0.4) {
-    breakdown.hydration = 8;
-  } else {
-    breakdown.hydration = Math.round(hydrationRatio * 20);
+  // Macro Balance: Penalize extreme imbalances (max 5 pts)
+  let balanceScore = 5;
+  let balanceIssue = null;
+  if (carbPercent > 70) {
+    balanceScore -= 3;
+    balanceIssue = 'carb-heavy';
+  } else if (carbPercent > 60) {
+    balanceScore -= 1;
   }
+  if (proteinPercent < 10 && totalMacroGrams > 0) {
+    balanceScore -= 2;
+    balanceIssue = balanceIssue || 'low-protein';
+  }
+  balanceScore = Math.max(0, balanceScore);
 
-  // 3. MOOD SCORE (0-25 points)
+  breakdown.nutrition = Math.round(Math.min(25, calorieScore + proteinScore + fiberScore + balanceScore));
+  breakdown.balance = balanceScore;
+  breakdown.balanceIssue = balanceIssue;
+
+  // ========================================================
+  // DOMAIN 2: MOOD SCORE (0-25 points)
+  // Factors: Average mood, mood stability
+  // Research: Emotional state correlates with nutrition quality
+  // ========================================================
+  let moodScore = 0;
+  let moodStability = 0;
+
   if (moodLogs.length > 0) {
-    const avgMood = moodLogs.reduce((sum, log) => sum + (log.intensity || 5), 0) / moodLogs.length;
-    // Mood is 1-10, normalize to 0-25
-    breakdown.mood = Math.round((avgMood / 10) * 25);
+    const intensities = moodLogs.map(log => log.intensity || 5);
+    const avgMood = intensities.reduce((sum, i) => sum + i, 0) / intensities.length;
+
+    // Base mood score (0-20): Mood 1-10 normalized to 0-20
+    moodScore = Math.round((avgMood / 10) * 20);
+
+    // Stability bonus (0-5): Low variance = more stable = bonus
+    if (intensities.length > 1) {
+      const variance = intensities.reduce((sum, i) => sum + Math.pow(i - avgMood, 2), 0) / intensities.length;
+      // Low variance (stable mood) gets bonus points
+      moodStability = variance < 1 ? 5 : variance < 2 ? 3 : variance < 3 ? 1 : 0;
+    } else {
+      moodStability = 2; // Single log gets partial stability bonus
+    }
+
+    breakdown.mood = Math.min(25, moodScore + moodStability);
   } else {
-    // No mood data - give neutral score
-    breakdown.mood = 12;
+    // No mood data - show 0% (user needs to log mood)
+    breakdown.mood = 0;
   }
 
-  // 4. CONSISTENCY SCORE (0-10 points)
-  // Based on streak
-  if (streak >= 30) {
-    breakdown.consistency = 10;
-  } else if (streak >= 14) {
-    breakdown.consistency = 8;
-  } else if (streak >= 7) {
-    breakdown.consistency = 6;
-  } else if (streak >= 3) {
-    breakdown.consistency = 4;
-  } else if (streak >= 1) {
-    breakdown.consistency = 2;
+  // ========================================================
+  // DOMAIN 3: HYDRATION SCORE (0-25 points)
+  // Research: PMC4207053 - even 1-2% dehydration impairs cognition
+  // ========================================================
+  const hydrationRatio = waterGoal > 0 ? waterIntake / waterGoal : 0;
+  const glasses = Math.round(waterIntake / 0.25); // 250ml = 1 glass
+
+  if (hydrationRatio >= 1) {
+    breakdown.hydration = 25; // Met or exceeded goal
+  } else if (hydrationRatio >= 0.8) {
+    breakdown.hydration = 20; // 80%+ of goal
+  } else if (hydrationRatio >= 0.6) {
+    breakdown.hydration = 15; // 60%+ of goal
+  } else if (hydrationRatio >= 0.4) {
+    breakdown.hydration = 10; // 40%+ of goal
+  } else if (hydrationRatio > 0) {
+    breakdown.hydration = Math.round(hydrationRatio * 25);
   } else {
-    breakdown.consistency = 0;
+    breakdown.hydration = 0;
   }
 
-  // 5. MEAL TIMING SCORE (0-10 points)
-  // Reward regular meal patterns
+  // ========================================================
+  // DOMAIN 4: ACTIVITY SCORE (0-25 points)
+  // WHO recommends 150-300 min moderate activity/week (21-43 min/day)
+  // Factors: Duration, intensity, variety
+  // ========================================================
+  const activityRatio = activityGoal > 0 ? activityMinutes / activityGoal : 0;
+
+  // Intensity multiplier: vigorous counts more
+  const intensityMultiplier = activityIntensity === 'vigorous' ? 1.5 :
+                              activityIntensity === 'moderate' ? 1.0 : 0.75;
+
+  // Effective minutes adjusted for intensity
+  const effectiveMinutes = activityMinutes * intensityMultiplier;
+  const effectiveRatio = activityGoal > 0 ? effectiveMinutes / activityGoal : 0;
+
+  // Base activity score (0-20)
+  let activityScore = 0;
+  if (effectiveRatio >= 1) {
+    activityScore = 20;
+  } else if (effectiveRatio >= 0.7) {
+    activityScore = 16;
+  } else if (effectiveRatio >= 0.5) {
+    activityScore = 12;
+  } else if (effectiveRatio >= 0.3) {
+    activityScore = 8;
+  } else if (activityMinutes > 0) {
+    activityScore = Math.round(effectiveRatio * 20);
+  }
+
+  // Variety bonus (0-5): Multiple activity types = more balanced
+  const varietyBonus = activityTypes.length >= 3 ? 5 :
+                       activityTypes.length >= 2 ? 3 :
+                       activityTypes.length >= 1 ? 1 : 0;
+
+  breakdown.activity = Math.min(25, activityScore + varietyBonus);
+
+  // ========================================================
+  // BONUS: Meal Timing (internal tracking, not displayed)
+  // Used for recommendations, not main score
+  // ========================================================
+  let timingBonus = 0;
   if (meals.length >= 3) {
     const hasBreakfast = meals.some(m => {
       const hour = new Date(m.timestamp || m.loggedDate).getHours();
@@ -124,26 +215,24 @@ export function calculateFoodMoodScore({
       const hour = new Date(m.timestamp || m.loggedDate).getHours();
       return hour >= 17 && hour <= 21;
     });
-
-    let timingPoints = 0;
-    if (hasBreakfast) timingPoints += 4;
-    if (hasLunch) timingPoints += 3;
-    if (hasDinner) timingPoints += 3;
-    breakdown.timing = timingPoints;
-  } else if (meals.length > 0) {
-    breakdown.timing = meals.length * 2;
+    if (hasBreakfast) timingBonus += 2;
+    if (hasLunch) timingBonus += 1;
+    if (hasDinner) timingBonus += 1;
   }
+  breakdown.timing = timingBonus; // Internal use only
 
-  // Calculate total score
+  // ========================================================
+  // CALCULATE TOTAL WELLNESS SCORE (0-100)
+  // 4 domains × 25 points each = 100 max
+  // ========================================================
   const totalScore = Math.min(100, Math.max(0,
     breakdown.nutrition +
-    breakdown.hydration +
     breakdown.mood +
-    breakdown.consistency +
-    breakdown.timing
+    breakdown.hydration +
+    breakdown.activity
   ));
 
-  // Determine score tier and label
+  // Determine score tier and label based on total
   let tier, label, color, emoji;
   if (totalScore >= 85) {
     tier = 'excellent';
@@ -152,41 +241,163 @@ export function calculateFoodMoodScore({
     emoji = '🔥';
   } else if (totalScore >= 70) {
     tier = 'good';
-    label = 'Energized';
-    color = '#6B4EFF';
+    label = 'Solid';
+    color = '#8B5CF6';
     emoji = '⚡';
   } else if (totalScore >= 55) {
     tier = 'okay';
-    label = 'Balanced';
-    color = '#F59E0B';
+    label = 'On Track';
+    color = '#3B82F6';
     emoji = '👍';
   } else if (totalScore >= 40) {
     tier = 'fair';
     label = 'Building';
-    color = '#F97316';
+    color = '#F59E0B';
     emoji = '💪';
   } else {
     tier = 'low';
     label = 'Starting';
-    color = '#EF4444';
+    color = '#94A3B8';
     emoji = '🌱';
   }
 
-  // Generate improvement tips
+  // ========================================================
+  // SMART RECOMMENDATIONS
+  // Identify weakest domain and generate actionable advice
+  // ========================================================
+  const recommendations = [];
+  const domainScores = [
+    { domain: 'nutrition', score: breakdown.nutrition, max: 25, label: 'Food' },
+    { domain: 'mood', score: breakdown.mood, max: 25, label: 'Mood' },
+    { domain: 'hydration', score: breakdown.hydration, max: 25, label: 'Hydration' },
+    { domain: 'activity', score: breakdown.activity, max: 25, label: 'Activity' },
+  ];
+
+  // Sort by score percentage (lowest first)
+  const sortedDomains = [...domainScores].sort((a, b) =>
+    (a.score / a.max) - (b.score / b.max)
+  );
+
+  // Generate recommendations for weakest domains
+  const weakest = sortedDomains[0];
+  const secondWeakest = sortedDomains[1];
+
+  // Domain-specific actionable recommendations
+  if (weakest.domain === 'hydration' && breakdown.hydration < 20) {
+    const remaining = Math.max(0, Math.round((waterGoal - waterIntake) / 0.25));
+    recommendations.push({
+      domain: 'hydration',
+      priority: 'high',
+      icon: 'water-outline',
+      title: 'Hydration needs attention',
+      message: remaining > 0
+        ? `Drink ${remaining} more glasses to reach your goal`
+        : 'Great job staying hydrated!',
+      action: 'Log water',
+    });
+  }
+
+  if (weakest.domain === 'activity' && breakdown.activity < 15) {
+    const remaining = Math.max(0, activityGoal - activityMinutes);
+    recommendations.push({
+      domain: 'activity',
+      priority: 'high',
+      icon: 'fitness-outline',
+      title: 'Get moving today',
+      message: remaining > 0
+        ? `${remaining} more minutes to hit your goal`
+        : 'Even a 10-minute walk helps!',
+      action: 'Log activity',
+    });
+  }
+
+  if (weakest.domain === 'nutrition' && breakdown.nutrition < 15) {
+    if (balanceIssue === 'low-protein') {
+      recommendations.push({
+        domain: 'nutrition',
+        priority: 'high',
+        icon: 'nutrition-outline',
+        title: 'Boost your protein',
+        message: 'Add eggs, chicken, or legumes to your next meal',
+        action: 'Log meal',
+      });
+    } else if (balanceIssue === 'carb-heavy') {
+      recommendations.push({
+        domain: 'nutrition',
+        priority: 'medium',
+        icon: 'nutrition-outline',
+        title: 'Balance your macros',
+        message: 'Pair carbs with protein for sustained energy',
+        action: 'Log meal',
+      });
+    } else {
+      recommendations.push({
+        domain: 'nutrition',
+        priority: 'high',
+        icon: 'restaurant-outline',
+        title: 'Keep fueling up',
+        message: 'Log your meals to track nutrition',
+        action: 'Log meal',
+      });
+    }
+  }
+
+  if (weakest.domain === 'mood' && breakdown.mood < 15 && moodLogs.length === 0) {
+    recommendations.push({
+      domain: 'mood',
+      priority: 'medium',
+      icon: 'happy-outline',
+      title: 'How are you feeling?',
+      message: 'A quick mood check helps spot patterns',
+      action: 'Log mood',
+    });
+  }
+
+  // Add second recommendation if first domain is doing okay
+  if (recommendations.length < 2 && secondWeakest.score / secondWeakest.max < 0.6) {
+    if (secondWeakest.domain === 'hydration' && breakdown.hydration < 20) {
+      recommendations.push({
+        domain: 'hydration',
+        priority: 'medium',
+        icon: 'water-outline',
+        title: 'Stay hydrated',
+        message: 'Your brain works better with enough water',
+        action: 'Log water',
+      });
+    }
+    if (secondWeakest.domain === 'activity' && breakdown.activity < 15) {
+      recommendations.push({
+        domain: 'activity',
+        priority: 'medium',
+        icon: 'walk-outline',
+        title: 'Add some movement',
+        message: 'A short walk can boost your mood',
+        action: 'Log activity',
+      });
+    }
+  }
+
+  // Legacy tips array for backward compatibility
   const tips = [];
-  if (breakdown.nutrition < 20) {
+  if (balanceIssue === 'carb-heavy') {
+    tips.push({ area: 'balance', tip: 'Add more protein to balance your carbs', icon: 'fitness-outline' });
+  }
+  if (balanceIssue === 'low-protein') {
+    tips.push({ area: 'balance', tip: 'Include protein with each meal', icon: 'nutrition-outline' });
+  }
+  if (breakdown.nutrition < 15 && tips.length < 2) {
     tips.push({ area: 'nutrition', tip: 'Focus on protein-rich meals', icon: 'nutrition-outline' });
   }
-  if (breakdown.hydration < 12) {
+  if (breakdown.hydration < 15 && tips.length < 2) {
     tips.push({ area: 'hydration', tip: 'Drink more water throughout the day', icon: 'water-outline' });
   }
-  if (breakdown.mood < 15 && moodLogs.length === 0) {
+  if (breakdown.mood < 12 && moodLogs.length === 0 && tips.length < 2) {
     tips.push({ area: 'mood', tip: 'Log your mood to unlock insights', icon: 'happy-outline' });
   }
-  if (breakdown.consistency < 4) {
-    tips.push({ area: 'consistency', tip: 'Keep your streak going!', icon: 'flame-outline' });
+  if (breakdown.activity < 12 && tips.length < 2) {
+    tips.push({ area: 'activity', tip: 'Add some movement to your day', icon: 'fitness-outline' });
   }
-  if (breakdown.timing < 6) {
+  if (timingBonus < 3 && tips.length < 2) {
     tips.push({ area: 'timing', tip: 'Try eating at regular times', icon: 'time-outline' });
   }
 
@@ -197,14 +408,32 @@ export function calculateFoodMoodScore({
     color,
     emoji,
     breakdown,
-    tips: tips.slice(0, 2), // Top 2 tips
-    maxBreakdown: {
-      nutrition: 35,
-      hydration: 20,
-      mood: 25,
-      consistency: 10,
-      timing: 10,
+    tips: tips.slice(0, 2),
+    recommendations: recommendations.slice(0, 2), // Top 2 smart recommendations
+    // Include macro percentages for UI insights
+    macroBalance: {
+      proteinPercent: Math.round(proteinPercent),
+      carbPercent: Math.round(carbPercent),
+      fatPercent: Math.round(fatPercent),
+      isBalanced: balanceScore >= 3,
     },
+    // Max points per domain for percentage calculations
+    maxBreakdown: {
+      nutrition: 25,
+      mood: 25,
+      hydration: 25,
+      activity: 25,
+    },
+    // Domain percentages for easy display
+    domainPercentages: {
+      nutrition: Math.round((breakdown.nutrition / 25) * 100),
+      mood: Math.round((breakdown.mood / 25) * 100),
+      hydration: Math.round((breakdown.hydration / 25) * 100),
+      activity: Math.round((breakdown.activity / 25) * 100),
+    },
+    // Weakest domain for highlighting
+    weakestDomain: sortedDomains[0].domain,
+    strongestDomain: sortedDomains[3].domain,
   };
 }
 

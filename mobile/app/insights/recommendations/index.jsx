@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../../constants/designSystem';
 
 export default function RecommendationsScreen() {
@@ -23,7 +24,7 @@ export default function RecommendationsScreen() {
     {
       id: 'food',
       title: 'Food Recommendations',
-      emoji: '🍽️',
+      icon: 'restaurant',
       description: 'Personalized nutrition advice based on your energy patterns',
       color: COLORS.nutrition.primary,
       action: () => router.push('/insights/recommendations/food'),
@@ -32,7 +33,7 @@ export default function RecommendationsScreen() {
     {
       id: 'mood-food',
       title: 'Mood-Food Patterns',
-      emoji: '📊',
+      icon: 'analytics',
       description: 'Which foods correlate with your mood improvements',
       color: COLORS.mood.primary,
       action: () => router.push('/insights/recommendations/mood-food'),
@@ -41,7 +42,7 @@ export default function RecommendationsScreen() {
     {
       id: 'hydration',
       title: 'Hydration-Energy Link',
-      emoji: '💧',
+      icon: 'water',
       description: 'How water intake affects your energy levels throughout the day',
       color: COLORS.hydration.primary,
       action: () => router.push('/insights/recommendations/hydration'),
@@ -50,7 +51,7 @@ export default function RecommendationsScreen() {
     {
       id: 'recovery',
       title: 'Activity Recovery',
-      emoji: '💪',
+      icon: 'fitness',
       description: 'Optimal nutrition timing for faster post-workout recovery',
       color: COLORS.activity.primary,
       action: () => router.push('/insights/recommendations/recovery'),
@@ -100,7 +101,9 @@ export default function RecommendationsScreen() {
             <View style={styles.cardContent}>
               {/* Icon & Title */}
               <View style={styles.cardHeader}>
-                <Text style={styles.cardEmoji}>{rec.emoji}</Text>
+                <View style={[styles.cardIconContainer, { backgroundColor: `${rec.color}15` }]}>
+                  <Ionicons name={rec.icon} size={24} color={rec.color} />
+                </View>
                 <View style={styles.cardTitleGroup}>
                   <Text style={styles.cardTitle}>{rec.title}</Text>
                   <Text style={styles.cardStats}>{rec.stats}</Text>
@@ -112,7 +115,7 @@ export default function RecommendationsScreen() {
 
               {/* Arrow indicator */}
               <View style={styles.cardArrow}>
-                <Text style={styles.arrowText}>→</Text>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.text.tertiary} />
               </View>
             </View>
           </TouchableOpacity>
@@ -120,7 +123,10 @@ export default function RecommendationsScreen() {
 
         {/* Information Section */}
         <View style={[styles.infoCard, SHADOWS.sm]}>
-          <Text style={styles.infoTitle}>ℹ️ About These Recommendations</Text>
+          <View style={styles.infoHeader}>
+            <Ionicons name="information-circle-outline" size={18} color={COLORS.text.secondary} />
+            <Text style={styles.infoTitle}>About These Recommendations</Text>
+          </View>
           <Text style={styles.infoText}>
             These insights are generated using machine learning analysis of your logged food, mood, hydration, and activity data. The more data you log, the more personalized and accurate these recommendations become.
           </Text>
@@ -190,8 +196,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: SPACING.md,
   },
-  cardEmoji: {
-    fontSize: TYPOGRAPHY.size.title1,
+  cardIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING.md,
   },
   cardTitleGroup: {
@@ -228,11 +238,16 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     marginBottom: SPACING['2xl'],
   },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
   infoTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
-    marginBottom: SPACING.md,
   },
   infoText: {
     fontSize: TYPOGRAPHY.size.body,

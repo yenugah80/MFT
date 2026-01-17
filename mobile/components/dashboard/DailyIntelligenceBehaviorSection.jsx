@@ -84,17 +84,10 @@ export default function DailyIntelligenceBehaviorSection({
     return null;
   }
 
-  // SILENT decision: Show quiet confirmation (no patterns)
+  // SILENT decision: Don't show anything - user finds "You're on track" unnecessary
+  // The dashboard already shows progress, no need to repeat it
   if (decision?.type === 'SILENT') {
-    return (
-      <Animated.View
-        style={[componentStyles.container, { opacity: fadeAnim }]}
-        accessibilityRole="summary"
-        accessibilityLabel="Daily health status: All metrics on track"
-      >
-        <QuietConfidenceCard />
-      </Animated.View>
-    );
+    return null;
   }
 
   return (

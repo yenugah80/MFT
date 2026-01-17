@@ -409,7 +409,7 @@ export const CARD_SYSTEM = {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS['2xl'],        // 24px - generous rounding
     padding: SPACING[5],                // 20px - breathing room
-    marginBottom: SPACING[4],           // 16px - consistent spacing
+    marginBottom: SPACING[3],           // 12px - tighter spacing
     borderWidth: 1,
     borderColor: 'rgba(138, 127, 120, 0.12)',  // Warm subtle border
     shadowColor: '#3D3633',             // Warm shadow (friendly)
@@ -424,7 +424,7 @@ export const CARD_SYSTEM = {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,            // 20px
     padding: SPACING[4],                // 16px
-    marginBottom: SPACING[4],           // 16px
+    marginBottom: SPACING[3],           // 12px - tighter spacing
     borderWidth: 1,
     borderColor: 'rgba(138, 127, 120, 0.10)',  // Warm subtle border
     shadowColor: '#3D3633',             // Warm shadow (friendly)
@@ -595,6 +595,20 @@ export const VIBRANT_WELLNESS = {
     solid: '#059669',
     glow: 'rgba(5, 150, 105, 0.4)',
     shadow: '#059669',
+  },
+  // Sleep - VIBRANT indigo/purple
+  sleep: {
+    gradient: ['#6366F1', '#8B5CF6', '#A78BFA'],
+    solid: '#6366F1',
+    glow: 'rgba(99, 102, 241, 0.4)',
+    shadow: '#6366F1',
+  },
+  // Stress - VIBRANT amber/orange
+  stress: {
+    gradient: ['#F59E0B', '#FBBF24', '#FCD34D'],
+    solid: '#F59E0B',
+    glow: 'rgba(245, 158, 11, 0.4)',
+    shadow: '#F59E0B',
   },
 };
 

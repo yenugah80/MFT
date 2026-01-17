@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, SEMANTIC } from '../../constants/premiumTheme';
+import { getProcessingLabel, getProcessingHealthMessage } from '../../utils/processingLabels';
 
 /**
  * Unit picker options
@@ -286,12 +287,29 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
         </View>
       )}
 
-      {/* Confidence Badge - Simplified to just show percentage */}
-      <View style={[styles.badge, { borderColor: confidenceColor }]}>
-        <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
-        <Text style={styles.badgeText}>
-          {Math.round(confidence * 100)}% confidence
-        </Text>
+      {/* Badges Row - Recognition Confidence + NOVA */}
+      <View style={styles.badgesRow}>
+        {/* Recognition Confidence Badge - clarifies this is food ID, not nutrition accuracy */}
+        <View style={[styles.badge, { borderColor: confidenceColor }]}>
+          <View style={[styles.badgeDot, { backgroundColor: confidenceColor }]} />
+          <Text style={styles.badgeText}>
+            Recognition: {Math.round(confidence * 100)}%
+          </Text>
+        </View>
+
+        {/* NOVA Processing Badge */}
+        {(item.novaScore || item.nova_group || item.macros?.nova_group) && (() => {
+          const novaScore = item.novaScore || item.nova_group || item.macros?.nova_group;
+          const novaInfo = getProcessingLabel(novaScore);
+          return (
+            <View style={[styles.novaBadge, { backgroundColor: novaInfo.backgroundColor, borderColor: novaInfo.color }]}>
+              <Text style={styles.novaEmoji}>{novaInfo.emoji}</Text>
+              <Text style={[styles.novaText, { color: novaInfo.color }]}>
+                {novaInfo.shortLabel}
+              </Text>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Expandable Details */}
@@ -419,6 +437,32 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
               )}
             </View>
           )}
+
+          {/* NOVA Processing Level - Show in expanded details if available */}
+          {(item.novaScore || item.nova_group || item.macros?.nova_group) && (() => {
+            const novaScore = item.novaScore || item.nova_group || item.macros?.nova_group;
+            const novaInfo = getProcessingLabel(novaScore);
+            const healthMessage = getProcessingHealthMessage(novaScore);
+            return (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Food Processing</Text>
+                <View style={[styles.novaDetailCard, { backgroundColor: novaInfo.backgroundColor, borderColor: novaInfo.color }]}>
+                  <View style={styles.novaDetailHeader}>
+                    <Text style={styles.novaDetailEmoji}>{novaInfo.emoji}</Text>
+                    <View style={styles.novaDetailInfo}>
+                      <Text style={[styles.novaDetailLabel, { color: novaInfo.color }]}>{novaInfo.label}</Text>
+                      <Text style={styles.novaDetailDescription}>{novaInfo.description}</Text>
+                    </View>
+                  </View>
+                  {healthMessage && (
+                    <Text style={[styles.novaHealthTip, { color: novaInfo.color }]}>
+                      💡 {healthMessage}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })()}
         </View>
       )}
 
@@ -623,15 +667,19 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     fontWeight: '500',
   },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     borderWidth: 1,
-    marginBottom: 12,
     gap: 6,
   },
   badgeDot: {
@@ -642,6 +690,55 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     color: TEXT.secondary,
+  },
+  novaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  novaEmoji: {
+    fontSize: 12,
+  },
+  novaText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  novaDetailCard: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  novaDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  novaDetailEmoji: {
+    fontSize: 28,
+  },
+  novaDetailInfo: {
+    flex: 1,
+  },
+  novaDetailLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  novaDetailDescription: {
+    fontSize: 13,
+    color: TEXT.secondary,
+  },
+  novaHealthTip: {
+    fontSize: 12,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+    fontWeight: '500',
   },
   expandButton: {
     paddingVertical: 8,

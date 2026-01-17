@@ -102,11 +102,14 @@ export default function FoodAnalyticsScreen() {
     const carbsConsumed = todayNutrition.totalCarbs || 0;
     const fatConsumed = todayNutrition.totalFats || 0;
 
-    const caloriesRemaining = Math.max(0, caloriesBudget - caloriesConsumed);
+    // Allow negative remaining to show "over budget" - don't clamp to 0
+    const caloriesRemaining = caloriesBudget - caloriesConsumed;
+    const isOverBudget = caloriesRemaining < 0;
 
-    const proteinProgress = proteinGoal > 0 ? Math.min((proteinConsumed / proteinGoal) * 100, 150) : 0;
-    const carbsProgress = carbsGoal > 0 ? Math.min((carbsConsumed / carbsGoal) * 100, 150) : 0;
-    const fatProgress = fatGoal > 0 ? Math.min((fatConsumed / fatGoal) * 100, 150) : 0;
+    // Calculate actual percentages - don't cap for display, cap only for gauge visual
+    const proteinProgress = proteinGoal > 0 ? (proteinConsumed / proteinGoal) * 100 : 0;
+    const carbsProgress = carbsGoal > 0 ? (carbsConsumed / carbsGoal) * 100 : 0;
+    const fatProgress = fatGoal > 0 ? (fatConsumed / fatGoal) * 100 : 0;
 
     // Calculate balance score based on how close each macro is to 100%
     const getScore = (progress) => {
@@ -127,7 +130,8 @@ export default function FoodAnalyticsScreen() {
         consumed: caloriesConsumed,
         budget: caloriesBudget,
         remaining: caloriesRemaining,
-        progress: caloriesBudget > 0 ? Math.min((caloriesConsumed / caloriesBudget) * 100, 150) : 0,
+        isOverBudget,
+        progress: caloriesBudget > 0 ? (caloriesConsumed / caloriesBudget) * 100 : 0,
       },
       macros: {
         protein: { consumed: proteinConsumed, goal: proteinGoal, progress: proteinProgress },
@@ -290,10 +294,17 @@ export default function FoodAnalyticsScreen() {
                 </View>
                 <View style={styles.calorieDivider} />
                 <View style={styles.calorieItem}>
-                  <Text style={[styles.calorieValue, { color: SEMANTIC.success.base }]}>
-                    {nutritionMetrics.calories.remaining}
+                  <Text style={[
+                    styles.calorieValue,
+                    { color: nutritionMetrics.calories.isOverBudget ? SEMANTIC.danger.base : SEMANTIC.success.base }
+                  ]}>
+                    {nutritionMetrics.calories.isOverBudget
+                      ? `+${Math.abs(nutritionMetrics.calories.remaining)}`
+                      : nutritionMetrics.calories.remaining}
                   </Text>
-                  <Text style={styles.calorieLabel}>remaining</Text>
+                  <Text style={styles.calorieLabel}>
+                    {nutritionMetrics.calories.isOverBudget ? 'over' : 'remaining'}
+                  </Text>
                 </View>
                 <View style={styles.calorieDivider} />
                 <View style={styles.calorieItem}>

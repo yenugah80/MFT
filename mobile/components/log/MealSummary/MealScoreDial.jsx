@@ -9,68 +9,120 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
 import { useTheme } from '../../../providers/ThemeProvider';
+import { calculateMicroBonus } from '../../../utils/macroBalance';
 
 /**
  * Calculate meal score from nutrition data
- * Factors: confidence, macro balance, nutrient density
+ *
+ * DESIGN PHILOSOPHY: Nutritional quality matters most
+ * - Macro balance is the PRIMARY factor (not AI confidence)
+ * - Confidence only affects a small penalty for uncertainty
+ * - Carb-heavy, protein-deficient meals should NOT score "Excellent"
  */
 function calculateMealScore(item) {
   if (!item) return 50;
 
-  const scores = [];
-  const weights = [];
-
-  // 1. Confidence score (30% weight)
-  const confidence = item.confidence || 0.7;
-  scores.push(confidence * 100);
-  weights.push(0.3);
-
-  // 2. Macro balance score (40% weight)
   const macros = item.macros || {};
   const protein = macros.protein_g || 0;
   const carbs = macros.carbs_g || 0;
   const fat = macros.fat_g || 0;
+  const fiber = macros.fiber_g || 0;
+  const sugar = macros.sugar_g || 0;
   const calories = macros.calories_kcal || 0;
 
-  if (calories > 0) {
-    // Calculate macro percentages
-    const proteinCal = protein * 4;
-    const carbsCal = carbs * 4;
-    const fatCal = fat * 9;
-    const totalCal = proteinCal + carbsCal + fatCal || 1;
+  // If no calorie data, return neutral score
+  if (calories <= 0) return 50;
 
-    const proteinPct = (proteinCal / totalCal) * 100;
-    const carbsPct = (carbsCal / totalCal) * 100;
-    const fatPct = (fatCal / totalCal) * 100;
+  // Calculate macro percentages by calories
+  const proteinCal = protein * 4;
+  const carbsCal = carbs * 4;
+  const fatCal = fat * 9;
+  const totalCal = proteinCal + carbsCal + fatCal || 1;
 
-    // Ideal ranges: protein 15-35%, carbs 45-65%, fat 20-35%
-    let macroScore = 100;
-    if (proteinPct < 10) macroScore -= 20;
-    else if (proteinPct > 40) macroScore -= 10;
-    if (carbsPct > 70) macroScore -= 15;
-    if (fatPct > 45) macroScore -= 20;
-    else if (fatPct < 15) macroScore -= 10;
+  const proteinPct = (proteinCal / totalCal) * 100;
+  const carbsPct = (carbsCal / totalCal) * 100;
+  const fatPct = (fatCal / totalCal) * 100;
 
-    scores.push(Math.max(0, macroScore));
-    weights.push(0.4);
+  // =========================================================================
+  // 1. MACRO BALANCE SCORE (60% weight) - This is the PRIMARY factor
+  // =========================================================================
+  // Ideal ranges: protein 20-35%, carbs 40-55%, fat 25-35%
+  let macroScore = 100;
+
+  // PROTEIN penalties (stricter)
+  if (proteinPct < 10) {
+    macroScore -= 35; // Severely protein-deficient
+  } else if (proteinPct < 15) {
+    macroScore -= 25; // Low protein
+  } else if (proteinPct < 20) {
+    macroScore -= 10; // Slightly low protein
+  } else if (proteinPct > 45) {
+    macroScore -= 15; // Very high protein (less of a concern)
   }
 
-  // 3. Fiber score (15% weight)
-  const fiber = macros.fiber_g || 0;
-  const fiberScore = Math.min(100, (fiber / 5) * 100); // 5g fiber = 100%
-  scores.push(fiberScore);
-  weights.push(0.15);
+  // CARB penalties (stricter for carb-dominant meals)
+  if (carbsPct > 75) {
+    macroScore -= 30; // Severely carb-heavy (like dal+rice at 77%)
+  } else if (carbsPct > 65) {
+    macroScore -= 20; // Carb-heavy
+  } else if (carbsPct > 55) {
+    macroScore -= 5;  // Slightly high carbs
+  } else if (carbsPct < 30) {
+    macroScore -= 10; // Very low carb (keto-ish)
+  }
 
-  // 4. Low sugar score (15% weight)
-  const sugar = macros.sugar_g || 0;
-  const sugarScore = Math.max(0, 100 - (sugar / 20) * 100); // <20g sugar = good
-  scores.push(sugarScore);
-  weights.push(0.15);
+  // FAT penalties (important for satiety and nutrient absorption)
+  if (fatPct < 10) {
+    macroScore -= 25; // Severely low fat (dal+rice ~2.5%)
+  } else if (fatPct < 20) {
+    macroScore -= 15; // Low fat
+  } else if (fatPct > 50) {
+    macroScore -= 25; // Very high fat
+  } else if (fatPct > 40) {
+    macroScore -= 10; // High fat
+  }
 
-  // Calculate weighted average
-  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-  const weightedSum = scores.reduce((sum, score, i) => sum + score * weights[i], 0);
-  return Math.round(weightedSum / totalWeight);
+  macroScore = Math.max(0, macroScore);
+
+  // =========================================================================
+  // 2. FIBER SCORE (20% weight) - Important for gut health
+  // =========================================================================
+  // 8g fiber per meal = excellent (3 meals = 24g daily)
+  const fiberScore = Math.min(100, (fiber / 8) * 100);
+
+  // =========================================================================
+  // 3. SUGAR SCORE (15% weight) - Penalize added sugars
+  // =========================================================================
+  // <5g sugar = 100%, >25g = 0%
+  const sugarScore = Math.max(0, 100 - (sugar / 25) * 100);
+
+  // =========================================================================
+  // 4. CONFIDENCE MODIFIER (5% weight) - Minor adjustment, NOT primary factor
+  // =========================================================================
+  // Low confidence slightly reduces score (uncertainty about data)
+  const confidence = item.confidence || 0.7;
+  const confidenceModifier = confidence >= 0.7 ? 100 : confidence * 143; // 0.7+ = full score
+
+  // =========================================================================
+  // 5. MICRONUTRIENT BONUS (up to 10 points) - Rewards nutrient-dense meals
+  // =========================================================================
+  // Bonus for meals rich in key micronutrients (calcium, iron, vitamins, etc.)
+  const microBonus = calculateMicroBonus(item.micros);
+
+  // =========================================================================
+  // CALCULATE FINAL SCORE
+  // =========================================================================
+  // Base score (90% max) + micro bonus (10% max)
+  const baseScore =
+    macroScore * 0.55 +
+    fiberScore * 0.20 +
+    sugarScore * 0.15 +
+    confidenceModifier * 0.05;
+
+  // Add micro bonus (up to 10 points)
+  const finalScore = Math.min(100, baseScore + microBonus);
+
+  return Math.round(finalScore);
 }
 
 /**

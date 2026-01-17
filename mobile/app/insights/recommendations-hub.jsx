@@ -236,8 +236,8 @@ export default function RecommendationsHub() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const message = wellnessScore
-      ? `My wellness score is ${wellnessScore.overall}/100 today! 🌟\n\nTracked with MyFoodTracker`
-      : 'Building my wellness journey with MyFoodTracker! 💪';
+      ? `My wellness score is ${wellnessScore.overall}/100 today!\n\nTracked with MyFoodTracker`
+      : 'Building my wellness journey with MyFoodTracker!';
 
     try {
       await Share.share({ message });

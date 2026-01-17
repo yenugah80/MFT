@@ -472,6 +472,183 @@ export function useAIAnalysis({ enabled = true, days = 14 } = {}) {
 }
 
 /**
+ * usePersonalizedPatterns - Fetch deep behavioral patterns from correlation engine
+ *
+ * Returns personalized temporal patterns like:
+ * - "When you skip breakfast, your mood crashes around 3pm"
+ * - "High-sugar dinners make you anxious the next morning"
+ * - "On days you drink enough water, you're less irritable"
+ * - "Morning workouts give you energy that lasts all day"
+ *
+ * Features:
+ * - Tries backend API first for server-computed correlations
+ * - Falls back to client-side pattern engine if backend fails
+ * - Uses local data from useFoodLog, useMoodTrends, useWaterLog
+ * - Bayesian confidence with scientific priors
+ *
+ * @param {Object} options
+ * @param {boolean} options.enabled - Whether to auto-fetch (default: true)
+ * @param {number} options.windowDays - Lookback period in days (default: 21)
+ */
+export function usePersonalizedPatterns({ enabled = true, windowDays = 21 } = {}) {
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    isFetching
+  } = useQuery({
+    queryKey: ['insights', 'personalized-patterns', windowDays],
+    queryFn: async () => {
+      // Try backend API first
+      try {
+        console.log('[useInsights] Fetching personalized patterns from backend...');
+        const response = await apiClient.get('/insights/patterns/personalized', {
+          params: { windowDays }
+        });
+
+        // If backend returns patterns, use them
+        if (response?.patterns?.length > 0) {
+          console.log('[useInsights] Personalized patterns received from backend:', response.patternsFound || 0, 'patterns');
+          return { ...response, source: 'backend' };
+        }
+
+        // Backend returned no patterns, try client-side analysis
+        console.log('[useInsights] Backend returned no patterns, trying client-side analysis...');
+        throw new Error('No patterns from backend');
+      } catch (backendErr) {
+        // Backend failed or returned no patterns - use client-side engine
+        console.log('[useInsights] Using client-side pattern engine as fallback');
+
+        try {
+          // Import the client-side pattern engine dynamically
+          const { analyzePersonalizedPatterns } = await import('../utils/personalizedPatternEngine');
+
+          // Fetch data from local storage/cache via API
+          const [foodResponse, moodResponse, waterResponse] = await Promise.allSettled([
+            apiClient.get('/food/history', { params: { limit: 100 } }),
+            apiClient.get('/mood/trends', { params: { days: windowDays } }),
+            apiClient.get('/water/history', { params: { limit: 100 } }),
+          ]);
+
+          // Extract data safely
+          const foodLogs = foodResponse.status === 'fulfilled' ? (foodResponse.value?.logs || foodResponse.value?.data || []) : [];
+          const moodLogs = moodResponse.status === 'fulfilled' ? (moodResponse.value?.data?.data || moodResponse.value?.data || []) : [];
+          const waterLogs = waterResponse.status === 'fulfilled' ? (waterResponse.value?.logs || waterResponse.value?.data || []) : [];
+          const activityLogs = []; // Activity logs not yet implemented
+
+          console.log('[useInsights] Client-side data loaded:', {
+            food: foodLogs.length,
+            mood: moodLogs.length,
+            water: waterLogs.length,
+          });
+
+          // Run client-side analysis
+          const result = analyzePersonalizedPatterns({
+            foodLogs,
+            moodLogs,
+            waterLogs,
+            activityLogs,
+          }, {
+            minConfidence: 0.4,
+            maxPatterns: 10,
+          });
+
+          // Update dataQuality with patternsFound
+          if (result.dataQuality) {
+            result.dataQuality.patternsFound = result.patternsFound || 0;
+          }
+
+          console.log('[useInsights] Client-side patterns computed:', result.patternsFound || 0, 'patterns');
+          return { ...result, source: 'client' };
+
+        } catch (clientErr) {
+          console.error('[useInsights] Client-side analysis failed:', clientErr);
+          // Return empty state instead of throwing
+          return {
+            success: false,
+            hasEnoughData: false,
+            patterns: [],
+            categories: {
+              mealTiming: [],
+              nextDayCarryover: [],
+              hydration: [],
+              activity: [],
+              general: [],
+            },
+            dataQuality: { score: 0, label: 'insufficient', patternsFound: 0 },
+            topInsight: null,
+            patternsFound: 0,
+            source: 'none',
+            message: 'Unable to analyze patterns. Please try again later.',
+          };
+        }
+      }
+    },
+    enabled,
+    staleTime: STALE_TIME * 2, // 10 minutes - patterns don't change quickly
+    gcTime: CACHE_TIME * 2, // 60 minutes cache
+    retry: 1,
+    retryDelay: 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  // Get patterns by category for easy UI grouping
+  const categories = data?.categories || {
+    mealTiming: [],
+    nextDayCarryover: [],
+    hydration: [],
+    activity: [],
+    general: [],
+  };
+
+  // Flatten all patterns for list display
+  const allPatterns = data?.patterns || [];
+
+  // Get top insight (most confident/impactful)
+  const topInsight = data?.topInsight || null;
+
+  return {
+    // All patterns
+    patterns: allPatterns,
+    patternsFound: data?.patternsFound || 0,
+
+    // Grouped by category
+    categories,
+    mealTimingPatterns: categories.mealTiming,
+    nextDayCarryoverPatterns: categories.nextDayCarryover,
+    hydrationPatterns: categories.hydration,
+    activityPatterns: categories.activity,
+
+    // Top insight for featured display
+    topInsight,
+
+    // Data quality info
+    dataQuality: data?.dataQuality || { score: 0, label: 'insufficient', patternsFound: 0 },
+    hasEnoughData: data?.hasEnoughData ?? false,
+
+    // Window info
+    windowDays: data?.windowDays || windowDays,
+
+    // Source info (backend vs client)
+    source: data?.source || 'unknown',
+
+    // Loading state
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+
+    // Convenience booleans
+    hasPatterns: allPatterns.length > 0,
+    hasMealTimingPatterns: categories.mealTiming?.length > 0,
+    hasHydrationPatterns: categories.hydration?.length > 0,
+    hasActivityPatterns: categories.activity?.length > 0,
+    hasCarryoverPatterns: categories.nextDayCarryover?.length > 0,
+  };
+}
+
+/**
  * useInsights - Combined hook for all insights
  * Convenience hook that fetches all insight types at once
  * @param {Object} options

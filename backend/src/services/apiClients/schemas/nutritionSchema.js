@@ -1,10 +1,165 @@
 /**
  * Nutrition Analysis Schema Normalization
  * Validates and normalizes AI responses to ensure data quality
+ * Supports both single-item and multi-item (plate scan) formats
  */
 
 /**
- * Normalize and validate nutrition analysis response
+ * Normalize multi-item image analysis response
+ * NEW: Handles the array-based format from multi-item plate scanning
+ * @param {Object} rawData - Raw AI response with items array
+ * @returns {Object} Normalized response with items array and totals
+ */
+export function normalizeMultiItemAnalysis(rawData) {
+  if (!rawData || typeof rawData !== 'object') {
+    throw new Error('Invalid nutrition analysis data: expected object');
+  }
+
+  // Check if this is the new multi-item format
+  if (rawData.items && Array.isArray(rawData.items)) {
+    console.log(`[Schema] Multi-item format detected: ${rawData.items.length} items`);
+
+    const normalizedItems = rawData.items.map((item, idx) => {
+      try {
+        return normalizeMultiItemEntry(item, idx);
+      } catch (err) {
+        console.error(`[Schema] Failed to normalize item ${idx}:`, err.message);
+        return null;
+      }
+    }).filter(Boolean);
+
+    // Calculate totals from items
+    const totals = {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      fiber: 0,
+      sugar: 0,
+      sodium: 0,
+      micros: {}
+    };
+
+    normalizedItems.forEach(item => {
+      totals.calories += item.macros?.calories || 0;
+      totals.protein += item.macros?.protein || 0;
+      totals.carbs += item.macros?.carbs || 0;
+      totals.fat += item.macros?.fat || 0;
+      totals.fiber += item.macros?.fiber || 0;
+      totals.sugar += item.macros?.sugar || 0;
+      totals.sodium += item.macros?.sodium || 0;
+
+      // Aggregate micros
+      if (item.micros) {
+        Object.entries(item.micros).forEach(([key, val]) => {
+          if (!totals.micros[key]) {
+            totals.micros[key] = { value: 0, unit: val.unit || 'mg' };
+          }
+          totals.micros[key].value += val.value || 0;
+        });
+      }
+    });
+
+    return {
+      isMultiItem: true,
+      items: normalizedItems,
+      totals,
+      mealSummary: {
+        totalItems: normalizedItems.length,
+        totalCalories: Math.round(totals.calories),
+        dominantCuisine: rawData.mealSummary?.dominantCuisine || 'Mixed',
+        mealType: rawData.mealSummary?.mealType || 'meal'
+      }
+    };
+  }
+
+  // Fallback: Single item format (legacy) - convert to multi-item structure
+  console.log('[Schema] Single-item format detected, converting to multi-item structure');
+  const singleItem = normalizeNutritionAnalysis(rawData);
+
+  return {
+    isMultiItem: false,
+    items: [{
+      name: singleItem.foodName,
+      description: singleItem.description,
+      portion: {
+        amount: 1,
+        unit: 'serving',
+        estimatedGrams: singleItem.portionGrams || 100
+      },
+      macros: {
+        calories: singleItem.calories,
+        protein: singleItem.protein,
+        carbs: singleItem.carbs,
+        fat: singleItem.fats,
+        fiber: singleItem.fiber,
+        sugar: singleItem.sugar,
+        sodium: singleItem.sodium
+      },
+      micros: singleItem.micros,
+      confidence: singleItem.confidence,
+      ingredients: singleItem.ingredients,
+      isComplex: singleItem.isComplex
+    }],
+    totals: {
+      calories: singleItem.calories,
+      protein: singleItem.protein,
+      carbs: singleItem.carbs,
+      fat: singleItem.fats,
+      fiber: singleItem.fiber,
+      sugar: singleItem.sugar,
+      sodium: singleItem.sodium,
+      micros: singleItem.micros
+    },
+    mealSummary: {
+      totalItems: 1,
+      totalCalories: Math.round(singleItem.calories),
+      dominantCuisine: 'Unknown',
+      mealType: singleItem.mealType || 'meal'
+    }
+  };
+}
+
+/**
+ * Normalize a single item from multi-item response
+ * @param {Object} item - Raw item from items array
+ * @param {number} index - Item index for error logging
+ * @returns {Object} Normalized item
+ */
+function normalizeMultiItemEntry(item, index) {
+  if (!item || typeof item !== 'object') {
+    throw new Error(`Item ${index} is not an object`);
+  }
+
+  const macros = item.macros || {};
+  const portion = item.portion || {};
+
+  return {
+    name: validateString(item.name, `Item ${index + 1}`, 1, 200),
+    description: validateString(item.description, '', 0, 500),
+    portion: {
+      amount: validateNumber(portion.amount, 1, 0, 100),
+      unit: validateString(portion.unit, 'serving', 1, 20),
+      estimatedGrams: validateNumber(portion.estimatedGrams || portion.grams, 100, 0, 5000)
+    },
+    macros: {
+      calories: validateNumber(macros.calories, 0, 0, 5000),
+      protein: validateNumber(macros.protein, 0, 0, 300),
+      carbs: validateNumber(macros.carbs, 0, 0, 500),
+      fat: validateNumber(macros.fat, 0, 0, 300),
+      fiber: validateNumber(macros.fiber, 0, 0, 100),
+      sugar: validateNumber(macros.sugar, 0, 0, 300),
+      sodium: validateNumber(macros.sodium, 0, 0, 10000)
+    },
+    micros: normalizeMicronutrients(item.micros),
+    confidence: validateConfidence(item.confidence),
+    ingredients: validateIngredients(item.ingredients),
+    isComplex: item.isComplex === true || (item.ingredients && item.ingredients.length > 1)
+  };
+}
+
+/**
+ * Normalize and validate nutrition analysis response (LEGACY single-item format)
  * @param {Object} rawData - Raw AI response
  * @returns {Object} Normalized and validated nutrition data
  */
@@ -157,7 +312,7 @@ function normalizeMicronutrients(value) {
     return {};
   }
 
-  // Accept both camelCase and snake_case formats
+  // Accept camelCase, snake_case, and suffixed formats (e.g., calcium_mg, vitaminA_mcg)
   const keyMapping = {
     // Input formats (camelCase from AI)
     'vitaminA': 'vitamin_a',
@@ -180,6 +335,18 @@ function normalizeMicronutrients(value) {
     'zinc': 'zinc',
     'sodium': 'sodium',
     'folate': 'folate',
+    // Suffixed variants (defensive - handle legacy or inconsistent AI outputs)
+    'calcium_mg': 'calcium',
+    'iron_mg': 'iron',
+    'magnesium_mg': 'magnesium',
+    'potassium_mg': 'potassium',
+    'zinc_mg': 'zinc',
+    'sodium_mg': 'sodium',
+    'vitaminA_mcg': 'vitamin_a',
+    'vitaminC_mg': 'vitamin_c',
+    'vitaminD_mcg': 'vitamin_d',
+    'vitaminB12_mcg': 'vitamin_b12',
+    'folate_mcg': 'folate',
   };
 
   // Default units for micronutrients (used when unit not provided)

@@ -62,7 +62,7 @@ export default function MealPreviewCard({
   const getConfidenceColor = () => {
     if (avgConfidence >= 0.8) return SEMANTIC.success.base;
     if (avgConfidence >= 0.6) return SEMANTIC.warning.base;
-    return SEMANTIC.error?.base || '#EF4444';
+    return SEMANTIC.danger?.base || '#EF4444';
   };
 
   return (
@@ -87,9 +87,9 @@ export default function MealPreviewCard({
                   style={styles.thumbnail}
                   resizeMode="cover"
                 />
-                {/* Confidence Badge */}
+                {/* Confidence Badge - clarifies this is food ID confidence, not nutrition accuracy */}
                 <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor() }]}>
-                  <Text style={styles.confidenceText}>{confidencePercent}%</Text>
+                  <Text style={styles.confidenceText}>ID {confidencePercent}%</Text>
                 </View>
               </View>
             ) : (

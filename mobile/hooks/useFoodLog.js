@@ -539,10 +539,24 @@ export function useFoodLog() {
         clientEventId: foodLog.clientEventId || generateClientEventId(userId),
       };
 
-      // Insert into SQLite
+      // Insert into SQLite (including fiber, sugar, sodium)
       await db.runAsync(
-        'INSERT OR REPLACE INTO food_logs (userId, foodName, calories, protein, carbs, fat, timestamp, status, clientEventId, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, newLog.foodName, newLog.calories, newLog.protein, newLog.carbs, newLog.fat, newLog.timestamp, newLog.status, newLog.clientEventId, JSON.stringify(newLog)]
+        'INSERT OR REPLACE INTO food_logs (userId, foodName, calories, protein, carbs, fat, fiber, sugar, sodium, timestamp, status, clientEventId, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          userId,
+          newLog.foodName,
+          newLog.calories,
+          newLog.protein,
+          newLog.carbs,
+          newLog.fat,
+          newLog.fiber ?? null,
+          newLog.sugar ?? null,
+          newLog.sodium ?? null,
+          newLog.timestamp,
+          newLog.status,
+          newLog.clientEventId,
+          JSON.stringify(newLog)
+        ]
       );
 
       // Update local state

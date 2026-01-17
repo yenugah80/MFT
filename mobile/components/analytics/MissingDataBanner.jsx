@@ -25,7 +25,7 @@ const SEVERITY = {
   },
   critical: {
     icon: 'warning',
-    color: SEMANTIC.error,
+    color: SEMANTIC.danger,
     bgColor: '#EF444410',
   },
 };

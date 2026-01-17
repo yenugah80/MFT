@@ -1,35 +1,30 @@
 /**
  * Food-Mood Correlation Card
  *
- * Displays bidirectional Food ↔ Mood relationship analysis
- * Based on WHO nutritional psychiatry research and user's personal data
- *
- * Design inspired by:
- * - Noom: Psychology-focused insights with clear visualizations
- * - MyFitnessPal: Nutrition tracking with impact analysis
- * - Progressive disclosure: High-level insight → tap to dive deeper
+ * Simple card showing how food affects mood
+ * Clean, user-friendly design
  */
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import CircularProgress from './CircularProgress';
-import MiniBarChart from './MiniBarChart';
-import { TEXT, BRAND, SURFACES, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
+import {
+  TEXT,
+  BRAND,
+  SURFACES,
+  SEMANTIC,
+  SHADOWS,
+  TYPOGRAPHY,
+  SPACING,
+  RADIUS,
+  VIBRANT_WELLNESS,
+} from '../../constants/premiumTheme';
 import { analyzeMultiFactorCorrelations } from '../../utils/multiFactorAnalytics';
 
-/**
- * FoodMoodCorrelationCard
- *
- * @param {Array} foodLogs - User's food logs
- * @param {Array} moodLogs - User's mood logs
- * @param {Array} waterLogs - User's water logs
- * @param {boolean} compact - Compact mode for dashboard (default true)
- */
 export default function FoodMoodCorrelationCard({
   foodLogs = [],
   moodLogs = [],
@@ -49,18 +44,26 @@ export default function FoodMoodCorrelationCard({
     });
   }, [foodLogs, moodLogs, waterLogs]);
 
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/insights/food-mood-correlation');
+  };
+
+  // Not enough data
   if (!analysis.canAnalyze) {
     return (
       <View style={styles.card}>
         <View style={styles.header}>
-          <Ionicons name="nutrition-outline" size={24} color={BRAND.primary} />
-          <Text style={styles.title}>Food → Mood</Text>
+          <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}20` }]}>
+            <Ionicons name="nutrition" size={24} color={VIBRANT_WELLNESS.nutrition.solid} />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Food & Mood</Text>
+            <Text style={styles.subtitle}>Track to see patterns</Text>
+          </View>
         </View>
-        <Text style={styles.insufficientData}>
-          {analysis.message}
-        </Text>
-        <Text style={styles.helpText}>
-          Keep logging your meals and mood to discover your personal patterns
+        <Text style={styles.emptyText}>
+          Log meals and mood to see how your food affects how you feel
         </Text>
       </View>
     );
@@ -68,18 +71,9 @@ export default function FoodMoodCorrelationCard({
 
   const { correlations } = analysis.correlations.food_mood;
 
-  // Get top 3 correlations
-  const topCorrelations = correlations
-    .sort((a, b) => Math.abs(b.effectSize) - Math.abs(a.effectSize))
-    .slice(0, 3);
-
-  // Calculate overall strength (0-100 for gauge)
-  const overallStrength = analysis.correlations.food_mood.overallStrength * 100;
-
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/food-mood-correlation');
-  };
+  // Get top correlation
+  const topCorrelation = correlations
+    .sort((a, b) => Math.abs(b.effectSize) - Math.abs(a.effectSize))[0];
 
   if (compact) {
     return (
@@ -87,382 +81,291 @@ export default function FoodMoodCorrelationCard({
         style={styles.card}
         onPress={handlePress}
         activeOpacity={0.7}
+        accessibilityLabel="Food and mood insights"
+        accessibilityRole="button"
       >
-        <LinearGradient
-          colors={[SURFACES.elevated, SURFACES.card]}
-          style={styles.gradient}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Ionicons name="nutrition-outline" size={24} color={BRAND.primary} />
-              <View>
-                <Text style={styles.title}>Food → Mood</Text>
-                <Text style={styles.subtitle}>
-                  {analysis.daysAnalyzed} days analyzed
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}20` }]}>
+            <Ionicons name="nutrition" size={24} color={VIBRANT_WELLNESS.nutrition.solid} />
           </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Food & Mood</Text>
+            <Text style={styles.subtitle}>{analysis.daysAnalyzed} days tracked</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+        </View>
 
-          {/* Insight */}
-          {topCorrelations.length > 0 ? (
-            <View style={styles.insightContainer}>
+        {topCorrelation ? (
+          <>
+            <View style={styles.insightRow}>
+              <Ionicons
+                name={topCorrelation.effectSize > 0 ? 'trending-up' : 'trending-down'}
+                size={18}
+                color={topCorrelation.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
+              />
               <Text style={styles.insightText}>
-                <Text style={styles.insightHighlight}>{topCorrelations[0].factor}</Text>
-                {' '}shows a{' '}
-                <Text style={styles.insightHighlight}>
-                  {Math.abs(topCorrelations[0].effectSize) > 0.5 ? 'strong' : 'moderate'}
-                </Text>
-                {' '}correlation with your mood
+                <Text style={styles.insightHighlight}>{topCorrelation.factor}</Text>
+                {' '}affects your mood
               </Text>
-              <View style={styles.confidenceBadge}>
-                <Ionicons name="shield-checkmark" size={14} color={SEMANTIC.success} />
-                <Text style={styles.confidenceText}>
-                  {Math.round(topCorrelations[0].confidence * 100)}% confidence
-                </Text>
-              </View>
             </View>
-          ) : (
-            <Text style={styles.noPatterns}>
-              Continue logging to discover patterns
-            </Text>
-          )}
 
-          {/* Mini visualization */}
-          {topCorrelations.length > 0 && (
-            <View style={styles.miniViz}>
+            <View style={styles.impactRow}>
               <CircularProgress
-                percentage={Math.abs(topCorrelations[0].effectSize) * 100}
-                size={60}
-                strokeWidth={6}
-                color={topCorrelations[0].effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning}
+                percentage={Math.abs(topCorrelation.effectSize) * 100}
+                size={50}
+                strokeWidth={5}
+                color={topCorrelation.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
                 showPercentage={false}
               >
                 <Ionicons
-                  name={topCorrelations[0].effectSize > 0 ? 'arrow-up' : 'arrow-down'}
-                  size={20}
-                  color={topCorrelations[0].effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning}
+                  name={topCorrelation.effectSize > 0 ? 'arrow-up' : 'arrow-down'}
+                  size={16}
+                  color={topCorrelation.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
                 />
               </CircularProgress>
-              <View style={styles.miniVizLabel}>
-                <Text style={styles.miniVizValue}>
-                  {topCorrelations[0].effectSize > 0 ? '+' : ''}
-                  {Math.round(topCorrelations[0].effectSize * 100)}%
+              <View style={styles.impactText}>
+                <Text style={styles.impactValue}>
+                  {topCorrelation.effectSize > 0 ? '+' : ''}
+                  {Math.round(topCorrelation.effectSize * 100)}%
                 </Text>
-                <Text style={styles.miniVizText}>Impact</Text>
+                <Text style={styles.impactLabel}>mood impact</Text>
               </View>
             </View>
-          )}
-        </LinearGradient>
+          </>
+        ) : (
+          <Text style={styles.emptyText}>
+            Keep logging to discover patterns
+          </Text>
+        )}
       </TouchableOpacity>
     );
   }
 
-  // Expanded view (for dedicated screen)
+  // Expanded view
+  const topCorrelations = correlations
+    .sort((a, b) => Math.abs(b.effectSize) - Math.abs(a.effectSize))
+    .slice(0, 3);
+
   return (
     <View style={styles.card}>
-      <LinearGradient
-        colors={[SURFACES.elevated, SURFACES.card]}
-        style={styles.gradient}
-      >
-        {/* Header */}
-        <View style={styles.headerExpanded}>
-          <Ionicons name="nutrition-outline" size={32} color={BRAND.primary} />
-          <View style={styles.headerTextExpanded}>
-            <Text style={styles.titleExpanded}>Food → Mood Analysis</Text>
-            <Text style={styles.subtitleExpanded}>
-              {analysis.daysAnalyzed} days • {correlations.length} factors analyzed
-            </Text>
-          </View>
+      <View style={styles.headerExpanded}>
+        <View style={[styles.iconBgLarge, { backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}20` }]}>
+          <Ionicons name="nutrition" size={32} color={VIBRANT_WELLNESS.nutrition.solid} />
         </View>
-
-        {/* Overall Strength */}
-        <View style={styles.overallSection}>
-          <Text style={styles.sectionTitle}>Overall Correlation Strength</Text>
-          <View style={styles.strengthViz}>
-            <CircularProgress
-              percentage={overallStrength}
-              size={100}
-              strokeWidth={10}
-              color={
-                overallStrength > 75 ? SEMANTIC.success :
-                overallStrength > 50 ? SEMANTIC.info :
-                SEMANTIC.warning
-              }
-            />
-            <Text style={styles.strengthLabel}>
-              {overallStrength > 75 ? 'Strong' : overallStrength > 50 ? 'Moderate' : 'Weak'}
-            </Text>
-          </View>
+        <View style={styles.headerTextExpanded}>
+          <Text style={styles.titleExpanded}>Food & Mood</Text>
+          <Text style={styles.subtitleExpanded}>
+            {analysis.daysAnalyzed} days • {correlations.length} patterns found
+          </Text>
         </View>
+      </View>
 
-        {/* Top Correlations */}
-        <View style={styles.correlationsSection}>
-          <Text style={styles.sectionTitle}>Top Food-Mood Factors</Text>
-          {topCorrelations.map((corr, index) => (
-            <View key={index} style={styles.correlationItem}>
-              <View style={styles.correlationHeader}>
-                <Text style={styles.correlationFactor}>{corr.factor}</Text>
-                <View style={[
-                  styles.effectBadge,
-                  { backgroundColor: corr.effectSize > 0 ? SEMANTIC.success + '20' : SEMANTIC.warning + '20' }
+      {/* Top Patterns */}
+      <View style={styles.patternsSection}>
+        <Text style={styles.sectionTitle}>Your Top Patterns</Text>
+        {topCorrelations.map((corr, index) => (
+          <View key={index} style={styles.patternCard}>
+            <View style={styles.patternHeader}>
+              <Text style={styles.patternName}>{corr.factor}</Text>
+              <View style={[
+                styles.effectBadge,
+                { backgroundColor: corr.effectSize > 0 ? `${SEMANTIC.success.base}15` : `${SEMANTIC.warning.base}15` }
+              ]}>
+                <Ionicons
+                  name={corr.effectSize > 0 ? 'trending-up' : 'trending-down'}
+                  size={14}
+                  color={corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
+                />
+                <Text style={[
+                  styles.effectText,
+                  { color: corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base }
                 ]}>
-                  <Ionicons
-                    name={corr.effectSize > 0 ? 'trending-up' : 'trending-down'}
-                    size={12}
-                    color={corr.effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning}
-                  />
-                  <Text style={[
-                    styles.effectText,
-                    { color: corr.effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning }
-                  ]}>
-                    {corr.effectSize > 0 ? 'Positive' : 'Negative'}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.mechanism}>{corr.mechanism}</Text>
-
-              <View style={styles.statsRow}>
-                <View style={styles.stat}>
-                  <Text style={styles.statLabel}>Effect Size</Text>
-                  <Text style={styles.statValue}>
-                    {Math.abs(corr.effectSize).toFixed(2)}
-                  </Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statLabel}>Confidence</Text>
-                  <Text style={styles.statValue}>
-                    {Math.round(corr.confidence * 100)}%
-                  </Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statLabel}>Evidence</Text>
-                  <Text style={styles.statValue}>{corr.evidenceLevel}</Text>
-                </View>
-              </View>
-
-              <View style={styles.sourcesRow}>
-                <Ionicons name="library-outline" size={12} color={TEXT.tertiary} />
-                <Text style={styles.sourcesText}>
-                  {corr.sources.join(' • ')}
+                  {corr.effectSize > 0 ? '+' : ''}{Math.round(corr.effectSize * 100)}%
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
-      </LinearGradient>
+            <Text style={styles.patternDesc}>{corr.mechanism}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Tip */}
+      <View style={styles.tipCard}>
+        <Ionicons name="bulb" size={20} color={VIBRANT_WELLNESS.nutrition.solid} />
+        <Text style={styles.tipText}>
+          Tap "View Details" for personalized food recommendations
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...SHADOWS.medium,
-  },
-  gradient: {
-    padding: 16,
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    ...SHADOWS.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: SPACING[3],
+    marginBottom: SPACING[3],
   },
-  headerLeft: {
-    flexDirection: 'row',
+  iconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginTop: 2,
   },
-  insufficientData: {
-    fontSize: 14,
-    color: TEXT.secondary,
-    marginTop: 8,
-  },
-  helpText: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  insightContainer: {
-    marginTop: 8,
-  },
-  insightText: {
-    fontSize: 14,
+  emptyText: {
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     lineHeight: 20,
   },
+
+  // Insight Row
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  insightText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+  },
   insightHighlight: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
-  confidenceBadge: {
+
+  // Impact Row
+  impactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: SEMANTIC.success + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    gap: SPACING[4],
+    backgroundColor: SURFACES.background.secondary,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
   },
-  confidenceText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: SEMANTIC.success,
-  },
-  noPatterns: {
-    fontSize: 14,
-    color: TEXT.tertiary,
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  miniViz: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.card,
-  },
-  miniVizLabel: {
+  impactText: {
     flex: 1,
   },
-  miniVizValue: {
-    fontSize: 24,
-    fontWeight: '700',
+  impactValue: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
-  miniVizText: {
-    fontSize: 12,
+  impactLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
-    marginTop: 2,
+    marginTop: SPACING[1],
   },
+
+  // Expanded View
   headerExpanded: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 24,
+    gap: SPACING[4],
+    marginBottom: SPACING[4],
+  },
+  iconBgLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTextExpanded: {
     flex: 1,
   },
   titleExpanded: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
   },
   subtitleExpanded: {
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
-    marginTop: 4,
+    marginTop: SPACING[1],
   },
-  overallSection: {
-    marginBottom: 24,
+
+  // Patterns Section
+  patternsSection: {
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: TEXT.secondary,
-    marginBottom: 12,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  strengthViz: {
-    alignItems: 'center',
-    gap: 12,
+  patternCard: {
+    backgroundColor: SURFACES.background.secondary,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    gap: SPACING[2],
   },
-  strengthLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: TEXT.primary,
-  },
-  correlationsSection: {
-    gap: 16,
-  },
-  correlationItem: {
-    backgroundColor: SURFACES.elevated,
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  correlationHeader: {
+  patternHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  correlationFactor: {
-    fontSize: 15,
-    fontWeight: '700',
+  patternName: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
     flex: 1,
   },
   effectBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    gap: SPACING[1],
+    paddingHorizontal: SPACING[2],
+    paddingVertical: SPACING[1],
+    borderRadius: RADIUS.full,
   },
   effectText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
-  mechanism: {
-    fontSize: 13,
+  patternDesc: {
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     lineHeight: 18,
   },
-  statsRow: {
+
+  // Tip Card
+  tipCard: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+    alignItems: 'center',
+    gap: SPACING[3],
+    backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}10`,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
   },
-  stat: {
+  tipText: {
     flex: 1,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: TEXT.tertiary,
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: TEXT.primary,
-  },
-  sourcesRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.card,
-  },
-  sourcesText: {
-    fontSize: 10,
-    color: TEXT.tertiary,
-    flex: 1,
-    lineHeight: 14,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
   },
 });

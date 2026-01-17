@@ -1,13 +1,13 @@
 /**
- * Insights Index - Navigation Hub
+ * Insights Index - Clean Analytics Navigation
  *
- * Central navigation point for all insight screens
- * Organized by category with visual hierarchy
+ * Simple, focused navigation to analytics screens
+ * NO duplicate wellness scores - that's on the dashboard
  *
- * Design: Apple Health/Oura inspired with clear sections
+ * Design: Clean, minimal, Apple Health inspired
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -27,46 +27,21 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  CARD_SYSTEM,
   VIBRANT_WELLNESS,
   BRAND,
   SHADOWS,
 } from '../../constants/premiumTheme';
 
 // Analytics components
-import TimeframeSelector from '../../components/analytics/TimeframeSelector';
-import PremiumCalendarStrip from '../../components/dashboard/PremiumCalendarStrip';
-
-// Hooks for calendar data
-import { useDashboard } from '../../hooks/useDashboard';
+import PersonalizedPatternsCard from '../../components/analytics/PersonalizedPatternsCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================================================
-// INSIGHT CATEGORIES
-// ============================================================================
-
-// ============================================================================
-// CLEAN INSIGHT SECTIONS - No duplicates, clear hierarchy
-// Each category has ONE dedicated screen
+// INSIGHT SECTIONS - Full structure (no duplicate wellness dashboard)
 // ============================================================================
 
 const INSIGHT_SECTIONS = [
-  {
-    title: 'Overview',
-    subtitle: 'Your complete wellness picture',
-    items: [
-      {
-        id: 'wellness-dashboard',
-        title: 'Wellness Dashboard',
-        description: 'Overall health score and personalized insights',
-        icon: 'analytics',
-        route: '/insights/recommendations-hub',
-        gradient: [BRAND.primary, BRAND.primaryLight],
-        featured: true,
-      },
-    ],
-  },
   {
     title: 'Health Analytics',
     subtitle: 'Deep dive into each category',
@@ -76,7 +51,7 @@ const INSIGHT_SECTIONS = [
         title: 'Nutrition Analytics',
         description: 'Calorie & macro tracking with goal progress',
         icon: 'nutrition',
-        route: '/insights/food-analytics', // Uses comprehensive analytics screen
+        route: '/insights/food-analytics',
         gradient: VIBRANT_WELLNESS.nutrition.gradient,
       },
       {
@@ -84,7 +59,7 @@ const INSIGHT_SECTIONS = [
         title: 'Activity Analytics',
         description: 'CDC guidelines progress and movement patterns',
         icon: 'fitness',
-        route: '/insights/activity-analytics', // Uses comprehensive analytics screen
+        route: '/insights/activity-analytics',
         gradient: VIBRANT_WELLNESS.activity.gradient,
       },
       {
@@ -92,7 +67,7 @@ const INSIGHT_SECTIONS = [
         title: 'Hydration Analytics',
         description: 'Daily water intake and hydration patterns',
         icon: 'water',
-        route: '/insights/hydration-analytics', // Uses comprehensive analytics screen
+        route: '/insights/hydration-analytics',
         gradient: VIBRANT_WELLNESS.hydration.gradient,
       },
       {
@@ -109,6 +84,15 @@ const INSIGHT_SECTIONS = [
     title: 'Correlations',
     subtitle: 'How your habits connect',
     items: [
+      {
+        id: 'mood-hydration',
+        title: 'Mood & Hydration',
+        description: 'How hydration affects how you feel',
+        icon: 'water',
+        route: '/insights/mood-hydration',
+        gradient: ['#0EA5E9', '#38BDF8'],
+        isNew: true,
+      },
       {
         id: 'multi-factor',
         title: 'Multi-Factor Analysis',
@@ -157,10 +141,6 @@ const INSIGHT_SECTIONS = [
 
 export default function InsightsIndex() {
   const router = useRouter();
-  const [timeframe, setTimeframe] = useState('weekly');
-
-  // Dashboard data for calendar
-  const { data: dashboard } = useDashboard();
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -182,6 +162,8 @@ export default function InsightsIndex() {
         options={{
           headerShown: true,
           title: 'Insights',
+          headerStyle: { backgroundColor: SURFACES.background.primary },
+          headerTintColor: TEXT.primary,
           headerLeft: () => (
             <TouchableOpacity
               onPress={handleBack}
@@ -208,23 +190,31 @@ export default function InsightsIndex() {
           </Text>
         </View>
 
-        {/* Timeframe Selector */}
-        <TimeframeSelector
-          selected={timeframe}
-          onSelect={setTimeframe}
-          style={styles.timeframeSelector}
-        />
-
-        {/* Calendar View - Historical data at a glance */}
-        <View style={styles.calendarSection}>
-          <PremiumCalendarStrip
-            data={dashboard?.calendarData || {}}
-            currentStreak={dashboard?.gamification?.currentStreak || 0}
+        {/* Personalized Patterns Card - Deep behavioral insights */}
+        <View style={styles.patternsSection}>
+          <PersonalizedPatternsCard
+            compact={true}
+            limit={3}
+            onPatternPress={(pattern) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const routes = {
+                'meal-timing': '/insights/food-mood-correlation',
+                'next-day-carryover': '/insights/food-mood-correlation',
+                'hydration': '/insights/hydration-analytics',
+                'activity': '/insights/activity-mood',
+              };
+              const route = routes[pattern.category] || '/insights/multi-factor-analytics';
+              router.push(route);
+            }}
+            onViewAll={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/insights/multi-factor-analytics');
+            }}
           />
         </View>
 
-        {/* Sections */}
-        {INSIGHT_SECTIONS.map((section, sectionIndex) => (
+        {/* All Sections */}
+        {INSIGHT_SECTIONS.map((section) => (
           <View key={section.title} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -244,10 +234,18 @@ export default function InsightsIndex() {
           </View>
         ))}
 
-        {/* Footer */}
+        {/* Footer with Legal Disclaimer */}
         <View style={styles.footer}>
+          <View style={styles.disclaimerContainer}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={TEXT.muted} />
+            <Text style={styles.disclaimerText}>
+              These insights are for informational purposes only and are not medical advice.
+              Patterns shown are based on your personal data. Consult a healthcare professional
+              for health concerns.
+            </Text>
+          </View>
           <Text style={styles.footerText}>
-            Insights are generated from your logged data
+            Insights improve with more logged data
           </Text>
         </View>
       </ScrollView>
@@ -260,36 +258,6 @@ export default function InsightsIndex() {
 // ============================================================================
 
 function InsightItem({ item, onPress, isLast }) {
-  if (item.featured) {
-    return (
-      <TouchableOpacity
-        onPress={onPress}
-        style={styles.featuredItem}
-        activeOpacity={0.8}
-        accessibilityLabel={item.title}
-        accessibilityHint={item.description}
-      >
-        <LinearGradient
-          colors={item.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.featuredGradient}
-        >
-          <View style={styles.featuredIcon}>
-            <Ionicons name={item.icon} size={32} color={TEXT.white} />
-          </View>
-          <View style={styles.featuredContent}>
-            <Text style={styles.featuredTitle}>{item.title}</Text>
-            <Text style={styles.featuredDescription}>{item.description}</Text>
-          </View>
-          <View style={styles.featuredArrow}>
-            <Ionicons name="arrow-forward" size={20} color="rgba(255,255,255,0.8)" />
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    );
-  }
-
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -303,7 +271,14 @@ function InsightItem({ item, onPress, isLast }) {
       </View>
 
       <View style={styles.itemContent}>
-        <Text style={styles.itemTitle}>{item.title}</Text>
+        <View style={styles.itemTitleRow}>
+          <Text style={styles.itemTitle}>{item.title}</Text>
+          {item.isNew && (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>NEW</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.itemDescription} numberOfLines={1}>
           {item.description}
         </Text>
@@ -351,16 +326,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Timeframe Selector
-  timeframeSelector: {
+  // Personalized Patterns Section
+  patternsSection: {
     marginHorizontal: SPACING[4],
     marginTop: SPACING[3],
-  },
-
-  // Calendar Section
-  calendarSection: {
-    marginHorizontal: SPACING[4],
-    marginTop: SPACING[4],
   },
 
   // Section
@@ -392,44 +361,6 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
 
-  // Featured Item
-  featuredItem: {
-    marginBottom: SPACING[3],
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    ...SHADOWS.md,
-  },
-  featuredGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING[4],
-  },
-  featuredIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING[3],
-  },
-  featuredContent: {
-    flex: 1,
-  },
-  featuredTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-    marginBottom: 4,
-  },
-  featuredDescription: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: 'rgba(255,255,255,0.85)',
-  },
-  featuredArrow: {
-    padding: SPACING[2],
-  },
-
   // Regular Item
   item: {
     flexDirection: 'row',
@@ -451,11 +382,28 @@ const styles = StyleSheet.create({
   itemContent: {
     flex: 1,
   },
+  itemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: 2,
+  },
   itemTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
-    marginBottom: 2,
+  },
+  newBadge: {
+    backgroundColor: '#0EA5E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  newBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.5,
   },
   itemDescription: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -467,6 +415,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SPACING[6],
     paddingHorizontal: SPACING[4],
+  },
+  disclaimerContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    marginBottom: SPACING[3],
+    gap: SPACING[2],
+  },
+  disclaimerText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.muted,
+    lineHeight: 16,
   },
   footerText: {
     fontSize: TYPOGRAPHY.size.xs,

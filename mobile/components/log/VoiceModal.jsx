@@ -152,9 +152,10 @@ function getConfidenceColor(confidence) {
 }
 
 function getConfidenceLabel(confidence) {
-  if (confidence >= 0.8) return 'High Confidence';
-  if (confidence >= 0.6) return 'Medium Confidence';
-  return 'Low Confidence';
+  // Clarify this is food recognition confidence, not nutrition accuracy
+  if (confidence >= 0.8) return 'Clear Recognition';
+  if (confidence >= 0.6) return 'Partial Recognition';
+  return 'Uncertain Recognition';
 }
 
 async function triggerHaptic(type = 'light') {

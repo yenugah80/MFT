@@ -99,8 +99,12 @@ export function useWaterLog() {
       throw new Error('Amount seems unrealistic (max 5L per entry)');
     }
 
-    // Validate beverage type
-    const validBeverageTypes = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte', 'smoothie', 'soda', 'sparkling', 'coconut', 'herbal', 'sports'];
+    // Validate beverage type - must match keys in BEVERAGE_TYPES
+    const validBeverageTypes = [
+      'water', 'sparkling', 'coffee', 'tea', 'herbal', 'juice',
+      'milk', 'electrolyte', 'coconut', 'smoothie', 'soda', 'sports',
+      'energy', 'alcohol_beer', 'alcohol_wine', 'alcohol_spirits'
+    ];
     if (!validBeverageTypes.includes(beverageType)) {
       console.warn('Invalid beverage type, defaulting to water:', beverageType);
       beverageType = 'water';

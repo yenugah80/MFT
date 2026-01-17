@@ -15,63 +15,1246 @@
  *
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
+  Animated,
   ScrollView,
+  Alert,
+  PanResponder,
+  ActivityIndicator,
   AccessibilityInfo,
   TextInput,
-  TouchableOpacity,
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import HydrationProgressRing from './hydration/HydrationProgressRing';
-import HydrationHistorySection from './hydration/HydrationHistorySection';
-import Confetti from './hydration/HydrationConfetti';
-import { BeverageChip, PremiumQuickAddButton } from './hydration/HydrationInputs';
-import { UndoToast, MilestoneToast } from './hydration/HydrationToasts';
+import Svg, {
+  Defs,
+  LinearGradient as SvgGradient,
+  Stop,
+  Circle,
+} from 'react-native-svg';
 
-import { TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS } from '../constants/premiumTheme';
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-// ============================================================================
-// CONSTANTS & CONFIG - Using single source of truth
-// ============================================================================
 import {
-  BEVERAGE_TYPES,
-  QUICK_ADD_SIZES,
-  HYDRATION_MILESTONES as MILESTONES,
-  getBeverageWarning,
-  getPairingRecommendation,
-  shouldAvoidBeverage,
-} from '../constants/beverageConstants';
+  TEXT,
+  SEMANTIC,
+  TYPOGRAPHY,
+  SPACING,
+  RADIUS,
+  SHADOWS,
+  ICON_SIZES,
+  SURFACES,
+  BRAND,
+} from '../constants/premiumTheme';
+
+// ============================================================================
+// CONSTANTS & CONFIG
+// ============================================================================
+
+const BEVERAGE_TYPES = {
+  water: {
+    hydrationFactor: 1.0,
+    icon: 'water',
+    color: '#3B82F6',
+    label: 'Water',
+    description: '100% hydration credit',
+  },
+  coffee: {
+    hydrationFactor: 0.5,
+    icon: 'cafe',
+    color: '#78350F',
+    label: 'Coffee',
+    description: 'Partial hydration credit',
+  },
+  tea: {
+    hydrationFactor: 0.9,
+    icon: 'leaf',
+    color: '#059669',
+    label: 'Tea',
+    description: 'Lightly hydrating',
+  },
+  juice: {
+    hydrationFactor: 0.8,
+    icon: 'wine',
+    color: '#F59E0B',
+    label: 'Juice',
+    description: 'Hydrating with sugars',
+  },
+  milk: {
+    hydrationFactor: 0.9,
+    icon: 'nutrition',
+    color: '#FBBF24',
+    label: 'Milk',
+    description: 'Hydrating with protein',
+  },
+  electrolyte: {
+    hydrationFactor: 1.1,
+    icon: 'flash',
+    color: '#0EA5E9',
+    label: 'Electrolyte',
+    description: 'Hydration boost',
+  },
+};
+
+const QUICK_ADD_SIZES = [
+  { ml: 150, label: 'Small', subtitle: '150ml', icon: 'water-outline' },
+  { ml: 250, label: 'Cup', subtitle: '250ml', icon: 'water' },
+  { ml: 500, label: 'Bottle', subtitle: '500ml', icon: 'water' },
+  { ml: 750, label: 'Large', subtitle: '750ml', icon: 'water' },
+];
+
+const MILESTONES = [25, 50, 75, 100];
 
 // Gamified tips and motivational messages
 const HYDRATION_TIPS = [
-  { emoji: '💡', message: 'Drink water before meals to aid digestion!' },
-  { emoji: '🧠', message: 'Your brain is 75% water - stay sharp!' },
-  { emoji: '⚡', message: 'Hydration boosts energy levels naturally!' },
-  { emoji: '✨', message: 'Water helps maintain healthy skin glow!' },
-  { emoji: '🏃', message: 'Drink water 30 mins before exercise!' },
-  { emoji: '🌙', message: 'Hydrate early, sleep better tonight!' },
-  { emoji: '💪', message: 'Water aids muscle recovery!' },
-  { emoji: '🎯', message: 'Consistency is key - you are doing great!' },
-  { emoji: '🔥', message: 'Water helps regulate body temperature!' },
-  { emoji: '🌟', message: 'Small sips throughout the day work best!' },
-  { emoji: '🎪', message: 'Thirsty? You are already slightly dehydrated!' },
-  { emoji: '🚀', message: 'Water carries nutrients to your cells!' },
-  { emoji: '💎', message: 'Clear urine = well hydrated!' },
-  { emoji: '🌊', message: 'Every sip counts toward your goal!' },
-  { emoji: '🎨', message: 'Mix it up - add lemon or cucumber!' },
+  { icon: 'bulb', message: 'Drink water before meals to aid digestion!' },
+  { icon: 'sparkles', message: 'Your brain is 75% water - stay sharp!' },
+  { icon: 'flash', message: 'Hydration boosts energy levels naturally!' },
+  { icon: 'sparkles', message: 'Water helps maintain healthy skin glow!' },
+  { icon: 'fitness', message: 'Drink water 30 mins before exercise!' },
+  { icon: 'moon', message: 'Hydrate early, sleep better tonight!' },
+  { icon: 'fitness', message: 'Water aids muscle recovery!' },
+  { icon: 'checkmark-circle', message: 'Consistency is key - you\'re doing great!' },
+  { icon: 'flame', message: 'Water helps regulate body temperature!' },
+  { icon: 'star', message: 'Small sips throughout the day work best!' },
+  { icon: 'alert-circle', message: 'Thirsty? You\'re already slightly dehydrated!' },
+  { icon: 'rocket', message: 'Water carries nutrients to your cells!' },
+  { icon: 'diamond', message: 'Clear urine = well hydrated!' },
+  { icon: 'water', message: 'Every sip counts toward your goal!' },
+  { icon: 'color-palette', message: 'Mix it up - add lemon or cucumber!' },
 ];
 
 // ============================================================================
 // CONFETTI PARTICLE - For celebration
 // ============================================================================
 
+const ConfettiParticle = ({ delay = 0 }) => {
+  const translateY = useRef(new Animated.Value(-20)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const randomX = (Math.random() - 0.5) * 100;
+
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: 300,
+        duration: 2000,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: randomX,
+        duration: 2000,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 2000,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rotate, {
+        toValue: Math.random() * 360,
+        duration: 2000,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+
+  return (
+    <Animated.View
+      style={[
+        styles.confettiParticle,
+        {
+          backgroundColor: color,
+          transform: [
+            { translateY },
+            { translateX },
+            { rotate: rotate.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) },
+          ],
+          opacity,
+        },
+      ]}
+    />
+  );
+};
+
+// ============================================================================
+// CELEBRATION CONFETTI
+// ============================================================================
+
+const Confetti = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.confettiContainer} pointerEvents="none">
+      {Array.from({ length: 30 }).map((_, i) => (
+        <ConfettiParticle key={i} delay={i * 50} />
+      ))}
+    </View>
+  );
+};
+
+// ============================================================================
+// LIQUID WAVE ANIMATION - Enhanced with actual wave
+// ============================================================================
+
+const LiquidWave = ({ percentage, size = 200 }) => {
+  const fillAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Fill animation - simplified, no continuous wave
+    Animated.spring(fillAnim, {
+      toValue: percentage,
+      tension: 15,
+      friction: 8,
+      useNativeDriver: false,
+    }).start();
+  }, [percentage]);
+
+  return (
+    <View style={[styles.liquidContainer, { width: size, height: size }]}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Defs>
+          <SvgGradient id="liquidGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor={SEMANTIC.info.light} stopOpacity="0.9" />
+            <Stop offset="50%" stopColor={SEMANTIC.info.base} stopOpacity="0.95" />
+            <Stop offset="100%" stopColor={SEMANTIC.info.dark} stopOpacity="1" />
+          </SvgGradient>
+        </Defs>
+
+        {/* Background circle */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={size / 2 - 4}
+          fill={`${SEMANTIC.info.base}0D`}
+          stroke={`${SEMANTIC.info.base}33`}
+          strokeWidth="2"
+        />
+
+        {/* Liquid fill - using mask instead of clipPath */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={size / 2 - 4}
+          fill="url(#liquidGradient)"
+          opacity={percentage / 100}
+        />
+
+        {/* Overlay circle border */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={size / 2 - 4}
+          fill="none"
+          stroke="rgba(255, 255, 255, 0.3)"
+          strokeWidth="3"
+        />
+      </Svg>
+
+      {/* Percentage text overlay */}
+      <View style={styles.liquidTextOverlay}>
+        <Text style={styles.liquidPercentage}>{Math.round(percentage)}%</Text>
+        <Text style={styles.liquidLabel}>Hydrated</Text>
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
+// PROGRESS RING WITH GLOW EFFECT
+// ============================================================================
+
+const ProgressRing = ({ percentage, size = 200, strokeWidth = 14, reduceMotion = false }) => {
+  const animatedProgress = useRef(new Animated.Value(0)).current;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  useEffect(() => {
+    const animConfig = reduceMotion
+      ? { duration: 250, useNativeDriver: false }
+      : { tension: 60, friction: 10, useNativeDriver: false };
+
+    Animated[reduceMotion ? 'timing' : 'spring'](animatedProgress, {
+      toValue: percentage,
+      ...animConfig,
+    }).start();
+  }, [percentage, reduceMotion]);
+
+  const strokeDashoffset = animatedProgress.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circumference, 0],
+  });
+
+  // Golden/amber color progression based on percentage
+  const getProgressColors = () => {
+    if (percentage >= 100) return { start: '#10B981', mid: '#059669', end: '#047857' }; // Emerald - goal achieved!
+    if (percentage >= 75) return { start: '#14B8A6', mid: '#0D9488', end: '#0F766E' }; // Teal - almost there
+    if (percentage >= 50) return { start: '#FBBF24', mid: '#F59E0B', end: '#D97706' }; // Amber/Gold - good progress
+    if (percentage >= 25) return { start: '#FCD34D', mid: '#FBBF24', end: '#F59E0B' }; // Golden yellow - building
+    return { start: '#FDE68A', mid: '#FCD34D', end: '#FBBF24' }; // Light gold - just started
+  };
+
+  const progressColors = getProgressColors();
+
+  return (
+    <View
+      style={[
+        styles.ringContainer,
+        { width: size, height: size },
+      ]}
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Hydration progress: ${Math.round(percentage)} percent of daily goal`}
+      accessibilityValue={{ min: 0, max: 100, now: percentage }}
+    >
+      <Svg width={size} height={size}>
+        <Defs>
+          <SvgGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={progressColors.start} stopOpacity="1" />
+            <Stop offset="50%" stopColor={progressColors.mid} stopOpacity="1" />
+            <Stop offset="100%" stopColor={progressColors.end} stopOpacity="1" />
+          </SvgGradient>
+        </Defs>
+
+        {/* Background Circle */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={`${progressColors.start}20`}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+
+        {/* Animated Progress Circle */}
+        <AnimatedCircle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="url(#ringGradient)"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+
+        {/* Milestone Markers */}
+        {MILESTONES.map((milestone) => {
+          const angle = (milestone / 100) * 360 - 90;
+          const x = size / 2 + radius * Math.cos((angle * Math.PI) / 180);
+          const y = size / 2 + radius * Math.sin((angle * Math.PI) / 180);
+          const reached = percentage >= milestone;
+
+          return (
+            <Circle
+              key={milestone}
+              cx={x}
+              cy={y}
+              r={reached ? 6 : 4}
+              fill={reached ? '#10B981' : '#E5E7EB'}
+            />
+          );
+        })}
+      </Svg>
+    </View>
+  );
+};
+
+// ============================================================================
+// SWIPEABLE TIMELINE ENTRY - Swipe to delete
+// ============================================================================
+
+const SwipeableEntry = ({ entry, onDelete, bevType }) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const deleteOpacity = useRef(new Animated.Value(0)).current;
+  const deleteScale = useRef(new Animated.Value(0.8)).current;
+  const lastHapticThreshold = useRef(0);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 10,
+      onPanResponderMove: (_, gesture) => {
+        if (gesture.dx < 0) {
+          const clampedDx = Math.max(gesture.dx, -120);
+          translateX.setValue(clampedDx);
+
+          // Progressive reveal
+          const progress = Math.min(Math.abs(clampedDx) / 100, 1);
+          deleteOpacity.setValue(progress);
+          deleteScale.setValue(0.8 + (progress * 0.2));
+
+          // Haptic at threshold
+          if (Math.abs(clampedDx) > 60 && lastHapticThreshold.current === 0) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            lastHapticThreshold.current = 1;
+          }
+        }
+      },
+      onPanResponderRelease: (_, gesture) => {
+        lastHapticThreshold.current = 0;
+
+        if (gesture.dx < -60) {
+          // Delete threshold
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          Animated.parallel([
+            Animated.timing(translateX, {
+              toValue: -400,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+            Animated.timing(deleteOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            if (onDelete) onDelete();
+          });
+        } else {
+          // Better spring bounce-back
+          Animated.parallel([
+            Animated.spring(translateX, {
+              toValue: 0,
+              tension: 100,
+              friction: 12,
+              useNativeDriver: true,
+            }),
+            Animated.spring(deleteOpacity, {
+              toValue: 0,
+              tension: 100,
+              friction: 12,
+              useNativeDriver: true,
+            }),
+            Animated.spring(deleteScale, {
+              toValue: 0.8,
+              tension: 100,
+              friction: 12,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    })
+  ).current;
+
+  // Direct tap delete option
+  const handleDirectDelete = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Delete Entry',
+      `Remove ${entry.amount}ml ${bevType.label} entry?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (onDelete) onDelete();
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <View style={styles.swipeableContainer}>
+      <Animated.View
+        style={[
+          styles.deleteBackground,
+          {
+            opacity: deleteOpacity,
+            transform: [{ scale: deleteScale }],
+          },
+        ]}
+      >
+        <Ionicons name="trash" size={ICON_SIZES.md} color={TEXT.white} />
+        <Text style={styles.deleteText}>Delete</Text>
+      </Animated.View>
+      <Animated.View
+        style={[styles.timelineEntry, { transform: [{ translateX }] }]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.timelineDot} />
+        <View style={styles.timelineIconWrapper}>
+          <Ionicons name={bevType.icon} size={18} color={bevType.color} />
+        </View>
+        <Text style={styles.timelineAmount}>{entry.amount}ml</Text>
+        <Text style={styles.timelineTime}>
+          {new Date(entry.timestamp).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </Text>
+        <TouchableOpacity
+          onPress={handleDirectDelete}
+          style={styles.timelineDeleteButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close-circle" size={20} color="#EF4444" />
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
+// ============================================================================
+// UNDO TOAST WITH HAPTIC FEEDBACK
+// ============================================================================
+
+// ============================================================================
+// PREMIUM HYDRATION SUCCESS TOAST - Celebration-style water logging feedback
+// ============================================================================
+
+const CELEBRATION_MESSAGES = {
+  morning: [
+    { icon: 'sunny', text: 'Great morning start!' },
+    { icon: 'sunny-outline', text: 'Rise & hydrate!' },
+    { icon: 'partly-sunny', text: 'Morning fuel added!' },
+  ],
+  afternoon: [
+    { icon: 'fitness', text: 'Staying strong!' },
+    { icon: 'flash', text: 'Energy boost!' },
+    { icon: 'checkmark-circle', text: 'On track!' },
+  ],
+  evening: [
+    { icon: 'moon', text: 'Evening sip logged!' },
+    { icon: 'sparkles', text: 'Winding down right!' },
+    { icon: 'star', text: 'Day well done!' },
+  ],
+  streak: [
+    { icon: 'flame', text: 'Streak on fire!' },
+    { icon: 'trophy', text: 'Champion hydrator!' },
+    { icon: 'diamond', text: 'Consistency pays!' },
+  ],
+  beverage: {
+    coffee: { icon: 'cafe', text: 'Coffee break!' },
+    tea: { icon: 'leaf', text: 'Tea time!' },
+    juice: { icon: 'wine', text: 'Fresh & fruity!' },
+    milk: { icon: 'water', text: 'Calcium boost!' },
+    electrolyte: { icon: 'flash', text: 'Electrolytes loaded!' },
+    water: { icon: 'water', text: 'Pure hydration!' },
+  },
+};
+
+const WaterRipple = ({ delay = 0 }) => {
+  const scale = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 2.5,
+          duration: 1200,
+          delay,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 1200,
+          delay,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.waterRipple,
+        {
+          transform: [{ scale }],
+          opacity,
+        },
+      ]}
+    />
+  );
+};
+
+const UndoToast = ({ visible, message, onUndo, onDismiss, amount, beverageType, streak }) => {
+  const slideAnim = useRef(new Animated.Value(100)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  // Get dynamic celebration message
+  const getCelebrationMessage = useCallback(() => {
+    const hour = new Date().getHours();
+    let timeOfDay = 'afternoon';
+    if (hour < 12) timeOfDay = 'morning';
+    else if (hour >= 18) timeOfDay = 'evening';
+
+    // Prioritize streak messages for streaks > 3
+    if (streak && streak > 3) {
+      const streakMsgs = CELEBRATION_MESSAGES.streak;
+      return streakMsgs[Math.floor(Math.random() * streakMsgs.length)];
+    }
+
+    // Beverage-specific message 40% of the time
+    if (beverageType && beverageType !== 'water' && Math.random() < 0.4) {
+      return CELEBRATION_MESSAGES.beverage[beverageType] || CELEBRATION_MESSAGES.beverage.water;
+    }
+
+    // Time-based message
+    const timeMsgs = CELEBRATION_MESSAGES[timeOfDay];
+    return timeMsgs[Math.floor(Math.random() * timeMsgs.length)];
+  }, [beverageType, streak]);
+
+  const celebration = useMemo(() => getCelebrationMessage(), [visible]);
+
+  useEffect(() => {
+    if (visible) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Reset animations
+      slideAnim.setValue(100);
+      opacityAnim.setValue(0);
+      scaleAnim.setValue(0.9);
+
+      // Entry animation
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 80,
+          friction: 6,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Subtle pulse animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.02,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      // Shimmer effect
+      Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      ).start();
+
+      const timer = setTimeout(() => {
+        dismissToast();
+      }, 4500);
+
+      return () => {
+        clearTimeout(timer);
+        pulseAnim.stopAnimation();
+        shimmerAnim.stopAnimation();
+      };
+    } else {
+      dismissToast();
+    }
+  }, [visible]);
+
+  const dismissToast = () => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 100,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      if (onDismiss) onDismiss();
+    });
+  };
+
+  if (!visible) return null;
+
+  const shimmerTranslate = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-200, 400],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.successToastContainer,
+        {
+          transform: [
+            { translateY: slideAnim },
+            { scale: Animated.multiply(scaleAnim, pulseAnim) },
+          ],
+          opacity: opacityAnim,
+        },
+      ]}
+    >
+      <LinearGradient
+        colors={['#0EA5E9', '#0284C7', '#0369A1']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.successToastGradient}
+      >
+        {/* Animated shimmer overlay */}
+        <Animated.View
+          style={[
+            styles.shimmerOverlay,
+            { transform: [{ translateX: shimmerTranslate }] },
+          ]}
+        />
+
+        {/* Water ripple effect background */}
+        <View style={styles.rippleContainer}>
+          <WaterRipple delay={0} />
+          <WaterRipple delay={400} />
+          <WaterRipple delay={800} />
+        </View>
+
+        <View style={styles.successToastContent}>
+          {/* Left: Water drop icon with amount */}
+          <View style={styles.successIconSection}>
+            <View style={styles.waterDropContainer}>
+              <Ionicons name="water" size={28} color="#FFF" />
+            </View>
+            <Text style={styles.amountText}>+{amount || 250}ml</Text>
+          </View>
+
+          {/* Center: Celebration message */}
+          <View style={styles.celebrationSection}>
+            {celebration?.icon ? (
+              <Ionicons name={celebration.icon} size={24} color="#FFF" style={styles.celebrationIcon} />
+            ) : null}
+            <Text style={styles.celebrationText}>{celebration?.text || 'Logged!'}</Text>
+            {streak > 1 ? (
+              <View style={styles.streakBadge}>
+                <Ionicons name="flame" size={12} color="#FFF" />
+                <Text style={styles.streakText}>{streak} day streak</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Right: Undo button */}
+          <TouchableOpacity
+            style={styles.successUndoButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              dismissToast();
+              if (onUndo) onUndo();
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-undo" size={16} color="rgba(255,255,255,0.9)" />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+};
+
+// ============================================================================
+// MILESTONE TOAST - Celebrates progress milestones and shows tips
+// ============================================================================
+
+const MilestoneToast = ({ milestone, visible, onDismiss, message, isFirstLog, isTip }) => {
+  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 60,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 60,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      const duration = isTip ? 4000 : 3000; // Tips stay longer
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: -100,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 0.8,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          if (onDismiss) onDismiss();
+        });
+      }, duration);
+    }
+  }, [visible, milestone, message, isTip]);
+
+  if (!visible) return null;
+
+  // Custom message or default milestone messages
+  let displayText, color;
+
+  if (message) {
+    displayText = message;
+    color = isTip ? '#6366F1' : '#10B981';
+  } else if (isFirstLog) {
+    displayText = 'Great start!';
+    color = '#10B981';
+  } else {
+    const messages = {
+      25: { text: 'Keep going!', color: '#3B82F6' },
+      50: { text: 'Halfway there!', color: '#8B5CF6' },
+      75: { text: 'Almost there!', color: '#EC4899' },
+      100: { text: 'Goal reached!', color: '#10B981' },
+    };
+    const milestoneData = messages[milestone] || messages[25];
+    displayText = milestoneData.text;
+    color = milestoneData.color;
+  }
+
+  return (
+    <Animated.View
+      style={[
+        styles.milestoneToast,
+        {
+          transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+          backgroundColor: color,
+        },
+      ]}
+    >
+      <Text style={styles.milestoneText}>{displayText}</Text>
+    </Animated.View>
+  );
+};
+
+// ============================================================================
+// EMPTY STATE - First time experience
+// ============================================================================
+
+const EmptyState = () => {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="water-outline" size={64} color="#93C5FD" />
+      </View>
+      <Text style={styles.emptyTitle}>Start Your Hydration Journey</Text>
+      <Text style={styles.emptySubtitle}>
+        Tap a quick-add button below to log your first drink!
+      </Text>
+      <View style={styles.emptyTips}>
+        <View style={styles.emptyTip}>
+          <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+          <Text style={styles.emptyTipText}>Track all beverages</Text>
+        </View>
+        <View style={styles.emptyTip}>
+          <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+          <Text style={styles.emptyTipText}>Swipe to undo entries</Text>
+        </View>
+        <View style={styles.emptyTip}>
+          <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+          <Text style={styles.emptyTipText}>Celebrate milestones</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
+// BEVERAGE CHIP - Animated Selection with Pulse
+// ============================================================================
+
+const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const bgAnim = useRef(new Animated.Value(selected ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(bgAnim, {
+      toValue: selected ? 1 : 0,
+      tension: 80,
+      friction: 10,
+      useNativeDriver: false,
+    }).start();
+  }, [selected]);
+
+  const handlePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Pulse animation
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 0.94,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    onSelect(bevKey);
+  };
+
+  const backgroundColor = bgAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SURFACES.background.secondary, `${bev.color}15`],
+  });
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[
+          styles.beverageChip,
+          selected && {
+            borderColor: bev.color,
+            ...SHADOWS.sm,
+          },
+        ]}
+        onPress={handlePress}
+        activeOpacity={1}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor, borderRadius: RADIUS.full }
+          ]}
+        />
+
+        <View style={styles.beverageChipContent}>
+          <Ionicons name={bev.icon} size={20} color={selected ? bev.color : TEXT.secondary} />
+          <Text
+            style={[
+              styles.beverageChipLabel,
+              selected && {
+                color: bev.color,
+                fontWeight: TYPOGRAPHY.weight.bold
+              },
+            ]}
+          >
+            {bev.label}
+          </Text>
+          {bev.hydrationFactor !== 1 && (
+            <View style={styles.multiplierBadge}>
+              <Text style={styles.beverageMultiplier}>
+                {Math.round(bev.hydrationFactor * 100)}%
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// ============================================================================
+// STATS CARD
+// ============================================================================
+
+const StatsCard = ({ beverageHistory, dailyGoal }) => {
+  const stats = useMemo(() => {
+    const today = beverageHistory || [];
+    const totalToday = today.reduce((sum, entry) => {
+      const hydrationLiters = Number.isFinite(entry.hydrationLiters)
+        ? entry.hydrationLiters
+        : entry.amountLiters;
+      return sum + (hydrationLiters || 0);
+    }, 0);
+    const avgPerEntry = today.length > 0 ? totalToday / today.length : 0;
+
+    const hourlyCounts = new Array(24).fill(0);
+    today.forEach(entry => {
+      const hour = new Date(entry.timestamp).getHours();
+      hourlyCounts[hour]++;
+    });
+    const peakHour = hourlyCounts.indexOf(Math.max(...hourlyCounts));
+
+    return {
+      totalToday: (totalToday * 1000).toFixed(0),
+      entriesCount: today.length,
+      avgPerEntry: (avgPerEntry * 1000).toFixed(0),
+      peakHour: peakHour >= 0 ? `${peakHour}:00` : 'N/A',
+    };
+  }, [beverageHistory]);
+
+  return (
+    <View style={styles.statsCard}>
+      <View style={styles.statsHeader}>
+        <Ionicons name="stats-chart" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
+        <Text style={styles.statsTitle}>Today's Stats</Text>
+      </View>
+
+      <View style={styles.statsGrid}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{stats.totalToday}ml</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{stats.entriesCount}</Text>
+          <Text style={styles.statLabel}>Entries</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{stats.avgPerEntry}ml</Text>
+          <Text style={styles.statLabel}>Avg/Entry</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{stats.peakHour}</Text>
+          <Text style={styles.statLabel}>Peak Time</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
+// TIMELINE WITH SWIPE-TO-DELETE
+// ============================================================================
+
+const Timeline = ({ beverageHistory, onDelete, onViewHistory }) => {
+  const timelineData = useMemo(() => {
+    const sortedHistory = [...(beverageHistory || [])].sort(
+      (a, b) => b.timestamp - a.timestamp
+    );
+
+    const periods = {
+      morning: [],
+      afternoon: [],
+      evening: [],
+      night: [],
+    };
+
+    sortedHistory.forEach(entry => {
+      const hour = new Date(entry.timestamp).getHours();
+      if (hour >= 5 && hour < 12) periods.morning.push(entry);
+      else if (hour >= 12 && hour < 17) periods.afternoon.push(entry);
+      else if (hour >= 17 && hour < 22) periods.evening.push(entry);
+      else periods.night.push(entry);
+    });
+
+    return periods;
+  }, [beverageHistory]);
+
+  const renderPeriod = (periodName, icon, data) => {
+    const totalMl = data.reduce((sum, entry) => sum + entry.amount, 0);
+    if (data.length === 0) return null;
+
+    return (
+      <View key={periodName} style={styles.timelinePeriod}>
+        <View style={styles.timelinePeriodHeader}>
+          <Ionicons name={icon} size={ICON_SIZES.sm} color={SEMANTIC.info.base} />
+          <Text style={styles.timelinePeriodName}>{periodName}</Text>
+          <Text style={styles.timelinePeriodTotal}>{totalMl}ml</Text>
+        </View>
+        <View style={styles.timelinePeriodEntries}>
+          {data.map((entry, idx) => {
+            const bevType = BEVERAGE_TYPES[entry.type] || BEVERAGE_TYPES.water;
+            return (
+              <SwipeableEntry
+                key={entry.id || idx}
+                entry={entry}
+                bevType={bevType}
+                onDelete={() => onDelete(entry)}
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.timelineContainer}>
+      <View style={styles.timelineHeader}>
+        <Ionicons name="time-outline" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
+        <Text style={styles.timelineTitle}>Timeline</Text>
+        <Text style={styles.timelineHint}>← Swipe to delete</Text>
+        {onViewHistory && (
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.selectionAsync();
+              onViewHistory();
+            }}
+            style={styles.viewHistoryButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.viewHistoryText}>History</Text>
+            <Ionicons name="chevron-forward" size={14} color={BRAND.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {renderPeriod('Morning', 'sunny', timelineData.morning)}
+      {renderPeriod('Afternoon', 'partly-sunny', timelineData.afternoon)}
+      {renderPeriod('Evening', 'moon', timelineData.evening)}
+      {renderPeriod('Night', 'moon-outline', timelineData.night)}
+    </View>
+  );
+};
+
+// ============================================================================
+// PREMIUM QUICK ADD BUTTON - With Scale Animation + Glow + Loading
+// ============================================================================
+
+const PremiumQuickAddButton = ({ size, onPress, isLoading = false, accessible, accessibilityRole, accessibilityLabel, accessibilityHint }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Scale down + glow up
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: false,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Scale up bounce then back + glow down
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 1.05,
+        tension: 300,
+        friction: 10,
+        useNativeDriver: false,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    Animated.timing(glowAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const glowColor = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(107, 78, 255, 0)', 'rgba(107, 78, 255, 0.4)'],
+  });
+
+  return (
+    <TouchableOpacity
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={onPress}
+      activeOpacity={1}
+      disabled={isLoading}
+      style={styles.quickAddTile}
+      accessible={accessible}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+    >
+      <Animated.View
+        style={[
+          styles.quickAddTileWrapper,
+          {
+            transform: [{ scale: scaleAnim }],
+            shadowColor: glowColor,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 1,
+            shadowRadius: 12,
+            elevation: 8,
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={SURFACES.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.quickAddTileGradient}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="large" color="#FFF" />
+          ) : (
+            <>
+              <Ionicons name={size.icon} size={32} color="#FFF" />
+              <Text style={styles.quickAddTileLabel}>{size.label}</Text>
+              <Text style={styles.quickAddTileSubtitle}>{size.subtitle}</Text>
+            </>
+          )}
+        </LinearGradient>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -81,6 +1264,8 @@ export default function HydrationTracker({
   onLogWater,
   onRemoveWater,
   beverageHistory = [],
+  streak = 0,
+  onViewHistory,
 }) {
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [lastEntry, setLastEntry] = useState(null);
@@ -92,10 +1277,12 @@ export default function HydrationTracker({
   const [isTipMessage, setIsTipMessage] = useState(false);
   const [logCount, setLogCount] = useState(0);
   const [shownFirstLogToast, setShownFirstLogToast] = useState(false);
-  const [customAmount, setCustomAmount] = useState('');
-  const [isCustomInputFocused, setIsCustomInputFocused] = useState(false);
   const [loadingButton, setLoadingButton] = useState(null);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [customAmount, setCustomAmount] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [isCustomLoading, setIsCustomLoading] = useState(false);
+  const customInputRef = useRef(null);
 
   // Ref to prevent concurrent operations
   const syncInFlightRef = useRef(false);
@@ -105,10 +1292,8 @@ export default function HydrationTracker({
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
   }, []);
 
-  // Guard against division by zero - default to 2L if goal is 0 or invalid
-  const safeGoal = dailyGoal > 0 ? dailyGoal : 2.0;
-  const percentage = Math.min((currentIntake / safeGoal) * 100, 100);
-  const remainingLiters = Math.max(safeGoal - currentIntake, 0);
+  const percentage = Math.min((currentIntake / dailyGoal) * 100, 100);
+  const remainingLiters = Math.max(dailyGoal - currentIntake, 0);
   const remainingMl = Math.round(remainingLiters * 1000);
   const goalReached = percentage >= 100;
 
@@ -130,7 +1315,6 @@ export default function HydrationTracker({
     }
 
     setPreviousPercentage(percentage);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage]);
 
   // Show random tips periodically (every 3 logs, not at milestones)
@@ -140,7 +1324,7 @@ export default function HydrationTracker({
 
     if (shouldShowTip) {
       const randomTip = HYDRATION_TIPS[Math.floor(Math.random() * HYDRATION_TIPS.length)];
-      setMilestoneMessage(`${randomTip.emoji} ${randomTip.message}`);
+      setMilestoneMessage(randomTip.message);
       setIsTipMessage(true);
       setShowMilestone('tip'); // Use a special key for tips
 
@@ -150,7 +1334,6 @@ export default function HydrationTracker({
         setIsTipMessage(false);
       }, 4500);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logCount]);
 
   const handleQuickAdd = useCallback(async (ml) => {
@@ -188,7 +1371,7 @@ export default function HydrationTracker({
 
       // Show "Great Start" only on first log of the day
       if (beverageHistory.length === 0 && !shownFirstLogToast) {
-        setMilestoneMessage('Great start! 🌟');
+        setMilestoneMessage('Great start!');
         setIsTipMessage(false);
         setShowMilestone('firstLog');
         setShownFirstLogToast(true);
@@ -217,6 +1400,71 @@ export default function HydrationTracker({
     }
   }, [selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater]);
 
+  // Handle custom amount submission
+  const handleCustomAdd = useCallback(async () => {
+    const ml = parseInt(customAmount, 10);
+    if (!ml || ml <= 0 || ml > 5000) {
+      Alert.alert('Invalid Amount', 'Please enter a value between 1 and 5000 ml');
+      return;
+    }
+
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    setIsCustomLoading(true);
+    Keyboard.dismiss();
+
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const bevType = BEVERAGE_TYPES[selectedBeverage];
+      const effectiveMl = ml * bevType.hydrationFactor;
+
+      const timestamp = Date.now();
+      const random1 = Math.random().toString(36).substring(2, 15);
+      const random2 = Math.random().toString(36).substring(2, 15);
+      const clientEventId = `hydration-custom-${timestamp}-${random1}-${random2}`;
+
+      const entry = {
+        amount: ml,
+        type: selectedBeverage,
+        effectiveAmount: effectiveMl,
+        timestamp,
+        clientEventId,
+      };
+
+      setLastEntry(entry);
+      setShowUndoToast(true);
+      setLogCount(prev => prev + 1);
+      setCustomAmount('');
+      setShowCustomInput(false);
+
+      if (beverageHistory.length === 0 && !shownFirstLogToast) {
+        setMilestoneMessage('Great start!');
+        setIsTipMessage(false);
+        setShowMilestone('firstLog');
+        setShownFirstLogToast(true);
+        setTimeout(() => {
+          setMilestoneMessage(null);
+          setShowMilestone(null);
+        }, 3500);
+      }
+
+      if (onLogWater) {
+        await onLogWater(entry);
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('[HydrationTracker] Error logging custom water:', error);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsCustomLoading(false);
+      setTimeout(() => {
+        syncInFlightRef.current = false;
+      }, 500);
+    }
+  }, [customAmount, selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater]);
+
   const handleUndo = useCallback(async () => {
     if (syncInFlightRef.current) return;
     syncInFlightRef.current = true;
@@ -243,35 +1491,16 @@ export default function HydrationTracker({
   }, [lastEntry, onRemoveWater, beverageHistory]);
 
   const handleSwipeDelete = useCallback(async (entry) => {
-    if (syncInFlightRef.current) {
-      console.log('[HydrationTracker] Delete blocked - sync in flight');
-      return;
-    }
+    if (syncInFlightRef.current) return;
     syncInFlightRef.current = true;
 
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      if (!entry) {
-        console.error('[HydrationTracker] Delete failed - entry is null/undefined');
-        return;
-      }
-
-      // Validate entry has required fields
-      const entryId = entry.id;
-      if (!Number.isFinite(entryId) && typeof entryId !== 'number') {
-        console.error('[HydrationTracker] Delete failed - invalid entry id:', entryId, 'entry:', entry);
-        return;
-      }
-
       if (onRemoveWater) {
-        console.log('[HydrationTracker] Deleting entry:', entryId, 'amount:', entry.amountLiters);
-        await onRemoveWater(entryId, entry.amountLiters, entry.hydrationLiters);
-      } else {
-        console.error('[HydrationTracker] Delete failed - onRemoveWater not provided');
+        if (Number.isFinite(entry?.id)) {
+          await onRemoveWater(entry.id, entry.amountLiters, entry.hydrationLiters);
+        }
       }
-    } catch (error) {
-      console.error('[HydrationTracker] Delete error:', error);
     } finally {
       setTimeout(() => {
         syncInFlightRef.current = false;
@@ -279,27 +1508,7 @@ export default function HydrationTracker({
     }
   }, [onRemoveWater]);
 
-  // Handle custom amount submission
-  const handleCustomAmountSubmit = useCallback(async () => {
-    const amount = parseInt(customAmount, 10);
-    if (!amount || amount <= 0 || amount > 5000) {
-      return; // Invalid amount
-    }
-
-    Keyboard.dismiss();
-    await handleQuickAdd(amount);
-    setCustomAmount('');
-  }, [customAmount, handleQuickAdd]);
-
-  // Quick adjust buttons for custom input
-  const adjustCustomAmount = useCallback((delta) => {
-    Haptics.selectionAsync();
-    setCustomAmount(prev => {
-      const current = parseInt(prev, 10) || 0;
-      const newAmount = Math.max(0, Math.min(5000, current + delta));
-      return newAmount > 0 ? String(newAmount) : '';
-    });
-  }, []);
+  const isEmpty = beverageHistory.length === 0;
 
   return (
     <View style={styles.mainContainer}>
@@ -317,7 +1526,7 @@ export default function HydrationTracker({
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.headerIconContainer}>
-                <Ionicons name="water" size={ICON_SIZES.lg} color={TEXT.white} />
+                <Ionicons name="water" size={ICON_SIZES.xl} color={TEXT.white} />
               </View>
               <View>
                 <Text style={styles.headerTitle}>Hydration Tracker</Text>
@@ -335,25 +1544,33 @@ export default function HydrationTracker({
         {/* Main Visualization */}
         <View style={styles.visualizationCard}>
           <View style={styles.progressContainer}>
-            <HydrationProgressRing
-              percentage={percentage}
-              size={160}
-              strokeWidth={12}
-              reduceMotion={reduceMotion}
-              milestones={MILESTONES}
-              styles={styles}
-            />
+            <ProgressRing percentage={percentage} size={200} strokeWidth={14} reduceMotion={reduceMotion} />
 
             {/* Stats overlay inside ring */}
             <View style={styles.progressCenter}>
-              <Text style={styles.progressPercentage}>{Math.round(percentage)}%</Text>
+              <Text style={[
+                styles.progressPercentage,
+                { color: percentage >= 100 ? '#10B981' : percentage >= 75 ? '#14B8A6' : percentage >= 50 ? '#F59E0B' : '#FBBF24' }
+              ]}>
+                {Math.round(percentage)}%
+              </Text>
               <Text style={styles.progressLabel}>Hydrated</Text>
 
               {/* Next milestone indicator */}
               {percentage >= 25 && percentage < 100 && (
-                <View style={styles.nextMilestoneChip}>
-                  <Ionicons name="flag-outline" size={ICON_SIZES.xs} color={SEMANTIC.info.base} />
-                  <Text style={styles.nextMilestoneText}>
+                <View style={[
+                  styles.nextMilestoneChip,
+                  { backgroundColor: percentage >= 75 ? '#CCFBF1' : percentage >= 50 ? '#FEF3C7' : '#FEF9C3' }
+                ]}>
+                  <Ionicons
+                    name="flag-outline"
+                    size={ICON_SIZES.xs}
+                    color={percentage >= 75 ? '#14B8A6' : percentage >= 50 ? '#F59E0B' : '#FBBF24'}
+                  />
+                  <Text style={[
+                    styles.nextMilestoneText,
+                    { color: percentage >= 75 ? '#14B8A6' : percentage >= 50 ? '#F59E0B' : '#FBBF24' }
+                  ]}>
                     {MILESTONES.find(m => m > percentage)}% next
                   </Text>
                 </View>
@@ -363,22 +1580,30 @@ export default function HydrationTracker({
 
           <View style={styles.statsRow}>
             <View style={styles.mainStat}>
-              <Text style={styles.mainStatValue}>
+              <Text style={[
+                styles.mainStatValue,
+                { color: percentage >= 100 ? '#10B981' : percentage >= 75 ? '#14B8A6' : percentage >= 50 ? '#F59E0B' : '#FBBF24' }
+              ]}>
                 {(currentIntake * 1000).toFixed(0)}ml
               </Text>
               <Text style={styles.mainStatLabel}>Consumed</Text>
             </View>
             <View style={styles.mainStatDivider} />
             <View style={styles.mainStat}>
-              <Text style={styles.mainStatValue}>{remainingMl}ml</Text>
+              <Text style={[
+                styles.mainStatValue,
+                { color: percentage >= 100 ? '#10B981' : percentage >= 75 ? '#14B8A6' : percentage >= 50 ? '#F59E0B' : '#FBBF24' }
+              ]}>
+                {remainingMl}ml
+              </Text>
               <Text style={styles.mainStatLabel}>Remaining</Text>
             </View>
           </View>
 
           {goalReached && (
             <View style={styles.goalReachedBanner}>
-              <Ionicons name="sparkles" size={20} color={SEMANTIC.success.base} />
-              <Text style={styles.goalReachedText}>Amazing! Goal achieved! 🎉</Text>
+              <Ionicons name="sparkles" size={20} color="#10B981" />
+              <Text style={styles.goalReachedText}>Amazing! Goal achieved!</Text>
             </View>
           )}
         </View>
@@ -398,63 +1623,16 @@ export default function HydrationTracker({
                 bev={bev}
                 selected={selectedBeverage === key}
                 onSelect={setSelectedBeverage}
-                styles={styles}
               />
             ))}
           </ScrollView>
-
-          {/* Beverage Warning/Tip */}
-          {(() => {
-            const warning = getBeverageWarning(selectedBeverage);
-            const shouldAvoid = shouldAvoidBeverage(selectedBeverage);
-            const pairing = getPairingRecommendation(selectedBeverage);
-            const bevInfo = BEVERAGE_TYPES[selectedBeverage];
-
-            if (shouldAvoid) {
-              return (
-                <View style={styles.beverageWarning}>
-                  <Ionicons name="warning" size={16} color={SEMANTIC.warning.base} />
-                  <Text style={styles.beverageWarningText}>
-                    {bevInfo?.label || selectedBeverage} is not recommended at this time
-                  </Text>
-                </View>
-              );
-            }
-            if (warning) {
-              return (
-                <View style={styles.beverageWarning}>
-                  <Ionicons name="information-circle" size={16} color={SEMANTIC.info.base} />
-                  <Text style={styles.beverageWarningText}>{warning}</Text>
-                </View>
-              );
-            }
-            if (pairing) {
-              return (
-                <View style={styles.beverageTip}>
-                  <Ionicons name="bulb-outline" size={16} color={SEMANTIC.success.base} />
-                  <Text style={styles.beverageTipText}>
-                    Tip: {pairing.reason}
-                  </Text>
-                </View>
-              );
-            }
-            if (bevInfo?.tip && selectedBeverage !== 'water') {
-              return (
-                <View style={styles.beverageTip}>
-                  <Ionicons name="leaf-outline" size={16} color={SEMANTIC.success.base} />
-                  <Text style={styles.beverageTipText}>{bevInfo.tip}</Text>
-                </View>
-              );
-            }
-            return null;
-          })()}
         </View>
 
-        {/* Quick Add Buttons - Clean 3-button layout */}
+        {/* Quick Add Buttons - Premium with Scale Animation + Glow */}
         <View style={styles.quickAddCard}>
           <Text style={styles.sectionLabel}>Quick Add</Text>
           <View style={styles.quickAddGrid}>
-            {QUICK_ADD_SIZES.filter(s => [250, 500, 750].includes(s.ml)).map((size) => (
+            {QUICK_ADD_SIZES.map((size) => (
               <PremiumQuickAddButton
                 key={size.ml}
                 size={size}
@@ -464,124 +1642,133 @@ export default function HydrationTracker({
                 accessibilityRole="button"
                 accessibilityLabel={`Add ${size.ml} milliliters of ${BEVERAGE_TYPES[selectedBeverage].label}`}
                 accessibilityHint="Double tap to log this amount"
-                styles={styles}
               />
             ))}
           </View>
 
-          {/* Custom Amount Input */}
-          <View style={styles.customAmountSection}>
-            <Text style={styles.customAmountLabel}>Custom Amount</Text>
-            <View style={styles.customAmountRow}>
-              {/* Decrease buttons */}
-              <View style={styles.adjustButtonGroup}>
+          {/* Custom Amount Toggle */}
+          <TouchableOpacity
+            style={styles.customAmountToggle}
+            onPress={() => {
+              Haptics.selectionAsync();
+              if (!showCustomInput) {
+                setCustomAmount('100'); // Initialize with 100ml
+              }
+              setShowCustomInput(!showCustomInput);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={showCustomInput ? 'chevron-up-circle-outline' : 'options-outline'}
+              size={18}
+              color={BRAND.primary}
+            />
+            <Text style={styles.customAmountToggleText}>
+              {showCustomInput ? 'Hide custom amount' : 'Custom amount'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Custom Amount Stepper - Plus/Minus Design */}
+          {showCustomInput && (
+            <View style={styles.customStepperContainer}>
+              {/* Stepper Row */}
+              <View style={styles.stepperRow}>
+                {/* Minus Button */}
                 <TouchableOpacity
-                  style={styles.adjustButton}
-                  onPress={() => adjustCustomAmount(-100)}
-                  accessibilityLabel="Decrease by 100ml"
+                  style={[
+                    styles.stepperButton,
+                    styles.stepperButtonMinus,
+                    parseInt(customAmount || '0') <= 50 && styles.stepperButtonDisabled,
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const current = parseInt(customAmount || '100');
+                    const newVal = Math.max(50, current - 50);
+                    setCustomAmount(String(newVal));
+                  }}
+                  disabled={parseInt(customAmount || '0') <= 50}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.adjustButtonText}>-100</Text>
+                  <Ionicons
+                    name="remove"
+                    size={24}
+                    color={parseInt(customAmount || '0') <= 50 ? '#CBD5E1' : SEMANTIC.info.base}
+                  />
                 </TouchableOpacity>
+
+                {/* Value Display */}
+                <View style={styles.stepperValueContainer}>
+                  <Text style={styles.stepperValue}>{customAmount || '100'}</Text>
+                  <Text style={styles.stepperUnit}>ml</Text>
+                </View>
+
+                {/* Plus Button */}
                 <TouchableOpacity
-                  style={styles.adjustButton}
-                  onPress={() => adjustCustomAmount(-50)}
-                  accessibilityLabel="Decrease by 50ml"
+                  style={[
+                    styles.stepperButton,
+                    styles.stepperButtonPlus,
+                    parseInt(customAmount || '0') >= 2000 && styles.stepperButtonDisabled,
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const current = parseInt(customAmount || '100');
+                    const newVal = Math.min(2000, current + 50);
+                    setCustomAmount(String(newVal));
+                  }}
+                  disabled={parseInt(customAmount || '0') >= 2000}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.adjustButtonText}>-50</Text>
+                  <Ionicons
+                    name="add"
+                    size={24}
+                    color={parseInt(customAmount || '0') >= 2000 ? '#CBD5E1' : SEMANTIC.info.base}
+                  />
                 </TouchableOpacity>
               </View>
 
-              {/* Input field */}
-              <View style={[
-                styles.customInputContainer,
-                isCustomInputFocused && styles.customInputContainerFocused
-              ]}>
-                <TextInput
-                  style={styles.customInput}
-                  value={customAmount}
-                  onChangeText={(text) => setCustomAmount(text.replace(/[^0-9]/g, ''))}
-                  onFocus={() => setIsCustomInputFocused(true)}
-                  onBlur={() => setIsCustomInputFocused(false)}
-                  placeholder="ml"
-                  placeholderTextColor={TEXT.muted}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  returnKeyType="done"
-                  onSubmitEditing={handleCustomAmountSubmit}
-                  accessibilityLabel="Enter custom amount in milliliters"
-                />
-                <Text style={styles.customInputUnit}>ml</Text>
-              </View>
-
-              {/* Increase buttons */}
-              <View style={styles.adjustButtonGroup}>
-                <TouchableOpacity
-                  style={styles.adjustButton}
-                  onPress={() => adjustCustomAmount(50)}
-                  accessibilityLabel="Increase by 50ml"
-                >
-                  <Text style={styles.adjustButtonText}>+50</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.adjustButton}
-                  onPress={() => adjustCustomAmount(100)}
-                  accessibilityLabel="Increase by 100ml"
-                >
-                  <Text style={styles.adjustButtonText}>+100</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Add Custom Button */}
-            <TouchableOpacity
-              style={[
-                styles.addCustomButton,
-                (!customAmount || parseInt(customAmount, 10) <= 0) && styles.addCustomButtonDisabled
-              ]}
-              onPress={handleCustomAmountSubmit}
-              disabled={!customAmount || parseInt(customAmount, 10) <= 0}
-              accessibilityLabel={`Add ${customAmount || 0} milliliters`}
-            >
-              <LinearGradient
-                colors={customAmount && parseInt(customAmount, 10) > 0
-                  ? SURFACES.gradient.blue
-                  : [SURFACES.divider, '#D1D5DB']}
-                style={styles.addCustomButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              {/* Add Button */}
+              <TouchableOpacity
+                style={[
+                  styles.stepperAddButton,
+                  isCustomLoading && styles.stepperAddButtonDisabled,
+                ]}
+                onPress={handleCustomAdd}
+                disabled={isCustomLoading}
+                activeOpacity={0.7}
               >
-                <Ionicons
-                  name="add-circle"
-                  size={20}
-                  color={customAmount && parseInt(customAmount, 10) > 0 ? TEXT.white : TEXT.muted}
-                />
-                <Text style={[
-                  styles.addCustomButtonText,
-                  (!customAmount || parseInt(customAmount, 10) <= 0) && styles.addCustomButtonTextDisabled
-                ]}>
-                  Add {customAmount || '0'}ml
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+                {isCustomLoading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="water" size={18} color="#FFF" />
+                    <Text style={styles.stepperAddButtonText}>Log {customAmount || '100'}ml</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        <HydrationHistorySection
-          beverageHistory={beverageHistory}
-          dailyGoal={dailyGoal}
-          onDelete={handleSwipeDelete}
-          beverageTypes={BEVERAGE_TYPES}
-          styles={styles}
-        />
+        {/* Stats */}
+        {!isEmpty && <StatsCard beverageHistory={beverageHistory} dailyGoal={dailyGoal} />}
+
+        {/* Empty State or Timeline */}
+        {isEmpty ? (
+          <EmptyState />
+        ) : (
+          <Timeline beverageHistory={beverageHistory} onDelete={handleSwipeDelete} onViewHistory={onViewHistory} />
+        )}
       </ScrollView>
 
-      {/* Undo Toast */}
+      {/* Premium Success Toast */}
       <UndoToast
         visible={showUndoToast}
-        message={`Added ${lastEntry?.amount}ml ${BEVERAGE_TYPES[lastEntry?.type]?.emoji || '💧'}`}
+        message={`Added ${lastEntry?.amount}ml ${BEVERAGE_TYPES[lastEntry?.type]?.label || 'Water'}`}
         onUndo={handleUndo}
         onDismiss={() => setShowUndoToast(false)}
-        styles={styles}
+        amount={lastEntry?.amount}
+        beverageType={lastEntry?.type}
+        streak={streak}
       />
 
       {/* Milestone Toast */}
@@ -596,11 +1783,10 @@ export default function HydrationTracker({
           setMilestoneMessage(null);
           setIsTipMessage(false);
         }}
-        styles={styles}
       />
 
       {/* Confetti */}
-      <Confetti visible={showConfetti} styles={styles} />
+      <Confetti visible={showConfetti} />
     </View>
   );
 }
@@ -614,15 +1800,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING[3],
-    paddingBottom: SPACING[6],
+    padding: SPACING[4],
+    paddingBottom: SPACING[8],
   },
 
   // Header
   headerCard: {
     borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[3],
+    padding: SPACING[5],
+    marginBottom: SPACING[4],
     ...SHADOWS.info,
   },
   headerContent: {
@@ -636,8 +1822,8 @@ const styles = StyleSheet.create({
     gap: SPACING[3],
   },
   headerIconContainer: {
-    width: 52,
-    height: 52,
+    width: 64,
+    height: 64,
     borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
@@ -645,19 +1831,19 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
   },
   headerTitle: {
-    fontSize: TYPOGRAPHY.size.xl,
+    fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.extrabold,
     color: TEXT.white,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.sm,
     color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: SPACING[0.5],
+    marginTop: SPACING[1],
   },
   goalBadge: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     borderRadius: RADIUS.full,
     backgroundColor: SEMANTIC.warning.bg,
     justifyContent: 'center',
@@ -669,8 +1855,8 @@ const styles = StyleSheet.create({
   visualizationCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[3],
+    padding: SPACING[6],
+    marginBottom: SPACING[4],
     alignItems: 'center',
     ...SHADOWS.lg,
   },
@@ -678,9 +1864,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING[4],
-    width: 180,
-    height: 180,
+    marginBottom: SPACING[6],
+    width: 220,
+    height: 220,
   },
   ringWrapper: {
     position: 'absolute',
@@ -695,18 +1881,18 @@ const styles = StyleSheet.create({
   progressCenter: {
     position: 'absolute',
     alignItems: 'center',
-    gap: SPACING[1],
+    gap: SPACING[2],
   },
   progressPercentage: {
-    fontSize: TYPOGRAPHY.size['3xl'],
+    fontSize: TYPOGRAPHY.size['4xl'],
     fontWeight: TYPOGRAPHY.weight.black,
     color: SEMANTIC.info.base,
     letterSpacing: -1,
   },
   progressLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
+    color: '#64748B', // Slate blue - more vibrant than gray
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -715,10 +1901,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[1],
     backgroundColor: SEMANTIC.info.bg,
-    paddingVertical: SPACING[0.5],
+    paddingVertical: SPACING[1],
     paddingHorizontal: SPACING[2],
     borderRadius: RADIUS.full,
-    marginTop: SPACING[1],
+    marginTop: SPACING[2],
   },
   nextMilestoneText: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -768,32 +1954,33 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[6],
-    marginBottom: SPACING[3],
+    gap: SPACING[4],
+    marginBottom: SPACING[4],
   },
   mainStat: {
     alignItems: 'center',
   },
   mainStatValue: {
-    fontSize: TYPOGRAPHY.size.xl,
+    fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
     color: SEMANTIC.info.base,
   },
   mainStatLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: '#7C93B2', // Soft blue-gray - matches hydration theme
+    fontWeight: TYPOGRAPHY.weight.medium,
+    marginTop: 4,
   },
   mainStatDivider: {
     width: 1,
-    height: 32,
-    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
+    height: 40,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
   },
   goalReachedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[2],
-    backgroundColor: SEMANTIC.success.bg,
+    backgroundColor: '#D1FAE5',
     paddingVertical: SPACING[2],
     paddingHorizontal: SPACING[4],
     borderRadius: RADIUS.full,
@@ -801,64 +1988,28 @@ const styles = StyleSheet.create({
   goalReachedText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: SEMANTIC.success.base,
+    color: '#059669',
   },
 
   // Beverage Selector
   beverageSelectorCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[3],
-    marginBottom: SPACING[3],
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
     ...SHADOWS.sm,
   },
   sectionLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
-    marginBottom: SPACING[2],
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#475569', // Deeper slate - stands out more
+    marginBottom: SPACING[3],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   beverageScroll: {
     gap: SPACING[2],
     paddingRight: SPACING[4],
-  },
-  beverageWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginTop: SPACING[3],
-    paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[3],
-    backgroundColor: SEMANTIC.warning.bg,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: `${SEMANTIC.warning.base}30`,
-  },
-  beverageWarningText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.xs,
-    color: SEMANTIC.warning.base,
-    fontWeight: TYPOGRAPHY.weight.medium,
-  },
-  beverageTip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginTop: SPACING[3],
-    paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[3],
-    backgroundColor: SEMANTIC.success.bg,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: `${SEMANTIC.success.base}30`,
-  },
-  beverageTipText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.xs,
-    color: SEMANTIC.success.base,
-    fontWeight: TYPOGRAPHY.weight.medium,
   },
   beverageChip: {
     flexDirection: 'row',
@@ -883,8 +2034,9 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     zIndex: 1,
   },
-  beverageEmoji: {
-    fontSize: 20,
+  beverageIconWrapper: {
+    width: 24,
+    alignItems: 'center',
   },
   beverageChipLabel: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -902,21 +2054,21 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
 
-  // Quick Add - Clean horizontal pills (WaterMinder/Waterllama inspired)
+  // Quick Add
   quickAddCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[3],
-    marginBottom: SPACING[3],
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
     ...SHADOWS.sm,
   },
   quickAddGrid: {
     flexDirection: 'row',
-    gap: SPACING[2],
+    gap: SPACING[3],
   },
   quickAddTile: {
     flex: 1,
-    height: 60,
+    aspectRatio: 1,
   },
   quickAddTileWrapper: {
     flex: 1,
@@ -925,113 +2077,106 @@ const styles = StyleSheet.create({
   },
   quickAddTileGradient: {
     flex: 1,
-    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING[3],
-    gap: SPACING[2],
+    padding: SPACING[3],
   },
   quickAddTileLabel: {
-    fontSize: TYPOGRAPHY.size.lg,
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.white,
+    marginTop: SPACING[2],
   },
   quickAddTileSubtitle: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
   },
 
-  // Custom Amount Input
-  customAmountSection: {
+  // Custom Amount Stepper (Plus/Minus Design)
+  customAmountToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[4],
+    paddingVertical: SPACING[2],
+  },
+  customAmountToggleText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: BRAND.primary,
+  },
+  customStepperContainer: {
     marginTop: SPACING[4],
     paddingTop: SPACING[4],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    borderTopColor: SURFACES.divider,
+    alignItems: 'center',
   },
-  customAmountLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.tertiary,
-    marginBottom: SPACING[3],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  customAmountRow: {
+  stepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING[2],
+    gap: SPACING[4],
   },
-  adjustButtonGroup: {
-    flexDirection: 'row',
-    gap: SPACING[1],
-  },
-  adjustButton: {
-    backgroundColor: SURFACES.background.secondary,
-    paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[2],
-    borderRadius: RADIUS.md,
-    minWidth: 44,
+  stepperButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  adjustButtonText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
-  },
-  customInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: SURFACES.background.secondary,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[2],
     borderWidth: 2,
-    borderColor: 'transparent',
+  },
+  stepperButtonMinus: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  stepperButtonPlus: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  stepperButtonDisabled: {
+    backgroundColor: SURFACES.background.secondary,
+    borderColor: SURFACES.divider,
+  },
+  stepperValueContainer: {
+    alignItems: 'center',
     minWidth: 100,
   },
-  customInputContainerFocused: {
-    borderColor: SEMANTIC.info.base,
-    backgroundColor: TEXT.white,
-  },
-  customInput: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.xl,
+  stepperValue: {
+    fontSize: 36,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.primary,
-    textAlign: 'center',
-    minWidth: 60,
-    paddingVertical: SPACING[1],
+    letterSpacing: -1,
   },
-  customInputUnit: {
+  stepperUnit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.muted,
-    marginLeft: SPACING[1],
+    color: '#7C93B2',
+    marginTop: -4,
   },
-  addCustomButton: {
-    marginTop: SPACING[3],
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-  },
-  addCustomButtonDisabled: {
-    opacity: 0.6,
-  },
-  addCustomButtonGradient: {
+  stepperAddButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING[2],
+    backgroundColor: SEMANTIC.info.base,
     paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[4],
+    paddingHorizontal: SPACING[6],
+    borderRadius: RADIUS.full,
+    marginTop: SPACING[4],
+    minWidth: 160,
+    ...SHADOWS.sm,
   },
-  addCustomButtonText: {
+  stepperAddButtonDisabled: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.6,
+  },
+  stepperAddButtonText: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.white,
-  },
-  addCustomButtonTextDisabled: {
-    color: TEXT.muted,
   },
 
   // Stats Card
@@ -1069,13 +2214,14 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
+    color: '#7C93B2', // Soft blue-gray - matches hydration theme
+    fontWeight: TYPOGRAPHY.weight.medium,
     marginTop: 4,
   },
   statDivider: {
     width: 1,
     height: 30,
-    backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
+    backgroundColor: 'rgba(107, 78, 255, 0.1)',
   },
 
   // Timeline
@@ -1103,6 +2249,21 @@ const styles = StyleSheet.create({
     color: TEXT.muted,
     fontStyle: 'italic',
   },
+  viewHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: SPACING[1],
+    paddingHorizontal: SPACING[2],
+    backgroundColor: `${BRAND.primary}10`,
+    borderRadius: RADIUS.full,
+    marginLeft: SPACING[2],
+  },
+  viewHistoryText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: BRAND.primary,
+  },
   timelinePeriod: {
     marginBottom: SPACING[4],
   },
@@ -1113,12 +2274,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[2],
     paddingBottom: SPACING[2],
     borderBottomWidth: 1,
-    borderBottomColor: `${SEMANTIC_ACTIONS.success}0D`,
+    borderBottomColor: 'rgba(107, 78, 255, 0.05)',
   },
   timelinePeriodName: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: '#475569', // Deeper slate - stands out more
     textTransform: 'capitalize',
     flex: 1,
   },
@@ -1143,7 +2304,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 100,
-    backgroundColor: SEMANTIC.danger.base,
+    backgroundColor: '#EF4444',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -1152,7 +2313,7 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
   },
   deleteText: {
-    color: TEXT.white,
+    color: '#FFF',
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
@@ -1171,8 +2332,10 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     backgroundColor: SEMANTIC.info.base,
   },
-  timelineEmoji: {
-    fontSize: 16,
+  timelineIconWrapper: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: SPACING[2],
   },
   timelineAmount: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -1186,37 +2349,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timelineDeleteButton: {
-    padding: 8,
-    minWidth: 44, // Accessibility: minimum touch target
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timelineContent: {
-    flex: 1,
-    gap: 2,
-  },
-  timelineAmountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  hydrationFactorBadge: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  hydrationBar: {
-    height: 4,
-    borderRadius: 2,
-    flex: 1,
-    maxWidth: 60,
-  },
-  hydrationFactorText: {
-    fontSize: 13, // Increased from 10px for better readability
-    fontWeight: TYPOGRAPHY.weight.medium,
-    color: TEXT.secondary, // Improved contrast
+    padding: 4,
   },
 
   // Empty State
@@ -1231,7 +2364,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: RADIUS.full,
-    backgroundColor: SEMANTIC.info.bg,
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING[4],
@@ -1264,47 +2397,107 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
   },
 
-  // Undo Toast
-  undoToastContainer: {
+  // Premium Success Toast
+  successToastContainer: {
     position: 'absolute',
     bottom: SPACING[6],
     left: SPACING[4],
     right: SPACING[4],
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.xl,
     overflow: 'hidden',
     ...SHADOWS.xl,
   },
-  undoToastGradient: {
+  successToastGradient: {
+    paddingVertical: SPACING[4],
+    paddingHorizontal: SPACING[4],
+    overflow: 'hidden',
+  },
+  successToastContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[4],
+    zIndex: 10,
   },
-  undoToastContent: {
+  successIconSection: {
+    alignItems: 'center',
+    gap: SPACING[1],
+  },
+  waterDropContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  amountText: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
+    letterSpacing: -0.5,
+  },
+  celebrationSection: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: SPACING[2],
+  },
+  celebrationIcon: {
+    marginBottom: SPACING[1],
+  },
+  celebrationText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.white,
+    textAlign: 'center',
+  },
+  streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[2],
-    flex: 1,
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    marginTop: SPACING[1],
   },
-  undoToastMessage: {
-    fontSize: TYPOGRAPHY.size.sm,
+  streakText: {
+    fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.white,
   },
-  undoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[1],
-    paddingVertical: SPACING[1],
-    paddingHorizontal: SPACING[3],
+  successUndoButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  undoButtonText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    transform: [{ skewX: '-20deg' }],
+  },
+  rippleContainer: {
+    position: 'absolute',
+    left: 20,
+    top: '50%',
+    marginTop: -20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  waterRipple: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
 
   // Milestone Toast

@@ -1,17 +1,21 @@
 /**
- * MinimalDashboardHeader - Clean Analytics Header
+ * MinimalDashboardHeader - Headspace/Calm Pattern
  *
- * Shows greeting with mini analytics indicators.
- * Includes visual progress rings and streak indicator.
+ * Design Philosophy: "Invitation, not status report"
+ * - Brand identity: Logo + app name for recognition
+ * - Time-aware greeting: Personal, contextual hello
+ * - Single focus: ONE tappable nudge, not multiple stats
+ * - Streak badge: Duolingo-inspired loss aversion
+ * - No stats in header: Stats belong in dashboard body
  *
- * Design Principles:
- * - Minimal: Only essential info at a glance
- * - Visual: Mini progress indicators for quick status
- * - Non-judgmental: No shame for missed days
- * - Premium: Staff-level polish with subtle animations
+ * Why this works:
+ * - Users don't see "0/3, 0%, –" as first thing (feels like failure)
+ * - Single nudge = one clear action to take
+ * - Smart routing: water nudge → water section, meal nudge → log
+ * - Headspace/Calm approach: invite to action, don't report status
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,19 +24,36 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import LottieView from 'lottie-react-native';
 
 import {
   TEXT,
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  SURFACES,
 } from '../../constants/premiumTheme';
-import { BOLD_GRADIENTS } from '../../constants/modernColorPalette';
 
-// Get greeting based on time
+// Lottie Animation Assets
+const LOTTIE_ANIMATIONS = {
+  streak: require('../../assets/animations/streak.json'),
+};
+
+// ============================================================================
+// CONSTANTS - Muted colors for nudges and streak
+// ============================================================================
+
+const STAT_COLORS = {
+  water: '#0E7490',    // Muted cyan for water nudge
+  streak: '#DC2626',   // Red for lost streak (loss aversion)
+  streakActive: '#F97316', // Orange when streak is active
+};
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
 const getGreeting = () => {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good morning';
@@ -40,123 +61,190 @@ const getGreeting = () => {
   return 'Good evening';
 };
 
-// Get date display
 const getDateDisplay = () => {
   const now = new Date();
   const options = { weekday: 'long', month: 'short', day: 'numeric' };
   return now.toLocaleDateString('en-US', options);
 };
 
-// Mini Progress Ring for header analytics
-const MiniRing = ({ progress, color, size = 32, strokeWidth = 3 }) => {
-  const animatedProgress = useRef(new Animated.Value(0)).current;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
+/**
+ * Get contextual nudge - ONE LINE only
+ * Based on time of day + current progress + streak status
+ * Returns: { text, icon, color, route: 'meals'|'water'|'mood' }
+ */
+const getNudge = ({ mealsLogged, waterProgress, moodLogged, streak, bestStreak, hour }) => {
+  // Priority 1: Streak loss (Duolingo psychology)
+  if (bestStreak > 0 && streak === 0) {
+    return {
+      text: `Your ${bestStreak}-day streak ended. Start fresh today.`,
+      icon: 'flame-outline',
+      color: STAT_COLORS.streak,
+      route: 'meals',
+    };
+  }
 
-  useEffect(() => {
-    Animated.spring(animatedProgress, {
-      toValue: Math.min(progress, 100),
-      tension: 40,
-      friction: 8,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, animatedProgress]);
+  // Priority 2: Streak milestone celebration (subtle, not screaming)
+  if (streak === 7 || streak === 14 || streak === 30 || streak === 100) {
+    const emoji = streak >= 30 ? '🎯' : '🔥';
+    return {
+      text: `${streak} days strong. ${emoji}`,
+      icon: 'flame',
+      color: STAT_COLORS.streakActive,
+      route: 'meals',
+    };
+  }
 
-  const strokeDashoffset = animatedProgress.interpolate({
-    inputRange: [0, 100],
-    outputRange: [circumference, 0],
-  });
+  // Priority 3: Time-based nudges (meal timing)
+  if (hour < 10 && mealsLogged === 0) {
+    return {
+      text: 'Log breakfast to start your day right.',
+      icon: 'sunny-outline',
+      color: TEXT.tertiary,
+      route: 'meals',
+    };
+  }
 
-  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+  if (hour >= 12 && hour < 14 && mealsLogged <= 1) {
+    return {
+      text: 'Lunch time—track what you eat.',
+      icon: 'restaurant-outline',
+      color: TEXT.tertiary,
+      route: 'meals',
+    };
+  }
 
-  return (
-    <View style={{ width: size, height: size }}>
-      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        {/* Background */}
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={`${color}30`}
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        {/* Progress */}
-        <AnimatedCircle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-        />
-      </Svg>
-    </View>
-  );
+  if (hour >= 18 && hour < 21 && mealsLogged <= 2) {
+    return {
+      text: 'Don\'t forget to log dinner.',
+      icon: 'moon-outline',
+      color: TEXT.tertiary,
+      route: 'meals',
+    };
+  }
+
+  // Priority 4: Progress encouragement
+  if (mealsLogged >= 3 && waterProgress >= 80 && moodLogged) {
+    return {
+      text: 'Great tracking today. You\'re all set.',
+      icon: 'checkmark-circle-outline',
+      color: '#059669', // Muted green
+      route: 'meals', // No action needed, but tapping goes to log
+    };
+  }
+
+  if (waterProgress < 50 && hour > 14) {
+    return {
+      text: 'Stay hydrated—you\'re behind on water.',
+      icon: 'water-outline',
+      color: STAT_COLORS.water,
+      route: 'water',
+    };
+  }
+
+  // Default: No nudge needed (clean state)
+  return null;
 };
 
-// Quick Stat Pill
-const QuickStat = ({ icon, value, label, color, progress, onPress }) => {
+// ============================================================================
+// STREAK INDICATOR - Duolingo-inspired with loss awareness
+// ============================================================================
+
+const StreakIndicator = ({ streak, bestStreak, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const lottieRef = useRef(null);
+
+  // Subtle pulse for milestone streaks
+  useEffect(() => {
+    if (streak === 7 || streak === 14 || streak === 30 || streak === 100) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+    return () => pulseAnim.setValue(1);
+  }, [streak, pulseAnim]);
+
+  // Auto-play Lottie when streak is active
+  useEffect(() => {
+    if (streak > 0 && lottieRef.current) {
+      lottieRef.current.play();
+    }
+  }, [streak]);
 
   const handlePress = async () => {
     if (!onPress) return;
     await Haptics.selectionAsync();
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.95, duration: 50, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.9, duration: 50, useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
     ]).start();
     onPress();
   };
 
+  // Lost streak state (Duolingo style)
+  const isLostStreak = bestStreak > 0 && streak === 0;
+
+  // No streak to show
+  if (streak === 0 && bestStreak === 0) return null;
+
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ transform: [{ scale: Animated.multiply(scaleAnim, pulseAnim) }] }}>
       <TouchableOpacity
-        style={styles.quickStat}
+        style={[
+          styles.streakBadge,
+          isLostStreak && styles.streakBadgeLost,
+        ]}
         onPress={handlePress}
         activeOpacity={0.7}
-        disabled={!onPress}
       >
-        <MiniRing progress={progress} color={color} size={32} />
-        <View style={styles.quickStatInfo}>
-          <Text style={styles.quickStatValue}>{value}</Text>
-          <Text style={styles.quickStatLabel}>{label}</Text>
-        </View>
+        {isLostStreak ? (
+          <Ionicons
+            name="flame-outline"
+            size={14}
+            color={STAT_COLORS.streak}
+          />
+        ) : (
+          <LottieView
+            ref={lottieRef}
+            source={LOTTIE_ANIMATIONS.streak}
+            autoPlay
+            loop
+            speed={0.8}
+            style={styles.streakLottie}
+          />
+        )}
+        <Text style={[
+          styles.streakText,
+          isLostStreak && styles.streakTextLost,
+        ]}>
+          {isLostStreak ? '0' : streak}
+        </Text>
       </TouchableOpacity>
     </Animated.View>
   );
 };
 
-// Streak Badge
-const StreakBadge = ({ streak }) => {
-  if (streak < 2) return null;
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
-  return (
-    <View style={styles.streakBadge}>
-      <Ionicons name="flame" size={14} color="#F97316" />
-      <Text style={styles.streakText}>{streak}</Text>
-    </View>
-  );
-};
-
-/**
- * MinimalDashboardHeader Component
- */
 export default function MinimalDashboardHeader({
   userName,
   mealsLogged = 0,
-  mealGoal = 3,
   waterProgress = 0,
   moodLogged = false,
   streak = 0,
+  bestStreak = 0,
+  notificationCount = 0,
   onSettingsPress,
   onNotificationsPress,
   onMealsPress,
   onWaterPress,
   onMoodPress,
+  onStreakPress,
   style,
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -164,7 +252,7 @@ export default function MinimalDashboardHeader({
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 600,
+      duration: 500,
       useNativeDriver: true,
     }).start();
   }, [fadeAnim]);
@@ -172,94 +260,175 @@ export default function MinimalDashboardHeader({
   const greeting = getGreeting();
   const dateDisplay = getDateDisplay();
   const firstName = userName?.split(' ')[0] || '';
+  const hour = new Date().getHours();
 
-  // Calculate progress percentages
-  const mealProgress = Math.min((mealsLogged / mealGoal) * 100, 100);
-  const moodProgress = moodLogged ? 100 : 0;
+  // Get contextual nudge
+  const nudge = useMemo(() => getNudge({
+    mealsLogged,
+    waterProgress,
+    moodLogged,
+    streak,
+    bestStreak,
+    hour,
+  }), [mealsLogged, waterProgress, moodLogged, streak, bestStreak, hour]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }, style]}>
-      {/* Top Row: Greeting + Actions */}
-      <View style={styles.topRow}>
-        <View style={styles.greetingSection}>
-          <View style={styles.greetingRow}>
-            <Text style={styles.greeting}>
-              {greeting}{firstName ? `, ${firstName}` : ''}
+      {/* Row 0: Brand Header - Logo + App Name + Notifications + Profile */}
+      <View style={styles.brandHeader}>
+        <View style={styles.brandLeft}>
+          <LinearGradient
+            colors={['#F97316', '#EA580C']}
+            style={styles.logoContainer}
+          >
+            <Ionicons name="nutrition" size={18} color="#FFF" />
+          </LinearGradient>
+          <Text style={styles.brandName}>MyFoodTracker</Text>
+        </View>
+        <View style={styles.headerActions}>
+          {/* Notification Bell */}
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={onNotificationsPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="notifications-outline" size={24} color={TEXT.secondary} />
+            {notificationCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {/* Profile */}
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={onSettingsPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="person-circle-outline" size={28} color={TEXT.secondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Row 1: Greeting + Streak */}
+      <View style={styles.greetingSection}>
+        <View style={styles.greetingRow}>
+          <Text style={styles.greeting}>
+            {greeting}{firstName ? `, ${firstName}` : ''}
+          </Text>
+          <StreakIndicator
+            streak={streak}
+            bestStreak={bestStreak}
+            onPress={onStreakPress}
+          />
+        </View>
+        <Text style={styles.date}>{dateDisplay}</Text>
+      </View>
+
+      {/* Row 2: Contextual Nudge - tappable, single focus */}
+      {/* No stats here - stats belong in dashboard body, not greeting area */}
+      {/* This follows Headspace/Calm pattern: invitation, not status report */}
+      {nudge && (
+        <TouchableOpacity
+          style={styles.nudgeTouchable}
+          onPress={() => {
+            // Smart routing based on nudge type
+            if (nudge.route === 'water' && onWaterPress) {
+              onWaterPress();
+            } else if (nudge.route === 'mood' && onMoodPress) {
+              onMoodPress();
+            } else if (onMealsPress) {
+              onMealsPress();
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.nudgeContainer}>
+            <Ionicons name={nudge.icon} size={16} color={nudge.color} />
+            <Text style={[styles.nudgeText, { color: nudge.color }]}>
+              {nudge.text}
             </Text>
-            <StreakBadge streak={streak} />
+            <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
           </View>
-          <Text style={styles.date}>{dateDisplay}</Text>
-        </View>
-
-        <View style={styles.actions}>
-          {onNotificationsPress && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onNotificationsPress}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="notifications-outline" size={22} color={TEXT.secondary} />
-            </TouchableOpacity>
-          )}
-          {onSettingsPress && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onSettingsPress}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="settings-outline" size={22} color={TEXT.secondary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Quick Stats Row */}
-      <View style={styles.quickStatsRow}>
-        <QuickStat
-          icon="restaurant"
-          value={`${mealsLogged}/${mealGoal}`}
-          label="Meals"
-          color="#F97316"
-          progress={mealProgress}
-          onPress={onMealsPress}
-        />
-        <QuickStat
-          icon="water"
-          value={`${Math.round(waterProgress)}%`}
-          label="Water"
-          color="#0891B2"
-          progress={waterProgress}
-          onPress={onWaterPress}
-        />
-        <QuickStat
-          icon="happy"
-          value={moodLogged ? '✓' : '−'}
-          label="Mood"
-          color="#9333EA"
-          progress={moodProgress}
-          onPress={onMoodPress}
-        />
-      </View>
+        </TouchableOpacity>
+      )}
     </Animated.View>
   );
 }
+
+// ============================================================================
+// STYLES
+// ============================================================================
 
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING[4],
     paddingTop: SPACING[2],
-    paddingBottom: SPACING[4],
+    paddingBottom: SPACING[3],
   },
 
-  // Top Row
-  topRow: {
+  // Brand Header
+  brandHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING[4],
+    alignItems: 'center',
+    marginBottom: SPACING[3],
   },
+  brandLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  logoContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandName: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+    letterSpacing: -0.3,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  notificationButton: {
+    padding: 4,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  profileButton: {
+    padding: 4,
+  },
+
+  // Greeting Section
   greetingSection: {
-    flex: 1,
+    marginBottom: SPACING[2],
   },
   greetingRow: {
     flexDirection: 'row',
@@ -267,10 +436,10 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
   },
   greeting: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   date: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -278,71 +447,49 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Actions
-  actions: {
-    flexDirection: 'row',
-    gap: SPACING[1],
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.lg,
-    backgroundColor: SURFACES.elevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-
-  // Streak Badge
+  // Streak Badge - Duolingo inspired
   streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
     backgroundColor: '#FFF7ED',
-    paddingHorizontal: SPACING[2],
+    paddingLeft: SPACING[1],
+    paddingRight: SPACING[2],
     paddingVertical: 2,
     borderRadius: RADIUS.full,
   },
+  streakBadgeLost: {
+    backgroundColor: '#FEF2F2', // Red tint for lost streak
+    paddingLeft: SPACING[2],
+  },
+  streakLottie: {
+    width: 24,
+    height: 24,
+    marginLeft: -2,
+  },
   streakText: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#F97316',
+    color: STAT_COLORS.streakActive,
+  },
+  streakTextLost: {
+    color: STAT_COLORS.streak,
   },
 
-  // Quick Stats Row
-  quickStatsRow: {
-    flexDirection: 'row',
-    gap: SPACING[2],
+  // Contextual Nudge (tappable)
+  nudgeTouchable: {
+    marginTop: SPACING[1],
   },
-  quickStat: {
-    flex: 1,
+  nudgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[2],
-    backgroundColor: SURFACES.elevated,
-    padding: SPACING[3],
-    borderRadius: RADIUS.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    gap: SPACING[1],
+    paddingVertical: SPACING[2],
+    paddingLeft: 2,
   },
-  quickStatInfo: {
+  nudgeText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
     flex: 1,
-  },
-  quickStatValue: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-  },
-  quickStatLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 1,
   },
 });

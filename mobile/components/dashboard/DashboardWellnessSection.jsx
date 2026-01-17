@@ -1,9 +1,11 @@
 /**
- * DashboardWellnessSection - Clean, focused wellness tracking
+ * DashboardWellnessSection - Complete wellness tracking
  *
  * Staff Design Principles:
  * - Hydration: Quick water logging
  * - Activity: Daily movement summary
+ * - Sleep: Last night's rest quality
+ * - Stress: Today's stress level
  * - Enhanced Mood Card with Wellness Score integration
  */
 
@@ -11,8 +13,11 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CollapsibleSection from './CollapsibleSection';
-import HydrationWellnessDashboard from './HydrationWellnessDashboard';
+import HydrationHeartPath from './HydrationHeartPath';
+// PersonalizedHydrationInsights REMOVED - was duplicating pace/status info shown in HydrationWellnessDashboard
 import ActivitySummaryCard from './ActivitySummaryCard';
+import SleepSummaryCard from './SleepSummaryCard';
+import StressSummaryCard from './StressSummaryCard';
 import EnhancedMoodCard from './EnhancedMoodCard';
 import { TEXT, SPACING, RADIUS, BRAND } from '../../constants/premiumTheme';
 
@@ -30,6 +35,7 @@ export default function DashboardWellnessSection({
   onCelebrateHydration,
   onOpenMoodInsights,
   onOpenHydrationTracker,
+  onViewHydrationHistory, // Navigate to hydration history/insights screen
   moodInsights,
   moodInsightsLoading,
   wellnessScore,
@@ -42,26 +48,27 @@ export default function DashboardWellnessSection({
       expanded={expanded}
       onToggle={onToggle}
     >
-      <View style={styles.wellnessStack}>
-        {/* Hydration Tracker */}
-        <HydrationWellnessDashboard
+      <View style={localStyles.compactStack}>
+        {/* Hydration Tracker - Heart Path Journey design */}
+        <HydrationHeartPath
           currentIntake={today?.waterIntakeLiters || 0}
           dailyGoal={goals?.waterLiters || 2.0}
-          streak={streak}
-          intakeEvents={hydrationEvents}
-          lastLoggedAt={hydrationLastLoggedAt}
-          celebratedTodayKey={hydrationCelebratedKey}
-          onCelebrate={onCelebrateHydration}
           onOpenFullTracker={onOpenHydrationTracker}
-          compact={true}
+          onViewHistory={onViewHydrationHistory}
         />
-
-        <View style={styles.wellnessDivider} />
 
         {/* Activity Summary */}
         <ActivitySummaryCard />
 
-        <View style={styles.wellnessDivider} />
+        {/* Sleep + Stress Side by Side Grid - Staff Design: Compact wellness duo */}
+        <View style={localStyles.wellnessGrid}>
+          <View style={localStyles.gridItem}>
+            <SleepSummaryCard compact={true} />
+          </View>
+          <View style={localStyles.gridItem}>
+            <StressSummaryCard compact={true} />
+          </View>
+        </View>
 
         {/* Enhanced Mood Card with Wellness Score & History */}
         <EnhancedMoodCard
@@ -77,6 +84,18 @@ export default function DashboardWellnessSection({
 }
 
 const localStyles = StyleSheet.create({
+  // Compact stack with tighter spacing (no dividers)
+  compactStack: {
+    gap: SPACING[2], // Tight 8px gap between cards
+  },
+  // Side-by-side grid for Sleep + Stress
+  wellnessGrid: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+  },
+  gridItem: {
+    flex: 1,
+  },
   insightsLink: {
     flexDirection: 'row',
     alignItems: 'center',

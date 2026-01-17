@@ -326,14 +326,14 @@ async function resolveTextMode(query, draftId, mealType, userId) {
 
 /**
  * PHOTO MODE RESOLVER
- * Pipeline: OpenAI vision → USDA/OFF search per detected food
+ * Pipeline: OpenAI vision → Multi-item detection → Individual item nutrition
  *
- * CRITICAL FIX: analyzeImage returns a single food object with:
- * { foodName, description, calories, protein, carbs, fats, ingredients, confidence, isComplex }
- * NOT an array of foods. We handle both structures for robustness.
+ * NEW: analyzeImage now returns multi-item format:
+ * { items: [...], totals: {...}, mealSummary: {...} }
+ * Each item has complete nutrition including macros and micros
  */
 async function resolvePhotoMode(imageBase64, draftId, mealType) {
-  // Step 1: Vision analysis
+  // Step 1: Vision analysis (now returns multi-item format)
   const visionResult = await FoodService.analyzeImage(imageBase64);
 
   // Handle null or failed analysis
@@ -342,39 +342,36 @@ async function resolvePhotoMode(imageBase64, draftId, mealType) {
     return createErrorDraft(draftId, 'photo', 'Could not analyze image', mealType);
   }
 
-  // Normalize the response structure
-  // analyzeImage returns a single object with foodName, not a foods array
-  let detectedFoods = [];
+  // NEW: Handle multi-item format from vision analysis
+  let detectedItems = [];
 
-  if (visionResult.foods && Array.isArray(visionResult.foods)) {
-    // If it's already an array (future-proofing)
-    detectedFoods = visionResult.foods;
+  if (visionResult.items && Array.isArray(visionResult.items)) {
+    // New multi-item format
+    console.log(`[Resolve] Photo detected ${visionResult.items.length} items`);
+    detectedItems = visionResult.items;
   } else if (visionResult.foodName) {
-    // Single food object from vision analysis - this is the expected structure
-    console.log(`[Resolve] Photo detected: "${visionResult.foodName}" with confidence ${visionResult.confidence}`);
+    // Legacy single-item format - convert to multi-item
+    console.log(`[Resolve] Photo detected (legacy format): "${visionResult.foodName}"`);
 
-    // Check if we got a valid food name (not "Unknown Food" or similar)
     if (visionResult.foodName === 'Unknown Food' || !visionResult.foodName.trim()) {
       return createErrorDraft(draftId, 'photo', 'Could not identify food in image', mealType);
     }
 
-    detectedFoods = [{
+    detectedItems = [{
       name: visionResult.foodName,
       description: visionResult.description,
-      estimatedAmount: 1,
-      estimatedUnit: visionResult.servingSize || 'serving',
-      confidence: visionResult.confidence || 0.7,
-      // Include pre-analyzed nutrition from vision to avoid double API calls
-      preAnalyzedNutrition: {
-        calories: visionResult.calories,
-        protein: visionResult.protein,
-        carbs: visionResult.carbs,
-        fat: visionResult.fats || visionResult.fat,
-        fiber: visionResult.fiber,
-        sugar: visionResult.sugar,
-        sodium: visionResult.sodium,
-        micros: visionResult.micros
+      portion: { amount: 1, unit: 'serving', estimatedGrams: 100 },
+      macros: {
+        calories: visionResult.calories || 0,
+        protein: visionResult.protein || 0,
+        carbs: visionResult.carbs || 0,
+        fat: visionResult.fats || visionResult.fat || 0,
+        fiber: visionResult.fiber || 0,
+        sugar: visionResult.sugar || 0,
+        sodium: visionResult.sodium || 0
       },
+      micros: visionResult.micros || {},
+      confidence: visionResult.confidence || 0.7,
       ingredients: visionResult.ingredients || [],
       isComplex: visionResult.isComplex || false
     }];
@@ -383,70 +380,51 @@ async function resolvePhotoMode(imageBase64, draftId, mealType) {
     return createErrorDraft(draftId, 'photo', 'Could not detect food in image', mealType);
   }
 
-  if (detectedFoods.length === 0) {
+  if (detectedItems.length === 0) {
     return createErrorDraft(draftId, 'photo', 'No food detected in image', mealType);
   }
 
-  // Step 2: Resolve each detected food
-  const items = [];
-  for (const detectedFood of detectedFoods) {
-    // If we have pre-analyzed nutrition from vision, use it directly
-    // This avoids an extra API call since vision already provides nutrition
-    let resolvedItem;
+  // Step 2: Convert each detected item to resolved format
+  const items = detectedItems.map((item, idx) => {
+    const macros = item.macros || {};
 
-    if (detectedFood.preAnalyzedNutrition && detectedFood.preAnalyzedNutrition.calories > 0) {
-      // Use nutrition from vision analysis directly
-      resolvedItem = {
-        itemId: uuidv4(),
-        name: detectedFood.name,
-        portion: {
-          amount: detectedFood.estimatedAmount || 1,
-          unit: detectedFood.estimatedUnit || 'serving',
-          gramsEquivalent: 100,
-          servingText: detectedFood.estimatedUnit || 'serving',
-          isEstimated: true
-        },
-        macros: {
-          calories_kcal: detectedFood.preAnalyzedNutrition.calories || 0,
-          protein_g: detectedFood.preAnalyzedNutrition.protein || 0,
-          carbs_g: detectedFood.preAnalyzedNutrition.carbs || 0,
-          fat_g: detectedFood.preAnalyzedNutrition.fat || 0,
-          fiber_g: detectedFood.preAnalyzedNutrition.fiber || 0,
-          sugar_g: detectedFood.preAnalyzedNutrition.sugar || 0,
-          sodium_mg: detectedFood.preAnalyzedNutrition.sodium || 0
-        },
-        micros: detectedFood.preAnalyzedNutrition.micros || {},
-        ingredients: detectedFood.ingredients || [],
-        isComplex: detectedFood.isComplex || false,
-        scores: {},
-        sourceEvidence: [{
-          source: 'OpenAI_Vision',
-          sourceId: 'gpt-4o-vision',
-          confidence: detectedFood.confidence || 0.7,
-          fetchedAt: new Date().toISOString(),
-          fieldsProvided: ['macros', 'micros', 'ingredients']
-        }],
-        flags: ['photo_analyzed', 'portion_estimated']
-      };
+    return {
+      itemId: uuidv4(),
+      name: item.name || `Item ${idx + 1}`,
+      description: item.description || '',
+      portion: {
+        amount: item.portion?.amount || 1,
+        unit: item.portion?.unit || 'serving',
+        gramsEquivalent: item.portion?.estimatedGrams || 100,
+        servingText: `${item.portion?.amount || 1} ${item.portion?.unit || 'serving'}`,
+        isEstimated: true
+      },
+      macros: {
+        calories_kcal: macros.calories || 0,
+        protein_g: macros.protein || 0,
+        carbs_g: macros.carbs || 0,
+        fat_g: macros.fat || 0,
+        fiber_g: macros.fiber || 0,
+        sugar_g: macros.sugar || 0,
+        sodium_mg: macros.sodium || 0
+      },
+      micros: item.micros || {},
+      ingredients: item.ingredients || [],
+      allergens: item.potentialAllergens || item.allergens || [],
+      isComplex: item.isComplex || (item.ingredients && item.ingredients.length > 1),
+      scores: {},
+      sourceEvidence: [{
+        source: 'OpenAI_Vision_MultiItem',
+        sourceId: 'gpt-4o-vision',
+        confidence: item.confidence || 0.7,
+        fetchedAt: new Date().toISOString(),
+        fieldsProvided: ['macros', 'micros', 'ingredients']
+      }],
+      flags: item.confidence < 0.7 ? ['photo_analyzed', 'portion_estimated', 'low_confidence'] : ['photo_analyzed', 'portion_estimated']
+    };
+  });
 
-      console.log(`[Resolve] ✅ Using vision nutrition for "${detectedFood.name}": ${resolvedItem.macros.calories_kcal} kcal`);
-    } else {
-      // Fallback: resolve nutrition via smartNutritionResolver
-      resolvedItem = await resolveGenericFood({
-        name: detectedFood.name,
-        quantity: detectedFood.estimatedAmount,
-        unit: detectedFood.estimatedUnit,
-        confidence: detectedFood.confidence
-      });
-    }
-
-    // Flag low-confidence detections
-    if (detectedFood.confidence < 0.7) {
-      resolvedItem.flags.push('low_confidence');
-    }
-
-    items.push(resolvedItem);
-  }
+  console.log(`[Resolve] ✅ Photo analysis complete: ${items.length} items, total ${visionResult.totals?.calories || 'N/A'} kcal`);
 
   const dataQuality = assessDataQuality(items);
 
@@ -457,7 +435,12 @@ async function resolvePhotoMode(imageBase64, draftId, mealType) {
     items,
     totals: calculateTotals(items),
     dataQuality,
-    uiHints: generateUIHints(items, dataQuality)
+    uiHints: generateUIHints(items, dataQuality),
+    // Include meal summary from vision
+    mealSummary: visionResult.mealSummary || {
+      totalItems: items.length,
+      totalCalories: Math.round(items.reduce((sum, i) => sum + (i.macros.calories_kcal || 0), 0))
+    }
   };
 }
 
@@ -523,6 +506,7 @@ async function resolveGenericFood(parsedFood) {
       micros: nutrition.micros || {},
       ingredients: nutrition.components || [], // 🆕 Map components to ingredients for frontend
       components: nutrition.components || [], // Component breakdown for complex foods
+      allergens: nutrition.potentialAllergens || nutrition.allergens || [], // 🆕 Allergen info from AI
       isComplex: nutrition.isComplex || false, // Whether food has multiple ingredients
       scores: {},
       sourceEvidence,

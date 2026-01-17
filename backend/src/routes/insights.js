@@ -9,6 +9,10 @@
  * - GET /api/insights/correlations - Behavioral pattern discoveries
  * - GET /api/insights/weekly-narrative - Weekly health story
  * - GET /api/insights/what-to-change - Priority change recommendation
+ * - GET /api/insights/ai-analysis - OpenAI-powered deep pattern analysis
+ * - GET /api/insights/patterns/personalized - Temporal & activity-mood patterns
+ *     (breakfast skip → afternoon crash, high-sugar dinner → morning anxiety,
+ *      hydration → mood stability, exercise → mood boost)
  */
 
 import express from 'express';
@@ -26,6 +30,7 @@ import {
 import { generateDailyStoryLine, calculateDailyScore } from '../services/storyLineService.js';
 import { generateMoodInsights, generateBasicMoodInsights } from '../services/moodInsightService.js';
 import { errors } from '../utils/errorResponse.js';
+import { computeUserCorrelations } from '../services/correlationEngineService.js';
 import { openaiClient as openai } from '../services/apiClients/OpenAIClient.js';
 
 const router = express.Router();
@@ -370,6 +375,338 @@ router.get('/ai-analysis', async (req, res) => {
     }
   }
 });
+
+/**
+ * GET /api/insights/patterns/personalized
+ * Returns personalized behavioral patterns discovered from correlation engine
+ *
+ * These are deep temporal patterns like:
+ * - "Every time you skip breakfast, your 3pm mood crashes"
+ * - "High-sugar dinners make you anxious the next morning"
+ * - "On days you drink enough water, you're less irritable"
+ * - "Morning exercise gives you all-day energy"
+ */
+router.get('/patterns/personalized', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { windowDays = 21 } = req.query;
+
+    // Compute correlations using the enhanced correlation engine
+    const result = await computeUserCorrelations(userId, {
+      windowTypes: ['7d', '30d'], // Use 7-day and 30-day windows for personalized patterns
+    });
+
+    // Extract correlations array from result object
+    const correlations = result?.correlations || [];
+
+    if (!correlations || correlations.length === 0) {
+      return res.json({
+        success: true,
+        hasEnoughData: false,
+        message: 'Keep logging meals, mood, water, and activities to discover your personal patterns.',
+        patterns: [],
+        categories: {
+          mealTiming: [],
+          nextDayCarryover: [],
+          hydration: [],
+          activity: [],
+          general: [],
+        },
+      });
+    }
+
+    // Transform correlations into user-friendly pattern statements
+    const formattedPatterns = correlations
+      .map(corr => formatCorrelationToPattern(corr))
+      .filter(p => p !== null) // Remove null patterns
+      .sort((a, b) => b.confidence - a.confidence); // Sort by confidence
+
+    // Group patterns by category
+    const categories = {
+      mealTiming: formattedPatterns.filter(p => p.category === 'meal-timing'),
+      nextDayCarryover: formattedPatterns.filter(p => p.category === 'next-day-carryover'),
+      hydration: formattedPatterns.filter(p => p.category === 'hydration'),
+      activity: formattedPatterns.filter(p => p.category === 'activity'),
+      general: formattedPatterns.filter(p => !['meal-timing', 'next-day-carryover', 'hydration', 'activity'].includes(p.category)),
+    };
+
+    // Calculate overall data quality score
+    const dataQuality = calculateDataQuality(correlations);
+
+    res.json({
+      success: true,
+      hasEnoughData: true,
+      windowDays: parseInt(windowDays),
+      patternsFound: formattedPatterns.length,
+      dataQuality,
+      patterns: formattedPatterns,
+      categories,
+      // Top insight - most confident/impactful pattern
+      topInsight: formattedPatterns.length > 0 ? formattedPatterns[0] : null,
+    });
+  } catch (error) {
+    console.error('[Insights] Personalized patterns error:', error);
+    errors.internal(res, 'Failed to compute personalized patterns');
+  }
+});
+
+/**
+ * Transform a correlation object into a user-friendly pattern statement
+ * Handles both the new correlation engine format and legacy format
+ */
+function formatCorrelationToPattern(correlation) {
+  // Handle the correlation engine's format (ruleName, correlationType, etc.)
+  const ruleName = correlation.ruleName || correlation.type;
+  const strength = correlation.strength || 0;
+  const confidence = correlation.confidence || 0;
+  const occurrences = correlation.occurrences || 1;
+  const expectedOutcome = correlation.expectedOutcome || correlation.explanation || '';
+
+  // Generate natural language statement based on rule name
+  let statement = '';
+  let category = 'general';
+  let icon = 'analytics-outline';
+  let impactType = 'neutral';
+
+  // Determine if this is a positive or negative pattern based on the rule
+  const isPositive = strength > 0 && !ruleName?.includes('crash') && !ruleName?.includes('negative');
+  impactType = isPositive ? 'positive' : 'negative';
+
+  // Map correlation engine rule names to user-friendly patterns
+  switch (ruleName) {
+    // High NOVA/Sugar mood impacts
+    case 'high_nova_mood_crash':
+      category = 'meal-timing';
+      icon = 'nutrition-outline';
+      impactType = 'negative';
+      statement = 'High-sugar, processed foods tend to cause mood dips 2-4 hours later';
+      break;
+
+    // Breakfast patterns
+    case 'breakfast_skip_afternoon_crash':
+    case 'breakfast-skip-afternoon-crash':
+      category = 'meal-timing';
+      icon = 'sunny-outline';
+      impactType = 'negative';
+      statement = 'When you skip breakfast, your mood tends to crash around 3pm';
+      break;
+
+    case 'breakfast_afternoon_boost':
+    case 'breakfast-afternoon-boost':
+      category = 'meal-timing';
+      icon = 'sunny-outline';
+      impactType = 'positive';
+      statement = 'Having breakfast keeps your afternoon mood stable';
+      break;
+
+    case 'protein_breakfast_energy':
+    case 'protein-breakfast-energy':
+      category = 'meal-timing';
+      icon = 'fitness-outline';
+      impactType = 'positive';
+      statement = 'Protein-rich breakfasts give you sustained energy through the morning';
+      break;
+
+    // Sugar dinner patterns
+    case 'high_sugar_dinner_morning_anxiety':
+    case 'high-sugar-dinner-morning-anxiety':
+      category = 'next-day-carryover';
+      icon = 'moon-outline';
+      impactType = 'negative';
+      statement = 'High-sugar dinners tend to make you feel anxious the next morning';
+      break;
+
+    case 'evening_meal_next_day':
+      category = 'next-day-carryover';
+      icon = 'moon-outline';
+      statement = 'What you eat in the evening affects how you feel the next morning';
+      break;
+
+    // Hydration patterns
+    case 'hydration_mood_correlation':
+    case 'hydration_mood_stability':
+    case 'hydration-mood-stability':
+      category = 'hydration';
+      icon = 'water-outline';
+      impactType = isPositive ? 'positive' : 'negative';
+      statement = isPositive
+        ? 'On days you drink enough water, you\'re noticeably less irritable'
+        : 'Low hydration days tend to correlate with more irritability';
+      break;
+
+    case 'dehydration_mood_impact':
+    case 'dehydration-mood-impact':
+      category = 'hydration';
+      icon = 'water-outline';
+      impactType = 'negative';
+      statement = 'Poor hydration days show higher negative moods and irritability';
+      break;
+
+    // Activity patterns
+    case 'exercise_mood_boost':
+    case 'exercise-mood-boost':
+    case 'activity_mood_correlation':
+      category = 'activity';
+      icon = 'barbell-outline';
+      impactType = 'positive';
+      statement = 'Exercise gives you a same-day mood boost';
+      break;
+
+    case 'morning_exercise_energy':
+    case 'morning-exercise-all-day-energy':
+      category = 'activity';
+      icon = 'sunny-outline';
+      impactType = 'positive';
+      statement = 'Morning workouts give you energy that lasts all day';
+      break;
+
+    case 'sedentary_mood_impact':
+    case 'sedentary-mood-impact':
+      category = 'activity';
+      icon = 'walk-outline';
+      impactType = 'negative';
+      statement = 'Days without physical activity tend to have lower mood scores';
+      break;
+
+    case 'consistent_exercise_stability':
+    case 'consistent-exercise-stability':
+      category = 'activity';
+      icon = 'trending-up-outline';
+      impactType = 'positive';
+      statement = 'Regular exercise is keeping your mood consistently positive';
+      break;
+
+    // Generic fallback
+    default:
+      // Try to generate a meaningful statement from the correlation data
+      if (expectedOutcome) {
+        statement = expectedOutcome;
+      } else if (correlation.signalA && correlation.signalB) {
+        const signalA = formatSignalName(correlation.signalA);
+        const signalB = formatSignalName(correlation.signalB);
+        statement = `${signalA} appears to affect ${signalB}`;
+      } else {
+        statement = 'A pattern was detected in your data';
+      }
+  }
+
+  // Calculate user-friendly confidence label
+  let confidenceLabel = 'possible';
+  if (confidence >= 0.8) confidenceLabel = 'very likely';
+  else if (confidence >= 0.65) confidenceLabel = 'likely';
+  else if (confidence >= 0.5) confidenceLabel = 'possible';
+
+  return {
+    id: `${ruleName}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    type: ruleName,
+    category,
+    icon,
+    statement,
+    impactType,
+    strength: Math.abs(strength),
+    confidence,
+    confidenceLabel,
+    occurrences,
+    suggestion: generateSuggestionForPattern(ruleName, impactType),
+    // Include raw data for debugging/details
+    _raw: {
+      signalA: correlation.signalA,
+      signalB: correlation.signalB,
+      windowType: correlation.windowType,
+      expectedOutcome,
+    },
+  };
+}
+
+/**
+ * Format signal name to human-readable text
+ */
+function formatSignalName(signal) {
+  if (!signal) return 'unknown';
+  return signal
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Generate actionable suggestion for a pattern type
+ */
+function generateSuggestionForPattern(type, impactType) {
+  // Normalize the type to handle both underscore and hyphen formats
+  const normalizedType = type?.replace(/_/g, '-');
+
+  const suggestions = {
+    // High NOVA/Sugar patterns
+    'high-nova-mood-crash': 'Try adding protein or fiber to meals to stabilize blood sugar and prevent mood dips.',
+
+    // Breakfast patterns
+    'breakfast-skip-afternoon-crash': 'Try having a light breakfast, even just yogurt or fruit, to prevent the afternoon energy dip.',
+    'breakfast-afternoon-boost': 'Keep up the breakfast habit! Your body clearly benefits from morning fuel.',
+    'protein-breakfast-energy': 'Keep including protein in breakfast - eggs, yogurt, or nuts work great.',
+
+    // Dinner/carryover patterns
+    'high-sugar-dinner-morning-anxiety': 'Consider reducing sugar at dinner - try protein-rich foods instead.',
+    'evening-meal-next-day': 'Pay attention to what you eat in the evening - it affects tomorrow\'s energy.',
+
+    // Hydration patterns
+    'hydration-mood-stability': impactType === 'positive'
+      ? 'Great job staying hydrated! Keep aiming for your water goal.'
+      : 'Try setting water reminders throughout the day.',
+    'hydration-mood-correlation': impactType === 'positive'
+      ? 'Staying hydrated is clearly working for your mood!'
+      : 'Try drinking more water - your mood may improve.',
+    'dehydration-mood-impact': 'Start each meal with a glass of water to build the habit.',
+
+    // Activity patterns
+    'exercise-mood-boost': 'Your mood loves activity! Try to move a little every day.',
+    'activity-mood-correlation': 'Physical activity is great for your mood - keep it up!',
+    'morning-exercise-all-day-energy': 'Morning workouts work well for you - consider making them a routine.',
+    'morning-exercise-energy': 'Morning workouts work well for you - consider making them a routine.',
+    'sedentary-mood-impact': 'Even a short 10-minute walk can help boost your mood.',
+    'consistent-exercise-stability': 'Your consistent exercise is paying off - keep it up!',
+
+    // Timing patterns
+    'meal-timing-stability': 'Eating at regular times helps regulate your energy and mood.',
+    'evening-exercise-next-day-impact': impactType === 'positive'
+      ? 'Evening exercise works well for you!'
+      : 'Consider moving intense workouts earlier in the day.',
+  };
+
+  return suggestions[normalizedType] || 'Keep tracking to learn more about your patterns.';
+}
+
+/**
+ * Calculate data quality score based on correlation confidence and occurrences
+ */
+function calculateDataQuality(correlations) {
+  if (!correlations || correlations.length === 0) {
+    return { score: 0, label: 'insufficient', suggestion: 'Log more meals, mood, and activities' };
+  }
+
+  const avgConfidence = correlations.reduce((sum, c) => sum + (c.confidence || 0), 0) / correlations.length;
+  const totalOccurrences = correlations.reduce((sum, c) => sum + (c.occurrences || 1), 0);
+
+  // Score based on confidence and number of patterns found
+  const score = Math.round((avgConfidence * 50) + Math.min(correlations.length * 5, 50));
+
+  let label = 'basic';
+  let suggestion = 'Keep logging to improve pattern detection';
+
+  if (score >= 80) {
+    label = 'excellent';
+    suggestion = 'Great data! Patterns are highly reliable';
+  } else if (score >= 60) {
+    label = 'good';
+    suggestion = 'Solid patterns detected with good confidence';
+  } else if (score >= 40) {
+    label = 'moderate';
+    suggestion = 'More consistent logging will improve insights';
+  }
+
+  return { score, label, suggestion, avgConfidence: Math.round(avgConfidence * 100), patternsFound: correlations.length };
+}
 
 /**
  * Prepare data summary for AI analysis
@@ -1115,6 +1452,444 @@ function getSchedule(type) {
     ];
   }
   return [];
+}
+
+/**
+ * GET /api/insights/user-patterns
+ * Returns user behavioral patterns for smart notification scheduling
+ *
+ * Used by the mobile app's smart notification engine to:
+ * - Schedule notifications at optimal times based on user behavior
+ * - Generate data-driven, personalized notification content
+ * - Determine user lifecycle stage for appropriate messaging
+ */
+router.get('/user-patterns', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    // Get data from the last 30 days
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Fetch all relevant data for pattern analysis
+    const [foodLogs, moodLogs, waterLogs, goals] = await Promise.all([
+      db.select()
+        .from(foodLogTable)
+        .where(and(
+          eq(foodLogTable.userId, userId),
+          gte(foodLogTable.loggedDate, startDate)
+        ))
+        .orderBy(desc(foodLogTable.loggedDate)),
+
+      db.select()
+        .from(moodLogTable)
+        .where(and(
+          eq(moodLogTable.userId, userId),
+          gte(moodLogTable.loggedDate, startDate)
+        ))
+        .orderBy(desc(moodLogTable.loggedDate)),
+
+      db.select()
+        .from(waterLogTable)
+        .where(and(
+          eq(waterLogTable.userId, userId),
+          gte(waterLogTable.loggedDate, startDate)
+        ))
+        .orderBy(desc(waterLogTable.loggedDate)),
+
+      db.select()
+        .from(nutritionGoalsTable)
+        .where(eq(nutritionGoalsTable.userId, userId))
+        .limit(1),
+    ]);
+
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0 };
+
+    // Calculate hydration patterns
+    const hydrationPatterns = analyzeHydrationPatterns(waterLogs);
+
+    // Calculate meal timing patterns
+    const mealPatterns = analyzeMealTimingPatterns(foodLogs);
+
+    // Calculate activity patterns (from mood logs with energy data)
+    const activityPatterns = analyzeActivityPatternsFromMood(moodLogs);
+
+    // Calculate overall user stats
+    const totalDaysActive = calculateActiveDays(foodLogs, moodLogs, waterLogs);
+    const currentStreak = calculateCurrentStreak(foodLogs, waterLogs);
+    const longestStreak = calculateLongestStreak(foodLogs, waterLogs);
+
+    // Determine lifecycle stage
+    const lifecycleStage = determineLifecycleStage(totalDaysActive, currentStreak, foodLogs.length);
+
+    // Calculate average daily logs
+    const averageDailyLogs = calculateAverageDailyLogs(foodLogs, moodLogs, waterLogs);
+
+    res.json({
+      success: true,
+
+      // User lifecycle
+      totalDaysActive,
+      currentStreak,
+      longestStreak,
+      lifecycleStage,
+      averageDailyLogs,
+
+      // Hydration patterns
+      hydration: {
+        peakHours: hydrationPatterns.peakHours,
+        consistency: hydrationPatterns.consistency,
+        preferredBeverages: hydrationPatterns.preferredBeverages,
+        avgDailyIntake: hydrationPatterns.avgDailyIntake,
+        goalAchievementRate: hydrationPatterns.goalAchievementRate,
+      },
+
+      // Meal patterns
+      meals: {
+        typicalTimes: mealPatterns.typicalTimes,
+        loggingRate: mealPatterns.loggingRate,
+        preferredCuisines: mealPatterns.preferredCuisines,
+        breakfastFrequency: mealPatterns.breakfastFrequency,
+      },
+
+      // Activity patterns (derived from mood/energy logs)
+      activity: {
+        peakHours: activityPatterns.peakHours,
+        avgEnergyLevel: activityPatterns.avgEnergyLevel,
+      },
+
+      // Raw counts for debugging
+      dataPoints: {
+        food: foodLogs.length,
+        mood: moodLogs.length,
+        water: waterLogs.length,
+      },
+    });
+  } catch (error) {
+    console.error('[Insights] User patterns error:', error);
+    errors.internal(res, 'Failed to analyze user patterns');
+  }
+});
+
+/**
+ * Analyze hydration patterns from water logs
+ */
+function analyzeHydrationPatterns(waterLogs) {
+  if (!waterLogs.length) {
+    return {
+      peakHours: [],
+      consistency: 0,
+      preferredBeverages: [],
+      avgDailyIntake: 0,
+      goalAchievementRate: 0,
+    };
+  }
+
+  // Analyze peak logging hours
+  const hourCounts = new Array(24).fill(0);
+  const beverageCounts = {};
+  const dailyTotals = {};
+
+  waterLogs.forEach(log => {
+    const date = new Date(log.loggedDate);
+    const hour = date.getHours();
+    const dateKey = date.toISOString().split('T')[0];
+
+    hourCounts[hour]++;
+
+    const beverage = log.beverageType || 'water';
+    beverageCounts[beverage] = (beverageCounts[beverage] || 0) + 1;
+
+    dailyTotals[dateKey] = (dailyTotals[dateKey] || 0) +
+      parseFloat(log.amountLiters || log.hydrationLiters || 0);
+  });
+
+  // Find top 3 peak hours
+  const sortedHours = hourCounts
+    .map((count, hour) => ({ hour, count }))
+    .filter(h => h.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+    .map(h => h.hour);
+
+  // Find preferred beverages
+  const preferredBeverages = Object.entries(beverageCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([type]) => type);
+
+  // Calculate average daily intake
+  const dailyValues = Object.values(dailyTotals);
+  const avgDailyIntake = dailyValues.length > 0
+    ? dailyValues.reduce((sum, v) => sum + v, 0) / dailyValues.length
+    : 0;
+
+  // Calculate consistency (days with logs / total days in range)
+  const dayCount = Object.keys(dailyTotals).length;
+  const totalDays = 30; // Last 30 days
+  const consistency = dayCount / totalDays;
+
+  // Goal achievement rate (days meeting 2L goal)
+  const goalDays = dailyValues.filter(v => v >= 2.0).length;
+  const goalAchievementRate = dayCount > 0 ? goalDays / dayCount : 0;
+
+  return {
+    peakHours: sortedHours,
+    consistency,
+    preferredBeverages,
+    avgDailyIntake: Math.round(avgDailyIntake * 10) / 10,
+    goalAchievementRate: Math.round(goalAchievementRate * 100) / 100,
+  };
+}
+
+/**
+ * Analyze meal timing patterns
+ */
+function analyzeMealTimingPatterns(foodLogs) {
+  if (!foodLogs.length) {
+    return {
+      typicalTimes: [],
+      loggingRate: 0,
+      preferredCuisines: [],
+      breakfastFrequency: 0,
+    };
+  }
+
+  // Categorize meals by time of day
+  const mealTimes = {
+    breakfast: { hours: [], count: 0 }, // 5-10am
+    lunch: { hours: [], count: 0 },     // 11am-2pm
+    dinner: { hours: [], count: 0 },    // 5-9pm
+    snacks: { hours: [], count: 0 },    // other times
+  };
+
+  const cuisineCounts = {};
+  const daysWithFood = new Set();
+
+  foodLogs.forEach(log => {
+    const date = new Date(log.loggedDate);
+    const hour = date.getHours();
+    const dateKey = date.toISOString().split('T')[0];
+
+    daysWithFood.add(dateKey);
+
+    if (hour >= 5 && hour < 10) {
+      mealTimes.breakfast.hours.push(hour);
+      mealTimes.breakfast.count++;
+    } else if (hour >= 11 && hour < 14) {
+      mealTimes.lunch.hours.push(hour);
+      mealTimes.lunch.count++;
+    } else if (hour >= 17 && hour < 21) {
+      mealTimes.dinner.hours.push(hour);
+      mealTimes.dinner.count++;
+    } else {
+      mealTimes.snacks.hours.push(hour);
+      mealTimes.snacks.count++;
+    }
+
+    // Track cuisines if available
+    if (log.cuisine) {
+      cuisineCounts[log.cuisine] = (cuisineCounts[log.cuisine] || 0) + 1;
+    }
+  });
+
+  // Calculate typical times for each meal type
+  const typicalTimes = Object.entries(mealTimes)
+    .filter(([_, data]) => data.count > 0)
+    .map(([meal, data]) => {
+      const avgHour = data.hours.length > 0
+        ? Math.round(data.hours.reduce((a, b) => a + b, 0) / data.hours.length)
+        : null;
+      return { meal, hour: avgHour, frequency: data.count };
+    })
+    .filter(t => t.hour !== null);
+
+  // Logging rate (days with logs / total days)
+  const loggingRate = daysWithFood.size / 30;
+
+  // Breakfast frequency
+  const breakfastFrequency = daysWithFood.size > 0
+    ? mealTimes.breakfast.count / daysWithFood.size
+    : 0;
+
+  // Top cuisines
+  const preferredCuisines = Object.entries(cuisineCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([cuisine]) => cuisine);
+
+  return {
+    typicalTimes,
+    loggingRate: Math.round(loggingRate * 100) / 100,
+    preferredCuisines,
+    breakfastFrequency: Math.round(breakfastFrequency * 100) / 100,
+  };
+}
+
+/**
+ * Analyze activity patterns from mood/energy logs
+ */
+function analyzeActivityPatternsFromMood(moodLogs) {
+  if (!moodLogs.length) {
+    return { peakHours: [], avgEnergyLevel: 0 };
+  }
+
+  // Find hours with high energy
+  const hourlyEnergy = new Array(24).fill(null).map(() => []);
+
+  moodLogs.forEach(log => {
+    const hour = new Date(log.loggedDate).getHours();
+    const energy = log.energyLevel || 5;
+    hourlyEnergy[hour].push(energy);
+  });
+
+  // Calculate average energy per hour
+  const avgByHour = hourlyEnergy.map((energies, hour) => ({
+    hour,
+    avgEnergy: energies.length > 0
+      ? energies.reduce((a, b) => a + b, 0) / energies.length
+      : 0,
+    count: energies.length,
+  }));
+
+  // Find peak activity hours (highest energy)
+  const peakHours = avgByHour
+    .filter(h => h.count > 0 && h.avgEnergy >= 6)
+    .sort((a, b) => b.avgEnergy - a.avgEnergy)
+    .slice(0, 3)
+    .map(h => h.hour);
+
+  // Overall average energy
+  const allEnergies = moodLogs.map(m => m.energyLevel || 5);
+  const avgEnergyLevel = allEnergies.length > 0
+    ? allEnergies.reduce((a, b) => a + b, 0) / allEnergies.length
+    : 0;
+
+  return {
+    peakHours,
+    avgEnergyLevel: Math.round(avgEnergyLevel * 10) / 10,
+  };
+}
+
+/**
+ * Calculate total active days (days with any log)
+ */
+function calculateActiveDays(foodLogs, moodLogs, waterLogs) {
+  const activeDays = new Set();
+
+  [...foodLogs, ...moodLogs, ...waterLogs].forEach(log => {
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    activeDays.add(dateKey);
+  });
+
+  return activeDays.size;
+}
+
+/**
+ * Calculate current streak (consecutive days with logs)
+ */
+function calculateCurrentStreak(foodLogs, waterLogs) {
+  const logDates = new Set();
+
+  [...foodLogs, ...waterLogs].forEach(log => {
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    logDates.add(dateKey);
+  });
+
+  const sortedDates = Array.from(logDates).sort().reverse();
+  if (sortedDates.length === 0) return 0;
+
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  // Check if streak includes today or yesterday
+  if (!sortedDates.includes(today) && !sortedDates.includes(yesterday)) {
+    return 0;
+  }
+
+  let streak = 0;
+  let currentDate = new Date(sortedDates[0]);
+
+  for (const dateStr of sortedDates) {
+    const expectedDate = new Date(currentDate);
+    expectedDate.setDate(expectedDate.getDate() - streak);
+    const expectedStr = expectedDate.toISOString().split('T')[0];
+
+    if (dateStr === expectedStr) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+/**
+ * Calculate longest streak ever
+ */
+function calculateLongestStreak(foodLogs, waterLogs) {
+  const logDates = new Set();
+
+  [...foodLogs, ...waterLogs].forEach(log => {
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    logDates.add(dateKey);
+  });
+
+  const sortedDates = Array.from(logDates).sort();
+  if (sortedDates.length === 0) return 0;
+
+  let longestStreak = 1;
+  let currentStreak = 1;
+
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prevDate = new Date(sortedDates[i - 1]);
+    const currDate = new Date(sortedDates[i]);
+    const diffDays = Math.round((currDate - prevDate) / 86400000);
+
+    if (diffDays === 1) {
+      currentStreak++;
+      longestStreak = Math.max(longestStreak, currentStreak);
+    } else {
+      currentStreak = 1;
+    }
+  }
+
+  return longestStreak;
+}
+
+/**
+ * Determine user lifecycle stage
+ */
+function determineLifecycleStage(totalDaysActive, currentStreak, foodLogCount) {
+  if (totalDaysActive < 3 || foodLogCount < 5) {
+    return 'newcomer';
+  }
+  if (totalDaysActive < 14 || currentStreak < 5) {
+    return 'building';
+  }
+  if (totalDaysActive < 30 || currentStreak < 14) {
+    return 'established';
+  }
+  return 'expert';
+}
+
+/**
+ * Calculate average daily logs
+ */
+function calculateAverageDailyLogs(foodLogs, moodLogs, waterLogs) {
+  const dailyCounts = {};
+
+  [...foodLogs, ...moodLogs, ...waterLogs].forEach(log => {
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+  });
+
+  const counts = Object.values(dailyCounts);
+  if (counts.length === 0) return 0;
+
+  return Math.round((counts.reduce((a, b) => a + b, 0) / counts.length) * 10) / 10;
 }
 
 export default router;

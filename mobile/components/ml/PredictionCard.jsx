@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   },
   confidenceBar: {
     height: 4,
-    backgroundColor: SURFACES.elevated,
+    backgroundColor: SURFACES.background.secondary,
     borderRadius: 2,
     overflow: 'hidden',
     marginBottom: 6,
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: SURFACES.elevated,
+    borderTopColor: SURFACES.background.secondary,
   },
   rangeText: {
     fontSize: 12,

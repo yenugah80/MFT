@@ -15,16 +15,24 @@ import {
 
 /**
  * Macro bar chart component
+ * FIXED: Now calculates percentages by CALORIES (not grams)
+ * Industry standard: Protein 4cal/g, Carbs 4cal/g, Fat 9cal/g
  */
 function MacroBar({ protein, carbs, fat }) {
   const p = Number(protein) || 0;
   const c = Number(carbs) || 0;
   const f = Number(fat) || 0;
-  const total = p + c + f || 1;
 
-  const proteinPct = (p / total) * 100;
-  const carbsPct = (c / total) * 100;
-  const fatPct = (f / total) * 100;
+  // Convert grams to calories using Atwater factors
+  const proteinCal = p * 4;
+  const carbsCal = c * 4;
+  const fatCal = f * 9;
+  const totalCal = proteinCal + carbsCal + fatCal || 1;
+
+  // Calculate percentages by calories (industry standard)
+  const proteinPct = (proteinCal / totalCal) * 100;
+  const carbsPct = (carbsCal / totalCal) * 100;
+  const fatPct = (fatCal / totalCal) * 100;
 
   return (
     <View style={styles.macroBarContainer}>

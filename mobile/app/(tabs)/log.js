@@ -31,6 +31,7 @@ import { useFoodLog } from '../../hooks/useFoodLog';
 import { useDashboard } from '../../hooks/useDashboard';
 import { useNotification } from '../../providers/NotificationProvider';
 import { useWaterLog } from '../../hooks/useWaterLog';
+import { calculateCaffeine } from '../../constants/beverageConstants';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { useTheme } from '../../providers/ThemeProvider';
@@ -51,6 +52,7 @@ import LogInputSection from '../../components/log/LogInputSection';
 import MoodLogger from '../../components/MoodLogger';
 import MealPreviewCard from '../../components/log/MealPreviewCard';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
+import UnifiedMealAnalysis from '../../components/log/UnifiedMealAnalysis';
 import HydrationTracker from '../../components/HydrationTracker';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import AnimatedMeshGradient from '../../components/AnimatedMeshGradient';
@@ -567,6 +569,7 @@ export default function LogScreen() {
           fats: item.macros?.fat_g || 0,
           fiber: item.macros?.fiber_g || 0,
           sugar: item.macros?.sugar_g || 0,
+          sodium: item.macros?.sodium_mg || 0,
           micros: item.micros || {},
           sourceEvidence: item.sourceEvidence,
           confidence: item.sourceEvidence?.[0]?.confidence || 0.5,
@@ -880,26 +883,35 @@ export default function LogScreen() {
 
   /**
    * Transform water logs to beverage history format for HydrationTracker
+   * Also calculates total caffeine intake
    */
-  const beverageHistory = useMemo(() => {
-    if (!waterTodayData?.logs) return [];
+  const { beverageHistory, totalCaffeine } = useMemo(() => {
+    if (!waterTodayData?.logs) return { beverageHistory: [], totalCaffeine: 0 };
 
+    let caffeine = 0;
     const entries = waterTodayData.logs.map(log => {
       const rawLiters = parseFloat(log.amountLiters || 0);
       const hydrationLiters = parseFloat(log.hydrationLiters || log.amountLiters || 0);
+      const beverageType = log.beverageType || 'water';
+
+      // Calculate caffeine from this log
+      caffeine += calculateCaffeine(rawLiters, beverageType);
+
       return {
         id: Number(log.id),
         amount: Math.round(rawLiters * 1000), // Convert to ml
-        type: log.beverageType || 'water',
+        type: beverageType,
         timestamp: new Date(log.loggedDate).getTime(),
         amountLiters: rawLiters,
         hydrationLiters,
       };
     });
 
-    return entries
+    const sortedEntries = entries
       .filter(entry => Number.isFinite(entry.id))
       .sort((a, b) => b.timestamp - a.timestamp);
+
+    return { beverageHistory: sortedEntries, totalCaffeine: caffeine };
   }, [waterTodayData]);
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
@@ -1015,43 +1027,15 @@ export default function LogScreen() {
           </View>
         ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 ? (
           <View style={styles.resultsContainer}>
-            {/* SMART FLOW: Photo/Barcode show MealPreviewCard, Text shows detailed view */}
-            {(analysisSource === 'photo' || analysisSource === 'barcode') ? (
-              <MealPreviewCard
-                analysisResult={foodAnalysis.analysisResult}
-                imageUri={selectedImage}
-                onTapDetails={() => {
-                  setHasManuallyClosedDetails(false);
-                  setShowAnalysisDetails(true);
-                }}
-                onQuickSave={handleSaveMeal}
-                onEdit={handleCancel}
-                isSaving={isSavingLog}
-              />
-            ) : foodAnalysis.analysisResult.items.length === 1 ? (
-              <NutritionCard
-                foodLog={buildLegacyFoodLog(foodAnalysis.analysisResult.items[0])}
-                dailyValues={DAILY_VALUES} // Pass daily values
-                onSave={handleSaveSingleItem}
-                onCancel={handleCancel}
-                onHealthPress={() => handleHealthPress(buildLegacyFoodLog(foodAnalysis.analysisResult.items[0]))}
-              />
-            ) : (
-              <>
-                <FoodItemsList
-                  items={foodAnalysis.analysisResult.items}
-                  onUpdateQuantity={foodAnalysis.updateItemQuantity}
-                  onRemove={foodAnalysis.removeItem}
-                  onRemoveIngredient={foodAnalysis.removeIngredient}
-                  dailyValues={DAILY_VALUES} // Pass daily values to FoodItemsList
-                />
-                <MealTotalsCard
-                  totals={foodAnalysis.analysisResult.totals}
-                  itemCount={foodAnalysis.analysisResult.items.length}
-                  onSave={handleSaveMeal}
-                />
-              </>
-            )}
+            {/* UNIFIED DISPLAY: Same component for ALL input modes (text, photo, voice, barcode) */}
+            <UnifiedMealAnalysis
+              items={foodAnalysis.analysisResult.items}
+              totals={foodAnalysis.analysisResult.totals}
+              mealSummary={foodAnalysis.analysisResult.mealSummary}
+              onSave={handleSaveMeal}
+              onEdit={handleCancel}
+              saving={isSavingLog}
+            />
 
             {/* "Did you mean?" Suggestions - Only for text input */}
             {analysisSource === 'text' && foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
@@ -1213,6 +1197,12 @@ export default function LogScreen() {
       <BarcodeScannerModal
         visible={showBarcodeScannerModal}
         onClose={() => setShowBarcodeScannerModal(false)}
+        foodAnalysis={foodAnalysis}
+        onScanSuccess={(source) => {
+          setAnalysisSource(source);
+          setSelectedImage(null);
+          foodAnalysis.setInputText('');
+        }}
       />
 
       <MoodLogger
@@ -1259,6 +1249,11 @@ export default function LogScreen() {
             onLogWater={handleLogWater}
             onRemoveWater={handleRemoveWater}
             beverageHistory={beverageHistory}
+            totalCaffeine={totalCaffeine}
+            onViewHistory={() => {
+              setShowHydrationModal(false);
+              router.push('/insights/hydration-history');
+            }}
           />
         </View>
       </Modal>
@@ -1512,6 +1507,13 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     fontFamily: fonts.strong,
   },
+  inputSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 2,
+    fontFamily: fonts.regular,
+  },
   textInputLarge: {
     backgroundColor: '#F3F4F6',
     borderRadius: 14,
@@ -1557,6 +1559,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 18,
     fontFamily: fonts.strong,
+  },
+
+  /* Error State */
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '500',
+    lineHeight: 18,
+    fontFamily: fonts.regular,
   },
 
   /* Analysis Status */
@@ -1614,6 +1638,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     fontFamily: fonts.display,
+  },
+  analyzeHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+    fontFamily: fonts.regular,
   },
 
   /* Photo Mode */

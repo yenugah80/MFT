@@ -16,7 +16,8 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Database version for migration tracking
-const DB_VERSION = 1;
+// Version 2: Added sodium column
+const DB_VERSION = 2;
 const DB_VERSION_KEY = '@db_version';
 
 // Singleton database instance
@@ -63,6 +64,7 @@ export async function initDatabase() {
         fat REAL,
         fiber REAL,
         sugar REAL,
+        sodium REAL,
         netCarbs REAL,
         servingSize TEXT,
         timestamp INTEGER,
@@ -115,11 +117,16 @@ async function runMigrations(db) {
     if (currentVersion < DB_VERSION) {
       console.log(`[Database] Running migrations from v${currentVersion} to v${DB_VERSION}`);
 
-      // Future migrations go here
-      // Example:
-      // if (currentVersion < 2) {
-      //   db.execSync(`ALTER TABLE food_logs ADD COLUMN newColumn TEXT;`);
-      // }
+      // Migration v2: Add sodium column
+      if (currentVersion < 2) {
+        try {
+          db.execSync(`ALTER TABLE food_logs ADD COLUMN sodium REAL;`);
+          console.log('[Database] ✅ Added sodium column');
+        } catch (alterErr) {
+          // Column might already exist - ignore error
+          console.log('[Database] sodium column may already exist');
+        }
+      }
 
       await AsyncStorage.setItem(DB_VERSION_KEY, DB_VERSION.toString());
       console.log('[Database] ✅ Migrations complete');

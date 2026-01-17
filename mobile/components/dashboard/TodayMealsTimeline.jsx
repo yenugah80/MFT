@@ -24,7 +24,7 @@ function getHealthScoreColor(score) {
   if (score >= 80) return SEMANTIC.success.base;
   if (score >= 60) return SEMANTIC.warning.base;
   if (score >= 40) return '#F97316';
-  return SEMANTIC.error?.base || '#EF4444';
+  return SEMANTIC.danger?.base || '#EF4444';
 }
 
 // Meal type icons

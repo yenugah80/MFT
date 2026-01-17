@@ -24,14 +24,39 @@ import { useTheme } from '../../../providers/ThemeProvider';
 
 // Sub-components
 import MealScoreDial from './MealScoreDial';
-import NutriScoreCard from './NutriScoreCard';
+// NutriScoreCard removed - conflicted with MealScoreDial (showed different grades for same meal)
 import MacroProgressSection from './MacroProgressSection';
 import IngredientsSection from './IngredientsSection';
 import MicrosGrid from './MicrosGrid';
 import ActionButtons from './ActionButtons';
 
 /**
+ * Extract sodium from micros object (handles multiple formats)
+ * Returns sodium value in mg, or 0 if not found
+ */
+function extractSodiumFromMicros(micros) {
+  if (!micros) return 0;
+
+  // Try various key formats: sodium, sodium_mg, Sodium
+  const sodiumKeys = ['sodium', 'sodium_mg', 'Sodium'];
+  for (const key of sodiumKeys) {
+    const val = micros[key];
+    if (val !== undefined && val !== null) {
+      // Handle both {sodium: 1700} and {sodium: {value: 1700}}
+      if (typeof val === 'object' && val.value !== undefined) {
+        return val.value;
+      }
+      if (typeof val === 'number') {
+        return val;
+      }
+    }
+  }
+  return 0;
+}
+
+/**
  * Aggregate nutrition data from multiple items
+ * FIX: Ensures sodium from micros is copied to macros for consistent display
  */
 function aggregateNutrition(analysisResult) {
   if (!analysisResult?.items || analysisResult.items.length === 0) {
@@ -41,10 +66,21 @@ function aggregateNutrition(analysisResult) {
   // Single item - return directly
   if (analysisResult.items.length === 1) {
     const item = analysisResult.items[0];
+    const macros = { ...(item.macros || {}) };
+    const micros = item.micros || {};
+
+    // FIX: If sodium_mg is missing or 0 in macros, copy from micros
+    if (!macros.sodium_mg || macros.sodium_mg === 0) {
+      const sodiumFromMicros = extractSodiumFromMicros(micros);
+      if (sodiumFromMicros > 0) {
+        macros.sodium_mg = sodiumFromMicros;
+      }
+    }
+
     return {
       item,
-      macros: item.macros || {},
-      micros: item.micros || {},
+      macros,
+      micros,
       ingredients: item.ingredients || [],
       isComplex: item.isComplex || false,
       name: item.name,
@@ -58,22 +94,36 @@ function aggregateNutrition(analysisResult) {
   // Names aggregation available if needed for display
   // const names = analysisResult.items.map(i => i.name).join(', ');
 
-  // Aggregate micros
+  // Aggregate micros - handle both formats: {calcium: 15} and {calcium: {value: 15}}
   const aggregatedMicros = {};
   analysisResult.items.forEach(item => {
     if (item.micros) {
       Object.entries(item.micros).forEach(([key, val]) => {
+        // Handle both flat numbers and object format
+        const isObject = typeof val === 'object' && val !== null;
+        const value = isObject ? (val.value ?? 0) : (typeof val === 'number' ? val : 0);
+        const unit = isObject ? (val.unit || 'mg') : 'mg';
+
         if (!aggregatedMicros[key]) {
-          aggregatedMicros[key] = { value: 0, unit: val?.unit || '' };
+          aggregatedMicros[key] = { value: 0, unit };
         }
-        aggregatedMicros[key].value += val?.value || 0;
+        aggregatedMicros[key].value += value;
       });
     }
   });
 
+  // FIX: Ensure macros has sodium_mg from micros if missing
+  const macros = { ...(totals.macros || {}) };
+  if (!macros.sodium_mg || macros.sodium_mg === 0) {
+    const sodiumFromMicros = extractSodiumFromMicros(aggregatedMicros);
+    if (sodiumFromMicros > 0) {
+      macros.sodium_mg = sodiumFromMicros;
+    }
+  }
+
   return {
     item: analysisResult.items[0], // First item for confidence
-    macros: totals.macros || {},
+    macros,
     micros: aggregatedMicros,
     ingredients: analysisResult.items, // Use items as "ingredients" for multi-item meals
     isComplex: true,
@@ -165,22 +215,16 @@ export default function MealSummaryScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Meal Score Dial */}
+          {/* Primary Score Section - ONE score, ONE truth */}
+          {/* DESIGN FIX: Removed NutriScoreCard to eliminate conflicting scores */}
+          {/* MealScoreDial (0-100) is the single source of meal quality */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
             <MealScoreDial item={nutrition.item} />
           </View>
 
-          {/* Nutri-Score */}
+          {/* Macro Progress - shows meal composition, not daily goals */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <NutriScoreCard item={nutrition.item} />
-          </View>
-
-          {/* Macro Progress */}
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <MacroProgressSection
-              macros={nutrition.macros}
-              dailyValues={dailyValues}
-            />
+            <MacroProgressSection macros={nutrition.macros} />
           </View>
 
           {/* Ingredients (for complex meals) */}
@@ -324,6 +368,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     overflow: 'hidden',
   },
+  // compactGradeContainer removed - NutriScoreCard no longer used
   bottomSpacer: {
     height: SPACING[6],
   },

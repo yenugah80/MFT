@@ -1,13 +1,11 @@
 /**
- * FoodMoodScoreCard - Delightful Wellness Hero
+ * FoodMoodScoreCard - Personalized Wellness Hero
  *
- * Staff Design Principles:
- * 1. ONE clear number - your wellness score
- * 2. EMOTIONAL feedback - celebrate, encourage, never stress
- * 3. SIMPLE next action - what to do now
- * 4. PROGRESSIVE disclosure - tap for details
- *
- * NO overwhelming data. NO stress. Pure delight.
+ * Design Principles:
+ * 1. USER-SPECIFIC - Greets by name, knows their patterns
+ * 2. CONTEXTUAL - Time-aware, streak-aware, history-aware
+ * 3. ACTIONABLE - Shows what to do next based on their habits
+ * 4. CELEBRATORY - Highlights wins and personal bests
  */
 
 import React, { useEffect, useRef, useMemo } from 'react';
@@ -17,191 +15,295 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { BRAND, TEXT, SEMANTIC, SURFACES } from '../../constants/premiumTheme';
-import { BOLD_GRADIENTS, WELLNESS_COLORS } from '../../constants/modernColorPalette';
+import { BRAND, TEXT, SURFACES } from '../../constants/premiumTheme';
 import { calculateFoodMoodScore } from '../../utils/foodMoodScore';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
 /**
- * Animated Score Ring - The hero element
+ * Pie Chart Score Visual - 4 Wellness Domains
+ * Equal segments (25% each): Food, Mood, Hydration, Activity
+ * Fill level shows how well each domain is doing (0-100%)
+ * Percentages displayed inside each segment
  */
-function ScoreRing({ score, size = 120, strokeWidth = 10 }) {
-  const animatedValue = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
+function PieChartScore({ score, tier, breakdown, size = 160 }) {
+  // 4 wellness domains - each worth 25 points (equal visual weight)
+  const factors = [
+    { key: 'nutrition', label: 'Food', color: '#34D399', colorDark: '#059669', max: 25 },
+    { key: 'mood', label: 'Mood', color: '#A78BFA', colorDark: '#7C3AED', max: 25 },
+    { key: 'hydration', label: 'Water', color: '#60A5FA', colorDark: '#2563EB', max: 25 },
+    { key: 'activity', label: 'Activity', color: '#F59E0B', colorDark: '#D97706', max: 25 },
+  ];
 
-  useEffect(() => {
-    // Score fill animation
-    Animated.timing(animatedValue, {
-      toValue: score / 100,
-      duration: 1500,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+  const outerRadius = size / 2;
+  const innerRadius = size / 2 - 35; // Donut hole for score
+  const center = size / 2;
+  const totalMax = 100; // 4 × 25 = 100
 
-    // Gentle pulse for high scores
-    if (score >= 70) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.05,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+  // Calculate wedge path (filled pie slice) with validation
+  const getWedgePath = (startAngle, endAngle, outerR, innerR) => {
+    // Validate inputs - return null for invalid paths
+    const angleDiff = endAngle - startAngle;
+    if (angleDiff < 1 || !isFinite(angleDiff)) {
+      return null; // Too small angle or invalid
     }
-  }, [score, animatedValue, pulseAnim]);
 
-  const getScoreGradient = (s) => {
-    // Use vibrant wellness gradients
-    if (s >= 80) return [WELLNESS_COLORS.fitness.base, WELLNESS_COLORS.fitness.light]; // Vibrant green
-    if (s >= 60) return WELLNESS_COLORS.mood.gradient.slice(0, 2); // Vibrant purple/magenta
-    if (s >= 40) return WELLNESS_COLORS.energy.gradient.slice(0, 2); // Vibrant orange
-    return [WELLNESS_COLORS.hydration.base, WELLNESS_COLORS.hydration.light]; // Vibrant cyan
+    const startRad = (startAngle - 90) * (Math.PI / 180);
+    const endRad = (endAngle - 90) * (Math.PI / 180);
+
+    // Calculate points with rounding to avoid floating-point precision issues
+    const round = (n) => Math.round(n * 1000) / 1000;
+
+    // Outer arc points
+    const x1 = round(center + outerR * Math.cos(startRad));
+    const y1 = round(center + outerR * Math.sin(startRad));
+    const x2 = round(center + outerR * Math.cos(endRad));
+    const y2 = round(center + outerR * Math.sin(endRad));
+
+    // Inner arc points
+    const x3 = round(center + innerR * Math.cos(endRad));
+    const y3 = round(center + innerR * Math.sin(endRad));
+    const x4 = round(center + innerR * Math.cos(startRad));
+    const y4 = round(center + innerR * Math.sin(startRad));
+
+    // Validate all coordinates are finite numbers
+    if ([x1, y1, x2, y2, x3, y3, x4, y4].some(v => !isFinite(v))) {
+      return null;
+    }
+
+    const largeArc = angleDiff > 180 ? 1 : 0;
+
+    // Path: outer arc, line to inner, inner arc (reverse), close
+    return `M ${x1} ${y1} A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerR} ${innerR} 0 ${largeArc} 0 ${x4} ${y4} Z`;
   };
 
-  const colors = getScoreGradient(score);
+  // Build segments with equal 90° angles (4 domains × 90° = 360°)
+  let currentAngle = 0;
+  const segments = factors.map((factor) => {
+    const segmentAngle = 90; // Equal segments
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + segmentAngle;
+    const value = breakdown?.[factor.key] || 0;
+    const fillPercent = factor.max > 0 ? Math.min(1, value / factor.max) : 0;
+    const displayPercent = Math.round(fillPercent * 100);
+
+    // Calculate label position - center of the FILLED portion, not full segment
+    // Only position meaningfully if fill is substantial (>30%)
+    const fillEndAngle = startAngle + segmentAngle * fillPercent;
+    const labelAngle = fillPercent >= 0.3
+      ? (startAngle + fillEndAngle) / 2  // Middle of filled area
+      : (startAngle + endAngle) / 2;     // Middle of full segment (for legend reference)
+
+    // Position label closer to inner edge for better visibility
+    const labelRadius = innerRadius + (outerRadius - innerRadius) * 0.45;
+    const labelRad = (labelAngle - 90) * (Math.PI / 180);
+    const labelX = center + labelRadius * Math.cos(labelRad);
+    const labelY = center + labelRadius * Math.sin(labelRad);
+
+    currentAngle = endAngle;
+
+    return { ...factor, startAngle, endAngle, fillPercent, displayPercent, value, labelX, labelY };
+  });
+
+  // Score color and label based on actual score value
+  const getTierDisplay = (s) => {
+    if (s >= 80) return { color: '#10B981', label: 'Excellent' };
+    if (s >= 60) return { color: '#8B5CF6', label: 'Good' };
+    if (s >= 40) return { color: '#3B82F6', label: 'Okay' };
+    if (s >= 20) return { color: '#F59E0B', label: 'Fair' };
+    if (s > 0) return { color: '#94A3B8', label: 'Low' };
+    return { color: '#94A3B8', label: 'No data' };
+  };
+
+  const tierDisplay = getTierDisplay(score);
 
   return (
-    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-      <View style={ringStyles.container}>
-        <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-          <Defs>
-            <SvgGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor={colors[0]} />
-              <Stop offset="100%" stopColor={colors[1]} />
-            </SvgGradient>
-          </Defs>
-          {/* Background ring */}
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="rgba(143, 163, 199, 0.22)"
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-          {/* Animated progress */}
-          <AnimatedCircle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="url(#scoreGradient)"
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={animatedValue.interpolate({
-              inputRange: [0, 1],
-              outputRange: [circumference, 0],
+    <View style={pieStyles.container}>
+      <View style={pieStyles.chartWrapper}>
+        <Svg width={size} height={size}>
+          <G>
+            {/* 4 domain segments - single color with opacity based on fill */}
+            {segments.map((seg) => {
+              const path = getWedgePath(seg.startAngle, seg.endAngle, outerRadius - 2, innerRadius);
+              if (!path) return null;
+              // Use opacity to show fill level: min 30% opacity, max 100%
+              const opacity = 0.30 + (seg.fillPercent * 0.70);
+              return (
+                <Path
+                  key={`seg-${seg.key}`}
+                  d={path}
+                  fill={seg.color}
+                  fillOpacity={opacity}
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
+                />
+              );
             })}
-          />
+            {/* Percentage labels inside each segment - always show */}
+            {segments.map((seg) => {
+              if (!isFinite(seg.labelX) || !isFinite(seg.labelY)) return null;
+              // Text color: white if segment is bright enough, otherwise use dark color
+              const textColor = seg.fillPercent >= 0.4 ? '#FFFFFF' : seg.colorDark;
+              return (
+                <SvgText
+                  key={`label-${seg.key}`}
+                  x={seg.labelX}
+                  y={seg.labelY + 4}
+                  fill={textColor}
+                  fontSize={12}
+                  fontWeight="700"
+                  textAnchor="middle"
+                >
+                  {seg.displayPercent}%
+                </SvgText>
+              );
+            })}
+          </G>
         </Svg>
-        {/* Score number */}
-        <View style={ringStyles.scoreContainer}>
-          <Text style={[ringStyles.score, { color: colors[0] }]}>{score}</Text>
-          <Text style={ringStyles.label}>score</Text>
+
+        {/* Score in center */}
+        <View style={pieStyles.scoreCenter}>
+          <Text style={[pieStyles.scoreValue, { color: tierDisplay.color }]}>{score}</Text>
+          <Text style={[pieStyles.tierLabel, { color: tierDisplay.color }]}>{tierDisplay.label}</Text>
         </View>
       </View>
-    </Animated.View>
-  );
-}
 
-const ringStyles = StyleSheet.create({
-  container: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreContainer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  score: {
-    fontSize: 36,
-    fontWeight: '800',
-    letterSpacing: -1,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: TEXT.tertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: -2,
-  },
-});
-
-
-/**
- * Celebration Badge - For wins (uses Ionicons, no emojis)
- */
-function CelebrationBadge({ celebration }) {
-  if (!celebration) return null;
-
-  const bgColor = celebration.color ? `${celebration.color}15` : 'rgba(16, 185, 129, 0.1)';
-  const borderColor = celebration.color ? `${celebration.color}30` : 'rgba(16, 185, 129, 0.2)';
-
-  return (
-    <View style={[celebrationStyles.badge, { backgroundColor: bgColor, borderColor }]}>
-      <Ionicons name={celebration.icon || 'sparkles'} size={14} color={celebration.color || '#10B981'} />
-      <Text style={celebrationStyles.text}>{celebration.text}</Text>
+      {/* Legend below */}
+      <View style={pieStyles.legend}>
+        {segments.map((seg) => (
+          <View key={seg.key} style={pieStyles.legendItem}>
+            <View style={[pieStyles.legendDot, { backgroundColor: seg.color }]} />
+            <Text style={pieStyles.legendLabel}>{seg.label}</Text>
+            <Text style={[pieStyles.legendPercent, { color: seg.displayPercent >= 70 ? seg.colorDark : TEXT.tertiary }]}>
+              {seg.displayPercent}%
+            </Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
-const celebrationStyles = StyleSheet.create({
-  badge: {
-    flexDirection: 'row',
+const pieStyles = StyleSheet.create({
+  container: {
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[2],
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
   },
-  text: {
-    fontSize: 12,
+  chartWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FFFFFF',
+  },
+  scoreValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -1,
+  },
+  tierLabel: {
+    fontSize: 10,
     fontWeight: '600',
-    color: '#059669',
+    letterSpacing: 0.3,
+    marginTop: -2,
+  },
+  legend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    marginTop: SPACING[4],
+    paddingHorizontal: SPACING[2],
+  },
+  legendItem: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendLabel: {
+    fontSize: 10,
+    color: TEXT.secondary,
+    fontWeight: '600',
+  },
+  legendPercent: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
 
 /**
- * Main FoodMoodScoreCard Component
+ * Achievement Badge - Celebrates wins
+ */
+function AchievementBadge({ achievement }) {
+  if (!achievement) return null;
+
+  return (
+    <View style={[achievementStyles.badge, { backgroundColor: `${achievement.color}15`, borderColor: `${achievement.color}30` }]}>
+      <Ionicons name={achievement.icon} size={12} color={achievement.color} />
+      <Text style={[achievementStyles.text, { color: achievement.color }]}>{achievement.text}</Text>
+    </View>
+  );
+}
+
+const achievementStyles = StyleSheet.create({
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  text: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+});
+
+/**
+ * Main Wellness Score Card Component
+ * Displays wellness score based on 4 domains: Food, Mood, Hydration, Activity
  */
 export default function FoodMoodScoreCard({
   today = {},
   goals = {},
   moodLogs = [],
+  activityData = {}, // NEW: Activity data { minutes, intensity, types }
+  yesterday = {},
+  userName = '',
   historicalScores = [],
   onViewDetails,
 }) {
   const cardAnim = useRef(new Animated.Value(0)).current;
 
-  // Calculate the score
+  // Calculate the wellness score from 4 domains
   const scoreData = useMemo(() => {
     const nutrition = today?.nutrition || {};
     const meals = today?.foodLogs || [];
     const water = today?.waterIntakeLiters || 0;
 
+    // Activity data - support both direct prop and today object
+    const activity = activityData || today?.activity || {};
+    const activityMinutes = activity?.totalMinutes || activity?.minutes || 0;
+    const activityIntensity = activity?.intensity || 'moderate';
+    const activityTypes = activity?.types || [];
+
     return calculateFoodMoodScore({
+      // Nutrition
       calories: nutrition.totalCalories || 0,
       calorieGoal: goals?.dailyCalories || 2000,
       protein: nutrition.totalProtein || 0,
@@ -212,53 +314,185 @@ export default function FoodMoodScoreCard({
       fatsGoal: goals?.fatsG || 65,
       fiber: nutrition.totalFiber || 0,
       fiberGoal: 30,
+      // Hydration
       waterIntake: water,
       waterGoal: goals?.waterLiters || 2.5,
+      // Mood
       moodLogs,
       meals,
+      // Activity (NEW)
+      activityMinutes,
+      activityGoal: goals?.activityMinutes || 30,
+      activityIntensity,
+      activityTypes,
     });
-  }, [today, goals, moodLogs]);
+  }, [today, goals, moodLogs, activityData]);
 
-  // Generate status indicator - functional, not emotional
-  const getStatusIndicator = useMemo(() => {
-    const { breakdown } = scoreData;
+  // Status indicator - only show when all 4 domains are logged
+  const statusIndicator = useMemo(() => {
     const hasMeals = (today?.foodLogs || []).length > 0;
     const hasWater = (today?.waterIntakeLiters || 0) > 0;
     const hasMood = (moodLogs || []).length > 0;
-    const logged = [hasMeals, hasWater, hasMood].filter(Boolean).length;
+    const hasActivity = (activityData?.minutes || today?.activity?.totalMinutes || 0) > 0;
+    const logged = [hasMeals, hasWater, hasMood, hasActivity].filter(Boolean).length;
 
-    if (logged === 3) return { icon: 'checkmark-circle', color: '#10B981', text: 'Complete' };
-    if (logged === 2) return { icon: 'ellipse-outline', color: '#8B5CF6', text: '2 of 3' };
-    if (logged === 1) return { icon: 'ellipse-outline', color: '#F59E0B', text: '1 of 3' };
-    return { icon: 'scan-outline', color: '#6B7280', text: 'No data' };
-  }, [scoreData, today, moodLogs]);
+    // Only show badge when all 4 are complete
+    if (logged === 4) return { icon: 'checkmark-circle', color: '#10B981', text: 'All logged' };
+    return null; // Don't show partial progress - pie chart shows that
+  }, [today, moodLogs, activityData]);
 
-  // Functional message - what's next, not judgment
-  const getDataMessage = ({ score, breakdown, hasMeals, hasWater, hasMood }) => {
+  // Get achievement if any (no streaks - those are shown elsewhere)
+  const achievement = useMemo(() => {
+    const { score } = scoreData;
+    const nutrition = today?.nutrition || {};
+    const protein = nutrition.totalProtein || 0;
+    const proteinGoal = goals?.proteinG || 150;
+    const calories = nutrition.totalCalories || 0;
+    const calorieGoal = goals?.dailyCalories || 2000;
+    const yesterdayScore = yesterday?.score || 0;
+
+    // Score improvements vs yesterday
+    if (yesterdayScore > 0 && score > yesterdayScore + 10) {
+      return { icon: 'trending-up', color: '#10B981', text: `+${score - yesterdayScore} vs yesterday` };
+    }
+
+    // Goal achievements
+    if (protein >= proteinGoal) return { icon: 'fitness', color: '#8B5CF6', text: 'Protein goal hit!' };
+    if (calories >= calorieGoal * 0.9 && calories <= calorieGoal * 1.1) {
+      return { icon: 'checkmark-circle', color: '#10B981', text: 'Calories on target' };
+    }
+
+    // High score
+    if (score >= 80) return { icon: 'star', color: '#F59E0B', text: 'Great day!' };
+
+    return null;
+  }, [scoreData, today, goals, yesterday]);
+
+  // Header content - Today's Wellness Score
+  const headerContent = useMemo(() => {
+    const hasMeals = (today?.foodLogs || []).length > 0;
+    const { tier } = scoreData;
+
+    if (!hasMeals) {
+      return {
+        title: "Today's Wellness",
+        subtitle: 'Log meals to build your score',
+      };
+    }
+
+    // Has data - show tier label
+    const tierLabels = {
+      excellent: 'Thriving today!',
+      good: 'Strong day so far',
+      okay: 'On track today',
+      fair: 'Building momentum',
+      low: 'Getting started',
+    };
+
+    return {
+      title: "Today's Wellness",
+      subtitle: tierLabels[tier] || 'Your daily score',
+    };
+  }, [today, scoreData]);
+
+  // Dynamic personalized message
+  const personalizedMessage = useMemo(() => {
+    const nutrition = today?.nutrition || {};
+    const calories = nutrition.totalCalories || 0;
+    const protein = nutrition.totalProtein || 0;
+    const water = today?.waterIntakeLiters || 0;
+    const mealCount = (today?.foodLogs || []).length;
+    const calorieGoal = goals?.dailyCalories || 2000;
+    const proteinGoal = goals?.proteinG || 150;
+    const waterGoal = goals?.waterLiters || 2.5;
+    const hour = new Date().getHours();
+    const name = userName ? userName.split(' ')[0] : '';
+
+    const hasMeals = mealCount > 0;
+    const hasWater = water > 0;
+    const hasMood = (moodLogs || []).length > 0;
+
+    // Calculate percentages
+    const calPercent = calorieGoal > 0 ? Math.round((calories / calorieGoal) * 100) : 0;
+    const proteinPercent = proteinGoal > 0 ? Math.round((protein / proteinGoal) * 100) : 0;
+    const waterPercent = waterGoal > 0 ? Math.round((water / waterGoal) * 100) : 0;
+    const glasses = Math.round(water / 0.25);
+
+    // Nothing logged - don't show message (header subtitle already handles this)
+    if (!hasMeals && !hasWater && !hasMood) {
+      return null;
+    }
+
+    // Build context-aware message
+    const remaining = {
+      calories: Math.max(0, calorieGoal - calories),
+      protein: Math.max(0, proteinGoal - protein),
+      water: Math.max(0, Math.round((waterGoal - water) / 0.25)), // glasses remaining
+    };
+
+    // All data logged - celebratory or summary
+    if (hasMeals && hasWater && hasMood) {
+      if (calPercent >= 90 && calPercent <= 110 && proteinPercent >= 80) {
+        return `Nailed it! ${Math.round(calories)} cal, ${Math.round(protein)}g protein`;
+      }
+      if (proteinPercent >= 100) {
+        return `Protein goal crushed! ${Math.round(protein)}g today`;
+      }
+      if (calPercent > 115) {
+        return `${Math.round(calories)} cal (${calPercent}%) - solid fuel today`;
+      }
+      return `${Math.round(calories)} cal • ${Math.round(protein)}g protein • ${glasses} glasses`;
+    }
+
+    // Partial data - show progress + what's missing
+    const parts = [];
     const missing = [];
-    if (!hasMeals) missing.push('meals');
-    if (!hasWater) missing.push('water');
-    if (!hasMood) missing.push('mood');
 
-    if (missing.length === 3) {
-      return "Log meals to start pattern detection";
+    if (hasMeals) {
+      if (calPercent >= 80) {
+        parts.push(`${calPercent}% calories`);
+      } else {
+        parts.push(`${Math.round(calories)} cal`);
+      }
+      if (proteinPercent >= 50) {
+        parts.push(`${proteinPercent}% protein`);
+      }
+    } else {
+      missing.push('meals');
     }
 
-    if (missing.length > 0) {
-      return `Missing: ${missing.join(', ')}`;
+    if (hasWater) {
+      if (waterPercent >= 80) {
+        parts.push(`${glasses} glasses`);
+      } else {
+        parts.push(`${remaining.water} glasses to go`);
+      }
+    } else {
+      missing.push('water');
     }
 
-    // All data present - give functional insight
-    if ((breakdown?.nutrition || 0) >= 25 && (breakdown?.hydration || 0) >= 15) {
-      return "Full data. Check insights below.";
+    if (!hasMood) {
+      missing.push('mood');
     }
 
-    if ((breakdown?.nutrition || 0) < 18) {
-      return "Low protein logged. Check portions.";
+    // Construct final message
+    if (parts.length > 0 && missing.length > 0) {
+      const progressPart = parts.slice(0, 2).join(' • ');
+      const missingPart = missing.length === 1 ? `Add ${missing[0]}` : `Add ${missing.join(' & ')}`;
+      return `${progressPart} • ${missingPart}`;
     }
 
-    return "Data captured. Patterns building.";
-  };
+    if (parts.length > 0) {
+      return parts.join(' • ');
+    }
+
+    // Only mood logged
+    if (hasMood && !hasMeals && !hasWater) {
+      return 'Mood logged! Now add meals & water';
+    }
+
+    return 'Keep logging to see your progress';
+  }, [today, goals, moodLogs, userName]);
 
   // Entrance animation
   useEffect(() => {
@@ -275,91 +509,86 @@ export default function FoodMoodScoreCard({
     onViewDetails?.();
   };
 
-  const hasMeals = (today?.foodLogs || []).length > 0;
-  const hasWater = (today?.waterIntakeLiters || 0) > 0;
-  const hasMood = (moodLogs || []).length > 0;
-  const { score, label, emoji, color, breakdown } = scoreData;
-  const message = getDataMessage({ score, breakdown, hasMeals, hasWater, hasMood });
-  const statusIndicator = getStatusIndicator;
+  const { score } = scoreData;
 
   return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.95}>
-      <Animated.View
-        style={[
-          styles.card,
-          {
-            transform: [{ scale: cardAnim }],
-            opacity: cardAnim,
-          },
-        ]}
+    <Animated.View
+      style={[
+        styles.card,
+        {
+          transform: [{ scale: cardAnim }],
+          opacity: cardAnim,
+        },
+      ]}
+    >
+      <LinearGradient
+        colors={SURFACES.gradient.pastelLavender}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
       >
-        <LinearGradient
-          colors={SURFACES.gradient.pastelLavender}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradient}
-        >
-          {/* Header - Functional, not judgmental */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <View style={styles.headerIcon}>
-                <Ionicons name="analytics-outline" size={16} color={BRAND.primaryDark} />
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>Data Coverage</Text>
-                <Text style={styles.headerSubtitle}>Today&apos;s tracking</Text>
-              </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIcon}>
+              <Ionicons name="sparkles" size={16} color={BRAND.primaryDark} />
             </View>
+            <View>
+              <Text style={styles.headerTitle}>{headerContent.title}</Text>
+              <Text style={styles.headerSubtitle}>{headerContent.subtitle}</Text>
+            </View>
+          </View>
+          {statusIndicator && (
             <View style={styles.headerRight}>
               <View style={[styles.statusPill, { borderColor: `${statusIndicator.color}30`, backgroundColor: `${statusIndicator.color}12` }]}>
                 <Ionicons name={statusIndicator.icon} size={14} color={statusIndicator.color} />
                 <Text style={[styles.statusText, { color: statusIndicator.color }]}>{statusIndicator.text}</Text>
               </View>
             </View>
-          </View>
+          )}
+        </View>
 
-          {/* Main content */}
-          <View style={styles.content}>
-            {/* Score Ring */}
-            <View style={styles.scorePanel}>
-              <ScoreRing score={score} />
-              <View style={styles.scoreMeta}>
-                <Text style={styles.scoreMetaLabel}>Completeness</Text>
-                <Text style={[styles.scoreMetaValue, { color: statusIndicator.color }]}>{score}%</Text>
-              </View>
-            </View>
+        {/* Main content - Pie chart visual */}
+        <View style={styles.content}>
+          <PieChartScore
+            score={score}
+            tier={scoreData.tier}
+            breakdown={scoreData.breakdown}
+            maxBreakdown={scoreData.maxBreakdown}
+          />
+        </View>
 
-            {/* Right side info */}
-            <View style={styles.info}>
-              {/* Functional status message */}
-              <Text style={styles.message}>{message}</Text>
-            </View>
+        {/* Achievement & personalized message */}
+        {(achievement || personalizedMessage) && (
+          <View style={styles.messageSection}>
+            {achievement && <AchievementBadge achievement={achievement} />}
+            {personalizedMessage && (
+              <Text style={styles.message}>{personalizedMessage}</Text>
+            )}
           </View>
+        )}
 
-          {/* Tap hint */}
-          <View style={styles.actionRow}>
-            <Text style={styles.actionText}>View all insights</Text>
-            <Ionicons name="arrow-forward" size={14} color={TEXT.secondary} />
-          </View>
-        </LinearGradient>
-      </Animated.View>
-    </TouchableOpacity>
+        {/* Action button - navigates to wellness score history */}
+        <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.actionRow}>
+          <Text style={styles.actionText}>View score history</Text>
+          <Ionicons name="chevron-forward" size={14} color={TEXT.secondary} />
+        </TouchableOpacity>
+      </LinearGradient>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[3],
     borderRadius: RADIUS['2xl'],
     overflow: 'hidden',
     backgroundColor: SURFACES.card.primary,
-    // Luxurious shadow for depth
     shadowColor: BRAND.primaryDark,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 10,
-    // Premium border glow
     borderWidth: 1.5,
     borderColor: SURFACES.card.border,
   },
@@ -367,8 +596,6 @@ const styles = StyleSheet.create({
     padding: SPACING[5],
     backgroundColor: SURFACES.card.primary,
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -411,51 +638,27 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     borderWidth: 1,
   },
-  statusEmoji: {
-    fontSize: 12,
-  },
   statusText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.weight.bold,
   },
-
-  // Content
   content: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[5],
+    paddingVertical: SPACING[2],
   },
-  scorePanel: {
+  messageSection: {
     alignItems: 'center',
     gap: SPACING[2],
+    marginTop: SPACING[4],
+    paddingHorizontal: SPACING[2],
   },
-  scoreMeta: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  scoreMetaLabel: {
-    fontSize: 11,
-    color: TEXT.tertiary,
-    fontWeight: TYPOGRAPHY.weight.medium,
-  },
-  scoreMetaValue: {
-    fontSize: 13,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-  },
-  info: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-
-  // Message
   message: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
-    lineHeight: 24,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
-
-  // Tap hint
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',

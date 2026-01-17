@@ -364,6 +364,7 @@ export default function MealLoggedCard({
   const [fadeAnim] = useState(new Animated.Value(0));
   // Defer animated child components to prevent bridge overflow
   const [animatedComponentsReady, setAnimatedComponentsReady] = useState(false);
+  const [showAllMicros, setShowAllMicros] = useState(false);
   const interactionRef = useRef(null);
 
   // Navigate to meal detail screen
@@ -406,13 +407,24 @@ export default function MealLoggedCard({
   const sourceIcon = getSourceIcon(meal.source);
   const sourceLabel = getSourceLabel(meal.source);
 
-  // Extract micronutrients (top 6 most important)
+  // Extract micronutrients
+  // Handle both formats: {calcium: 15} and {calcium: {value: 15, unit: 'mg'}}
   const microsEntries = meal.micros && typeof meal.micros === 'object'
     ? Object.entries(meal.micros)
     : [];
-  const importantMicros = microsEntries
-    .filter(([, val]) => val && val.value > 0)
-    .slice(0, 6);
+  const allMicros = microsEntries
+    .map(([name, val]) => {
+      // Normalize to {name, value, unit} format
+      const isObject = typeof val === 'object' && val !== null;
+      const value = isObject ? (val.value ?? 0) : (typeof val === 'number' ? val : 0);
+      const unit = isObject ? (val.unit || 'mg') : 'mg';
+      return [name, { value, unit, dv: isObject ? val.dv : undefined }];
+    })
+    .filter(([, data]) => data.value > 0);
+
+  // Show 6 by default, or all if expanded
+  const displayedMicros = showAllMicros ? allMicros : allMicros.slice(0, 6);
+  const hasMoreMicros = allMicros.length > 6;
 
   return (
     <Animated.View
@@ -470,7 +482,7 @@ export default function MealLoggedCard({
               <View style={styles.nutriScoreSection}>
                 <NutriScoreGlow grade={meal.nutriScore} size="lg" />
                 <View style={styles.nutriScoreInfo}>
-                  <Text style={styles.nutriScoreLabel}>NutriScore</Text>
+                  <Text style={styles.nutriScoreLabel}>Nutrition Grade</Text>
                   <Text style={[styles.nutriScoreGrade, { color: NUTRISCORE[meal.nutriScore]?.text || TEXT.primary }]}>
                     Grade {meal.nutriScore}
                   </Text>
@@ -694,14 +706,14 @@ export default function MealLoggedCard({
         {/* ──────────────────────────────────────────── */}
         {/* TERTIARY DATA - Micronutrients (if available) */}
         {/* ──────────────────────────────────────────── */}
-        {importantMicros.length > 0 && (
+        {allMicros.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Key Micronutrients</Text>
               <Text style={styles.sectionNote}>Estimated</Text>
             </View>
             <View style={styles.microContainer}>
-              {importantMicros.map(([name, data]) => (
+              {displayedMicros.map(([name, data]) => (
                 <MicroRow
                   key={name}
                   name={name.charAt(0).toUpperCase() + name.slice(1)}
@@ -711,6 +723,22 @@ export default function MealLoggedCard({
                 />
               ))}
             </View>
+            {hasMoreMicros && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                onPress={() => setShowAllMicros(!showAllMicros)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.viewMoreText}>
+                  {showAllMicros ? 'Show less' : `+${allMicros.length - 6} more nutrients`}
+                </Text>
+                <Ionicons
+                  name={showAllMicros ? 'chevron-up' : 'chevron-down'}
+                  size={ICON_SIZES.sm}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1138,6 +1166,21 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.medium,
     minWidth: 40,
     textAlign: 'right',
+  },
+  viewMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: SPACING[3],
+    gap: SPACING[1],
+    marginTop: SPACING[2],
+    borderTopWidth: 1,
+    borderTopColor: `${BRAND.primary}15`,
+  },
+  viewMoreText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: BRAND.primary,
   },
 
   // ──────────────────────────────────────────────

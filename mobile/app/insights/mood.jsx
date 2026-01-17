@@ -47,14 +47,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 64;
 const CHART_HEIGHT = 140;
 
-// Mood emoji mapping
-const MOOD_EMOJIS = {
-  happy: { emoji: '😊', label: 'Happy', color: '#10B981' },
-  energized: { emoji: '⚡', label: 'Energized', color: '#F59E0B' },
-  calm: { emoji: '😌', label: 'Calm', color: '#3B82F6' },
-  neutral: { emoji: '😐', label: 'Neutral', color: '#6B7280' },
-  stressed: { emoji: '😰', label: 'Stressed', color: '#EF4444' },
-  sad: { emoji: '😢', label: 'Sad', color: '#8B5CF6' },
+// Mood icon mapping (using Ionicons instead of emojis)
+const MOOD_ICONS = {
+  happy: { icon: 'happy', label: 'Happy', color: '#10B981' },
+  energized: { icon: 'flash', label: 'Energized', color: '#F59E0B' },
+  calm: { icon: 'leaf', label: 'Calm', color: '#3B82F6' },
+  neutral: { icon: 'ellipse-outline', label: 'Neutral', color: '#6B7280' },
+  stressed: { icon: 'alert-circle', label: 'Stressed', color: '#EF4444' },
+  sad: { icon: 'sad', label: 'Sad', color: '#8B5CF6' },
 };
 
 // Pattern tags with icons
@@ -262,7 +262,7 @@ export default function MoodInsightsScreen() {
 
     const message = `My Mood This Week\n\n` +
       `Average: ${moodStats.avgMood}/10\n` +
-      `Trend: ${moodStats.trend === 'up' ? '📈 Improving' : moodStats.trend === 'down' ? '📉 Declining' : '➡️ Stable'}\n` +
+      `Trend: ${moodStats.trend === 'up' ? 'Improving' : moodStats.trend === 'down' ? 'Declining' : 'Stable'}\n` +
       `Logged ${moodStats.loggedDays} days\n\n` +
       `Tracked with MyFoodTracker`;
 
@@ -365,7 +365,7 @@ export default function MoodInsightsScreen() {
 
   // Get mood display info
   const getMoodDisplay = (mood) => {
-    return MOOD_EMOJIS[mood] || MOOD_EMOJIS.neutral;
+    return MOOD_ICONS[mood] || MOOD_ICONS.neutral;
   };
 
   if (isLoading) {
@@ -408,9 +408,13 @@ export default function MoodInsightsScreen() {
           <View style={styles.heroContent}>
             {latestMood ? (
               <>
-                <Text style={styles.heroEmoji}>
-                  {getMoodDisplay(latestMood.mood).emoji}
-                </Text>
+                <View style={styles.heroIconContainer}>
+                  <Ionicons
+                    name={getMoodDisplay(latestMood.mood).icon}
+                    size={48}
+                    color={getMoodDisplay(latestMood.mood).color}
+                  />
+                </View>
                 <View style={styles.heroTextContainer}>
                   <Text style={styles.heroLabel}>You're feeling</Text>
                   <Text style={styles.heroMood}>
@@ -432,7 +436,7 @@ export default function MoodInsightsScreen() {
               </>
             ) : (
               <View style={styles.heroEmptyState}>
-                <Text style={styles.heroEmptyEmoji}>🤔</Text>
+                <Ionicons name="help-circle-outline" size={40} color={TEXT.tertiary} />
                 <Text style={styles.heroEmptyText}>How are you feeling today?</Text>
                 <TouchableOpacity onPress={handleLogMood} style={styles.heroLogButton}>
                   <Ionicons name="add-circle" size={18} color={TEXT.white} />
@@ -559,7 +563,9 @@ export default function MoodInsightsScreen() {
                 const moodConfig = getMoodDisplay(corr.mood);
                 return (
                   <View key={i} style={styles.correlationItem}>
-                    <Text style={styles.correlationEmoji}>{moodConfig.emoji}</Text>
+                    <View style={[styles.correlationIconContainer, { backgroundColor: `${moodConfig.color}15` }]}>
+                      <Ionicons name={moodConfig.icon} size={20} color={moodConfig.color} />
+                    </View>
                     <View style={styles.correlationContent}>
                       <Text style={styles.correlationMood}>
                         Felt {moodConfig.label} after eating
@@ -753,8 +759,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  heroEmoji: {
-    fontSize: 56,
+  heroIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING[4],
   },
   heroTextContainer: {
@@ -984,8 +995,13 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     gap: SPACING[3],
   },
-  correlationEmoji: {
-    fontSize: 28,
+  correlationIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING[3],
   },
   correlationContent: {
     flex: 1,

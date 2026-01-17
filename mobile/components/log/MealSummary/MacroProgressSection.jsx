@@ -1,7 +1,14 @@
 /**
  * MacroProgressSection Component
- * Displays macro progress bars with daily goal context
- * Features: Protein, Carbs, Fat bars with percentages
+ * Displays meal macronutrient breakdown
+ *
+ * DESIGN PRINCIPLE: Show meal nutrition clearly, daily context as secondary
+ * - Primary: Absolute macro values for THIS meal
+ * - Secondary: Macro ratios within the meal (P/C/F distribution)
+ * - Tertiary: Optional daily goal context (not prominently displayed)
+ *
+ * This avoids confusion where "15% of daily calories" makes a normal meal
+ * look inadequate when it's actually a reasonable portion of a 3-meal day.
  */
 
 import React from 'react';
@@ -34,17 +41,14 @@ const MACRO_CONFIG = {
 };
 
 /**
- * Single macro progress bar
+ * Single macro display with meal ratio context
+ * Shows: absolute value + percentage of this meal's calories from this macro
  */
-function MacroBar({ type, current, goal, showGoal = true }) {
+function MacroBar({ type, current, mealRatioPercent }) {
   const { colors, isDark } = useTheme();
   const config = MACRO_CONFIG[type];
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
-
-  // Calculate percentage
-  const percentage = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
-  const isOverGoal = current > goal;
 
   return (
     <View style={styles.macroRow}>
@@ -57,14 +61,10 @@ function MacroBar({ type, current, goal, showGoal = true }) {
           <Text style={[styles.macroCurrent, { color: textPrimary }]}>
             {Math.round(current)}{config.unit}
           </Text>
-          {showGoal && goal > 0 && (
-            <Text style={[styles.macroGoal, { color: textSecondary }]}>
-              / {Math.round(goal)}{config.unit}
-            </Text>
-          )}
         </View>
       </View>
 
+      {/* Bar shows proportion of meal calories from this macro */}
       <View
         style={[
           styles.progressBarContainer,
@@ -75,21 +75,16 @@ function MacroBar({ type, current, goal, showGoal = true }) {
           style={[
             styles.progressBarFill,
             {
-              width: `${Math.min(100, percentage)}%`,
-              backgroundColor: isOverGoal ? '#EF4444' : config.color,
+              width: `${Math.min(100, mealRatioPercent)}%`,
+              backgroundColor: config.color,
             },
           ]}
         />
       </View>
 
       <View style={styles.progressFooter}>
-        <Text
-          style={[
-            styles.percentageText,
-            { color: isOverGoal ? '#EF4444' : config.color },
-          ]}
-        >
-          {Math.round(percentage)}% {showGoal && 'of daily goal'}
+        <Text style={[styles.percentageText, { color: textSecondary }]}>
+          {Math.round(mealRatioPercent)}% of meal calories
         </Text>
       </View>
     </View>
@@ -97,15 +92,13 @@ function MacroBar({ type, current, goal, showGoal = true }) {
 }
 
 /**
- * Calories display (large number)
+ * Calories display (large number) - meal focused
+ * Shows absolute calories without confusing daily goal context
  */
-function CaloriesDisplay({ calories, goal }) {
+function CaloriesDisplay({ calories }) {
   const { colors } = useTheme();
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
-
-  const percentage = goal > 0 ? Math.round((calories / goal) * 100) : 0;
-  const isOverGoal = calories > goal;
 
   return (
     <View style={styles.caloriesContainer}>
@@ -115,26 +108,14 @@ function CaloriesDisplay({ calories, goal }) {
         </Text>
         <Text style={[styles.caloriesUnit, { color: textSecondary }]}>kcal</Text>
       </View>
-      {goal > 0 && (
-        <View style={styles.caloriesGoal}>
-          <Text
-            style={[
-              styles.caloriesPercentage,
-              { color: isOverGoal ? '#EF4444' : '#6B4EFF' },
-            ]}
-          >
-            {percentage}%
-          </Text>
-          <Text style={[styles.caloriesGoalText, { color: textSecondary }]}>
-            of {Math.round(goal)} daily
-          </Text>
-        </View>
-      )}
+      <Text style={[styles.mealLabel, { color: textSecondary }]}>
+        This meal
+      </Text>
     </View>
   );
 }
 
-export default function MacroProgressSection({ macros, dailyValues }) {
+export default function MacroProgressSection({ macros }) {
   const { colors, isDark } = useTheme();
   const textPrimary = colors.text.primary;
 
@@ -144,11 +125,16 @@ export default function MacroProgressSection({ macros, dailyValues }) {
   const carbs = macros?.carbs_g || 0;
   const fat = macros?.fat_g || 0;
 
-  // Daily goals with fallbacks
-  const calorieGoal = dailyValues?.calories || 2000;
-  const proteinGoal = dailyValues?.protein || 150;
-  const carbsGoal = dailyValues?.carbs || 250;
-  const fatGoal = dailyValues?.fat || 65;
+  // Calculate macro ratios (% of meal calories from each macro)
+  // Using Atwater factors: protein 4cal/g, carbs 4cal/g, fat 9cal/g
+  const proteinCal = protein * 4;
+  const carbsCal = carbs * 4;
+  const fatCal = fat * 9;
+  const totalMacroCal = proteinCal + carbsCal + fatCal || 1; // Avoid division by zero
+
+  const proteinRatio = (proteinCal / totalMacroCal) * 100;
+  const carbsRatio = (carbsCal / totalMacroCal) * 100;
+  const fatRatio = (fatCal / totalMacroCal) * 100;
 
   return (
     <View
@@ -157,10 +143,10 @@ export default function MacroProgressSection({ macros, dailyValues }) {
         { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' },
       ]}
     >
-      <Text style={[styles.sectionTitle, { color: textPrimary }]}>Macronutrients</Text>
+      <Text style={[styles.sectionTitle, { color: textPrimary }]}>Meal Nutrition</Text>
 
       {/* Calories */}
-      <CaloriesDisplay calories={calories} goal={calorieGoal} />
+      <CaloriesDisplay calories={calories} />
 
       {/* Divider */}
       <View
@@ -170,11 +156,11 @@ export default function MacroProgressSection({ macros, dailyValues }) {
         ]}
       />
 
-      {/* Macro bars */}
+      {/* Macro bars - showing meal composition, not daily goals */}
       <View style={styles.macrosContainer}>
-        <MacroBar type="protein" current={protein} goal={proteinGoal} />
-        <MacroBar type="carbs" current={carbs} goal={carbsGoal} />
-        <MacroBar type="fat" current={fat} goal={fatGoal} />
+        <MacroBar type="protein" current={protein} mealRatioPercent={proteinRatio} />
+        <MacroBar type="carbs" current={carbs} mealRatioPercent={carbsRatio} />
+        <MacroBar type="fat" current={fat} mealRatioPercent={fatRatio} />
       </View>
 
       {/* Macro breakdown summary */}
@@ -229,15 +215,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
-  caloriesGoal: {
-    alignItems: 'flex-end',
-  },
-  caloriesPercentage: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-  },
-  caloriesGoalText: {
-    fontSize: TYPOGRAPHY.size.xs,
+  mealLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   divider: {
     height: 1,
@@ -276,9 +258,6 @@ const styles = StyleSheet.create({
   macroCurrent: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
-  },
-  macroGoal: {
-    fontSize: TYPOGRAPHY.size.sm,
   },
   progressBarContainer: {
     height: 8,

@@ -29,6 +29,9 @@ import {
   recommendationsHistoryTable,
   userCorrelationsTable,
   gamificationTable,
+  foodLogTable,
+  waterLogTable,
+  moodLogTable,
 } from '../db/schema.js';
 import { eq, and, desc, gte, sql } from 'drizzle-orm';
 
@@ -129,6 +132,41 @@ const ACTIVE_EXPERIMENTS = {
  */
 
 /**
+ * Calculate the total number of distinct days with any logged activity
+ * This is the correct way to measure user engagement - not totalMealsLogged/3
+ */
+async function getTotalDaysWithLogs(userId) {
+  try {
+    // Query distinct dates from all log tables
+    const [foodDays, waterDays, moodDays] = await Promise.all([
+      db.select({ date: sql`DATE(${foodLogTable.loggedDate})`.as('date') })
+        .from(foodLogTable)
+        .where(eq(foodLogTable.userId, userId))
+        .groupBy(sql`DATE(${foodLogTable.loggedDate})`),
+      db.select({ date: sql`DATE(${waterLogTable.loggedDate})`.as('date') })
+        .from(waterLogTable)
+        .where(eq(waterLogTable.userId, userId))
+        .groupBy(sql`DATE(${waterLogTable.loggedDate})`),
+      db.select({ date: sql`DATE(${moodLogTable.loggedDate})`.as('date') })
+        .from(moodLogTable)
+        .where(eq(moodLogTable.userId, userId))
+        .groupBy(sql`DATE(${moodLogTable.loggedDate})`),
+    ]);
+
+    // Combine all dates into a Set to get unique days
+    const allDates = new Set();
+    foodDays.forEach(row => row.date && allDates.add(String(row.date)));
+    waterDays.forEach(row => row.date && allDates.add(String(row.date)));
+    moodDays.forEach(row => row.date && allDates.add(String(row.date)));
+
+    return allDates.size;
+  } catch (error) {
+    console.warn('[ML Orchestrator] Error calculating totalDaysWithLogs:', error.message);
+    return 0;
+  }
+}
+
+/**
  * Enhanced daily orchestration with ML capabilities
  *
  * @param {string} userId - User ID
@@ -169,8 +207,11 @@ export async function orchestrateDailyRecommendationsML(userId, options = {}) {
     const stats = gamStats[0] || {};
 
     // Step 3: Determine lifecycle stage
+    // CRITICAL FIX: Calculate actual distinct days with logs, not rough estimate
+    const actualDaysWithLogs = await getTotalDaysWithLogs(userId);
+
     const userMetrics = {
-      totalDaysWithLogs: stats.totalMealsLogged ? Math.ceil(stats.totalMealsLogged / 3) : 0,
+      totalDaysWithLogs: actualDaysWithLogs,
       loggingStreak: stats.streak || 0,
       daysSinceLastLog: stats.lastLogDate
         ? Math.floor((Date.now() - new Date(stats.lastLogDate)) / (1000 * 60 * 60 * 24))

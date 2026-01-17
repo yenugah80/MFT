@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   RefreshControl,
   Modal,
@@ -14,6 +14,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useFoodLog } from '../../hooks/useFoodLog';
 import { HistoryItem } from '../../components/log/HistoryDrawer';
+
+/**
+ * Format date for section headers
+ */
+function formatSectionDate(timestamp) {
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today';
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  }
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
+ * Get date key for grouping
+ */
+function getDateKey(timestamp) {
+  const date = new Date(timestamp);
+  return date.toDateString();
+}
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -67,11 +97,12 @@ export default function HistoryScreen() {
         setSelectedLogs([log]);
       }
     } else {
-      // Navigate to meal detail screen
-      const mealId = log.clientEventId || log.mealId || log.id || log.local_id;
-      if (mealId) {
-        router.push(`/meal/${mealId}`);
-      }
+      // Navigate to meal detail screen with full log data
+      const mealId = log.clientEventId || log.mealId || log.id || log.local_id || log.timestamp;
+      router.push({
+        pathname: `/meal/${mealId}`,
+        params: { logData: JSON.stringify(log) },
+      });
     }
   };
 
@@ -145,6 +176,25 @@ export default function HistoryScreen() {
     });
   }, [foodLog.logs, filterDays, scannedOnly, getDateRange]);
 
+  // Group logs by date for SectionList
+  const groupedLogs = useMemo(() => {
+    const groups = {};
+    filteredLogs.forEach((log) => {
+      const dateKey = getDateKey(log.timestamp);
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          title: formatSectionDate(log.timestamp),
+          timestamp: log.timestamp,
+          data: [],
+        };
+      }
+      groups[dateKey].data.push(log);
+    });
+
+    // Sort sections by date (most recent first)
+    return Object.values(groups).sort((a, b) => b.timestamp - a.timestamp);
+  }, [filteredLogs]);
+
   const canCompare = filteredLogs.length >= 2;
 
   const isSelected = (log) => {
@@ -167,31 +217,38 @@ export default function HistoryScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ), [handleSelectLog, selectedLogs]);
 
+  // Render section header
+  const renderSectionHeader = useCallback(({ section }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{section.title}</Text>
+      <Text style={styles.sectionCount}>{section.data.length} meals</Text>
+    </View>
+  ), []);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Clean Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => {
-            console.log('[History] Back button pressed, canGoBack:', router.canGoBack());
-            // Always navigate to dashboard since back() may not work
-            router.replace('/(tabs)/dashboard');
-          }}
+          onPress={() => router.replace('/(tabs)/dashboard')}
           hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
           <Ionicons name="chevron-back" size={24} color="#111827" />
         </TouchableOpacity>
+
         <View style={styles.titleBlock}>
-          <Text style={styles.title}>Food Log History</Text>
-          <Text style={styles.subtitle}>
-            {filterDays === 1 ? 'Today' : `Last ${filterDays} days`}
-          </Text>
+          <Text style={styles.title}>Food History</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{filteredLogs.length} meals</Text>
+          </View>
         </View>
+
         <TouchableOpacity
           style={[
-            styles.compareToggle,
-            compareMode && styles.compareToggleActive,
-            !canCompare && styles.compareToggleDisabled,
+            styles.iconButton,
+            compareMode && styles.iconButtonActive,
+            !canCompare && styles.iconButtonDisabled,
           ]}
           onPress={() => {
             if (!canCompare) return;
@@ -200,30 +257,20 @@ export default function HistoryScreen() {
           }}
           disabled={!canCompare}
         >
-          <Ionicons name="git-compare-outline" size={18} color={compareMode ? '#FFFFFF' : '#6B7280'} />
-          <Text style={[styles.compareToggleText, compareMode && styles.compareToggleTextActive]}>
-            Compare
-          </Text>
+          <Ionicons
+            name="git-compare-outline"
+            size={20}
+            color={compareMode ? '#FFFFFF' : '#6B7280'}
+          />
         </TouchableOpacity>
       </View>
 
-      {compareMode && (
-        <View style={styles.selectionHint}>
-          <Text style={styles.selectionHintText}>
-            {selectedLogs.length === 0
-              ? 'Select up to 2 items to compare'
-              : selectedLogs.length === 1
-                ? 'Select one more item'
-                : 'Comparing 2 items'}
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.filters}>
+      {/* Compact Filter Row */}
+      <View style={styles.filterBar}>
         <View style={styles.filterRow}>
           {[1, 7, 30, 90].map((value) => {
             const isActive = filterDays === value;
-            const label = value === 1 ? 'Today' : `${value} days`;
+            const label = value === 1 ? 'Today' : `${value}d`;
             return (
               <TouchableOpacity
                 key={value}
@@ -241,23 +288,43 @@ export default function HistoryScreen() {
           })}
         </View>
         <TouchableOpacity
-          style={[styles.scanToggle, scannedOnly && styles.scanToggleActive]}
+          style={[styles.scanChip, scannedOnly && styles.scanChipActive]}
           onPress={() => {
             const next = !scannedOnly;
             setScannedOnly(next);
             router.setParams({ scanned: next ? '1' : undefined });
           }}
         >
-          <Ionicons name="barcode-outline" size={16} color={scannedOnly ? '#FFFFFF' : '#6B7280'} />
-          <Text style={[styles.scanToggleText, scannedOnly && styles.scanToggleTextActive]}>
-            Scanned meals
-          </Text>
+          <Ionicons
+            name="camera-outline"
+            size={14}
+            color={scannedOnly ? '#FFFFFF' : '#6B7280'}
+          />
+          {scannedOnly && <Text style={styles.scanChipText}>Scanned</Text>}
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={filteredLogs}
+      {/* Compare mode hint */}
+      {compareMode && (
+        <View style={styles.selectionHint}>
+          <View style={styles.hintLeft}>
+            <Ionicons name="git-compare-outline" size={16} color="#6B4EFF" />
+            <Text style={styles.selectionHintText}>
+              {selectedLogs.length === 0
+                ? 'Select 2 meals to compare'
+                : `${selectedLogs.length}/2 selected`}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => { setCompareMode(false); setSelectedLogs([]); }}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <SectionList
+        sections={groupedLogs}
         keyExtractor={keyExtractor}
+        renderSectionHeader={renderSectionHeader}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -266,10 +333,16 @@ export default function HistoryScreen() {
         removeClippedSubviews={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No logs in this range</Text>
-            <Text style={styles.emptySubtitle}>Try another range or log more meals</Text>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="restaurant-outline" size={40} color="#D1D5DB" />
+            </View>
+            <Text style={styles.emptyTitle}>No meals logged</Text>
+            <Text style={styles.emptySubtitle}>
+              {filterDays === 1 ? 'Nothing logged today' : `No meals in the last ${filterDays} days`}
+            </Text>
           </View>
         }
+        stickySectionHeadersEnabled={false}
       />
 
       {/* Detail Sheet */}
@@ -364,62 +437,73 @@ const styles = StyleSheet.create({
   titleBlock: {
     flex: 1,
     alignItems: 'center',
-    marginLeft: 0,
   },
-  subtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  compareToggle: {
+  countBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
     backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
   },
-  compareToggleDisabled: {
-    opacity: 0.5,
-  },
-  compareToggleActive: {
-    backgroundColor: '#6B4EFF',
-    borderColor: '#6B4EFF',
-  },
-  compareToggleText: {
-    fontSize: 13,
+  countText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#6B7280',
   },
-  compareToggleTextActive: {
-    color: '#FFFFFF',
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconButtonActive: {
+    backgroundColor: '#6B4EFF',
+  },
+  iconButtonDisabled: {
+    opacity: 0.4,
   },
   selectionHint: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#EEF2FF',
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#C7D2FE',
+  },
+  hintLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   selectionHintText: {
-    textAlign: 'center',
     color: '#4F46E5',
     fontWeight: '600',
+    fontSize: 13,
   },
-  filters: {
+  cancelText: {
+    color: '#EF4444',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
+    gap: 6,
   },
   filterChip: {
     paddingVertical: 6,
@@ -441,46 +525,75 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFFFFF',
   },
-  scanToggle: {
+  scanChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
+    gap: 4,
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F9FAFB',
   },
-  scanToggleActive: {
-    backgroundColor: '#111827',
-    borderColor: '#111827',
+  scanChipActive: {
+    backgroundColor: '#374151',
+    borderColor: '#374151',
   },
-  scanToggleText: {
-    fontSize: 12,
+  scanChipText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
-  },
-  scanToggleTextActive: {
     color: '#FFFFFF',
   },
+  // Section list styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  sectionCount: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   emptyState: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#6B7280',
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#374151',
     marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 14,
     color: '#9CA3AF',
+    textAlign: 'center',
   },
   overlay: {
     flex: 1,

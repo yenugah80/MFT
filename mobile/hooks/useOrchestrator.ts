@@ -98,15 +98,11 @@ const fetchOrchestrator = async (): Promise<OrchestratorResult> => {
 
     return data;
   } catch (error) {
-    // Development fallback: Return mock data when endpoint is not yet deployed
+    // Graceful fallback: Return mock data when endpoint fails (404, 500, network error, etc.)
+    // This ensures dashboard always loads even if orchestrator service is down
     const status = error?.response?.status || (error as any)?.status;
-    if (status === 404) {
-      console.log('[useOrchestrator] Orchestrator endpoint not found (404) - using mock data for development');
-      return getMockOrchestratorData();
-    }
-
-    console.error('[useOrchestrator] Error fetching orchestrator:', error);
-    throw error;
+    console.warn(`[useOrchestrator] Orchestrator error (${status || 'network'}) - using fallback data`);
+    return getMockOrchestratorData();
   }
 };
 

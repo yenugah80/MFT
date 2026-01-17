@@ -10,6 +10,9 @@ export async function logMeal(req, res) {
       protein,
       carbs,
       fats,
+      fiber, // New: fiber in grams
+      sugar, // New: sugar in grams
+      sodium, // New: sodium in mg
       servingSize,
       mealType,
       micros,
@@ -38,6 +41,9 @@ export async function logMeal(req, res) {
         protein: protein ?? null,
         carbs: carbs ?? null,
         fats: fats ?? null,
+        fiber: fiber ?? null, // New: save fiber
+        sugar: sugar ?? null, // New: save sugar
+        sodium: sodium ?? null, // New: save sodium
         servingSize: servingSize ?? null,
         mealType: mealType ?? null,
         micros: micros ?? {},

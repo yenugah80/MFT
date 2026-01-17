@@ -41,6 +41,9 @@ export const useDashboard = () => {
     gcTime: 5 * 60 * 1000,
     // Refetch on mount only if data is stale (default behavior with staleTime set)
     refetchOnMount: true,
+    // Retry up to 4 times with exponential backoff (handles Render cold starts)
+    retry: 4,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 15000),
   });
 };
 

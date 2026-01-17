@@ -708,31 +708,39 @@ async function compressImage(uri) {
 
   let manipulateAsync, SaveFormat;
   let resultUri = null;
+  let compressionAvailable = false;
 
   try {
     const mod = await import('expo-image-manipulator');
     manipulateAsync = mod.manipulateAsync;
     SaveFormat = mod.SaveFormat;
+    compressionAvailable = !!(manipulateAsync && SaveFormat);
   } catch (e) {
-    throw new Error('Image compression unavailable. Install expo-image-manipulator and run on a real device.');
+    console.warn('[useFoodAnalysis] expo-image-manipulator not available, using original image:', e?.message);
+    compressionAvailable = false;
   }
 
   if (!readAsStringAsync) {
     throw new Error('Photo analysis unavailable: expo-file-system missing. Install expo-file-system and rebuild on device.');
   }
 
-  try {
-    const result = await manipulateAsync(
-      uri,
-      [{ resize: { width: IMAGE_MAX_WIDTH_PX } }],
-      { compress: IMAGE_COMPRESSION_QUALITY, format: SaveFormat.JPEG }
-    );
-    resultUri = result?.uri || null;
-  } catch (err) {
-    console.warn('[useFoodAnalysis] Image compression failed, using original photo.', err?.message || err);
+  // Try to compress if available
+  if (compressionAvailable && manipulateAsync && SaveFormat) {
+    try {
+      const result = await manipulateAsync(
+        uri,
+        [{ resize: { width: IMAGE_MAX_WIDTH_PX } }],
+        { compress: IMAGE_COMPRESSION_QUALITY, format: SaveFormat.JPEG }
+      );
+      resultUri = result?.uri || null;
+    } catch (err) {
+      console.warn('[useFoodAnalysis] Image compression failed, using original photo.', err?.message || err);
+    }
   }
 
+  // Fall back to original URI if compression failed or unavailable
   if (!resultUri) {
+    console.log('[useFoodAnalysis] Using original image (no compression)');
     resultUri = uri;
   }
 
@@ -1029,10 +1037,24 @@ export function useFoodAnalysis() {
    * @returns {Promise<AnalysisResult>} Analysis result
    */
   const analyzeBarcode = useCallback(async (barcode) => {
-    const code = (barcode || '').trim();
+    let code = (barcode || '').trim();
     if (!code) {
       throw new Error('Barcode is required for analysis');
     }
+
+    // Normalize barcode format for Open Food Facts compatibility
+    // UPC-A should be 12 digits, EAN-13 should be 13 digits
+    // Some scanners strip leading zeros
+    if (/^\d+$/.test(code)) {
+      if (code.length < 12) {
+        // Pad to 12 digits (UPC-A format)
+        code = code.padStart(12, '0');
+      } else if (code.length === 12 && !code.startsWith('0')) {
+        // Some UPC-A codes should have leading zero for EAN-13 compatibility
+        code = '0' + code;
+      }
+    }
+    console.log('[analyzeBarcode] Normalized barcode:', barcode, '->', code);
 
     // Check cache
     if (barcodeCacheRef.current[code]) {
@@ -1056,7 +1078,7 @@ export function useFoodAnalysis() {
       let region = null;
       let cookingMethod = null;
       try {
-        const profileRes = await fetch(`${API_URL}/profiles/me`, {
+        const profileRes = await fetch(`${API_URL}/profile/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (profileRes.ok) {
@@ -1093,8 +1115,25 @@ export function useFoodAnalysis() {
           const text = await res.text().catch(() => '');
           throw new Error(text || 'Barcode lookup failed');
         } else {
-          const data = await res.json();
-          productItem = mapBackendProductToItem(data, code);
+          const responseData = await res.json();
+          // Backend returns { success: true, data: unifiedResponse }
+          // The unifiedResponse has { items: [...], totals: {...}, ... }
+          if (responseData?.success && responseData?.data?.items?.[0]) {
+            const item = responseData.data.items[0];
+            // Map unified response item to our format
+            productItem = {
+              itemId: item.itemId || code,
+              name: item.name || `Barcode: ${code}`,
+              portion: item.portion || { amount: 1, unit: 'serving', gramsEquivalent: 100 },
+              macros: item.macros || {},
+              micros: item.micros || {},
+              netCarbs: item.netCarbs || 0,
+              sourceEvidence: item.sourceEvidence || [{ source: 'backend', confidence: 0.9 }],
+            };
+          } else {
+            // Fallback to legacy format
+            productItem = mapBackendProductToItem(responseData?.data || responseData, code);
+          }
         }
       } catch (err) {
         console.warn('[useFoodAnalysis] Backend barcode lookup failed, falling back to OFF:', err.message);
@@ -1103,10 +1142,14 @@ export function useFoodAnalysis() {
       // 2. Fallback to Open Food Facts
       if (!productItem) {
         setProgress(50);
+        console.log('[analyzeBarcode] Backend returned no product, trying Open Food Facts...');
         productItem = await fetchFromOpenFoodFacts(code, 'barcode');
       }
 
       if (!productItem) {
+        console.log('[analyzeBarcode] No product found in any source for barcode:', code);
+        // IMPORTANT: This exact message pattern is checked by BarcodeScannerModal
+        // to trigger the fallback UI. Keep "No product found" in the message.
         throw new Error('No product found for this barcode. Try another code or scan again.');
       }
 
@@ -1159,7 +1202,7 @@ export function useFoodAnalysis() {
       }
 
       // Get user profile for regional context
-      const profileRes = await fetch(`${API_URL}/profiles/me`, {
+      const profileRes = await fetch(`${API_URL}/profile/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -1351,7 +1394,7 @@ export function useFoodAnalysis() {
       let cookingMethod = null;
       let userGoals = null;
       try {
-        const profileRes = await fetch(`${API_URL}/profiles/me`, {
+        const profileRes = await fetch(`${API_URL}/profile/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (profileRes.ok) {
@@ -1480,17 +1523,32 @@ export function useFoodAnalysis() {
       );
 
       if (!res.ok) {
-        const errorMessage = json?.error || json?.message || 'Image analysis failed';
-        const statusHint = res.status === 504 || res.status === 524
-          ? ' (Server timeout - try again on a faster connection)'
-          : res.status === 413
-          ? ' (Image too large - try a smaller photo)'
-          : res.status === 401
-          ? ' (Authentication failed - please sign in again)'
-          : '';
+        const rawError = json?.error || json?.message || '';
+        console.error(`[useFoodAnalysis] Image API error: ${res.status} - ${rawError}`);
 
-        console.error(`[useFoodAnalysis] Image API error: ${res.status} - ${errorMessage}`);
-        throw new Error(`${errorMessage}${statusHint}`);
+        // Provide user-friendly error messages based on status and error type
+        let userMessage;
+        if (res.status === 504 || res.status === 524) {
+          userMessage = 'Server timeout. Please try again with a smaller image or on a faster connection.';
+        } else if (res.status === 413) {
+          userMessage = 'Image too large. Please try with a smaller photo.';
+        } else if (res.status === 401) {
+          userMessage = 'Authentication failed. Please sign in again.';
+        } else if (res.status === 429) {
+          userMessage = 'Too many requests. Please wait a moment and try again.';
+        } else if (rawError.toLowerCase().includes('timeout')) {
+          userMessage = 'Analysis timed out. The image may be too complex - try a clearer photo.';
+        } else if (rawError.toLowerCase().includes('rate limit')) {
+          userMessage = 'AI service is busy. Please wait a moment and try again.';
+        } else if (rawError.toLowerCase().includes('api key') || rawError.toLowerCase().includes('authentication')) {
+          userMessage = 'AI service configuration error. Please contact support.';
+        } else if (res.status >= 500) {
+          userMessage = 'Server error analyzing image. Please try again or use text input instead.';
+        } else {
+          userMessage = rawError || 'Could not analyze image. Please try again or use text input.';
+        }
+
+        throw new Error(userMessage);
       }
 
       setProgress(95);
@@ -1757,7 +1815,7 @@ export function useFoodAnalysis() {
       let cookingMethod = null;
       let userGoals = null;
       try {
-        const profileRes = await fetch(`${API_URL}/profiles/me`, {
+        const profileRes = await fetch(`${API_URL}/profile/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (profileRes.ok) {
@@ -1841,7 +1899,7 @@ export function useFoodAnalysis() {
           let region = null;
           let cookingMethod = null;
           try {
-            const profileRes = await fetch(`${API_URL}/profiles/me`, {
+            const profileRes = await fetch(`${API_URL}/profile/me`, {
               headers: { Authorization: `Bearer ${token}` },
             });
             if (profileRes.ok) {

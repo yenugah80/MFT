@@ -44,7 +44,8 @@ router.get("/barcode/:code", async (req, res) => {
     if (!code) return res.status(400).json({ error: "Barcode required" });
 
     const product = await FoodService.searchByBarcode(code);
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    // Use consistent "No product found" message that frontend expects
+    if (!product) return res.status(404).json({ error: "No product found for this barcode" });
 
     // Transform to unified response format
     const rawItems = [{
@@ -83,8 +84,13 @@ router.get("/barcode/:code", async (req, res) => {
     console.log(`[FoodBarcode] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse });
   } catch (error) {
-    console.error("[FoodBarcode] Error:", error);
-    res.status(500).json({ error: "Barcode lookup failed" });
+    console.error("[FoodBarcode] Error:", error.message);
+    // Return descriptive error message
+    const errorMessage = error.message || 'Barcode lookup failed';
+    res.status(500).json({
+      error: errorMessage,
+      success: false
+    });
   }
 });
 
@@ -110,7 +116,8 @@ router.post("/analyze-image", async (req, res) => {
       highAccuracy,
       includeIngredients,
     });
-    if (!result) return res.status(500).json({ error: "Analysis failed" });
+    // Result should never be null now (FoodService throws on failure)
+    if (!result) return res.status(500).json({ error: "AI could not analyze this image. Please try with a clearer photo." });
 
     // Transform raw result to unified response format
     // Convert FoodService.analyzeImage result to rawItems format for unified builder
@@ -177,8 +184,13 @@ router.post("/analyze-image", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("[FoodAnalyzeImage] Error:", error);
-    res.status(500).json({ error: "Image analysis failed" });
+    console.error("[FoodAnalyzeImage] Error:", error.message);
+    // Return descriptive error message to frontend
+    const errorMessage = error.message || 'Unknown error during image analysis';
+    res.status(500).json({
+      error: errorMessage,
+      success: false
+    });
   }
 });
 

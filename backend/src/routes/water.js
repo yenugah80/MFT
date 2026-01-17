@@ -3,7 +3,7 @@ import { db } from "../config/db.js";
 import { dailyNutritionSummaryTable, waterLogTable } from "../db/schema.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
-import { parseTimezoneOffsetMinutes, getLocalDayRange } from "../utils/timezone.js";
+import { parseTimezoneOffsetMinutes, getLocalDayRange, getDayKey } from "../utils/timezone.js";
 import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../utils/schemaGuards.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
@@ -14,32 +14,62 @@ const router = express.Router();
 router.use(requireAuth);
 
 /**
- * BEVERAGE HYDRATION FACTORS
+ * BEVERAGE HYDRATION FACTORS (Research-backed)
  * Keep in sync with mobile/constants/beverageConstants.js
  *
- * Science-based factors:
- * - Water: 1.0 (baseline)
- * - Tea: 0.9 (minimal caffeine)
- * - Milk: 0.87 (studies show excellent retention)
- * - Smoothie: 0.85 (fiber doesn't significantly affect absorption)
- * - Juice: 0.8 (sugar increases osmotic load)
- * - Soda: 0.6 (high sugar, some caffeine)
- * - Coffee: 0.5 (caffeine is mild diuretic)
- * - Electrolyte/Sports/Coconut: 1.05-1.1 (sodium helps retention)
+ * Source: Beverage Hydration Index study
+ * https://ajcn.nutrition.org/article/S0002-9165(22)06556-X/fulltext
+ *
+ * Key findings that differ from common beliefs:
+ * - Coffee: ~1.0 (NO significant diuretic effect - myth debunked!)
+ * - Tea: ~1.0 (same as water)
+ * - Milk: 1.50-1.58 (BETTER than water - fat/protein slow emptying)
+ * - Orange juice: 1.39 (sugar + potassium aid retention)
+ * - Alcohol: 0.70-0.85 (actual diuretic effect)
  */
 const BEVERAGE_FACTORS = {
   water: 1.0,
   sparkling: 1.0,
   herbal: 1.0,
-  tea: 0.9,
-  milk: 0.87,
-  smoothie: 0.85,
-  juice: 0.8,
-  soda: 0.6,
-  coffee: 0.5,
+  tea: 1.0,           // Updated: Research shows same as water
+  coffee: 1.0,        // Updated: No significant diuretic effect
+  milk: 1.50,         // Updated: Best hydrator (was 0.87)
+  milkSkim: 1.58,     // New: Skim milk is best
+  juice: 1.39,        // Updated: Better than water (BHI study)
+  smoothie: 1.1,      // Updated: Similar to milk-based drinks
+  soda: 1.0,          // Updated: Same as water (but avoid for sugar)
   electrolyte: 1.1,
   coconut: 1.05,
   sports: 1.05,
+  energy: 1.0,        // New: Energy drinks
+  alcohol_beer: 0.85,   // New: Alcohol is actually diuretic
+  alcohol_wine: 0.80,   // New: Higher alcohol = more diuretic
+  alcohol_spirits: 0.70, // New: Spirits are most diuretic
+};
+
+/**
+ * CAFFEINE CONTENT (mg per 250ml serving)
+ * Used for daily caffeine tracking
+ * FDA recommendation: max 400mg/day
+ */
+const CAFFEINE_CONTENT = {
+  water: 0,
+  sparkling: 0,
+  herbal: 0,
+  milk: 0,
+  milkSkim: 0,
+  juice: 0,
+  coconut: 0,
+  smoothie: 0,
+  coffee: 95,
+  tea: 47,
+  soda: 35,
+  energy: 80,
+  sports: 0,
+  electrolyte: 0,
+  alcohol_beer: 0,
+  alcohol_wine: 0,
+  alcohol_spirits: 0,
 };
 
 /**
@@ -71,6 +101,10 @@ router.post("/log", async (req, res) => {
       : "water";
     const hydrationFactor = BEVERAGE_FACTORS[normalizedType] ?? BEVERAGE_FACTORS.water;
     const hydrationLiters = parseFloat(amountLiters) * hydrationFactor;
+
+    // Calculate caffeine content (mg per 250ml, so multiply by 4 for per-liter)
+    const caffeinePer250ml = CAFFEINE_CONTENT[normalizedType] ?? 0;
+    const caffeineMg = Math.round(parseFloat(amountLiters) * caffeinePer250ml * 4);
 
     // Insert with idempotency protection via ON CONFLICT
     // Drizzle ORM handles decimal conversion automatically - pass numbers directly
@@ -188,9 +222,35 @@ router.get("/today", async (req, res) => {
       return sum + parseFloat(log.amountLiters || 0);
     }, 0);
 
+    // Calculate total caffeine from today's logs
+    const totalCaffeine = logs.reduce((sum, log) => {
+      const bevType = (log.beverageType || 'water').toLowerCase();
+      const caffeinePer250ml = CAFFEINE_CONTENT[bevType] ?? 0;
+      const amount = parseFloat(log.amountLiters || 0);
+      return sum + Math.round(amount * caffeinePer250ml * 4);
+    }, 0);
+
+    // Caffeine status based on FDA 400mg limit
+    const CAFFEINE_LIMIT = 400;
+    let caffeineStatus = 'low';
+    let caffeineWarning = null;
+    if (totalCaffeine > CAFFEINE_LIMIT) {
+      caffeineStatus = 'excessive';
+      caffeineWarning = 'Over recommended daily limit (400mg)';
+    } else if (totalCaffeine > 300) {
+      caffeineStatus = 'high';
+      caffeineWarning = 'Approaching daily limit';
+    } else if (totalCaffeine > 200) {
+      caffeineStatus = 'moderate';
+    }
+
     res.json({
       logs,
       totalLiters,
+      totalCaffeine,
+      caffeineStatus,
+      caffeineWarning,
+      caffeineLimit: CAFFEINE_LIMIT,
       count: logs.length,
     });
   } catch (error) {
@@ -207,12 +267,18 @@ router.get("/today", async (req, res) => {
  *   startDate?: ISO date string
  *   endDate?: ISO date string
  *   limit?: number (default 100)
+ *
+ * Headers:
+ *   X-Timezone-Offset: Client's timezone offset in minutes (required for correct date grouping)
  */
 router.get("/history", async (req, res) => {
   try {
     await ensureWaterLogTableShape();
     const userId = req.auth.userId;
     const { startDate, endDate, limit = 100 } = req.query;
+
+    // Get client's timezone offset for accurate date grouping
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
 
     // Build where clause with all conditions
     let whereClause = eq(waterLogTable.userId, userId);
@@ -244,9 +310,11 @@ router.get("/history", async (req, res) => {
       .limit(parseInt(limit));
 
     // Calculate daily aggregates for pattern detection
+    // Use client's timezone for accurate date grouping
     const dailyAggregates = {};
     history.forEach(log => {
-      const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+      // Use getDayKey with timezone offset for client-local date grouping
+      const dateKey = getDayKey(new Date(log.loggedDate), offsetMinutes);
       if (!dailyAggregates[dateKey]) {
         dailyAggregates[dateKey] = {
           date: dateKey,

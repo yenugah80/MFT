@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: SURFACES.elevated,
+    borderBottomColor: SURFACES.background.secondary,
   },
   insightLabel: {
     fontSize: 14,
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: SURFACES.elevated,
+    backgroundColor: SURFACES.background.secondary,
   },
   qualityDotFilled: {
     backgroundColor: BRAND.primary,

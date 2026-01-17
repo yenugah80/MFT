@@ -2,49 +2,58 @@
  * Food-Mood Correlation Screen
  *
  * Deep-dive analysis of Food → Mood relationship
- * Progressive disclosure from dashboard card
- *
- * Features:
- * - Detailed correlation analysis
- * - Nutritional factors breakdown (B vitamins, Omega-3, Magnesium, Protein, Sugar)
- * - Personal vs research comparison
- * - Temporal patterns
- * - Actionable recommendations
+ * Shows how nutrition affects mood based on your personal data
  */
 
-import React, { useState, useMemo } from 'react';
-import { View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, ScrollView, Text, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import FoodMoodCorrelationCard from '../../components/analytics/FoodMoodCorrelationCard';
-import MiniBarChart from '../../components/analytics/MiniBarChart';
-import MiniLineChart from '../../components/analytics/MiniLineChart';
 import CircularProgress from '../../components/analytics/CircularProgress';
 
 import { useFoodLog } from '../../hooks/useFoodLog';
 import { useMoodTrends } from '../../hooks/useMoodTrends';
 import { useWaterLog } from '../../hooks/useWaterLog';
-import { useNotification } from '../../providers/NotificationProvider';
 
-import { TEXT, BRAND, SURFACES, SEMANTIC, SHADOWS } from '../../constants/premiumTheme';
-import { analyzeMultiFactorCorrelations, analyzePersonalizedResponses, EVIDENCE_TERMINOLOGY } from '../../utils/multiFactorAnalytics';
+import { TEXT, BRAND, SURFACES, SEMANTIC, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { analyzeMultiFactorCorrelations, analyzePersonalizedResponses } from '../../utils/multiFactorAnalytics';
+import { calculateMoodNutrientScore } from '../../utils/moodNutrients';
 
 export default function FoodMoodCorrelationScreen() {
   const router = useRouter();
-  const notify = useNotification();
 
-  const [timeRange, setTimeRange] = useState(30); // 7, 30, 90 days
-  const [viewMode, setViewMode] = useState('overview'); // overview, nutrients, temporal, personal
+  const [timeRange, setTimeRange] = useState(30);
+  const [viewMode, setViewMode] = useState('overview');
+  const [refreshing, setRefreshing] = useState(false);
 
   // Get data
-  const { logs: foodLogs } = useFoodLog();
-  const { data: moodData } = useMoodTrends({ days: timeRange });
-  const { logs: waterLogs } = useWaterLog();
+  const { logs: foodLogs, refetch: refetchFood, isLoading: foodLoading } = useFoodLog();
+  const { data: moodData, refetch: refetchMood, isLoading: moodLoading } = useMoodTrends({ days: timeRange });
+  const { logs: waterLogs, refetch: refetchWater } = useWaterLog();
 
   const moodLogs = moodData?.data || [];
+  const isLoading = foodLoading || moodLoading;
+
+  // Pull to refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Promise.all([refetchFood?.(), refetchMood?.(), refetchWater?.()]);
+    setRefreshing(false);
+  }, [refetchFood, refetchMood, refetchWater]);
+
+  // Back handler
+  const handleBack = useCallback(() => {
+    Haptics.selectionAsync();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/dashboard');
+    }
+  }, [router]);
 
   // Analyze
   const analysis = useMemo(() => {
@@ -67,6 +76,53 @@ export default function FoodMoodCorrelationScreen() {
     });
   }, [foodLogs, moodLogs, waterLogs]);
 
+  // Calculate mood-supporting nutrient intake
+  const moodNutrientAnalysis = useMemo(() => {
+    if (!foodLogs || foodLogs.length === 0) {
+      return { score: 0, level: 'unknown', deficiencies: [], adequate: [] };
+    }
+
+    const aggregatedNutrients = {};
+    const daysTracked = new Set();
+
+    foodLogs.forEach(log => {
+      const date = new Date(log.date || log.loggedDate).toDateString();
+      daysTracked.add(date);
+
+      const macros = log.macros || log;
+      if (macros.omega3 || macros.omega3_g) aggregatedNutrients.omega3 = (aggregatedNutrients.omega3 || 0) + (macros.omega3 || macros.omega3_g || 0);
+      if (macros.vitaminB6 || macros.vitamin_b6_mg) aggregatedNutrients.vitaminB6 = (aggregatedNutrients.vitaminB6 || 0) + (macros.vitaminB6 || macros.vitamin_b6_mg || 0);
+      if (macros.vitaminB12 || macros.vitamin_b12_mcg) aggregatedNutrients.vitaminB12 = (aggregatedNutrients.vitaminB12 || 0) + (macros.vitaminB12 || macros.vitamin_b12_mcg || 0);
+      if (macros.folate || macros.folate_mcg) aggregatedNutrients.folate = (aggregatedNutrients.folate || 0) + (macros.folate || macros.folate_mcg || 0);
+      if (macros.magnesium || macros.magnesium_mg) aggregatedNutrients.magnesium = (aggregatedNutrients.magnesium || 0) + (macros.magnesium || macros.magnesium_mg || 0);
+      if (macros.iron || macros.iron_mg) aggregatedNutrients.iron = (aggregatedNutrients.iron || 0) + (macros.iron || macros.iron_mg || 0);
+      if (macros.zinc || macros.zinc_mg) aggregatedNutrients.zinc = (aggregatedNutrients.zinc || 0) + (macros.zinc || macros.zinc_mg || 0);
+      if (macros.vitaminD || macros.vitamin_d_iu) aggregatedNutrients.vitaminD = (aggregatedNutrients.vitaminD || 0) + (macros.vitaminD || macros.vitamin_d_iu || 0);
+      if (macros.tryptophan || macros.tryptophan_mg) aggregatedNutrients.tryptophan = (aggregatedNutrients.tryptophan || 0) + (macros.tryptophan || macros.tryptophan_mg || 0);
+    });
+
+    const numDays = Math.max(daysTracked.size, 1);
+    const dailyAverage = {};
+    Object.keys(aggregatedNutrients).forEach(key => {
+      dailyAverage[key] = aggregatedNutrients[key] / numDays;
+    });
+
+    return calculateMoodNutrientScore(dailyAverage);
+  }, [foodLogs]);
+
+  // Empty/Loading states
+  if (isLoading && !refreshing) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Food → Mood', headerShown: true }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={BRAND.primary} />
+          <Text style={styles.loadingText}>Analyzing your data...</Text>
+        </View>
+      </>
+    );
+  }
+
   if (!analysis.canAnalyze) {
     return (
       <>
@@ -74,6 +130,17 @@ export default function FoodMoodCorrelationScreen() {
           options={{
             title: 'Food → Mood',
             headerShown: true,
+            headerLeft: () => (
+              <TouchableOpacity
+                onPress={handleBack}
+                style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Go back"
+                accessibilityRole="button"
+              >
+                <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
+              </TouchableOpacity>
+            ),
           }}
         />
         <View style={styles.container}>
@@ -83,9 +150,11 @@ export default function FoodMoodCorrelationScreen() {
             <Text style={styles.emptyText}>{analysis.message}</Text>
             <TouchableOpacity
               style={styles.emptyButton}
-              onPress={() => router.back()}
+              onPress={() => router.push('/(tabs)/log')}
+              accessibilityLabel="Log a meal"
+              accessibilityRole="button"
             >
-              <Text style={styles.emptyButtonText}>Go Back</Text>
+              <Text style={styles.emptyButtonText}>Log a Meal</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -99,33 +168,50 @@ export default function FoodMoodCorrelationScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Food → Mood Analysis',
+          title: 'Food → Mood',
           headerShown: true,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.headerButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
+            </TouchableOpacity>
+          ),
         }}
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={BRAND.primary}
+            colors={[BRAND.primary]}
+          />
+        }
+      >
         {/* Time Range Selector */}
         <View style={styles.timeRangeContainer}>
-          {[7, 30, 90].map(days => (
+          {[{ days: 7, label: '7d' }, { days: 30, label: '30d' }, { days: 90, label: '90d' }].map(({ days, label }) => (
             <TouchableOpacity
               key={days}
-              style={[
-                styles.timeRangeButton,
-                timeRange === days && styles.timeRangeButtonActive,
-              ]}
+              style={[styles.timeRangeButton, timeRange === days && styles.timeRangeButtonActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setTimeRange(days);
               }}
+              accessibilityLabel={`Show ${label} data`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: timeRange === days }}
             >
-              <Text
-                style={[
-                  styles.timeRangeText,
-                  timeRange === days && styles.timeRangeTextActive,
-                ]}
-              >
-                {days}d
+              <Text style={[styles.timeRangeText, timeRange === days && styles.timeRangeTextActive]}>
+                {label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -136,41 +222,34 @@ export default function FoodMoodCorrelationScreen() {
           {[
             { key: 'overview', label: 'Overview', icon: 'analytics-outline' },
             { key: 'nutrients', label: 'Nutrients', icon: 'nutrition-outline' },
-            { key: 'temporal', label: 'Patterns', icon: 'time-outline' },
-            { key: 'personal', label: 'Your Response', icon: 'person-outline' },
+            { key: 'personal', label: 'Patterns', icon: 'person-outline' },
           ].map(tab => (
             <TouchableOpacity
               key={tab.key}
-              style={[
-                styles.tab,
-                viewMode === tab.key && styles.tabActive,
-              ]}
+              style={[styles.tab, viewMode === tab.key && styles.tabActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setViewMode(tab.key);
               }}
+              accessibilityLabel={tab.label}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: viewMode === tab.key }}
             >
               <Ionicons
                 name={tab.icon}
                 size={18}
                 color={viewMode === tab.key ? BRAND.primary : TEXT.tertiary}
               />
-              <Text
-                style={[
-                  styles.tabText,
-                  viewMode === tab.key && styles.tabTextActive,
-                ]}
-              >
+              <Text style={[styles.tabText, viewMode === tab.key && styles.tabTextActive]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Content based on view mode */}
+        {/* Overview Tab */}
         {viewMode === 'overview' && (
           <View style={styles.section}>
-            {/* Expanded correlation card */}
             <FoodMoodCorrelationCard
               foodLogs={foodLogs}
               moodLogs={moodLogs}
@@ -184,43 +263,92 @@ export default function FoodMoodCorrelationScreen() {
               {correlations.slice(0, 5).map((corr, index) => (
                 <View key={index} style={styles.insightCard}>
                   <View style={styles.insightHeader}>
-                    <Text style={styles.insightNumber}>{index + 1}</Text>
+                    <View style={[styles.insightNumber, { backgroundColor: corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base }]}>
+                      <Text style={styles.insightNumberText}>{index + 1}</Text>
+                    </View>
                     <Text style={styles.insightTitle}>{corr.factor}</Text>
-                  </View>
-                  <Text style={styles.insightDescription}>
-                    {corr.mechanism}
-                  </Text>
-                  <View style={styles.insightStats}>
-                    <View style={styles.insightStat}>
-                      <Text style={styles.insightStatLabel}>Your Effect</Text>
-                      <Text style={[
-                        styles.insightStatValue,
-                        { color: corr.effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning }
-                      ]}>
+                    <View style={[styles.effectBadge, { backgroundColor: corr.effectSize > 0 ? `${SEMANTIC.success.base}15` : `${SEMANTIC.warning.base}15` }]}>
+                      <Ionicons
+                        name={corr.effectSize > 0 ? 'trending-up' : 'trending-down'}
+                        size={14}
+                        color={corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
+                      />
+                      <Text style={[styles.effectText, { color: corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base }]}>
                         {corr.effectSize > 0 ? '+' : ''}{(corr.effectSize * 100).toFixed(0)}%
                       </Text>
                     </View>
-                    <View style={styles.insightStat}>
-                      <Text style={styles.insightStatLabel}>Research Prior</Text>
-                      <Text style={styles.insightStatValue}>
-                        {(corr.prior * 100).toFixed(0)}%
-                      </Text>
-                    </View>
                   </View>
+                  <Text style={styles.insightDescription}>{corr.mechanism}</Text>
                 </View>
               ))}
             </View>
           </View>
         )}
 
+        {/* Nutrients Tab */}
         {viewMode === 'nutrients' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Nutritional Factors</Text>
-            <Text style={styles.sectionSubtitle}>
-              How different nutrients affect your mood
-            </Text>
+            <Text style={styles.sectionTitle}>Mood-Supporting Nutrients</Text>
 
-            {/* Nutrient breakdown with mini charts */}
+            {/* Score Card */}
+            <View style={styles.scoreCard}>
+              <View style={styles.scoreHeader}>
+                <View style={styles.scoreCircle}>
+                  <Text style={styles.scoreValue}>{moodNutrientAnalysis.score}</Text>
+                  <Text style={styles.scoreLabel}>/ 100</Text>
+                </View>
+                <View style={styles.scoreInfo}>
+                  <Text style={styles.scoreTitle}>Nutrient Score</Text>
+                  <Text style={[
+                    styles.scoreLevel,
+                    moodNutrientAnalysis.level === 'excellent' && { color: SEMANTIC.success.base },
+                    moodNutrientAnalysis.level === 'good' && { color: BRAND.primary },
+                    moodNutrientAnalysis.level === 'fair' && { color: SEMANTIC.warning.base },
+                    moodNutrientAnalysis.level === 'low' && { color: SEMANTIC.danger.base },
+                  ]}>
+                    {moodNutrientAnalysis.level === 'excellent' ? 'Excellent' :
+                     moodNutrientAnalysis.level === 'good' ? 'Good' :
+                     moodNutrientAnalysis.level === 'fair' ? 'Fair' :
+                     moodNutrientAnalysis.level === 'low' ? 'Needs Work' : 'Tracking...'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Deficiencies */}
+              {moodNutrientAnalysis.deficiencies?.length > 0 && (
+                <View style={styles.deficienciesSection}>
+                  <Text style={styles.sectionLabel}>Areas to Improve</Text>
+                  {moodNutrientAnalysis.deficiencies.slice(0, 3).map((def, idx) => (
+                    <View key={idx} style={styles.deficiencyItem}>
+                      <View style={styles.deficiencyHeader}>
+                        <Ionicons name={def.icon || 'nutrition'} size={16} color={def.color || SEMANTIC.warning.base} />
+                        <Text style={styles.deficiencyName}>{def.name}</Text>
+                        <Text style={styles.deficiencyPercent}>{Math.round(def.percentage)}%</Text>
+                      </View>
+                      <Text style={styles.deficiencyFoods}>
+                        Try: {def.topFoods?.slice(0, 3).join(', ')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Adequate */}
+              {moodNutrientAnalysis.adequate?.length > 0 && (
+                <View style={styles.adequateSection}>
+                  <Text style={styles.sectionLabel}>Meeting Goals</Text>
+                  <View style={styles.adequateChips}>
+                    {moodNutrientAnalysis.adequate.slice(0, 4).map((nut, idx) => (
+                      <View key={idx} style={[styles.adequateChip, { backgroundColor: `${nut.color}15`, borderColor: nut.color }]}>
+                        <Text style={[styles.adequateChipText, { color: nut.color }]}>{nut.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Nutrient Breakdown */}
             {correlations.map((corr, index) => (
               <View key={index} style={styles.nutrientCard}>
                 <View style={styles.nutrientHeader}>
@@ -228,74 +356,28 @@ export default function FoodMoodCorrelationScreen() {
                     <Ionicons
                       name={corr.effectSize > 0 ? 'trending-up' : 'trending-down'}
                       size={24}
-                      color={corr.effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning}
+                      color={corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
                     />
                     <Text style={styles.nutrientTitle}>{corr.factor}</Text>
                   </View>
                   <CircularProgress
                     percentage={Math.abs(corr.effectSize) * 100}
-                    size={60}
-                    strokeWidth={6}
-                    color={corr.effectSize > 0 ? SEMANTIC.success : SEMANTIC.warning}
+                    size={50}
+                    strokeWidth={5}
+                    color={corr.effectSize > 0 ? SEMANTIC.success.base : SEMANTIC.warning.base}
                   />
                 </View>
-
-                <Text style={styles.nutrientMechanism}>{corr.mechanism}</Text>
-
-                <View style={styles.nutrientEvidence}>
-                  <View style={styles.evidenceItem}>
-                    <Text style={styles.evidenceLabel}>Evidence Level</Text>
-                    <View style={styles.evidenceBadge}>
-                      <Ionicons name="shield-checkmark" size={12} color={SEMANTIC.success} />
-                      <Text style={styles.evidenceValue}>
-                        {EVIDENCE_TERMINOLOGY.getCausalFraming(corr.evidenceLevel)}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.evidenceItem}>
-                    <Text style={styles.evidenceLabel}>Confidence</Text>
-                    <Text style={styles.evidenceValue}>
-                      {EVIDENCE_TERMINOLOGY.getConfidenceLabel(corr.confidence)}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.nutrientSources}>
-                  <Text style={styles.sourcesLabel}>Research Sources:</Text>
-                  <Text style={styles.sourcesText}>
-                    {corr.sources.join(' • ')}
-                  </Text>
-                </View>
+                <Text style={styles.nutrientDescription}>{corr.mechanism}</Text>
               </View>
             ))}
           </View>
         )}
 
-        {viewMode === 'temporal' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Temporal Patterns</Text>
-            <Text style={styles.sectionSubtitle}>
-              When do these correlations appear strongest?
-            </Text>
-
-            <View style={styles.comingSoon}>
-              <Ionicons name="time-outline" size={48} color={TEXT.tertiary} />
-              <Text style={styles.comingSoonText}>
-                Temporal pattern analysis coming soon
-              </Text>
-              <Text style={styles.comingSoonSubtext}>
-                This will show how food-mood correlations vary by time of day, day of week, and seasonal patterns
-              </Text>
-            </View>
-          </View>
-        )}
-
+        {/* Patterns Tab */}
         {viewMode === 'personal' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Personal Response</Text>
-            <Text style={styles.sectionSubtitle}>
-              Unique patterns based on YOUR data
-            </Text>
+            <Text style={styles.sectionTitle}>Your Patterns</Text>
+            <Text style={styles.sectionSubtitle}>Based on your personal data</Text>
 
             {personalPatterns.canAnalyze ? (
               <>
@@ -305,13 +387,13 @@ export default function FoodMoodCorrelationScreen() {
                       <Ionicons
                         name={
                           pattern.type === 'success_pattern' ? 'star' :
-                          pattern.type === 'struggle_pattern' ? 'warning' :
+                          pattern.type === 'struggle_pattern' ? 'alert-circle' :
                           'analytics'
                         }
                         size={24}
                         color={
-                          pattern.type === 'success_pattern' ? SEMANTIC.success :
-                          pattern.type === 'struggle_pattern' ? SEMANTIC.warning :
+                          pattern.type === 'success_pattern' ? SEMANTIC.success.base :
+                          pattern.type === 'struggle_pattern' ? SEMANTIC.warning.base :
                           BRAND.primary
                         }
                       />
@@ -323,9 +405,10 @@ export default function FoodMoodCorrelationScreen() {
               </>
             ) : (
               <View style={styles.insufficientData}>
-                <Ionicons name="information-circle-outline" size={32} color={TEXT.tertiary} />
+                <Ionicons name="time-outline" size={48} color={TEXT.tertiary} />
+                <Text style={styles.insufficientDataTitle}>Keep Logging</Text>
                 <Text style={styles.insufficientDataText}>
-                  {personalPatterns.message}
+                  Log more meals and moods to discover your personal patterns
                 </Text>
               </View>
             )}
@@ -339,22 +422,37 @@ export default function FoodMoodCorrelationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SURFACES.background,
+    backgroundColor: SURFACES.background.primary,
   },
   content: {
     padding: 16,
+    paddingBottom: 32,
     gap: 16,
+  },
+  headerButton: {
+    padding: SPACING[2],
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.primary,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: TEXT.secondary,
   },
   timeRangeContainer: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: SURFACES.card,
+    backgroundColor: SURFACES.card.primary,
     padding: 4,
     borderRadius: 12,
   },
   timeRangeButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -362,7 +460,7 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.primary,
   },
   timeRangeText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: TEXT.tertiary,
   },
@@ -372,7 +470,7 @@ const styles = StyleSheet.create({
   tabsContainer: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: SURFACES.card,
+    backgroundColor: SURFACES.card.primary,
     padding: 4,
     borderRadius: 12,
   },
@@ -380,8 +478,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
     borderRadius: 8,
     gap: 4,
   },
@@ -389,7 +486,7 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.primary + '20',
   },
   tabText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     color: TEXT.tertiary,
   },
@@ -397,7 +494,7 @@ const styles = StyleSheet.create({
     color: BRAND.primary,
   },
   section: {
-    gap: 16,
+    gap: 12,
   },
   sectionTitle: {
     fontSize: 18,
@@ -409,14 +506,21 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
     marginTop: -8,
   },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: TEXT.secondary,
+    marginBottom: 8,
+  },
   insightsSection: {
     gap: 12,
+    marginTop: 8,
   },
   insightCard: {
-    backgroundColor: SURFACES.card,
+    backgroundColor: SURFACES.card.primary,
     padding: 16,
     borderRadius: 12,
-    ...SHADOWS.small,
+    ...SHADOWS.sm,
   },
   insightHeader: {
     flexDirection: 'row',
@@ -428,12 +532,13 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: BRAND.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  insightNumberText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 24,
   },
   insightTitle: {
     fontSize: 15,
@@ -441,34 +546,127 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
     flex: 1,
   },
+  effectBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  effectText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   insightDescription: {
     fontSize: 13,
     color: TEXT.secondary,
     lineHeight: 18,
-    marginBottom: 12,
   },
-  insightStats: {
+  scoreCard: {
+    backgroundColor: SURFACES.card.primary,
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: `${BRAND.primary}20`,
+    ...SHADOWS.md,
+  },
+  scoreHeader: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    gap: SPACING[4],
   },
-  insightStat: {
-    flex: 1,
+  scoreCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: `${BRAND.primary}10`,
+    borderWidth: 3,
+    borderColor: BRAND.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  insightStatLabel: {
+  scoreValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: BRAND.primary,
+  },
+  scoreLabel: {
     fontSize: 11,
     color: TEXT.tertiary,
+    marginTop: -2,
+  },
+  scoreInfo: {
+    flex: 1,
+  },
+  scoreTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
     marginBottom: 4,
   },
-  insightStatValue: {
-    fontSize: 16,
-    fontWeight: '700',
+  scoreLevel: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+  },
+  deficienciesSection: {
+    marginTop: SPACING[4],
+    paddingTop: SPACING[4],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  deficiencyItem: {
+    backgroundColor: `${SEMANTIC.warning.base}10`,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING[2],
+    borderLeftWidth: 3,
+    borderLeftColor: SEMANTIC.warning.base,
+  },
+  deficiencyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: 4,
+  },
+  deficiencyName: {
+    fontSize: 14,
+    fontWeight: '600',
     color: TEXT.primary,
+    flex: 1,
+  },
+  deficiencyPercent: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: SEMANTIC.warning.base,
+  },
+  deficiencyFoods: {
+    fontSize: 12,
+    color: TEXT.secondary,
+  },
+  adequateSection: {
+    marginTop: SPACING[3],
+  },
+  adequateChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[2],
+  },
+  adequateChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  adequateChipText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   nutrientCard: {
-    backgroundColor: SURFACES.card,
+    backgroundColor: SURFACES.card.primary,
     padding: 16,
     borderRadius: 12,
-    ...SHADOWS.small,
+    ...SHADOWS.sm,
   },
   nutrientHeader: {
     flexDirection: 'row',
@@ -487,74 +685,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: TEXT.primary,
   },
-  nutrientMechanism: {
+  nutrientDescription: {
     fontSize: 13,
     color: TEXT.secondary,
     lineHeight: 18,
-    marginBottom: 12,
-  },
-  nutrientEvidence: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
-  },
-  evidenceItem: {
-    flex: 1,
-  },
-  evidenceLabel: {
-    fontSize: 11,
-    color: TEXT.tertiary,
-    marginBottom: 4,
-  },
-  evidenceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  evidenceValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: TEXT.primary,
-  },
-  nutrientSources: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.elevated,
-  },
-  sourcesLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: TEXT.tertiary,
-    marginBottom: 4,
-  },
-  sourcesText: {
-    fontSize: 10,
-    color: TEXT.tertiary,
-    lineHeight: 14,
-  },
-  comingSoon: {
-    backgroundColor: SURFACES.card,
-    padding: 32,
-    borderRadius: 12,
-    alignItems: 'center',
-    gap: 12,
-  },
-  comingSoonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: TEXT.secondary,
-  },
-  comingSoonSubtext: {
-    fontSize: 12,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-    lineHeight: 16,
   },
   patternCard: {
-    backgroundColor: SURFACES.card,
+    backgroundColor: SURFACES.card.primary,
     padding: 16,
     borderRadius: 12,
-    ...SHADOWS.small,
+    ...SHADOWS.sm,
   },
   patternHeader: {
     flexDirection: 'row',
@@ -574,11 +714,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   insufficientData: {
-    backgroundColor: SURFACES.card,
-    padding: 24,
+    backgroundColor: SURFACES.card.primary,
+    padding: 32,
     borderRadius: 12,
     alignItems: 'center',
     gap: 12,
+  },
+  insufficientDataTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: TEXT.primary,
   },
   insufficientDataText: {
     fontSize: 13,

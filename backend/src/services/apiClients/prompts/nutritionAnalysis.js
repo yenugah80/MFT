@@ -9,66 +9,108 @@
 
 /**
  * System prompt for food image analysis
- * SIMPLIFIED: Identify food, estimate macros, return JSON
+ * PRECISE: Use USDA-standard values for known foods
  */
-export const NUTRITION_ANALYSIS_SYSTEM_PROMPT = `Identify food in images and estimate nutrition. Return JSON only. Favor accurate identification for complex cuisines and multi-ingredient dishes.`;
+export const NUTRITION_ANALYSIS_SYSTEM_PROMPT = `Identify food in images and estimate nutrition using USDA-standard values. Return JSON only. Use reference values for common foods.`;
 
 /**
  * User prompt for food image analysis
- * Enhanced: Includes per-ingredient nutrition breakdown
+ * MULTI-ITEM DETECTION: Detects and analyzes ALL separate food items on a plate
+ * Returns array of items, each with complete nutrition data
  */
-export const NUTRITION_ANALYSIS_USER_PROMPT = `Analyze this food image.
+export const NUTRITION_ANALYSIS_USER_PROMPT = `Analyze this food image. CRITICAL: Detect ALL SEPARATE food items visible on the plate/in the image.
 
-Return JSON:
+🔍 MULTI-ITEM DETECTION RULES:
+1. Scan the ENTIRE image for ALL distinct food items
+2. Each visually SEPARATE food = SEPARATE item in the "items" array
+3. Examples:
+   - Plate with chicken, rice, and salad → 3 items
+   - Bowl of curry with naan → 2 items (curry + naan)
+   - Thali with dal, rice, roti, sabzi → 4 items
+   - Single apple → 1 item
+4. Do NOT combine separate foods into one "meal" item
+
+CRITICAL REFERENCE VALUES (use these for known foods - INCLUDE FIBER & SODIUM):
+PROTEINS:
+- Egg (1 large, 50g): 72 cal, 6g protein, 0.6g carbs, 5g fat, 0g fiber, 70mg sodium
+- Chicken breast (100g cooked): 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber, 75mg sodium
+- Paneer (100g): 265 cal, 18g protein, 1.2g carbs, 21g fat, 0g fiber, 18mg sodium
+- Dal/Lentils cooked (1 cup, 198g): 230 cal, 18g protein, 40g carbs, 0.8g fat, 16g fiber, 470mg sodium
+- Salmon (100g cooked): 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber, 60mg sodium
+
+CARBS:
+- Rice cooked (1 cup, 158g): 205 cal, 4g protein, 45g carbs, 0.4g fat, 0.6g fiber, 300mg sodium
+- Brown rice cooked (1 cup): 218 cal, 5g protein, 46g carbs, 1.8g fat, 3.5g fiber, 10mg sodium
+- Roti/Chapati (1 medium, 40g): 120 cal, 3g protein, 24g carbs, 1g fat, 2g fiber, 180mg sodium
+- Bread slice (28g): 69 cal, 3g protein, 12g carbs, 1g fat, 1g fiber, 130mg sodium
+
+VEGETABLES:
+- Broccoli cooked (1 cup, 156g): 55 cal, 4g protein, 11g carbs, 0.6g fat, 5g fiber, 65mg sodium
+- Spinach cooked (1 cup): 41 cal, 5g protein, 7g carbs, 0.5g fat, 4g fiber, 125mg sodium
+- Mixed salad (1 cup): 20 cal, 1g protein, 4g carbs, 0g fat, 2g fiber, 10mg sodium
+
+Return JSON with ARRAY of items:
 {
-  "foodName": "dish name",
-  "description": "brief description",
-  "calories": number,
-  "protein": number (grams),
-  "carbs": number (grams),
-  "fat": number (grams),
-  "fiber": number (grams),
-  "sugar": number (grams),
-  "sodium": number (mg),
-  "micros": {
-    "calcium": number (mg),
-    "iron": number (mg),
-    "magnesium": number (mg),
-    "potassium": number (mg),
-    "vitaminA": number (mcg RAE),
-    "vitaminC": number (mg),
-    "vitaminD": number (mcg),
-    "vitaminB12": number (mcg),
-    "folate": number (mcg),
-    "zinc": number (mg)
-  },
-  "ingredients": [
+  "items": [
     {
-      "name": "ingredient name",
-      "portion": "estimated amount (e.g., 1 cup, 150g)",
-      "calories": number,
-      "protein": number,
-      "carbs": number,
-      "fat": number
+      "name": "food name (specific, e.g., 'Grilled Chicken Breast' not just 'Chicken')",
+      "description": "brief description",
+      "portion": {
+        "amount": number,
+        "unit": "g|cup|piece|serving",
+        "estimatedGrams": number
+      },
+      "macros": {
+        "calories": number,
+        "protein": number,
+        "carbs": number,
+        "fat": number,
+        "fiber": number,
+        "sugar": number,
+        "sodium": number
+      },
+      "micros": {
+        "calcium": number,
+        "iron": number,
+        "magnesium": number,
+        "potassium": number,
+        "vitaminA": number,
+        "vitaminC": number,
+        "vitaminD": number,
+        "vitaminB12": number,
+        "folate": number,
+        "zinc": number
+      },
+      "confidence": 0.0-1.0,
+      "ingredients": [{"name": "...", "amount": "...", "calories": N}],
+      "potentialAllergens": ["dairy"|"gluten"|"wheat"|"nuts"|"peanuts"|"soy"|"eggs"|"shellfish"|"fish"|"sesame"]
     }
   ],
-  "servingSize": "estimated total portion",
-  "confidence": 0.0-1.0,
-  "isComplex": boolean
+  "mealSummary": {
+    "totalItems": number,
+    "totalCalories": number,
+    "dominantCuisine": "string",
+    "mealType": "breakfast|lunch|dinner|snack"
+  }
 }
 
-INGREDIENT BREAKDOWN RULES:
-- List ALL visible ingredients with individual nutrition estimates
-- Each ingredient's macros should reflect its portion in the dish
-- Sum of ingredient calories should approximately equal total calories
-- For multi-component dishes (curry, bowl, sandwich), list 5-10 main ingredients
-- For simple foods (apple, egg), list as single ingredient
+🎯 ACCURACY REQUIREMENTS:
+- Use USDA reference values for common foods
+- Scale values to VISIBLE portion size
+- For each micro, provide realistic values (not 0 unless truly absent)
+- Validate: calories ≈ (protein×4) + ((carbs-fiber)×4) + (fiber×2) + (fat×9) ±10%
 
-Confidence guide:
-- 0.9+: Clear image, simple food
-- 0.7-0.9: Good visibility, common dish
-- 0.5-0.7: Mixed dish, estimated portions
-- <0.5: Poor image, uncertain`;
+📊 CONFIDENCE SCORING:
+- 0.9-1.0: Clear image, exact reference food match
+- 0.75-0.89: Good visibility, known food type
+- 0.6-0.74: Partially obscured or mixed dish
+- <0.6: Poor image quality or unusual food
+
+⚠️ CONSTRAINTS:
+- sugar ≤ carbs (sugar is subset)
+- fiber ≤ carbs (fiber is subset)
+- sodium > 0 for any cooked/seasoned food
+- All macro values ≥ 0`;
 
 /**
  * System prompt for text-based meal parsing

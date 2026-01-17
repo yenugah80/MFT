@@ -172,7 +172,7 @@ Premium health-conscious users seeking personalization (5% of SAM)
 - Strategy: Freemium + word-of-mouth
 
 **Phase 2: Wellness Seekers (6-12 months)**
-- Target: Health-conscious professionals, weight management
+- Target: Health-conscious professionals, weight management, csv exports
 - Channels: Instagram, TikTok influencers, podcast sponsorships
 - Strategy: Paid acquisition + content marketing
 

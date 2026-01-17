@@ -13,4 +13,4 @@ export { default as ActionButtons } from './ActionButtons';
 
 // Utility exports
 export { calculateMealScore, getScoreLabel } from './MealScoreDial';
-export { calculateNutriScoreGrade, NUTRI_SCORE_GRADES } from './NutriScoreCard';
+export { calculateNutriScoreGrade, NUTRITION_GRADES } from './NutriScoreCard';

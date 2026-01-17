@@ -23,7 +23,7 @@ export default function OCRScanner({ navigation }) {
     setNutritionData(null);
     setSelectedIndices(new Set());
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true, // Enable cropping
       quality: 1,
     });
