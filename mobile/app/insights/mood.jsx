@@ -28,7 +28,7 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 import { useDashboard } from '../../hooks/useDashboard';
-import { useMoodTrends } from '../../hooks/useMoodInsights';
+import { useMoodTrends, useMoodIntelligence } from '../../hooks/useMoodInsights';
 import { useNotification } from '../../providers/NotificationProvider';
 import apiClient from '../../services/apiClient';
 import {
@@ -99,12 +99,17 @@ export default function MoodInsightsScreen() {
   // Data hooks
   const { data: dashboard, isLoading: dashboardLoading } = useDashboard();
   const { data: moodData, isLoading: moodLoading, refetch } = useMoodTrends({ period: 'week' });
+  const { data: intelligence, isLoading: intelligenceLoading, refetch: refetchIntelligence } = useMoodIntelligence();
 
   const [selectedTimeframe, setSelectedTimeframe] = useState('week');
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [aiInsights, setAiInsights] = useState([]);
 
   const isLoading = dashboardLoading || moodLoading;
+
+  // Extract wellness score and recommendations from intelligence
+  const wellnessScore = intelligence?.wellnessScore || null;
+  const aiRecommendations = intelligence?.recommendations || [];
 
   // Extract today's mood from dashboard
   const todaysMoods = useMemo(() => {
@@ -475,6 +480,39 @@ export default function MoodInsightsScreen() {
           )}
         </LinearGradient>
 
+        {/* Wellness Score Card */}
+        {wellnessScore && (
+          <View style={styles.wellnessScoreCard}>
+            <View style={styles.wellnessScoreHeader}>
+              <Ionicons name="heart-circle" size={24} color={VIBRANT_WELLNESS.mood.primary} />
+              <Text style={styles.wellnessScoreTitle}>Mood Wellness Score</Text>
+              {intelligenceLoading && (
+                <ActivityIndicator size="small" color={VIBRANT_WELLNESS.mood.primary} style={{ marginLeft: 'auto' }} />
+              )}
+            </View>
+            <View style={styles.wellnessScoreBody}>
+              <View style={styles.wellnessScoreCircle}>
+                <Text style={styles.wellnessScoreValue}>{wellnessScore.score}</Text>
+                <Text style={styles.wellnessScoreMax}>/100</Text>
+              </View>
+              <View style={styles.wellnessScoreDetails}>
+                <Text style={styles.wellnessScoreLabel}>{wellnessScore.label}</Text>
+                <Text style={styles.wellnessScoreDescription}>{wellnessScore.description}</Text>
+                <View style={styles.wellnessBreakdown}>
+                  {wellnessScore.breakdown && Object.entries(wellnessScore.breakdown).slice(0, 3).map(([key, value]) => (
+                    <View key={key} style={styles.breakdownItem}>
+                      <Text style={styles.breakdownLabel}>{key.replace(/([A-Z])/g, ' $1').trim()}</Text>
+                      <View style={styles.breakdownBar}>
+                        <View style={[styles.breakdownFill, { width: `${value}%` }]} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Timeframe Selector */}
         <View style={styles.timeframeContainer}>
           {['week', 'month'].map((tf) => (
@@ -586,32 +624,84 @@ export default function MoodInsightsScreen() {
           </View>
         )}
 
-        {/* Smart Recommendations */}
+        {/* AI-Powered Recommendations */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: SEMANTIC.success.base + '20' }]}>
-              <Ionicons name="bulb" size={20} color={SEMANTIC.success.base} />
+            <View style={[styles.cardIcon, { backgroundColor: VIBRANT_WELLNESS.mood.primary + '20' }]}>
+              <Ionicons name="sparkles" size={20} color={VIBRANT_WELLNESS.mood.primary} />
             </View>
-            <View>
-              <Text style={styles.cardTitle}>Recommendations</Text>
-              <Text style={styles.cardSubtitle}>Personalized for you</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Smart Recommendations</Text>
+              <Text style={styles.cardSubtitle}>
+                {aiRecommendations.length > 0 ? 'AI-powered insights for you' : 'Personalized for you'}
+              </Text>
             </View>
+            {aiRecommendations.length > 0 && (
+              <TouchableOpacity onPress={refetchIntelligence} style={styles.refreshButton}>
+                <Ionicons name="refresh" size={18} color={intelligenceLoading ? TEXT.muted : VIBRANT_WELLNESS.mood.primary} />
+              </TouchableOpacity>
+            )}
           </View>
-          <View style={styles.recommendationsContainer}>
-            {currentRecommendations.map((rec, i) => (
-              <View key={i} style={styles.recommendationItem}>
-                <View style={styles.recommendationIcon}>
-                  <Ionicons name={rec.icon} size={20} color={BRAND.primary} />
+
+          {intelligenceLoading && aiRecommendations.length === 0 ? (
+            <View style={styles.aiLoadingContainer}>
+              <ActivityIndicator size="small" color={VIBRANT_WELLNESS.mood.primary} />
+              <Text style={styles.aiLoadingText}>Analyzing your patterns...</Text>
+            </View>
+          ) : aiRecommendations.length > 0 ? (
+            <View style={styles.recommendationsContainer}>
+              {aiRecommendations.slice(0, 5).map((rec, i) => {
+                const priorityColors = {
+                  high: SEMANTIC.error.base,
+                  medium: SEMANTIC.warning.base,
+                  low: SEMANTIC.success.base,
+                };
+                const priorityColor = priorityColors[rec.priority] || BRAND.primary;
+
+                return (
+                  <View key={i} style={styles.aiRecommendationItem}>
+                    <View style={[styles.recommendationPriority, { backgroundColor: priorityColor + '20' }]}>
+                      <Ionicons
+                        name={rec.icon || 'bulb-outline'}
+                        size={18}
+                        color={priorityColor}
+                      />
+                    </View>
+                    <View style={styles.recommendationContent}>
+                      <Text style={styles.recommendationTitle}>{rec.title}</Text>
+                      <Text style={styles.recommendationText}>{rec.message}</Text>
+                      {rec.reasoning && (
+                        <Text style={styles.recommendationReasoning}>{rec.reasoning}</Text>
+                      )}
+                    </View>
+                    {rec.confidence && (
+                      <View style={[styles.confidencePill, { backgroundColor: priorityColor + '15' }]}>
+                        <Text style={[styles.confidenceText, { color: priorityColor }]}>
+                          {Math.round(rec.confidence * 100)}%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.recommendationsContainer}>
+              {currentRecommendations.map((rec, i) => (
+                <View key={i} style={styles.recommendationItem}>
+                  <View style={styles.recommendationIcon}>
+                    <Ionicons name={rec.icon} size={20} color={BRAND.primary} />
+                  </View>
+                  <Text style={styles.recommendationText}>{rec.text}</Text>
+                  {rec.action && (
+                    <TouchableOpacity onPress={handleLogMood} style={styles.recommendationAction}>
+                      <Ionicons name="arrow-forward" size={16} color={BRAND.primary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <Text style={styles.recommendationText}>{rec.text}</Text>
-                {rec.action && (
-                  <TouchableOpacity onPress={handleLogMood} style={styles.recommendationAction}>
-                    <Ionicons name="arrow-forward" size={16} color={BRAND.primary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* AI Insights Section */}
@@ -1054,6 +1144,128 @@ const styles = StyleSheet.create({
   },
   recommendationAction: {
     padding: SPACING[2],
+  },
+
+  // Wellness Score Card
+  wellnessScoreCard: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    ...SHADOWS.sm,
+  },
+  wellnessScoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[4],
+  },
+  wellnessScoreTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+  },
+  wellnessScoreBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[4],
+  },
+  wellnessScoreCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: VIBRANT_WELLNESS.mood.primary + '15',
+    borderWidth: 3,
+    borderColor: VIBRANT_WELLNESS.mood.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wellnessScoreValue: {
+    fontSize: 28,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: VIBRANT_WELLNESS.mood.primary,
+  },
+  wellnessScoreMax: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: -4,
+  },
+  wellnessScoreDetails: {
+    flex: 1,
+  },
+  wellnessScoreLabel: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+  },
+  wellnessScoreDescription: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  wellnessBreakdown: {
+    marginTop: SPACING[3],
+    gap: SPACING[2],
+  },
+  breakdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  breakdownLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    width: 80,
+    textTransform: 'capitalize',
+  },
+  breakdownBar: {
+    flex: 1,
+    height: 4,
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: 2,
+  },
+  breakdownFill: {
+    height: '100%',
+    backgroundColor: VIBRANT_WELLNESS.mood.primary,
+    borderRadius: 2,
+  },
+
+  // AI Recommendation Items
+  aiRecommendationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: SURFACES.background.secondary,
+    padding: SPACING[3],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[3],
+  },
+  recommendationPriority: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recommendationContent: {
+    flex: 1,
+  },
+  recommendationTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+    marginBottom: 2,
+  },
+  recommendationReasoning: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  confidencePill: {
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
   },
 
   // AI Insights

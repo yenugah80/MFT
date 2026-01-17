@@ -46,3 +46,19 @@ export const useMoodTrends = ({ period = 'week' } = {}) => {
   const windowDays = periodDays[period] || 7;
   return useMoodInsights({ windowDays, trendDays: Math.min(windowDays, 7) });
 };
+
+/**
+ * useMoodIntelligence - Fetches AI-powered mood recommendations and wellness insights
+ */
+export const useMoodIntelligence = () => {
+  return useQuery({
+    queryKey: ['moodIntelligence'],
+    queryFn: async () => {
+      const response = await apiClient.get('/mood/intelligence', { _timeout: 30000 });
+      return response;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
+    retry: 2,
+  });
+};
