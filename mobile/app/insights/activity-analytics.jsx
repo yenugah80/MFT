@@ -199,7 +199,7 @@ function getTimeAwareCoaching(coldStart, metrics, todayMinutes = 0) {
         : time.suggestion,
       action: {
         primary: 'Keep it up',
-        secondary: 'You\'ve exceeded the CDC recommendation',
+        secondary: 'You\'ve exceeded your weekly target!',
       },
       stats: {
         show: true,
@@ -211,7 +211,7 @@ function getTimeAwareCoaching(coldStart, metrics, todayMinutes = 0) {
       },
       tip: {
         icon: 'trophy-outline',
-        text: 'CDC goal exceeded',
+        text: 'Weekly goal achieved!',
         subtext: 'Your commitment is paying off',
       },
       progress: {
@@ -246,7 +246,7 @@ function getTimeAwareCoaching(coldStart, metrics, todayMinutes = 0) {
     },
     progress: {
       percent: weeklyPercent,
-      label: `${weeklyPercent}% of CDC goal`,
+      label: `${weeklyPercent}% of weekly goal`,
     },
   };
 }
@@ -540,7 +540,7 @@ export default function ActivityAnalyticsScreen() {
                   value={metrics.cdcProgress}
                   maxValue={100}
                   label={`${metrics.weeklyMinutes} min`}
-                  sublabel={`of ${CDC_WEEKLY_GOAL} min CDC goal`}
+                  sublabel={`of ${CDC_WEEKLY_GOAL} min weekly goal`}
                   size={GAUGE_CONFIG.size}
                   strokeWidth={GAUGE_CONFIG.strokeWidth}
                   animated={!reducedMotion}

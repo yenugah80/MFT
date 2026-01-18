@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import { Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const Toast = ({ type = 'info', message, onDismiss, style }) => {
+const Toast = ({ type = 'info', title, message, onDismiss, style }) => {
   const opacity = new Animated.Value(0);
 
   useEffect(() => {
@@ -64,9 +64,21 @@ const Toast = ({ type = 'info', message, onDismiss, style }) => {
       ]}
     >
       <Ionicons name={icon} size={24} color={color} style={styles.icon} />
-      <Text style={[styles.message, { color }]} numberOfLines={2}>
-        {message}
-      </Text>
+      <View style={styles.textContainer}>
+        {title && (
+          <Text style={[styles.title, { color }]} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
+        {message && (
+          <Text style={[styles.message, { color }]} numberOfLines={2}>
+            {message}
+          </Text>
+        )}
+        {!title && !message && (
+          <Text style={[styles.message, { color }]}>Notification</Text>
+        )}
+      </View>
       <TouchableOpacity onPress={handleDismiss} style={styles.closeButton}>
         <Ionicons name="close" size={20} color={color} />
       </TouchableOpacity>
@@ -94,10 +106,17 @@ const styles = StyleSheet.create({
   icon: {
     marginRight: 12,
   },
-  message: {
+  textContainer: {
     flex: 1,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  message: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   closeButton: {
     marginLeft: 8,

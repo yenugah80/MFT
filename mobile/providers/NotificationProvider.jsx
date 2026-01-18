@@ -35,6 +35,7 @@ import {
 } from '../services/pushNotifications';
 import apiClient from '../services/apiClient';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
+import fcmService from '../services/fcmService';
 
 const NotificationContext = createContext(null);
 
@@ -56,6 +57,12 @@ export const NotificationProvider = ({ children }) => {
     token: null,
     error: null,
   });
+  const [fcmStatus, setFcmStatus] = useState({
+    initialized: false,
+    permissionStatus: 'undetermined',
+    token: null,
+    error: null,
+  });
   const [preferences, setPreferences] = useState({
     dailyReminder: true,
     hydrationNudges: true,
@@ -65,6 +72,7 @@ export const NotificationProvider = ({ children }) => {
 
   const notificationListener = useRef();
   const responseListener = useRef();
+  const fcmListenersRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
 
   // ============== Toast Management ==============
@@ -124,6 +132,45 @@ export const NotificationProvider = ({ children }) => {
       }));
     }
   }, [isSignedIn]);
+
+  // ============== FCM Setup (Server-triggered notifications) ==============
+  const initializeFCM = useCallback(async () => {
+    if (!isSignedIn) return;
+
+    try {
+      // Setup FCM for server-triggered push notifications
+      const result = await fcmService.setupFCM();
+
+      setFcmStatus({
+        initialized: true,
+        permissionStatus: result.permissionStatus,
+        token: result.token,
+        error: result.error,
+      });
+
+      // Set up FCM message handlers for foreground notifications
+      const listeners = await fcmService.setupFCMListeners((message) => {
+        // Show FCM messages as toasts when app is in foreground
+        addToast({
+          type: 'info',
+          title: message.title,
+          message: message.body,
+          duration: 4000,
+        });
+      });
+
+      fcmListenersRef.current = listeners;
+      console.log('[NotificationProvider] FCM initialized successfully');
+    } catch (error) {
+      console.warn('[NotificationProvider] FCM setup error (non-critical):', error?.message || error);
+      setFcmStatus({
+        initialized: true,
+        permissionStatus: 'unavailable',
+        token: null,
+        error: 'FCM unavailable on this device',
+      });
+    }
+  }, [isSignedIn, addToast]);
 
   // Sync notification schedules with user preferences
   const syncNotificationSchedules = useCallback(async () => {
@@ -247,9 +294,14 @@ export const NotificationProvider = ({ children }) => {
   // Initialize push notifications when signed in
   useEffect(() => {
     if (isSignedIn && !pushStatus.initialized) {
+      // Initialize Expo push (for local scheduled notifications)
       initializePushNotifications();
     }
-  }, [isSignedIn, pushStatus.initialized, initializePushNotifications]);
+    if (isSignedIn && !fcmStatus.initialized) {
+      // Initialize FCM (for server-triggered notifications)
+      initializeFCM();
+    }
+  }, [isSignedIn, pushStatus.initialized, fcmStatus.initialized, initializePushNotifications, initializeFCM]);
 
   // Set up notification listeners
   useEffect(() => {
@@ -286,6 +338,11 @@ export const NotificationProvider = ({ children }) => {
       }
       if (responseListener.current) {
         responseListener.current.remove();
+      }
+      // Clean up FCM listeners
+      if (fcmListenersRef.current) {
+        fcmListenersRef.current.foreground?.remove();
+        fcmListenersRef.current.tokenRefresh?.remove();
       }
     };
   }, [addToast]);
@@ -337,8 +394,10 @@ export const NotificationProvider = ({ children }) => {
     // Push notification status and controls
     push: {
       status: pushStatus,
+      fcmStatus: fcmStatus,
       preferences,
       initialize: initializePushNotifications,
+      initializeFCM: initializeFCM,
       checkPermission: checkPermissionStatus,
       updatePreferences: updateNotificationPreferences,
       syncSchedules: syncNotificationSchedules,

@@ -6,6 +6,9 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "BACKEND_URL": "https://myfoodtracker.onrender.com/health"
+  },
   "triggers": {
     "crons": ["*/10 * * * *"]
   }

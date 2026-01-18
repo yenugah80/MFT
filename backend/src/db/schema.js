@@ -58,6 +58,10 @@ export const accountSettingsTable = pgTable(
     // Push notification token from Expo
     expoPushToken: text("expo_push_token"),
     pushTokenUpdatedAt: timestamp("push_token_updated_at"),
+    // Firebase Cloud Messaging token
+    fcmToken: text("fcm_token"),
+    fcmTokenUpdatedAt: timestamp("fcm_token_updated_at"),
+    fcmTokenPlatform: text("fcm_token_platform"), // 'ios' | 'android'
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   }
@@ -1413,5 +1417,224 @@ export const featureInteractionsTable = pgTable(
     outcomeIdx: index("feat_interaction_outcome_idx").on(table.targetOutcome),
     activeIdx: index("feat_interaction_active_idx").on(table.isActive),
     interactionTypeCheck: check("feat_interaction_type_check", sql`${table.interactionType} IS NULL OR ${table.interactionType} IN ('synergistic', 'antagonistic', 'additive')`),
+  })
+);
+
+// ============================================================================
+// PREDICTION LEARNING SYSTEM
+// A closed-loop system that learns from each user individually
+// ============================================================================
+
+// Prediction Log - Every prediction we make (stored for outcome tracking)
+export const predictionLogTable = pgTable(
+  "prediction_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // What we predicted
+    predictionType: text("prediction_type").notNull(), // 'energy_crash', 'mood_dip', 'dehydration', 'hunger'
+    predictionSubtype: text("prediction_subtype"), // 'sugar_crash', 'low_protein', 'late_meal'
+
+    // The specific prediction
+    predictedOutcome: text("predicted_outcome").notNull(), // 'low_energy', 'mood_drop', 'fatigue'
+    predictedSeverity: text("predicted_severity").notNull(), // 'high', 'medium', 'low'
+    predictedTime: timestamp("predicted_time").notNull(), // When we expect the outcome
+    predictionWindowMinutes: integer("prediction_window_minutes").default(60),
+
+    // The cause (what triggered this prediction)
+    triggerType: text("trigger_type").notNull(), // 'meal', 'hydration', 'sleep', 'pattern'
+    triggerData: json("trigger_data").notNull(), // Full context
+
+    // Our confidence at prediction time
+    confidence: decimal("confidence", { precision: 3, scale: 2 }).notNull(),
+    confidenceFactors: json("confidence_factors"),
+
+    // Thresholds used (for learning later)
+    thresholdsUsed: json("thresholds_used").notNull(),
+    wasPersonalized: boolean("was_personalized").default(false),
+
+    // User messaging
+    userMessage: text("user_message").notNull(),
+    preventionTip: text("prevention_tip"),
+
+    // Outcome tracking
+    checkInSentAt: timestamp("check_in_sent_at"),
+    checkInMethod: text("check_in_method"), // 'push', 'in_app', 'none'
+    outcomeStatus: text("outcome_status").default("pending"), // 'pending', 'confirmed', 'denied', 'skipped', 'expired'
+
+    createdAt: timestamp("created_at").defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (table) => ({
+    userStatusIdx: index("prediction_log_user_status_idx").on(table.userId, table.outcomeStatus),
+    predictedTimeIdx: index("prediction_log_time_idx").on(table.predictedTime),
+    typeIdx: index("prediction_log_type_idx").on(table.userId, table.predictionType),
+  })
+);
+
+// Prediction Outcomes - User feedback on predictions
+export const predictionOutcomesTable = pgTable(
+  "prediction_outcomes",
+  {
+    id: serial("id").primaryKey(),
+    predictionId: integer("prediction_id")
+      .notNull()
+      .references(() => predictionLogTable.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // User's actual experience
+    actualOutcome: text("actual_outcome").notNull(), // 'as_predicted', 'opposite', 'no_effect', 'unsure'
+    outcomeIntensity: integer("outcome_intensity"), // 1-5 scale
+
+    // Timing accuracy
+    timingAccuracy: text("timing_accuracy"), // 'early', 'on_time', 'late', 'no_outcome'
+    actualTime: timestamp("actual_time"),
+
+    // Optional context
+    userNotes: text("user_notes"),
+    contextFactors: json("context_factors"),
+
+    // Helpfulness
+    wasHelpful: boolean("was_helpful"),
+    followedPreventionTip: boolean("followed_prevention_tip"),
+    tipEffectiveness: text("tip_effectiveness"),
+
+    // Feedback method
+    feedbackMethod: text("feedback_method").notNull(), // 'quick_emoji', 'detailed_form', 'implicit'
+
+    // Accuracy calculation
+    predictionAccurate: boolean("prediction_accurate").notNull(),
+    accuracyScore: decimal("accuracy_score", { precision: 3, scale: 2 }),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("prediction_outcomes_user_idx").on(table.userId),
+    accurateIdx: index("prediction_outcomes_accurate_idx").on(table.userId, table.predictionAccurate),
+  })
+);
+
+// User Thresholds - Personalized thresholds that evolve over time
+export const userThresholdsTable = pgTable(
+  "user_thresholds",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Threshold definition
+    thresholdType: text("threshold_type").notNull(), // 'sugar_crash', 'protein_fatigue', 'hydration_warning'
+    thresholdValue: decimal("threshold_value", { precision: 10, scale: 2 }).notNull(),
+    thresholdUnit: text("threshold_unit").notNull(), // 'grams', 'percent', 'hours', 'liters'
+
+    // Source
+    source: text("source").notNull(), // 'default', 'population', 'personal_learning', 'manual'
+
+    // Learning metrics
+    predictionsMade: integer("predictions_made").default(0),
+    predictionsCorrect: integer("predictions_correct").default(0),
+    accuracyRate: decimal("accuracy_rate", { precision: 3, scale: 2 }),
+
+    // Adjustment tracking
+    initialValue: decimal("initial_value", { precision: 10, scale: 2 }).notNull(),
+    adjustmentCount: integer("adjustment_count").default(0),
+    lastAdjustmentAt: timestamp("last_adjustment_at"),
+    adjustmentReason: text("adjustment_reason"),
+
+    // Confidence
+    confidenceLevel: text("confidence_level").default("low"), // 'low', 'medium', 'high', 'validated'
+    minSamplesForAdjustment: integer("min_samples_for_adjustment").default(5),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userThresholdUnique: unique("user_threshold_unique").on(table.userId, table.thresholdType),
+    userIdx: index("user_thresholds_user_idx").on(table.userId),
+  })
+);
+
+// Prediction Stories - "Remember when" moments for user connection
+export const predictionStoriesTable = pgTable(
+  "prediction_stories",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Story content
+    storyType: text("story_type").notNull(), // 'remember_when', 'pattern_discovered', 'milestone', 'learning'
+    storyTitle: text("story_title").notNull(),
+    storyBody: text("story_body").notNull(),
+    storyEmoji: text("story_emoji"),
+
+    // Related data
+    relatedPredictionIds: json("related_prediction_ids"), // Array of prediction_log IDs
+    relatedDates: json("related_dates"), // Array of dates
+    patternData: json("pattern_data"),
+
+    // Engagement
+    shownCount: integer("shown_count").default(0),
+    lastShownAt: timestamp("last_shown_at"),
+    userAcknowledged: boolean("user_acknowledged").default(false),
+    userReaction: text("user_reaction"), // 'helpful', 'already_knew', 'surprising', 'dismissed'
+
+    // Freshness
+    relevanceScore: decimal("relevance_score", { precision: 3, scale: 2 }).default("1.00"),
+    expiresAt: timestamp("expires_at"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userTypeIdx: index("prediction_stories_user_type_idx").on(table.userId, table.storyType),
+    shownIdx: index("prediction_stories_shown_idx").on(table.userId, table.lastShownAt),
+  })
+);
+
+// Pending Check-ins - Queue for check-in notifications
+export const pendingCheckInsTable = pgTable(
+  "pending_check_ins",
+  {
+    id: serial("id").primaryKey(),
+    predictionId: integer("prediction_id")
+      .notNull()
+      .references(() => predictionLogTable.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Scheduling
+    scheduledFor: timestamp("scheduled_for").notNull(),
+    windowEnd: timestamp("window_end").notNull(),
+
+    // Notification content
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    emoji: text("emoji"),
+    actionButtons: json("action_buttons"), // [{label: "😴 Tired", value: "tired"}, ...]
+
+    // Status
+    status: text("status").default("pending"), // 'pending', 'sent', 'responded', 'expired', 'failed'
+    sentAt: timestamp("sent_at"),
+    respondedAt: timestamp("responded_at"),
+    responseValue: text("response_value"),
+
+    // Retry logic
+    attemptCount: integer("attempt_count").default(0),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    failureReason: text("failure_reason"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userPendingIdx: index("pending_checkins_user_pending_idx").on(table.userId, table.status),
+    scheduledIdx: index("pending_checkins_scheduled_idx").on(table.scheduledFor),
   })
 );

@@ -1025,9 +1025,10 @@ export default function LogScreen() {
               onHealthPress={() => handleHealthPress(analyzedFood)}
             />
           </View>
-        ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 ? (
+        ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 && !showAnalysisDetails ? (
           <View style={styles.resultsContainer}>
             {/* UNIFIED DISPLAY: Same component for ALL input modes (text, photo, voice, barcode) */}
+            {/* Hidden when MealSummaryScreen modal is open to avoid duplicate displays */}
             <UnifiedMealAnalysis
               items={foodAnalysis.analysisResult.items}
               totals={foodAnalysis.analysisResult.totals}

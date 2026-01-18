@@ -143,6 +143,210 @@ export async function getPushTokenStatus(req, res) {
   }
 }
 
+// --- FCM Token Management (Firebase Cloud Messaging) ---
+export async function saveFCMToken(req, res) {
+  try {
+    const { userId } = req.auth;
+    const { fcmToken, platform } = req.body;
+
+    if (!fcmToken || typeof fcmToken !== 'string') {
+      return res.status(400).json({ error: 'Invalid FCM token' });
+    }
+
+    // Basic FCM token validation (tokens are typically 150+ characters)
+    if (fcmToken.length < 100) {
+      return res.status(400).json({
+        error: 'Invalid FCM token format',
+        hint: 'FCM tokens are typically 150+ characters'
+      });
+    }
+
+    // Check if profile exists first (foreign key constraint)
+    const [profile] = await req.db
+      .select({ userId: profilesTable.userId })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (!profile) {
+      console.log(`[saveFCMToken] Profile not found for user ${userId} - will retry after profile creation`);
+      return res.status(202).json({
+        success: false,
+        tokenRegistered: false,
+        message: 'Profile not ready yet, FCM token will be registered after profile creation',
+        retryAfterProfileCreation: true
+      });
+    }
+
+    const updated = await req.db
+      .insert(accountSettingsTable)
+      .values({
+        userId,
+        fcmToken,
+        fcmTokenUpdatedAt: new Date(),
+        fcmTokenPlatform: platform || null,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: {
+          fcmToken,
+          fcmTokenUpdatedAt: new Date(),
+          fcmTokenPlatform: platform || null,
+          updatedAt: new Date()
+        },
+      })
+      .returning({ fcmToken: accountSettingsTable.fcmToken });
+
+    console.log(`[saveFCMToken] Saved FCM token for user ${userId} (${platform || 'unknown platform'})`);
+    res.status(200).json({
+      success: true,
+      tokenRegistered: true,
+    });
+  } catch (error) {
+    // Handle foreign key constraint violation gracefully
+    if (error.code === '23503') {
+      console.log(`[saveFCMToken] Profile not found (FK error) for user ${req.auth?.userId}`);
+      return res.status(202).json({
+        success: false,
+        tokenRegistered: false,
+        message: 'Profile not ready yet',
+        retryAfterProfileCreation: true
+      });
+    }
+    console.error('[saveFCMToken] Error saving FCM token:', error);
+    sendDevError(res, error);
+  }
+}
+
+export async function deleteFCMToken(req, res) {
+  try {
+    const { userId } = req.auth;
+
+    await req.db
+      .update(accountSettingsTable)
+      .set({
+        fcmToken: null,
+        fcmTokenUpdatedAt: new Date(),
+        fcmTokenPlatform: null,
+        updatedAt: new Date()
+      })
+      .where(eq(accountSettingsTable.userId, userId));
+
+    console.log(`[deleteFCMToken] Removed FCM token for user ${userId}`);
+    res.status(200).json({ success: true, tokenRegistered: false });
+  } catch (error) {
+    console.error('[deleteFCMToken] Error removing FCM token:', error);
+    sendDevError(res, error);
+  }
+}
+
+export async function getFCMTokenStatus(req, res) {
+  try {
+    const { userId } = req.auth;
+
+    const [settings] = await req.db
+      .select({
+        fcmToken: accountSettingsTable.fcmToken,
+        fcmTokenUpdatedAt: accountSettingsTable.fcmTokenUpdatedAt,
+        fcmTokenPlatform: accountSettingsTable.fcmTokenPlatform,
+      })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId));
+
+    res.status(200).json({
+      tokenRegistered: !!settings?.fcmToken,
+      platform: settings?.fcmTokenPlatform || null,
+      lastUpdated: settings?.fcmTokenUpdatedAt || null
+    });
+  } catch (error) {
+    console.error('[getFCMTokenStatus] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+// --- Combined Push Token Endpoint (Expo + FCM) ---
+export async function saveBothPushTokens(req, res) {
+  try {
+    const { userId } = req.auth;
+    const { expoPushToken, fcmToken, platform } = req.body;
+
+    // Check if profile exists first
+    const [profile] = await req.db
+      .select({ userId: profilesTable.userId })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (!profile) {
+      console.log(`[saveBothPushTokens] Profile not found for user ${userId}`);
+      return res.status(202).json({
+        success: false,
+        expoPushTokenRegistered: false,
+        fcmTokenRegistered: false,
+        message: 'Profile not ready yet',
+        retryAfterProfileCreation: true
+      });
+    }
+
+    const updateData = {
+      updatedAt: new Date(),
+    };
+
+    // Add Expo token if provided
+    if (expoPushToken) {
+      if (expoPushToken.startsWith('ExponentPushToken[') || expoPushToken.startsWith('ExpoPushToken[')) {
+        updateData.expoPushToken = expoPushToken;
+        updateData.pushTokenUpdatedAt = new Date();
+      } else {
+        return res.status(400).json({
+          error: 'Invalid Expo push token format',
+          hint: 'Token should start with ExponentPushToken[ or ExpoPushToken['
+        });
+      }
+    }
+
+    // Add FCM token if provided
+    if (fcmToken) {
+      if (fcmToken.length >= 100) {
+        updateData.fcmToken = fcmToken;
+        updateData.fcmTokenUpdatedAt = new Date();
+        updateData.fcmTokenPlatform = platform || null;
+      } else {
+        return res.status(400).json({
+          error: 'Invalid FCM token format',
+          hint: 'FCM tokens are typically 150+ characters'
+        });
+      }
+    }
+
+    await req.db
+      .insert(accountSettingsTable)
+      .values({ userId, ...updateData })
+      .onConflictDoUpdate({
+        target: accountSettingsTable.userId,
+        set: updateData,
+      });
+
+    console.log(`[saveBothPushTokens] Saved tokens for user ${userId}`);
+    res.status(200).json({
+      success: true,
+      expoPushTokenRegistered: !!expoPushToken,
+      fcmTokenRegistered: !!fcmToken,
+    });
+  } catch (error) {
+    if (error.code === '23503') {
+      return res.status(202).json({
+        success: false,
+        message: 'Profile not ready yet',
+        retryAfterProfileCreation: true
+      });
+    }
+    console.error('[saveBothPushTokens] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
 // --- Notification Preferences ---
 export async function getNotifications(req, res) {
   try {

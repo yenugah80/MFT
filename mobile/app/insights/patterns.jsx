@@ -26,6 +26,7 @@ import {
   Dimensions,
   AccessibilityInfo,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -750,6 +751,7 @@ const INSIGHT_LABELS = {
  */
 function PredictionCard({ prediction, onTap, onFeedback, index = 0, showFeedback = true }) {
   const reducedMotion = useReducedMotion();
+  const [expanded, setExpanded] = useState(false);
   const color = INSIGHT_COLORS[prediction.type] || INSIGHT_COLORS.default;
   const icon = DOMAIN_ICONS[prediction.type] || DOMAIN_ICONS.default;
   const confidence = prediction.confidence || 0;
@@ -761,7 +763,7 @@ function PredictionCard({ prediction, onTap, onFeedback, index = 0, showFeedback
   const handlePressIn = () => {
     if (reducedMotion) return;
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.98,
       friction: 8,
       useNativeDriver: true,
     }).start();
@@ -778,11 +780,22 @@ function PredictionCard({ prediction, onTap, onFeedback, index = 0, showFeedback
 
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onTap?.(prediction);
+    setExpanded(!expanded);
   };
 
-  // Accessibility label construction
-  const a11yLabel = `${typeLabel}. ${prediction.statement}. ${confidencePercent} percent confidence.${prediction.suggestion ? ` Suggestion: ${prediction.suggestion}` : ''}`;
+  // Extract a short headline from suggestion (first sentence or first 50 chars)
+  const getShortHeadline = (text) => {
+    if (!text) return '';
+    const firstSentence = text.split(/[.!?]/)[0];
+    return firstSentence.length > 60 ? firstSentence.slice(0, 57) + '...' : firstSentence;
+  };
+
+  const headline = prediction.suggestion
+    ? getShortHeadline(prediction.suggestion)
+    : getShortHeadline(prediction.statement);
+
+  // Accessibility label
+  const a11yLabel = `${typeLabel}. ${headline}. ${confidencePercent} percent confidence. Tap to ${expanded ? 'collapse' : 'expand'}.`;
 
   return (
     <AnimatedCard index={reducedMotion ? 0 : index}>
@@ -796,50 +809,64 @@ function PredictionCard({ prediction, onTap, onFeedback, index = 0, showFeedback
           accessible={true}
           accessibilityLabel={a11yLabel}
           accessibilityRole="button"
-          accessibilityHint="Tap to see more details"
         >
           {/* Top accent line */}
           <View style={[styles.cardAccent, { backgroundColor: color }]} />
 
-          <View style={styles.predictionHeader}>
-            <ConfidenceRing confidence={confidence} size={48} color={color} />
-            <View style={styles.predictionMeta}>
-              <View style={styles.predictionTypeRow}>
-                <Ionicons name={icon} size={14} color={color} />
-                <Text style={[styles.predictionType, { color }]}>
-                  {typeLabel}
-                </Text>
-              </View>
-              <Text style={styles.confidenceLabel}>
-                {confidencePercent}% confidence
+          {/* Compact Header: Icon + Headline + Confidence */}
+          <View style={styles.compactHeader}>
+            <View style={[styles.compactIconWrap, { backgroundColor: `${color}15` }]}>
+              <Ionicons name={icon} size={20} color={color} />
+            </View>
+            <View style={styles.compactContent}>
+              <Text style={[styles.compactType, { color }]}>{typeLabel}</Text>
+              <Text style={styles.compactHeadline} numberOfLines={2}>
+                {headline}
               </Text>
+            </View>
+            <View style={styles.compactConfidence}>
+              <Text style={[styles.compactConfidenceNum, { color }]}>{confidencePercent}</Text>
+              <Text style={styles.compactConfidenceLabel}>%</Text>
             </View>
           </View>
 
-          <Text style={styles.predictionStatement} numberOfLines={3}>
-            {prediction.statement}
-          </Text>
-
-          {prediction.suggestion && (
-            <View style={styles.suggestionBox}>
-              <LinearGradient
-                colors={[`${color}08`, `${color}03`]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.suggestionGradient}
-              >
-                <View style={[styles.suggestionIcon, { backgroundColor: `${color}15` }]}>
-                  <Ionicons name="bulb-outline" size={14} color={color} />
+          {/* Expanded Details (only when tapped) */}
+          {expanded && prediction.statement && (
+            <View style={styles.expandedDetails}>
+              <Text style={styles.expandedStatement}>
+                {prediction.statement}
+              </Text>
+              {prediction.suggestion && prediction.suggestion !== headline && (
+                <View style={styles.suggestionBox}>
+                  <LinearGradient
+                    colors={[`${color}08`, `${color}03`]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.suggestionGradient}
+                  >
+                    <View style={[styles.suggestionIcon, { backgroundColor: `${color}15` }]}>
+                      <Ionicons name="bulb-outline" size={14} color={color} />
+                    </View>
+                    <Text style={styles.suggestionText}>
+                      {prediction.suggestion}
+                    </Text>
+                  </LinearGradient>
                 </View>
-                <Text style={styles.suggestionText} numberOfLines={2}>
-                  {prediction.suggestion}
-                </Text>
-              </LinearGradient>
+              )}
             </View>
           )}
 
-          {/* Feedback actions */}
-          {showFeedback && (
+          {/* Expand/Collapse indicator */}
+          <View style={styles.expandIndicator}>
+            <Ionicons
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={TEXT.tertiary}
+            />
+          </View>
+
+          {/* Feedback actions (only when expanded) */}
+          {expanded && showFeedback && (
             <InsightFeedback
               insightId={prediction.id}
               onFeedback={onFeedback}
@@ -1232,12 +1259,35 @@ function InsufficientDataState({ daysLogged, onLogMeal }) {
 
 /**
  * Main Patterns Screen
+ *
+ * PERFORMANCE OPTIMIZED:
+ * - Basic insights (fast) load immediately
+ * - AI analysis loads in background, doesn't block page
+ * - AI section shows skeleton while loading
+ * - Uses aggressive caching to reduce API calls
  */
 export default function PatternsInsightsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  // AI-powered analysis hook - primary data source
+  // FAST: Traditional insights - these load quickly (no AI calls)
+  // Always enabled - show immediately
+  const {
+    predictive,
+    correlations: correlationsData,
+    weeklyNarrative,
+    whatToChange,
+    isLoading: insightsLoading,
+    isFetching: insightsFetching,
+    hasAnyError: insightsError,
+    refetchAll: refetchInsights,
+    hasPredictions,
+    hasCorrelations,
+    hasWeeklyNarrative,
+    hasWhatToChange,
+  } = useInsights({ enabled: true }); // Always fetch basic insights
+
+  // SLOW: AI-powered analysis - loads in background, doesn't block
   const {
     hasEnoughData: aiHasEnoughData,
     dataPoints: aiDataPoints,
@@ -1253,35 +1303,20 @@ export default function PatternsInsightsScreen() {
     hasPatterns: hasAIPatterns,
   } = useAIAnalysis({ enabled: true, days: 14 });
 
-  // Fallback to traditional insights if AI not available
-  const {
-    predictive,
-    correlations: correlationsData,
-    weeklyNarrative,
-    whatToChange,
-    isLoading: insightsLoading,
-    isFetching: insightsFetching,
-    hasAnyError: insightsError,
-    refetchAll: refetchInsights,
-    hasPredictions,
-    hasCorrelations,
-    hasWeeklyNarrative,
-    hasWhatToChange,
-  } = useInsights({ enabled: !aiHasEnoughData }); // Only fetch if AI has no data
-
   // Get lifecycle data for progress tracking
   const { data: orchestratorData } = useOrchestrator();
   const daysLogged = orchestratorData?.lifecycle?.daysSinceStart || 0;
 
-  // Combined loading state
-  const isLoading = aiLoading || insightsLoading;
-  const isFetching = aiFetching || insightsFetching;
-  const hasAnyError = aiError || insightsError;
+  // IMPORTANT: Only block on basic insights, NOT AI analysis
+  // This lets the page load fast while AI fetches in background
+  const isLoading = insightsLoading;
+  const isFetching = insightsFetching || aiFetching;
+  const hasAnyError = insightsError; // Don't block on AI errors
 
-  // Refetch all data
-  const refetchAll = async () => {
+  // Refetch all data - memoized to prevent infinite re-renders
+  const refetchAll = useCallback(async () => {
     await Promise.all([refetchAI(), refetchInsights()]);
-  };
+  }, [refetchAI, refetchInsights]);
   // Determine if we have enough data to show insights
   const canShowInsights = aiHasEnoughData ||
                           orchestratorData?.learningState?.canShowCorrelations ||
@@ -1291,12 +1326,18 @@ export default function PatternsInsightsScreen() {
                           hasCorrelations ||
                           hasWeeklyNarrative;
 
-  // Pull-to-refresh
+  // Pull-to-refresh with proper error handling
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await refetchAll();
-    setRefreshing(false);
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await refetchAll();
+    } catch (error) {
+      console.error('[Patterns] Refresh failed:', error);
+    } finally {
+      // Always reset refreshing state, even on error
+      setRefreshing(false);
+    }
   }, [refetchAll]);
 
   // Navigation handlers
@@ -1349,15 +1390,19 @@ export default function PatternsInsightsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Loading State - Premium AI Analysis Indicator */}
+        {/* Loading State - Show simple skeletons, NOT AI Analysis loader */}
+        {/* AI loader is misleading - basic insights don't use AI */}
         {isLoading && (
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <AIAnalysisLoader />
-            <View style={{ marginTop: SPACING[6] }}>
+            <View style={styles.loadingHeader}>
+              <ActivityIndicator size="small" color={BRAND.primary} />
+              <Text style={styles.loadingText}>Loading insights...</Text>
+            </View>
+            <View style={{ marginTop: SPACING[4] }}>
               <NarrativeCardSkeleton />
               <View style={{ marginTop: SPACING[4] }}>
                 <InsightCardSkeleton />
@@ -1467,8 +1512,20 @@ export default function PatternsInsightsScreen() {
               </AnimatedCard>
             )}
 
-            {/* AI Insights - GPT-powered insights */}
-            {hasAIInsights && aiInsights.length > 0 && (
+            {/* AI Insights - GPT-powered insights (loads in background) */}
+            {aiLoading ? (
+              /* Show skeleton while AI loads - doesn't block page */
+              <View style={styles.section}>
+                <SectionHeader
+                  title="AI Insights"
+                  subtitle="Analyzing your patterns..."
+                  icon="sparkles-outline"
+                  badge="LOADING"
+                  badgeColor={TEXT.tertiary}
+                />
+                <InsightCardSkeleton />
+              </View>
+            ) : hasAIInsights && aiInsights.length > 0 && (
               <View style={styles.section}>
                 <SectionHeader
                   title="AI Insights"
@@ -1496,8 +1553,8 @@ export default function PatternsInsightsScreen() {
               </View>
             )}
 
-            {/* AI Patterns - GPT-discovered correlations */}
-            {hasAIPatterns && aiPatterns.length > 0 && (
+            {/* AI Patterns - GPT-discovered correlations (loads in background) */}
+            {!aiLoading && hasAIPatterns && aiPatterns.length > 0 && (
               <View style={styles.section}>
                 <SectionHeader
                   title="Discovered Patterns"
@@ -1629,9 +1686,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+  },
+
+  // Simple loading state (not AI loader)
+  loadingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING[6],
+    gap: SPACING[3],
+  },
+  loadingText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.medium,
   },
 
   // Scroll & Content
@@ -1991,18 +2059,18 @@ const styles = StyleSheet.create({
   },
 
   // ============================================================================
-  // PREDICTION CARD STYLES (Premium Animated)
+  // PREDICTION CARD STYLES (Compact Visual Design)
   // ============================================================================
   predictionCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    paddingTop: SPACING[5],
+    padding: SPACING[3],
+    paddingTop: SPACING[4],
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
     overflow: 'hidden',
   },
   cardAccent: {
@@ -2012,6 +2080,66 @@ const styles = StyleSheet.create({
     right: 0,
     height: 3,
   },
+  // Compact header layout
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  compactIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactContent: {
+    flex: 1,
+    marginRight: SPACING[2],
+  },
+  compactType: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  compactHeadline: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+    lineHeight: 18,
+  },
+  compactConfidence: {
+    alignItems: 'center',
+  },
+  compactConfidenceNum: {
+    fontSize: 20,
+    fontWeight: TYPOGRAPHY.weight.bold,
+  },
+  compactConfidenceLabel: {
+    fontSize: 10,
+    color: TEXT.tertiary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  // Expanded state
+  expandedDetails: {
+    marginTop: SPACING[3],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  expandedStatement: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    lineHeight: 20,
+    marginBottom: SPACING[3],
+  },
+  expandIndicator: {
+    alignItems: 'center',
+    marginTop: SPACING[2],
+  },
+  // Legacy styles (keep for compatibility)
   predictionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

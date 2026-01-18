@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../constants/designSystem';
 
 const mockData = {
@@ -112,17 +113,13 @@ function CorrelationMatrixRow({ item }) {
 
       <View style={styles.ratingStars}>
         {[0, 1, 2].map((i) => (
-          <Text
+          <Ionicons
             key={i}
-            style={[
-              styles.star,
-              {
-                opacity: i < Math.ceil(item.confidence * 3) ? 1 : 0.3,
-              },
-            ]}
-          >
-            ⭐
-          </Text>
+            name={i < Math.ceil(item.confidence * 3) ? 'star' : 'star-outline'}
+            size={14}
+            color={i < Math.ceil(item.confidence * 3) ? '#F59E0B' : '#D1D5DB'}
+            style={styles.star}
+          />
         ))}
       </View>
     </View>

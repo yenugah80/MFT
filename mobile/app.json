@@ -10,9 +10,11 @@
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.harikay.myfoodtracker",
+      "bundleIdentifier": "com.silverhorn.myfoodtracker",
       "buildNumber": "1",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"],
         "NSCameraUsageDescription": "My-Food-Tracker needs camera access to photograph your meals for nutrition analysis.",
         "NSMicrophoneUsageDescription": "My-Food-Tracker needs microphone access for voice meal logging.",
         "NSPhotoLibraryUsageDescription": "My-Food-Tracker needs photo library access to select food photos for analysis.",
@@ -58,9 +60,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.harikay.myfoodtracker",
+      "package": "com.silverhorn.myfoodtracker",
       "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
       "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -75,6 +79,8 @@
       "favicon": "./assets/styles/images/adaptive-icon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       "expo-router",
       [
         "expo-camera",
@@ -124,7 +130,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": "https://myfoodtracker.onrender.com/api",
+      "apiUrl": "https://api.my-food-tracker.com/api",
       "router": {},
       "eas": {
         "projectId": "91264355-29bc-4019-be18-08002c3180c2"

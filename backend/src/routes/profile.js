@@ -17,7 +17,11 @@ import {
   savePreferences,
   savePushToken,
   deletePushToken,
-  getPushTokenStatus
+  getPushTokenStatus,
+  saveFCMToken,
+  deleteFCMToken,
+  getFCMTokenStatus,
+  saveBothPushTokens,
 } from "../controllers/profileController.js";
 
 const router = express.Router();
@@ -39,10 +43,18 @@ router.post("/onboarding-complete", completeOnboarding);
 router.get("/notifications", getNotifications);
 router.post("/notifications", saveNotifications);
 
-// Push notification token management
+// Push notification token management (Expo)
 router.get("/push-token/status", getPushTokenStatus);
 router.post("/push-token", savePushToken);
 router.delete("/push-token", deletePushToken);
+
+// FCM token management (Firebase Cloud Messaging)
+router.get("/fcm-token/status", getFCMTokenStatus);
+router.post("/fcm-token", saveFCMToken);
+router.delete("/fcm-token", deleteFCMToken);
+
+// Combined token endpoint (register both Expo and FCM tokens)
+router.post("/push-tokens", saveBothPushTokens);
 
 // Privacy settings
 router.get("/privacy", getPrivacySettings);

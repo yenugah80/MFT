@@ -407,6 +407,7 @@ export const BOLD_GRADIENTS = {
   story: ['#14B8A6', '#2DD4BF', '#5EEAD4'],         // VIBRANT Teal - Weekly insights
   celebration: ['#6366F1', '#EC4899', '#F59E0B'],   // Rainbow - Achievements
   wellness: ['#6366F1', '#8B5CF6', '#06B6D4'],      // Hero wellness ring
+  premium: ['#6366F1', '#8B5CF6', '#A855F7'],       // Premium AI features - Indigo/purple
 };
 
 // ============================================================================

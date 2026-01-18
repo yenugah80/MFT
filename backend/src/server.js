@@ -5,6 +5,7 @@ import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
 import { attachDb } from "./middleware/db.js";
+import { requireCloudflare, blockBots, getClientIP } from "./middleware/cloudflare.js";
 import {
   profilesTable,
   dietaryPreferencesTable,
@@ -49,8 +50,11 @@ import mlAnalyticsRouter from "./routes/mlAnalytics.js";
 import mtlPredictionsRouter from "./routes/mtlPredictions.js";
 import unifiedAnalyticsRouter from "./routes/unifiedAnalytics.js";
 import remindersRouter from "./routes/reminders.js";
+import predictionsRouter from "./routes/predictions.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
+import { initializeFirebase, isFirebaseReady } from "./config/firebase.js";
+import { globalLimiter, aiLimiter, imageLimiter, burstLimiter } from "./middleware/rateLimiter.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
@@ -431,10 +435,23 @@ app.use(
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// Cloudflare middleware - extracts real client IP and detects bots
+// In production, requests should come through Cloudflare
+app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
+
+// Block obvious bot traffic (except health checks)
+app.use(blockBots({ allowedPaths: ['/health', '/api/health'] }));
+
 // Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
 app.use(clerkMiddleware());
 
 app.use(attachDb);
+
+// Rate limiting - applied to all API routes
+// Burst limiter prevents rapid-fire requests (10/sec)
+// Global limiter caps at 200 req/min per user
+app.use('/api', burstLimiter);
+app.use('/api', globalLimiter);
 
 /* -------------------------------------------
    HEALTH CHECK ENDPOINT FOR RENDER + CLOUDFLARE
@@ -444,6 +461,43 @@ app.get("/health", (req, res) => {
     status: "ok",
     message: "MyFoodTracker backend is running.",
     timestamp: new Date().toISOString(),
+  });
+});
+
+/* -------------------------------------------
+   CLOUDFLARE DEBUG ENDPOINT
+   Use this to verify Cloudflare integration
+-------------------------------------------- */
+app.get("/api/debug/cloudflare", (req, res) => {
+  // Only allow in development or with admin check
+  const isDev = process.env.NODE_ENV === 'development';
+  const debugKey = req.headers['x-debug-key'];
+  const validDebugKey = process.env.DEBUG_KEY || 'mft-debug-2024';
+
+  if (!isDev && debugKey !== validDebugKey) {
+    return res.status(403).json({ error: 'Debug endpoint not available' });
+  }
+
+  res.status(200).json({
+    success: true,
+    cloudflare: {
+      isProxied: !!req.headers['cf-ray'],
+      cfRay: req.headers['cf-ray'] || null,
+      clientIP: req.clientIP || getClientIP(req),
+      country: req.headers['cf-ipcountry'] || null,
+      city: req.headers['cf-ipcity'] || null,
+      botScore: req.headers['cf-bot-score'] || null,
+      isBot: req.isBot || false,
+    },
+    request: {
+      userAgent: req.headers['user-agent'] || null,
+      acceptLanguage: req.headers['accept-language'] || null,
+      proxyIP: req.ip || req.connection?.remoteAddress || null,
+    },
+    server: {
+      nodeEnv: process.env.NODE_ENV || 'production',
+      timestamp: new Date().toISOString(),
+    },
   });
 });
 
@@ -549,6 +603,10 @@ app.use("/api/analytics", unifiedAnalyticsRouter);
 // Note: Zomato/Swiggy-style friendly reminders based on user patterns
 app.use("/api/reminders", remindersRouter);
 
+// Mount Predictions Router (Proactive wellness predictions)
+// Note: Morning predictions, meal feeling predictions, real-time interventions
+app.use("/api/predictions", predictionsRouter);
+
 /* -------------------------------------------
    EXISTING ROUTES
 -------------------------------------------- */
@@ -588,7 +646,7 @@ app.get("/api/food/barcode/:code", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/food/analyze-image", requireAuth, validate(imageAnalysisSchema), async (req, res) => {
+app.post("/api/food/analyze-image", requireAuth, imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
   try {
     const { image } = req.body; // Expecting base64 string
     const result = await FoodService.analyzeImage(image);
@@ -672,6 +730,20 @@ app.listen(PORT, "0.0.0.0", async () => {
     PREMIUM_OPENAI: featureFlags.PREMIUM_OPENAI,
     envValue: process.env.FULL_AI_MODE,
   });
+
+  // Initialize Firebase Admin SDK for FCM
+  console.log('[Firebase] Initializing Firebase Admin SDK...');
+  try {
+    const firebase = initializeFirebase();
+    if (isFirebaseReady()) {
+      console.log('[Firebase] Cloud Messaging ready for server-triggered notifications');
+    } else {
+      console.log('[Firebase] Cloud Messaging not available - FCM notifications disabled');
+      console.log('[Firebase] To enable: set FIREBASE_SERVICE_ACCOUNT env var with service account JSON');
+    }
+  } catch (firebaseErr) {
+    console.warn('[Firebase] Initialization failed (non-critical):', firebaseErr.message);
+  }
 
   // Initialize database schema on startup
   console.log('[Database] Initializing schema...');

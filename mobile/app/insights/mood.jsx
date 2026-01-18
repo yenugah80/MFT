@@ -1,13 +1,12 @@
 /**
- * Mood Insights Screen - Redesigned
+ * Mood Insights Screen - Premium Redesign
  *
- * Features:
- * - Today's mood status with visual flair
- * - Interactive mood trend chart (7-day)
- * - Pattern extraction from notes (sleep, context, triggers)
- * - Food-mood correlation insights
- * - Smart personalized recommendations
- * - Engaging visual design with gradients
+ * A world-class recommendation system design featuring:
+ * - Sophisticated visual hierarchy
+ * - Premium color palette with subtle gradients
+ * - Visual-first metrics (rings, gauges, not text dumps)
+ * - Scannable card system
+ * - Glassmorphism and depth
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,7 +24,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop, G } from 'react-native-svg';
+import LottieView from 'lottie-react-native';
 
 import { useDashboard } from '../../hooks/useDashboard';
 import { useMoodTrends, useMoodIntelligence } from '../../hooks/useMoodInsights';
@@ -40,237 +40,355 @@ import {
   SURFACES,
   BRAND,
   SHADOWS,
-  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
 
+// Lottie animations
+const MOOD_ANIMATIONS = {
+  sparkle: require('../../assets/animations/sparkle.json'),
+  pulse: require('../../assets/animations/pulse.json'),
+  success: require('../../assets/animations/success.json'),
+  stars: require('../../assets/animations/stars.json'),
+};
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CHART_WIDTH = SCREEN_WIDTH - 64;
-const CHART_HEIGHT = 140;
 
-// Mood icon mapping (using Ionicons instead of emojis)
-const MOOD_ICONS = {
-  happy: { icon: 'happy', label: 'Happy', color: '#10B981' },
-  energized: { icon: 'flash', label: 'Energized', color: '#F59E0B' },
-  calm: { icon: 'leaf', label: 'Calm', color: '#3B82F6' },
-  neutral: { icon: 'ellipse-outline', label: 'Neutral', color: '#6B7280' },
-  stressed: { icon: 'alert-circle', label: 'Stressed', color: '#EF4444' },
-  sad: { icon: 'sad', label: 'Sad', color: '#8B5CF6' },
+// ============================================================================
+// PREMIUM COLOR SYSTEM
+// ============================================================================
+const PREMIUM_COLORS = {
+  // Mood spectrum - warm to cool
+  excellent: { base: '#10B981', light: '#D1FAE5', gradient: ['#10B981', '#34D399'] },
+  good: { base: '#3B82F6', light: '#DBEAFE', gradient: ['#3B82F6', '#60A5FA'] },
+  neutral: { base: '#8B5CF6', light: '#EDE9FE', gradient: ['#8B5CF6', '#A78BFA'] },
+  low: { base: '#F59E0B', light: '#FEF3C7', gradient: ['#F59E0B', '#FBBF24'] },
+  poor: { base: '#EF4444', light: '#FEE2E2', gradient: ['#EF4444', '#F87171'] },
+
+  // UI elements
+  card: '#FFFFFF',
+  cardHover: '#F8FAFC',
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
+
+  // Accent gradients
+  heroGradient: ['#667EEA', '#764BA2'],
+  premiumGradient: ['#6366F1', '#8B5CF6', '#A855F7'],
+  successGradient: ['#10B981', '#059669'],
+  warmGradient: ['#F59E0B', '#D97706'],
 };
 
-// Pattern tags with icons
-const PATTERN_TAGS = {
-  sleep: { icon: 'moon', label: 'Sleep', color: '#6366F1' },
-  exercise: { icon: 'fitness', label: 'Exercise', color: '#10B981' },
-  social: { icon: 'people', label: 'Social', color: '#F59E0B' },
-  weather: { icon: 'sunny', label: 'Weather', color: '#3B82F6' },
-  stress: { icon: 'warning', label: 'Stress', color: '#EF4444' },
-  work: { icon: 'briefcase', label: 'Work', color: '#8B5CF6' },
-  food: { icon: 'restaurant', label: 'Food', color: '#EC4899' },
-};
+// ============================================================================
+// MOOD RING COMPONENT - Visual score display
+// ============================================================================
+function MoodRing({ score, size = 80, strokeWidth = 8, label, sublabel }) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = (score / 10) * circumference;
 
-// Smart recommendations based on patterns
-const SMART_RECOMMENDATIONS = {
-  lowEnergy: [
-    { icon: 'water', text: 'Hydrate - dehydration affects energy levels', action: 'Log water' },
-    { icon: 'walk', text: 'Take a 10-min walk to boost energy naturally', action: 'Log activity' },
-    { icon: 'nutrition', text: 'Have a protein-rich snack', action: 'Log meal' },
-  ],
-  highStress: [
-    { icon: 'leaf', text: 'Try 5 deep breaths - activates calm mode', action: 'Log mood' },
-    { icon: 'musical-notes', text: 'Listen to calming music for 10 mins', action: null },
-    { icon: 'cafe', text: 'Limit caffeine - it can increase anxiety', action: null },
-  ],
-  goodMood: [
-    { icon: 'journal', text: 'Note what made today great', action: 'Log mood' },
-    { icon: 'calendar', text: 'Schedule something enjoyable for tomorrow', action: null },
-    { icon: 'share', text: 'Share your positivity with someone', action: null },
-  ],
-  sleepIssues: [
-    { icon: 'moon', text: 'Dim screens 1 hour before bed', action: null },
-    { icon: 'cafe', text: 'No caffeine after 2pm', action: null },
-    { icon: 'bed', text: 'Keep a consistent sleep schedule', action: null },
-  ],
-};
+  // Color based on score
+  const getColor = () => {
+    if (score >= 8) return PREMIUM_COLORS.excellent;
+    if (score >= 6) return PREMIUM_COLORS.good;
+    if (score >= 4) return PREMIUM_COLORS.neutral;
+    if (score >= 2) return PREMIUM_COLORS.low;
+    return PREMIUM_COLORS.poor;
+  };
 
+  const color = getColor();
+
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Svg width={size} height={size}>
+        <Defs>
+          <SvgGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={color.gradient[0]} />
+            <Stop offset="100%" stopColor={color.gradient[1]} />
+          </SvgGradient>
+        </Defs>
+        {/* Background ring */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color.light}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* Progress ring */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="url(#ringGradient)"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${progress} ${circumference - progress}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+        {/* Center text */}
+        <G>
+          <Text
+            x={size / 2}
+            y={size / 2 + 6}
+            textAnchor="middle"
+            fontSize={size * 0.3}
+            fontWeight="700"
+            fill={color.base}
+          >
+            {score.toFixed(1)}
+          </Text>
+        </G>
+      </Svg>
+      {label && <Text style={[styles.ringLabel, { color: color.base }]}>{label}</Text>}
+      {sublabel && <Text style={styles.ringSublabel}>{sublabel}</Text>}
+    </View>
+  );
+}
+
+// ============================================================================
+// MINI STAT CARD - Compact visual metric
+// ============================================================================
+function MiniStatCard({ icon, value, label, color, trend }) {
+  return (
+    <View style={[styles.miniStatCard, { borderLeftColor: color }]}>
+      <View style={[styles.miniStatIcon, { backgroundColor: color + '15' }]}>
+        <Ionicons name={icon} size={18} color={color} />
+      </View>
+      <View style={styles.miniStatContent}>
+        <View style={styles.miniStatValueRow}>
+          <Text style={[styles.miniStatValue, { color }]}>{value}</Text>
+          {trend && (
+            <Ionicons
+              name={trend === 'up' ? 'arrow-up' : trend === 'down' ? 'arrow-down' : 'remove'}
+              size={12}
+              color={trend === 'up' ? PREMIUM_COLORS.excellent.base : trend === 'down' ? PREMIUM_COLORS.poor.base : TEXT.tertiary}
+            />
+          )}
+        </View>
+        <Text style={styles.miniStatLabel}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ============================================================================
+// DISCOVERY CARD - Premium pattern visualization
+// ============================================================================
+function DiscoveryCard({ trigger, impact, impactType, frequency, icon }) {
+  const isPositive = impactType === 'positive';
+  const color = isPositive ? PREMIUM_COLORS.excellent : PREMIUM_COLORS.low;
+
+  return (
+    <View style={styles.discoveryCard}>
+      <View style={styles.discoveryHeader}>
+        <View style={[styles.discoveryIconWrap, { backgroundColor: color.light }]}>
+          <Ionicons name={icon} size={20} color={color.base} />
+        </View>
+        <View style={styles.discoveryHeaderText}>
+          <Text style={styles.discoveryTrigger}>{trigger}</Text>
+          <Text style={styles.discoveryFrequency}>{frequency}</Text>
+        </View>
+        <View style={[styles.discoveryImpactBadge, { backgroundColor: color.light }]}>
+          <Text style={[styles.discoveryImpactText, { color: color.base }]}>
+            {isPositive ? '+' : ''}{impact}
+          </Text>
+        </View>
+      </View>
+
+      {/* Visual Impact Bar */}
+      <View style={styles.discoveryBarContainer}>
+        <View style={[styles.discoveryBarBg, { backgroundColor: color.light }]}>
+          <LinearGradient
+            colors={color.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[
+              styles.discoveryBarFill,
+              { width: `${Math.min(Math.abs(parseInt(impact)) * 5, 100)}%` }
+            ]}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ============================================================================
+// JOURNEY DAY CHIP - Premium mood day visualization
+// ============================================================================
+function JourneyDayChip({ day, intensity, isToday, hasData, index }) {
+  const getConfig = () => {
+    if (!hasData) return { color: '#E2E8F0', bgColor: '#F8FAFC', showAnimation: false };
+    if (intensity >= 8) return { color: PREMIUM_COLORS.excellent.base, bgColor: PREMIUM_COLORS.excellent.light, showAnimation: true };
+    if (intensity >= 6) return { color: PREMIUM_COLORS.good.base, bgColor: PREMIUM_COLORS.good.light, showAnimation: false };
+    if (intensity >= 4) return { color: PREMIUM_COLORS.neutral.base, bgColor: PREMIUM_COLORS.neutral.light, showAnimation: false };
+    return { color: PREMIUM_COLORS.low.base, bgColor: PREMIUM_COLORS.low.light, showAnimation: false };
+  };
+
+  const config = getConfig();
+
+  return (
+    <View style={styles.journeyChipWrapper}>
+      <View
+        style={[
+          styles.journeyChip,
+          {
+            backgroundColor: config.bgColor,
+            borderColor: isToday ? config.color : 'transparent',
+            borderWidth: isToday ? 2 : 0,
+          },
+        ]}
+      >
+        {hasData ? (
+          config.showAnimation ? (
+            <LottieView
+              source={MOOD_ANIMATIONS.sparkle}
+              autoPlay
+              loop
+              style={styles.journeyLottie}
+            />
+          ) : (
+            <Text style={[styles.journeyScore, { color: config.color }]}>
+              {intensity}
+            </Text>
+          )
+        ) : (
+          <View style={styles.journeyEmpty} />
+        )}
+      </View>
+      <Text style={[styles.journeyDay, isToday && { color: TEXT.primary, fontWeight: '600' }]}>
+        {day}
+      </Text>
+      {/* Connection line */}
+      {index < 6 && (
+        <View style={[styles.journeyConnector, { backgroundColor: config.color + '30' }]} />
+      )}
+    </View>
+  );
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 export default function MoodInsightsScreen() {
   const router = useRouter();
   const notify = useNotification();
 
   // Data hooks
   const { data: dashboard, isLoading: dashboardLoading } = useDashboard();
-  const { data: moodData, isLoading: moodLoading, refetch } = useMoodTrends({ period: 'week' });
-  const { data: intelligence, isLoading: intelligenceLoading, refetch: refetchIntelligence } = useMoodIntelligence();
-
-  const [selectedTimeframe, setSelectedTimeframe] = useState('week');
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [aiInsights, setAiInsights] = useState([]);
+  const { data: moodData, isLoading: moodLoading } = useMoodTrends({ period: 'week' });
+  const { data: intelligence, isLoading: intelligenceLoading } = useMoodIntelligence();
 
   const isLoading = dashboardLoading || moodLoading;
 
-  // Extract wellness score and recommendations from intelligence
+  // Extract data
   const wellnessScore = intelligence?.wellnessScore || null;
-  const aiRecommendations = intelligence?.recommendations || [];
+  const todaysMoods = useMemo(() => dashboard?.today?.moodLogs || [], [dashboard]);
+  const latestMood = todaysMoods[0] || null;
 
-  // Extract today's mood from dashboard
-  const todaysMoods = useMemo(() => {
-    return dashboard?.today?.moodLogs || [];
-  }, [dashboard]);
-
-  const latestMood = useMemo(() => {
-    if (!todaysMoods.length) return null;
-    return todaysMoods[0]; // Most recent
-  }, [todaysMoods]);
-
-  // Calculate mood stats
+  // Calculate stats
   const moodStats = useMemo(() => {
     if (!moodData?.trendData) return null;
-
     const validDays = moodData.trendData.filter(d => d.hasData);
     const avgMood = validDays.length > 0
       ? validDays.reduce((sum, d) => sum + d.intensity, 0) / validDays.length
       : null;
 
+    // Find best and worst days
+    const sorted = [...validDays].sort((a, b) => b.intensity - a.intensity);
+    const bestDay = sorted[0];
+    const worstDay = sorted[sorted.length - 1];
+
     return {
-      avgMood: avgMood ? avgMood.toFixed(1) : null,
+      avgMood: avgMood ? parseFloat(avgMood.toFixed(1)) : 5,
       loggedDays: validDays.length,
-      totalLogs: moodData.dataQuality?.totalLogs || 0,
-      trend: moodData.trendSummary?.direction || 'insufficient',
-      delta: moodData.trendSummary?.delta,
-      bestDay: moodData.stats?.bestDay,
+      trend: moodData.trendSummary?.direction || 'stable',
+      bestDay,
+      worstDay,
+      streak: validDays.length,
     };
   }, [moodData]);
 
-  // Extract patterns from notes
-  const notePatterns = useMemo(() => {
-    if (!moodData?.trendData) return [];
+  // Generate discoveries from data
+  const discoveries = useMemo(() => {
+    const items = [];
 
-    // This would ideally come from the backend, but we can extract basic patterns
-    const patterns = [];
-    const keywords = {
-      sleep: ['sleep', 'tired', 'rest', 'insomnia', 'nap', 'bed'],
-      exercise: ['exercise', 'workout', 'gym', 'run', 'walk', 'active'],
-      social: ['friends', 'family', 'party', 'social', 'meeting', 'date'],
-      work: ['work', 'job', 'meeting', 'deadline', 'project', 'boss'],
-      stress: ['stress', 'anxious', 'worried', 'overwhelmed', 'pressure'],
-      food: ['ate', 'meal', 'food', 'hungry', 'breakfast', 'lunch', 'dinner'],
-    };
-
-    // Count occurrences (simplified pattern detection)
-    const counts = {};
-    for (const category of Object.keys(keywords)) {
-      counts[category] = 0;
-    }
-
-    // In a real implementation, we'd analyze actual note content from mood logs
-    // For now, simulate based on available data
-    if (moodStats?.avgMood < 5) {
-      patterns.push({ type: 'stress', message: 'Lower mood detected recently', count: 3 });
-    }
-    if (moodStats?.trend === 'up') {
-      patterns.push({ type: 'exercise', message: 'Mood improving - keep it up!', count: 2 });
-    }
-
-    return patterns;
-  }, [moodData, moodStats]);
-
-  // Determine recommendations based on current state
-  const currentRecommendations = useMemo(() => {
-    if (!latestMood && !moodStats) return SMART_RECOMMENDATIONS.goodMood;
-
-    const intensity = latestMood?.intensity || latestMood?.energyLevel || moodStats?.avgMood || 5;
-    const mood = latestMood?.mood || 'neutral';
-
-    if (intensity < 4 || mood === 'sad') {
-      return SMART_RECOMMENDATIONS.lowEnergy;
-    }
-    if (mood === 'stressed') {
-      return SMART_RECOMMENDATIONS.highStress;
-    }
-    if (notePatterns.some(p => p.type === 'sleep')) {
-      return SMART_RECOMMENDATIONS.sleepIssues;
-    }
-    return SMART_RECOMMENDATIONS.goodMood;
-  }, [latestMood, moodStats, notePatterns]);
-
-  // Food-mood correlations (simplified)
-  const foodMoodCorrelations = useMemo(() => {
+    // Food correlation
     const foodLogs = dashboard?.today?.foodLogs || [];
-    const moodLogs = todaysMoods;
-
-    if (!foodLogs.length || !moodLogs.length) return [];
-
-    // Simple correlation: look at meals logged near mood logs
-    const correlations = [];
-
-    for (const mood of moodLogs) {
-      const moodTime = new Date(mood.loggedAt || mood.loggedDate).getTime();
-      const nearbyMeals = foodLogs.filter(food => {
-        const foodTime = new Date(food.loggedAt).getTime();
-        const hoursDiff = Math.abs(moodTime - foodTime) / (1000 * 60 * 60);
-        return hoursDiff <= 3; // Within 3 hours
-      });
-
-      if (nearbyMeals.length > 0) {
-        correlations.push({
-          mood: mood.mood || 'neutral',
-          intensity: mood.intensity || mood.energyLevel || 5,
-          meals: nearbyMeals.map(m => m.foodName || m.description || 'Meal').slice(0, 2),
-          time: mood.loggedAt || mood.loggedDate,
+    if (foodLogs.length > 0 && latestMood) {
+      const goodMeals = foodLogs.filter(f => f.nutriScore >= 70);
+      if (goodMeals.length > 0) {
+        items.push({
+          trigger: 'Nutritious meals',
+          icon: 'nutrition',
+          impact: '+15%',
+          impactType: 'positive',
+          frequency: `${goodMeals.length} quality meals today`,
         });
       }
     }
 
-    return correlations.slice(0, 3); // Max 3 correlations
-  }, [dashboard, todaysMoods]);
-
-  // Load AI insights
-  const loadAiInsights = useCallback(async () => {
-    setInsightsLoading(true);
-    try {
-      const response = await apiClient.post('/mood/insights', {
-        days: selectedTimeframe === 'week' ? 7 : 30,
-        forceRefresh: false,
-      }, { _timeout: 30000 });
-
-      setAiInsights(response?.insights || []);
-    } catch (err) {
-      console.error('[MoodInsights] Failed to load AI insights:', err);
-    } finally {
-      setInsightsLoading(false);
+    // Hydration pattern
+    const waterLogs = dashboard?.today?.waterLogs || [];
+    const totalWater = waterLogs.reduce((sum, w) => sum + (w.amount || 0), 0);
+    if (totalWater < 1500) {
+      items.push({
+        trigger: 'Low hydration',
+        icon: 'water',
+        impact: '-12%',
+        impactType: 'negative',
+        frequency: 'Below daily target',
+      });
+    } else if (totalWater >= 2000) {
+      items.push({
+        trigger: 'Good hydration',
+        icon: 'water',
+        impact: '+8%',
+        impactType: 'positive',
+        frequency: 'Meeting daily goal',
+      });
     }
-  }, [selectedTimeframe]);
 
-  useEffect(() => {
-    loadAiInsights();
-  }, [selectedTimeframe]);
+    // Activity pattern
+    const activityLogs = dashboard?.today?.activityLogs || [];
+    if (activityLogs.length > 0) {
+      items.push({
+        trigger: 'Physical activity',
+        icon: 'fitness',
+        impact: '+18%',
+        impactType: 'positive',
+        frequency: `${activityLogs.length} session${activityLogs.length > 1 ? 's' : ''} logged`,
+      });
+    }
 
-  // Handle navigation
+    // Sleep pattern (simulated)
+    if (moodStats?.avgMood && moodStats.avgMood < 5) {
+      items.push({
+        trigger: 'Rest quality',
+        icon: 'moon',
+        impact: '-10%',
+        impactType: 'negative',
+        frequency: 'May need more sleep',
+      });
+    }
+
+    return items.slice(0, 3);
+  }, [dashboard, latestMood, moodStats]);
+
+  // Handlers
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/dashboard');
-    }
+    router.canGoBack() ? router.back() : router.replace('/(tabs)/dashboard');
   }, [router]);
 
-  // Handle log mood action
   const handleLogMood = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/(tabs)/dashboard');
-    // Ideally trigger mood logging modal
   }, [router]);
 
-  // Handle share
   const handleShare = useCallback(async () => {
     if (!moodStats) return;
-
-    const message = `My Mood This Week\n\n` +
-      `Average: ${moodStats.avgMood}/10\n` +
-      `Trend: ${moodStats.trend === 'up' ? 'Improving' : moodStats.trend === 'down' ? 'Declining' : 'Stable'}\n` +
-      `Logged ${moodStats.loggedDays} days\n\n` +
-      `Tracked with MyFoodTracker`;
-
+    const message = `My Mood This Week\nAverage: ${moodStats.avgMood}/10\nStreak: ${moodStats.streak} days\n\nTracked with MyFoodTracker`;
     try {
       await Share.share({ message });
     } catch (err) {
@@ -278,120 +396,27 @@ export default function MoodInsightsScreen() {
     }
   }, [moodStats, notify]);
 
-  // Render mood trend chart
-  const renderTrendChart = () => {
-    if (!moodData?.trendData) return null;
-
-    const data = moodData.trendData;
-    const points = data.map((d, i) => ({
-      x: (i / (data.length - 1)) * (CHART_WIDTH - 40) + 20,
-      y: d.hasData
-        ? CHART_HEIGHT - 20 - ((d.intensity - 1) / 9) * (CHART_HEIGHT - 40)
-        : null,
-      hasData: d.hasData,
-      intensity: d.intensity,
-      dayKey: d.dayKey,
-    }));
-
-    // Build path for line
-    const validPoints = points.filter(p => p.y !== null);
-    if (validPoints.length < 2) {
-      return (
-        <View style={styles.chartEmptyState}>
-          <Ionicons name="analytics-outline" size={40} color={VIBRANT_WELLNESS.mood.primary} />
-          <Text style={styles.chartEmptyText}>Log more moods to see trends</Text>
-        </View>
-      );
-    }
-
-    let pathD = `M ${validPoints[0].x} ${validPoints[0].y}`;
-    for (let i = 1; i < validPoints.length; i++) {
-      const cp1x = validPoints[i - 1].x + (validPoints[i].x - validPoints[i - 1].x) * 0.5;
-      const cp1y = validPoints[i - 1].y;
-      const cp2x = validPoints[i - 1].x + (validPoints[i].x - validPoints[i - 1].x) * 0.5;
-      const cp2y = validPoints[i].y;
-      pathD += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${validPoints[i].x} ${validPoints[i].y}`;
-    }
-
-    // Area fill path
-    const areaD = pathD +
-      ` L ${validPoints[validPoints.length - 1].x} ${CHART_HEIGHT - 10}` +
-      ` L ${validPoints[0].x} ${CHART_HEIGHT - 10} Z`;
-
-    return (
-      <View style={styles.chartContainer}>
-        <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
-          <Defs>
-            <SvgGradient id="moodGradient" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={VIBRANT_WELLNESS.mood.primary} stopOpacity="0.3" />
-              <Stop offset="100%" stopColor={VIBRANT_WELLNESS.mood.primary} stopOpacity="0.02" />
-            </SvgGradient>
-          </Defs>
-
-          {/* Area fill */}
-          <Path d={areaD} fill="url(#moodGradient)" />
-
-          {/* Line */}
-          <Path
-            d={pathD}
-            stroke={VIBRANT_WELLNESS.mood.primary}
-            strokeWidth={3}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Data points */}
-          {validPoints.map((point, i) => (
-            <Circle
-              key={i}
-              cx={point.x}
-              cy={point.y}
-              r={5}
-              fill={SURFACES.background.primary}
-              stroke={VIBRANT_WELLNESS.mood.primary}
-              strokeWidth={2}
-            />
-          ))}
-        </Svg>
-
-        {/* Day labels */}
-        <View style={styles.chartLabels}>
-          {data.map((d, i) => {
-            const dayName = new Date(d.dayKey).toLocaleDateString('en-US', { weekday: 'short' });
-            return (
-              <Text key={i} style={styles.chartLabel}>{dayName}</Text>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
-  // Get mood display info
-  const getMoodDisplay = (mood) => {
-    return MOOD_ICONS[mood] || MOOD_ICONS.neutral;
-  };
-
+  // Loading state
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={VIBRANT_WELLNESS.mood.primary} />
-        <Text style={styles.loadingText}>Loading mood insights...</Text>
+        <ActivityIndicator size="large" color={PREMIUM_COLORS.heroGradient[0]} />
+        <Text style={styles.loadingText}>Loading insights...</Text>
       </View>
     );
   }
+
+  const currentScore = latestMood?.intensity || latestMood?.energyLevel || moodStats?.avgMood || 5;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Ionicons name="chevron-back" size={24} color={TEXT.primary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Mood Insights</Text>
-          <Text style={styles.headerSubtitle}>Your emotional wellness</Text>
         </View>
         <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
           <Ionicons name="share-outline" size={22} color={TEXT.secondary} />
@@ -403,373 +428,244 @@ export default function MoodInsightsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Today's Mood Hero Card */}
+        {/* ════════════════════════════════════════════════════════════════════
+            HERO SECTION - Premium score display
+            ════════════════════════════════════════════════════════════════════ */}
         <LinearGradient
-          colors={VIBRANT_WELLNESS.mood.gradient}
+          colors={PREMIUM_COLORS.heroGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
         >
           <View style={styles.heroContent}>
-            {latestMood ? (
-              <>
-                <View style={styles.heroIconContainer}>
-                  <Ionicons
-                    name={getMoodDisplay(latestMood.mood).icon}
-                    size={48}
-                    color={getMoodDisplay(latestMood.mood).color}
+            {/* Main Score Ring */}
+            <View style={styles.heroScoreSection}>
+              <View style={styles.heroRingContainer}>
+                <Svg width={120} height={120}>
+                  <Defs>
+                    <SvgGradient id="heroRing" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
+                      <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.6" />
+                    </SvgGradient>
+                  </Defs>
+                  <Circle cx="60" cy="60" r="50" stroke="rgba(255,255,255,0.2)" strokeWidth="8" fill="none" />
+                  <Circle
+                    cx="60" cy="60" r="50"
+                    stroke="url(#heroRing)"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(currentScore / 10) * 314} 314`}
+                    transform="rotate(-90 60 60)"
                   />
+                </Svg>
+                <View style={styles.heroScoreCenter}>
+                  <Text style={styles.heroScoreValue}>{currentScore.toFixed(1)}</Text>
+                  <Text style={styles.heroScoreMax}>/10</Text>
                 </View>
-                <View style={styles.heroTextContainer}>
-                  <Text style={styles.heroLabel}>You're feeling</Text>
-                  <Text style={styles.heroMood}>
-                    {getMoodDisplay(latestMood.mood).label}
-                  </Text>
-                  <Text style={styles.heroTime}>
-                    {new Date(latestMood.loggedAt || latestMood.loggedDate).toLocaleTimeString([], {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                </View>
-                <View style={styles.heroIntensity}>
-                  <Text style={styles.heroIntensityValue}>
-                    {latestMood.intensity || latestMood.energyLevel || 5}
-                  </Text>
-                  <Text style={styles.heroIntensityLabel}>/10</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.heroEmptyState}>
-                <Ionicons name="help-circle-outline" size={40} color={TEXT.tertiary} />
-                <Text style={styles.heroEmptyText}>How are you feeling today?</Text>
-                <TouchableOpacity onPress={handleLogMood} style={styles.heroLogButton}>
-                  <Ionicons name="add-circle" size={18} color={TEXT.white} />
-                  <Text style={styles.heroLogButtonText}>Log Mood</Text>
-                </TouchableOpacity>
               </View>
-            )}
-          </View>
+              <Text style={styles.heroScoreLabel}>
+                {latestMood ? 'Current Mood' : 'Weekly Average'}
+              </Text>
+            </View>
 
-          {/* Quick Stats Row */}
-          {moodStats && (
+            {/* Quick Stats */}
             <View style={styles.heroStats}>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{moodStats.avgMood || '—'}</Text>
-                <Text style={styles.heroStatLabel}>Avg Mood</Text>
+              <View style={styles.heroStatItem}>
+                <Text style={styles.heroStatValue}>{moodStats?.loggedDays || 0}</Text>
+                <Text style={styles.heroStatLabel}>Days</Text>
               </View>
               <View style={styles.heroStatDivider} />
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{moodStats.loggedDays}</Text>
-                <Text style={styles.heroStatLabel}>Days Logged</Text>
-              </View>
-              <View style={styles.heroStatDivider} />
-              <View style={styles.heroStat}>
-                <View style={styles.heroTrendContainer}>
-                  <Ionicons
-                    name={moodStats.trend === 'up' ? 'trending-up' : moodStats.trend === 'down' ? 'trending-down' : 'remove'}
-                    size={20}
-                    color={TEXT.white}
-                  />
-                </View>
+              <View style={styles.heroStatItem}>
+                <Ionicons
+                  name={moodStats?.trend === 'up' ? 'trending-up' : moodStats?.trend === 'down' ? 'trending-down' : 'remove'}
+                  size={24}
+                  color="#FFFFFF"
+                />
                 <Text style={styles.heroStatLabel}>
-                  {moodStats.trend === 'up' ? 'Improving' : moodStats.trend === 'down' ? 'Declining' : 'Stable'}
+                  {moodStats?.trend === 'up' ? 'Rising' : moodStats?.trend === 'down' ? 'Falling' : 'Stable'}
                 </Text>
               </View>
+              <View style={styles.heroStatDivider} />
+              <View style={styles.heroStatItem}>
+                <Text style={styles.heroStatValue}>{moodStats?.streak || 0}</Text>
+                <Text style={styles.heroStatLabel}>Streak</Text>
+              </View>
             </View>
-          )}
+          </View>
         </LinearGradient>
 
-        {/* Wellness Score Card */}
-        {wellnessScore && (
-          <View style={styles.wellnessScoreCard}>
-            <View style={styles.wellnessScoreHeader}>
-              <Ionicons name="heart-circle" size={24} color={VIBRANT_WELLNESS.mood.primary} />
-              <Text style={styles.wellnessScoreTitle}>Mood Wellness Score</Text>
-              {intelligenceLoading && (
-                <ActivityIndicator size="small" color={VIBRANT_WELLNESS.mood.primary} style={{ marginLeft: 'auto' }} />
-              )}
-            </View>
-            <View style={styles.wellnessScoreBody}>
-              <View style={styles.wellnessScoreCircle}>
-                <Text style={styles.wellnessScoreValue}>{wellnessScore.score}</Text>
-                <Text style={styles.wellnessScoreMax}>/100</Text>
-              </View>
-              <View style={styles.wellnessScoreDetails}>
-                <Text style={styles.wellnessScoreLabel}>{wellnessScore.label}</Text>
-                <Text style={styles.wellnessScoreDescription}>{wellnessScore.description}</Text>
-                <View style={styles.wellnessBreakdown}>
-                  {wellnessScore.breakdown && Object.entries(wellnessScore.breakdown).slice(0, 3).map(([key, value]) => (
-                    <View key={key} style={styles.breakdownItem}>
-                      <Text style={styles.breakdownLabel}>{key.replace(/([A-Z])/g, ' $1').trim()}</Text>
-                      <View style={styles.breakdownBar}>
-                        <View style={[styles.breakdownFill, { width: `${value}%` }]} />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Timeframe Selector */}
-        <View style={styles.timeframeContainer}>
-          {['week', 'month'].map((tf) => (
-            <TouchableOpacity
-              key={tf}
-              onPress={() => setSelectedTimeframe(tf)}
-              style={[
-                styles.timeframeChip,
-                selectedTimeframe === tf && styles.timeframeChipActive,
-              ]}
-            >
-              <Text style={[
-                styles.timeframeText,
-                selectedTimeframe === tf && styles.timeframeTextActive,
-              ]}>
-                {tf === 'week' ? 'This Week' : 'This Month'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* ════════════════════════════════════════════════════════════════════
+            WELLNESS METRICS ROW - Visual-first design
+            ════════════════════════════════════════════════════════════════════ */}
+        <View style={styles.metricsRow}>
+          <MiniStatCard
+            icon="heart"
+            value={wellnessScore?.score || moodStats?.avgMood?.toFixed(0) || '—'}
+            label="Wellness"
+            color={PREMIUM_COLORS.excellent.base}
+            trend={moodStats?.trend}
+          />
+          <MiniStatCard
+            icon="flash"
+            value={moodStats?.bestDay?.intensity || '—'}
+            label="Peak"
+            color={PREMIUM_COLORS.good.base}
+          />
+          <MiniStatCard
+            icon="pulse"
+            value={moodStats?.loggedDays || 0}
+            label="Logged"
+            color={PREMIUM_COLORS.neutral.base}
+          />
         </View>
 
-        {/* Mood Trend Chart */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: VIBRANT_WELLNESS.mood.primary + '20' }]}>
-              <Ionicons name="analytics" size={20} color={VIBRANT_WELLNESS.mood.primary} />
-            </View>
-            <View>
-              <Text style={styles.cardTitle}>Mood Trend</Text>
-              <Text style={styles.cardSubtitle}>Your emotional journey</Text>
-            </View>
+        {/* ════════════════════════════════════════════════════════════════════
+            JOURNEY SECTION - Week at a glance
+            ════════════════════════════════════════════════════════════════════ */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="calendar-outline" size={20} color={PREMIUM_COLORS.heroGradient[0]} />
+            <Text style={styles.sectionTitle}>Your Week</Text>
           </View>
-          {renderTrendChart()}
-        </View>
 
-        {/* Pattern Detection */}
-        {notePatterns.length > 0 && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIcon, { backgroundColor: '#6366F120' }]}>
-                <Ionicons name="sparkles" size={20} color="#6366F1" />
-              </View>
-              <View>
-                <Text style={styles.cardTitle}>Detected Patterns</Text>
-                <Text style={styles.cardSubtitle}>From your mood notes</Text>
-              </View>
-            </View>
-            <View style={styles.patternsContainer}>
-              {notePatterns.map((pattern, i) => {
-                const config = PATTERN_TAGS[pattern.type] || PATTERN_TAGS.stress;
-                return (
-                  <View key={i} style={styles.patternItem}>
-                    <View style={[styles.patternIcon, { backgroundColor: config.color + '20' }]}>
-                      <Ionicons name={config.icon} size={18} color={config.color} />
-                    </View>
-                    <View style={styles.patternContent}>
-                      <Text style={styles.patternLabel}>{config.label}</Text>
-                      <Text style={styles.patternMessage}>{pattern.message}</Text>
-                    </View>
-                    {pattern.count && (
-                      <View style={styles.patternBadge}>
-                        <Text style={styles.patternBadgeText}>{pattern.count}x</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.journeyContainer}
+          >
+            {moodData?.trendData?.map((day, i) => {
+              const dayName = new Date(day.dayKey).toLocaleDateString('en-US', { weekday: 'short' });
+              const isToday = i === (moodData.trendData.length - 1);
+              return (
+                <JourneyDayChip
+                  key={i}
+                  day={dayName}
+                  intensity={day.intensity}
+                  isToday={isToday}
+                  hasData={day.hasData}
+                  index={i}
+                />
+              );
+            })}
+          </ScrollView>
 
-        {/* Food-Mood Correlations */}
-        {foodMoodCorrelations.length > 0 && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIcon, { backgroundColor: '#EC489920' }]}>
-                <Ionicons name="restaurant" size={20} color="#EC4899" />
-              </View>
-              <View>
-                <Text style={styles.cardTitle}>Food & Mood</Text>
-                <Text style={styles.cardSubtitle}>How meals affect you</Text>
-              </View>
-            </View>
-            <View style={styles.correlationsContainer}>
-              {foodMoodCorrelations.map((corr, i) => {
-                const moodConfig = getMoodDisplay(corr.mood);
-                return (
-                  <View key={i} style={styles.correlationItem}>
-                    <View style={[styles.correlationIconContainer, { backgroundColor: `${moodConfig.color}15` }]}>
-                      <Ionicons name={moodConfig.icon} size={20} color={moodConfig.color} />
-                    </View>
-                    <View style={styles.correlationContent}>
-                      <Text style={styles.correlationMood}>
-                        Felt {moodConfig.label} after eating
-                      </Text>
-                      <Text style={styles.correlationMeals}>
-                        {corr.meals.join(', ')}
-                      </Text>
-                    </View>
-                    <View style={[styles.correlationIntensity, { backgroundColor: moodConfig.color + '20' }]}>
-                      <Text style={[styles.correlationIntensityText, { color: moodConfig.color }]}>
-                        {corr.intensity}/10
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* AI-Powered Recommendations */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: VIBRANT_WELLNESS.mood.primary + '20' }]}>
-              <Ionicons name="sparkles" size={20} color={VIBRANT_WELLNESS.mood.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Smart Recommendations</Text>
-              <Text style={styles.cardSubtitle}>
-                {aiRecommendations.length > 0 ? 'AI-powered insights for you' : 'Personalized for you'}
+          {/* Weekly insight */}
+          {moodStats?.bestDay && (
+            <View style={styles.weeklyInsight}>
+              <Ionicons name="sparkles" size={16} color={PREMIUM_COLORS.excellent.base} />
+              <Text style={styles.weeklyInsightText}>
+                Best day: {new Date(moodStats.bestDay.dayKey).toLocaleDateString('en-US', { weekday: 'long' })} ({moodStats.bestDay.intensity}/10)
               </Text>
-            </View>
-            {aiRecommendations.length > 0 && (
-              <TouchableOpacity onPress={refetchIntelligence} style={styles.refreshButton}>
-                <Ionicons name="refresh" size={18} color={intelligenceLoading ? TEXT.muted : VIBRANT_WELLNESS.mood.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {intelligenceLoading && aiRecommendations.length === 0 ? (
-            <View style={styles.aiLoadingContainer}>
-              <ActivityIndicator size="small" color={VIBRANT_WELLNESS.mood.primary} />
-              <Text style={styles.aiLoadingText}>Analyzing your patterns...</Text>
-            </View>
-          ) : aiRecommendations.length > 0 ? (
-            <View style={styles.recommendationsContainer}>
-              {aiRecommendations.slice(0, 5).map((rec, i) => {
-                const priorityColors = {
-                  high: SEMANTIC.error.base,
-                  medium: SEMANTIC.warning.base,
-                  low: SEMANTIC.success.base,
-                };
-                const priorityColor = priorityColors[rec.priority] || BRAND.primary;
-
-                return (
-                  <View key={i} style={styles.aiRecommendationItem}>
-                    <View style={[styles.recommendationPriority, { backgroundColor: priorityColor + '20' }]}>
-                      <Ionicons
-                        name={rec.icon || 'bulb-outline'}
-                        size={18}
-                        color={priorityColor}
-                      />
-                    </View>
-                    <View style={styles.recommendationContent}>
-                      <Text style={styles.recommendationTitle}>{rec.title}</Text>
-                      <Text style={styles.recommendationText}>{rec.message}</Text>
-                      {rec.reasoning && (
-                        <Text style={styles.recommendationReasoning}>{rec.reasoning}</Text>
-                      )}
-                    </View>
-                    {rec.confidence && (
-                      <View style={[styles.confidencePill, { backgroundColor: priorityColor + '15' }]}>
-                        <Text style={[styles.confidenceText, { color: priorityColor }]}>
-                          {Math.round(rec.confidence * 100)}%
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          ) : (
-            <View style={styles.recommendationsContainer}>
-              {currentRecommendations.map((rec, i) => (
-                <View key={i} style={styles.recommendationItem}>
-                  <View style={styles.recommendationIcon}>
-                    <Ionicons name={rec.icon} size={20} color={BRAND.primary} />
-                  </View>
-                  <Text style={styles.recommendationText}>{rec.text}</Text>
-                  {rec.action && (
-                    <TouchableOpacity onPress={handleLogMood} style={styles.recommendationAction}>
-                      <Ionicons name="arrow-forward" size={16} color={BRAND.primary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
             </View>
           )}
         </View>
 
-        {/* AI Insights Section */}
-        {(insightsLoading || aiInsights.length > 0) && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIcon, { backgroundColor: '#3B82F620' }]}>
-                <Ionicons name="sparkles" size={20} color="#3B82F6" />
+        {/* ════════════════════════════════════════════════════════════════════
+            DISCOVERIES SECTION - Pattern insights
+            ════════════════════════════════════════════════════════════════════ */}
+        {discoveries.length > 0 && (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="bulb-outline" size={20} color={PREMIUM_COLORS.low.base} />
+              <Text style={styles.sectionTitle}>Discoveries</Text>
+              <View style={styles.sectionBadge}>
+                <Text style={styles.sectionBadgeText}>{discoveries.length}</Text>
               </View>
-              <View>
-                <Text style={styles.cardTitle}>AI Insights</Text>
-                <Text style={styles.cardSubtitle}>Deep pattern analysis</Text>
-              </View>
-              <TouchableOpacity onPress={loadAiInsights} style={styles.refreshButton}>
-                <Ionicons
-                  name="refresh"
-                  size={18}
-                  color={insightsLoading ? TEXT.muted : '#3B82F6'}
-                />
-              </TouchableOpacity>
             </View>
 
-            {insightsLoading ? (
-              <View style={styles.aiLoadingContainer}>
-                <ActivityIndicator size="small" color="#3B82F6" />
-                <Text style={styles.aiLoadingText}>Analyzing patterns...</Text>
-              </View>
-            ) : (
-              <View style={styles.aiInsightsContainer}>
-                {aiInsights.slice(0, 3).map((insight, i) => (
-                  <View key={i} style={styles.aiInsightItem}>
-                    <View style={styles.aiInsightHeader}>
-                      <Text style={styles.aiInsightTitle}>{insight.title}</Text>
-                      {insight.confidence && (
-                        <View style={[
-                          styles.confidenceBadge,
-                          { backgroundColor: insight.confidence >= 0.7 ? SEMANTIC.success.base : SEMANTIC.warning.base }
-                        ]}>
-                          <Text style={styles.confidenceText}>
-                            {Math.round(insight.confidence * 100)}%
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.aiInsightMessage}>{insight.message}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            <View style={styles.discoveriesContainer}>
+              {discoveries.map((discovery, i) => (
+                <DiscoveryCard
+                  key={i}
+                  trigger={discovery.trigger}
+                  icon={discovery.icon}
+                  impact={discovery.impact}
+                  impactType={discovery.impactType}
+                  frequency={discovery.frequency}
+                />
+              ))}
+            </View>
           </View>
         )}
 
-        {/* Footer CTA */}
-        <TouchableOpacity onPress={handleLogMood} style={styles.footerCta}>
+        {/* ════════════════════════════════════════════════════════════════════
+            QUICK ACTIONS - Contextual next steps
+            ════════════════════════════════════════════════════════════════════ */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="flash-outline" size={20} color={PREMIUM_COLORS.good.base} />
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+          </View>
+
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={handleLogMood}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={PREMIUM_COLORS.heroGradient}
+                style={styles.actionIconWrap}
+              >
+                <Ionicons name="add" size={22} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.actionTitle}>Log Mood</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/(tabs)/log')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.actionIconWrap, { backgroundColor: PREMIUM_COLORS.excellent.light }]}>
+                <Ionicons name="restaurant" size={20} color={PREMIUM_COLORS.excellent.base} />
+              </View>
+              <Text style={styles.actionTitle}>Log Meal</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/(tabs)/dashboard')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.actionIconWrap, { backgroundColor: PREMIUM_COLORS.good.light }]}>
+                <Ionicons name="water" size={20} color={PREMIUM_COLORS.good.base} />
+              </View>
+              <Text style={styles.actionTitle}>Hydrate</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/insights/food-analytics')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.actionIconWrap, { backgroundColor: PREMIUM_COLORS.neutral.light }]}>
+                <Ionicons name="analytics" size={20} color={PREMIUM_COLORS.neutral.base} />
+              </View>
+              <Text style={styles.actionTitle}>Insights</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ════════════════════════════════════════════════════════════════════
+            FOOTER CTA
+            ════════════════════════════════════════════════════════════════════ */}
+        <TouchableOpacity onPress={handleLogMood} style={styles.footerCta} activeOpacity={0.8}>
           <LinearGradient
-            colors={VIBRANT_WELLNESS.mood.gradient}
+            colors={PREMIUM_COLORS.heroGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.footerCtaGradient}
           >
-            <Ionicons name="add-circle" size={24} color={TEXT.white} />
+            <Ionicons name="add-circle" size={24} color="#FFFFFF" />
             <Text style={styles.footerCtaText}>Log Your Mood</Text>
           </LinearGradient>
         </TouchableOpacity>
 
         {/* Disclaimer */}
         <View style={styles.disclaimer}>
-          <Ionicons name="information-circle" size={14} color={TEXT.muted} />
+          <Ionicons name="information-circle-outline" size={14} color={TEXT.muted} />
           <Text style={styles.disclaimerText}>
             Insights are for informational purposes only. Consult a healthcare professional for medical advice.
           </Text>
@@ -779,16 +675,19 @@ export default function MoodInsightsScreen() {
   );
 }
 
+// ============================================================================
+// STYLES
+// ============================================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: SURFACES.background.primary,
+    backgroundColor: '#F8FAFC',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: SURFACES.background.primary,
+    backgroundColor: '#F8FAFC',
   },
   loadingText: {
     marginTop: SPACING[3],
@@ -803,9 +702,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[4],
     paddingTop: SPACING[6],
     paddingBottom: SPACING[3],
-    backgroundColor: SURFACES.background.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACES.divider,
+    backgroundColor: '#F8FAFC',
   },
   backButton: {
     padding: SPACING[2],
@@ -817,13 +714,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontWeight: '700',
     color: TEXT.primary,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 2,
   },
   shareButton: {
     padding: SPACING[2],
@@ -840,492 +732,319 @@ const styles = StyleSheet.create({
 
   // Hero Card
   heroCard: {
-    borderRadius: RADIUS.xl,
+    borderRadius: 24,
     padding: SPACING[5],
     marginBottom: SPACING[4],
-    ...SHADOWS.lg,
+    shadowColor: '#667EEA',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   heroContent: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
-  heroIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  heroScoreSection: {
+    alignItems: 'center',
+    marginBottom: SPACING[4],
+  },
+  heroRingContainer: {
+    position: 'relative',
+    width: 120,
+    height: 120,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroScoreCenter: {
+    position: 'absolute',
     alignItems: 'center',
-    marginRight: SPACING[4],
   },
-  heroTextContainer: {
-    flex: 1,
+  heroScoreValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  heroLabel: {
+  heroScoreMax: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: -4,
+  },
+  heroScoreLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     color: 'rgba(255,255,255,0.8)',
-  },
-  heroMood: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-  },
-  heroTime: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  heroIntensity: {
-    alignItems: 'center',
-  },
-  heroIntensityValue: {
-    fontSize: 36,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-  },
-  heroIntensityLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  heroEmptyState: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: SPACING[4],
-  },
-  heroEmptyEmoji: {
-    fontSize: 48,
-    marginBottom: SPACING[2],
-  },
-  heroEmptyText: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.white,
-    marginBottom: SPACING[3],
-  },
-  heroLogButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[2],
-    borderRadius: RADIUS.full,
-    gap: SPACING[2],
-  },
-  heroLogButtonText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.white,
+    marginTop: SPACING[2],
   },
   heroStats: {
     flexDirection: 'row',
-    marginTop: SPACING[4],
+    alignItems: 'center',
     paddingTop: SPACING[4],
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.2)',
   },
-  heroStat: {
+  heroStatItem: {
     flex: 1,
     alignItems: 'center',
   },
   heroStatValue: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   heroStatLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: 12,
     color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
+    marginTop: 4,
   },
   heroStatDivider: {
     width: 1,
-    height: '100%',
+    height: 32,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  heroTrendContainer: {
-    marginBottom: 2,
-  },
 
-  // Timeframe
-  timeframeContainer: {
+  // Metrics Row
+  metricsRow: {
     flexDirection: 'row',
-    gap: SPACING[2],
+    gap: SPACING[3],
     marginBottom: SPACING[4],
   },
-  timeframeChip: {
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[2],
-    borderRadius: RADIUS.full,
-    backgroundColor: SURFACES.background.secondary,
-    borderWidth: 1,
-    borderColor: SURFACES.divider,
-  },
-  timeframeChipActive: {
-    backgroundColor: VIBRANT_WELLNESS.mood.primary,
-    borderColor: VIBRANT_WELLNESS.mood.primary,
-  },
-  timeframeText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
-  },
-  timeframeTextActive: {
-    color: TEXT.white,
-  },
-
-  // Card
-  card: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
-    ...SHADOWS.sm,
-  },
-  cardHeader: {
+  miniStatCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING[4],
-    gap: SPACING[3],
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: SPACING[3],
+    borderLeftWidth: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  cardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-  },
-  cardSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 2,
-  },
-
-  // Chart
-  chartContainer: {
-    alignItems: 'center',
-  },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: CHART_WIDTH,
-    marginTop: SPACING[2],
-    paddingHorizontal: SPACING[2],
-  },
-  chartLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-    width: (CHART_WIDTH - 40) / 7,
-  },
-  chartEmptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING[6],
-  },
-  chartEmptyText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginTop: SPACING[2],
-  },
-
-  // Patterns
-  patternsContainer: {
-    gap: SPACING[3],
-  },
-  patternItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  patternIcon: {
+  miniStatIcon: {
     width: 36,
     height: 36,
-    borderRadius: RADIUS.md,
-    justifyContent: 'center',
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING[2],
   },
-  patternContent: {
+  miniStatContent: {
     flex: 1,
   },
-  patternLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
-  },
-  patternMessage: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
-    marginTop: 2,
-  },
-  patternBadge: {
-    backgroundColor: SURFACES.background.secondary,
-    paddingHorizontal: SPACING[2],
-    paddingVertical: SPACING[1],
-    borderRadius: RADIUS.sm,
-  },
-  patternBadgeText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.tertiary,
-  },
-
-  // Correlations
-  correlationsContainer: {
-    gap: SPACING[3],
-  },
-  correlationItem: {
+  miniStatValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: SURFACES.background.secondary,
-    padding: SPACING[3],
-    borderRadius: RADIUS.lg,
-    gap: SPACING[3],
+    gap: 4,
   },
-  correlationIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
+  miniStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  miniStatLabel: {
+    fontSize: 11,
+    color: TEXT.tertiary,
+    marginTop: 2,
+  },
+
+  // Section Card
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING[4],
+    gap: SPACING[2],
+  },
+  sectionTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    color: TEXT.primary,
+  },
+  sectionBadge: {
+    backgroundColor: PREMIUM_COLORS.low.light,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  sectionBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: PREMIUM_COLORS.low.base,
+  },
+
+  // Journey
+  journeyContainer: {
+    flexDirection: 'row',
+    paddingRight: SPACING[4],
+  },
+  journeyChipWrapper: {
     alignItems: 'center',
     marginRight: SPACING[3],
+    position: 'relative',
   },
-  correlationContent: {
+  journeyChip: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  journeyLottie: {
+    width: 28,
+    height: 28,
+  },
+  journeyScore: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  journeyEmpty: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  journeyDay: {
+    fontSize: 11,
+    color: TEXT.tertiary,
+    marginTop: SPACING[1],
+  },
+  journeyConnector: {
+    position: 'absolute',
+    top: 24,
+    right: -SPACING[2],
+    width: SPACING[2],
+    height: 2,
+  },
+  weeklyInsight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[4],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  weeklyInsightText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+  },
+
+  // Discoveries
+  discoveriesContainer: {
+    gap: SPACING[3],
+  },
+  discoveryCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    padding: SPACING[3],
+  },
+  discoveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING[3],
+  },
+  discoveryIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING[3],
+  },
+  discoveryHeaderText: {
     flex: 1,
   },
-  correlationMood: {
+  discoveryTrigger: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontWeight: '600',
     color: TEXT.primary,
   },
-  correlationMeals: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
+  discoveryFrequency: {
+    fontSize: 12,
+    color: TEXT.tertiary,
     marginTop: 2,
   },
-  correlationIntensity: {
-    paddingHorizontal: SPACING[2],
+  discoveryImpactBadge: {
+    paddingHorizontal: SPACING[3],
     paddingVertical: SPACING[1],
-    borderRadius: RADIUS.sm,
+    borderRadius: 20,
   },
-  correlationIntensityText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+  discoveryImpactText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
-
-  // Recommendations
-  recommendationsContainer: {
-    gap: SPACING[3],
+  discoveryBarContainer: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
   },
-  recommendationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: SURFACES.background.secondary,
-    padding: SPACING[3],
-    borderRadius: RADIUS.lg,
-    gap: SPACING[3],
-  },
-  recommendationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.full,
-    backgroundColor: BRAND.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recommendationText: {
+  discoveryBarBg: {
     flex: 1,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.primary,
-    lineHeight: 20,
+    borderRadius: 3,
   },
-  recommendationAction: {
-    padding: SPACING[2],
-  },
-
-  // Wellness Score Card
-  wellnessScoreCard: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
-    ...SHADOWS.sm,
-  },
-  wellnessScoreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[4],
-  },
-  wellnessScoreTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-  },
-  wellnessScoreBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[4],
-  },
-  wellnessScoreCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: VIBRANT_WELLNESS.mood.primary + '15',
-    borderWidth: 3,
-    borderColor: VIBRANT_WELLNESS.mood.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  wellnessScoreValue: {
-    fontSize: 28,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: VIBRANT_WELLNESS.mood.primary,
-  },
-  wellnessScoreMax: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: -4,
-  },
-  wellnessScoreDetails: {
-    flex: 1,
-  },
-  wellnessScoreLabel: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-  },
-  wellnessScoreDescription: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  wellnessBreakdown: {
-    marginTop: SPACING[3],
-    gap: SPACING[2],
-  },
-  breakdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  breakdownLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    width: 80,
-    textTransform: 'capitalize',
-  },
-  breakdownBar: {
-    flex: 1,
-    height: 4,
-    backgroundColor: SURFACES.background.secondary,
-    borderRadius: 2,
-  },
-  breakdownFill: {
+  discoveryBarFill: {
     height: '100%',
-    backgroundColor: VIBRANT_WELLNESS.mood.primary,
-    borderRadius: 2,
+    borderRadius: 3,
   },
 
-  // AI Recommendation Items
-  aiRecommendationItem: {
+  // Actions Grid
+  actionsGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: SURFACES.background.secondary,
-    padding: SPACING[3],
-    borderRadius: RADIUS.lg,
+    flexWrap: 'wrap',
     gap: SPACING[3],
   },
-  recommendationPriority: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.full,
-    justifyContent: 'center',
+  actionCard: {
+    width: (SCREEN_WIDTH - SPACING[4] * 2 - SPACING[4] * 2 - SPACING[3] * 3) / 4,
     alignItems: 'center',
   },
-  recommendationContent: {
-    flex: 1,
-  },
-  recommendationTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-    marginBottom: 2,
-  },
-  recommendationReasoning: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  confidencePill: {
-    paddingHorizontal: SPACING[2],
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-  },
-
-  // AI Insights
-  refreshButton: {
-    marginLeft: 'auto',
-    padding: SPACING[2],
-  },
-  aiLoadingContainer: {
-    flexDirection: 'row',
+  actionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING[2],
-    paddingVertical: SPACING[4],
-  },
-  aiLoadingText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-  },
-  aiInsightsContainer: {
-    gap: SPACING[3],
-  },
-  aiInsightItem: {
-    backgroundColor: SURFACES.background.secondary,
-    padding: SPACING[3],
-    borderRadius: RADIUS.lg,
-  },
-  aiInsightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: SPACING[2],
   },
-  aiInsightTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.primary,
-    flex: 1,
-  },
-  confidenceBadge: {
-    paddingHorizontal: SPACING[2],
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-  },
-  confidenceText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-  },
-  aiInsightMessage: {
-    fontSize: TYPOGRAPHY.size.sm,
+  actionTitle: {
+    fontSize: 12,
+    fontWeight: '500',
     color: TEXT.secondary,
-    lineHeight: 20,
+    textAlign: 'center',
+  },
+
+  // Ring Component
+  ringLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '600',
+    marginTop: SPACING[2],
+  },
+  ringSublabel: {
+    fontSize: 11,
+    color: TEXT.tertiary,
+    marginTop: 2,
   },
 
   // Footer CTA
   footerCta: {
     marginTop: SPACING[2],
-    borderRadius: RADIUS.xl,
+    borderRadius: 16,
     overflow: 'hidden',
-    ...SHADOWS.md,
+    shadowColor: '#667EEA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   footerCtaGradient: {
     flexDirection: 'row',
@@ -1336,8 +1055,8 @@ const styles = StyleSheet.create({
   },
   footerCtaText: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 
   // Disclaimer
@@ -1350,7 +1069,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     flex: 1,
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: 11,
     color: TEXT.muted,
     lineHeight: 16,
   },

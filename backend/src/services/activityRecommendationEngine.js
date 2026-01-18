@@ -1072,15 +1072,15 @@ async function generateWeeklyInsights(userId, activityStats) {
     });
   }
 
-  // Weekly minutes vs CDC recommendation (150 min/week)
+  // Weekly minutes vs recommended target (150 min/week)
   const weeklyTarget = 150;
   const weeklyPct = Math.round((activityStats.weeklyMinutes / weeklyTarget) * 100);
 
   if (weeklyPct >= 100) {
     insights.push({
       type: 'goal_met',
-      title: 'CDC Goal Achieved!',
-      message: `${activityStats.weeklyMinutes} min/week exceeds the 150 min recommendation.`,
+      title: 'Weekly Goal Achieved!',
+      message: `${activityStats.weeklyMinutes} min this week - you've exceeded your 150 min target!`,
       icon: 'checkmark-circle',
       color: '#10B981',
     });

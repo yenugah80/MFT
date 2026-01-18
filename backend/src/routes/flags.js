@@ -8,6 +8,8 @@
 
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/admin.js';
+import { adminLimiter } from '../middleware/rateLimiter.js';
 import {
   getAllFlagStates,
   getFlagConfig,
@@ -91,18 +93,15 @@ router.get('/:flagName', requireAuth, async (req, res) => {
 
 // ============================================================================
 // ADMIN ENDPOINTS
-// In production, these would require admin authentication
+// Secured with requireAdmin middleware - only users in ADMIN_USER_IDS can access
 // ============================================================================
 
 /**
  * GET /api/flags/admin/config
  * Returns all flag configurations (admin only)
  */
-router.get('/admin/config', requireAuth, async (req, res) => {
+router.get('/admin/config', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
   try {
-    // TODO: Add admin check in production
-    // if (!req.auth.isAdmin) return res.status(403).json({ error: 'Forbidden' });
-
     const config = getFlagConfig();
 
     res.json({
@@ -119,9 +118,8 @@ router.get('/admin/config', requireAuth, async (req, res) => {
  * POST /api/flags/admin/:flagName/enable
  * Enables a flag for all users (100% rollout)
  */
-router.post('/admin/:flagName/enable', requireAuth, async (req, res) => {
+router.post('/admin/:flagName/enable', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
   try {
-    // TODO: Add admin check in production
     const { flagName } = req.params;
 
     enableFlag(flagName);
@@ -141,9 +139,8 @@ router.post('/admin/:flagName/enable', requireAuth, async (req, res) => {
  * POST /api/flags/admin/:flagName/disable
  * Disables a flag for all users (kill switch)
  */
-router.post('/admin/:flagName/disable', requireAuth, async (req, res) => {
+router.post('/admin/:flagName/disable', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
   try {
-    // TODO: Add admin check in production
     const { flagName } = req.params;
 
     disableFlag(flagName);
@@ -166,9 +163,8 @@ router.post('/admin/:flagName/disable', requireAuth, async (req, res) => {
  *   enabled: boolean
  *   rolloutPercent: number 0-100
  */
-router.patch('/admin/:flagName', requireAuth, async (req, res) => {
+router.patch('/admin/:flagName', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
   try {
-    // TODO: Add admin check in production
     const { flagName } = req.params;
     const updates = req.body;
 
@@ -191,9 +187,8 @@ router.patch('/admin/:flagName', requireAuth, async (req, res) => {
  * Body:
  *   userId: string
  */
-router.post('/admin/:flagName/allowlist', requireAuth, async (req, res) => {
+router.post('/admin/:flagName/allowlist', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
   try {
-    // TODO: Add admin check in production
     const { flagName } = req.params;
     const { userId } = req.body;
 
@@ -218,9 +213,8 @@ router.post('/admin/:flagName/allowlist', requireAuth, async (req, res) => {
  * DELETE /api/flags/admin/:flagName/allowlist/:userId
  * Removes a user from the flag allowlist
  */
-router.delete('/admin/:flagName/allowlist/:userId', requireAuth, async (req, res) => {
+router.delete('/admin/:flagName/allowlist/:userId', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
   try {
-    // TODO: Add admin check in production
     const { flagName, userId } = req.params;
 
     removeFromAllowlist(flagName, userId);

@@ -1455,6 +1455,140 @@ function getSchedule(type) {
 }
 
 /**
+ * GET /api/insights/combined
+ * Returns all basic insights in a single API call for faster loading
+ *
+ * PERFORMANCE OPTIMIZED:
+ * - Combines predictive, correlations, weekly-narrative, and what-to-change
+ * - Single DB connection for all queries
+ * - Reduces API round-trips from 4 to 1
+ * - AI analysis is separate (slower, cached longer)
+ */
+router.get('/combined', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { days = 14 } = req.query;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get date range for this week
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() + mondayOffset);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    console.log('[Insights] Combined endpoint - fetching all data...');
+    const fetchStart = Date.now();
+
+    // Single batch of all DB queries - much faster than 4 separate requests
+    const [foodLogs, moodLogs, waterLogs, goals, summaries, storedCorrelations] = await Promise.all([
+      db.select()
+        .from(foodLogTable)
+        .where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, startDate)))
+        .orderBy(desc(foodLogTable.loggedDate)),
+
+      db.select()
+        .from(moodLogTable)
+        .where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, startDate)))
+        .orderBy(desc(moodLogTable.loggedDate)),
+
+      db.select()
+        .from(waterLogTable)
+        .where(and(eq(waterLogTable.userId, userId), gte(waterLogTable.loggedDate, startDate)))
+        .orderBy(desc(waterLogTable.loggedDate)),
+
+      db.select()
+        .from(nutritionGoalsTable)
+        .where(eq(nutritionGoalsTable.userId, userId))
+        .limit(1),
+
+      db.select()
+        .from(dailyNutritionSummaryTable)
+        .where(and(eq(dailyNutritionSummaryTable.userId, userId), gte(dailyNutritionSummaryTable.date, weekStart)))
+        .orderBy(desc(dailyNutritionSummaryTable.date)),
+
+      db.select()
+        .from(moodMealCorrelationsTable)
+        .where(eq(moodMealCorrelationsTable.userId, userId))
+        .orderBy(desc(moodMealCorrelationsTable.strength))
+        .limit(5),
+    ]);
+
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0, dailyProtein: 100 };
+
+    console.log(`[Insights] Combined data fetched in ${Date.now() - fetchStart}ms`);
+
+    // Generate all insights in parallel
+    const [predictions, correlations, narrative, recommendation] = await Promise.all([
+      // Predictive insights
+      Promise.resolve(generatePredictiveInsights(foodLogs, moodLogs, waterLogs, userGoals)),
+
+      // Correlations (use stored or generate)
+      Promise.resolve(
+        storedCorrelations.length > 0
+          ? storedCorrelations.map(corr => ({
+              id: corr.id,
+              factor: formatMealPattern(corr.mealPattern),
+              outcome: corr.moodPattern,
+              type: getMoodType(corr.moodPattern),
+              correlation: Math.round(parseFloat(corr.strength) * 100),
+              dataPoints: corr.occurrences,
+              instances: corr.occurrences,
+              confidence: Math.round(parseFloat(corr.confidence) * 100),
+              explanation: generateExplanation(corr.mealPattern, corr.moodPattern),
+              suggestion: generateSuggestion(corr.mealPattern, corr.moodPattern),
+            }))
+          : generateBehavioralCorrelations(moodLogs, foodLogs)
+      ),
+
+      // Weekly narrative
+      Promise.resolve(generateWeeklyNarrative(foodLogs, moodLogs, waterLogs, summaries, userGoals, weekStart, weekEnd)),
+
+      // What to change
+      Promise.resolve(generateWhatToChange(foodLogs, moodLogs, waterLogs, userGoals)),
+    ]);
+
+    console.log(`[Insights] Combined endpoint total time: ${Date.now() - fetchStart}ms`);
+
+    res.json({
+      success: true,
+      dataPoints: {
+        food: foodLogs.length,
+        mood: moodLogs.length,
+        water: waterLogs.length,
+      },
+      lookbackDays: parseInt(days),
+
+      // Predictive insights
+      predictions,
+
+      // Correlations
+      correlations,
+      correlationsSource: storedCorrelations.length > 0 ? 'stored' : 'generated',
+
+      // Weekly narrative
+      weeklyNarrative: narrative,
+
+      // What to change
+      whatToChange: {
+        ...recommendation,
+        dataPoints: foodLogs.length + moodLogs.length + waterLogs.length,
+      },
+    });
+  } catch (error) {
+    console.error('[Insights] Combined endpoint error:', error);
+    errors.internal(res, 'Failed to fetch combined insights');
+  }
+});
+
+/**
  * GET /api/insights/user-patterns
  * Returns user behavioral patterns for smart notification scheduling
  *

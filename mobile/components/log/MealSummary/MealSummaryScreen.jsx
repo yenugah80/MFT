@@ -29,6 +29,7 @@ import MacroProgressSection from './MacroProgressSection';
 import IngredientsSection from './IngredientsSection';
 import MicrosGrid from './MicrosGrid';
 import ActionButtons from './ActionButtons';
+import MealFeelingPrediction from '../MealFeelingPrediction';
 
 /**
  * Extract sodium from micros object (handles multiple formats)
@@ -220,6 +221,21 @@ export default function MealSummaryScreen({
           {/* MealScoreDial (0-100) is the single source of meal quality */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
             <MealScoreDial item={nutrition.item} />
+          </View>
+
+          {/* How Will This Make Me Feel - DIFFERENTIATOR */}
+          <View style={[styles.card, { backgroundColor: cardBg }]}>
+            <MealFeelingPrediction
+              mealData={{
+                calories: nutrition.macros?.calories,
+                protein: nutrition.macros?.protein_g,
+                carbs: nutrition.macros?.carbs_g,
+                sugar: nutrition.micros?.sugar?.value || nutrition.micros?.sugar,
+                fiber: nutrition.micros?.fiber?.value || nutrition.micros?.fiber,
+                novaScore: nutrition.item?.novaScore,
+                mealType: nutrition.item?.mealType,
+              }}
+            />
           </View>
 
           {/* Macro Progress - shows meal composition, not daily goals */}

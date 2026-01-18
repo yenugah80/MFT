@@ -8,6 +8,7 @@
 
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
+import { aiLimiter } from "../middleware/rateLimiter.js";
 import { FoodService } from "../services/foodService.js";
 import { smartNutritionResolver } from "../services/smartNutritionResolver.js";
 import { strategicFoodParser } from "../services/StrategicFoodParser.js";
@@ -15,9 +16,11 @@ import { premiumFeaturesService } from "../services/PremiumFeatures.js";
 import { parseIngredientsText, shouldParseIngredients } from "../services/ingredientParser.js";
 import { v4 as uuidv4 } from "uuid";
 import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
+import { getSpellingSuggestions, findSimilarFoods } from "../utils/fuzzyMatch.js";
 
 const router = express.Router();
 router.use(requireAuth);
+router.use(aiLimiter); // Strict rate limit for AI-powered endpoints
 
 /**
  * POST /api/food/resolve
@@ -263,7 +266,25 @@ async function resolveTextMode(query, draftId, mealType, userId) {
 
     console.log(`[Resolve] ✅ Parsed with ${parseResult.engine} engine: ${parseResult.items.length} items, confidence=${parseResult.confidence.toFixed(2)}`);
 
-    // Step 2: Resolve each food
+    // Step 2: Check for spelling suggestions for each parsed food
+    const spellingSuggestions = [];
+    for (const parsedFood of parseResult.items) {
+      const foodName = parsedFood.name || parsedFood.canonicalName || '';
+      if (foodName) {
+        const suggestion = getSpellingSuggestions(foodName);
+        if (suggestion.needsCorrection && suggestion.didYouMean) {
+          spellingSuggestions.push({
+            original: foodName,
+            didYouMean: suggestion.didYouMean,
+            confidence: Math.round(suggestion.confidence * 100),
+            alternatives: suggestion.suggestions.slice(0, 3).map(s => s.name)
+          });
+          console.log(`[Resolve] 🔍 Spelling suggestion for "${foodName}": Did you mean "${suggestion.didYouMean}"? (${Math.round(suggestion.confidence * 100)}% match)`);
+        }
+      }
+    }
+
+    // Step 3: Resolve each food
     const items = [];
     for (const parsedFood of parseResult.items) {
       const resolvedItem = await resolveGenericFood(parsedFood);
@@ -272,8 +293,8 @@ async function resolveTextMode(query, draftId, mealType, userId) {
 
     const dataQuality = assessDataQuality(items);
 
-    // Step 3: Add strategic parsing metadata to response
-    return {
+    // Step 4: Build response with spelling suggestions
+    const response = {
       draftId,
       mode: 'text',
       mealType,
@@ -281,7 +302,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       totals: calculateTotals(items),
       dataQuality,
       uiHints: generateUIHints(items, dataQuality),
-      // NEW: Strategic parsing metadata
+      // Strategic parsing metadata
       strategicParsing: {
         engine: parseResult.engine,
         confidence: parseResult.confidence,
@@ -290,6 +311,21 @@ async function resolveTextMode(query, draftId, mealType, userId) {
         userTier: parseResult.userTier
       }
     };
+
+    // Add spelling suggestions if any food names might be misspelled
+    if (spellingSuggestions.length > 0) {
+      response.spellingSuggestions = spellingSuggestions;
+      response.uiHints.gentleWarnings = response.uiHints.gentleWarnings || [];
+      response.uiHints.gentleWarnings.push({
+        title: 'Did you mean?',
+        message: `Some food names might be misspelled. Suggestions: ${spellingSuggestions.map(s => `"${s.original}" → "${s.didYouMean}"`).join(', ')}`,
+        actionable: true,
+        ctaText: 'Review suggestions',
+        type: 'spelling_suggestion'
+      });
+    }
+
+    return response;
   } catch (error) {
     console.error(`[Resolve] Strategic parser error: ${error.message}`);
     // Fallback to legacy parsing
@@ -299,6 +335,23 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       return createErrorDraft(draftId, 'text', 'Could not parse food from text (fallback)', mealType);
     }
 
+    // Check for spelling suggestions in fallback path too
+    const spellingSuggestions = [];
+    for (const parsedFood of parsedFoods) {
+      const foodName = parsedFood.name || parsedFood.canonicalName || '';
+      if (foodName) {
+        const suggestion = getSpellingSuggestions(foodName);
+        if (suggestion.needsCorrection && suggestion.didYouMean) {
+          spellingSuggestions.push({
+            original: foodName,
+            didYouMean: suggestion.didYouMean,
+            confidence: Math.round(suggestion.confidence * 100),
+            alternatives: suggestion.suggestions.slice(0, 3).map(s => s.name)
+          });
+        }
+      }
+    }
+
     const items = [];
     for (const parsedFood of parsedFoods) {
       const resolvedItem = await resolveGenericFood(parsedFood);
@@ -306,6 +359,19 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     }
 
     const dataQuality = assessDataQuality(items);
+    const uiHints = generateUIHints(items, dataQuality);
+
+    // Add spelling suggestions if any
+    if (spellingSuggestions.length > 0) {
+      uiHints.gentleWarnings = uiHints.gentleWarnings || [];
+      uiHints.gentleWarnings.push({
+        title: 'Did you mean?',
+        message: `Some food names might be misspelled. Suggestions: ${spellingSuggestions.map(s => `"${s.original}" → "${s.didYouMean}"`).join(', ')}`,
+        actionable: true,
+        ctaText: 'Review suggestions',
+        type: 'spelling_suggestion'
+      });
+    }
 
     return {
       draftId,
@@ -314,7 +380,8 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       items,
       totals: calculateTotals(items),
       dataQuality,
-      uiHints: generateUIHints(items, dataQuality),
+      uiHints,
+      spellingSuggestions: spellingSuggestions.length > 0 ? spellingSuggestions : undefined,
       strategicParsing: {
         engine: 'fallback_legacy',
         confidence: 0.5,
@@ -488,13 +555,21 @@ async function resolveGenericFood(parsedFood) {
     // 🆕 CRITICAL FIX: Preserve ORIGINAL parsed food name!
     // The smartNutritionResolver may return a hallucinated foodName (e.g., "rice" → "Indian Chicken Curry")
     // We must use the original parsed name from strategicFoodParser, not the resolver's name
-    const originalName = parsedFood.name || parsedFood.originalInput || nutrition.foodName;
+    // Priority: parsedFood.name > parsedFood.originalInput > parsedFood.canonicalName > NEVER use nutrition.foodName
+    const originalName = parsedFood.name || parsedFood.originalInput || parsedFood.canonicalName;
 
-    console.log(`[Resolve] 🔍 Food name resolution: parsed="${parsedFood.name}" → resolver="${nutrition.foodName}" → using="${originalName}"`);
+    // SAFETY: If we have NO parsed name at all, something is very wrong - log error but don't crash
+    if (!originalName) {
+      console.error(`[Resolve] ❌ CRITICAL: No original food name found! parsedFood:`, JSON.stringify(parsedFood));
+      console.error(`[Resolve] ❌ Using nutrition.foodName as LAST RESORT: "${nutrition.foodName}"`);
+    }
+
+    const finalName = originalName || nutrition.foodName || 'Unknown Food';
+    console.log(`[Resolve] 🔍 Food name resolution: parsed="${parsedFood.name}" → resolver="${nutrition.foodName}" → using="${finalName}"`);
 
     return {
       itemId,
-      name: originalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
+      name: finalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
       portion: {
         amount: parsedFood.quantity || 1,
         unit: parsedFood.unit || 'serving',
@@ -537,9 +612,11 @@ async function resolveGenericFood(parsedFood) {
         fieldsProvided: ['macros', 'micros']
       });
 
+      // CRITICAL: Use original parsed name, not USDA description
+      // USDA description might be very different from what user typed
       return {
         itemId,
-        name: bestMatch.description,
+        name: parsedFood.name || parsedFood.originalInput || bestMatch.description, // Prefer original
         portion: {
           amount: parsedFood.quantity || 1,
           unit: parsedFood.unit || 'serving',
@@ -551,7 +628,8 @@ async function resolveGenericFood(parsedFood) {
         micros: bestMatch.micros || {},
         scores: {},
         sourceEvidence,
-        flags: parsedFood.quantity ? ['fallback_method'] : ['portion_estimated', 'fallback_method']
+        flags: parsedFood.quantity ? ['fallback_method'] : ['portion_estimated', 'fallback_method'],
+        _usdaMatch: bestMatch.description, // Store USDA match for debugging
       };
     }
 

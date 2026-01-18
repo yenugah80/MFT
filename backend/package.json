@@ -16,6 +16,7 @@
   "type": "module",
   "description": "",
   "dependencies": {
+    "firebase-admin": "^13.0.2",
     "@clerk/clerk-sdk-node": "^4.13.23",
     "@clerk/express": "^1.7.60",
     "@neondatabase/serverless": "^1.0.0",

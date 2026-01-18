@@ -333,20 +333,27 @@ class OpenAIClient extends BaseApiClient {
         role: 'system',
         content: `Extract food items with quantities from text.
 
-Rules:
-1. Extract the food name WITHOUT the quantity (e.g., "five eggs" → name: "eggs", quantity: 5)
-2. Convert word quantities to numbers (one=1, two=2, three=3, four=4, five=5, six=6, etc.)
-3. Parse "X servings of Y" as quantity X, unit "servings", name Y
-4. If no quantity specified, use quantity: 1
-5. If no unit specified, use unit: "serving"
-6. Treat named dishes as single items (e.g., "chicken curry", "beef tacos", "pad thai")
-7. Split into multiple items when user lists separate foods (commas, "and", "with")
+CRITICAL RULES:
+1. PRESERVE EXACT FOOD NAMES - Never change, translate, correct, or substitute food names
+2. If you don't recognize a regional/ethnic dish name, KEEP IT EXACTLY as typed
+   - "Chamadhumpa curry" stays "Chamadhumpa curry" (NOT rice noodles, NOT something else)
+   - "Dosa" stays "Dosa", "Idli" stays "Idli", "Pho" stays "Pho"
+3. Extract the food name WITHOUT the quantity (e.g., "five eggs" → name: "eggs", quantity: 5)
+4. Convert word quantities to numbers (one=1, two=2, three=3, four=4, five=5, six=6, etc.)
+5. Parse "X servings of Y" as quantity X, unit "servings", name Y
+6. If no quantity specified, use quantity: 1
+7. If no unit specified, use unit: "serving"
+8. Treat named dishes as single items (e.g., "chicken curry", "beef tacos", "pad thai")
+9. Split into multiple items when user lists separate foods (commas, "and", "with")
+10. NEVER hallucinate or guess different foods - use EXACTLY what the user wrote
 
 Examples:
 - "five eggs" → {"name": "eggs", "quantity": 5, "unit": "serving"}
 - "two servings of chicken curry" → {"name": "chicken curry", "quantity": 2, "unit": "servings"}
 - "3 Indian Vadas" → {"name": "Indian Vadas", "quantity": 3, "unit": "serving"}
 - "a bowl of rice" → {"name": "rice", "quantity": 1, "unit": "bowl"}
+- "Chamadhumpa curry with cooked rice" → [{"name": "Chamadhumpa curry", "quantity": 1, "unit": "serving"}, {"name": "cooked rice", "quantity": 1, "unit": "serving"}]
+- "unknown regional dish" → {"name": "unknown regional dish", "quantity": 1, "unit": "serving"}
 
 Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       },
@@ -378,7 +385,7 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
       });
 
       // Step 2: Process each ingredient - preserve original names for accurate nutrition lookup
-      // OpenAI can estimate nutrition for ANY food, so no need to simplify/canonicalize
+      // CRITICAL: OpenAI should return EXACT user input - we just add metadata
       const canonical = validated.map(item => {
         const canonicalForm = canonicalize(item.name);
         const baseConfidence = item.confidence ?? 0.5;
@@ -398,11 +405,11 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
         return {
           ...item,
           canonical: canonicalForm,
-          // Keep display name for UI, use canonicalName for nutrition lookup
-          name: canonicalForm.display_name || item.name,
-          // For complex dishes (curry, biryani, etc), use full name for nutrition lookup
-          // Simple ingredients use canonical form (eggs, chicken, rice)
-          canonicalName: isComplex ? item.name : canonicalForm.canonical,
+          // CRITICAL: Use AI-extracted name directly - prompt instructs AI to preserve exact user input
+          // Never override with canonical form since that might change regional food names
+          name: item.name,
+          // For nutrition lookup, also use the exact name from AI extraction
+          canonicalName: item.name,
           preparation: null,
           quantity: item.quantity || 1,
           unit: item.unit || 'serving',
@@ -413,7 +420,8 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
             ? { oilLevel: 'moderate', proteinCut: 'average', cuisineStyle: 'home-style' }
             : null,
           isComplex,
-          originalInput: item.name, // Preserve what user typed
+          originalInput: item.name, // Preserve what AI extracted (should match user input per prompt)
+          _userQuery: query, // Also store full original query for debugging
         };
       });
 
@@ -446,17 +454,19 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     } catch (error) {
       console.error(`[OpenAI] Parse failed for "${query}":`, error.message);
 
-      // Fallback: treat entire query as single food with canonicalization
+      // Fallback: treat entire query as single food
+      // CRITICAL: Preserve EXACT user input - never substitute or canonicalize unknown foods
       const canonicalForm = canonicalize(query);
       return [
         {
-          name: canonicalForm.canonical,
+          name: query.trim(), // ALWAYS use original query, not canonicalized version
           preparation: null,
           quantity: 1,
           unit: 'serving',
           confidence: 0.5,
           canonical: canonicalForm,
-          originalInput: query,
+          canonicalName: query.trim(), // Use original for nutrition lookup too
+          originalInput: query.trim(),
         },
       ];
     }

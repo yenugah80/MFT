@@ -16,13 +16,18 @@ import { usdaClient } from './apiClients/USDAClient.js';
 import { buildNutritionEstimationPrompt, buildBatchNutritionEstimationPrompt } from './apiClients/prompts/nutritionEstimation.js';
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
+import { cache as redisCache, isRedisAvailable, cacheKeys } from '../config/redis.js';
 
 // FIXED P1: Feature flags for dual-prompt system
 const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
 const ENABLE_USDA_VERIFICATION = process.env.ENABLE_USDA_VERIFICATION === 'true';
 
-// Aggressive caching (24 hours)
-const nutritionCache = new NodeCache({ stdTTL: 86400, checkperiod: 600, maxKeys: 5000 });
+// In-memory cache (fallback when Redis unavailable)
+// Also serves as L1 cache for faster reads
+const memoryCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, maxKeys: 5000 }); // 1 hour L1 cache
+
+// Redis cache TTL (48 hours - longer than memory since it's persistent)
+const REDIS_CACHE_TTL = 48 * 60 * 60; // 48 hours in seconds
 
 class SmartNutritionResolver {
   constructor() {
@@ -30,6 +35,8 @@ class SmartNutritionResolver {
       openaiEstimates: 0,
       usdaVerifications: 0,
       cacheHits: 0,
+      redisCacheHits: 0,
+      memoryCacheHits: 0,
       totalRequests: 0,
       // FIXED P1: Observability metrics for dual-prompt system
       promptStats: {
@@ -46,6 +53,64 @@ class SmartNutritionResolver {
       schemaValidationErrors: 0,
       macroValidationErrors: 0,
     };
+  }
+
+  /**
+   * Get from two-level cache (memory L1 → Redis L2)
+   * @private
+   */
+  async _cacheGet(key) {
+    // L1: Check memory cache first (fastest)
+    const memResult = memoryCache.get(key);
+    if (memResult) {
+      this.stats.memoryCacheHits++;
+      return memResult;
+    }
+
+    // L2: Check Redis (persistent, shared across instances)
+    if (isRedisAvailable()) {
+      const redisResult = await redisCache.get(key);
+      if (redisResult) {
+        // Populate L1 cache for future requests
+        memoryCache.set(key, redisResult);
+        this.stats.redisCacheHits++;
+        return redisResult;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Set in two-level cache (memory L1 + Redis L2)
+   * @private
+   */
+  async _cacheSet(key, value) {
+    // Always set in memory (L1)
+    memoryCache.set(key, value);
+
+    // Also set in Redis if available (L2 - persistent)
+    if (isRedisAvailable()) {
+      await redisCache.set(key, value, REDIS_CACHE_TTL);
+    }
+  }
+
+  /**
+   * Check if key exists in cache
+   * @private
+   */
+  async _cacheHas(key) {
+    // Check memory first
+    if (memoryCache.has(key)) {
+      return true;
+    }
+
+    // Check Redis
+    if (isRedisAvailable()) {
+      return await redisCache.exists(key);
+    }
+
+    return false;
   }
 
   /**
@@ -108,9 +173,10 @@ class SmartNutritionResolver {
 
     // NOW build cache key using ACTUAL portion that will be used
     const cacheKey = getCacheKey('nutrition', canonicalQuery, portionToUse, promptTier);
-    const cached = nutritionCache.get(cacheKey);
+    const cached = await this._cacheGet(cacheKey);
     if (cached) {
-      console.log(`[SmartResolver] Cache hit for "${canonicalQuery}" (${promptTier})`);
+      const cacheSource = isRedisAvailable() ? 'Redis/Memory' : 'Memory';
+      console.log(`[SmartResolver] Cache hit for "${canonicalQuery}" (${promptTier}) from ${cacheSource}`);
       this.stats.cacheHits++;
       return cached;
     }
@@ -170,8 +236,9 @@ class SmartNutritionResolver {
         // CRITICAL FIX #3: ONLY cache valid results
         // Invalid data (validationPassed=false) will poison cache and return wrong info forever
         if (openAIResult.validationPassed) {
-          nutritionCache.set(cacheKey, result);
-          console.log(`[SmartResolver] Cached valid result for "${canonicalQuery}"`);
+          await this._cacheSet(cacheKey, result);
+          const cacheTarget = isRedisAvailable() ? 'Redis + Memory' : 'Memory only';
+          console.log(`[SmartResolver] Cached valid result for "${canonicalQuery}" (${cacheTarget})`);
         } else {
           console.warn(`[SmartResolver] NOT caching invalid result for "${canonicalQuery}" (validationPassed=false)`);
           // CRITICAL FIX: Track invalid results for telemetry
@@ -215,7 +282,7 @@ class SmartNutritionResolver {
 
         // CRITICAL: Only cache valid USDA results, same as OpenAI
         if (usdaResult.validationPassed) {
-          nutritionCache.set(cacheKey, result);
+          await this._cacheSet(cacheKey, result);
         } else {
           console.warn(`[SmartResolver] NOT caching unvalidated USDA result for "${canonicalQuery}"`);
           // Track invalid USDA results
@@ -242,7 +309,7 @@ class SmartNutritionResolver {
 
       // Only cache if OpenAI result is valid
       if (openAIResult.validationPassed) {
-        nutritionCache.set(cacheKey, result);
+        await this._cacheSet(cacheKey, result);
       } else {
         this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
       }
@@ -354,32 +421,39 @@ class SmartNutritionResolver {
   async resolveFoodsBatch(foodItems, userId = null) {
     // Filter out cached items - FIXED P0: Include prompt tier in cache key
     // CRITICAL FIX #1: Canonicalize food names to ensure cache key consistency
-    const uncachedItems = foodItems.filter(item => {
+    const uncachedItems = [];
+    const cachedResults = [];
+
+    for (const item of foodItems) {
       const canonicalName = this._canonicalizeFoodQuery(item.name);
       const canonicalPortion = this._canonicalizeFoodQuery(item.portion || '1 serving');
       const isComplex = this._isLikelyComplex(canonicalName);
       const promptTier = isComplex ? 'extended' : 'core';
       const cacheKey = getCacheKey('nutrition', canonicalName, canonicalPortion, promptTier);
-      return !nutritionCache.has(cacheKey);
-    });
+
+      const cached = await this._cacheGet(cacheKey);
+      if (cached) {
+        cachedResults.push({ item, cached, cacheKey });
+      } else {
+        uncachedItems.push({ item, cacheKey, promptTier });
+      }
+    }
 
     if (uncachedItems.length === 0) {
-      console.log(`[SmartResolver] All ${foodItems.length} items from cache`);
-      return foodItems.map(item => {
-        const canonicalName = this._canonicalizeFoodQuery(item.name);
-        const canonicalPortion = this._canonicalizeFoodQuery(item.portion || '1 serving');
-        const isComplex = this._isLikelyComplex(canonicalName);
-        const promptTier = isComplex ? 'extended' : 'core';
-        const cacheKey = getCacheKey('nutrition', canonicalName, canonicalPortion, promptTier);
-        return nutritionCache.get(cacheKey);
-      });
+      const cacheSource = isRedisAvailable() ? 'Redis/Memory' : 'Memory';
+      console.log(`[SmartResolver] All ${foodItems.length} items from cache (${cacheSource})`);
+      this.stats.cacheHits += cachedResults.length;
+      return cachedResults.map(r => r.cached);
     }
 
     console.log(`[SmartResolver] Batch resolving ${uncachedItems.length} items`);
 
     try {
+      // Extract original items for the prompt builder
+      const itemsForPrompt = uncachedItems.map(u => u.item);
+
       // Use OpenAI batch estimation (single API call for multiple foods)
-      const prompt = buildBatchNutritionEstimationPrompt(uncachedItems);
+      const prompt = buildBatchNutritionEstimationPrompt(itemsForPrompt);
 
       // Use safe wrapper - validates JSON BEFORE caching
       const estimates = await safeJSONCompletion(
@@ -397,8 +471,8 @@ class SmartNutritionResolver {
 
       // CRITICAL FIX #4: Batch must obey same correctness rules as single requests
       // Validate EVERY estimate before caching
-      const results = estimates.map((estimate, i) => {
-        const item = uncachedItems[i];
+      const newResults = await Promise.all(estimates.map(async (estimate, i) => {
+        const { item, cacheKey, promptTier } = uncachedItems[i];
 
         // CRITICAL: Apply same validation rules as single request path
         try {
@@ -408,13 +482,6 @@ class SmartNutritionResolver {
           console.error(`[SmartResolver] Batch item ${i} ("${item.name}") failed validation:`, error.message);
           estimate.validationPassed = false;
         }
-
-        // CRITICAL FIX #1: Canonicalize to match single request path
-        const canonicalName = this._canonicalizeFoodQuery(item.name);
-        const canonicalPortion = this._canonicalizeFoodQuery(item.portion || '1 serving');
-        const isComplex = this._isLikelyComplex(canonicalName);
-        const promptTier = isComplex ? 'extended' : 'core';
-        const cacheKey = getCacheKey('nutrition', canonicalName, canonicalPortion, promptTier);
 
         const result = {
           ...estimate,
@@ -430,7 +497,7 @@ class SmartNutritionResolver {
 
         // CRITICAL FIX #3: ONLY cache valid batch results
         if (estimate.validationPassed) {
-          nutritionCache.set(cacheKey, result);
+          await this._cacheSet(cacheKey, result);
         } else {
           console.warn(`[SmartResolver] Batch: NOT caching invalid result for "${item.name}"`);
           // Track invalid batch results
@@ -438,16 +505,32 @@ class SmartNutritionResolver {
         }
 
         return result;
-      });
+      }));
 
-      return results;
+      // Merge cached results with new results in original order
+      const allResults = [];
+      let cachedIdx = 0;
+      let newIdx = 0;
+
+      for (const item of foodItems) {
+        // Check if this item was cached
+        if (cachedIdx < cachedResults.length && cachedResults[cachedIdx].item === item) {
+          allResults.push(cachedResults[cachedIdx].cached);
+          cachedIdx++;
+        } else if (newIdx < newResults.length) {
+          allResults.push(newResults[newIdx]);
+          newIdx++;
+        }
+      }
+
+      return allResults.length === foodItems.length ? allResults : newResults;
 
     } catch (error) {
       console.error(`[SmartResolver] Batch resolution failed:`, error.message);
       // Fall back to individual resolution
       // CRITICAL FIX: Pass userId to maintain learned portion support in fallback
-      return Promise.all(uncachedItems.map(item =>
-        this.resolveFood(item.name, item.portion, userId)
+      return Promise.all(uncachedItems.map(u =>
+        this.resolveFood(u.item.name, u.item.portion, userId)
       ));
     }
   }
@@ -648,9 +731,16 @@ class SmartNutritionResolver {
 
     return {
       ...this.stats,
-      cacheSize: nutritionCache.keys().length,
+      memoryCacheSize: memoryCache.keys().length,
+      redisAvailable: isRedisAvailable(),
       cacheHitRate: this.stats.totalRequests > 0
         ? ((this.stats.cacheHits / this.stats.totalRequests) * 100).toFixed(1) + '%'
+        : '0%',
+      memoryCacheHitRate: this.stats.cacheHits > 0
+        ? ((this.stats.memoryCacheHits / this.stats.cacheHits) * 100).toFixed(1) + '%'
+        : '0%',
+      redisCacheHitRate: this.stats.cacheHits > 0
+        ? ((this.stats.redisCacheHits / this.stats.cacheHits) * 100).toFixed(1) + '%'
         : '0%',
       openaiUsageRate: this.stats.totalRequests > 0
         ? ((this.stats.openaiEstimates / this.stats.totalRequests) * 100).toFixed(1) + '%'
@@ -733,10 +823,19 @@ class SmartNutritionResolver {
 
   /**
    * Clear cache (for testing/debugging)
+   * Clears both memory and Redis caches
    */
-  clearCache() {
-    nutritionCache.flushAll();
-    console.log('[SmartResolver] Cache cleared');
+  async clearCache() {
+    // Clear memory cache
+    memoryCache.flushAll();
+
+    // Clear Redis nutrition cache if available
+    if (isRedisAvailable()) {
+      await redisCache.delPattern('nutrition:*');
+      console.log('[SmartResolver] Memory + Redis caches cleared');
+    } else {
+      console.log('[SmartResolver] Memory cache cleared (Redis not available)');
+    }
   }
 }
 

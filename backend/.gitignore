@@ -46,3 +46,7 @@ ios/
 Thumbs.db
 desktop.ini
 
+firebase-service-account.json
+
+# Scripts with secrets
+setup-render-env.sh

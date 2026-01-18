@@ -1,0 +1,36 @@
+# Render Blueprint
+# https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    name: MyFoodTracker
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run drizzle:migrate
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5001"
+      - key: DATABASE_URL
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USDA_API_KEY
+        sync: false
+      - key: HEALTH_TOKEN
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: ADMIN_USER_IDS
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false

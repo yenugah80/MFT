@@ -1,16 +1,18 @@
 /**
- * Wellness History Screen - "Glass Bubbles" Design
+ * Wellness History Screen - Interactive 4-Domain Design
  *
- * Shows wellness score history with:
- * - AI-powered key insight at top (speech bubble style)
- * - Personal bests in floating bubble cards
- * - Weekly score visualization with day circles
- * - Pattern detection and recommendations
+ * Shows wellness score history with real data and interactive elements:
+ * - Insights-first design (recommendations at top)
+ * - 4-domain breakdown (Food, Mood, Hydration, Activity - 25 pts each)
+ * - Tappable day circles with detail modal
+ * - AI-powered patterns and recommendations
  *
- * Research-based: Uses 4-domain wellness model (Food, Mood, Hydration, Activity)
+ * Data Sources:
+ * - useWellnessHistory: Aggregates dashboard + historical data
+ * - useWellnessInsights: What-to-change + personalized patterns
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -30,12 +32,17 @@ import {
   TEXT,
   SURFACES,
   BRAND,
-  SEMANTIC,
 } from '../../constants/premiumTheme';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
+import { SPACING, RADIUS } from '../../constants/designTokens';
 
-import { useDashboard } from '../../hooks/useDashboard';
-import { calculateFoodMoodScore, detectPatterns } from '../../utils/foodMoodScore';
+import { useWellnessHistory } from '../../hooks/useWellnessHistory';
+import { useWellnessInsights } from '../../hooks/useWellnessInsights';
+
+import {
+  DomainBreakdownGrid,
+  DayDetailModal,
+  WellnessRecommendationsSection,
+} from '../../components/wellness';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -44,100 +51,34 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // ============================================================================
 
 /**
- * Key Insight Card - Speech bubble style with gradient glass effect
- */
-function KeyInsightCard({ insight, isLoading }) {
-  if (isLoading) {
-    return (
-      <View style={insightStyles.container}>
-        <LinearGradient
-          colors={['rgba(139, 92, 246, 0.15)', 'rgba(139, 92, 246, 0.05)']}
-          style={insightStyles.gradient}
-        >
-          <ActivityIndicator size="small" color={BRAND.primary} />
-          <Text style={insightStyles.loadingText}>Analyzing your patterns...</Text>
-        </LinearGradient>
-      </View>
-    );
-  }
-
-  return (
-    <View style={insightStyles.container}>
-      <LinearGradient
-        colors={['rgba(139, 92, 246, 0.15)', 'rgba(139, 92, 246, 0.05)']}
-        style={insightStyles.gradient}
-      >
-        <View style={insightStyles.speechBubble}>
-          <Text style={insightStyles.quoteText}>
-            "{insight || 'Keep logging to discover your wellness patterns!'}"
-          </Text>
-          <View style={insightStyles.aiTag}>
-            <Ionicons name="sparkles" size={12} color={BRAND.primary} />
-            <Text style={insightStyles.aiTagText}>AI Insight</Text>
-          </View>
-        </View>
-      </LinearGradient>
-    </View>
-  );
-}
-
-const insightStyles = StyleSheet.create({
-  container: {
-    marginHorizontal: SPACING[4],
-    marginBottom: SPACING[4],
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-  },
-  gradient: {
-    padding: SPACING[4],
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: SPACING[2],
-    fontSize: 14,
-    color: TEXT.secondary,
-  },
-  speechBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: RADIUS.lg,
-    padding: SPACING[4],
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  quoteText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: TEXT.primary,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontStyle: 'italic',
-  },
-  aiTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: SPACING[3],
-  },
-  aiTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: BRAND.primary,
-  },
-});
-
-/**
  * Personal Bests - Floating bubble cards
  */
 function PersonalBestsSection({ stats }) {
   const bests = [
-    { key: 'highest', value: stats.highestScore, label: 'Highest', sublabel: stats.highestDate, icon: 'trophy', color: '#F59E0B' },
-    { key: 'streak', value: stats.currentStreak, label: 'Streak', sublabel: 'days', icon: 'flame', color: '#EF4444' },
-    { key: 'improved', value: stats.improvement, label: 'vs Last Week', sublabel: stats.improvement > 0 ? 'Improved!' : 'Keep going', icon: 'trending-up', color: '#10B981' },
+    {
+      key: 'highest',
+      value: stats.highestScore,
+      label: 'Highest',
+      sublabel: stats.highestDate,
+      icon: 'trophy',
+      color: '#F59E0B',
+    },
+    {
+      key: 'streak',
+      value: stats.currentStreak,
+      label: 'Streak',
+      sublabel: 'days',
+      icon: 'flame',
+      color: '#EF4444',
+    },
+    {
+      key: 'improved',
+      value: stats.improvement,
+      label: 'vs Last Week',
+      sublabel: stats.improvement > 0 ? 'Improved!' : 'Keep going',
+      icon: 'trending-up',
+      color: '#10B981',
+    },
   ];
 
   return (
@@ -150,7 +91,9 @@ function PersonalBestsSection({ stats }) {
               <Ionicons name={item.icon} size={20} color={item.color} />
             </View>
             <Text style={[bestsStyles.value, { color: item.color }]}>
-              {item.key === 'improved' && item.value > 0 ? '+' : ''}{item.value}{item.key === 'improved' ? '%' : ''}
+              {item.key === 'improved' && item.value > 0 ? '+' : ''}
+              {item.value}
+              {item.key === 'improved' ? '%' : ''}
             </Text>
             <Text style={bestsStyles.label}>{item.label}</Text>
             <Text style={bestsStyles.sublabel}>{item.sublabel}</Text>
@@ -219,17 +162,22 @@ const bestsStyles = StyleSheet.create({
 });
 
 /**
- * Weekly Score Visualization - Score circles for each day
+ * Weekly Score Visualization - Interactive day circles
  */
-function WeeklyScoreSection({ weekData, weekAverage, bestDay }) {
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
+function WeeklyScoreSection({ weekData, weekAverage, onDayPress }) {
   const getScoreColor = (score) => {
-    if (!score) return TEXT.tertiary;
+    if (!score || score === 0) return TEXT.tertiary;
     if (score >= 80) return '#10B981';
     if (score >= 60) return '#8B5CF6';
     if (score >= 40) return '#3B82F6';
     return '#F59E0B';
+  };
+
+  const handleDayPress = async (dayData, index) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (dayData.hasData) {
+      onDayPress?.(dayData);
+    }
   };
 
   return (
@@ -240,48 +188,51 @@ function WeeklyScoreSection({ weekData, weekAverage, bestDay }) {
       >
         <View style={weekStyles.header}>
           <Text style={weekStyles.title}>This Week</Text>
+          <Text style={weekStyles.avgText}>
+            Avg: <Text style={weekStyles.avgValue}>{weekAverage || 0}</Text>
+          </Text>
         </View>
 
         <View style={weekStyles.daysRow}>
-          {weekData.map((dayScore, index) => {
-            const isBest = dayScore === bestDay.score && dayScore > 0;
-            const color = getScoreColor(dayScore);
-            const hasData = dayScore > 0;
+          {weekData.map((day, index) => {
+            const score = day.score || 0;
+            const hasData = day.hasData;
+            const color = getScoreColor(score);
+            const isToday = day.isToday;
 
             return (
-              <View key={index} style={weekStyles.dayColumn}>
+              <TouchableOpacity
+                key={index}
+                onPress={() => handleDayPress(day, index)}
+                activeOpacity={hasData ? 0.7 : 1}
+                style={weekStyles.dayColumn}
+              >
                 <View
                   style={[
                     weekStyles.scoreCircle,
                     {
                       backgroundColor: hasData ? `${color}20` : SURFACES.background.secondary,
-                      borderColor: isBest ? color : 'transparent',
-                      borderWidth: isBest ? 2 : 0,
+                      borderColor: isToday ? color : 'transparent',
+                      borderWidth: isToday ? 2 : 0,
                     },
                   ]}
                 >
                   {hasData ? (
-                    <Text style={[weekStyles.scoreText, { color }]}>{dayScore}</Text>
+                    <Text style={[weekStyles.scoreText, { color }]}>{Math.round(score)}</Text>
                   ) : (
                     <Ionicons name="remove" size={14} color={TEXT.tertiary} />
                   )}
                 </View>
-                <Text style={weekStyles.dayLabel}>{days[index]}</Text>
-              </View>
+                <Text style={[weekStyles.dayLabel, isToday && weekStyles.dayLabelToday]}>
+                  {day.dayShort}
+                </Text>
+                {isToday && <View style={[weekStyles.todayDot, { backgroundColor: color }]} />}
+              </TouchableOpacity>
             );
           })}
         </View>
 
-        <View style={weekStyles.statsRow}>
-          <Text style={weekStyles.statText}>
-            Avg: <Text style={weekStyles.statValue}>{weekAverage}</Text>
-          </Text>
-          <View style={weekStyles.statDot} />
-          <Text style={weekStyles.statText}>
-            Best: <Text style={weekStyles.statValue}>{bestDay.score}</Text>
-            <Text style={weekStyles.statDetail}> ({bestDay.day})</Text>
-          </Text>
-        </View>
+        <Text style={weekStyles.tapHint}>Tap a day to see details</Text>
       </LinearGradient>
     </View>
   );
@@ -314,19 +265,27 @@ const weekStyles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  avgText: {
+    fontSize: 13,
+    color: TEXT.secondary,
+  },
+  avgValue: {
+    fontWeight: '700',
+    color: TEXT.primary,
+  },
   daysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING[4],
+    marginBottom: SPACING[3],
   },
   dayColumn: {
     alignItems: 'center',
-    gap: SPACING[2],
+    gap: SPACING[1],
   },
   scoreCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -339,151 +298,19 @@ const weekStyles = StyleSheet.create({
     fontWeight: '600',
     color: TEXT.tertiary,
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: SPACING[3],
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
-  },
-  statText: {
-    fontSize: 13,
-    color: TEXT.secondary,
-  },
-  statValue: {
-    fontWeight: '700',
+  dayLabelToday: {
     color: TEXT.primary,
   },
-  statDetail: {
-    color: TEXT.tertiary,
-  },
-  statDot: {
+  todayDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: TEXT.tertiary,
-    marginHorizontal: SPACING[3],
   },
-});
-
-/**
- * Patterns Detected - What we noticed section
- */
-function PatternsSection({ patterns }) {
-  if (!patterns || patterns.length === 0) {
-    return (
-      <View style={patternsStyles.container}>
-        <Text style={patternsStyles.sectionTitle}>What We Noticed</Text>
-        <View style={patternsStyles.emptyCard}>
-          <Ionicons name="sparkles-outline" size={24} color={TEXT.tertiary} />
-          <Text style={patternsStyles.emptyText}>Keep logging to discover patterns</Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={patternsStyles.container}>
-      <Text style={patternsStyles.sectionTitle}>What We Noticed</Text>
-      <View style={patternsStyles.card}>
-        {patterns.map((pattern, index) => (
-          <View
-            key={pattern.id || index}
-            style={[
-              patternsStyles.patternRow,
-              index < patterns.length - 1 && patternsStyles.patternRowBorder,
-            ]}
-          >
-            <View style={[patternsStyles.iconDot, { backgroundColor: `${getPatternColor(pattern.type)}20` }]}>
-              <Ionicons name={pattern.icon || 'bulb-outline'} size={16} color={getPatternColor(pattern.type)} />
-            </View>
-            <View style={patternsStyles.patternContent}>
-              <Text style={patternsStyles.patternTitle}>{pattern.title}</Text>
-              <Text style={patternsStyles.patternMessage}>{pattern.message}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function getPatternColor(type) {
-  switch (type) {
-    case 'positive': return '#10B981';
-    case 'insight': return '#8B5CF6';
-    case 'warning': return '#F59E0B';
-    default: return BRAND.primary;
-  }
-}
-
-const patternsStyles = StyleSheet.create({
-  container: {
-    marginHorizontal: SPACING[4],
-    marginBottom: SPACING[4],
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: TEXT.secondary,
-    marginBottom: SPACING[3],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  card: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[3],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyCard: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[5],
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  emptyText: {
-    fontSize: 14,
+  tapHint: {
+    fontSize: 11,
     color: TEXT.tertiary,
-  },
-  patternRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING[3],
-    paddingVertical: SPACING[2],
-  },
-  patternRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACES.divider,
-    marginBottom: SPACING[2],
-    paddingBottom: SPACING[3],
-  },
-  iconDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  patternContent: {
-    flex: 1,
-  },
-  patternTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: TEXT.primary,
-    marginBottom: 2,
-  },
-  patternMessage: {
-    fontSize: 13,
-    color: TEXT.secondary,
-    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: SPACING[2],
   },
 });
 
@@ -494,110 +321,64 @@ const patternsStyles = StyleSheet.create({
 export default function WellnessHistoryScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [showDayModal, setShowDayModal] = useState(false);
 
-  // Fetch dashboard data
-  const { data: dashboard, isLoading, error, refetch } = useDashboard();
+  // Fetch wellness history data
+  const {
+    todayScore,
+    weekData,
+    weekAverage,
+    personalBests,
+    hasData,
+    isLoading: historyLoading,
+    refetch: refetchHistory,
+  } = useWellnessHistory({ days: 7 });
 
-  // Calculate wellness stats from dashboard data
-  const wellnessStats = useMemo(() => {
-    if (!dashboard) {
+  // Fetch insights data
+  const {
+    whatToChange,
+    patterns,
+    isLoading: insightsLoading,
+    refetch: refetchInsights,
+  } = useWellnessInsights();
+
+  // Calculate domain breakdown from today's score
+  const domainBreakdown = useMemo(() => {
+    if (!todayScore?.breakdown) {
       return {
-        highestScore: 0,
-        highestDate: '--',
-        currentStreak: 0,
-        improvement: 0,
-        weekData: [0, 0, 0, 0, 0, 0, 0],
-        weekAverage: 0,
-        bestDay: { score: 0, day: '--' },
-        keyInsight: null,
-        patterns: [],
+        nutrition: { score: 0 },
+        mood: { score: 0 },
+        hydration: { score: 0 },
+        activity: { score: 0 },
       };
     }
+    return todayScore.breakdown;
+  }, [todayScore]);
 
-    // Get today's data for current score
-    const today = dashboard.today || {};
-    const goals = dashboard.goals || {};
-    const trends = dashboard.trends || {};
+  // Handle day press
+  const handleDayPress = useCallback((dayData) => {
+    setSelectedDay(dayData);
+    setShowDayModal(true);
+  }, []);
 
-    // Calculate today's score
-    const todayScore = calculateFoodMoodScore({
-      calories: today.nutrition?.totalCalories || 0,
-      calorieGoal: goals.dailyCalories || 2000,
-      protein: today.nutrition?.totalProtein || 0,
-      proteinGoal: goals.proteinG || 150,
-      carbs: today.nutrition?.totalCarbs || 0,
-      carbsGoal: goals.carbsG || 250,
-      fats: today.nutrition?.totalFats || 0,
-      fatsGoal: goals.fatsG || 65,
-      fiber: today.nutrition?.totalFiber || 0,
-      fiberGoal: 30,
-      waterIntake: today.waterIntakeLiters || 0,
-      waterGoal: goals.waterLiters || 2.5,
-      moodLogs: today.moodLogs || [],
-      meals: today.foodLogs || [],
-      activityMinutes: today.activity?.totalMinutes || 0,
-      activityGoal: goals.activityMinutes || 30,
-    });
+  // Handle domain press (optional drill-down)
+  const handleDomainPress = useCallback((domain, data) => {
+    // Could navigate to domain-specific insights
+    console.log('[WellnessHistory] Domain pressed:', domain, data);
+  }, []);
 
-    // Mock week data (in production, fetch from API)
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const todayIndex = new Date().getDay() - 1; // 0 = Monday
-    const weekData = Array(7).fill(0).map((_, i) => {
-      if (i === (todayIndex >= 0 ? todayIndex : 6)) return todayScore.score;
-      if (i < todayIndex) return Math.floor(Math.random() * 30) + 50; // Mock past days
-      return 0; // Future days
-    });
-
-    const validScores = weekData.filter(s => s > 0);
-    const weekAverage = validScores.length > 0
-      ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
-      : 0;
-
-    const bestScore = Math.max(...weekData);
-    const bestDayIndex = weekData.indexOf(bestScore);
-
-    // Detect patterns from data
-    const patterns = detectPatterns({
-      foodLogs: today.foodLogs || [],
-      moodLogs: today.moodLogs || [],
-      waterLogs: [], // Would need water log history
-      days: 30,
-    });
-
-    // Generate key insight based on patterns
-    let keyInsight = null;
-    if (patterns.length > 0 && patterns[0].type === 'positive') {
-      keyInsight = patterns[0].message;
-    } else if (todayScore.score >= 70) {
-      keyInsight = "You're on a roll! Keep up the balanced approach.";
-    } else if (todayScore.weakestDomain) {
-      const domainMessages = {
-        nutrition: "Focus on balanced meals to boost your score",
-        hydration: "Staying hydrated can improve your energy and mood",
-        mood: "Regular mood check-ins help spot what lifts your spirits",
-        activity: "Even a short walk can make a big difference",
-      };
-      keyInsight = domainMessages[todayScore.weakestDomain];
-    }
-
-    return {
-      highestScore: Math.max(bestScore, todayScore.score),
-      highestDate: bestScore === todayScore.score ? 'Today' : dayNames[bestDayIndex],
-      currentStreak: trends.currentStreak || 0,
-      improvement: Math.round((todayScore.score - (weekAverage || todayScore.score)) * 10) / 10,
-      weekData,
-      weekAverage,
-      bestDay: { score: bestScore, day: dayNames[bestDayIndex] || 'Today' },
-      keyInsight,
-      patterns: patterns.slice(0, 3),
-    };
-  }, [dashboard]);
+  // Handle pattern press
+  const handlePatternPress = useCallback((pattern) => {
+    // Could show pattern detail modal
+    console.log('[WellnessHistory] Pattern pressed:', pattern);
+  }, []);
 
   // Handle refresh
   const onRefresh = async () => {
     setRefreshing(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await refetch();
+    await Promise.all([refetchHistory(), refetchInsights()]);
     setRefreshing(false);
   };
 
@@ -606,6 +387,8 @@ export default function WellnessHistoryScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
   };
+
+  const isLoading = historyLoading && !hasData;
 
   return (
     <>
@@ -633,25 +416,40 @@ export default function WellnessHistoryScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Key Insight - Speech bubble at top */}
-        <KeyInsightCard insight={wellnessStats.keyInsight} isLoading={isLoading} />
-
-        {/* Personal Bests - Floating bubbles */}
-        <PersonalBestsSection stats={wellnessStats} />
-
-        {/* This Week - Score circles */}
-        <WeeklyScoreSection
-          weekData={wellnessStats.weekData}
-          weekAverage={wellnessStats.weekAverage}
-          bestDay={wellnessStats.bestDay}
+        {/* 1. Insights First - Recommendations Section */}
+        <WellnessRecommendationsSection
+          whatToChange={whatToChange}
+          patterns={patterns}
+          isLoading={insightsLoading}
+          onPatternPress={handlePatternPress}
         />
 
-        {/* Patterns Detected */}
-        <PatternsSection patterns={wellnessStats.patterns} />
+        {/* 2. Domain Breakdown - Interactive 2x2 Grid */}
+        <DomainBreakdownGrid
+          breakdown={domainBreakdown}
+          onDomainPress={handleDomainPress}
+        />
+
+        {/* 3. This Week - Interactive Day Circles */}
+        <WeeklyScoreSection
+          weekData={weekData}
+          weekAverage={weekAverage}
+          onDayPress={handleDayPress}
+        />
+
+        {/* 4. Personal Bests */}
+        <PersonalBestsSection stats={personalBests} />
 
         {/* Bottom spacing */}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Day Detail Modal */}
+      <DayDetailModal
+        visible={showDayModal}
+        onClose={() => setShowDayModal(false)}
+        dayData={selectedDay}
+      />
     </>
   );
 }

@@ -19,16 +19,28 @@ const ApiInitializer = ({ children }) => {
 
     // Set token provider for API client
     apiClient.setTokenProvider(async () => {
+      // Don't try to get token if user isn't signed in
+      if (!isSignedIn) {
+        return null;
+      }
+
       try {
         const token = await getToken({ template: 'backend' });
-        if (!token) {
-          console.warn('[ApiInitializer] Token unavailable (user signed in: %s)', isSignedIn);
-        } else if (__DEV__) {
+        if (!token && __DEV__) {
+          console.log('[ApiInitializer] Token unavailable - session may be initializing');
+        } else if (__DEV__ && token) {
           console.log('[ApiInitializer] Token acquired (length %d)', token.length);
         }
         return token;
       } catch (error) {
-        console.error('[ApiInitializer] Failed to get token:', error);
+        // "Unable to authenticate" is expected when session isn't ready
+        const isSessionError = error?.message?.includes('Unable to authenticate') ||
+                               error?.message?.includes('active session');
+        if (isSessionError) {
+          // Silent - this is normal during app startup
+          return null;
+        }
+        console.warn('[ApiInitializer] Token error:', error?.message || error);
         return null;
       }
     });

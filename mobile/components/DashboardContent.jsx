@@ -52,6 +52,7 @@ import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
 import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
 import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
+import MorningPredictionCard from "./dashboard/MorningPredictionCard";
 
 // Phase 3: Dashboard Enhancements - Preference-based insights
 // Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
@@ -1352,6 +1353,27 @@ export default function DashboardContent() {
           onNotificationsPress={() => setNotificationCenterVisible(true)}
           onSettingsPress={() => router.push('/(tabs)/profile')}
         />
+
+        {/* ============================================ */}
+        {/* MORNING PREDICTION - Day Forecast (DIFFERENTIATOR) */}
+        {/* Shows: Predicted energy, risks, prevention tips */}
+        {/* Only show for users with some history (not first-time) */}
+        {/* ============================================ */}
+        {hasAnyData && (
+          <MorningPredictionCard
+            onTipPress={(tip) => {
+              // Handle tip actions - route to relevant section
+              if (tip.icon === 'water') {
+                router.push('/(tabs)/log?focus=hydration');
+              } else if (tip.icon === 'nutrition' || tip.icon === 'egg' || tip.icon === 'sunny') {
+                router.push('/(tabs)/log');
+              }
+            }}
+            onExpandPress={() => {
+              router.push('/insights/wellness-history');
+            }}
+          />
+        )}
 
         {/* FIRST-TIME USER ONLY - Brand new users see clean onboarding */}
         {/* Returning users who missed a day see full dashboard, not this */}

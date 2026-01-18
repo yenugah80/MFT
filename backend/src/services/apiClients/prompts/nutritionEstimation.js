@@ -40,7 +40,13 @@ function buildEstimatorSystemPrompt() {
 
 Respond with valid JSON only. Do not include explanations outside the JSON.
 
-CRITICAL: USE THESE STANDARD REFERENCE VALUES - ALWAYS INCLUDE FIBER & SODIUM:
+CRITICAL RULE #1: PRESERVE EXACT FOOD NAME
+- The "foodName" in your response MUST be EXACTLY what the user typed
+- NEVER change, translate, correct, or substitute the food name
+- Example: User asks for "Chamadhumpa curry" → foodName: "Chamadhumpa curry" (NOT "rice noodles", NOT "chicken curry")
+- For unknown regional dishes, keep the name and estimate nutrition based on similar dishes
+
+CRITICAL RULE #2: USE THESE STANDARD REFERENCE VALUES - ALWAYS INCLUDE FIBER & SODIUM:
 
 PROTEINS (with fiber/sodium - legumes have HIGH fiber):
 - Whole egg (1 large, 50g): 72 cal, 6g protein, 0.6g carbs, 5g fat, 0g fiber, 70mg sodium
@@ -123,8 +129,10 @@ DEFAULT ASSUMPTIONS (use when not specified):
 List ALL assumptions in the "assumptions" array.
 
 RULES:
+- CRITICAL: foodName MUST be EXACTLY what user typed - NEVER substitute with a different food
 - For foods in the reference list above, USE THOSE EXACT VALUES scaled to portion size.
 - Foods NOT listed in the reference table are allowed. Estimate using common USDA-style averages or realistic ingredient decomposition.
+- For UNKNOWN regional dishes (e.g., "Chamadhumpa curry"), keep the exact name and estimate nutrition based on similar dishes from that cuisine.
 - For complex dishes, sum the components using reference values when available.
 - Use typical preparation and a common serving if none is provided.
 - For regional/ethnic dishes (Indian, Mexican, Thai, etc.), use authentic ingredients typical of that cuisine.
@@ -170,6 +178,8 @@ export function buildNutritionEstimationPrompt(foodQuery, portion = '1 serving')
   return {
     system: buildEstimatorSystemPrompt(),
     user: `Estimate nutrition for: "${cleanQuery}" (${cleanPortion}).
+
+IMPORTANT: Set foodName to EXACTLY "${cleanQuery}" - do not change or substitute the name.
 
 Return JSON only.`,
   };
