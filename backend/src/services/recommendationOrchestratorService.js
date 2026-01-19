@@ -306,12 +306,12 @@ function generateSpeakMessage(correlation, lifecycleStage) {
       subtitle = `We noticed: High-processed meals → energy crashes 2-4h later (${occurrences} times)`;
       actions = [
         {
-          icon: '🥗',
+          icon: 'nutrition',
           text: 'Add protein to meals',
           description: 'Protein stabilizes blood sugar and mood',
         },
         {
-          icon: '🥜',
+          icon: 'leaf',
           text: 'Try nuts or yogurt as snacks',
           description: 'Instead of crackers or candy',
         },
@@ -323,12 +323,12 @@ function generateSpeakMessage(correlation, lifecycleStage) {
       subtitle = 'Low water intake on certain days correlates with tiredness and low mood';
       actions = [
         {
-          icon: '💧',
+          icon: 'water',
           text: 'Drink water with meals',
           description: 'Creates a natural hydration rhythm',
         },
         {
-          icon: '⏰',
+          icon: 'alarm-outline',
           text: 'Set water reminders',
           description: 'Morning, afternoon, evening',
         },
@@ -340,12 +340,12 @@ function generateSpeakMessage(correlation, lifecycleStage) {
       subtitle = 'When stressed, you either skip meals or eat more—affecting energy next day';
       actions = [
         {
-          icon: '🧘',
+          icon: 'body-outline',
           text: 'Pause before eating',
           description: 'Am I hungry or stressed?',
         },
         {
-          icon: '🍌',
+          icon: 'nutrition-outline',
           text: 'Keep quick healthy snacks',
           description: 'For high-stress days',
         },
@@ -357,7 +357,7 @@ function generateSpeakMessage(correlation, lifecycleStage) {
       subtitle = expectedOutcome;
       actions = [
         {
-          icon: '📊',
+          icon: 'analytics-outline',
           text: 'Learn more',
           description: 'See the evidence',
         },
@@ -391,7 +391,7 @@ function generateReinforceMessage(correlation, lifecycleStage) {
     subtitle = `Your ${affectedDomains[0]} stays strong when you ${extractBehavior(correlation.ruleName)}`;
     actions = [
       {
-        icon: '⭐',
+        icon: 'star',
         text: 'Keep the streak',
         description: "You're on the right track",
       },
@@ -402,7 +402,7 @@ function generateReinforceMessage(correlation, lifecycleStage) {
     subtitle = `${affectedDomains[0]} drops when ${extractBehavior(correlation.ruleName)} (${occurrences} times seen)`;
     actions = [
       {
-        icon: '🎯',
+        icon: 'flag-outline',
         text: 'Avoid the trigger',
         description: 'You know what works for you',
       },
@@ -442,7 +442,7 @@ function generatePredictMessage(correlation, lifecycleStage) {
 
   actions = [
     {
-      icon: '🔮',
+      icon: 'sparkles',
       text: 'Prepare for tomorrow',
       description: 'Use what you know about yourself',
     },

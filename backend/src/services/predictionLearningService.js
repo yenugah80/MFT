@@ -31,7 +31,7 @@ import { sendUserFCMNotification, FCM_NOTIFICATION_TYPES } from './fcmPushServic
 // WELLNESS DOMAINS
 // ============================================================================
 
-const WELLNESS_DOMAINS = {
+export const WELLNESS_DOMAINS = {
   FOOD: 'food',
   HYDRATION: 'hydration',
   MOOD: 'mood',
@@ -268,7 +268,8 @@ async function scheduleCheckIn(userId, predictionId, prediction) {
 
 /**
  * Generate user-friendly check-in notification content
- * Covers all 4 wellness domains with empathetic messaging
+ * Covers all 4 wellness domains with WITTY, Zomato-style messaging
+ * No generic messages - every check-in should feel personal and fun
  */
 function generateCheckInContent(prediction) {
   const { type, outcome, severity, predictedTime, subtype } = prediction;
@@ -277,76 +278,185 @@ function generateCheckInContent(prediction) {
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const formattedTime = formatTime(predictedTime);
 
+  // Multiple variants per type for variety
   const templates = {
     // === FOOD DOMAIN ===
     energy_crash: {
-      title: 'How\'s your energy?',
-      body: `Around ${formattedTime}, we thought you might feel a dip. How do you feel now?`,
+      variants: [
+        {
+          title: 'Energy status report ⚡',
+          body: `We predicted a dip around ${formattedTime}. Did the crash land? Be honest.`,
+        },
+        {
+          title: 'Quick energy check',
+          body: 'That meal earlier had some crash potential. How\'s the battery level?',
+        },
+        {
+          title: 'The moment of truth',
+          body: `Around ${formattedTime} we expected tired vibes. Were we right or wrong?`,
+        },
+        {
+          title: 'Energy forecast check',
+          body: 'We said cloudy with a chance of fatigue. How\'s the weather in your body?',
+        },
+        {
+          title: 'Prediction report card time',
+          body: 'We thought that sugar would hit you by now. Score us - did it?',
+        },
+      ],
       emoji: '⚡',
       buttons: [
-        { label: '😴 Tired', value: 'tired' },
-        { label: '😊 Fine', value: 'fine' },
-        { label: '😐 Somewhat', value: 'somewhat' },
+        { label: '😴 Crashed hard', value: 'tired' },
+        { label: '💪 Still going', value: 'fine' },
+        { label: '😐 A little dip', value: 'somewhat' },
       ],
     },
     hunger: {
-      title: 'How\'s your hunger?',
-      body: 'It\'s been a while since you ate. Are you feeling the effects?',
+      variants: [
+        {
+          title: 'Hunger level: ? 🍽️',
+          body: 'It\'s been a while since food entered the chat. How hangry are we?',
+        },
+        {
+          title: 'Fuel gauge check',
+          body: 'Your last meal was ages ago. Is the tank running on empty?',
+        },
+        {
+          title: 'The hangry report',
+          body: 'Long gap between meals detected. Are you chill or contemplating snacks?',
+        },
+        {
+          title: 'Snack emergency?',
+          body: 'You\'ve been running on empty for a bit. How are the hunger vibes?',
+        },
+      ],
       emoji: '🍽️',
       buttons: [
-        { label: '😤 Hangry', value: 'tired' },
-        { label: '👍 Managing', value: 'fine' },
-        { label: '🤷 Unsure', value: 'unsure' },
+        { label: '😤 Hangry AF', value: 'tired' },
+        { label: '👍 Managing fine', value: 'fine' },
+        { label: '🍿 Snacked already', value: 'unsure' },
       ],
     },
     sleep_impact: {
-      title: 'How was your sleep?',
-      body: 'That late meal might have affected your rest. How do you feel this morning?',
+      variants: [
+        {
+          title: 'Morning check ☀️',
+          body: 'That late-night feast... did it mess with your sleep or were you fine?',
+        },
+        {
+          title: 'Sleep quality report',
+          body: 'We thought that late meal might haunt your dreams. Did it?',
+        },
+        {
+          title: 'Rise and... shine? 🌙',
+          body: 'Late eating can disrupt sleep. How refreshed are you feeling?',
+        },
+        {
+          title: 'The morning verdict',
+          body: 'You ate late last night. Your body\'s review of sleep quality is...?',
+        },
+      ],
       emoji: '🌙',
       buttons: [
-        { label: '😴 Sluggish', value: 'tired' },
-        { label: '✨ Rested', value: 'fine' },
-        { label: '😐 So-so', value: 'somewhat' },
+        { label: '😴 Didn\'t sleep well', value: 'tired' },
+        { label: '✨ Slept like a baby', value: 'fine' },
+        { label: '😐 Meh, okay-ish', value: 'somewhat' },
       ],
     },
     digestion_issue: {
-      title: 'How\'s your stomach?',
-      body: 'That high-fiber meal might be settling. Any discomfort?',
+      variants: [
+        {
+          title: 'Stomach situation?',
+          body: 'That fiber-heavy meal is settling. Is your gut happy or having opinions?',
+        },
+        {
+          title: 'Digestive report 🫃',
+          body: 'High fiber meals sometimes cause... events. Any discomfort?',
+        },
+        {
+          title: 'Gut check (literally)',
+          body: 'That meal had a lot going on. How\'s the digestion situation?',
+        },
+      ],
       emoji: '🫃',
       buttons: [
         { label: '😣 Uncomfortable', value: 'tired' },
-        { label: '👍 All good', value: 'fine' },
-        { label: '🤏 A little', value: 'somewhat' },
+        { label: '👍 All systems go', value: 'fine' },
+        { label: '🤏 Slight grumbles', value: 'somewhat' },
       ],
     },
 
     // === HYDRATION DOMAIN ===
     dehydration: {
-      title: 'Hydration check',
-      body: 'Have you had enough water? Your energy might be affected.',
+      variants: [
+        {
+          title: 'Water status? 💧',
+          body: 'You\'ve been running dry. Can you feel the dehydration or are you good?',
+        },
+        {
+          title: 'Hydration reality check',
+          body: 'Low water = low energy. That\'s the math. How\'s your energy?',
+        },
+        {
+          title: 'Thirst trap (literally)',
+          body: 'Your water intake has been... minimal. Any tiredness or fog?',
+        },
+        {
+          title: 'The dehydration question',
+          body: 'When was your last glass of water? Your body wants to know.',
+        },
+        {
+          title: 'Water report 📊',
+          body: 'Low hydration often = low performance. Notice anything?',
+        },
+      ],
       emoji: '💧',
       buttons: [
-        { label: '🥱 Feeling it', value: 'tired' },
-        { label: '💪 Hydrated', value: 'fine' },
-        { label: '🤷 Not sure', value: 'unsure' },
+        { label: '🥱 Feeling dehydrated', value: 'tired' },
+        { label: '💪 Actually hydrated', value: 'fine' },
+        { label: '🤷 Hard to tell', value: 'unsure' },
       ],
     },
     dehydration_headache: {
-      title: 'How\'s your head?',
-      body: 'Low water intake can cause headaches. Any pressure or fogginess?',
+      variants: [
+        {
+          title: 'Head check 🤕',
+          body: 'Low water can cause headaches. Any pressure or brain fog happening?',
+        },
+        {
+          title: 'Headache forecast',
+          body: 'Dehydration headaches are sneaky. Any signs of one brewing?',
+        },
+        {
+          title: 'Brain fog report',
+          body: 'Your water intake is low. How\'s the clarity upstairs?',
+        },
+      ],
       emoji: '🤕',
       buttons: [
-        { label: '😵 Headache', value: 'tired' },
-        { label: '😊 Clear', value: 'fine' },
-        { label: '🤔 Slightly', value: 'somewhat' },
+        { label: '😵 Headache city', value: 'tired' },
+        { label: '😊 Crystal clear', value: 'fine' },
+        { label: '🤔 Slightly foggy', value: 'somewhat' },
       ],
     },
     hydration_energy: {
-      title: 'Energy boost check',
-      body: 'You\'ve been staying hydrated! Feeling the difference?',
+      variants: [
+        {
+          title: 'Energy boost? ✨',
+          body: 'You\'ve been hydrating well! Feeling the difference in your energy?',
+        },
+        {
+          title: 'Hydration payoff check',
+          body: 'Good water intake should = good energy. Is the math mathing?',
+        },
+        {
+          title: 'Premium fuel status',
+          body: 'Well hydrated bodies run better. How\'s yours running?',
+        },
+      ],
       emoji: '✨',
       buttons: [
-        { label: '⚡ Energized', value: 'fine' },
+        { label: '⚡ Energized!', value: 'fine' },
         { label: '😐 Same as usual', value: 'somewhat' },
         { label: '🤷 Not really', value: 'tired' },
       ],
@@ -354,80 +464,185 @@ function generateCheckInContent(prediction) {
 
     // === MOOD DOMAIN ===
     mood_dip: {
-      title: 'Quick mood check',
-      body: 'We noticed something that might affect your mood. How are you feeling?',
+      variants: [
+        {
+          title: 'Vibe check 💭',
+          body: 'Based on your patterns, this might be a low-mood window. True?',
+        },
+        {
+          title: 'Mood radar ping',
+          body: 'We predicted some mood turbulence around now. Accurate or nah?',
+        },
+        {
+          title: 'Quick feels report',
+          body: 'Your patterns suggested a potential dip. How\'s the emotional weather?',
+        },
+        {
+          title: 'Mood status?',
+          body: 'Something in your data suggested you might feel meh right now. True?',
+        },
+      ],
       emoji: '💭',
       buttons: [
-        { label: '😔 Low', value: 'tired' },
-        { label: '😊 Good', value: 'fine' },
-        { label: '😐 Okay', value: 'somewhat' },
+        { label: '😔 Yeah, low', value: 'tired' },
+        { label: '😊 Actually good!', value: 'fine' },
+        { label: '😐 Neutral zone', value: 'somewhat' },
       ],
     },
     mood_boost: {
-      title: 'How\'s your mood?',
-      body: 'Based on your patterns, you might be feeling good right now!',
+      variants: [
+        {
+          title: 'Good vibes check? 🌟',
+          body: 'Your patterns suggest you might be feeling great right now. True?',
+        },
+        {
+          title: 'Positive mood radar',
+          body: 'We predicted good vibes around now. Is the forecast accurate?',
+        },
+        {
+          title: 'Happiness check-in',
+          body: 'Based on what works for you, this should be a good moment. Is it?',
+        },
+      ],
       emoji: '🌟',
       buttons: [
-        { label: '😊 Great!', value: 'fine' },
-        { label: '😐 Neutral', value: 'somewhat' },
+        { label: '😊 Yep, great!', value: 'fine' },
+        { label: '😐 Meh, neutral', value: 'somewhat' },
         { label: '😕 Not really', value: 'tired' },
       ],
     },
     stress_fatigue: {
-      title: 'Stress check-in',
-      body: 'High stress can be exhausting. How are you holding up?',
+      variants: [
+        {
+          title: 'Stress check 🧘',
+          body: 'High stress = energy drain. How\'s your tank looking?',
+        },
+        {
+          title: 'Burnout meter reading',
+          body: 'Stress has been high. How are you holding up?',
+        },
+        {
+          title: 'Mental battery status',
+          body: 'Stress drains faster than anything. What\'s your charge at?',
+        },
+        {
+          title: 'Stress-o-meter check',
+          body: 'We\'ve noticed elevated stress. How\'s that affecting you?',
+        },
+      ],
       emoji: '🧘',
       buttons: [
-        { label: '😓 Drained', value: 'tired' },
-        { label: '💪 Coping', value: 'fine' },
-        { label: '😤 Stressed', value: 'somewhat' },
+        { label: '😓 Running on empty', value: 'tired' },
+        { label: '💪 Coping okay', value: 'fine' },
+        { label: '😤 Stressed but alive', value: 'somewhat' },
       ],
     },
 
     // === ACTIVITY DOMAIN ===
     activity_fatigue: {
-      title: 'Post-workout check',
-      body: 'After that activity, how\'s your body feeling?',
+      variants: [
+        {
+          title: 'Post-workout report 🏃',
+          body: 'After that session, how\'s the body feeling?',
+        },
+        {
+          title: 'Muscle status update',
+          body: 'That workout was intense. Are you feeling strong or sore?',
+        },
+        {
+          title: 'Recovery check',
+          body: 'Exercise done. Now: how\'s the body recovering?',
+        },
+        {
+          title: 'Fitness feels report',
+          body: 'That activity was solid. How are you feeling post-effort?',
+        },
+      ],
       emoji: '🏃',
       buttons: [
-        { label: '😫 Exhausted', value: 'tired' },
-        { label: '💪 Strong', value: 'fine' },
-        { label: '🦵 Sore but good', value: 'somewhat' },
+        { label: '😫 Dead', value: 'tired' },
+        { label: '💪 Strong AF', value: 'fine' },
+        { label: '🦵 Sore but happy', value: 'somewhat' },
       ],
     },
     recovery_needed: {
-      title: 'Recovery check',
-      body: 'Your body might need rest after yesterday. How are your muscles?',
+      variants: [
+        {
+          title: 'Recovery status 🛌',
+          body: 'Yesterday was intense. How are the muscles today?',
+        },
+        {
+          title: 'Body report',
+          body: 'After that workout, your body needs rest. How\'s it feeling?',
+        },
+        {
+          title: 'Soreness check',
+          body: 'Intense activity = recovery time. How sore are we talking?',
+        },
+      ],
       emoji: '🛌',
       buttons: [
         { label: '😣 Very sore', value: 'tired' },
-        { label: '✨ Recovered', value: 'fine' },
-        { label: '🤏 A bit tight', value: 'somewhat' },
+        { label: '✨ Bounced back!', value: 'fine' },
+        { label: '🤏 Little tight', value: 'somewhat' },
       ],
     },
     movement_reminder: {
-      title: 'Movement check',
-      body: 'You\'ve been sitting a while. Any stiffness or low energy?',
+      variants: [
+        {
+          title: 'Desk check 🪑',
+          body: 'You\'ve been still for a bit. Any stiffness creeping in?',
+        },
+        {
+          title: 'Movement status',
+          body: 'Long sitting sessions = stiff body. How are you feeling?',
+        },
+        {
+          title: 'Stretch break?',
+          body: 'Your body has been stationary. Any low energy or tightness?',
+        },
+      ],
       emoji: '🪑',
       buttons: [
-        { label: '😩 Stiff', value: 'tired' },
-        { label: '👍 Fine', value: 'fine' },
-        { label: '🚶 Just moved', value: 'fine' },
+        { label: '😩 Super stiff', value: 'tired' },
+        { label: '👍 Feeling fine', value: 'fine' },
+        { label: '🚶 Just got up', value: 'fine' },
       ],
     },
     sleep_quality_impact: {
-      title: 'Sleep quality check',
-      body: 'That late workout might affect tonight\'s sleep. How are you feeling?',
+      variants: [
+        {
+          title: 'Pre-sleep check 😴',
+          body: 'That late workout might make sleep interesting. How are you feeling?',
+        },
+        {
+          title: 'Wired or tired?',
+          body: 'Late exercise can keep you up. What\'s your body saying?',
+        },
+        {
+          title: 'Sleep prep status',
+          body: 'Evening workouts can affect sleep. Feeling relaxed or restless?',
+        },
+      ],
       emoji: '😴',
       buttons: [
-        { label: '🫨 Wired', value: 'tired' },
-        { label: '😌 Relaxed', value: 'fine' },
+        { label: '🫨 Wired, can\'t sleep', value: 'tired' },
+        { label: '😌 Pleasantly tired', value: 'fine' },
         { label: '🤷 Too early to tell', value: 'unsure' },
       ],
     },
   };
 
-  return templates[type] || templates.energy_crash;
+  // Get template and pick random variant
+  const template = templates[type] || templates.energy_crash;
+  const variant = template.variants[Math.floor(Math.random() * template.variants.length)];
+
+  return {
+    title: variant.title,
+    body: variant.body,
+    emoji: template.emoji,
+    buttons: template.buttons,
+  };
 }
 
 /**
