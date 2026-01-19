@@ -76,6 +76,18 @@ const PREMIUM_COLORS = {
   warmGradient: ['#F59E0B', '#D97706'],
 };
 
+// Mood type metadata for timeline display
+const MOOD_META = {
+  happy: { emoji: '😊', label: 'Happy', color: '#10B981', light: '#D1FAE5' },
+  calm: { emoji: '😌', label: 'Calm', color: '#3B82F6', light: '#DBEAFE' },
+  focused: { emoji: '🎯', label: 'Focused', color: '#6366F1', light: '#E0E7FF' },
+  energized: { emoji: '⚡', label: 'Energized', color: '#F59E0B', light: '#FEF3C7' },
+  neutral: { emoji: '😐', label: 'Neutral', color: '#8B5CF6', light: '#EDE9FE' },
+  tired: { emoji: '😴', label: 'Tired', color: '#64748B', light: '#F1F5F9' },
+  stressed: { emoji: '😰', label: 'Stressed', color: '#EF4444', light: '#FEE2E2' },
+  sad: { emoji: '😢', label: 'Sad', color: '#6366F1', light: '#E0E7FF' },
+};
+
 // ============================================================================
 // MOOD RING COMPONENT - Visual score display
 // ============================================================================
@@ -171,47 +183,6 @@ function MiniStatCard({ icon, value, label, color, trend }) {
   );
 }
 
-// ============================================================================
-// DISCOVERY CARD - Premium pattern visualization
-// ============================================================================
-function DiscoveryCard({ trigger, impact, impactType, frequency, icon }) {
-  const isPositive = impactType === 'positive';
-  const color = isPositive ? PREMIUM_COLORS.excellent : PREMIUM_COLORS.low;
-
-  return (
-    <View style={styles.discoveryCard}>
-      <View style={styles.discoveryHeader}>
-        <View style={[styles.discoveryIconWrap, { backgroundColor: color.light }]}>
-          <Ionicons name={icon} size={20} color={color.base} />
-        </View>
-        <View style={styles.discoveryHeaderText}>
-          <Text style={styles.discoveryTrigger}>{trigger}</Text>
-          <Text style={styles.discoveryFrequency}>{frequency}</Text>
-        </View>
-        <View style={[styles.discoveryImpactBadge, { backgroundColor: color.light }]}>
-          <Text style={[styles.discoveryImpactText, { color: color.base }]}>
-            {isPositive ? '+' : ''}{impact}
-          </Text>
-        </View>
-      </View>
-
-      {/* Visual Impact Bar */}
-      <View style={styles.discoveryBarContainer}>
-        <View style={[styles.discoveryBarBg, { backgroundColor: color.light }]}>
-          <LinearGradient
-            colors={color.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[
-              styles.discoveryBarFill,
-              { width: `${Math.min(Math.abs(parseInt(impact)) * 5, 100)}%` }
-            ]}
-          />
-        </View>
-      </View>
-    </View>
-  );
-}
 
 // ============================================================================
 // JOURNEY DAY CHIP - Premium mood day visualization
@@ -309,71 +280,102 @@ export default function MoodInsightsScreen() {
     };
   }, [moodData]);
 
-  // Generate discoveries from data
-  const discoveries = useMemo(() => {
+  // Generate mood-specific insights from actual mood data
+  const moodInsights = useMemo(() => {
     const items = [];
+    if (!moodData?.trendData || !moodStats) return items;
 
-    // Food correlation
-    const foodLogs = dashboard?.today?.foodLogs || [];
-    if (foodLogs.length > 0 && latestMood) {
-      const goodMeals = foodLogs.filter(f => f.nutriScore >= 70);
-      if (goodMeals.length > 0) {
-        items.push({
-          trigger: 'Nutritious meals',
-          icon: 'nutrition',
-          impact: '+15%',
-          impactType: 'positive',
-          frequency: `${goodMeals.length} quality meals today`,
-        });
-      }
-    }
+    const validDays = moodData.trendData.filter(d => d.hasData);
+    if (validDays.length < 2) return items;
 
-    // Hydration pattern
-    const waterLogs = dashboard?.today?.waterLogs || [];
-    const totalWater = waterLogs.reduce((sum, w) => sum + (w.amount || 0), 0);
-    if (totalWater < 1500) {
+    // 1. Mood consistency insight
+    const intensities = validDays.map(d => d.intensity);
+    const variance = intensities.length > 1
+      ? intensities.reduce((sum, val) => sum + Math.pow(val - moodStats.avgMood, 2), 0) / intensities.length
+      : 0;
+    const isConsistent = variance < 2;
+
+    if (isConsistent && validDays.length >= 3) {
       items.push({
-        trigger: 'Low hydration',
-        icon: 'water',
-        impact: '-12%',
-        impactType: 'negative',
-        frequency: 'Below daily target',
+        title: 'Stable mood pattern',
+        description: 'Your mood has been consistent this week',
+        icon: 'shield-checkmark',
+        color: PREMIUM_COLORS.excellent.base,
+        light: PREMIUM_COLORS.excellent.light,
       });
-    } else if (totalWater >= 2000) {
+    } else if (variance > 4) {
       items.push({
-        trigger: 'Good hydration',
-        icon: 'water',
-        impact: '+8%',
-        impactType: 'positive',
-        frequency: 'Meeting daily goal',
+        title: 'Mood variability',
+        description: 'Your mood has fluctuated this week',
+        icon: 'pulse',
+        color: PREMIUM_COLORS.low.base,
+        light: PREMIUM_COLORS.low.light,
       });
     }
 
-    // Activity pattern
-    const activityLogs = dashboard?.today?.activityLogs || [];
-    if (activityLogs.length > 0) {
+    // 2. Trend direction insight
+    if (moodStats.trend === 'up' && validDays.length >= 3) {
       items.push({
-        trigger: 'Physical activity',
-        icon: 'fitness',
-        impact: '+18%',
-        impactType: 'positive',
-        frequency: `${activityLogs.length} session${activityLogs.length > 1 ? 's' : ''} logged`,
+        title: 'Upward trend',
+        description: 'Your mood has been improving lately',
+        icon: 'trending-up',
+        color: PREMIUM_COLORS.excellent.base,
+        light: PREMIUM_COLORS.excellent.light,
+      });
+    } else if (moodStats.trend === 'down' && validDays.length >= 3) {
+      items.push({
+        title: 'Downward trend',
+        description: 'Your mood has dipped recently',
+        icon: 'trending-down',
+        color: PREMIUM_COLORS.low.base,
+        light: PREMIUM_COLORS.low.light,
       });
     }
 
-    // Sleep pattern (simulated)
-    if (moodStats?.avgMood && moodStats.avgMood < 5) {
+    // 3. Best day insight
+    if (moodStats.bestDay && moodStats.bestDay.intensity >= 7) {
+      const bestDayName = new Date(moodStats.bestDay.dayKey).toLocaleDateString('en-US', { weekday: 'long' });
       items.push({
-        trigger: 'Rest quality',
-        icon: 'moon',
-        impact: '-10%',
-        impactType: 'negative',
-        frequency: 'May need more sleep',
+        title: `Peak on ${bestDayName}`,
+        description: `You felt great with ${moodStats.bestDay.intensity}/10`,
+        icon: 'sunny',
+        color: PREMIUM_COLORS.good.base,
+        light: PREMIUM_COLORS.good.light,
+      });
+    }
+
+    // 4. Logging streak insight
+    if (moodStats.streak >= 3) {
+      items.push({
+        title: `${moodStats.streak}-day tracking streak`,
+        description: 'Keep up the self-awareness habit!',
+        icon: 'flame',
+        color: PREMIUM_COLORS.low.base,
+        light: PREMIUM_COLORS.low.light,
+      });
+    }
+
+    // 5. Average mood level insight
+    if (moodStats.avgMood >= 7) {
+      items.push({
+        title: 'Great week overall',
+        description: `Averaging ${moodStats.avgMood.toFixed(1)}/10 mood`,
+        icon: 'happy',
+        color: PREMIUM_COLORS.excellent.base,
+        light: PREMIUM_COLORS.excellent.light,
+      });
+    } else if (moodStats.avgMood < 4 && validDays.length >= 3) {
+      items.push({
+        title: 'Tough week',
+        description: 'Consider what might help boost your mood',
+        icon: 'heart',
+        color: PREMIUM_COLORS.neutral.base,
+        light: PREMIUM_COLORS.neutral.light,
       });
     }
 
     return items.slice(0, 3);
-  }, [dashboard, latestMood, moodStats]);
+  }, [moodData, moodStats]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -562,91 +564,107 @@ export default function MoodInsightsScreen() {
         </View>
 
         {/* ════════════════════════════════════════════════════════════════════
-            DISCOVERIES SECTION - Pattern insights
+            MOOD INSIGHTS SECTION - Real patterns from mood data
             ════════════════════════════════════════════════════════════════════ */}
-        {discoveries.length > 0 && (
+        {moodInsights.length > 0 && (
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="bulb-outline" size={20} color={PREMIUM_COLORS.low.base} />
-              <Text style={styles.sectionTitle}>Discoveries</Text>
-              <View style={styles.sectionBadge}>
-                <Text style={styles.sectionBadgeText}>{discoveries.length}</Text>
+              <Ionicons name="bulb-outline" size={20} color={PREMIUM_COLORS.neutral.base} />
+              <Text style={styles.sectionTitle}>Patterns</Text>
+              <View style={[styles.sectionBadge, { backgroundColor: PREMIUM_COLORS.neutral.light }]}>
+                <Text style={[styles.sectionBadgeText, { color: PREMIUM_COLORS.neutral.base }]}>
+                  {moodInsights.length}
+                </Text>
               </View>
             </View>
 
-            <View style={styles.discoveriesContainer}>
-              {discoveries.map((discovery, i) => (
-                <DiscoveryCard
-                  key={i}
-                  trigger={discovery.trigger}
-                  icon={discovery.icon}
-                  impact={discovery.impact}
-                  impactType={discovery.impactType}
-                  frequency={discovery.frequency}
-                />
+            <View style={styles.insightsContainer}>
+              {moodInsights.map((insight, i) => (
+                <View key={i} style={styles.insightCard}>
+                  <View style={[styles.insightIconWrap, { backgroundColor: insight.light }]}>
+                    <Ionicons name={insight.icon} size={18} color={insight.color} />
+                  </View>
+                  <View style={styles.insightContent}>
+                    <Text style={[styles.insightTitle, { color: insight.color }]}>{insight.title}</Text>
+                    <Text style={styles.insightDescription}>{insight.description}</Text>
+                  </View>
+                </View>
               ))}
             </View>
           </View>
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            QUICK ACTIONS - Contextual next steps
+            TODAY'S MOODS SECTION - Timeline of mood entries
             ════════════════════════════════════════════════════════════════════ */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="flash-outline" size={20} color={PREMIUM_COLORS.good.base} />
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
+        {todaysMoods.length > 0 && (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="time-outline" size={20} color={PREMIUM_COLORS.neutral.base} />
+              <Text style={styles.sectionTitle}>Today's Moods</Text>
+              <View style={[styles.sectionBadge, { backgroundColor: PREMIUM_COLORS.neutral.light }]}>
+                <Text style={[styles.sectionBadgeText, { color: PREMIUM_COLORS.neutral.base }]}>
+                  {todaysMoods.length}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.moodTimelineContainer}>
+              {todaysMoods.map((entry, index) => {
+                const moodMeta = MOOD_META[entry.mood] || MOOD_META.neutral;
+                const time = new Date(entry.loggedDate).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                });
+                const isLast = index === todaysMoods.length - 1;
+
+                return (
+                  <View key={entry.id || entry.clientEventId || index} style={styles.moodTimelineItem}>
+                    {/* Timeline connector */}
+                    {!isLast && <View style={[styles.timelineConnector, { backgroundColor: moodMeta.color + '30' }]} />}
+
+                    {/* Mood icon */}
+                    <View style={[styles.moodTimelineIcon, { backgroundColor: moodMeta.light }]}>
+                      <Text style={styles.moodTimelineEmoji}>{moodMeta.emoji}</Text>
+                    </View>
+
+                    {/* Content */}
+                    <View style={styles.moodTimelineContent}>
+                      <View style={styles.moodTimelineHeader}>
+                        <Text style={[styles.moodTimelineLabel, { color: moodMeta.color }]}>
+                          {moodMeta.label}
+                        </Text>
+                        <Text style={styles.moodTimelineTime}>{time}</Text>
+                      </View>
+                      <View style={styles.moodTimelineMeta}>
+                        {entry.intensity && (
+                          <View style={[styles.intensityPill, { backgroundColor: moodMeta.color + '15' }]}>
+                            <Text style={[styles.intensityPillText, { color: moodMeta.color }]}>
+                              {entry.intensity}/10
+                            </Text>
+                          </View>
+                        )}
+                        {entry.energyLevel && (
+                          <View style={[styles.energyPill, { backgroundColor: PREMIUM_COLORS.low.light }]}>
+                            <Ionicons name="flash" size={10} color={PREMIUM_COLORS.low.base} />
+                            <Text style={[styles.energyPillText, { color: PREMIUM_COLORS.low.base }]}>
+                              {entry.energyLevel}/10
+                            </Text>
+                          </View>
+                        )}
+                        {entry.note && (
+                          <View style={styles.noteBadge}>
+                            <Ionicons name="chatbubble-outline" size={10} color={TEXT.tertiary} />
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </View>
-
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={handleLogMood}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={PREMIUM_COLORS.heroGradient}
-                style={styles.actionIconWrap}
-              >
-                <Ionicons name="add" size={22} color="#FFFFFF" />
-              </LinearGradient>
-              <Text style={styles.actionTitle}>Log Mood</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => router.push('/(tabs)/log')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.actionIconWrap, { backgroundColor: PREMIUM_COLORS.excellent.light }]}>
-                <Ionicons name="restaurant" size={20} color={PREMIUM_COLORS.excellent.base} />
-              </View>
-              <Text style={styles.actionTitle}>Log Meal</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => router.push('/(tabs)/dashboard')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.actionIconWrap, { backgroundColor: PREMIUM_COLORS.good.light }]}>
-                <Ionicons name="water" size={20} color={PREMIUM_COLORS.good.base} />
-              </View>
-              <Text style={styles.actionTitle}>Hydrate</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => router.push('/insights/food-analytics')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.actionIconWrap, { backgroundColor: PREMIUM_COLORS.neutral.light }]}>
-                <Ionicons name="analytics" size={20} color={PREMIUM_COLORS.neutral.base} />
-              </View>
-              <Text style={styles.actionTitle}>Insights</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
 
         {/* ════════════════════════════════════════════════════════════════════
             FOOTER CTA
@@ -940,87 +958,36 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
   },
 
-  // Discoveries
-  discoveriesContainer: {
-    gap: SPACING[3],
+  // Mood Insights (Patterns)
+  insightsContainer: {
+    gap: SPACING[2],
   },
-  discoveryCard: {
-    backgroundColor: '#FAFAFA',
-    borderRadius: 14,
-    padding: SPACING[3],
-  },
-  discoveryHeader: {
+  insightCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING[3],
-  },
-  discoveryIconWrap: {
-    width: 40,
-    height: 40,
+    backgroundColor: '#FAFAFA',
     borderRadius: 12,
+    padding: SPACING[3],
+    gap: SPACING[3],
+  },
+  insightIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: SPACING[3],
   },
-  discoveryHeaderText: {
+  insightContent: {
     flex: 1,
   },
-  discoveryTrigger: {
+  insightTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
-    color: TEXT.primary,
   },
-  discoveryFrequency: {
+  insightDescription: {
     fontSize: 12,
     color: TEXT.tertiary,
     marginTop: 2,
-  },
-  discoveryImpactBadge: {
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[1],
-    borderRadius: 20,
-  },
-  discoveryImpactText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  discoveryBarContainer: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  discoveryBarBg: {
-    flex: 1,
-    borderRadius: 3,
-  },
-  discoveryBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-
-  // Actions Grid
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING[3],
-  },
-  actionCard: {
-    width: (SCREEN_WIDTH - SPACING[4] * 2 - SPACING[4] * 2 - SPACING[3] * 3) / 4,
-    alignItems: 'center',
-  },
-  actionIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING[2],
-  },
-  actionTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: TEXT.secondary,
-    textAlign: 'center',
   },
 
   // Ring Component
@@ -1033,6 +1000,90 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: TEXT.tertiary,
     marginTop: 2,
+  },
+
+  // Today's Moods Timeline
+  moodTimelineContainer: {
+    gap: SPACING[1],
+  },
+  moodTimelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    position: 'relative',
+    paddingBottom: SPACING[3],
+  },
+  timelineConnector: {
+    position: 'absolute',
+    left: 20,
+    top: 44,
+    bottom: 0,
+    width: 2,
+    borderRadius: 1,
+  },
+  moodTimelineIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING[3],
+  },
+  moodTimelineEmoji: {
+    fontSize: 20,
+  },
+  moodTimelineContent: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  moodTimelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[1],
+  },
+  moodTimelineLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '600',
+  },
+  moodTimelineTime: {
+    fontSize: 12,
+    color: TEXT.tertiary,
+  },
+  moodTimelineMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  intensityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  intensityPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  energyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  energyPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  noteBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Footer CTA

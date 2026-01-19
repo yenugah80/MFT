@@ -14,36 +14,56 @@ import apiClient from '../services/apiClient';
  * Fetch morning prediction for the day ahead
  */
 async function fetchMorningPrediction() {
-  const response = await apiClient.get('/predictions/morning');
-  return response.data;
+  try {
+    const response = await apiClient.get('/predictions/morning');
+    return response.data || {};
+  } catch (error) {
+    console.warn('[Predictions] Failed to fetch morning prediction:', error.message);
+    return {};
+  }
 }
 
 /**
  * Fetch time-aware prediction (adapts to current time of day)
  */
 async function fetchTimeAwarePrediction() {
-  const response = await apiClient.get('/predictions/now');
-  return response.data;
+  try {
+    const response = await apiClient.get('/predictions/now');
+    return response.data || {};
+  } catch (error) {
+    console.warn('[Predictions] Failed to fetch time-aware prediction:', error.message);
+    return {};
+  }
 }
 
 /**
  * Fetch meal feeling prediction
  */
 async function fetchMealFeeling(mealData) {
-  const response = await apiClient.post('/predictions/meal-feeling', mealData);
-  return response.data;
+  try {
+    const response = await apiClient.post('/predictions/meal-feeling', mealData);
+    return response.data || {};
+  } catch (error) {
+    console.warn('[Predictions] Failed to fetch meal feeling:', error.message);
+    return {};
+  }
 }
 
 /**
  * Fetch real-time interventions
  */
 async function fetchRealtimeInterventions({ lastMealHours, hydrationPercent }) {
-  const params = new URLSearchParams();
-  if (lastMealHours !== undefined) params.append('lastMealHours', lastMealHours);
-  if (hydrationPercent !== undefined) params.append('hydrationPercent', hydrationPercent);
+  try {
+    const params = new URLSearchParams();
+    if (lastMealHours !== undefined) params.append('lastMealHours', lastMealHours);
+    if (hydrationPercent !== undefined) params.append('hydrationPercent', hydrationPercent);
 
-  const response = await apiClient.get(`/predictions/realtime?${params.toString()}`);
-  return response.data;
+    const response = await apiClient.get(`/predictions/realtime?${params.toString()}`);
+    return response.data || { interventions: [], hasUrgent: false };
+  } catch (error) {
+    console.warn('[Predictions] Failed to fetch realtime interventions:', error.message);
+    return { interventions: [], hasUrgent: false };
+  }
 }
 
 /**
@@ -188,19 +208,29 @@ export function useRealtimeInterventions(state = {}, options = {}) {
  * Fetch prediction stories for "Remember when" moments
  */
 async function fetchPredictionStories() {
-  const response = await apiClient.get('/predictions/stories');
-  return response.data;
+  try {
+    const response = await apiClient.get('/predictions/stories');
+    return response.data || { stories: [], hasStories: false, count: 0 };
+  } catch (error) {
+    console.warn('[Predictions] Failed to fetch stories:', error.message);
+    return { stories: [], hasStories: false, count: 0 };
+  }
 }
 
 /**
  * Acknowledge a story
  */
 async function acknowledgeStory(storyId, reaction) {
-  const response = await apiClient.post(
-    `/predictions/stories/${storyId}/acknowledge`,
-    { reaction }
-  );
-  return response.data;
+  try {
+    const response = await apiClient.post(
+      `/predictions/stories/${storyId}/acknowledge`,
+      { reaction }
+    );
+    return response.data || {};
+  } catch (error) {
+    console.warn('[Predictions] Failed to acknowledge story:', error.message);
+    return {};
+  }
 }
 
 /**
@@ -243,8 +273,13 @@ export function usePersonalizedThresholds(options = {}) {
   const query = useQuery({
     queryKey: ['personalized-thresholds'],
     queryFn: async () => {
-      const response = await apiClient.get('/predictions/thresholds');
-      return response.data;
+      try {
+        const response = await apiClient.get('/predictions/thresholds');
+        return response.data || { thresholds: {}, byDomain: {}, isPersonalized: false, domains: [] };
+      } catch (error) {
+        console.warn('[Predictions] Failed to fetch thresholds:', error.message);
+        return { thresholds: {}, byDomain: {}, isPersonalized: false, domains: [] };
+      }
     },
     staleTime: 60 * 60 * 1000, // 1 hour
     gcTime: 24 * 60 * 60 * 1000, // 24 hours

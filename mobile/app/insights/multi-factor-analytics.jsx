@@ -45,10 +45,13 @@ export default function MultiFactorAnalyticsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Get data
-  const { logs: foodLogs, isLoading: foodLoading, refetch: refetchFood } = useFoodLog();
+  const { logs: rawFoodLogs, isLoading: foodLoading, refetch: refetchFood } = useFoodLog();
   const { data: moodData, isLoading: moodLoading, refetch: refetchMood } = useMoodTrends({ days: 30 });
-  const { logs: waterLogs, isLoading: waterLoading, refetch: refetchWater } = useWaterLog();
+  const { logs: rawWaterLogs, isLoading: waterLoading, refetch: refetchWater } = useWaterLog();
 
+  // Ensure arrays are never undefined
+  const foodLogs = rawFoodLogs || [];
+  const waterLogs = rawWaterLogs || [];
   const moodLogs = moodData?.data || [];
   const isLoading = foodLoading || moodLoading || waterLoading;
 

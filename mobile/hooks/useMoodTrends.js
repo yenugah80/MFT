@@ -13,7 +13,7 @@ import apiClient from '../services/apiClient';
  * @param {number} options.days - Number of days (alternative to period)
  * @returns {Object} - React Query result with trend data
  */
-export function useMoodTrends({ period = 'week', days }) {
+export function useMoodTrends({ period = 'week', days } = {}) {
   return useQuery({
     queryKey: ['moodTrends', period, days],
     queryFn: async () => {

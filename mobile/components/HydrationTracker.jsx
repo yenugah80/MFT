@@ -103,16 +103,133 @@ const BEVERAGE_TYPES = {
   },
 };
 
+// Personality-driven quick-add sizes (Zomato-style naming)
 const QUICK_ADD_SIZES = [
-  { ml: 150, label: 'Small', subtitle: '150ml', icon: 'water-outline' },
-  { ml: 250, label: 'Cup', subtitle: '250ml', icon: 'water' },
-  { ml: 500, label: 'Bottle', subtitle: '500ml', icon: 'water' },
-  { ml: 750, label: 'Large', subtitle: '750ml', icon: 'water' },
+  { ml: 150, label: 'Quick Sip', subtitle: '150ml', icon: 'water-outline', wittyNote: 'Espresso-sized hydration' },
+  { ml: 250, label: 'The Classic', subtitle: '250ml', icon: 'water', wittyNote: 'Standard issue refresh' },
+  { ml: 500, label: 'Half Liter Hero', subtitle: '500ml', icon: 'water', wittyNote: 'Serious hydration intent' },
+  { ml: 750, label: 'Overachiever', subtitle: '750ml', icon: 'water', wittyNote: 'Someone\'s committed' },
 ];
 
 const MILESTONES = [25, 50, 75, 100];
 
-// Gamified tips and motivational messages
+// ============================================================================
+// WITTY CONTEXT-AWARE HYDRATION TIPS (Zomato-style personality)
+// ============================================================================
+
+const WITTY_HYDRATION_TIPS = {
+  // Morning tips (before noon)
+  morning: {
+    low: [ // <30% progress
+      { icon: 'sunny', message: 'Your cells are like "Good morning, where\'s our water?" 💧' },
+      { icon: 'cafe', message: 'Plot twist: water before coffee hits different.' },
+      { icon: 'bulb', message: 'Morning brain fog? Often it\'s just thirst in disguise.' },
+      { icon: 'rocket', message: 'Hydrate first. Caffeinate second. Dominate third.' },
+    ],
+    medium: [ // 30-60% progress
+      { icon: 'sparkles', message: 'You\'re doing great! Your cells are sending thank-you notes.' },
+      { icon: 'flash', message: 'Morning momentum: activated. Keep it flowing!' },
+      { icon: 'fitness', message: 'This is the part where your energy takes off. 🚀' },
+    ],
+    high: [ // >60% progress
+      { icon: 'trophy', message: 'Overachiever alert! You\'re crushing it this morning.' },
+      { icon: 'star', message: 'Your hydration game is so strong right now.' },
+      { icon: 'flame', message: 'At this rate, you\'ll hit your goal before lunch!' },
+    ],
+  },
+  // Afternoon tips (noon to 5pm)
+  afternoon: {
+    low: [
+      { icon: 'alert-circle', message: 'Afternoon slump calling? Water might be the answer you forgot to ask.' },
+      { icon: 'bulb', message: 'Fun fact: your 3pm tiredness might just be your body\'s water alarm.' },
+      { icon: 'cafe', message: 'Before you reach for more coffee, try this: 💧' },
+      { icon: 'flash', message: 'Your energy bar is low. This is usually a water problem.' },
+    ],
+    medium: [
+      { icon: 'rocket', message: 'Afternoon push! You\'re halfway to becoming a hydration legend.' },
+      { icon: 'sparkles', message: 'Keep this pace and your future self will high-five you.' },
+      { icon: 'fitness', message: 'Solid progress! Your cells are doing a little happy dance.' },
+    ],
+    high: [
+      { icon: 'trophy', message: 'Afternoon and already crushing it? You\'re built different.' },
+      { icon: 'diamond', message: 'At this point, you\'re basically a water sommelier.' },
+      { icon: 'star', message: 'This is elite-level hydration. Just saying.' },
+    ],
+  },
+  // Evening tips (after 5pm)
+  evening: {
+    low: [
+      { icon: 'moon', message: 'Evening catch-up time! Your body is still keeping score.' },
+      { icon: 'bulb', message: 'A few more glasses and you can call today a hydration win.' },
+      { icon: 'water', message: 'The day isn\'t over yet. Your water bottle believes in you.' },
+    ],
+    medium: [
+      { icon: 'sparkles', message: 'Solid day! A little more and you\'ll end on a high note.' },
+      { icon: 'star', message: 'Evening hydration = better sleep. Science said it, not us.' },
+      { icon: 'flash', message: 'You\'re so close to nailing today\'s goal!' },
+    ],
+    high: [
+      { icon: 'trophy', message: 'You crushed it today. Your cells are throwing a party. 🎉' },
+      { icon: 'flame', message: 'Goal reached! Tomorrow, you do it all over again. Champion.' },
+      { icon: 'diamond', message: 'Hydration status: Immaculate. Rest well, you earned it.' },
+    ],
+  },
+  // Streak-specific tips
+  streak: {
+    3: { icon: 'flame', message: '3 days strong! This is where habits start to form. Keep going!' },
+    5: { icon: 'flash', message: '5 days! Your body is starting to expect this. Don\'t let it down.' },
+    7: { icon: 'trophy', message: 'One week! Your cells have officially filed a "keep doing this" request.' },
+    10: { icon: 'diamond', message: '10 days! You\'re not just hydrating, you\'re building a lifestyle.' },
+    14: { icon: 'star', message: '2 weeks of consistency! At this point, you\'re basically unstoppable.' },
+    21: { icon: 'rocket', message: '21 days! They say it takes this long to form a habit. Congratulations, you did it!' },
+    30: { icon: 'medal', message: 'A FULL MONTH! You\'re a hydration role model now. Seriously.' },
+  },
+  // Beverage-specific tips
+  beverage: {
+    coffee: [
+      { icon: 'cafe', message: 'Coffee counts, but chase it with water to balance things out!' },
+      { icon: 'bulb', message: 'Pro tip: 1 cup of coffee + 1 cup of water = happy body.' },
+    ],
+    tea: [
+      { icon: 'leaf', message: 'Tea is basically flavored hydration with benefits. Smart choice.' },
+      { icon: 'sparkles', message: 'Green, black, or herbal - your body thanks you either way.' },
+    ],
+    electrolyte: [
+      { icon: 'flash', message: 'Electrolytes: because sometimes water needs backup dancers.' },
+      { icon: 'fitness', message: 'Post-workout perfection! Your muscles are sending thank-you notes.' },
+    ],
+  },
+};
+
+/**
+ * Get a contextually-relevant, witty hydration tip
+ * Zomato-style: never generic, always feels personal
+ */
+function getSmartHydrationTip(percentage, streak, beverageType, logCount) {
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const progressLevel = percentage < 30 ? 'low' : percentage < 60 ? 'medium' : 'high';
+
+  // Priority 1: Streak milestones (these feel special)
+  const streakMilestones = [3, 5, 7, 10, 14, 21, 30];
+  if (streak > 0 && streakMilestones.includes(streak)) {
+    return WITTY_HYDRATION_TIPS.streak[streak];
+  }
+
+  // Priority 2: Beverage-specific tips (40% chance if non-water)
+  if (beverageType && beverageType !== 'water' && Math.random() < 0.4) {
+    const bevTips = WITTY_HYDRATION_TIPS.beverage[beverageType];
+    if (bevTips) {
+      return bevTips[Math.floor(Math.random() * bevTips.length)];
+    }
+  }
+
+  // Priority 3: Time + progress based tip (always relevant)
+  const timeBasedTips = WITTY_HYDRATION_TIPS[timeOfDay][progressLevel];
+  return timeBasedTips[Math.floor(Math.random() * timeBasedTips.length)];
+}
+
+// Legacy array for backward compatibility (rarely used now)
 const HYDRATION_TIPS = [
   { icon: 'bulb', message: 'Drink water before meals to aid digestion!' },
   { icon: 'sparkles', message: 'Your brain is 75% water - stay sharp!' },
@@ -852,14 +969,27 @@ const MilestoneToast = ({ milestone, visible, onDismiss, message, isFirstLog, is
     displayText = message;
     color = isTip ? '#6366F1' : '#10B981';
   } else if (isFirstLog) {
-    displayText = 'Great start!';
+    displayText = 'First sip of the day! 🌟';
     color = '#10B981';
   } else {
+    // Witty milestone messages (Zomato-style personality)
     const messages = {
-      25: { text: 'Keep going!', color: '#3B82F6' },
-      50: { text: 'Halfway there!', color: '#8B5CF6' },
-      75: { text: 'Almost there!', color: '#EC4899' },
-      100: { text: 'Goal reached!', color: '#10B981' },
+      25: {
+        text: ['Quarter tank filled! 🚀', 'Your cells just noticed. They approve.', '25% to hydration glory!'][Math.floor(Math.random() * 3)],
+        color: '#3B82F6'
+      },
+      50: {
+        text: ['50% hydration domination! 💧', 'Halfway to legendary status.', 'Glass half full? More like body half hydrated!'][Math.floor(Math.random() * 3)],
+        color: '#8B5CF6'
+      },
+      75: {
+        text: ['75% - The finish line is waving! 🏃', 'So close you can taste it (literally, it\'s water).', 'Your kidneys are doing a happy dance!'][Math.floor(Math.random() * 3)],
+        color: '#EC4899'
+      },
+      100: {
+        text: ['GOAL CRUSHED! 🏆 Your cells are throwing a party.', 'Hydration hero status: UNLOCKED', '100%! You beautiful hydrated legend.'][Math.floor(Math.random() * 3)],
+        color: '#10B981'
+      },
     };
     const milestoneData = messages[milestone] || messages[25];
     displayText = milestoneData.text;
@@ -1033,32 +1163,48 @@ const StatsCard = ({ beverageHistory, dailyGoal }) => {
     };
   }, [beverageHistory]);
 
+  // Witty commentary based on stats
+  const getStatsCommentary = () => {
+    const total = parseInt(stats.totalToday);
+    const entries = stats.entriesCount;
+    if (total === 0) return null;
+    if (entries >= 8) return '🏆 Hydration habits: elite-level';
+    if (entries >= 5) return '💧 Consistent sipper detected!';
+    if (total >= 2000) return '🌊 Seriously committed to hydration';
+    if (total >= 1500) return '📈 Nice steady progress today';
+    return '🚀 Every sip counts!';
+  };
+
   return (
     <View style={styles.statsCard}>
       <View style={styles.statsHeader}>
-        <Ionicons name="stats-chart" size={ICON_SIZES.md} color={BRAND.primary} />
-        <Text style={styles.statsTitle}>Today's Stats</Text>
+        <Ionicons name="analytics" size={ICON_SIZES.md} color={BRAND.primary} />
+        <Text style={styles.statsTitle}>Your Hydration Intel</Text>
       </View>
+
+      {getStatsCommentary() && (
+        <Text style={styles.statsCommentary}>{getStatsCommentary()}</Text>
+      )}
 
       <View style={styles.statsGrid}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.totalToday}ml</Text>
-          <Text style={styles.statLabel}>Total</Text>
+          <Text style={styles.statLabel}>Consumed</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.entriesCount}</Text>
-          <Text style={styles.statLabel}>Entries</Text>
+          <Text style={styles.statLabel}>Sips</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.avgPerEntry}ml</Text>
-          <Text style={styles.statLabel}>Avg/Entry</Text>
+          <Text style={styles.statLabel}>Per Sip</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{stats.peakHour}</Text>
-          <Text style={styles.statLabel}>Peak Time</Text>
+          <Text style={styles.statLabel}>Prime Time</Text>
         </View>
       </View>
     </View>
@@ -1124,9 +1270,9 @@ const Timeline = ({ beverageHistory, onDelete, onViewHistory }) => {
   return (
     <View style={styles.timelineContainer}>
       <View style={styles.timelineHeader}>
-        <Ionicons name="time-outline" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
-        <Text style={styles.timelineTitle}>Timeline</Text>
-        <Text style={styles.timelineHint}>← Swipe to delete</Text>
+        <Ionicons name="water" size={ICON_SIZES.md} color={SEMANTIC.info.base} />
+        <Text style={styles.timelineTitle}>Your Hydration Story</Text>
+        <Text style={styles.timelineHint}>← Swipe to edit history</Text>
         {onViewHistory && (
           <TouchableOpacity
             onPress={() => {
@@ -1141,10 +1287,10 @@ const Timeline = ({ beverageHistory, onDelete, onViewHistory }) => {
           </TouchableOpacity>
         )}
       </View>
-      {renderPeriod('Morning', 'sunny', timelineData.morning)}
-      {renderPeriod('Afternoon', 'partly-sunny', timelineData.afternoon)}
-      {renderPeriod('Evening', 'moon', timelineData.evening)}
-      {renderPeriod('Night', 'moon-outline', timelineData.night)}
+      {renderPeriod('AM Power-Up', 'sunny', timelineData.morning)}
+      {renderPeriod('Midday Fuel', 'partly-sunny', timelineData.afternoon)}
+      {renderPeriod('Evening Wind-Down', 'moon', timelineData.evening)}
+      {renderPeriod('Night Owl Mode', 'moon-outline', timelineData.night)}
     </View>
   );
 };
@@ -1317,14 +1463,15 @@ export default function HydrationTracker({
     setPreviousPercentage(percentage);
   }, [percentage]);
 
-  // Show random tips periodically (every 3 logs, not at milestones)
+  // Show smart, context-aware tips periodically (every 3 logs, not at milestones)
   useEffect(() => {
     // Show tip every 3 logs, but not if we just hit a milestone
     const shouldShowTip = logCount > 0 && logCount % 3 === 0 && !showMilestone;
 
     if (shouldShowTip) {
-      const randomTip = HYDRATION_TIPS[Math.floor(Math.random() * HYDRATION_TIPS.length)];
-      setMilestoneMessage(randomTip.message);
+      // Use the smart tip function with full context
+      const smartTip = getSmartHydrationTip(percentage, streak, selectedBeverage, logCount);
+      setMilestoneMessage(smartTip.message);
       setIsTipMessage(true);
       setShowMilestone('tip'); // Use a special key for tips
 
@@ -1334,7 +1481,7 @@ export default function HydrationTracker({
         setIsTipMessage(false);
       }, 4500);
     }
-  }, [logCount]);
+  }, [logCount, percentage, streak, selectedBeverage]);
 
   const handleQuickAdd = useCallback(async (ml) => {
     // Prevent double-clicks with debouncing
@@ -1529,8 +1676,8 @@ export default function HydrationTracker({
                 <Ionicons name="water" size={ICON_SIZES.xl} color={TEXT.white} />
               </View>
               <View>
-                <Text style={styles.headerTitle}>Hydration Tracker</Text>
-                <Text style={styles.headerSubtitle}>Stay hydrated, stay healthy</Text>
+                <Text style={styles.headerTitle}>Hydration HQ</Text>
+                <Text style={styles.headerSubtitle}>Where champions refuel 💧</Text>
               </View>
             </View>
             {goalReached && (
@@ -2197,6 +2344,13 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.primary,
+  },
+  statsCommentary: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: BRAND.primary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    marginBottom: SPACING[3],
+    fontStyle: 'italic',
   },
   statsGrid: {
     flexDirection: 'row',

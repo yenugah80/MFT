@@ -92,6 +92,7 @@ import { scanMealsForAllergens } from "../utils/allergenDetection";
 // Note: calculateDietaryComplianceScore and calculateCuisineDiversity moved to Profile > MyInsightsSection
 import apiClient from "../services/apiClient";
 import { getItem, setItem, STORAGE_KEYS } from "../utils/storage";
+import { foodMessages, generalMessages, goalMessages, insightMessages } from "../utils/wittyMessages";
 
 // Utility to deduplicate logs by clientEventId (preferred) or id
 function dedupeLogs(logs) {
@@ -327,20 +328,12 @@ export default function DashboardContent() {
         // Additional handlers for user feedback
         onSuccess: () => {
           setDismissingCorrelationId(null);
-          notify?.({
-            type: 'success',
-            title: 'Pattern dismissed',
-            message: 'Thank you for the feedback',
-          });
+          notify?.success(insightMessages.patternDismissed());
         },
         onError: (error) => {
           console.error('[Dashboard] Feedback error:', error);
           // Keep modal open on error so user can retry
-          notify?.({
-            type: 'error',
-            title: 'Could not save feedback',
-            message: 'Please try again',
-          });
+          notify?.error(generalMessages.error());
         },
       }
     );
@@ -410,18 +403,18 @@ export default function DashboardContent() {
       const result = await acceptRecommendationAction(recommendation);
 
       if (result.success) {
-        notify?.success(result.message || 'Added to food log!');
+        notify?.success(result.message || foodMessages.logged());
         setRecommendationModalVisible(false);
         setSelectedRecommendation(null);
 
         // Refresh dashboard to show updated nutrition
         await refetch();
       } else {
-        notify?.error(result.error || 'Failed to add to log');
+        notify?.error(result.error || generalMessages.error());
       }
     } catch (error) {
       console.error('[Dashboard] Failed to accept recommendation:', error);
-      notify?.error(error?.response?.data?.error || 'Failed to add to log');
+      notify?.error(error?.response?.data?.error || generalMessages.error());
     } finally {
       setAcceptingRecommendation(false);
     }
@@ -432,7 +425,7 @@ export default function DashboardContent() {
     try {
       await trackInteraction(recommendation.id, 'reject', { reason });
 
-      notify?.info('Thanks for the feedback!');
+      notify?.info(generalMessages.feedbackThanks());
       setRecommendationModalVisible(false);
       setSelectedRecommendation(null);
     } catch (error) {
@@ -447,15 +440,15 @@ export default function DashboardContent() {
     try {
       const response = await apiClient.post('/api/nutrition/goals', goalUpdates);
       if (response?.data?.success) {
-        notify?.success('Goal updated!');
+        notify?.success(goalMessages.updated());
         // Refresh dashboard data
         await refetch();
       } else {
-        notify?.error('Failed to update goal');
+        notify?.error(generalMessages.error());
       }
     } catch (error) {
       console.error('[Dashboard] Failed to update goals:', error);
-      notify?.error(error?.response?.data?.error || 'Failed to update goal');
+      notify?.error(error?.response?.data?.error || generalMessages.error());
     }
   }, [refetch, notify]);
 
@@ -464,13 +457,14 @@ export default function DashboardContent() {
   // ============================================================================
 
   // Track previous streak to detect increments
-  // CRITICAL FIX: Use trends.currentStreak (fresh calculation) not gamification.streak (stale DB row)
-  const prevStreakRef = useRef(data?.trends?.currentStreak);
+  // Use gamification.streak (authoritative DB value) - fallback to trends.currentStreak
+  const currentStreak = data?.gamification?.streak ?? data?.trends?.currentStreak ?? 0;
+  const prevStreakRef = useRef(currentStreak);
 
-  const checkStreakReward = useCallback(async (currentStreak) => {
+  const checkStreakReward = useCallback(async (streakValue) => {
     try {
-      const result = await apiClient.post('/gamification/check-streak', { currentStreak });
-      if (result.awarded) {
+      const result = await apiClient.post('/gamification/check-streak', { currentStreak: streakValue });
+      if (result.awarded && result.message) {
         notify?.success(result.message);
         refetch(); // Refresh to show new freeze count
       }
@@ -481,14 +475,13 @@ export default function DashboardContent() {
   }, [notify, refetch]);
 
   useEffect(() => {
-    const currentStreak = data?.trends?.currentStreak;
     if (currentStreak && prevStreakRef.current !== undefined) {
       if (currentStreak > prevStreakRef.current) {
         checkStreakReward(currentStreak);
       }
     }
     prevStreakRef.current = currentStreak;
-  }, [data?.trends?.currentStreak, checkStreakReward]);
+  }, [currentStreak, checkStreakReward]);
 
   // Check if a freeze was consumed (Logic: if streak preserved but logged date gap > 1 day)
   // For now, we can trigger this manually or based on a backend flag in 'data'
@@ -698,8 +691,11 @@ export default function DashboardContent() {
       const proteinGoalValue = parseGoal(data.goals?.proteinG, 150, 20, 500);
 
       data.trends.weekSummaries.forEach(summary => {
-        const date = new Date(summary.date);
-        const key = formatDateLocal(date);
+        // CRITICAL FIX: Extract date string directly to avoid timezone issues
+        // Backend sends "2026-01-16T00:00:00.000Z" which gets shifted when parsed as Date
+        const key = typeof summary.date === 'string'
+          ? summary.date.substring(0, 10)  // Extract "YYYY-MM-DD" from ISO string
+          : formatDateLocal(new Date(summary.date));
 
         // Skip today since we already processed it above
         if (key === todayKey) return;
@@ -744,8 +740,10 @@ export default function DashboardContent() {
     // 3. Process Mood Trends (History)
     if (trendData?.data) {
       trendData.data.forEach(log => {
-        const date = new Date(log.loggedDate);
-        const key = formatDateLocal(date);
+        // CRITICAL FIX: Extract date string directly to avoid timezone issues
+        const key = typeof log.loggedDate === 'string'
+          ? log.loggedDate.substring(0, 10)
+          : formatDateLocal(new Date(log.loggedDate));
 
         if (!calData[key]) {
           calData[key] = {
@@ -874,10 +872,10 @@ export default function DashboardContent() {
       proteinGoal: parseGoal(data.goals?.proteinG, 150, 20, 500),
       currentHydration: currentWater,
       hydrationGoal: parseGoal(data.goals?.waterLiters, 2.0, 0.5, 10),
-      streak: parseDecimal(data.trends?.currentStreak, 0),
+      streak: currentStreak,
       timeOfDay: new Date().getHours(),
     });
-  }, [data]);
+  }, [data, currentStreak]);
 
   // Convert smartInsights and dataAnomalies to notification center format
   const dashboardNotifications = useMemo(() => {
@@ -885,11 +883,11 @@ export default function DashboardContent() {
     let idCounter = 0;
 
     // Check for streak risk first (urgent priority)
-    const streak = parseDecimal(data?.trends?.currentStreak, 0);
+    const streakValue = currentStreak;
     const bestStreak = parseDecimal(data?.gamification?.bestStreak, 0);
     const hasLoggedToday = data?.userLifecycle?.hasLoggedToday ?? false;
 
-    if (bestStreak > 0 && streak === 0 && !hasLoggedToday && !dismissedNotifications.has('streak-risk')) {
+    if (bestStreak > 0 && streakValue === 0 && !hasLoggedToday && !dismissedNotifications.has('streak-risk')) {
       notifications.push({
         id: 'streak-risk',
         type: 'streak_risk',
@@ -948,7 +946,7 @@ export default function DashboardContent() {
     });
 
     return notifications;
-  }, [smartInsights, dataAnomalies, dismissedNotifications, data]);
+  }, [smartInsights, dataAnomalies, dismissedNotifications, data, currentStreak]);
 
   // Notification count for badge
   const notificationCount = dashboardNotifications.length;
@@ -972,7 +970,7 @@ export default function DashboardContent() {
       today: data.today,
       goals: data.goals,
       historicalData: data.trends?.weekSummaries || [],
-      streak: parseDecimal(data.trends?.currentStreak, 0),
+      streak: currentStreak,
     });
 
     // Transform to format expected by EnhancedMoodCard
@@ -1082,7 +1080,7 @@ export default function DashboardContent() {
 
   const handleShareInsights = async () => {
     if (!moodInsights.length && !insightsMessage) {
-      notify?.error('No insights to share yet.');
+      notify?.error(insightMessages.noInsights());
       return;
     }
 
@@ -1103,7 +1101,7 @@ export default function DashboardContent() {
       await Share.share({ message });
     } catch (error) {
       console.error('[Dashboard] Failed to share insights:', error);
-      notify?.error('Unable to share insights right now.');
+      notify?.error(insightMessages.shareError());
     }
   };
 
@@ -1137,7 +1135,7 @@ export default function DashboardContent() {
         router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
         break;
       default:
-        notify?.info(insight.action);
+        notify?.info(insightMessages.actionTip(insight.action));
     }
   };
 
@@ -1344,7 +1342,7 @@ export default function DashboardContent() {
             (parseLiters(today?.waterIntakeLiters) / parseGoal(goals?.waterLiters, 2.0, 0.5, 10)) * 100
           )}
           moodLogged={parseDecimal(today?.moodCount, 0) > 0}
-          streak={parseDecimal(trends?.currentStreak, 0)}
+          streak={currentStreak}
           bestStreak={parseDecimal(gamification?.bestStreak, 0)}
           notificationCount={notificationCount}
           onMealsPress={() => router.push('/(tabs)/log')}
@@ -1398,7 +1396,7 @@ export default function DashboardContent() {
           <PremiumCalendarStrip
             data={calendarData}
             selectedDate={null}
-            currentStreak={parseDecimal(trends?.currentStreak, 0)}
+            currentStreak={currentStreak}
             onDateSelect={(dateOrObj) => {
               // Handle both Date object and { dateKey } from day detail modal
               const dateKey = dateOrObj?.dateKey || (dateOrObj instanceof Date ? dateOrObj.toISOString().split('T')[0] : null);
@@ -1438,7 +1436,7 @@ export default function DashboardContent() {
         <NutritionDetailsSection
           today={today}
           goals={goals}
-          streak={parseDecimal(trends?.currentStreak, 0)}
+          streak={currentStreak}
           userHistory={{
             totalDays: parseDecimal(gamification?.totalLoggingDays, 0),
             yesterdayCalories: data?.trends?.yesterdayCalories || 0,
@@ -1544,7 +1542,7 @@ export default function DashboardContent() {
           <PremiumAchievementsCard
             level={parseDecimal(gamification?.level, 1)}
             xp={parseDecimal(gamification?.xp, 0)}
-            streak={parseDecimal(trends?.currentStreak, 0)}
+            streak={currentStreak}
             nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
             streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
             isReturningUser={isReturning || hasAnyData}
@@ -1613,7 +1611,7 @@ export default function DashboardContent() {
           today={today}
           goals={goals}
           gamification={gamification}
-          streak={parseDecimal(trends?.currentStreak, 0)}
+          streak={currentStreak}
           hydrationEvents={hydrationEvents}
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
@@ -1900,7 +1898,7 @@ export default function DashboardContent() {
         onAccept={handleAcceptRecommendation}
         onReject={handleRejectRecommendation}
         onSaveForLater={(rec) => {
-          notify?.info('Saved for later!');
+          notify?.info(insightMessages.savedForLater());
           setRecommendationModalVisible(false);
         }}
       />

@@ -348,14 +348,6 @@ const formatLastLogged = (loggedDate) => {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
-const formatDayKey = (dayKey) => {
-  if (!dayKey) return '--';
-  const [year, month, day] = dayKey.split('-').map(Number);
-  if (!year || !month || !day) return '--';
-  const localDate = new Date(year, month - 1, day);
-  return localDate.toLocaleDateString('en-US', { weekday: 'short' });
-};
-
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#F6F8FC',

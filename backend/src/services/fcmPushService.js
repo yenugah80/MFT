@@ -13,6 +13,7 @@
 import { eq, isNotNull } from 'drizzle-orm';
 import { accountSettingsTable } from '../db/schema.js';
 import { getMessaging, isFirebaseReady } from '../config/firebase.js';
+import WittyMessageEngine from './wittyMessageEngine.js';
 
 /**
  * FCM Notification types
@@ -297,57 +298,91 @@ export async function broadcastFCMNotification(db, notificationType, notificatio
 }
 
 // ============================================================================
-// PRE-BUILT NOTIFICATION TEMPLATES
+// WITTY NOTIFICATION TEMPLATES (Zomato-style)
 // ============================================================================
 
 /**
- * Send goal achieved notification
+ * Send goal achieved notification with witty copy
  */
-export async function sendGoalAchievedNotification(db, userId, goalType, value) {
-  const messages = {
-    calories: `You hit your calorie goal of ${value} today!`,
-    protein: `Protein goal reached: ${value}g!`,
-    water: `Hydration goal complete: ${value}L!`,
-    steps: `Step goal crushed: ${value.toLocaleString()} steps!`,
-  };
+export async function sendGoalAchievedNotification(db, userId, goalType, value, context = {}) {
+  let message;
+
+  switch (goalType) {
+    case 'water':
+    case 'hydration':
+      message = WittyMessageEngine.getHydrationMessage({
+        percentage: 100,
+        currentMl: value,
+        goalMl: value,
+        streak: context.streak || 0,
+      });
+      break;
+    case 'steps':
+      message = WittyMessageEngine.getActivityMessage({
+        steps: value,
+        stepGoal: value,
+      });
+      break;
+    default:
+      // For calories, protein, etc. - use domain-specific witty messages
+      message = {
+        title: "You did that 💪",
+        body: `${goalType.charAt(0).toUpperCase() + goalType.slice(1)} goal: crushed. Your body is running on premium today.`,
+      };
+  }
+
+  // Fallback if no witty message generated
+  if (!message) {
+    message = {
+      title: "Goal achieved!",
+      body: `Your ${goalType} goal is complete. That's what consistency looks like.`,
+    };
+  }
 
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.GOAL_ACHIEVED, {
-    title: 'Goal Achieved!',
-    body: messages[goalType] || `You reached your ${goalType} goal!`,
+    title: message.title,
+    body: message.body,
     data: { goalType, value: String(value), screen: 'dashboard' },
     channelId: 'insights',
   });
 }
 
 /**
- * Send streak celebration notification
+ * Send streak celebration notification with personality for EVERY day
  */
 export async function sendStreakCelebrationNotification(db, userId, streakDays) {
-  const milestoneMessages = {
-    7: 'One week strong! Keep it up!',
-    14: 'Two weeks of consistency! Amazing progress!',
-    30: 'One month milestone! You\'re crushing it!',
-    50: '50 days! You\'re on fire!',
-    100: '100 days! Legendary dedication!',
-  };
-
-  const body = milestoneMessages[streakDays] || `${streakDays} day streak! Keep going!`;
+  // Get witty message for ANY streak day (not just milestones)
+  const message = WittyMessageEngine.getStreakMessage(streakDays);
 
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.STREAK_CELEBRATION, {
-    title: `${streakDays} Day Streak!`,
-    body,
+    title: message.title,
+    body: message.body,
     data: { streakDays: String(streakDays), screen: 'profile' },
     channelId: 'insights',
   });
 }
 
 /**
- * Send correlation discovered notification
+ * Send correlation discovered notification with intrigue
  */
 export async function sendCorrelationDiscoveredNotification(db, userId, correlation) {
+  // Make pattern discovery feel like a revelation
+  const titleOptions = [
+    "We noticed something interesting 🔍",
+    "Pattern unlocked",
+    "Your data revealed something",
+    "Insight discovered",
+  ];
+
+  const title = titleOptions[Math.floor(Math.random() * titleOptions.length)];
+
+  // Use correlation summary or generate curiosity
+  const body = correlation.summary ||
+    `Your ${correlation.type || 'wellness'} patterns just taught us something new. Tap to see.`;
+
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.CORRELATION_DISCOVERED, {
-    title: 'New Pattern Discovered',
-    body: correlation.summary || 'We found a new pattern in your health data!',
+    title,
+    body,
     data: {
       correlationId: String(correlation.id),
       type: correlation.type,
@@ -358,36 +393,65 @@ export async function sendCorrelationDiscoveredNotification(db, userId, correlat
 }
 
 /**
- * Send weekly summary notification
+ * Send weekly summary with personality
  */
 export async function sendWeeklySummaryNotification(db, userId, summary) {
+  const { mealsLogged = 0, avgCalories = 0, streakDays = 0, hydrationAvg = 0 } = summary;
+
+  // Build a personalized summary based on highlights
+  let title, body;
+
+  if (streakDays >= 7) {
+    title = "Your week in review 🔥";
+    body = `${mealsLogged} meals logged, ${streakDays}-day streak going strong. You're in rhythm.`;
+  } else if (mealsLogged >= 14) {
+    title = "Solid week 📊";
+    body = `${mealsLogged} meals tracked at ~${avgCalories} cal avg. Your data is getting smarter.`;
+  } else if (mealsLogged >= 7) {
+    title = "Week wrapped up";
+    body = `${mealsLogged} meals logged this week. Every entry helps us help you.`;
+  } else {
+    title = "Weekly check-in";
+    body = `${mealsLogged} meals this week. More logs = better insights. Just saying.`;
+  }
+
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.WEEKLY_SUMMARY, {
-    title: 'Your Weekly Summary',
-    body: `${summary.mealsLogged} meals logged, ${summary.avgCalories} avg calories. Tap to see insights.`,
+    title,
+    body,
     data: { screen: 'insights', period: 'weekly' },
     channelId: 'insights',
   });
 }
 
 /**
- * Send hydration nudge notification
+ * Send hydration nudge with witty, contextual copy
  */
-export async function sendHydrationNudgeNotification(db, userId, currentMl, goalMl) {
-  const remaining = Math.max(0, goalMl - currentMl);
+export async function sendHydrationNudgeNotification(db, userId, currentMl, goalMl, context = {}) {
   const percentage = Math.round((currentMl / goalMl) * 100);
 
-  let body;
-  if (percentage >= 100) {
-    body = 'Amazing! You hit your hydration goal today!';
-  } else if (percentage >= 75) {
-    body = `Almost there! Just ${remaining}ml more to reach your goal.`;
-  } else {
-    body = `You've had ${currentMl}ml today. ${remaining}ml more to reach your goal.`;
-  }
+  // Get witty message from engine with full context
+  const message = WittyMessageEngine.getHydrationMessage({
+    percentage,
+    currentMl,
+    goalMl,
+    hoursSinceLastLog: context.hoursSinceLastLog,
+    streak: context.streak || 0,
+    logCount: context.logCount || 0,
+    hasCaffeine: context.hasCaffeine || false,
+    temperature: context.temperature,
+  });
+
+  // Use witty message or fallback with personality
+  const notification = message || {
+    title: "Quick hydration check 💧",
+    body: percentage < 50
+      ? "Your water bottle is feeling neglected. Just an observation."
+      : `${percentage}% there. Keep the momentum going.`,
+  };
 
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.HYDRATION_NUDGE, {
-    title: 'Hydration Check',
-    body,
+    title: notification.title,
+    body: notification.body,
     data: {
       currentMl: String(currentMl),
       goalMl: String(goalMl),
@@ -398,12 +462,32 @@ export async function sendHydrationNudgeNotification(db, userId, currentMl, goal
 }
 
 /**
- * Send insight drop notification
+ * Send insight drop notification with curiosity hooks
  */
 export async function sendInsightDropNotification(db, userId, insight) {
+  // Make insights feel like discoveries, not just information
+  let title = insight.title;
+  let body = insight.body || insight.summary;
+
+  // Add personality if the insight has generic title
+  if (!title || title === 'New Insight') {
+    const titleHooks = [
+      "Something to think about 💭",
+      "Your data has a story",
+      "Worth knowing",
+      "Quick insight",
+    ];
+    title = titleHooks[Math.floor(Math.random() * titleHooks.length)];
+  }
+
+  // Add curiosity if body is too generic
+  if (!body || body.length < 20) {
+    body = "We found something interesting in your patterns. Tap to explore.";
+  }
+
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.INSIGHT_DROP, {
-    title: insight.title || 'New Insight',
-    body: insight.body || insight.summary,
+    title,
+    body,
     data: {
       insightId: String(insight.id),
       insightType: insight.type,
@@ -413,16 +497,111 @@ export async function sendInsightDropNotification(db, userId, insight) {
   });
 }
 
+/**
+ * Send re-engagement notification with personality (not guilt)
+ */
+export async function sendReengagementNotification(db, userId, context = {}) {
+  const message = WittyMessageEngine.getReengagementMessage({
+    daysInactive: context.daysInactive || 3,
+    previousStreak: context.previousStreak || 0,
+    totalDays: context.totalDays || 0,
+  });
+
+  if (!message) {
+    // Don't send if no relevant message
+    return { success: false, reason: 'no_relevant_message' };
+  }
+
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
+    title: message.title,
+    body: message.body,
+    data: { screen: 'dashboard', type: 'reengagement' },
+    channelId: 'reminders',
+  });
+}
+
+/**
+ * Send meal reminder notification with context
+ */
+export async function sendMealReminderNotification(db, userId, context = {}) {
+  const message = WittyMessageEngine.getFoodMessage({
+    mealsLogged: context.mealsLogged || 0,
+    totalCalories: context.totalCalories || 0,
+    calorieGoal: context.calorieGoal || 2000,
+    streak: context.streak || 0,
+  });
+
+  if (!message) {
+    return { success: false, reason: 'no_relevant_message' };
+  }
+
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
+    title: message.title,
+    body: message.body,
+    data: { screen: 'log', type: 'meal_reminder' },
+    channelId: 'reminders',
+  });
+}
+
+/**
+ * Send mood check-in notification
+ */
+export async function sendMoodCheckInNotification(db, userId, context = {}) {
+  const message = WittyMessageEngine.getMoodMessage({
+    hour: new Date().getHours(),
+    pattern: context.pattern,
+  });
+
+  if (!message) {
+    return { success: false, reason: 'no_relevant_message' };
+  }
+
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.INSIGHT_DROP, {
+    title: message.title,
+    body: message.body,
+    data: { screen: 'mood', type: 'mood_checkin' },
+    channelId: 'insights',
+  });
+}
+
+/**
+ * Send activity nudge notification
+ */
+export async function sendActivityNudgeNotification(db, userId, context = {}) {
+  const message = WittyMessageEngine.getActivityMessage({
+    steps: context.steps || 0,
+    stepGoal: context.stepGoal || 10000,
+    sedentaryHours: context.sedentaryHours || 0,
+    justWorkedOut: context.justWorkedOut || false,
+  });
+
+  if (!message) {
+    return { success: false, reason: 'no_relevant_message' };
+  }
+
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
+    title: message.title,
+    body: message.body,
+    data: { screen: 'activity', type: 'activity_nudge' },
+    channelId: 'reminders',
+  });
+}
+
 export default {
   FCM_NOTIFICATION_TYPES,
   sendFCMNotification,
   sendBatchFCMNotifications,
   sendUserFCMNotification,
   broadcastFCMNotification,
+  // Witty notification functions
   sendGoalAchievedNotification,
   sendStreakCelebrationNotification,
   sendCorrelationDiscoveredNotification,
   sendWeeklySummaryNotification,
   sendHydrationNudgeNotification,
   sendInsightDropNotification,
+  sendReengagementNotification,
+  sendMealReminderNotification,
+  sendMoodCheckInNotification,
+  sendActivityNudgeNotification,
 };

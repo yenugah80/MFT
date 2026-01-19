@@ -19,12 +19,14 @@ import {
   foodLogTable,
   waterLogTable,
   moodLogTable,
+  activityLogTable,
   profilesTable,
   nutritionGoalsTable,
   accountSettingsTable,
   gamificationTable,
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import WittyMessageEngine from './wittyMessageEngine.js';
 
 // ============================================================================
 // REMINDER TYPES & CONFIGURATION
@@ -98,247 +100,221 @@ export const FREQUENCY_LIMITS = {
 };
 
 // ============================================================================
-// MESSAGE TEMPLATES - Zomato/Swiggy Inspired
+// MESSAGE GENERATORS - Using WittyMessageEngine (Zomato-style)
 // ============================================================================
 
 /**
- * Hydration message templates - warm, friendly, varied
+ * Get hydration message using WittyMessageEngine
+ * @param {string} timeSlot - morning, midday, afternoon, evening, goal_reached
+ * @param {object} context - { current, goal, remaining, percentage, streak, name }
  */
+function getHydrationMessage(timeSlot, context = {}) {
+  const { current = 0, goal = 2000, remaining, percentage, streak = 0, logCount = 0 } = context;
+  const actualPercentage = percentage || Math.round((current / goal) * 100);
+  const actualRemaining = remaining || (goal - current);
+
+  // Use WittyMessageEngine for contextual message
+  const wittyMessage = WittyMessageEngine.getHydrationMessage({
+    percentage: actualPercentage,
+    currentMl: current,
+    goalMl: goal,
+    streak,
+    logCount,
+    hoursSinceLastLog: context.hoursSinceLastLog,
+  });
+
+  if (wittyMessage) {
+    return { ...wittyMessage, tone: TONE_STYLES.FRIENDLY };
+  }
+
+  // Fallback based on time slot
+  const fallbacks = {
+    morning: { title: "Morning hydration window 💧", body: "Your body just went 8 hours without water. It has requests." },
+    midday: { title: "Hydration check-in", body: `You're at ${actualPercentage}%. The afternoon will thank you for drinking more now.` },
+    afternoon: { title: "Afternoon energy hack", body: `${actualRemaining}ml more and you're set. Water now = energy later.` },
+    evening: { title: "End-of-day push", body: `${actualRemaining}ml to go. You can salvage today's hydration goal.` },
+    goal_reached: { title: "You did that 💪", body: "Hydration goal: demolished. Your cells are celebrating." },
+  };
+
+  return { ...fallbacks[timeSlot] || fallbacks.midday, tone: TONE_STYLES.FRIENDLY };
+}
+
+/**
+ * Get food message using WittyMessageEngine
+ * @param {string} mealType - breakfast, lunch, dinner, gentle_nudge, streak
+ * @param {object} context - { streak, mealsLogged, name }
+ */
+function getFoodMessage(mealType, context = {}) {
+  const { streak = 0, mealsLogged = 0, calorieGoal = 2000, totalCalories = 0 } = context;
+
+  // Use WittyMessageEngine for contextual message
+  const wittyMessage = WittyMessageEngine.getFoodMessage({
+    mealsLogged,
+    totalCalories,
+    calorieGoal,
+    streak,
+  });
+
+  if (wittyMessage) {
+    return { ...wittyMessage, tone: TONE_STYLES.FRIENDLY };
+  }
+
+  // Fallback based on meal type
+  const fallbacks = {
+    breakfast: { title: "Breakfast happened, right?", body: "Log it before your brain forgets. Takes 10 seconds." },
+    lunch: { title: "Lunch break?", body: "Your nutrition insights are only as good as your logs. No pressure." },
+    dinner: { title: "Day's almost done", body: "Lock in that dinner before your streak ghosts you. 👻" },
+    gentle_nudge: { title: "Quick log?", body: "One meal logged is better than zero. We don't judge." },
+    streak: { title: `${streak}-day streak on the line`, body: "One meal log is all that stands between you and heartbreak. 💔" },
+  };
+
+  return { ...fallbacks[mealType] || fallbacks.gentle_nudge, tone: TONE_STYLES.FRIENDLY };
+}
+
+/**
+ * Get mood message using WittyMessageEngine
+ * @param {string} timeSlot - morning, afternoon, evening, post_meal
+ * @param {object} context - { pattern }
+ */
+function getMoodMessage(timeSlot, context = {}) {
+  const wittyMessage = WittyMessageEngine.getMoodMessage({
+    hour: new Date().getHours(),
+    pattern: context.pattern,
+  });
+
+  if (wittyMessage) {
+    return { ...wittyMessage, tone: TONE_STYLES.GENTLE };
+  }
+
+  // Fallback based on time slot
+  const fallbacks = {
+    morning: { title: "Quick vibe check 🌤️", body: "How's today treating you? 5 seconds to log, days of insights." },
+    afternoon: { title: "Afternoon pulse", body: "How's the day going? Quick check-in helps pattern detection." },
+    evening: { title: "End of day feels", body: "Rate your day. It helps us connect the dots." },
+    post_meal: { title: "Post-meal mood?", body: "How do you feel after eating? This data is gold for insights." },
+  };
+
+  return { ...fallbacks[timeSlot] || fallbacks.afternoon, tone: TONE_STYLES.GENTLE };
+}
+
+/**
+ * Get motivation/engagement message using WittyMessageEngine
+ * @param {string} type - streak_at_risk, comeback, achievement_close, weekly_summary
+ * @param {object} context - { streak, daysInactive, remaining, achievement, meals, water }
+ */
+function getMotivationMessage(type, context = {}) {
+  const { streak = 0, daysInactive = 0, previousStreak = 0 } = context;
+
+  switch (type) {
+    case 'streak_at_risk':
+      const streakMessage = WittyMessageEngine.getStreakMessage(streak);
+      return {
+        title: `${streak}-day streak at risk 🔥`,
+        body: streakMessage?.body || "You didn't come this far to only come this far. Log something.",
+        tone: TONE_STYLES.MOTIVATING,
+      };
+
+    case 'comeback':
+      const reengageMessage = WittyMessageEngine.getReengagementMessage({
+        daysInactive,
+        previousStreak,
+        totalDays: context.totalDays || 0,
+      });
+      return reengageMessage
+        ? { ...reengageMessage, tone: TONE_STYLES.GENTLE }
+        : { title: "Still here for you", body: "Whenever you're ready, we're ready. No pressure.", tone: TONE_STYLES.GENTLE };
+
+    case 'achievement_close':
+      return {
+        title: "So close! 🎯",
+        body: `You're ${context.remaining} away from ${context.achievement}. Finish strong.`,
+        tone: TONE_STYLES.MOTIVATING,
+      };
+
+    case 'weekly_summary':
+      return {
+        title: "Your week in review 📊",
+        body: `${context.meals || 0} meals logged, ${context.water || 0}L water tracked. Your data is getting smarter.`,
+        tone: TONE_STYLES.INFORMATIVE,
+      };
+
+    default:
+      return { title: "Quick check-in", body: "Your health journey continues. One log at a time.", tone: TONE_STYLES.FRIENDLY };
+  }
+}
+
+/**
+ * Get activity message using WittyMessageEngine
+ * @param {string} type - movement, walk, post_workout, sedentary
+ * @param {object} context - { steps, stepGoal, sedentaryHours, activityType, duration }
+ */
+function getActivityMessage(type, context = {}) {
+  const { steps = 0, stepGoal = 10000, sedentaryHours = 0, activityType, duration = 0 } = context;
+
+  // Use WittyMessageEngine for contextual message
+  const wittyMessage = WittyMessageEngine.getActivityMessage({
+    steps,
+    stepGoal,
+    sedentaryHours,
+    justWorkedOut: type === 'post_workout',
+    activityType,
+    duration,
+  });
+
+  if (wittyMessage) {
+    return { ...wittyMessage, tone: TONE_STYLES.MOTIVATING };
+  }
+
+  // Fallback based on type
+  const percentage = Math.round((steps / stepGoal) * 100);
+  const fallbacks = {
+    movement: { title: "Time to move 🏃", body: sedentaryHours >= 2 ? `${sedentaryHours}h sitting. Your body's filing a complaint.` : "A quick stretch does wonders. Science says so." },
+    walk: { title: "Walk break?", body: `You're at ${percentage}% of your step goal. Every step counts.` },
+    post_workout: { title: "Crushed it 💪", body: activityType ? `${activityType} logged! Your future self just sent a thank you note.` : "Activity logged! Momentum is a powerful thing." },
+    sedentary: { title: "Sitting alert", body: `${sedentaryHours}+ hours seated. Even a 2-minute walk helps.` },
+    gentle_nudge: { title: "Quick movement?", body: "30 seconds of stretching. Your spine will write you a thank-you letter." },
+  };
+
+  return { ...fallbacks[type] || fallbacks.gentle_nudge, tone: TONE_STYLES.MOTIVATING };
+}
+
+// Legacy message objects for backward compatibility (now wrap the functions)
 const HYDRATION_MESSAGES = {
-  morning: [
-    {
-      title: "Good morning! ☀️",
-      body: "A glass of water is the perfect way to start your day. Your body will thank you!",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "Rise and hydrate! 💧",
-      body: "After a night's rest, your body is thirsty. Start with a refreshing glass of water.",
-      tone: TONE_STYLES.GENTLE,
-    },
-    {
-      title: "Morning check-in",
-      body: "Hey {{name}}, had your first glass today? A hydrated morning = productive day!",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-  ],
-  midday: [
-    {
-      title: "Hydration break! 🌊",
-      body: "It's {{time}} - perfect time for a water break. You've had {{current}}ml so far!",
-      tone: TONE_STYLES.INFORMATIVE,
-    },
-    {
-      title: "Quick reminder",
-      body: "Your water bottle misses you! Take a quick sip and keep going strong.",
-      tone: TONE_STYLES.PLAYFUL,
-    },
-    {
-      title: "Midday refresh",
-      body: "Staying hydrated helps you stay focused. You're {{percentage}}% to your goal!",
-      tone: TONE_STYLES.MOTIVATING,
-    },
-  ],
-  afternoon: [
-    {
-      title: "Afternoon boost! 💪",
-      body: "Feeling that afternoon slump? Water can help! You need {{remaining}}ml more today.",
-      tone: TONE_STYLES.MOTIVATING,
-    },
-    {
-      title: "Keep it flowing",
-      body: "Great progress today! Just {{remaining}}ml to go. You've got this!",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "Hydration check",
-      body: "Tea, coffee, or water - whatever works for you! Just keep those fluids coming.",
-      tone: TONE_STYLES.GENTLE,
-    },
-  ],
-  evening: [
-    {
-      title: "Evening wind-down 🌙",
-      body: "One more glass before winding down? You're at {{percentage}}% of today's goal.",
-      tone: TONE_STYLES.GENTLE,
-    },
-    {
-      title: "Almost there!",
-      body: "Just {{remaining}}ml to hit your hydration goal. A herbal tea counts too!",
-      tone: TONE_STYLES.MOTIVATING,
-    },
-  ],
-  goal_reached: [
-    {
-      title: "Goal achieved! 🎉",
-      body: "You hit your hydration goal for today! Keep up the amazing work, {{name}}!",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "Hydration champion! 💧",
-      body: "{{liters}}L logged today - you're crushing your water goals!",
-      tone: TONE_STYLES.PLAYFUL,
-    },
-  ],
+  morning: [{ getMessage: (ctx) => getHydrationMessage('morning', ctx) }],
+  midday: [{ getMessage: (ctx) => getHydrationMessage('midday', ctx) }],
+  afternoon: [{ getMessage: (ctx) => getHydrationMessage('afternoon', ctx) }],
+  evening: [{ getMessage: (ctx) => getHydrationMessage('evening', ctx) }],
+  goal_reached: [{ getMessage: (ctx) => getHydrationMessage('goal_reached', ctx) }],
 };
 
-/**
- * Food logging message templates
- */
 const FOOD_MESSAGES = {
-  breakfast: [
-    {
-      title: "Breakfast time! 🍳",
-      body: "Had your morning meal? Log it to track your nutrition journey.",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "Good morning, {{name}}!",
-      body: "Starting the day right? Don't forget to log your breakfast!",
-      tone: TONE_STYLES.GENTLE,
-    },
-  ],
-  lunch: [
-    {
-      title: "Lunch check-in 🥗",
-      body: "Enjoying your midday meal? Log it to stay on top of your goals.",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "Midday nourishment",
-      body: "What's fueling your afternoon? Log your lunch when you get a chance!",
-      tone: TONE_STYLES.GENTLE,
-    },
-  ],
-  dinner: [
-    {
-      title: "Dinner time! 🍽️",
-      body: "Wrapping up your eating for today? Log your dinner to complete your food diary.",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "Evening meal",
-      body: "What's on your plate tonight? Quick log takes just seconds!",
-      tone: TONE_STYLES.GENTLE,
-    },
-  ],
-  gentle_nudge: [
-    {
-      title: "Forgot to log?",
-      body: "No pressure! When you're ready, your food diary is waiting for you.",
-      tone: TONE_STYLES.GENTLE,
-    },
-    {
-      title: "Quick catch-up",
-      body: "Haven't logged today yet - no worries! Even one meal logged helps.",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-  ],
-  streak: [
-    {
-      title: "🔥 {{streak}} day streak!",
-      body: "Amazing consistency! Log today's meals to keep your streak going.",
-      tone: TONE_STYLES.MOTIVATING,
-    },
-    {
-      title: "Streak alert! 🔥",
-      body: "You've logged for {{streak}} days straight! Don't break the chain!",
-      tone: TONE_STYLES.PLAYFUL,
-    },
-  ],
+  breakfast: [{ getMessage: (ctx) => getFoodMessage('breakfast', ctx) }],
+  lunch: [{ getMessage: (ctx) => getFoodMessage('lunch', ctx) }],
+  dinner: [{ getMessage: (ctx) => getFoodMessage('dinner', ctx) }],
+  gentle_nudge: [{ getMessage: (ctx) => getFoodMessage('gentle_nudge', ctx) }],
+  streak: [{ getMessage: (ctx) => getFoodMessage('streak', ctx) }],
 };
 
-/**
- * Mood check-in message templates
- */
 const MOOD_MESSAGES = {
-  morning: [
-    {
-      title: "How are you feeling? 🌅",
-      body: "Take a moment to check in with yourself. How did you wake up today?",
-      tone: TONE_STYLES.GENTLE,
-    },
-    {
-      title: "Morning mood check",
-      body: "A quick mood log helps us understand how your nutrition affects you!",
-      tone: TONE_STYLES.INFORMATIVE,
-    },
-  ],
-  afternoon: [
-    {
-      title: "Afternoon check-in 🌤️",
-      body: "How's your energy? A quick mood log helps track your patterns.",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-    {
-      title: "How are you doing?",
-      body: "Midday reflections help us spot food-mood connections for you.",
-      tone: TONE_STYLES.GENTLE,
-    },
-  ],
-  evening: [
-    {
-      title: "End of day reflection 🌙",
-      body: "How was your day overall? Log your mood before winding down.",
-      tone: TONE_STYLES.GENTLE,
-    },
-    {
-      title: "Evening check-in",
-      body: "Looking back at today - how are you feeling? Quick log helps!",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-  ],
-  post_meal: [
-    {
-      title: "Post-meal check-in",
-      body: "How do you feel after your meal? This helps us find patterns!",
-      tone: TONE_STYLES.INFORMATIVE,
-    },
-  ],
+  morning: [{ getMessage: (ctx) => getMoodMessage('morning', ctx) }],
+  afternoon: [{ getMessage: (ctx) => getMoodMessage('afternoon', ctx) }],
+  evening: [{ getMessage: (ctx) => getMoodMessage('evening', ctx) }],
+  post_meal: [{ getMessage: (ctx) => getMoodMessage('post_meal', ctx) }],
 };
 
-/**
- * Engagement & motivation messages
- */
 const MOTIVATION_MESSAGES = {
-  streak_at_risk: [
-    {
-      title: "Your streak needs you! 🔥",
-      body: "You have a {{streak}} day streak - just one log today keeps it alive!",
-      tone: TONE_STYLES.MOTIVATING,
-    },
-    {
-      title: "Don't let it slip!",
-      body: "{{streak}} days of progress is worth protecting. Log anything today!",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-  ],
-  comeback: [
-    {
-      title: "We miss you! 💚",
-      body: "It's been a few days. Ready to get back on track? We're here for you!",
-      tone: TONE_STYLES.GENTLE,
-    },
-    {
-      title: "Welcome back?",
-      body: "No judgment here! Whenever you're ready, your health journey continues.",
-      tone: TONE_STYLES.FRIENDLY,
-    },
-  ],
-  achievement_close: [
-    {
-      title: "So close! 🎯",
-      body: "You're {{remaining}} away from your {{achievement}} achievement!",
-      tone: TONE_STYLES.MOTIVATING,
-    },
-  ],
-  weekly_summary: [
-    {
-      title: "Your week in review 📊",
-      body: "You logged {{meals}} meals and drank {{water}}L this week. Tap to see more!",
-      tone: TONE_STYLES.INFORMATIVE,
-    },
-  ],
+  streak_at_risk: [{ getMessage: (ctx) => getMotivationMessage('streak_at_risk', ctx) }],
+  comeback: [{ getMessage: (ctx) => getMotivationMessage('comeback', ctx) }],
+  achievement_close: [{ getMessage: (ctx) => getMotivationMessage('achievement_close', ctx) }],
+  weekly_summary: [{ getMessage: (ctx) => getMotivationMessage('weekly_summary', ctx) }],
+};
+
+const ACTIVITY_MESSAGES = {
+  movement: [{ getMessage: (ctx) => getActivityMessage('movement', ctx) }],
+  walk: [{ getMessage: (ctx) => getActivityMessage('walk', ctx) }],
+  post_workout: [{ getMessage: (ctx) => getActivityMessage('post_workout', ctx) }],
+  sedentary: [{ getMessage: (ctx) => getActivityMessage('sedentary', ctx) }],
+  gentle_nudge: [{ getMessage: (ctx) => getActivityMessage('gentle_nudge', ctx) }],
 };
 
 // ============================================================================
@@ -594,6 +570,12 @@ export async function getSmartReminders(userId) {
     if (notificationPrefs.motivation !== false) {
       const motivationReminders = generateMotivationReminders(context);
       reminders.push(...motivationReminders);
+    }
+
+    // Activity reminders
+    if (notificationPrefs.activity !== false) {
+      const activityReminders = generateActivityReminders(context);
+      reminders.push(...activityReminders);
     }
 
     // Sort by priority and limit total
@@ -855,6 +837,71 @@ function generateMotivationReminders(context) {
   return reminders;
 }
 
+/**
+ * Generate activity reminders
+ */
+function generateActivityReminders(context) {
+  const { currentHour, todayStats, patterns, userName } = context;
+  const reminders = [];
+
+  const activityLogsToday = todayStats.activity?.totalLogs || 0;
+  const steps = todayStats.activity?.steps || 0;
+  const stepGoal = context.goals?.stepGoal || 10000;
+  const sedentaryHours = todayStats.activity?.sedentaryHours || 0;
+
+  // Only remind if user has shown interest in activity tracking
+  if (patterns.engagementLevel === 'new' && activityLogsToday === 0) {
+    return reminders; // New user who hasn't engaged with activity
+  }
+
+  // Morning movement prompt (9-10 AM)
+  if (currentHour >= 9 && currentHour <= 10 && steps < stepGoal * 0.1) {
+    const template = selectRandomTemplate(ACTIVITY_MESSAGES.movement);
+    reminders.push({
+      type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
+      ...formatTemplate(template, { name: userName, sedentaryHours }),
+      priority: 4,
+      scheduledFor: null,
+    });
+  }
+
+  // Midday walk reminder (12-2 PM)
+  if (currentHour >= 12 && currentHour <= 14 && steps < stepGoal * 0.4) {
+    const template = selectRandomTemplate(ACTIVITY_MESSAGES.walk);
+    reminders.push({
+      type: REMINDER_TYPES.ACTIVITY_WALK,
+      ...formatTemplate(template, { steps, stepGoal, percentage: Math.round((steps / stepGoal) * 100) }),
+      priority: 4,
+      scheduledFor: null,
+    });
+  }
+
+  // Afternoon sedentary alert (3-5 PM)
+  if (currentHour >= 15 && currentHour <= 17 && sedentaryHours >= 3) {
+    const template = selectRandomTemplate(ACTIVITY_MESSAGES.sedentary);
+    reminders.push({
+      type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
+      ...formatTemplate(template, { sedentaryHours }),
+      priority: 3,
+      scheduledFor: null,
+    });
+  }
+
+  // Evening step goal push (6-8 PM)
+  if (currentHour >= 18 && currentHour <= 20 && steps >= stepGoal * 0.6 && steps < stepGoal) {
+    const remaining = stepGoal - steps;
+    const template = selectRandomTemplate(ACTIVITY_MESSAGES.gentle_nudge);
+    reminders.push({
+      type: REMINDER_TYPES.ACTIVITY_WALK,
+      ...formatTemplate(template, { steps, stepGoal, remaining }),
+      priority: 5,
+      scheduledFor: null,
+    });
+  }
+
+  return reminders;
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -965,7 +1012,7 @@ async function getTodayStats(userId) {
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   try {
-    const [foodStats, waterStats, moodStats] = await Promise.all([
+    const [foodStats, waterStats, moodStats, activityStats] = await Promise.all([
       // Food stats
       db.select({
         totalMeals: sql`COUNT(*)::int`,
@@ -999,6 +1046,19 @@ async function getTodayStats(userId) {
           eq(moodLogTable.userId, userId),
           gte(moodLogTable.loggedDate, today),
           lte(moodLogTable.loggedDate, tomorrow)
+        )),
+
+      // Activity stats
+      db.select({
+        totalLogs: sql`COUNT(*)::int`,
+        totalDuration: sql`COALESCE(SUM(${activityLogTable.durationMinutes}), 0)::int`,
+        totalCaloriesBurned: sql`COALESCE(SUM(${activityLogTable.caloriesBurned}), 0)::int`,
+      })
+        .from(activityLogTable)
+        .where(and(
+          eq(activityLogTable.userId, userId),
+          gte(activityLogTable.loggedDate, today),
+          lte(activityLogTable.loggedDate, tomorrow)
         )),
     ]);
 
@@ -1034,6 +1094,13 @@ async function getTodayStats(userId) {
       mood: {
         totalLogs: moodStats[0]?.totalLogs || 0,
       },
+      activity: {
+        totalLogs: activityStats[0]?.totalLogs || 0,
+        totalDuration: activityStats[0]?.totalDuration || 0,
+        totalCaloriesBurned: activityStats[0]?.totalCaloriesBurned || 0,
+        steps: 0, // Would need integration with step tracking service
+        sedentaryHours: 0, // Would need integration with activity tracking
+      },
     };
   } catch (error) {
     console.error('[SmartReminder] getTodayStats error:', error);
@@ -1041,6 +1108,7 @@ async function getTodayStats(userId) {
       food: { totalMeals: 0, totalCalories: 0, mealTypes: {} },
       water: { totalLogs: 0, totalLiters: 0 },
       mood: { totalLogs: 0 },
+      activity: { totalLogs: 0, totalDuration: 0, totalCaloriesBurned: 0, steps: 0, sedentaryHours: 0 },
     };
   }
 }
@@ -1063,6 +1131,7 @@ async function getNotificationPreferences(userId) {
         food: true,
         mood: true,
         motivation: true,
+        activity: true,
       };
     }
 
@@ -1073,6 +1142,7 @@ async function getNotificationPreferences(userId) {
       food: notifs.food !== false,
       mood: notifs.mood !== false,
       motivation: notifs.motivation !== false,
+      activity: notifs.activity !== false,
     };
   } catch {
     return {
@@ -1081,6 +1151,7 @@ async function getNotificationPreferences(userId) {
       food: true,
       mood: true,
       motivation: true,
+      activity: true,
     };
   }
 }

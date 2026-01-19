@@ -153,33 +153,48 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
   if (hour >= 8 && hour <= 20) {
     if (todayMl < expectedProgress * 0.5) {
       const glassesNeeded = Math.ceil((expectedProgress - todayMl) / 250);
+      const behindMessages = [
+        `Your cells are sending a ${glassesNeeded}-glass SOS. Time to respond.`,
+        `${Math.round((1 - currentPace) * 100)}% behind pace. Your body's hydration hotline is ringing.`,
+        `Plot twist: you can catch up. ${glassesNeeded} glasses in 2 hours. Go.`,
+      ];
       recommendations.push({
         id: 'pace_behind',
         icon: 'speedometer',
         iconColor: COLORS.warning,
-        title: 'Catch Up Time',
-        message: `You're ${Math.round((1 - currentPace) * 100)}% behind your usual pace. Try drinking ${glassesNeeded} glasses in the next 2 hours.`,
+        title: 'Your Body Called',
+        message: behindMessages[Math.floor(Math.random() * behindMessages.length)],
         priority: 1,
         actionable: true,
         action: 'Log 250ml now',
       });
     } else if (todayMl >= goal) {
+      const goalMessages = [
+        "Goal crushed. Your kidneys just high-fived each other.",
+        "You did that. Hydration goal? Demolished.",
+        "100% done. Your cells are throwing a party right now.",
+      ];
       recommendations.push({
         id: 'goal_achieved',
         icon: 'trophy',
         iconColor: '#F59E0B',
-        title: 'Goal Achieved!',
-        message: 'Amazing work! You\'ve hit your daily hydration goal. Keep sipping to maintain optimal hydration.',
+        title: 'You Did That',
+        message: goalMessages[Math.floor(Math.random() * goalMessages.length)],
         priority: 0,
         actionable: false,
       });
     } else if (todayMl >= expectedProgress * 0.9) {
+      const onTrackMessages = [
+        `${formatMl(goal - todayMl)}ml left. You're basically there. Finish strong.`,
+        `On pace and crushing it. Just a bit more and you're golden.`,
+        `So close to 100%. Your future self is already celebrating.`,
+      ];
       recommendations.push({
         id: 'pace_good',
         icon: 'checkmark-circle',
         iconColor: COLORS.success,
-        title: 'Great Progress',
-        message: `You're on track! Just ${formatMl(goal - todayMl)}ml to go. You've got this!`,
+        title: "You're Cruising",
+        message: onTrackMessages[Math.floor(Math.random() * onTrackMessages.length)],
         priority: 2,
         actionable: false,
       });
@@ -188,12 +203,17 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
 
   // 2. Time-based recommendations
   if (hour >= 6 && hour < 9 && todayMl < 250) {
+    const morningMessages = [
+      "Your body just went 8 hours without water. It has requests.",
+      "Morning hydration unlocks productivity. Science confirmed.",
+      "First sip of the day hits different. Your metabolism agrees.",
+    ];
     recommendations.push({
       id: 'morning_hydration',
       icon: 'sunny',
       iconColor: '#FBBF24',
-      title: 'Morning Boost',
-      message: 'Start your day right! Drinking water first thing helps kickstart your metabolism and improve focus.',
+      title: 'Morning Window Open',
+      message: morningMessages[Math.floor(Math.random() * morningMessages.length)],
       priority: 1,
       actionable: true,
       action: 'Log morning water',
@@ -201,12 +221,17 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
   }
 
   if (hour >= 14 && hour < 16 && todayMl < goal * 0.5) {
+    const afternoonMessages = [
+      "That 3pm slump? Often dehydration in disguise. Water > coffee right now.",
+      "Your brain is 75% water. It's requesting a refill.",
+      "Afternoon energy crash? Plot twist: it might just be thirst.",
+    ];
     recommendations.push({
       id: 'afternoon_slump',
       icon: 'cafe',
       iconColor: '#8B5CF6',
-      title: 'Beat the Afternoon Slump',
-      message: 'Feeling tired? Dehydration causes fatigue. A glass of water can boost energy better than caffeine!',
+      title: '3PM Energy Hack',
+      message: afternoonMessages[Math.floor(Math.random() * afternoonMessages.length)],
       priority: 2,
       actionable: true,
       action: 'Hydrate now',
@@ -215,12 +240,17 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
 
   if (hour >= 20 && todayMl < goal * 0.8) {
     const remaining = goal - todayMl;
+    const eveningMessages = [
+      `${formatMl(remaining)}ml left. Salvage today's hydration before bed.`,
+      `The day's not over yet. ${formatMl(remaining)}ml to close it out strong.`,
+      `Quick sips now, better sleep later. ${formatMl(remaining)}ml to go.`,
+    ];
     recommendations.push({
       id: 'evening_catch_up',
       icon: 'moon',
       iconColor: '#6366F1',
-      title: 'Evening Reminder',
-      message: `Still ${formatMl(remaining)}ml to go. Try to finish before bed, but not too close to sleep time!`,
+      title: 'Final Push',
+      message: eveningMessages[Math.floor(Math.random() * eveningMessages.length)],
       priority: 1,
       actionable: true,
       action: 'Quick catch-up',
@@ -229,12 +259,17 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
 
   // 3. Pattern-based recommendations
   if (isWeekend && weekendAvg < weekdayAvg * 0.7 && weekdayCount > 3) {
+    const weekendMessages = [
+      `Weekends = ${Math.round((1 - weekendAvg/weekdayAvg) * 100)}% hydration drop. Your body doesn't take days off.`,
+      "Weekend vibes =/= skipping water. Your organs don't know it's Saturday.",
+      "Your weekday hydration game is strong. Weekends? Different story.",
+    ];
     recommendations.push({
       id: 'weekend_pattern',
       icon: 'calendar',
       iconColor: COLORS.primary,
-      title: 'Weekend Watch',
-      message: `Your weekend hydration tends to drop ${Math.round((1 - weekendAvg/weekdayAvg) * 100)}% below weekdays. Set a reminder to stay consistent!`,
+      title: 'Weekend Blind Spot',
+      message: weekendMessages[Math.floor(Math.random() * weekendMessages.length)],
       priority: 3,
       actionable: false,
     });
@@ -253,22 +288,38 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
   }
 
   if (streak >= 7) {
+    const streakMessages = streak >= 21
+      ? [
+          `${streak} days. This is no longer a streak - it's a lifestyle.`,
+          `${streak} consecutive days. You've literally rewired your habits.`,
+          `${streak} days of showing up. Your future self owes you big time.`,
+        ]
+      : [
+          `${streak} days and counting. Momentum is a powerful thing.`,
+          `${streak}-day streak. Your cells are getting used to this treatment.`,
+          `${streak} days of consistency. That's not luck, that's discipline.`,
+        ];
     recommendations.push({
       id: 'streak_celebration',
       icon: 'flame',
       iconColor: '#EF4444',
-      title: `${streak} Day Streak!`,
-      message: 'Your consistency is paying off. Research shows habits stick after 21 days. Keep going!',
+      title: streak >= 21 ? 'Habit Locked In' : `${streak} Days Strong`,
+      message: streakMessages[Math.floor(Math.random() * streakMessages.length)],
       priority: 4,
       actionable: false,
     });
   } else if (streak === 0 && recentDays.filter(d => d > 0).length > 0) {
+    const restartMessages = [
+      "Yesterday's gone. Today's water awaits. Let's go.",
+      "Fresh slate. One glass = new streak. You in?",
+      "Your streak ghosted you. Time to start a new one.",
+    ];
     recommendations.push({
       id: 'restart_streak',
       icon: 'refresh',
       iconColor: COLORS.primary,
-      title: 'Fresh Start',
-      message: 'Today is a new opportunity! Log your first drink to start building your streak.',
+      title: 'Redemption Arc Starts Now',
+      message: restartMessages[Math.floor(Math.random() * restartMessages.length)],
       priority: 1,
       actionable: true,
       action: 'Start streak',
@@ -282,12 +333,17 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
     const currentTimeSlot = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
 
     if (bestTime === currentTimeSlot && todayMl < goal * 0.3) {
+      const peakMessages = [
+        `Your data says ${bestTime}s are your prime hydration time. Lean into it.`,
+        `Pattern detected: you crush it in the ${bestTime}. Don't break the streak.`,
+        `${bestTime} is statistically your hydration sweet spot. Use it.`,
+      ];
       recommendations.push({
         id: 'peak_time',
         icon: 'trending-up',
         iconColor: COLORS.success,
-        title: 'Peak Hydration Time',
-        message: `You typically drink the most in the ${bestTime}. Now's a great time to hydrate!`,
+        title: 'Your Window Is Open',
+        message: peakMessages[Math.floor(Math.random() * peakMessages.length)],
         priority: 2,
         actionable: true,
         action: 'Take advantage',
@@ -297,12 +353,17 @@ const generateSmartRecommendations = (hydrationByDate, todayMl, goal) => {
 
   // 6. Personal best motivation
   if (bestDay.ml > 0 && todayMl > 0 && todayMl < bestDay.ml * 0.5 && hour >= 14) {
+    const pbMessages = [
+      `Your all-time best: ${formatMl(bestDay.ml)}ml. Today? ${Math.round((todayMl/bestDay.ml) * 100)}% there. The record is watching.`,
+      `Personal best alert: ${formatMl(bestDay.ml)}ml exists. You're ${Math.round((todayMl/bestDay.ml) * 100)}% there. Hungry?`,
+      `${formatMl(bestDay.ml)}ml is the mountain. You're ${Math.round((todayMl/bestDay.ml) * 100)}% up. Keep climbing.`,
+    ];
     recommendations.push({
       id: 'personal_best',
       icon: 'ribbon',
       iconColor: '#EC4899',
-      title: 'Beat Your Best',
-      message: `Your record is ${formatMl(bestDay.ml)}ml. You're ${Math.round((todayMl/bestDay.ml) * 100)}% there. Push for a new personal best!`,
+      title: 'The Record Is Calling',
+      message: pbMessages[Math.floor(Math.random() * pbMessages.length)],
       priority: 3,
       actionable: false,
     });

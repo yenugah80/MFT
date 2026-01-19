@@ -21,10 +21,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
 import { useMoodLog } from '../hooks/useMoodLog';
 import MoodIcon3D from './MoodTracker/MoodIcon3D';
-import apiClient from '../services/apiClient';
 import {
   MOOD_PALETTE,
   SPACING,
@@ -170,45 +168,8 @@ const TagSelector = ({ category, selectedValue, onSelect }) => {
 
 /**
  * Main Premium MoodLogger Component
+ * Note: Mood history is displayed on the Dashboard (EnhancedMoodCard), not here
  */
-/**
- * MoodHistoryEntry - Single mood history item
- */
-const MoodHistoryEntry = ({ entry, moodTypes }) => {
-  const moodMeta = moodTypes.find(m => m.key === entry.mood) || moodTypes[4]; // Default to neutral
-  const moodColors = MOOD_PALETTE[entry.mood] || MOOD_PALETTE.neutral;
-  const time = new Date(entry.loggedDate).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit'
-  });
-
-  return (
-    <View style={[styles.historyEntry, { borderLeftColor: moodColors.base }]}>
-      <View style={[styles.historyMoodIcon, { backgroundColor: moodColors.light }]}>
-        <Text style={styles.historyEmoji}>{moodMeta.emoji}</Text>
-      </View>
-      <View style={styles.historyContent}>
-        <Text style={[styles.historyMoodLabel, { color: moodColors.base }]}>
-          {moodMeta.label}
-        </Text>
-        <View style={styles.historyMeta}>
-          <Text style={styles.historyTime}>{time}</Text>
-          {entry.intensity && (
-            <View style={[styles.historyIntensityBadge, { backgroundColor: hexToRgba(moodColors.base, 0.15) }]}>
-              <Text style={[styles.historyIntensityText, { color: moodColors.base }]}>
-                {entry.intensity}/10
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-      {entry.note && (
-        <Ionicons name="document-text-outline" size={14} color={TEXT.tertiary} />
-      )}
-    </View>
-  );
-};
-
 export default function MoodLogger({ visible, onClose, onSuccess }) {
   const { logMood, isLogging, moodTypes } = useMoodLog();
   const [selectedMood, setSelectedMood] = useState(null);
@@ -217,18 +178,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   const [tags, setTags] = useState({});
   const [note, setNote] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showHistory, setShowHistory] = useState(true);
-
-  // Fetch today's mood history
-  const { data: moodHistory, isLoading: historyLoading } = useQuery({
-    queryKey: ['moodToday'],
-    queryFn: async () => {
-      const response = await apiClient.get('/mood/today');
-      return response || [];
-    },
-    staleTime: 30000,
-    enabled: visible, // Only fetch when modal is visible
-  });
 
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -290,7 +239,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
         tags,
         note: trimmedNote,
       });
-      onSuccess?.();
+      onSuccess?.(selectedMood);
       onClose();
     } catch (err) {
       console.error('Failed to save mood:', err);
@@ -348,53 +297,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
           </LinearGradient>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Today's Mood History */}
-            {moodHistory && moodHistory.length > 0 && (
-              <View style={styles.historySection}>
-                <TouchableOpacity
-                  style={styles.historyHeader}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowHistory(!showHistory);
-                  }}
-                >
-                  <View style={styles.historyHeaderLeft}>
-                    <Ionicons name="time-outline" size={18} color={MOOD_PALETTE.calm.base} />
-                    <Text style={styles.historyTitle}>Today&apos;s Moods</Text>
-                    <View style={[styles.historyCountBadge, { backgroundColor: MOOD_PALETTE.calm.base }]}>
-                      <Text style={styles.historyCountText}>{moodHistory.length}</Text>
-                    </View>
-                  </View>
-                  <Ionicons
-                    name={showHistory ? 'chevron-up' : 'chevron-down'}
-                    size={18}
-                    color={MOOD_PALETTE.calm.base}
-                  />
-                </TouchableOpacity>
-
-                {showHistory && (
-                  <View style={styles.historyList}>
-                    {historyLoading ? (
-                      <ActivityIndicator size="small" color={MOOD_PALETTE.calm.base} />
-                    ) : (
-                      moodHistory.slice(0, 5).map((entry) => (
-                        <MoodHistoryEntry
-                          key={entry.id || entry.clientEventId}
-                          entry={entry}
-                          moodTypes={moodTypes}
-                        />
-                      ))
-                    )}
-                    {moodHistory.length > 5 && (
-                      <Text style={styles.historyMore}>
-                        +{moodHistory.length - 5} more entries today
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
-
             {/* Mood Selection with 3D Lottie */}
             <View style={styles.moodGrid}>
               {moodTypes.map((mood) => (
@@ -745,96 +647,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: TEXT.white,
-  },
-  // Mood History Styles
-  historySection: {
-    marginBottom: SPACING[4],
-    backgroundColor: hexToRgba(MOOD_PALETTE.calm.base, 0.08),
-    borderRadius: RADIUS.lg,
-    padding: SPACING[3],
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  historyHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  historyTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
-  },
-  historyCountBadge: {
-    paddingHorizontal: SPACING[2],
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-    minWidth: 22,
-    alignItems: 'center',
-  },
-  historyCountText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-  },
-  historyList: {
-    marginTop: SPACING[3],
-    gap: SPACING[2],
-  },
-  historyEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.md,
-    padding: SPACING[2],
-    paddingLeft: SPACING[3],
-    borderLeftWidth: 3,
-    gap: SPACING[2],
-  },
-  historyMoodIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  historyEmoji: {
-    fontSize: 16,
-  },
-  historyContent: {
-    flex: 1,
-  },
-  historyMoodLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-  },
-  historyMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginTop: 2,
-  },
-  historyTime: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-  },
-  historyIntensityBadge: {
-    paddingHorizontal: SPACING[1],
-    paddingVertical: 1,
-    borderRadius: RADIUS.sm,
-  },
-  historyIntensityText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-  },
-  historyMore: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-    marginTop: SPACING[1],
-    fontStyle: 'italic',
   },
 });

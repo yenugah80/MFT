@@ -172,15 +172,12 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
         </View>
       </View>
 
-      {/* Legend below */}
+      {/* Legend below - just labels, percentages already shown in pie segments */}
       <View style={pieStyles.legend}>
         {segments.map((seg) => (
           <View key={seg.key} style={pieStyles.legendItem}>
             <View style={[pieStyles.legendDot, { backgroundColor: seg.color }]} />
             <Text style={pieStyles.legendLabel}>{seg.label}</Text>
-            <Text style={[pieStyles.legendPercent, { color: seg.displayPercent >= 70 ? seg.colorDark : TEXT.tertiary }]}>
-              {seg.displayPercent}%
-            </Text>
           </View>
         ))}
       </View>
@@ -237,10 +234,6 @@ const pieStyles = StyleSheet.create({
     fontSize: 10,
     color: TEXT.secondary,
     fontWeight: '600',
-  },
-  legendPercent: {
-    fontSize: 11,
-    fontWeight: '700',
   },
 });
 

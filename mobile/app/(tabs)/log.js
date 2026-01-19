@@ -38,6 +38,7 @@ import { useTheme } from '../../providers/ThemeProvider';
 import useProfileForm from '../../hooks/useProfileForm';
 import { useUser } from '@clerk/clerk-expo';
 import { calculateDailyTargets } from '../../utils/nutritionTargets';
+import { hydrationMessages, moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
 
 // Components
 import { NutritionCard } from '../../components/log/NutritionCard';
@@ -152,7 +153,7 @@ export default function LogScreen() {
         setInputMode('text');
         setAnalysisSource('text');
         if (mealType) {
-          notify.info(`Ready to log ${mealType}.`);
+          notify.info(foodMessages.readyToLog(mealType), { domain: 'food' });
         }
         break;
       default:
@@ -374,7 +375,7 @@ export default function LogScreen() {
       setAnalyzedFood(null); // Clear single-item state to prefer list view
     } catch (err) {
       console.error('[log] Voice result processing failed:', err.message);
-      notify.error('Failed to process voice result');
+      notify.error(generalMessages.error());
     }
   };
 
@@ -416,9 +417,9 @@ export default function LogScreen() {
     
     try {
       await apiClient.post('/voice/report', { name: itemToReport.name });
-      notify.success('Thanks! We will review this item.');
+      notify.success(generalMessages.reportThanks());
     } catch (_error) {
-      notify.error('Failed to send report');
+      notify.error(generalMessages.error());
     }
   };
 
@@ -427,7 +428,7 @@ export default function LogScreen() {
    */
   const handleShare = async () => {
     if (!foodAnalysis.analysisResult) {
-      notify.info('No analysis results to share.');
+      notify.info(insightMessages.noInsights());
       return;
     }
 
@@ -471,7 +472,7 @@ export default function LogScreen() {
       });
     } catch (error) {
       console.error('Share failed:', error);
-      notify.error('Failed to share meal analysis');
+      notify.error(insightMessages.shareError());
     }
   };
 
@@ -610,7 +611,7 @@ export default function LogScreen() {
       });
     } catch (error) {
       console.error('[LogScreen] Multi-item save error:', error);
-      notify.error('Failed to save meal');
+      notify.error(generalMessages.error());
     } finally {
       setIsSavingLog(false);
     }
@@ -764,10 +765,10 @@ export default function LogScreen() {
       };
 
       await foodLog.addLog(foodLogData);
-      notify.success(`Quick added: ${foodItem.foodName}`);
+      notify.success(foodMessages.quickAdded(foodItem.foodName), { domain: 'food' });
     } catch (error) {
       console.error('Quick add failed:', error);
-      notify.error('Failed to quick add item');
+      notify.error(generalMessages.error());
     }
   };
 
@@ -810,7 +811,7 @@ export default function LogScreen() {
     foodAnalysis.setAnalysisResult({ items, totals });
     setAnalyzedFood(null);
     setSelectedImage(null);
-    notify.success(`Loaded "${savedMeal.name}"`);
+    notify.success(foodMessages.savedMealLoaded(savedMeal.name), { domain: 'food' });
   };
 
   const handleEditLoggedMeal = async () => {
@@ -861,10 +862,10 @@ export default function LogScreen() {
       // Backend water.js applies hydration factor: hydrationLiters = amountLiters * factor
       const amountLiters = entry.amount / 1000; // Convert raw ml to liters
       await logWater(amountLiters, entry.type);
-      notify.success(`Logged ${entry.amount}ml of ${entry.type}`);
+      notify.success(hydrationMessages.logged(entry.amount, entry.type), { domain: 'hydration' });
     } catch (error) {
       console.error('[LogScreen] Failed to log water:', error);
-      notify.error('Failed to log water');
+      notify.error(generalMessages.error());
     }
   };
 
@@ -874,10 +875,10 @@ export default function LogScreen() {
   const handleRemoveWater = async (entryId, amountLiters, hydrationLiters) => {
     try {
       await removeWater(entryId, amountLiters, hydrationLiters);
-      notify.success('Water entry removed');
+      notify.success(hydrationMessages.removed(), { domain: 'hydration' });
     } catch (error) {
       console.error('[LogScreen] Failed to remove water:', error);
-      notify.error('Failed to remove water entry');
+      notify.error(generalMessages.error());
     }
   };
 
@@ -1209,7 +1210,7 @@ export default function LogScreen() {
       <MoodLogger
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
-        onSuccess={() => notify.success('Mood logged!')}
+        onSuccess={(mood) => notify.success(moodMessages.logged(mood), { domain: 'mood' })}
       />
 
       <HealthAnalysisModal
@@ -1297,7 +1298,7 @@ export default function LogScreen() {
             onClose={() => {
               setShowMealLogged(false);
               setLoggedMeal(null);
-              notify.success('Meal logged successfully!');
+              notify.success(foodMessages.logged(), { domain: 'food' });
             }}
           />
         )}

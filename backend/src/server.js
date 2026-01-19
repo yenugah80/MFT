@@ -6,6 +6,7 @@ import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
 import { attachDb } from "./middleware/db.js";
 import { requireCloudflare, blockBots, getClientIP } from "./middleware/cloudflare.js";
+import { verifyTurnstileToken, getTurnstilePageHTML } from "./middleware/turnstile.js";
 import {
   profilesTable,
   dietaryPreferencesTable,
@@ -499,6 +500,68 @@ app.get("/api/debug/cloudflare", (req, res) => {
       timestamp: new Date().toISOString(),
     },
   });
+});
+
+/* -------------------------------------------
+   TURNSTILE VERIFICATION ENDPOINTS
+   Human verification for mobile apps via WebView
+-------------------------------------------- */
+
+// Serve Turnstile verification page (for WebView)
+app.get("/api/verify/turnstile", (req, res) => {
+  const siteKey = process.env.TURNSTILE_SITE_KEY;
+
+  if (!siteKey) {
+    // Development fallback - auto-verify
+    if (process.env.NODE_ENV === 'development') {
+      return res.send(`
+        <html>
+          <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;">
+            <div style="text-align:center;">
+              <h2>Development Mode</h2>
+              <p>Turnstile not configured. Auto-verifying...</p>
+              <script>
+                setTimeout(() => {
+                  if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'turnstile_success',
+                      token: 'dev-bypass-token',
+                    }));
+                  }
+                }, 1000);
+              </script>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    return res.status(500).json({ error: 'Turnstile not configured' });
+  }
+
+  const action = req.query.action || 'verify';
+  res.setHeader('Content-Type', 'text/html');
+  res.send(getTurnstilePageHTML(siteKey, action));
+});
+
+// Verify Turnstile token
+app.post("/api/verify/turnstile", express.json(), async (req, res) => {
+  const { token } = req.body;
+  const clientIP = req.clientIP || req.ip;
+
+  const result = await verifyTurnstileToken(token, clientIP);
+
+  if (result.success) {
+    res.json({
+      success: true,
+      verified: true,
+      timestamp: result.challengeTs || new Date().toISOString(),
+    });
+  } else {
+    res.status(403).json({
+      success: false,
+      error: result.error || 'Verification failed',
+    });
+  }
 });
 
 /* -------------------------------------------

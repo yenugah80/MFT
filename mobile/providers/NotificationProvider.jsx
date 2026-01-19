@@ -367,22 +367,37 @@ export const NotificationProvider = ({ children }) => {
 
   // ============== Notify API ==============
   const notify = {
-    success: (message, options = {}) =>
-      addToast({ type: 'success', message, ...options }),
+    success: (message, options = {}) => {
+      // Debug: always log what message is being passed in dev
+      if (__DEV__) {
+        console.log('[NotificationProvider] success called with:', JSON.stringify({ message, type: typeof message }));
+        if (!message || (typeof message === 'string' && !message.trim())) {
+          console.warn('[NotificationProvider] Empty success message!', new Error().stack);
+        }
+      }
+      // Ensure message is a non-empty string
+      const finalMessage = (typeof message === 'string' && message.trim()) ? message : 'Success!';
+      return addToast({ type: 'success', message: finalMessage, ...options });
+    },
 
     error: (message, options = {}) =>
       addToast({
         type: 'error',
-        message,
+        message: message || 'An error occurred',
         duration: options.duration ?? 5000,
         ...options,
       }),
 
     warning: (message, options = {}) =>
-      addToast({ type: 'warning', message, ...options }),
+      addToast({ type: 'warning', message: message || 'Warning', ...options }),
 
-    info: (message, options = {}) =>
-      addToast({ type: 'info', message, ...options }),
+    info: (message, options = {}) => {
+      if (__DEV__) {
+        console.log('[NotificationProvider] info called with:', JSON.stringify({ message, type: typeof message }));
+      }
+      const finalMessage = (typeof message === 'string' && message.trim()) ? message : 'Info';
+      return addToast({ type: 'info', message: finalMessage, ...options });
+    },
 
     modal: (config) => showModal(config),
 
@@ -463,9 +478,11 @@ const styles = StyleSheet.create({
   toastContainer: {
     position: 'absolute',
     top: 60,
+    left: 16,
     right: 16,
     zIndex: 9999,
     pointerEvents: 'box-none',
+    alignItems: 'flex-end', // Align toasts to right
   },
 });
 
