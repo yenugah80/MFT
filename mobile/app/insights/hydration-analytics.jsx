@@ -48,6 +48,7 @@ import ColdStartCard from '../../components/insights/ColdStartCard';
 import { useHydrationAnalytics, useHydrationPrediction } from '../../hooks/useHydrationAnalytics';
 // Note: useCorrelations removed - cross-category correlations belong in /insights/multi-factor-analytics
 import { useWaterLog } from '../../hooks/useWaterLog';
+import { useDecisionBrainHydrationInsights } from '../../hooks/useMoodInsights';
 
 // Responsive layout for small devices
 import { getResponsiveGaugeSize, IS_SMALL_DEVICE } from '../../utils/responsiveLayout';
@@ -72,8 +73,10 @@ export default function HydrationAnalyticsScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Real data hooks - ONLY hydration-specific data
-  // Cross-category correlations belong in /insights/multi-factor-analytics
+  // Decision Brain - ML-powered insights (PRIMARY data source)
+  const { data: decisionBrainData, isLoading: dbLoading, refetch: refetchDB } = useDecisionBrainHydrationInsights();
+
+  // Existing hooks as fallback
   const {
     analytics,
     isLoading: hydrationLoading,
@@ -87,12 +90,45 @@ export default function HydrationAnalyticsScreen() {
   const { prediction: hydrationPrediction, isLoading: predictionLoading } = useHydrationPrediction();
   const { getTodayTotal } = useWaterLog();
 
-  const isLoading = hydrationLoading || predictionLoading;
-  // Critical error if main hydration data fails
-  const hasError = !!hydrationError;
+  const isLoading = dbLoading || hydrationLoading || predictionLoading;
+  // Critical error only if both Decision Brain and hydration analytics fail
+  const hasError = !!hydrationError && !decisionBrainData?.success;
 
-  // Calculate hydration metrics from real data
+  // Calculate hydration metrics - PREFER Decision Brain stats, fall back to local
   const hydrationMetrics = useMemo(() => {
+    // If Decision Brain returned stats, use them (ML-enhanced)
+    if (decisionBrainData?.stats && decisionBrainData.hasEnoughData) {
+      const stats = decisionBrainData.stats;
+      const progress = stats.todayProgress || 0;
+
+      // Determine status
+      let status;
+      if (progress >= 100) {
+        status = { label: 'Goal Met', color: SEMANTIC.success.base, icon: 'water' };
+      } else if (progress >= 70) {
+        status = { label: 'On Track', color: VIBRANT_WELLNESS.hydration.solid, icon: 'water-outline' };
+      } else if (progress >= 40) {
+        status = { label: 'Low', color: SEMANTIC.warning.base, icon: 'alert-circle-outline' };
+      } else {
+        status = { label: 'Dehydrated', color: SEMANTIC.danger.base, icon: 'warning-outline' };
+      }
+
+      return {
+        todayMl: stats.todayIntake || 0,
+        goalMl: stats.dailyGoal || DEFAULT_HYDRATION_GOAL,
+        progress: Math.min(progress, 150),
+        avgMl: stats.avgDailyIntake || 0,
+        avgPercentage: stats.goalAdherence || 0,
+        streak: stats.streak || 0,
+        status,
+        daysLogged: stats.daysLogged || 0,
+        remaining: Math.abs((stats.dailyGoal || DEFAULT_HYDRATION_GOAL) - (stats.todayIntake || 0)),
+        exceeded: (stats.todayIntake || 0) > (stats.dailyGoal || DEFAULT_HYDRATION_GOAL),
+        trend: stats.trend || 'stable',
+      };
+    }
+
+    // Fallback to local calculation
     // CRITICAL FIX: getTodayTotal returns LITERS, convert to ml for display
     const todayLiters = getTodayTotal?.() || 0;
     const todayMl = Math.round(todayLiters * 1000);
@@ -135,15 +171,42 @@ export default function HydrationAnalyticsScreen() {
       remaining: Math.abs(remaining),
       exceeded,
     };
-  }, [getTodayTotal, patterns, coldStart]);
+  }, [getTodayTotal, patterns, coldStart, decisionBrainData]);
+
+  // ML-powered patterns from Decision Brain
+  const hydrationPatterns = useMemo(() => {
+    if (decisionBrainData?.patterns?.length > 0) {
+      return decisionBrainData.patterns.slice(0, 5);
+    }
+    return [];
+  }, [decisionBrainData]);
+
+  // ML correlations with confidence scores
+  const hydrationCorrelations = useMemo(() => {
+    if (decisionBrainData?.correlations?.length > 0) {
+      return decisionBrainData.correlations.slice(0, 4);
+    }
+    return [];
+  }, [decisionBrainData]);
+
+  // ML-powered recommendations (witty copy)
+  const hydrationRecommendations = useMemo(() => {
+    if (decisionBrainData?.recommendations?.length > 0) {
+      return decisionBrainData.recommendations.slice(0, 3);
+    }
+    return [];
+  }, [decisionBrainData]);
 
   // Handlers
   const handleRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRefreshing(true);
-    await refetchHydration?.();
+    await Promise.all([
+      refetchDB?.(),
+      refetchHydration?.(),
+    ]);
     setRefreshing(false);
-  }, [refetchHydration]);
+  }, [refetchDB, refetchHydration]);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -288,6 +351,101 @@ export default function HydrationAnalyticsScreen() {
                 <Text style={styles.personaRecommendationText}>{persona.recommendation}</Text>
               </View>
             )}
+          </View>
+        )}
+
+        {/* ML Patterns Section - Decision Brain detected patterns */}
+        {hydrationPatterns.length > 0 && (
+          <View style={[styles.patternsCard, CARD_SYSTEM.standard]}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="bulb-outline" size={20} color={VIBRANT_WELLNESS.hydration.solid} />
+              <Text style={styles.sectionCardTitle}>Hydration Patterns</Text>
+              <View style={styles.mlBadge}>
+                <Text style={styles.mlBadgeText}>ML</Text>
+              </View>
+            </View>
+            {hydrationPatterns.map((pattern, i) => (
+              <View key={i} style={styles.patternRow}>
+                <View style={[styles.patternIcon, { backgroundColor: (pattern.light || `${pattern.color}15`) }]}>
+                  <Ionicons name={pattern.icon || 'water'} size={18} color={pattern.color || VIBRANT_WELLNESS.hydration.solid} />
+                </View>
+                <View style={styles.patternContent}>
+                  <Text style={[styles.patternTitle, { color: pattern.color || TEXT.primary }]}>{pattern.title}</Text>
+                  <Text style={styles.patternDescription}>{pattern.description}</Text>
+                  {pattern.confidence && (
+                    <Text style={styles.confidenceText}>{Math.round(pattern.confidence * 100)}% confidence</Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ML Correlations Section - What affects your hydration */}
+        {hydrationCorrelations.length > 0 && (
+          <View style={[styles.correlationsCard, CARD_SYSTEM.standard]}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="git-network-outline" size={20} color={BRAND.primary} />
+              <Text style={styles.sectionCardTitle}>What We Noticed</Text>
+              <View style={styles.mlBadge}>
+                <Text style={styles.mlBadgeText}>ML</Text>
+              </View>
+            </View>
+            {hydrationCorrelations.map((corr, i) => (
+              <View key={corr.id || i} style={styles.correlationRow}>
+                <View style={[styles.correlationIcon, { backgroundColor: corr.impactType === 'positive' ? SEMANTIC.success.light : SEMANTIC.warning.light }]}>
+                  <Ionicons
+                    name={corr.impactType === 'positive' ? 'trending-up' : 'trending-down'}
+                    size={16}
+                    color={corr.impactType === 'positive' ? SEMANTIC.success.base : SEMANTIC.warning.base}
+                  />
+                </View>
+                <View style={styles.correlationContent}>
+                  <Text style={styles.correlationStatement}>{corr.statement}</Text>
+                  <View style={styles.correlationMeta}>
+                    <Text style={styles.correlationConfidence}>{Math.round(corr.confidence * 100)}% confident</Text>
+                  </View>
+                  {corr.suggestion && (
+                    <View style={styles.suggestionRow}>
+                      <Ionicons name="bulb-outline" size={12} color={TEXT.tertiary} />
+                      <Text style={styles.suggestionText}>{corr.suggestion}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+            <View style={styles.mlAttribution}>
+              <Ionicons name="sparkles" size={12} color={TEXT.muted} />
+              <Text style={styles.mlAttributionText}>Powered by ML analysis of your data</Text>
+            </View>
+          </View>
+        )}
+
+        {/* ML Recommendations Section - Witty personalized tips */}
+        {hydrationRecommendations.length > 0 && (
+          <View style={[styles.recommendationsCard, CARD_SYSTEM.standard]}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="sparkles-outline" size={20} color={VIBRANT_WELLNESS.hydration.solid} />
+              <Text style={styles.sectionCardTitle}>Recommendations</Text>
+            </View>
+            {hydrationRecommendations.map((rec, i) => (
+              <View key={i} style={styles.recommendationRow}>
+                <View style={[styles.recommendationIcon, { backgroundColor: `${VIBRANT_WELLNESS.hydration.solid}15` }]}>
+                  <Ionicons name={rec.icon || 'water'} size={18} color={VIBRANT_WELLNESS.hydration.solid} />
+                </View>
+                <View style={styles.recommendationContent}>
+                  <Text style={styles.recommendationTitle}>{rec.title}</Text>
+                  <Text style={styles.recommendationDescription}>{rec.description}</Text>
+                  {rec.priority && (
+                    <View style={[styles.priorityBadge, { backgroundColor: rec.priority === 'high' ? SEMANTIC.danger.light : SEMANTIC.info.light }]}>
+                      <Text style={[styles.priorityText, { color: rec.priority === 'high' ? SEMANTIC.danger.base : SEMANTIC.info.base }]}>
+                        {rec.priority === 'high' ? 'Priority' : 'Tip'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
           </View>
         )}
 
@@ -528,4 +686,40 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingVertical: SPACING[10] },
   emptyStateTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[3] },
   emptyStateText: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, textAlign: 'center', marginTop: SPACING[2], paddingHorizontal: SPACING[4] },
+
+  // ML Patterns Section
+  patternsCard: { marginTop: SPACING[4] },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
+  sectionCardTitle: { flex: 1, fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  mlBadge: { backgroundColor: BRAND.primaryLight, paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm },
+  mlBadgeText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.bold, color: BRAND.primary },
+  patternRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[2], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  patternIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
+  patternContent: { flex: 1 },
+  patternTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold },
+  patternDescription: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
+  confidenceText: { fontSize: 10, color: TEXT.muted, marginTop: SPACING[1], fontStyle: 'italic' },
+
+  // ML Correlations Section
+  correlationsCard: { marginTop: SPACING[4] },
+  correlationRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[3], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  correlationIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
+  correlationContent: { flex: 1 },
+  correlationStatement: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary, lineHeight: 20 },
+  correlationMeta: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING[1] },
+  correlationConfidence: { fontSize: 11, color: TEXT.tertiary },
+  suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[1], marginTop: SPACING[2], paddingTop: SPACING[2], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  suggestionText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, lineHeight: 16 },
+  mlAttribution: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING[1], marginTop: SPACING[3], paddingTop: SPACING[3], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  mlAttributionText: { fontSize: 11, color: TEXT.muted },
+
+  // ML Recommendations Section
+  recommendationsCard: { marginTop: SPACING[4] },
+  recommendationRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[3], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  recommendationIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
+  recommendationContent: { flex: 1 },
+  recommendationTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  recommendationDescription: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
+  priorityBadge: { alignSelf: 'flex-start', paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm, marginTop: SPACING[1] },
+  priorityText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.semibold },
 });

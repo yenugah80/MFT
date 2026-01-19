@@ -28,7 +28,7 @@ import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop, G } from 
 import LottieView from 'lottie-react-native';
 
 import { useDashboard } from '../../hooks/useDashboard';
-import { useMoodTrends, useMoodIntelligence } from '../../hooks/useMoodInsights';
+import { useMoodTrends, useMoodIntelligence, useDecisionBrainMoodInsights } from '../../hooks/useMoodInsights';
 import { useNotification } from '../../providers/NotificationProvider';
 import apiClient from '../../services/apiClient';
 import {
@@ -250,15 +250,44 @@ export default function MoodInsightsScreen() {
   const { data: moodData, isLoading: moodLoading } = useMoodTrends({ period: 'week' });
   const { data: intelligence, isLoading: intelligenceLoading } = useMoodIntelligence();
 
-  const isLoading = dashboardLoading || moodLoading;
+  // Decision Brain - ML-powered insights from backend
+  const { data: decisionBrainData, isLoading: decisionBrainLoading } = useDecisionBrainMoodInsights();
+
+  const isLoading = dashboardLoading || moodLoading || decisionBrainLoading;
 
   // Extract data
   const wellnessScore = intelligence?.wellnessScore || null;
-  const todaysMoods = useMemo(() => dashboard?.today?.moodLogs || [], [dashboard]);
+
+  // Prefer backend data for today's moods, fall back to dashboard
+  const todaysMoods = useMemo(() => {
+    if (decisionBrainData?.todaysMoods?.length > 0) {
+      return decisionBrainData.todaysMoods;
+    }
+    return dashboard?.today?.moodLogs || [];
+  }, [decisionBrainData, dashboard]);
+
   const latestMood = todaysMoods[0] || null;
 
-  // Calculate stats
+  // Calculate stats - prefer Decision Brain stats, fall back to local calculation
   const moodStats = useMemo(() => {
+    // If Decision Brain returned stats, use them (they're ML-enhanced)
+    if (decisionBrainData?.stats && decisionBrainData.hasEnoughData) {
+      return {
+        avgMood: decisionBrainData.stats.avgMood ?? 5,
+        avgEnergy: decisionBrainData.stats.avgEnergy ?? 5,
+        loggedDays: decisionBrainData.stats.loggedDays ?? 0,
+        trend: decisionBrainData.stats.trend || 'stable',
+        isConsistent: decisionBrainData.stats.isConsistent ?? true,
+        dominantMood: decisionBrainData.stats.dominantMood || 'neutral',
+        bestDay: decisionBrainData.stats.bestDay,
+        worstDay: decisionBrainData.stats.worstDay,
+        streak: decisionBrainData.stats.streak ?? 0,
+        // Additional ML-derived metrics
+        variance: decisionBrainData.stats.moodVariance ?? 0,
+      };
+    }
+
+    // Fallback to local calculation
     if (!moodData?.trendData) return null;
     const validDays = moodData.trendData.filter(d => d.hasData);
     const avgMood = validDays.length > 0
@@ -270,18 +299,33 @@ export default function MoodInsightsScreen() {
     const bestDay = sorted[0];
     const worstDay = sorted[sorted.length - 1];
 
+    // Calculate variance locally
+    const intensities = validDays.map(d => d.intensity);
+    const variance = intensities.length > 1
+      ? intensities.reduce((sum, val) => sum + Math.pow(val - (avgMood || 5), 2), 0) / intensities.length
+      : 0;
+
     return {
       avgMood: avgMood ? parseFloat(avgMood.toFixed(1)) : 5,
       loggedDays: validDays.length,
       trend: moodData.trendSummary?.direction || 'stable',
+      isConsistent: variance < 2,
       bestDay,
       worstDay,
       streak: validDays.length,
+      variance,
     };
-  }, [moodData]);
+  }, [moodData, decisionBrainData]);
 
-  // Generate mood-specific insights from actual mood data
+  // Generate mood-specific insights - prefer Decision Brain patterns (ML-backed)
   const moodInsights = useMemo(() => {
+    // PREFER: Decision Brain ML-powered patterns (includes correlations, causal inference)
+    if (decisionBrainData?.patterns && decisionBrainData.patterns.length > 0) {
+      // Backend patterns already have the right format: { title, description, icon, color, light, confidence }
+      return decisionBrainData.patterns.slice(0, 5);
+    }
+
+    // FALLBACK: Local statistical calculation (basic patterns only)
     const items = [];
     if (!moodData?.trendData || !moodStats) return items;
 
@@ -375,7 +419,7 @@ export default function MoodInsightsScreen() {
     }
 
     return items.slice(0, 3);
-  }, [moodData, moodStats]);
+  }, [moodData, moodStats, decisionBrainData]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -587,9 +631,75 @@ export default function MoodInsightsScreen() {
                   <View style={styles.insightContent}>
                     <Text style={[styles.insightTitle, { color: insight.color }]}>{insight.title}</Text>
                     <Text style={styles.insightDescription}>{insight.description}</Text>
+                    {/* Show confidence if available (from ML backend) */}
+                    {insight.confidence && (
+                      <View style={styles.confidenceBadge}>
+                        <Text style={styles.confidenceText}>
+                          {Math.round(insight.confidence * 100)}% confidence
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               ))}
+            </View>
+          </View>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            ML CORRELATIONS SECTION - Deep patterns from Decision Brain
+            ════════════════════════════════════════════════════════════════════ */}
+        {decisionBrainData?.correlations && decisionBrainData.correlations.length > 0 && (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="git-network-outline" size={20} color={PREMIUM_COLORS.good.base} />
+              <Text style={styles.sectionTitle}>What Affects Your Mood</Text>
+              <View style={[styles.sectionBadge, { backgroundColor: PREMIUM_COLORS.good.light }]}>
+                <Text style={[styles.sectionBadgeText, { color: PREMIUM_COLORS.good.base }]}>
+                  ML
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.correlationsContainer}>
+              {decisionBrainData.correlations.map((correlation, i) => (
+                <View key={correlation.id || i} style={styles.correlationCard}>
+                  <View style={styles.correlationHeader}>
+                    <View style={[
+                      styles.correlationIconWrap,
+                      { backgroundColor: correlation.impactType === 'positive' ? PREMIUM_COLORS.excellent.light : PREMIUM_COLORS.low.light }
+                    ]}>
+                      <Ionicons
+                        name={correlation.impactType === 'positive' ? 'arrow-up' : 'arrow-down'}
+                        size={16}
+                        color={correlation.impactType === 'positive' ? PREMIUM_COLORS.excellent.base : PREMIUM_COLORS.low.base}
+                      />
+                    </View>
+                    <View style={styles.correlationMeta}>
+                      <Text style={styles.correlationStatement}>{correlation.statement}</Text>
+                      <View style={styles.correlationStats}>
+                        <Text style={styles.correlationConfidence}>
+                          {Math.round(correlation.confidence * 100)}% confident
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {correlation.suggestion && (
+                    <View style={styles.correlationSuggestion}>
+                      <Ionicons name="bulb-outline" size={12} color={TEXT.tertiary} />
+                      <Text style={styles.correlationSuggestionText}>{correlation.suggestion}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+
+            {/* Data source attribution */}
+            <View style={styles.mlAttribution}>
+              <Ionicons name="sparkles" size={12} color={TEXT.muted} />
+              <Text style={styles.mlAttributionText}>
+                Powered by ML analysis of your wellness data
+              </Text>
             </View>
           </View>
         )}
@@ -988,6 +1098,87 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT.tertiary,
     marginTop: 2,
+  },
+
+  // Confidence badge for ML-powered insights
+  confidenceBadge: {
+    marginTop: SPACING[1],
+  },
+  confidenceText: {
+    fontSize: 10,
+    color: TEXT.muted,
+    fontStyle: 'italic',
+  },
+
+  // ML Correlations Section
+  correlationsContainer: {
+    gap: SPACING[3],
+  },
+  correlationCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    padding: SPACING[3],
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  correlationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[3],
+  },
+  correlationIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  correlationMeta: {
+    flex: 1,
+  },
+  correlationStatement: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '500',
+    color: TEXT.primary,
+    lineHeight: 20,
+  },
+  correlationStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING[1],
+  },
+  correlationConfidence: {
+    fontSize: 11,
+    color: TEXT.tertiary,
+  },
+  correlationSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    paddingTop: SPACING[2],
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  correlationSuggestionText: {
+    flex: 1,
+    fontSize: 12,
+    color: TEXT.secondary,
+    lineHeight: 18,
+  },
+  mlAttribution: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[1],
+    marginTop: SPACING[3],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mlAttributionText: {
+    fontSize: 11,
+    color: TEXT.muted,
   },
 
   // Ring Component

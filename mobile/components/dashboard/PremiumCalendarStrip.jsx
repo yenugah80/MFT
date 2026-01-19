@@ -120,11 +120,15 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
   const dateKey = formatDateKey(date);
   const dayData = data?.[dateKey] || {};
 
-  // Support all field name variants from different data sources
+  // Support all field name variants from different data sources - ALL 4 DOMAINS
   const hasFood = (dayData.meals > 0) || (dayData.foodCount > 0) || (dayData.calories > 0);
   const hasMood = (dayData.moodCount > 0) || (dayData.avgMood > 0) || (dayData.moodAvg > 0);
   const hasWater = (dayData.water > 0) || (dayData.hydrationPercent > 0);
-  const hasAnyData = hasFood || hasMood || hasWater;
+  const hasActivity = (dayData.activityMinutes > 0) || (dayData.activityCount > 0);
+  const hasAnyData = hasFood || hasMood || hasWater || hasActivity;
+
+  // Count how many domains have data
+  const domainCount = [hasFood, hasMood, hasWater, hasActivity].filter(Boolean).length;
 
   // Check if this is a missed day (past date with no activity)
   const isMissedDay = isPastDate(date) && !hasAnyData;
@@ -166,15 +170,16 @@ function DayCell({ date, isToday, isSelected, data, onPress, compact = false }) 
         {/* Data indicators or missed indicator */}
         {hasAnyData ? (
           <View style={styles.indicators}>
-            {hasFood && hasMood && hasWater ? (
-              // All 3 activities logged - show single combined indicator
+            {domainCount >= 3 ? (
+              // 3+ domains logged - show single combined indicator
               <View style={[styles.indicator, styles.indicatorCombined]} />
             ) : (
-              // Show individual dots (max 2)
+              // Show individual dots (max 3 visible)
               <>
                 {hasFood && <View style={[styles.indicator, styles.indicatorFood]} />}
                 {hasMood && <View style={[styles.indicator, styles.indicatorMood]} />}
                 {hasWater && <View style={[styles.indicator, styles.indicatorWater]} />}
+                {hasActivity && <View style={[styles.indicator, styles.indicatorActivity]} />}
               </>
             )}
           </View>
@@ -264,7 +269,7 @@ function MonthGridModal({ visible, onClose, year, month, data, onDateSelect, onM
             })}
           </View>
 
-          {/* Legend */}
+          {/* Legend - All 4 wellness domains */}
           <View style={styles.legend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.indicatorFood]} />
@@ -277,6 +282,10 @@ function MonthGridModal({ visible, onClose, year, month, data, onDateSelect, onM
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.indicatorWater]} />
               <Text style={styles.legendText}>Water</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.indicatorActivity]} />
+              <Text style={styles.legendText}>Activity</Text>
             </View>
           </View>
 
@@ -1268,6 +1277,9 @@ const styles = StyleSheet.create({
   },
   indicatorWater: {
     backgroundColor: '#3B82F6', // Blue
+  },
+  indicatorActivity: {
+    backgroundColor: '#EF4444', // Red - Activity/Fitness
   },
   indicatorCombined: {
     backgroundColor: '#6B4EFF', // Brand purple - indicates complete logging

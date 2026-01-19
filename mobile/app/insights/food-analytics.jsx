@@ -48,6 +48,7 @@ import ColdStartCard from '../../components/insights/ColdStartCard';
 import { useDashboard } from '../../hooks/useDashboard';
 // Note: useCorrelations removed - cross-category correlations belong in /insights/food-mood-correlation
 import { useRecommendations } from '../../hooks/useRecommendations';
+import { useDecisionBrainNutritionInsights } from '../../hooks/useMoodInsights';
 
 // Responsive layout for small devices
 import { getResponsiveGaugeSize, IS_SMALL_DEVICE, getHorizontalPadding } from '../../utils/responsiveLayout';
@@ -71,18 +72,45 @@ export default function FoodAnalyticsScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Real data hooks - ONLY nutrition-specific data
-  // Cross-category correlations belong in /insights/food-mood-correlation
+  // Decision Brain - ML-powered insights (PRIMARY data source)
+  const { data: decisionBrainData, isLoading: dbLoading, refetch: refetchDB } = useDecisionBrainNutritionInsights();
+
+  // Dashboard as fallback for basic metrics
   const { data: dashboard, isLoading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboard();
   const { recommendations, isLoading: recsLoading, refetch: refetchRecs, acceptRecommendation } = useRecommendations();
 
-  const isLoading = dashboardLoading || recsLoading;
-  // Critical error only if dashboard fails (main data source)
-  const hasError = !!dashboardError;
+  const isLoading = dbLoading || dashboardLoading || recsLoading;
+  // Critical error only if both Decision Brain and dashboard fail
+  const hasError = !!dashboardError && !decisionBrainData?.success;
 
-  // Calculate nutrition metrics from real dashboard data
-  // Dashboard structure: { today: { nutrition, foodLogs, ... }, goals, userLifecycle, ... }
+  // Calculate nutrition metrics - PREFER Decision Brain stats, fall back to dashboard
   const nutritionMetrics = useMemo(() => {
+    // If Decision Brain returned stats, use them (ML-enhanced)
+    if (decisionBrainData?.stats && decisionBrainData.hasEnoughData) {
+      const stats = decisionBrainData.stats;
+      return {
+        calories: {
+          consumed: stats.todayCalories || 0,
+          budget: stats.calorieGoal || 2000,
+          remaining: (stats.calorieGoal || 2000) - (stats.todayCalories || 0),
+          isOverBudget: (stats.todayCalories || 0) > (stats.calorieGoal || 2000),
+          progress: stats.calorieGoalAdherence || 0,
+        },
+        macros: {
+          protein: { consumed: stats.todayProtein || 0, goal: stats.proteinGoal || 120, progress: stats.proteinProgress || 0 },
+          carbs: { consumed: stats.todayCarbs || 0, goal: stats.carbsGoal || 250, progress: stats.carbsProgress || 0 },
+          fat: { consumed: stats.todayFat || 0, goal: stats.fatGoal || 65, progress: stats.fatProgress || 0 },
+        },
+        balanceScore: stats.nutritionScore || 50,
+        mealsToday: stats.mealsToday || 0,
+        totalMealsLogged: stats.totalMealsLogged || 0,
+        totalDaysWithLogs: stats.totalDaysWithLogs || 0,
+        trend: stats.trend || 'stable',
+        avgCalories: stats.avgCalories || 0,
+      };
+    }
+
+    // Fallback to dashboard data
     if (!dashboard) return null;
 
     // Extract data from correct dashboard structure
@@ -143,24 +171,45 @@ export default function FoodAnalyticsScreen() {
       totalMealsLogged,
       totalDaysWithLogs,
     };
-  }, [dashboard]);
+  }, [dashboard, decisionBrainData]);
 
-  // Filter food recommendations from AI
+  // Recommendations - PREFER Decision Brain witty recommendations, fall back to AI recs
   const foodRecommendations = useMemo(() => {
+    // Decision Brain returns witty, personalized recommendations
+    if (decisionBrainData?.recommendations?.length > 0) {
+      return decisionBrainData.recommendations.slice(0, 3);
+    }
     if (!recommendations) return [];
     return recommendations.slice(0, 3);
-  }, [recommendations]);
+  }, [recommendations, decisionBrainData]);
+
+  // ML-powered patterns from Decision Brain
+  const nutritionPatterns = useMemo(() => {
+    if (decisionBrainData?.patterns?.length > 0) {
+      return decisionBrainData.patterns.slice(0, 5);
+    }
+    return [];
+  }, [decisionBrainData]);
+
+  // ML correlations with confidence scores
+  const nutritionCorrelations = useMemo(() => {
+    if (decisionBrainData?.correlations?.length > 0) {
+      return decisionBrainData.correlations.slice(0, 4);
+    }
+    return [];
+  }, [decisionBrainData]);
 
   // Handlers
   const handleRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRefreshing(true);
     await Promise.all([
+      refetchDB?.(),
       refetchDashboard?.(),
       refetchRecs?.(),
     ]);
     setRefreshing(false);
-  }, [refetchDashboard, refetchRecs]);
+  }, [refetchDB, refetchDashboard, refetchRecs]);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -344,11 +393,78 @@ export default function FoodAnalyticsScreen() {
           </View>
         )}
 
+        {/* ML Patterns Section - Decision Brain detected patterns */}
+        {nutritionPatterns.length > 0 && (
+          <View style={[styles.patternsCard, CARD_SYSTEM.standard]}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="bulb-outline" size={20} color={VIBRANT_WELLNESS.nutrition.solid} />
+              <Text style={styles.cardTitle}>Nutrition Patterns</Text>
+              <View style={styles.mlBadge}>
+                <Text style={styles.mlBadgeText}>ML</Text>
+              </View>
+            </View>
+            {nutritionPatterns.map((pattern, i) => (
+              <View key={i} style={styles.patternRow}>
+                <View style={[styles.patternIcon, { backgroundColor: (pattern.light || `${pattern.color}15`) }]}>
+                  <Ionicons name={pattern.icon || 'nutrition'} size={18} color={pattern.color || VIBRANT_WELLNESS.nutrition.solid} />
+                </View>
+                <View style={styles.patternContent}>
+                  <Text style={[styles.patternTitle, { color: pattern.color || TEXT.primary }]}>{pattern.title}</Text>
+                  <Text style={styles.patternDescription}>{pattern.description}</Text>
+                  {pattern.confidence && (
+                    <Text style={styles.confidenceText}>{Math.round(pattern.confidence * 100)}% confidence</Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ML Correlations Section - What affects your nutrition */}
+        {nutritionCorrelations.length > 0 && (
+          <View style={[styles.correlationsCard, CARD_SYSTEM.standard]}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="git-network-outline" size={20} color={BRAND.primary} />
+              <Text style={styles.cardTitle}>What We Noticed</Text>
+              <View style={styles.mlBadge}>
+                <Text style={styles.mlBadgeText}>ML</Text>
+              </View>
+            </View>
+            {nutritionCorrelations.map((corr, i) => (
+              <View key={corr.id || i} style={styles.correlationRow}>
+                <View style={[styles.correlationIcon, { backgroundColor: corr.impactType === 'positive' ? SEMANTIC.success.light : SEMANTIC.warning.light }]}>
+                  <Ionicons
+                    name={corr.impactType === 'positive' ? 'trending-up' : 'trending-down'}
+                    size={16}
+                    color={corr.impactType === 'positive' ? SEMANTIC.success.base : SEMANTIC.warning.base}
+                  />
+                </View>
+                <View style={styles.correlationContent}>
+                  <Text style={styles.correlationStatement}>{corr.statement}</Text>
+                  <View style={styles.correlationMeta}>
+                    <Text style={styles.correlationConfidence}>{Math.round(corr.confidence * 100)}% confident</Text>
+                  </View>
+                  {corr.suggestion && (
+                    <View style={styles.suggestionRow}>
+                      <Ionicons name="bulb-outline" size={12} color={TEXT.tertiary} />
+                      <Text style={styles.suggestionText}>{corr.suggestion}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+            <View style={styles.mlAttribution}>
+              <Ionicons name="sparkles" size={12} color={TEXT.muted} />
+              <Text style={styles.mlAttributionText}>Powered by ML analysis of your data</Text>
+            </View>
+          </View>
+        )}
+
         {/* AI Food Recommendations */}
         {foodRecommendations.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>AI Recommendations</Text>
+              <Text style={styles.sectionTitle}>{decisionBrainData?.recommendations?.length > 0 ? 'Recommendations' : 'AI Recommendations'}</Text>
               <Text style={styles.sectionSubtitle}>Personalized for your goals</Text>
             </View>
 
@@ -356,7 +472,7 @@ export default function FoodAnalyticsScreen() {
               <View key={rec.id || index} style={[styles.recommendationCard, CARD_SYSTEM.standard]}>
                 <View style={styles.recommendationContent}>
                   <View style={[styles.recommendationIcon, { backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}15` }]}>
-                    <Ionicons name="restaurant" size={24} color={VIBRANT_WELLNESS.nutrition.solid} />
+                    <Ionicons name={rec.icon || 'restaurant'} size={24} color={VIBRANT_WELLNESS.nutrition.solid} />
                   </View>
                   <View style={styles.recommendationText}>
                     <Text style={styles.recommendationTitle}>{rec.name || rec.title}</Text>
@@ -368,15 +484,24 @@ export default function FoodAnalyticsScreen() {
                         {rec.calories} cal • {rec.protein}g protein
                       </Text>
                     )}
+                    {rec.priority && (
+                      <View style={[styles.priorityBadge, { backgroundColor: rec.priority === 'high' ? SEMANTIC.danger.light : SEMANTIC.info.light }]}>
+                        <Text style={[styles.priorityText, { color: rec.priority === 'high' ? SEMANTIC.danger.base : SEMANTIC.info.base }]}>
+                          {rec.priority === 'high' ? 'Priority' : 'Tip'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
-                <TouchableOpacity
-                  onPress={() => handleAcceptRecommendation(rec)}
-                  style={[styles.actionButton, { backgroundColor: VIBRANT_WELLNESS.nutrition.solid }]}
-                >
-                  <Text style={styles.actionButtonText}>Add to Log</Text>
-                  <Ionicons name="add" size={16} color={TEXT.white} />
-                </TouchableOpacity>
+                {!decisionBrainData?.recommendations?.length && (
+                  <TouchableOpacity
+                    onPress={() => handleAcceptRecommendation(rec)}
+                    style={[styles.actionButton, { backgroundColor: VIBRANT_WELLNESS.nutrition.solid }]}
+                  >
+                    <Text style={styles.actionButtonText}>Add to Log</Text>
+                    <Ionicons name="add" size={16} color={TEXT.white} />
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </>
@@ -490,4 +615,33 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingVertical: SPACING[10] },
   emptyStateTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[3] },
   emptyStateText: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, textAlign: 'center', marginTop: SPACING[2], paddingHorizontal: SPACING[4] },
+
+  // ML Patterns Section
+  patternsCard: { marginTop: SPACING[4] },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
+  mlBadge: { backgroundColor: BRAND.primaryLight, paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm },
+  mlBadgeText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.bold, color: BRAND.primary },
+  patternRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[2], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  patternIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
+  patternContent: { flex: 1 },
+  patternTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold },
+  patternDescription: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
+  confidenceText: { fontSize: 10, color: TEXT.muted, marginTop: SPACING[1], fontStyle: 'italic' },
+
+  // ML Correlations Section
+  correlationsCard: { marginTop: SPACING[4] },
+  correlationRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[3], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  correlationIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
+  correlationContent: { flex: 1 },
+  correlationStatement: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary, lineHeight: 20 },
+  correlationMeta: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING[1] },
+  correlationConfidence: { fontSize: 11, color: TEXT.tertiary },
+  suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[1], marginTop: SPACING[2], paddingTop: SPACING[2], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  suggestionText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, lineHeight: 16 },
+  mlAttribution: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING[1], marginTop: SPACING[3], paddingTop: SPACING[3], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  mlAttributionText: { fontSize: 11, color: TEXT.muted },
+
+  // Priority Badge for recommendations
+  priorityBadge: { alignSelf: 'flex-start', paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm, marginTop: SPACING[1] },
+  priorityText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.semibold },
 });

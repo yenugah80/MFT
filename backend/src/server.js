@@ -670,6 +670,11 @@ app.use("/api/reminders", remindersRouter);
 // Note: Morning predictions, meal feeling predictions, real-time interventions
 app.use("/api/predictions", predictionsRouter);
 
+// Mount Decision Brain Router (Unified ML Intelligence Layer)
+// Note: Central brain that integrates all ML components and decides when to speak/stay silent
+import decisionBrainRouter from "./routes/decisionBrain.js";
+app.use("/api/decision-brain", decisionBrainRouter);
+
 /* -------------------------------------------
    EXISTING ROUTES
 -------------------------------------------- */

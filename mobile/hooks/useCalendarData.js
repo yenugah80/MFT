@@ -11,15 +11,23 @@
  *
  * Transforms dashboard data into a calendar-friendly format with:
  * - Daily nutrition summaries
- * - Wellness scores
+ * - Wellness scores (all 4 domains: Food, Mood, Hydration, Activity)
  * - Goal progress indicators
  * - Storyline generation
+ *
+ * DATA SOURCES:
+ * - /nutrition/dashboard - today's comprehensive data
+ * - /water/history - historical water logs
+ * - /mood/history - historical mood entries
+ * - /activity/history - historical activity logs
  *
  * Used by: Insights index, Dashboard calendar strip, History screens
  */
 
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from './useDashboard';
+import apiClient from '../services/apiClient';
 import { calculateFoodMoodScore, generateStoryLine } from '../utils/healthCalculations';
 
 // ============================================================================
@@ -73,6 +81,51 @@ export function getTimeframeRange(timeframe) {
   }
 }
 
+/**
+ * Aggregate logs by date key
+ */
+function aggregateLogsByDay(logs, dateField = 'loggedDate') {
+  const byDay = {};
+  if (!logs || !Array.isArray(logs)) return byDay;
+
+  logs.forEach(log => {
+    const logDate = new Date(log[dateField] || log.timestamp || log.createdAt);
+    const key = formatDateKey(logDate);
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(log);
+  });
+  return byDay;
+}
+
+/**
+ * Fetch historical wellness data (water, mood, activity)
+ */
+async function fetchHistoricalData(days = 7) {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days + 1);
+
+  const startISO = startDate.toISOString();
+  const endISO = endDate.toISOString();
+
+  try {
+    const [waterHistory, moodHistory, activityHistory] = await Promise.all([
+      apiClient.get('/water/history', { params: { startDate: startISO, endDate: endISO, limit: days * 10 } }).catch(() => ({ logs: [] })),
+      apiClient.get('/mood/history', { params: { startDate: startISO, endDate: endISO, limit: days * 5 } }).catch(() => []),
+      apiClient.get('/activity/history', { params: { days } }).catch(() => ({ activities: [] })),
+    ]);
+
+    return {
+      waterLogs: waterHistory?.logs || [],
+      moodLogs: Array.isArray(moodHistory) ? moodHistory : [],
+      activityLogs: activityHistory?.activities || [],
+    };
+  } catch (error) {
+    console.error('[useCalendarData] Historical fetch error:', error);
+    return { waterLogs: [], moodLogs: [], activityLogs: [] };
+  }
+}
+
 // ============================================================================
 // MAIN HOOK
 // ============================================================================
@@ -87,8 +140,33 @@ export function getTimeframeRange(timeframe) {
 export function useCalendarData(options = {}) {
   const { timeframe = 'weekly' } = options;
 
-  // Get dashboard data
-  const { data: dashboard, isLoading, error, refetch } = useDashboard();
+  // Get dashboard data (includes today + nutrition week summaries)
+  const { data: dashboard, isLoading: dashboardLoading, error, refetch: refetchDashboard } = useDashboard();
+
+  // Fetch historical water, mood, activity data separately
+  const historyDays = timeframe === 'monthly' ? 30 : 7;
+  const { data: historicalData, isLoading: historyLoading, refetch: refetchHistory } = useQuery({
+    queryKey: ['calendar-history', historyDays],
+    queryFn: () => fetchHistoricalData(historyDays),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
+  });
+
+  const isLoading = dashboardLoading || historyLoading;
+  const refetch = async () => {
+    await Promise.all([refetchDashboard(), refetchHistory()]);
+  };
+
+  // Aggregate historical logs by date
+  const { waterByDay, moodByDay, activityByDay } = useMemo(() => {
+    if (!historicalData) return { waterByDay: {}, moodByDay: {}, activityByDay: {} };
+    return {
+      waterByDay: aggregateLogsByDay(historicalData.waterLogs, 'loggedDate'),
+      moodByDay: aggregateLogsByDay(historicalData.moodLogs, 'loggedDate'),
+      activityByDay: aggregateLogsByDay(historicalData.activityLogs, 'timestamp'),
+    };
+  }, [historicalData]);
 
   // Extract goals from dashboard
   const goals = useMemo(() => {
@@ -178,7 +256,7 @@ export function useCalendarData(options = {}) {
       };
     }
 
-    // Process week summaries (historical data)
+    // Process week summaries (historical data) - NOW WITH COMPLETE DATA
     if (dashboard.trends?.weekSummaries) {
       dashboard.trends.weekSummaries.forEach(summary => {
         const key = formatDateKey(summary.date);
@@ -188,15 +266,34 @@ export function useCalendarData(options = {}) {
         const totalProtein = summary.totalProtein || 0;
         const goalReached = totalCals >= (calorieGoal * 0.9) && totalCals <= (calorieGoal * 1.1);
 
-        // Calculate partial wellness score (without mood/water since not available for history)
+        // Get historical water, mood, activity for this day
+        const dayWaterLogs = waterByDay[key] || [];
+        const dayMoodLogs = moodByDay[key] || [];
+        const dayActivityLogs = activityByDay[key] || [];
+
+        // Calculate water intake (logs are in liters)
+        const waterIntake = dayWaterLogs.reduce((sum, log) =>
+          sum + parseFloat(log.amountLiters || log.hydrationLiters || 0), 0);
+        const hydrationPercent = Math.min((waterIntake / waterGoal) * 100, 100);
+
+        // Calculate mood average
+        const moodAvg = dayMoodLogs.length > 0
+          ? dayMoodLogs.reduce((sum, log) => sum + (log.intensity ?? 5), 0) / dayMoodLogs.length
+          : null;
+
+        // Calculate activity minutes
+        const activityMinutes = dayActivityLogs.reduce((sum, log) =>
+          sum + (log.durationMinutes || log.duration || 0), 0);
+
+        // Calculate COMPLETE wellness score with all 4 domains
         const foodMoodScore = calculateFoodMoodScore({
           calories: totalCals,
           calorieGoal,
           protein: totalProtein,
           proteinGoal,
-          hydrationPercent: 0,
+          hydrationPercent,
           micronutrientCount: 0,
-          moodIntensity: null,
+          moodIntensity: moodAvg,
         });
 
         // Generate storyline
@@ -205,8 +302,8 @@ export function useCalendarData(options = {}) {
           calorieGoal,
           meals: summary.mealCount || 0,
           goalReached,
-          moodAvg: null,
-          hydrationPercent: 0,
+          moodAvg,
+          hydrationPercent,
           protein: totalProtein,
           proteinGoal,
         });
@@ -220,20 +317,83 @@ export function useCalendarData(options = {}) {
           fiber: 0,
           meals: summary.mealCount || 0,
           goalReached,
-          logged: totalCals > 0,
+          logged: totalCals > 0 || dayWaterLogs.length > 0 || dayMoodLogs.length > 0 || dayActivityLogs.length > 0,
           protein: totalProtein,
           proteinGoal,
           foodCount: summary.mealCount || 0,
-          moodCount: 0,
-          moodAvg: null,
-          hydrationPercent: 0,
-          water: 0,
+          moodCount: dayMoodLogs.length,
+          moodAvg,
+          hydrationPercent,
+          water: waterIntake,
+          activityMinutes,
+          activityCount: dayActivityLogs.length,
           foodMoodScore,
           storyLine,
           isToday: false,
         };
       });
     }
+
+    // Also add days with water/mood/activity but no food logged
+    const allHistoricalDays = new Set([
+      ...Object.keys(waterByDay),
+      ...Object.keys(moodByDay),
+      ...Object.keys(activityByDay),
+    ]);
+
+    allHistoricalDays.forEach(key => {
+      if (key === todayKey || calData[key]) return; // Skip if already processed
+
+      const dayWaterLogs = waterByDay[key] || [];
+      const dayMoodLogs = moodByDay[key] || [];
+      const dayActivityLogs = activityByDay[key] || [];
+
+      if (dayWaterLogs.length === 0 && dayMoodLogs.length === 0 && dayActivityLogs.length === 0) return;
+
+      const waterIntake = dayWaterLogs.reduce((sum, log) =>
+        sum + parseFloat(log.amountLiters || log.hydrationLiters || 0), 0);
+      const hydrationPercent = Math.min((waterIntake / waterGoal) * 100, 100);
+
+      const moodAvg = dayMoodLogs.length > 0
+        ? dayMoodLogs.reduce((sum, log) => sum + (log.intensity ?? 5), 0) / dayMoodLogs.length
+        : null;
+
+      const activityMinutes = dayActivityLogs.reduce((sum, log) =>
+        sum + (log.durationMinutes || log.duration || 0), 0);
+
+      const foodMoodScore = calculateFoodMoodScore({
+        calories: 0,
+        calorieGoal,
+        protein: 0,
+        proteinGoal,
+        hydrationPercent,
+        micronutrientCount: 0,
+        moodIntensity: moodAvg,
+      });
+
+      calData[key] = {
+        date: key,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        meals: 0,
+        goalReached: false,
+        logged: true, // Has water/mood/activity data
+        proteinGoal,
+        foodCount: 0,
+        moodCount: dayMoodLogs.length,
+        moodAvg,
+        hydrationPercent,
+        water: waterIntake,
+        activityMinutes,
+        activityCount: dayActivityLogs.length,
+        foodMoodScore,
+        storyLine: null,
+        isToday: false,
+      };
+    });
 
     // Ensure today exists
     if (!calData[todayKey]) {
@@ -256,7 +416,7 @@ export function useCalendarData(options = {}) {
     }
 
     return calData;
-  }, [dashboard, goals]);
+  }, [dashboard, goals, waterByDay, moodByDay, activityByDay]);
 
   // Filter data by timeframe
   const filteredData = useMemo(() => {
