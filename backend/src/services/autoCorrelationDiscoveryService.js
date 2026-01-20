@@ -266,17 +266,19 @@ async function extractAllFactors(userId, lookbackDays = 30) {
       factorsByDate[dateKey] = initDayFactors(dateKey);
     }
 
-    // Aggregate mood data
+    // Aggregate mood data (moodLogTable uses 'intensity' not 'moodScore')
     factorsByDate[dateKey].mood_score = Math.max(
       factorsByDate[dateKey].mood_score || 0,
-      log.moodScore || 0
+      log.intensity || 0
     );
     factorsByDate[dateKey].energy_level = Math.max(
       factorsByDate[dateKey].energy_level || 0,
       log.energyLevel || 0
     );
-    factorsByDate[dateKey].stress_level = log.stressLevel || factorsByDate[dateKey].stress_level;
-    factorsByDate[dateKey].sleep_quality = log.sleepQuality || factorsByDate[dateKey].sleep_quality;
+    // Note: stressLevel and sleepQuality are stored in tags JSON if present
+    const tags = log.tags || {};
+    if (tags.stress) factorsByDate[dateKey].stress_level = tags.stress;
+    if (tags.sleep) factorsByDate[dateKey].sleep_quality = tags.sleep;
     factorsByDate[dateKey]._moodTimestamp = log.loggedDate;
   }
 

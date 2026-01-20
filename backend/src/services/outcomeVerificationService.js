@@ -299,7 +299,7 @@ async function getMoodInWindow(userId, start, end) {
 
   if (logs.length === 0) return null;
 
-  const avgMood = logs.reduce((sum, l) => sum + (l.moodScore || 0), 0) / logs.length;
+  const avgMood = logs.reduce((sum, l) => sum + (l.intensity || 0), 0) / logs.length;
   const avgEnergy = logs.reduce((sum, l) => sum + (l.energyLevel || 0), 0) / logs.length;
 
   return {
