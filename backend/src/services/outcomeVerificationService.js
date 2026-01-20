@@ -326,7 +326,7 @@ async function getHydrationInWindow(userId, start, end) {
 
   if (logs.length === 0) return null;
 
-  const totalMl = logs.reduce((sum, l) => sum + (l.amountMl || 0), 0);
+  const totalMl = logs.reduce((sum, l) => sum + ((parseFloat(l.amountLiters) || 0) * 1000), 0);
 
   return {
     totalMl,

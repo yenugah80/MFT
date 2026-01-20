@@ -324,12 +324,13 @@ async function extractAllFactors(userId, lookbackDays = 30) {
     }
 
     const day = factorsByDate[dateKey];
-    day.daily_water_ml += log.amountMl || 0;
+    const waterMl = (parseFloat(log.amountLiters) || 0) * 1000;
+    day.daily_water_ml += waterMl;
 
     if (hour < 12) {
-      day.morning_hydration += log.amountMl || 0;
+      day.morning_hydration += waterMl;
     } else if (hour >= 18) {
-      day.evening_hydration += log.amountMl || 0;
+      day.evening_hydration += waterMl;
     }
   }
 
