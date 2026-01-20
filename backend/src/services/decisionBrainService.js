@@ -40,10 +40,11 @@ import {
   generateMessage,
 } from './recommendationOrchestratorService.js';
 import { computeUserCorrelations, getUserCorrelations } from './correlationEngineService.js';
-import { selectArmWithThompsonSampling, updateArmStats } from './thompsonSamplingService.js';
-import { detectDriftForUser, getDriftStatus } from './driftDetectionService.js';
+import { selectArm, updateArm } from './thompsonSamplingService.js';
+import { getLatestDriftStatus } from './driftDetectionService.js';
 import { bootstrapLearningFromHistory, getLearningReadiness } from './learningStateService.js';
-import { generateMoodProfile, generateRecommendations as generateMoodRecommendations } from './moodRecommendationEngine.js';
+import moodRecommendationEngine from './moodRecommendationEngine.js';
+const { buildMoodProfile: generateMoodProfile, generateMoodRecommendations } = moodRecommendationEngine;
 
 /**
  * ============================================================================
@@ -386,7 +387,7 @@ export async function generateIntelligentRecommendations(userId, options = {}) {
     // Step 11: Check for drift (model health)
     let driftStatus = null;
     try {
-      driftStatus = await getDriftStatus(userId);
+      driftStatus = await getLatestDriftStatus(userId);
     } catch (err) {
       // Drift detection is optional
     }
