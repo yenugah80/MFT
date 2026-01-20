@@ -86,7 +86,7 @@ export const NotificationProvider = ({ children }) => {
 
     setToasts((prev) => [...prev, newToast]);
 
-    const duration = toast.duration ?? 3000;
+    const duration = toast.duration ?? 4500; // 4.5 seconds for better readability
     if (duration > 0) {
       setTimeout(() => removeToast(id), duration);
     }
@@ -155,7 +155,7 @@ export const NotificationProvider = ({ children }) => {
           type: 'info',
           title: message.title,
           message: message.body,
-          duration: 4000,
+          duration: 5000, // 5 seconds for push notifications
         });
       });
 
@@ -262,7 +262,7 @@ export const NotificationProvider = ({ children }) => {
         type: 'info',
         message: notification.body,
         title: notification.title,
-        duration: 4000,
+        duration: 5000, // 5 seconds for smart notifications
       });
 
       console.log(`[NotificationProvider] Smart ${type} notification triggered`);
@@ -315,7 +315,7 @@ export const NotificationProvider = ({ children }) => {
         type: 'info',
         message: body || title,
         title: title,
-        duration: 4000,
+        duration: 5000, // 5 seconds for foreground notifications
       });
     });
 
@@ -384,7 +384,7 @@ export const NotificationProvider = ({ children }) => {
       addToast({
         type: 'error',
         message: message || 'An error occurred',
-        duration: options.duration ?? 5000,
+        duration: options.duration ?? 6000, // 6 seconds for errors (important to read)
         ...options,
       }),
 
