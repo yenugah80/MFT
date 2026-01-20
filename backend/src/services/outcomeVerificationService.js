@@ -292,8 +292,8 @@ async function getMoodInWindow(userId, start, end) {
     .where(
       and(
         eq(moodLogTable.userId, userId),
-        gte(moodLogTable.loggedAt, start),
-        lte(moodLogTable.loggedAt, end)
+        gte(moodLogTable.loggedDate, start),
+        lte(moodLogTable.loggedDate, end)
       )
     );
 
@@ -319,8 +319,8 @@ async function getHydrationInWindow(userId, start, end) {
     .where(
       and(
         eq(waterLogTable.userId, userId),
-        gte(waterLogTable.loggedAt, start),
-        lte(waterLogTable.loggedAt, end)
+        gte(waterLogTable.loggedDate, start),
+        lte(waterLogTable.loggedDate, end)
       )
     );
 
@@ -344,8 +344,8 @@ async function getNutritionInWindow(userId, start, end) {
     .where(
       and(
         eq(foodLogTable.userId, userId),
-        gte(foodLogTable.loggedAt, start),
-        lte(foodLogTable.loggedAt, end)
+        gte(foodLogTable.loggedDate, start),
+        lte(foodLogTable.loggedDate, end)
       )
     );
 

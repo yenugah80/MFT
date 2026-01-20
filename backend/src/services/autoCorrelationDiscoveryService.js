@@ -218,30 +218,30 @@ async function extractAllFactors(userId, lookbackDays = 30) {
       .where(
         and(
           eq(moodLogTable.userId, userId),
-          gte(moodLogTable.loggedAt, startDate)
+          gte(moodLogTable.loggedDate, startDate)
         )
       )
-      .orderBy(desc(moodLogTable.loggedAt)),
+      .orderBy(desc(moodLogTable.loggedDate)),
 
     db.select()
       .from(foodLogTable)
       .where(
         and(
           eq(foodLogTable.userId, userId),
-          gte(foodLogTable.loggedAt, startDate)
+          gte(foodLogTable.loggedDate, startDate)
         )
       )
-      .orderBy(desc(foodLogTable.loggedAt)),
+      .orderBy(desc(foodLogTable.loggedDate)),
 
     db.select()
       .from(waterLogTable)
       .where(
         and(
           eq(waterLogTable.userId, userId),
-          gte(waterLogTable.loggedAt, startDate)
+          gte(waterLogTable.loggedDate, startDate)
         )
       )
-      .orderBy(desc(waterLogTable.loggedAt)),
+      .orderBy(desc(waterLogTable.loggedDate)),
 
     db.select()
       .from(activityLogTable)
@@ -259,8 +259,8 @@ async function extractAllFactors(userId, lookbackDays = 30) {
 
   // Process mood logs
   for (const log of moodLogs) {
-    const dateKey = new Date(log.loggedAt).toISOString().split('T')[0];
-    const hour = new Date(log.loggedAt).getHours();
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const hour = new Date(log.loggedDate).getHours();
 
     if (!factorsByDate[dateKey]) {
       factorsByDate[dateKey] = initDayFactors(dateKey);
@@ -277,13 +277,13 @@ async function extractAllFactors(userId, lookbackDays = 30) {
     );
     factorsByDate[dateKey].stress_level = log.stressLevel || factorsByDate[dateKey].stress_level;
     factorsByDate[dateKey].sleep_quality = log.sleepQuality || factorsByDate[dateKey].sleep_quality;
-    factorsByDate[dateKey]._moodTimestamp = log.loggedAt;
+    factorsByDate[dateKey]._moodTimestamp = log.loggedDate;
   }
 
   // Process food logs
   for (const log of foodLogs) {
-    const dateKey = new Date(log.loggedAt).toISOString().split('T')[0];
-    const hour = new Date(log.loggedAt).getHours();
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const hour = new Date(log.loggedDate).getHours();
 
     if (!factorsByDate[dateKey]) {
       factorsByDate[dateKey] = initDayFactors(dateKey);
@@ -316,8 +316,8 @@ async function extractAllFactors(userId, lookbackDays = 30) {
 
   // Process water logs
   for (const log of waterLogs) {
-    const dateKey = new Date(log.loggedAt).toISOString().split('T')[0];
-    const hour = new Date(log.loggedAt).getHours();
+    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const hour = new Date(log.loggedDate).getHours();
 
     if (!factorsByDate[dateKey]) {
       factorsByDate[dateKey] = initDayFactors(dateKey);
