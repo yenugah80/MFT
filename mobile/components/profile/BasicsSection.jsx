@@ -1,7 +1,7 @@
 import { View, Text, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from 'expo-linear-gradient';
-import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS , SEMANTIC_ACTIONS } from "../../constants/premiumTheme";
+import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS } from "../../constants/premiumTheme";
 
 /**
  * BasicsSection - Premium Profile Header
@@ -10,7 +10,7 @@ import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SHADOWS , SEMA
  * Personal metrics (age, weight, height, etc.) are now in MetricsGridSection
  * with inline editing support.
  */
-export default function BasicsSection({ basics, user , SEMANTIC_ACTIONS }) {
+export default function BasicsSection({ basics, user }) {
   return (
     <View style={styles.card}>
       <View style={styles.profileSection}>
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     padding: SPACING[6],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
+    borderColor: SURFACES.card.border,
     ...SHADOWS.md,
   },
   profileSection: {
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: `${SEMANTIC_ACTIONS.success}33`,
+    backgroundColor: SURFACES.background.tertiary,
     justifyContent: 'center',
     alignItems: 'center',
   },

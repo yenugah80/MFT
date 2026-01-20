@@ -143,12 +143,11 @@ export default function DailyIntelligenceBehaviorSection({
               <View style={componentStyles.correlationCardContainer}>
                 <CorrelationCard
                   id={item.id}
-                  headline={item.pattern}
+                  pattern={item.pattern}
                   confidence={item.confidence}
                   occurrences={item.occurrences}
                   affectedDomains={item.affectedDomains}
                   whatHappens={item.whatHappens}
-                  evidence={item.evidence}
                   onDismiss={() => handleCorrelationDismiss(item.id)}
                 />
               </View>
@@ -181,7 +180,7 @@ const componentStyles = StyleSheet.create({
   },
 
   mainCardWrapper: {
-    paddingHorizontal: SPACING[4],
+    // DailyIntelligenceCard handles its own marginHorizontal
     marginBottom: SPACING[2],
   },
 

@@ -89,6 +89,7 @@ export const calculateFoodMoodScore = ({
 
 /**
  * Generate personalized story line based on daily data
+ * Shows actual numbers and specific data points for real, personalized insights
  *
  * @param {Object} dayData - Day's nutrition and wellness data
  * @returns {string} Story line text
@@ -103,55 +104,106 @@ export const generateStoryLine = (dayData) => {
     hydrationPercent = 0,
     protein = 0,
     proteinGoal = 150,
+    carbs = 0,
+    fat = 0,
+    water = 0,
+    waterGoal = 2.5,
   } = dayData;
 
-  const calorieRatio = calories / calorieGoal;
-  const proteinRatio = protein / proteinGoal;
+  const calorieRatio = calorieGoal > 0 ? calories / calorieGoal : 0;
+  const proteinRatio = proteinGoal > 0 ? protein / proteinGoal : 0;
+  const caloriesRemaining = Math.max(0, calorieGoal - calories);
+  const proteinRemaining = Math.max(0, proteinGoal - protein);
 
-  // No data scenario
-  if (meals === 0 && hydrationPercent === 0 && moodAvg == null) {
+  // Helper to format mood description
+  const getMoodDesc = (avg) => {
+    if (avg >= 4.5) return 'great';
+    if (avg >= 4) return 'good';
+    if (avg >= 3) return 'okay';
+    if (avg >= 2) return 'low';
+    return 'very low';
+  };
+
+  // No data scenario - check ALL data sources including calories
+  if (calories === 0 && meals === 0 && hydrationPercent === 0 && moodAvg == null) {
     return "No data logged for this day.";
   }
 
-  // Perfect day
+  // Perfect day - show actual achievements
   if (goalReached && hydrationPercent >= 80 && moodAvg != null && moodAvg >= 4) {
-    return "Perfect balance! Great nutrition and hydration led to a positive mood. Keep this momentum going!";
+    return `${Math.round(calories)} cal consumed, ${Math.round(protein)}g protein, ${Math.round(hydrationPercent)}% hydrated. Mood was ${getMoodDesc(moodAvg)}. A well-balanced day!`;
   }
 
-  // Good nutrition, good mood
+  // Good nutrition, good mood - show the numbers
   if (goalReached && moodAvg != null && moodAvg >= 4) {
-    return "Excellent day! You hit your calorie goal and felt great. Your nutrition choices supported your wellbeing.";
+    return `You hit ${Math.round(calories)} cal (${Math.round(calorieRatio * 100)}% of goal) with ${Math.round(protein)}g protein. Mood: ${getMoodDesc(moodAvg)}.`;
   }
 
-  // Good nutrition, low mood
+  // Good nutrition, low mood - specific data
   if (goalReached && moodAvg != null && moodAvg < 3) {
-    return `You hit your nutrition goals, but mood was lower. ${hydrationPercent < 60 ? 'Try increasing water intake' : 'Consider stress factors beyond nutrition'}.`;
+    const hydrationNote = hydrationPercent < 60
+      ? `Only ${Math.round(hydrationPercent)}% hydrated - this may have affected mood.`
+      : 'Consider non-nutritional factors.';
+    return `Nutrition on track (${Math.round(calories)} cal, ${Math.round(protein)}g protein) but mood was ${getMoodDesc(moodAvg)}. ${hydrationNote}`;
   }
 
-  // High protein, high mood
+  // High protein, high mood - show protein achievement
   if (proteinRatio >= 0.9 && moodAvg != null && moodAvg >= 4) {
-    return "High protein intake correlated with positive mood. Your muscle recovery and energy levels benefited!";
+    return `Strong protein day: ${Math.round(protein)}g of ${proteinGoal}g goal (${Math.round(proteinRatio * 100)}%). Mood was ${getMoodDesc(moodAvg)}.`;
   }
 
-  // Undereating
-  if (calorieRatio < 0.7) {
-    return `Significantly under calorie goal (${Math.round(calorieRatio * 100)}%). This may impact energy levels and mood tomorrow.`;
+  // Undereating - show actual numbers
+  if (calorieRatio < 0.7 && calorieRatio > 0) {
+    const mealInfo = meals > 0 ? ` from ${meals} meal${meals > 1 ? 's' : ''}` : '';
+    const moodNote = moodAvg != null ? ` Mood: ${getMoodDesc(moodAvg)}.` : '';
+    return `${Math.round(calories)} of ${calorieGoal} cal${mealInfo} (${caloriesRemaining} cal short).${moodNote}`;
   }
 
-  // Overeating
+  // Overeating - show specific numbers
   if (calorieRatio > 1.3) {
-    return `Above calorie goal (${Math.round(calorieRatio * 100)}%). ${moodAvg != null && moodAvg < 3 ? 'This may have contributed to lower energy' : 'Balance out with lighter meals tomorrow'}.`;
+    const overBy = Math.round(calories - calorieGoal);
+    const moodNote = moodAvg != null && moodAvg < 3 ? ` Mood was ${getMoodDesc(moodAvg)}.` : '';
+    return `${Math.round(calories)} cal consumed (+${overBy} over ${calorieGoal} goal).${moodNote}`;
   }
 
-  // Low hydration impact
-  if (hydrationPercent < 40 && moodAvg != null && moodAvg < 3) {
-    return "Low hydration detected. Dehydration can significantly impact mood and cognitive function. Try drinking more water!";
+  // Low hydration impact - show water data
+  if (hydrationPercent < 40 && hydrationPercent > 0 && moodAvg != null && moodAvg < 3) {
+    const waterAmount = water > 0 ? `${water.toFixed(1)}L` : `${Math.round(hydrationPercent)}%`;
+    return `Only ${waterAmount} water logged. Low hydration may have impacted your ${getMoodDesc(moodAvg)} mood.`;
   }
 
-  // Decent day
-  if (meals > 0) {
-    const moodText = moodAvg != null ? (moodAvg >= 3.5 ? 'positive' : 'moderate') : '';
-    return `You logged ${meals} meal${meals > 1 ? 's' : ''} today${moodText ? ` with ${moodText} mood` : ''}. ${goalReached ? 'Goal achieved!' : 'Keep tracking!'}`;
+  // Decent day with meals - show full breakdown
+  if (meals > 0 || calories > 0) {
+    const parts = [];
+
+    if (calories > 0) {
+      parts.push(`${Math.round(calories)} cal (${Math.round(calorieRatio * 100)}%)`);
+    }
+    if (protein > 0) {
+      parts.push(`${Math.round(protein)}g protein`);
+    }
+    if (hydrationPercent > 0) {
+      parts.push(`${Math.round(hydrationPercent)}% hydrated`);
+    }
+    if (moodAvg != null) {
+      parts.push(`mood: ${getMoodDesc(moodAvg)}`);
+    }
+
+    if (parts.length > 0) {
+      const summary = parts.join(', ');
+      const goalStatus = goalReached ? ' Goal reached!' : '';
+      return `${summary}.${goalStatus}`;
+    }
+  }
+
+  // Partial data - be specific about what was logged
+  const logged = [];
+  if (calories > 0) logged.push(`${Math.round(calories)} cal`);
+  if (hydrationPercent > 0) logged.push(`${Math.round(hydrationPercent)}% water`);
+  if (moodAvg != null) logged.push(`mood logged`);
+
+  if (logged.length > 0) {
+    return `Partial log: ${logged.join(', ')}.`;
   }
 
   return "Partial data logged for this day.";

@@ -4,15 +4,27 @@
  * Provides predictive insights, behavioral correlations, and weekly narratives
  * for premium users. Powers the 5W2H intelligent wellness system.
  *
- * Endpoints:
+ * Core Endpoints:
  * - GET /api/insights/predictive - Energy, mood, nutrient predictions
  * - GET /api/insights/correlations - Behavioral pattern discoveries
  * - GET /api/insights/weekly-narrative - Weekly health story
  * - GET /api/insights/what-to-change - Priority change recommendation
  * - GET /api/insights/ai-analysis - OpenAI-powered deep pattern analysis
  * - GET /api/insights/patterns/personalized - Temporal & activity-mood patterns
- *     (breakfast skip → afternoon crash, high-sugar dinner → morning anxiety,
- *      hydration → mood stability, exercise → mood boost)
+ *
+ * Novel Correlation Discovery:
+ * - GET /api/insights/novel-correlations - Auto-discovered user-specific patterns
+ *     (pairwise factor scanning with lag analysis and novelty scoring)
+ *
+ * Outcome Verification (Feedback Loop):
+ * - POST /api/insights/recommendations/track - Track recommendation actions
+ * - POST /api/insights/recommendations/verify - Verify recommendation outcomes
+ * - POST /api/insights/verification/process-pending - Batch verification processing
+ *
+ * Prediction Calibration:
+ * - POST /api/insights/predictions/log - Log predictions for calibration
+ * - POST /api/insights/predictions/verify - Verify predictions against outcomes
+ * - GET /api/insights/predictions/accuracy - Get prediction accuracy stats
  */
 
 import express from 'express';
@@ -32,6 +44,15 @@ import { generateMoodInsights, generateBasicMoodInsights } from '../services/moo
 import { errors } from '../utils/errorResponse.js';
 import { computeUserCorrelations } from '../services/correlationEngineService.js';
 import { openaiClient as openai } from '../services/apiClients/OpenAIClient.js';
+import { discoverNovelCorrelations, getNovelInsights } from '../services/autoCorrelationDiscoveryService.js';
+import {
+  trackRecommendationAction,
+  verifyRecommendationOutcome,
+  processPendingVerifications,
+  logPrediction,
+  verifyPrediction,
+  calculatePredictionAccuracy,
+} from '../services/outcomeVerificationService.js';
 
 const router = express.Router();
 
@@ -416,10 +437,21 @@ router.get('/patterns/personalized', async (req, res) => {
     }
 
     // Transform correlations into user-friendly pattern statements
-    const formattedPatterns = correlations
+    const allPatterns = correlations
       .map(corr => formatCorrelationToPattern(corr))
       .filter(p => p !== null) // Remove null patterns
       .sort((a, b) => b.confidence - a.confidence); // Sort by confidence
+
+    // Deduplicate patterns - keep only the highest confidence pattern for each rule type
+    const seenRules = new Set();
+    const formattedPatterns = allPatterns.filter(pattern => {
+      const key = pattern.type || pattern.statement;
+      if (seenRules.has(key)) {
+        return false; // Skip duplicate (already have higher confidence version)
+      }
+      seenRules.add(key);
+      return true;
+    });
 
     // Group patterns by category
     const categories = {
@@ -765,16 +797,28 @@ CRITICAL RULES:
 - Use probabilistic language: "tends to", "may", "appears to correlate with", "often"
 - NEVER use diagnostic language: "you have", "you are", "definitely"
 - Focus on patterns and correlations, not causation
-- Only report patterns with sufficient evidence
+- Only report patterns with sufficient evidence (at least 5+ occurrences)
 - Be encouraging and supportive
 - Provide specific, actionable recommendations
-- Reference specific numbers from the data`;
+- Reference specific numbers from the data
+
+DATA QUALITY RULES:
+- Zero values (0g sugar, 0 calories) usually mean MISSING DATA, not actual zeros
+- NEVER celebrate 0g of any nutrient as an "achievement" - it indicates incomplete tracking
+- Only create achievements for ACTUAL progress toward goals (>50% of goal reached)
+- If data looks suspicious (all zeros, impossible values), skip that metric
+
+INSIGHT STRUCTURE RULES:
+- Title: What the pattern IS (e.g., "Evening meals tend to improve next-day mood")
+- Statement: Evidence and data points supporting it
+- Suggestion: DIFFERENT from title - specific action to take (e.g., "Try having dinner before 7pm")
+- NEVER make title and suggestion the same text`;
 
   const userPrompt = `Analyze this health data and identify patterns:
 
 **FOOD DATA (${dataSummary.food.totalMeals} meals):**
 - Average daily: ${dataSummary.food.avgCalories} cal, ${dataSummary.food.avgProtein}g protein, ${dataSummary.food.avgCarbs}g carbs, ${dataSummary.food.avgFat}g fat
-- Sugar intake: avg ${dataSummary.food.avgSugar}g per meal
+- Sugar intake: avg ${dataSummary.food.avgSugar}g per meal ${dataSummary.food.avgSugar === 0 ? '(likely incomplete tracking - ignore for achievements)' : ''}
 - Food processing level (NOVA): ${dataSummary.food.avgNovaScore}/4
 - Meal timing: ${JSON.stringify(dataSummary.food.mealsByTime)}
 - Frequent foods: ${dataSummary.food.topFoods.join(', ')}
@@ -801,14 +845,15 @@ Provide analysis in this JSON format:
   "insights": [
     {
       "type": "correlation" | "prediction" | "recommendation" | "achievement",
-      "title": "Short title (5-8 words)",
-      "statement": "Clear insight with specific data references (1-2 sentences)",
-      "confidence": 0.0-1.0,
+      "title": "What the pattern IS (5-8 words, e.g. 'Morning protein boosts afternoon energy')",
+      "statement": "Evidence: specific data points that support this (1-2 sentences)",
+      "confidence": 0.7-1.0 (only include insights with 70%+ confidence),
       "evidencePoints": ["specific data point 1", "specific data point 2"],
       "affectedDomains": ["energy", "mood", "nutrition", "hydration"],
-      "suggestion": "Specific actionable recommendation"
+      "suggestion": "DIFFERENT from title - specific action (e.g. 'Add eggs or yogurt to breakfast')"
     }
   ],
+  NOTE: Only create "achievement" type for REAL progress (hitting >50% of a goal). Never celebrate 0g values.
   "patterns": [
     {
       "pattern": "When X happens, Y tends to follow",
@@ -2025,5 +2070,261 @@ function calculateAverageDailyLogs(foodLogs, moodLogs, waterLogs) {
 
   return Math.round((counts.reduce((a, b) => a + b, 0) / counts.length) * 10) / 10;
 }
+
+// ============================================================================
+// NOVEL CORRELATIONS ENDPOINT - Auto-discovered user-specific patterns
+// ============================================================================
+
+/**
+ * GET /api/insights/novel-correlations
+ * Discovers novel, user-specific correlations using pairwise factor analysis
+ * with lag analysis and novelty scoring.
+ */
+router.get('/novel-correlations', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { lookbackDays = 30, limit = 5 } = req.query;
+
+    // Get novel correlations with full statistical analysis
+    const discovery = await discoverNovelCorrelations(
+      userId,
+      parseInt(lookbackDays)
+    );
+
+    // Get user-friendly insights (internally calls discoverNovelCorrelations)
+    const insightsResult = await getNovelInsights(userId, parseInt(limit));
+
+    // Handle case where discovery returns success: false
+    const correlations = discovery?.correlations || [];
+
+    res.json({
+      success: true,
+      data: {
+        correlations: correlations.slice(0, parseInt(limit)),
+        insights: insightsResult?.insights || [],
+        hasEnoughData: discovery?.success && insightsResult?.hasEnoughData,
+        daysAnalyzed: discovery?.daysAnalyzed || 0,
+        meta: {
+          lookbackDays: parseInt(lookbackDays),
+          totalDiscovered: correlations.length,
+          minimumSampleSize: 10,
+          significanceLevel: 0.05,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[NovelCorrelations] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to discover novel correlations',
+      message: error.message,
+    });
+  }
+});
+
+// ============================================================================
+// OUTCOME VERIFICATION ENDPOINTS - Feedback loop for recommendation effectiveness
+// ============================================================================
+
+/**
+ * POST /api/insights/recommendations/track
+ * Track user action on a recommendation (shown, clicked, completed, dismissed)
+ */
+router.post('/recommendations/track', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { recommendationId, recommendationType, domain, actionType, title, action, difficultyTier, context } = req.body;
+
+    if (!recommendationType || !domain || !actionType) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: recommendationType, domain, actionType',
+      });
+    }
+
+    // Build recommendation object to pass to service
+    const recommendation = {
+      id: recommendationId,
+      type: recommendationType,
+      domain,
+      title,
+      action,
+      difficultyTier,
+      context,
+    };
+
+    const result = await trackRecommendationAction(userId, recommendation, actionType);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[TrackRecommendation] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to track recommendation action',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/insights/recommendations/verify
+ * Verify outcome of a specific recommendation
+ */
+router.post('/recommendations/verify', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { actionId } = req.body;
+
+    if (!actionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required field: actionId',
+      });
+    }
+
+    const result = await verifyRecommendationOutcome(userId, actionId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[VerifyRecommendation] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify recommendation outcome',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/insights/verification/process-pending
+ * Process all pending verifications (batch operation for current user's data)
+ */
+router.post('/verification/process-pending', async (req, res) => {
+  try {
+    // Note: processPendingVerifications processes all pending verifications globally
+    // It filters by expectedOutcomeTime, not by userId
+    const results = await processPendingVerifications();
+
+    res.json({
+      success: true,
+      data: {
+        processed: results?.length || 0,
+        results: results || [],
+      },
+    });
+  } catch (error) {
+    console.error('[ProcessPendingVerifications] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process pending verifications',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/insights/predictions/log
+ * Log a prediction for later accuracy verification
+ */
+router.post('/predictions/log', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { predictionType, predictedValue, confidence, intervalLow, intervalHigh, context } = req.body;
+
+    if (!predictionType || predictedValue === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: predictionType, predictedValue',
+      });
+    }
+
+    // Build prediction object to pass to service
+    const prediction = {
+      value: predictedValue,
+      confidence,
+      interval: intervalLow !== undefined ? { low: intervalLow, high: intervalHigh } : null,
+      context,
+    };
+
+    const result = await logPrediction(userId, predictionType, prediction);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[LogPrediction] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to log prediction',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/insights/predictions/verify
+ * Verify a prediction against actual outcome
+ */
+router.post('/predictions/verify', async (req, res) => {
+  try {
+    const { predictionId, actualValue } = req.body;
+
+    if (!predictionId || actualValue === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: predictionId, actualValue',
+      });
+    }
+
+    const result = await verifyPrediction(predictionId, actualValue);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[VerifyPrediction] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify prediction',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/insights/predictions/accuracy
+ * Get prediction accuracy statistics for the user
+ */
+router.get('/predictions/accuracy', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { predictionType } = req.query;
+
+    const accuracy = await calculatePredictionAccuracy(
+      userId,
+      predictionType || null
+    );
+
+    res.json({
+      success: true,
+      data: accuracy,
+    });
+  } catch (error) {
+    console.error('[PredictionAccuracy] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to calculate prediction accuracy',
+      message: error.message,
+    });
+  }
+});
 
 export default router;

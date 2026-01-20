@@ -86,7 +86,7 @@ export const NotificationProvider = ({ children }) => {
 
     setToasts((prev) => [...prev, newToast]);
 
-    const duration = toast.duration ?? 4500; // 4.5 seconds for better readability
+    const duration = toast.duration ?? 7000; // 7 seconds for comfortable reading
     if (duration > 0) {
       setTimeout(() => removeToast(id), duration);
     }
@@ -397,6 +397,41 @@ export const NotificationProvider = ({ children }) => {
       }
       const finalMessage = (typeof message === 'string' && message.trim()) ? message : 'Info';
       return addToast({ type: 'info', message: finalMessage, ...options });
+    },
+
+    // Celebration notifications with Lottie animations
+    celebrate: (message, options = {}) => {
+      const finalMessage = (typeof message === 'string' && message.trim()) ? message : 'Awesome!';
+      return addToast({
+        type: 'success',
+        message: finalMessage,
+        celebration: true,
+        lottieAnimation: options.lottieAnimation || 'celebration',
+        duration: options.duration ?? 7000, // Celebrations deserve more time
+        ...options,
+      });
+    },
+
+    // Goal celebration shortcuts
+    celebrateGoal: (goalType, message, options = {}) => {
+      const lottieMap = {
+        hydration: 'sparkle',
+        streak: 'streak',
+        steps: 'success',
+        meal: 'celebration',
+        mood: 'stars',
+        level: 'celebration',
+        achievement: 'stars',
+      };
+      return addToast({
+        type: 'success',
+        message: message || `${goalType} goal achieved!`,
+        domain: goalType,
+        celebration: true,
+        lottieAnimation: lottieMap[goalType] || 'celebration',
+        duration: 7000,
+        ...options,
+      });
     },
 
     modal: (config) => showModal(config),

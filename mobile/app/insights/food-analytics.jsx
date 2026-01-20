@@ -43,6 +43,8 @@ import {
 
 import HalfGaugeChart, { MiniHalfGauge } from '../../components/insights/HalfGaugeChart';
 import ColdStartCard from '../../components/insights/ColdStartCard';
+import MicroBar from '../../components/MicroBar';
+import { getMicrosWithPercentages, calculateMicrosCoverage, getMicrosCoverageColor } from '../../utils/microsCalculations';
 // Note: RelatedInsights removed - this screen shows ONLY nutrition data
 
 import { useDashboard } from '../../hooks/useDashboard';
@@ -107,6 +109,7 @@ export default function FoodAnalyticsScreen() {
         totalDaysWithLogs: stats.totalDaysWithLogs || 0,
         trend: stats.trend || 'stable',
         avgCalories: stats.avgCalories || 0,
+        micros: dashboard?.today?.nutrition?.micros || {},
       };
     }
 
@@ -170,6 +173,7 @@ export default function FoodAnalyticsScreen() {
       mealsToday,
       totalMealsLogged,
       totalDaysWithLogs,
+      micros: todayNutrition.micros || {},
     };
   }, [dashboard, decisionBrainData]);
 
@@ -198,6 +202,20 @@ export default function FoodAnalyticsScreen() {
     }
     return [];
   }, [decisionBrainData]);
+
+  // Process micronutrient data for display
+  const micronutrientData = useMemo(() => {
+    if (!nutritionMetrics?.micros || Object.keys(nutritionMetrics.micros).length === 0) {
+      return { items: [], coverage: 0, coverageColor: getMicrosCoverageColor(0) };
+    }
+    const items = getMicrosWithPercentages(nutritionMetrics.micros);
+    const coverage = calculateMicrosCoverage(nutritionMetrics.micros);
+    return {
+      items,
+      coverage,
+      coverageColor: getMicrosCoverageColor(coverage),
+    };
+  }, [nutritionMetrics?.micros]);
 
   // Handlers
   const handleRefresh = useCallback(async () => {
@@ -389,6 +407,46 @@ export default function FoodAnalyticsScreen() {
                   </Text>
                 </View>
               ))}
+            </View>
+          </View>
+        )}
+
+        {/* Micronutrients Section - All tracked vitamins and minerals */}
+        {micronutrientData.items.length > 0 && (
+          <View style={[styles.microsCard, CARD_SYSTEM.standard]}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="leaf-outline" size={20} color={micronutrientData.coverageColor} />
+              <Text style={styles.cardTitle}>Micronutrients</Text>
+              <View style={[styles.coverageBadge, { backgroundColor: `${micronutrientData.coverageColor}15` }]}>
+                <Text style={[styles.coverageBadgeText, { color: micronutrientData.coverageColor }]}>
+                  {micronutrientData.coverage}% coverage
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.microsSubtitle}>
+              {micronutrientData.coverage >= 70
+                ? 'Great job! Your vitamin and mineral intake is well-balanced.'
+                : micronutrientData.coverage >= 50
+                ? 'You\'re making progress. Focus on the nutrients below.'
+                : 'These nutrients need more attention in your diet.'}
+            </Text>
+            <View style={styles.microsGrid}>
+              {micronutrientData.items.map((micro) => (
+                <MicroBar
+                  key={micro.key}
+                  label={micro.label}
+                  value={micro.value}
+                  unit={micro.unit}
+                  percentage={micro.percentage}
+                  rdi={micro.rdi}
+                />
+              ))}
+            </View>
+            <View style={styles.microsNote}>
+              <Ionicons name="information-circle-outline" size={14} color={TEXT.muted} />
+              <Text style={styles.microsNoteText}>
+                Values are estimated based on logged foods. RDI = Recommended Daily Intake.
+              </Text>
             </View>
           </View>
         )}
@@ -594,6 +652,15 @@ const styles = StyleSheet.create({
   macroLabel: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[1] },
   macroValue: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary },
   macroUnit: { color: TEXT.tertiary },
+
+  // Micronutrients Card
+  microsCard: { marginTop: SPACING[4] },
+  microsSubtitle: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, marginBottom: SPACING[4], lineHeight: 20 },
+  microsGrid: { gap: SPACING[2] },
+  coverageBadge: { paddingHorizontal: SPACING[2], paddingVertical: 3, borderRadius: RADIUS.sm, marginLeft: 'auto' },
+  coverageBadgeText: { fontSize: 11, fontWeight: TYPOGRAPHY.weight.semibold },
+  microsNote: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[2], marginTop: SPACING[4], paddingTop: SPACING[3], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  microsNoteText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: TEXT.muted, lineHeight: 16 },
 
   // Section Header
   sectionHeader: { marginTop: SPACING[6], marginBottom: SPACING[3] },

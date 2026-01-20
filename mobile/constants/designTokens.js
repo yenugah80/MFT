@@ -137,6 +137,14 @@ export const TYPOGRAPHY = {
     wider: 0.8,
     widest: 1.6,
   },
+
+  // Font families - DM Sans for premium feel
+  family: {
+    regular: 'DMSans_400Regular',
+    medium: 'DMSans_500Medium',
+    semibold: 'DMSans_600SemiBold',
+    bold: 'DMSans_700Bold',
+  },
 };
 
 // SPACING (4pt grid system)

@@ -34,6 +34,9 @@ import {
 
 // Analytics components
 import PersonalizedPatternsCard from '../../components/analytics/PersonalizedPatternsCard';
+import MorningPredictionCard from '../../components/dashboard/MorningPredictionCard';
+import { NovelDiscoveriesSection } from '../../components/wellness/WellnessRecommendation';
+import { useNovelCorrelations } from '../../hooks/useInsights';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -142,6 +145,14 @@ const INSIGHT_SECTIONS = [
 export default function InsightsIndex() {
   const router = useRouter();
 
+  // Novel correlations - AI-discovered patterns unique to this user
+  const {
+    patterns: novelPatterns,
+    isLoading: novelLoading,
+    emptyStateMessage,
+    hasEnoughData,
+  } = useNovelCorrelations({ lookbackDays: 30, limit: 3 });
+
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
     if (router.canGoBack()) {
@@ -190,6 +201,23 @@ export default function InsightsIndex() {
           </Text>
         </View>
 
+        {/* What's Ahead - Day Forecast */}
+        <View style={styles.forecastSection}>
+          <MorningPredictionCard
+            onTipPress={(tip) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (tip.icon === 'water') {
+                router.push('/(tabs)/log?focus=hydration');
+              } else if (tip.icon === 'nutrition' || tip.icon === 'egg' || tip.icon === 'sunny') {
+                router.push('/(tabs)/log');
+              }
+            }}
+            onExpandPress={() => {
+              router.push('/insights/wellness-history');
+            }}
+          />
+        </View>
+
         {/* Personalized Patterns Card - Deep behavioral insights */}
         <View style={styles.patternsSection}>
           <PersonalizedPatternsCard
@@ -209,6 +237,29 @@ export default function InsightsIndex() {
             onViewAll={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push('/insights/multi-factor-analytics');
+            }}
+          />
+        </View>
+
+        {/* AI Discoveries - Novel patterns unique to this user */}
+        <View style={styles.discoveriesSection}>
+          <NovelDiscoveriesSection
+            patterns={novelPatterns}
+            isLoading={novelLoading}
+            emptyMessage={emptyStateMessage}
+            onPatternPress={(discovery) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // Navigate based on the factors involved
+              const factors = discovery.technical?.factorA || '';
+              if (factors.includes('water') || factors.includes('hydration')) {
+                router.push('/insights/hydration-analytics');
+              } else if (factors.includes('activity') || factors.includes('exercise')) {
+                router.push('/insights/activity-mood');
+              } else if (factors.includes('mood') || factors.includes('energy')) {
+                router.push('/insights/mood');
+              } else {
+                router.push('/insights/multi-factor-analytics');
+              }
             }}
           />
         </View>
@@ -316,20 +367,32 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 22,
+  },
+
+  // Forecast Section (What's Ahead)
+  forecastSection: {
+    marginTop: SPACING[3],
   },
 
   // Personalized Patterns Section
   patternsSection: {
     marginHorizontal: SPACING[4],
     marginTop: SPACING[3],
+  },
+
+  // AI Discoveries Section
+  discoveriesSection: {
+    marginHorizontal: SPACING[4],
+    marginTop: SPACING[4],
   },
 
   // Section
@@ -342,7 +405,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -390,7 +453,7 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   newBadge: {

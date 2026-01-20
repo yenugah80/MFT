@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyFoodTracker - Adaptive Intelligence for Your Wellness Journey</title>
+    <meta name="description" content="Enterprise-grade AI wellness platform with predictive intelligence, auto-correlation discovery, and Thompson Sampling optimization. Your body. Your patterns. Your insights.">
+    <meta name="keywords" content="AI nutrition tracker, mood food correlation, predictive wellness, Thompson Sampling, personalized health insights">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --brand-orange: #F97316;
+            --brand-orange-dark: #EA580C;
+            --brand-purple: #8B5CF6;
+            --brand-green: #10B981;
+            --brand-blue: #3B82F6;
+            --brand-red: #EF4444;
+            --brand-teal: #14B8A6;
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --text-muted: #9CA3AF;
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --gradient-intelligence: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+            --gradient-discovery: linear-gradient(135deg, #11998E 0%, #38EF7D 100%);
+            --gradient-prediction: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text-primary);
+            line-height: 1.7;
+            background: var(--bg-primary);
+        }
+
+        /* Hero Section - Premium */
+        .hero {
+            background: linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 30%, #F0FDF4 70%, #EFF6FF 100%);
+            padding: 100px 20px 120px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 20%, rgba(249, 115, 22, 0.05) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-2%, 2%) rotate(1deg); }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--brand-purple);
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+
+        .hero-logo {
+            width: 88px;
+            height: 88px;
+            background: linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 28px;
+            box-shadow: 0 24px 48px rgba(249, 115, 22, 0.35);
+        }
+
+        .hero-logo svg {
+            width: 52px;
+            height: 52px;
+            fill: white;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.25rem, 5vw, 3.75rem);
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, #374151 50%, var(--brand-orange) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        .hero-tagline {
+            font-size: 1.375rem;
+            color: var(--text-secondary);
+            max-width: 680px;
+            margin: 0 auto 16px;
+            line-height: 1.6;
+        }
+
+        .hero-subtagline {
+            font-size: 1rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 18px 36px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%);
+            color: white;
+            box-shadow: 0 8px 32px rgba(249, 115, 22, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(249, 115, 22, 0.5);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--text-primary);
+            border: 2px solid var(--bg-tertiary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--brand-orange);
+            background: #FFFBF7;
+        }
+
+        /* Trust Indicators */
+        .trust-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 32px;
+            flex-wrap: wrap;
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .trust-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .trust-item strong {
+            color: var(--text-secondary);
+        }
+
+        /* Section Styles */
+        section {
+            padding: 100px 20px;
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 64px;
+        }
+
+        .section-eyebrow {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--brand-purple);
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: clamp(1.75rem, 4vw, 2.5rem);
+            font-weight: 700;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        .section-subtitle {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* Intelligence Architecture Section */
+        .intelligence-section {
+            background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            padding: 100px 20px;
+        }
+
+        .intelligence-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .intelligence-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 32px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .intelligence-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .intelligence-card:nth-child(1)::before { background: var(--gradient-intelligence); }
+        .intelligence-card:nth-child(2)::before { background: var(--gradient-discovery); }
+        .intelligence-card:nth-child(3)::before { background: var(--gradient-prediction); }
+
+        .intelligence-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+        }
+
+        .intelligence-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            font-size: 24px;
+        }
+
+        .intelligence-card:nth-child(1) .intelligence-icon { background: rgba(102, 126, 234, 0.1); }
+        .intelligence-card:nth-child(2) .intelligence-icon { background: rgba(17, 153, 142, 0.1); }
+        .intelligence-card:nth-child(3) .intelligence-icon { background: rgba(79, 172, 254, 0.1); }
+
+        .intelligence-card h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .intelligence-card .tech-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 10px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .intelligence-card:nth-child(1) .tech-badge { background: rgba(102, 126, 234, 0.1); color: #667EEA; }
+        .intelligence-card:nth-child(2) .tech-badge { background: rgba(17, 153, 142, 0.1); color: #11998E; }
+        .intelligence-card:nth-child(3) .tech-badge { background: rgba(79, 172, 254, 0.1); color: #4FACFE; }
+
+        .intelligence-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+
+        .intelligence-features {
+            list-style: none;
+        }
+
+        .intelligence-features li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            padding: 8px 0;
+            border-top: 1px solid var(--bg-tertiary);
+        }
+
+        .intelligence-features li:first-child {
+            border-top: none;
+        }
+
+        .intelligence-features .feature-check {
+            color: var(--brand-green);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* 4 Pillars */
+        .pillars {
+            background: var(--bg-primary);
+        }
+
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+
+        .pillar-card {
+            background: white;
+            padding: 36px 28px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--bg-tertiary);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .pillar-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.08);
+        }
+
+        .pillar-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 32px;
+        }
+
+        .pillar-card h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .pillar-card .pillar-description {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .pillar-card .pillar-stat {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            padding-top: 16px;
+            border-top: 1px solid var(--bg-tertiary);
+        }
+
+        .pillar-card .pillar-stat strong {
+            color: var(--brand-orange);
+            font-weight: 600;
+        }
+
+        .pillar-food .pillar-icon { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); }
+        .pillar-mood .pillar-icon { background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%); }
+        .pillar-water .pillar-icon { background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); }
+        .pillar-activity .pillar-icon { background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%); }
+
+        /* Evidence-Anchored Insights */
+        .insights-showcase {
+            background: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+            color: white;
+            border-radius: 32px;
+            margin: 40px 20px;
+            padding: 80px 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .insights-showcase::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 100%;
+            background: radial-gradient(circle at 100% 0%, rgba(249, 115, 22, 0.15) 0%, transparent 60%);
+        }
+
+        .insights-showcase .section-header {
+            position: relative;
+            z-index: 1;
+        }
+
+        .insights-showcase .section-eyebrow {
+            color: var(--brand-orange);
+        }
+
+        .insights-showcase .section-title {
+            color: white;
+        }
+
+        .insights-showcase .section-subtitle {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .insight-examples {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .insight-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 28px;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .insight-card .insight-type {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 10px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .insight-card.correlation .insight-type { background: rgba(139, 92, 246, 0.3); color: #C4B5FD; }
+        .insight-card.prediction .insight-type { background: rgba(79, 172, 254, 0.3); color: #93C5FD; }
+        .insight-card.discovery .insight-type { background: rgba(16, 185, 129, 0.3); color: #6EE7B7; }
+        .insight-card.recommendation .insight-type { background: rgba(249, 115, 22, 0.3); color: #FDBA74; }
+
+        .insight-card h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: white;
+            line-height: 1.5;
+        }
+
+        .insight-card p {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+        }
+
+        .insight-evidence {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .insight-evidence-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 8px;
+        }
+
+        .insight-evidence-content {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'SF Mono', 'Monaco', monospace;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+
+        /* XP System */
+        .xp-section {
+            background: var(--bg-secondary);
+            padding: 100px 20px;
+        }
+
+        .xp-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .xp-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+            margin-top: 48px;
+        }
+
+        .xp-card {
+            background: white;
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--bg-tertiary);
+        }
+
+        .xp-card h4 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .xp-table {
+            width: 100%;
+        }
+
+        .xp-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+
+        .xp-row:last-child {
+            border-bottom: none;
+        }
+
+        .xp-action {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .xp-value {
+            color: var(--brand-orange);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .ranks-showcase {
+            margin-top: 48px;
+            text-align: center;
+        }
+
+        .ranks-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .ranks-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .rank-badge {
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: transform 0.3s ease;
+        }
+
+        .rank-badge:hover {
+            transform: scale(1.05);
+        }
+
+        .rank-novice { background: #E5E7EB; color: #374151; }
+        .rank-apprentice { background: #DBEAFE; color: #1D4ED8; }
+        .rank-expert { background: #FEF3C7; color: #B45309; }
+        .rank-master { background: #FCE7F3; color: #BE185D; }
+        .rank-grandmaster { background: #EDE9FE; color: #7C3AED; }
+        .rank-legend { background: linear-gradient(135deg, #F59E0B, #EF4444); color: white; box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4); }
+
+        /* Features Deep Dive */
+        .features-deep {
+            padding: 100px 20px;
+        }
+
+        .features-categories {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-category {
+            background: var(--bg-secondary);
+            border-radius: 24px;
+            padding: 40px;
+            border: 1px solid var(--bg-tertiary);
+        }
+
+        .feature-category h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .feature-category .category-description {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+
+        .feature-list {
+            list-style: none;
+        }
+
+        .feature-list li {
+            display: flex;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+
+        .feature-list .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .feature-list .feature-content h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .feature-list .feature-content p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Technical Architecture */
+        .tech-architecture {
+            background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            padding: 100px 20px;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .tech-card {
+            background: white;
+            border-radius: 16px;
+            padding: 28px 24px;
+            text-align: center;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--bg-tertiary);
+            transition: all 0.3s ease;
+        }
+
+        .tech-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+        }
+
+        .tech-card .tech-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 22px;
+        }
+
+        .tech-card h4 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .tech-card p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Comparison Table */
+        .comparison {
+            background: var(--bg-secondary);
+            padding: 100px 20px;
+        }
+
+        .comparison-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 20px 24px;
+            text-align: left;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+
+        .comparison-table th {
+            background: var(--bg-tertiary);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .comparison-table th:first-child {
+            width: 35%;
+        }
+
+        .comparison-table td {
+            font-size: 0.9rem;
+        }
+
+        .comparison-table td:not(:first-child) {
+            text-align: center;
+        }
+
+        .comparison-table tbody tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .comparison-table .feature-name {
+            font-weight: 600;
+        }
+
+        .check { color: var(--brand-green); font-size: 1.25rem; font-weight: 700; }
+        .cross { color: var(--brand-red); font-size: 1.25rem; opacity: 0.5; }
+        .partial { color: var(--brand-orange); font-size: 1.25rem; }
+
+        .our-column {
+            background: rgba(249, 115, 22, 0.04);
+        }
+
+        .our-column-header {
+            background: linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%) !important;
+            color: white !important;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%);
+            color: white;
+            text-align: center;
+            padding: 100px 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+        }
+
+        .cta-content {
+            position: relative;
+            z-index: 1;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .cta-section h2 {
+            font-size: clamp(2rem, 4vw, 2.75rem);
+            font-weight: 700;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        .cta-section p {
+            font-size: 1.25rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .cta-section .btn {
+            background: white;
+            color: var(--brand-orange);
+            font-size: 1.125rem;
+            padding: 20px 48px;
+        }
+
+        .cta-section .btn:hover {
+            background: var(--bg-secondary);
+            transform: translateY(-2px);
+        }
+
+        .cta-features {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+
+        .cta-features span {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* Footer */
+        footer {
+            background: #0F172A;
+            color: white;
+            padding: 80px 20px 48px;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr repeat(3, 1fr);
+            gap: 48px;
+        }
+
+        .footer-brand h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .footer-brand p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            max-width: 300px;
+        }
+
+        .footer-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 0.8rem;
+        }
+
+        .footer-links h4 {
+            font-size: 0.875rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .footer-links a {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            padding: 8px 0;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: var(--brand-orange);
+        }
+
+        .footer-bottom {
+            max-width: 1200px;
+            margin: 48px auto 0;
+            padding-top: 32px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .footer-bottom p {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.875rem;
+        }
+
+        .footer-bottom .social-links {
+            display: flex;
+            gap: 16px;
+        }
+
+        .footer-bottom .social-links a {
+            color: rgba(255, 255, 255, 0.5);
+            transition: color 0.3s;
+        }
+
+        .footer-bottom .social-links a:hover {
+            color: var(--brand-orange);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .intelligence-grid,
+            .pillars-grid,
+            .xp-grid,
+            .tech-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .features-categories {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                padding: 60px 20px 80px;
+            }
+
+            section {
+                padding: 60px 20px;
+            }
+
+            .intelligence-grid,
+            .pillars-grid,
+            .xp-grid,
+            .tech-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .insight-examples {
+                grid-template-columns: 1fr;
+            }
+
+            .insights-showcase {
+                margin: 20px 10px;
+                padding: 40px 24px;
+            }
+
+            .comparison-table th,
+            .comparison-table td {
+                padding: 14px 12px;
+                font-size: 0.8rem;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span>&#9889;</span>
+                Adaptive Intelligence Engine
+            </div>
+            <div class="hero-logo">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+            </div>
+            <h1>MyFoodTracker</h1>
+            <p class="hero-tagline">Enterprise-grade wellness intelligence that learns your patterns, predicts your outcomes, and adapts to your unique physiology.</p>
+            <p class="hero-subtagline">Powered by Thompson Sampling, Platt-Calibrated Predictions, and Auto-Correlation Discovery.</p>
+            <div class="cta-buttons">
+                <a href="#" class="btn btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+                    Download for iOS
+                </a>
+                <a href="#" class="btn btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.25-.84-.76-.84-1.35zm13.81-5.38L6.05 21.34l8.49-8.49 2.27 2.27zm3.35-4.31c.34.27.59.69.59 1.19s-.22.9-.57 1.18l-2.29 1.32-2.5-2.5 2.5-2.5 2.27 1.31zM6.05 2.66l10.76 6.22-2.27 2.27L6.05 2.66z"/></svg>
+                    Get on Android
+                </a>
+            </div>
+            <div class="trust-bar">
+                <div class="trust-item">
+                    <span>&#128274;</span>
+                    <strong>Privacy First</strong> &mdash; Your data never sold
+                </div>
+                <div class="trust-item">
+                    <span>&#128161;</span>
+                    <strong>AI-Powered</strong> &mdash; GPT-4 Vision
+                </div>
+                <div class="trust-item">
+                    <span>&#10003;</span>
+                    <strong>Free Forever</strong> &mdash; No subscriptions
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Intelligence Architecture -->
+    <section class="intelligence-section">
+        <div class="section-header">
+            <span class="section-eyebrow">Intelligence Architecture</span>
+            <h2 class="section-title">Three Engines. One Unified Intelligence.</h2>
+            <p class="section-subtitle">We don't just track data. We deploy production-grade machine learning systems that continuously learn from your unique patterns to deliver insights no other app can match.</p>
+        </div>
+
+        <div class="intelligence-grid">
+            <div class="intelligence-card">
+                <div class="intelligence-icon">&#128300;</div>
+                <span class="tech-badge">Thompson Sampling</span>
+                <h3>Adaptive Recommendations</h3>
+                <p>Multi-armed bandit optimization that balances exploration and exploitation. Every recommendation gets smarter based on verified outcomes.</p>
+                <ul class="intelligence-features">
+                    <li><span class="feature-check">&#10003;</span> Outcome verification feedback loop</li>
+                    <li><span class="feature-check">&#10003;</span> Context-aware filtering (time, energy, location)</li>
+                    <li><span class="feature-check">&#10003;</span> Difficulty tiers: Quick Win, Worth It, Challenge</li>
+                    <li><span class="feature-check">&#10003;</span> Micro-actions breakdown for complex goals</li>
+                </ul>
+            </div>
+
+            <div class="intelligence-card">
+                <div class="intelligence-icon">&#128269;</div>
+                <span class="tech-badge">Auto-Discovery</span>
+                <h3>Novel Pattern Detection</h3>
+                <p>Pairwise correlation scanner that tests every factor combination across multiple time lags to discover patterns unique to your body.</p>
+                <ul class="intelligence-features">
+                    <li><span class="feature-check">&#10003;</span> Multi-lag analysis (0h, 2h, 6h, 12h, 24h, 48h)</li>
+                    <li><span class="feature-check">&#10003;</span> Statistical significance filtering (p &lt; 0.05)</li>
+                    <li><span class="feature-check">&#10003;</span> Novelty scoring for surprising correlations</li>
+                    <li><span class="feature-check">&#10003;</span> Human-friendly explanations, not jargon</li>
+                </ul>
+            </div>
+
+            <div class="intelligence-card">
+                <div class="intelligence-icon">&#128202;</div>
+                <span class="tech-badge">Platt Scaling</span>
+                <h3>Calibrated Predictions</h3>
+                <p>Honest confidence intervals you can actually trust. We tell you when we're uncertain and why.</p>
+                <ul class="intelligence-features">
+                    <li><span class="feature-check">&#10003;</span> 80% confidence intervals on all forecasts</li>
+                    <li><span class="feature-check">&#10003;</span> Uncertainty decomposition by source</li>
+                    <li><span class="feature-check">&#10003;</span> Continuous recalibration from outcomes</li>
+                    <li><span class="feature-check">&#10003;</span> Morning energy & mood predictions</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4 Pillars -->
+    <section class="pillars">
+        <div class="section-header">
+            <span class="section-eyebrow">Complete Wellness</span>
+            <h2 class="section-title">Four Pillars. Unified Intelligence.</h2>
+            <p class="section-subtitle">We track the full picture because isolated metrics miss what matters: how everything connects.</p>
+        </div>
+        <div class="pillars-grid">
+            <div class="pillar-card pillar-food">
+                <div class="pillar-icon">&#127829;</div>
+                <h3>Nutrition</h3>
+                <p class="pillar-description">AI-powered meal analysis via photo, voice, or text. Track calories, 25+ macros/micros, and food quality scores automatically.</p>
+                <p class="pillar-stat">Avg <strong>8 seconds</strong> to log a meal</p>
+            </div>
+            <div class="pillar-card pillar-mood">
+                <div class="pillar-icon">&#128522;</div>
+                <h3>Mood Intelligence</h3>
+                <p class="pillar-description">Track emotional states across your day. Our correlation engine finds what drives your mental clarity and energy.</p>
+                <p class="pillar-stat"><strong>20+ correlations</strong> detected per user</p>
+            </div>
+            <div class="pillar-card pillar-water">
+                <div class="pillar-icon">&#128167;</div>
+                <h3>Hydration</h3>
+                <p class="pillar-description">One-tap water logging with intelligent reminders. See direct impact on focus, mood, and physical performance.</p>
+                <p class="pillar-stat"><strong>3x better</strong> goal adherence vs manual</p>
+            </div>
+            <div class="pillar-card pillar-activity">
+                <div class="pillar-icon">&#127939;</div>
+                <h3>Activity</h3>
+                <p class="pillar-description">Log workouts, steps, and movement. Correlate activity with mood, sleep, and nutrition outcomes.</p>
+                <p class="pillar-stat">CDC guidelines tracking <strong>built-in</strong></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Evidence-Anchored Insights -->
+    <div class="insights-showcase">
+        <div class="section-header">
+            <span class="section-eyebrow">Evidence-Anchored Insights</span>
+            <h2 class="section-title">Insights That Reference Your Actual Data</h2>
+            <p class="section-subtitle">Generic advice is worthless. We anchor every insight to specific timestamps, values, and verified outcomes from your history.</p>
+        </div>
+
+        <div class="insight-examples">
+            <div class="insight-card correlation">
+                <span class="insight-type">Correlation</span>
+                <h4>Your mood averaged 7.2/10 on days when you drank 2000+ ml of water, versus 5.1/10 otherwise.</h4>
+                <p>This pattern appeared in 23 out of 30 days analyzed, with statistical significance (p = 0.008).</p>
+                <div class="insight-evidence">
+                    <div class="insight-evidence-label">Evidence</div>
+                    <div class="insight-evidence-content">Best example: Tuesday, Jan 14 at 2pm you logged "Happy" after hitting 2400ml</div>
+                </div>
+            </div>
+
+            <div class="insight-card discovery">
+                <span class="insight-type">Novel Discovery</span>
+                <h4>We noticed your energy dips 6 hours after high-sugar breakfasts, but stays stable after protein-rich ones.</h4>
+                <p>This 6-hour lag pattern is unique to your data and wasn't programmed&mdash;our auto-discovery engine found it.</p>
+                <div class="insight-evidence">
+                    <div class="insight-evidence-label">Data Points</div>
+                    <div class="insight-evidence-content">14 instances analyzed | Correlation: r = -0.68 | Novelty score: 87%</div>
+                </div>
+            </div>
+
+            <div class="insight-card prediction">
+                <span class="insight-type">Calibrated Prediction</span>
+                <h4>Tomorrow's predicted mood: 6.8/10 (80% CI: 5.9 &ndash; 7.7)</h4>
+                <p>Uncertainty sources: Limited sleep data this week, new caffeine pattern detected.</p>
+                <div class="insight-evidence">
+                    <div class="insight-evidence-label">Calibration</div>
+                    <div class="insight-evidence-content">Model accuracy: 78% within interval | Last 30 predictions verified</div>
+                </div>
+            </div>
+
+            <div class="insight-card recommendation">
+                <span class="insight-type">Adaptive Recommendation</span>
+                <h4>Try adding 15g more protein to your lunch today.</h4>
+                <p>Based on 8 verified outcomes where this improved your afternoon energy by an average of +1.2 points.</p>
+                <div class="insight-evidence">
+                    <div class="insight-evidence-label">Difficulty</div>
+                    <div class="insight-evidence-content">Quick Win | ~2 min | Impact probability: 73%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- XP System -->
+    <section class="xp-section">
+        <div class="xp-content">
+            <div class="section-header">
+                <span class="section-eyebrow">Gamification Engine</span>
+                <h2 class="section-title">Level Up Your Wellness Journey</h2>
+                <p class="section-subtitle">Every action earns XP. Every level unlocks deeper insights. A progression system designed to build habits, not addiction.</p>
+            </div>
+
+            <div class="xp-grid">
+                <div class="xp-card">
+                    <h4>&#9889; Daily XP Opportunities</h4>
+                    <div class="xp-table">
+                        <div class="xp-row">
+                            <span class="xp-action">Log meal (first 3 of day)</span>
+                            <span class="xp-value">+10 XP each</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Log meal (4th+ of day)</span>
+                            <span class="xp-value">+5 XP each</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Log water intake</span>
+                            <span class="xp-value">+5 XP</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Hit daily water goal</span>
+                            <span class="xp-value">+10 XP bonus</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Log mood</span>
+                            <span class="xp-value">+8 XP</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Log activity</span>
+                            <span class="xp-value">+10-25 XP</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="xp-card">
+                    <h4>&#128200; Progressive Leveling</h4>
+                    <div class="xp-table">
+                        <div class="xp-row">
+                            <span class="xp-action">Level 1 &#8594; 2</span>
+                            <span class="xp-value">200 XP</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Level 5 &#8594; 6</span>
+                            <span class="xp-value">400 XP</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Level 10 &#8594; 11</span>
+                            <span class="xp-value">650 XP</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">Level 20 &#8594; 21</span>
+                            <span class="xp-value">1,150 XP</span>
+                        </div>
+                    </div>
+                    <p style="margin-top: 16px; font-size: 0.8rem; color: var(--text-muted);">Formula: 100 + (50 &times; level) XP per level</p>
+                </div>
+
+                <div class="xp-card">
+                    <h4>&#128293; Streak System</h4>
+                    <div class="xp-table">
+                        <div class="xp-row">
+                            <span class="xp-action">7-day streak</span>
+                            <span class="xp-value">&#128170; 1 Streak Freeze</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">30-day streak</span>
+                            <span class="xp-value">&#127942; Bronze Badge</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">100-day streak</span>
+                            <span class="xp-value">&#128293; Centurion Badge</span>
+                        </div>
+                        <div class="xp-row">
+                            <span class="xp-action">365-day streak</span>
+                            <span class="xp-value">&#127775; Legend Status</span>
+                        </div>
+                    </div>
+                    <p style="margin-top: 16px; font-size: 0.8rem; color: var(--text-muted);">Streak freezes protect your progress on rest days</p>
+                </div>
+            </div>
+
+            <div class="ranks-showcase">
+                <p class="ranks-title">Rank Progression System</p>
+                <div class="ranks-container">
+                    <span class="rank-badge rank-novice">Novice (1-4)</span>
+                    <span class="rank-badge rank-apprentice">Apprentice (5-9)</span>
+                    <span class="rank-badge rank-expert">Expert (10-19)</span>
+                    <span class="rank-badge rank-master">Master (20-29)</span>
+                    <span class="rank-badge rank-grandmaster">Grandmaster (30-49)</span>
+                    <span class="rank-badge rank-legend">Legend (50+)</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Deep Dive -->
+    <section class="features-deep">
+        <div class="section-header">
+            <span class="section-eyebrow">Feature Deep Dive</span>
+            <h2 class="section-title">Everything You Need. Nothing You Don't.</h2>
+            <p class="section-subtitle">We obsessed over every feature so you don't have to think about the tool&mdash;just your health.</p>
+        </div>
+
+        <div class="features-categories">
+            <div class="feature-category">
+                <h3>&#128247; Input Intelligence</h3>
+                <p class="category-description">Log anything in under 10 seconds. Multiple input modes for every situation.</p>
+                <ul class="feature-list">
+                    <li>
+                        <div class="feature-icon">&#128248;</div>
+                        <div class="feature-content">
+                            <h4>AI Photo Analysis</h4>
+                            <p>GPT-4 Vision identifies foods, estimates portions, and calculates full nutrition in one snap.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#127908;</div>
+                        <div class="feature-content">
+                            <h4>Voice Logging</h4>
+                            <p>Whisper-powered transcription understands "chicken salad with ranch on the side" naturally.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128221;</div>
+                        <div class="feature-content">
+                            <h4>Smart Text Input</h4>
+                            <p>Type "2 eggs and toast" and watch AI parse, portion, and log it instantly.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128214;</div>
+                        <div class="feature-content">
+                            <h4>Barcode Scanning</h4>
+                            <p>Scan packaged foods. Auto-fills from verified nutrition databases.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="feature-category">
+                <h3>&#128202; Output Intelligence</h3>
+                <p class="category-description">Actionable insights, not data dumps. We do the analysis so you get answers.</p>
+                <ul class="feature-list">
+                    <li>
+                        <div class="feature-icon">&#128300;</div>
+                        <div class="feature-content">
+                            <h4>Correlation Engine</h4>
+                            <p>20+ rule-based detectors plus auto-discovery finds patterns between food, mood, and energy.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#127774;</div>
+                        <div class="feature-content">
+                            <h4>Daily Predictions</h4>
+                            <p>Morning forecasts with confidence intervals tell you what to expect&mdash;and why.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128161;</div>
+                        <div class="feature-content">
+                            <h4>Smart Recommendations</h4>
+                            <p>Thompson Sampling serves personalized suggestions that get better with every outcome.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128200;</div>
+                        <div class="feature-content">
+                            <h4>Progressive Disclosure</h4>
+                            <p>Hero insights first. Deep dives on demand. Never overwhelmed, always informed.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="feature-category">
+                <h3>&#128274; Privacy & Trust</h3>
+                <p class="category-description">Your body data is sacred. We built privacy into our architecture, not as an afterthought.</p>
+                <ul class="feature-list">
+                    <li>
+                        <div class="feature-icon">&#128272;</div>
+                        <div class="feature-content">
+                            <h4>Data Ownership</h4>
+                            <p>Your data belongs to you. Export anytime. Delete everything with one tap.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128683;</div>
+                        <div class="feature-content">
+                            <h4>No Ads. Ever.</h4>
+                            <p>We don't show ads or sell your data. Period. Our incentives are aligned with yours.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128196;</div>
+                        <div class="feature-content">
+                            <h4>GDPR/CCPA Compliant</h4>
+                            <p>Full compliance with global privacy regulations. Right to erasure. Right to portability.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128274;</div>
+                        <div class="feature-content">
+                            <h4>Cloudflare Protected</h4>
+                            <p>Turnstile human verification. DDoS protection. Enterprise-grade security.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="feature-category">
+                <h3>&#127760; Offline & Sync</h3>
+                <p class="category-description">Works everywhere. Syncs when you're back online. Never lose data.</p>
+                <ul class="feature-list">
+                    <li>
+                        <div class="feature-icon">&#9889;</div>
+                        <div class="feature-content">
+                            <h4>Local-First Storage</h4>
+                            <p>SQLite database on device means instant access and offline logging.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128260;</div>
+                        <div class="feature-content">
+                            <h4>Smart Sync</h4>
+                            <p>Automatic background sync when online. Conflict resolution built-in.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128241;</div>
+                        <div class="feature-content">
+                            <h4>Cross-Device</h4>
+                            <p>Start on phone, continue on tablet. Your data follows you.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="feature-icon">&#128682;</div>
+                        <div class="feature-content">
+                            <h4>Airplane Mode Ready</h4>
+                            <p>Full functionality without internet. Perfect for travel or poor signal areas.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Architecture -->
+    <section class="tech-architecture">
+        <div class="section-header">
+            <span class="section-eyebrow">Under the Hood</span>
+            <h2 class="section-title">Built on Production-Grade Infrastructure</h2>
+            <p class="section-subtitle">The same technologies powering enterprise ML systems, packaged in an elegant mobile experience.</p>
+        </div>
+
+        <div class="tech-grid">
+            <div class="tech-card">
+                <div class="tech-icon">&#129504;</div>
+                <h4>Thompson Sampling</h4>
+                <p>Multi-armed bandit optimization for recommendation personalization at scale.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#128200;</div>
+                <h4>Platt Scaling</h4>
+                <p>Calibrated probability estimates for honest confidence intervals.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#128269;</div>
+                <h4>Auto-Correlation</h4>
+                <p>Pairwise factor scanning with multi-lag statistical analysis.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#128260;</div>
+                <h4>Feedback Loop</h4>
+                <p>Outcome verification closes the loop for continuous model improvement.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#128171;</div>
+                <h4>GPT-4 Vision</h4>
+                <p>State-of-the-art multimodal AI for food recognition and analysis.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#127908;</div>
+                <h4>Whisper ASR</h4>
+                <p>OpenAI's speech recognition for natural voice logging.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#128451;</div>
+                <h4>React Query</h4>
+                <p>Optimistic UI with intelligent caching and background refetch.</p>
+            </div>
+            <div class="tech-card">
+                <div class="tech-icon">&#128193;</div>
+                <h4>PostgreSQL + SQLite</h4>
+                <p>Server-side persistence with local-first offline capability.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison -->
+    <section class="comparison">
+        <div class="comparison-wrapper">
+            <div class="section-header">
+                <span class="section-eyebrow">Competitive Analysis</span>
+                <h2 class="section-title">See the Difference</h2>
+                <p class="section-subtitle">We built what we wished existed. Here's how we stack up against the incumbents.</p>
+            </div>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th class="our-column-header">MyFoodTracker</th>
+                        <th>MyFitnessPal</th>
+                        <th>Lose It!</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="feature-name">AI Photo Analysis</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="partial">&#9679;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Voice Input</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Mood-Food Correlation</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Auto Pattern Discovery</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Calibrated Predictions</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Outcome Verification</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Full Gamification</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="partial">&#9679;</span></td>
+                        <td><span class="partial">&#9679;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">True Offline Mode</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="partial">&#9679;</span></td>
+                        <td><span class="partial">&#9679;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Ad-Free Experience</td>
+                        <td class="our-column"><span class="check">&#10004;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                        <td><span class="cross">&#10006;</span></td>
+                    </tr>
+                    <tr>
+                        <td class="feature-name">Price</td>
+                        <td class="our-column"><strong style="color: var(--brand-green);">Free Forever</strong></td>
+                        <td>$19.99/mo</td>
+                        <td>$39.99/yr</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+        <div class="cta-content">
+            <h2>Your Body. Your Patterns. Your Intelligence.</h2>
+            <p>Join users who've upgraded from generic tracking to personalized wellness intelligence.</p>
+            <a href="#" class="btn">Start Free Today</a>
+            <div class="cta-features">
+                <span><span style="color: #6EE7B7;">&#10003;</span> No credit card required</span>
+                <span><span style="color: #6EE7B7;">&#10003;</span> Free forever, not a trial</span>
+                <span><span style="color: #6EE7B7;">&#10003;</span> Export data anytime</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-brand">
+                <h3>MyFoodTracker</h3>
+                <p>Enterprise-grade wellness intelligence for everyone. Built by health obsessives who couldn't find an app that actually learned.</p>
+                <div class="footer-badge">
+                    <span>&#128161;</span>
+                    Powered by OpenAI GPT-4
+                </div>
+            </div>
+            <div class="footer-links">
+                <h4>Product</h4>
+                <a href="#">Features</a>
+                <a href="#">Intelligence Engine</a>
+                <a href="#">Gamification</a>
+                <a href="#">Changelog</a>
+            </div>
+            <div class="footer-links">
+                <h4>Company</h4>
+                <a href="#">About</a>
+                <a href="#">Contact</a>
+                <a href="#">Careers</a>
+                <a href="#">Press Kit</a>
+            </div>
+            <div class="footer-links">
+                <h4>Legal</h4>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">GDPR</a>
+                <a href="#">CCPA</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 MyFoodTracker. All rights reserved. Not medical advice.</p>
+            <div class="social-links">
+                <a href="#" aria-label="Twitter">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </a>
+                <a href="#" aria-label="GitHub">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

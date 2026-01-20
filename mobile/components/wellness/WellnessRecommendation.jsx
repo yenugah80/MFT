@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
 import { SPACING, RADIUS } from '../../constants/designTokens';
+import { useRecommendationTracking, getDifficultyTierDisplay } from '../../hooks/useInsights';
 
 // Type configurations
 const TYPE_CONFIG = {
@@ -74,20 +75,35 @@ const getTypeConfig = (title = '') => {
 
 /**
  * Primary Recommendation Card - Premium glassmorphism design
+ * Now with recommendation tracking for smarter AI learning
  */
 export function PrimaryRecommendationCard({
   title,
   subtitle,
   whyMatters = [],
   difficulty = 'easy',
+  difficultyTier, // New: EASY/MEDIUM/HARD tier from backend
   impact = 'high',
   confidence,
   isLoading,
   onPress,
+  recommendation, // Full recommendation object for tracking
+  domain = 'nutrition',
 }) {
   const router = useRouter();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const config = getTypeConfig(title);
+  const { trackClicked, trackCompleted } = useRecommendationTracking();
+
+  // Get difficulty display from tier or fallback to string
+  const difficultyDisplay = difficultyTier
+    ? getDifficultyTierDisplay(difficultyTier)
+    : {
+        label: difficulty?.charAt(0).toUpperCase() + difficulty?.slice(1) || 'Easy',
+        icon: 'flash-outline',
+        color: '#10B981',
+        bgColor: '#ECFDF5',
+      };
 
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -97,10 +113,37 @@ export function PrimaryRecommendationCard({
       Animated.timing(scaleAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
     ]).start();
 
+    // Track that user clicked this recommendation
+    if (recommendation || title) {
+      trackClicked({
+        id: recommendation?.id || `rec_${Date.now()}`,
+        type: recommendation?.type || 'general',
+        domain: recommendation?.domain || domain,
+        title,
+        action: subtitle,
+      });
+    }
+
     if (onPress) {
       onPress();
     } else {
       router.push(config.route);
+    }
+  };
+
+  const handleComplete = async () => {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Track completion - triggers outcome verification
+    if (recommendation || title) {
+      await trackCompleted({
+        id: recommendation?.id || `rec_${Date.now()}`,
+        type: recommendation?.type || 'general',
+        domain: recommendation?.domain || domain,
+        title,
+        action: subtitle,
+        difficultyTier: difficultyTier || difficulty?.toUpperCase(),
+      });
     }
   };
 
@@ -155,12 +198,12 @@ export function PrimaryRecommendationCard({
             </View>
           )}
 
-          {/* Meta badges */}
+          {/* Meta badges with difficulty tier */}
           <View style={styles.metaBadges}>
-            <View style={[styles.badge, { backgroundColor: '#ECFDF5' }]}>
-              <Ionicons name="flash" size={12} color="#10B981" />
-              <Text style={[styles.badgeText, { color: '#059669' }]}>
-                {difficulty?.charAt(0).toUpperCase() + difficulty?.slice(1)}
+            <View style={[styles.badge, { backgroundColor: difficultyDisplay.bgColor || '#ECFDF5' }]}>
+              <Ionicons name={difficultyDisplay.icon || 'flash'} size={12} color={difficultyDisplay.color} />
+              <Text style={[styles.badgeText, { color: difficultyDisplay.color }]}>
+                {difficultyDisplay.label}
               </Text>
             </View>
             <View style={[styles.badge, { backgroundColor: '#EEF2FF' }]}>
@@ -179,16 +222,29 @@ export function PrimaryRecommendationCard({
             )}
           </View>
 
-          {/* CTA Button */}
-          <LinearGradient
-            colors={config.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.ctaButton}
-          >
-            <Text style={styles.ctaText}>Take Action</Text>
-            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-          </LinearGradient>
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.completeButton}
+              onPress={handleComplete}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+              <Text style={styles.completeText}>Done</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handlePress} activeOpacity={0.9} style={{ flex: 1 }}>
+              <LinearGradient
+                colors={config.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaButton}
+              >
+                <Text style={styles.ctaText}>Take Action</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -240,6 +296,127 @@ export function PatternCard({ pattern, onPress }) {
         </View>
       </TouchableOpacity>
     </Animated.View>
+  );
+}
+
+/**
+ * Novel Discovery Card - Shows AI-discovered patterns unique to this user
+ * Uses friendly, conversational language
+ */
+export function NovelDiscoveryCard({ discovery, onPress }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.98, duration: 60, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
+    ]).start();
+    onPress?.(discovery);
+  };
+
+  if (!discovery) return null;
+
+  return (
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
+      <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
+        <View style={styles.discoveryCard}>
+          {/* New badge for novel discoveries */}
+          {discovery.isNew && (
+            <View style={styles.newBadge}>
+              <Ionicons name="sparkles" size={10} color="#FFFFFF" />
+              <Text style={styles.newBadgeText}>NEW</Text>
+            </View>
+          )}
+
+          {/* Emoji and headline */}
+          <View style={styles.discoveryHeader}>
+            <Text style={styles.discoveryEmoji}>{discovery.emoji || '🔍'}</Text>
+            <View style={styles.discoveryHeaderContent}>
+              <Text style={styles.discoveryHeadline}>{discovery.headline}</Text>
+              <Text style={styles.discoveryStrength}>{discovery.strengthLabel}</Text>
+            </View>
+          </View>
+
+          {/* Explanation */}
+          <Text style={styles.discoveryExplanation}>{discovery.explanation}</Text>
+
+          {/* Action tip */}
+          {discovery.actionTip && (
+            <View style={styles.actionTipBox}>
+              <Ionicons name="bulb" size={16} color="#F59E0B" />
+              <Text style={styles.actionTipText}>{discovery.actionTip}</Text>
+            </View>
+          )}
+
+          {/* Delay indicator if applicable */}
+          {discovery.delayLabel && discovery.delayLabel !== 'Immediate effect' && (
+            <View style={styles.delayBadge}>
+              <Ionicons name="time-outline" size={12} color="#6366F1" />
+              <Text style={styles.delayText}>{discovery.delayLabel}</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+/**
+ * Novel Discoveries Section - Shows patterns the AI discovered for this user
+ */
+export function NovelDiscoveriesSection({ patterns = [], isLoading, onPatternPress, emptyMessage }) {
+  if (isLoading) {
+    return (
+      <View style={styles.discoveriesContainer}>
+        <View style={styles.discoveriesHeader}>
+          <Ionicons name="search" size={18} color="#6366F1" />
+          <Text style={styles.discoveriesTitle}>Discoveries</Text>
+        </View>
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="small" color="#6366F1" />
+          <Text style={styles.loadingText}>Looking for patterns in your data...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!patterns || patterns.length === 0) {
+    return (
+      <View style={styles.discoveriesContainer}>
+        <View style={styles.discoveriesHeader}>
+          <Ionicons name="search" size={18} color="#6366F1" />
+          <Text style={styles.discoveriesTitle}>Discoveries</Text>
+        </View>
+        <View style={styles.emptyDiscoveries}>
+          <Text style={styles.emptyDiscoveriesText}>
+            {emptyMessage || "Keep logging and I'll find patterns unique to you!"}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.discoveriesContainer}>
+      <View style={styles.discoveriesHeader}>
+        <Ionicons name="sparkles" size={18} color="#6366F1" />
+        <Text style={styles.discoveriesTitle}>Discovered for You</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{patterns.length}</Text>
+        </View>
+      </View>
+      <Text style={styles.discoveriesSubtitle}>
+        Patterns I've learned from YOUR data - not generic advice
+      </Text>
+      {patterns.slice(0, 3).map((discovery, index) => (
+        <NovelDiscoveryCard
+          key={discovery.id || `discovery-${index}`}
+          discovery={discovery}
+          onPress={onPatternPress}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -468,7 +645,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // CTA Button
+  // Action Buttons
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  completeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    borderRadius: RADIUS.xl,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    gap: 6,
+  },
+  completeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+  },
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -539,5 +738,139 @@ const styles = StyleSheet.create({
   occurrenceText: {
     fontSize: 12,
     color: TEXT.tertiary,
+  },
+
+  // Novel Discoveries Section
+  discoveriesContainer: {
+    marginTop: SPACING[5],
+  },
+  discoveriesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[1],
+  },
+  discoveriesTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: TEXT.primary,
+    flex: 1,
+  },
+  discoveriesSubtitle: {
+    fontSize: 13,
+    color: TEXT.tertiary,
+    marginBottom: SPACING[3],
+    fontStyle: 'italic',
+  },
+  countBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6366F1',
+  },
+  emptyDiscoveries: {
+    backgroundColor: '#F8FAFC',
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    alignItems: 'center',
+  },
+  emptyDiscoveriesText: {
+    fontSize: 14,
+    color: TEXT.secondary,
+    textAlign: 'center',
+  },
+
+  // Discovery Card
+  discoveryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[3],
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  newBadge: {
+    position: 'absolute',
+    top: -8,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 4,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  discoveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[3],
+    marginBottom: SPACING[2],
+  },
+  discoveryEmoji: {
+    fontSize: 28,
+  },
+  discoveryHeaderContent: {
+    flex: 1,
+  },
+  discoveryHeadline: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: TEXT.primary,
+    lineHeight: 21,
+    marginBottom: 4,
+  },
+  discoveryStrength: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#10B981',
+  },
+  discoveryExplanation: {
+    fontSize: 13,
+    color: TEXT.secondary,
+    lineHeight: 19,
+    marginBottom: SPACING[3],
+  },
+  actionTipBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    padding: SPACING[3],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[2],
+    marginBottom: SPACING[2],
+  },
+  actionTipText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  delayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  delayText: {
+    fontSize: 12,
+    color: '#6366F1',
+    fontWeight: '500',
   },
 });

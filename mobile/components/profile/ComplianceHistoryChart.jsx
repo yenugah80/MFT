@@ -10,7 +10,7 @@ import { LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../services/apiClient';
-import { TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -250,7 +250,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.muted,
+    fontStyle: 'italic',
   },
 });

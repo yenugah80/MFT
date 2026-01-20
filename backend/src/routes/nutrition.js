@@ -1101,6 +1101,7 @@ router.get("/dashboard", async (req, res) => {
           totalProtein: s.totalProtein,
           totalCarbs: s.totalCarbs,
           totalFats: s.totalFats,
+          mealCount: s.mealCount || 0,
         })),
         currentStreak,
       },

@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { useDashboard } from "../hooks/useDashboard";
 import { useMoodTrends } from "../hooks/useMoodTrends";
 import { useMoodInsights } from "../hooks/useMoodInsights";
+import { useCalendarData } from "../hooks/useCalendarData";
 import { useWaterLog } from "../hooks/useWaterLog";
 import { useFoodLog } from "../hooks/useFoodLog";
 import { useActivityLog } from "../hooks/useActivityLog";
@@ -52,7 +53,7 @@ import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
 import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
 import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
-import MorningPredictionCard from "./dashboard/MorningPredictionCard";
+// MorningPredictionCard moved to Insights screen - less dashboard clutter
 
 // Phase 3: Dashboard Enhancements - Preference-based insights
 // Note: DietaryComplianceCard and CuisineDiversityCard moved to Profile > MyInsightsSection
@@ -64,9 +65,6 @@ import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
 
 // NEW: Comprehensive nutrition details component with integrated progress rings and macro breakdown
 import NutritionDetailsSection from "./dashboard/NutritionDetailsSection";
-
-// Micronutrients coverage display
-import MicrosCoverageSection from "./MicrosCoverageSection";
 
 // Behavioral Health Intelligence System - Phase 6
 import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehaviorSection";
@@ -276,6 +274,10 @@ export default function DashboardContent() {
 
   // Activity tracking hook - for wellness score calculation
   const { todayData: activityTodayData } = useActivityLog();
+
+  // Calendar data with complete historical water/mood/activity data
+  // Request 90 days to support 30D/60D/90D views in calendar modal
+  const { calendarData: fullCalendarData } = useCalendarData({ days: 90 });
 
   // Behavioral Health Intelligence - single fetch point
   const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestrator();
@@ -1352,27 +1354,6 @@ export default function DashboardContent() {
           onSettingsPress={() => router.push('/(tabs)/profile')}
         />
 
-        {/* ============================================ */}
-        {/* MORNING PREDICTION - Day Forecast (DIFFERENTIATOR) */}
-        {/* Shows: Predicted energy, risks, prevention tips */}
-        {/* Only show for users with some history (not first-time) */}
-        {/* ============================================ */}
-        {hasAnyData && (
-          <MorningPredictionCard
-            onTipPress={(tip) => {
-              // Handle tip actions - route to relevant section
-              if (tip.icon === 'water') {
-                router.push('/(tabs)/log?focus=hydration');
-              } else if (tip.icon === 'nutrition' || tip.icon === 'egg' || tip.icon === 'sunny') {
-                router.push('/(tabs)/log');
-              }
-            }}
-            onExpandPress={() => {
-              router.push('/insights/wellness-history');
-            }}
-          />
-        )}
-
         {/* FIRST-TIME USER ONLY - Brand new users see clean onboarding */}
         {/* Returning users who missed a day see full dashboard, not this */}
         {isNewUser && (
@@ -1392,9 +1373,10 @@ export default function DashboardContent() {
         {/* This keeps the dashboard clean and focused on data visualization */}
 
         {/* Premium Calendar Strip - Only show when user has data */}
+        {/* Uses fullCalendarData which includes complete water/mood/activity history */}
         {hasAnyData && (
           <PremiumCalendarStrip
-            data={calendarData}
+            data={fullCalendarData || calendarData}
             selectedDate={null}
             currentStreak={currentStreak}
             onDateSelect={(dateOrObj) => {
@@ -1444,19 +1426,6 @@ export default function DashboardContent() {
             avgCalories: data?.trends?.avgCalories || 0,
           }}
         />
-
-        {/* ============================================ */}
-        {/* MICRONUTRIENTS COVERAGE - Daily micros summary */}
-        {/* Shows coverage ring and top priority nutrients */}
-        {/* ============================================ */}
-        {Object.keys(aggregatedMicros).length > 0 && (
-          <View style={styles.sectionContainer}>
-            <MicrosCoverageSection
-              micros={aggregatedMicros}
-              onViewAll={() => router.push('/insights/food-analytics')}
-            />
-          </View>
-        )}
 
         {/* ============================================ */}
         {/* QUICK ANALYTICS - Navigation to dedicated screens */}
@@ -1977,10 +1946,10 @@ const styles = StyleSheet.create({
     padding: SPACING[5],
     paddingBottom: SPACING[16],
   },
-  // Analytics Section
+  // Analytics Section - Explore buttons
   analyticsSection: {
     marginTop: SPACING[3],
-    marginBottom: SPACING[2],
+    marginBottom: SPACING[4], // Better separation from intelligence card
   },
   analyticsSectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,

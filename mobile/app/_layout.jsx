@@ -1,7 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
+import * as SplashScreen from "expo-splash-screen";
+import { View } from "react-native";
+import {
+  useFonts,
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+} from "@expo-google-fonts/dm-sans";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { ProfileProvider } from "@/providers/ProfileProvider";
@@ -12,9 +21,13 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
 import OnboardingGuard from "@/components/OnboardingGuard";
+import SmartNotificationInitializer from "@/components/SmartNotificationInitializer";
 import Toast from "react-native-toast-message";
 import "@/i18n/config"; // Initialize i18n
 import { LogBox } from 'react-native';
+
+// Keep splash screen visible while fonts load
+SplashScreen.preventAutoHideAsync();
 
 // Analytics & Crash Reporting (FREE - uses your backend)
 import { cleanupAnalytics } from "@/services/analytics";
@@ -76,6 +89,21 @@ if (!publishableKey) {
 export default function RootLayout() {
   const router = useRouter();
 
+  // Load DM Sans fonts - premium typography
+  const [fontsLoaded, fontError] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+  });
+
+  // Hide splash screen when fonts are ready
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded || fontError) {
+      await SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
   // Initialize analytics & crash reporting on app start
   useEffect(() => {
     // ✅ Use module-level flag instead of ref - survives component unmount/remount
@@ -120,7 +148,13 @@ export default function RootLayout() {
     router.replace('/(tabs)/dashboard');
   };
 
+  // Wait for fonts to load
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
+
   return (
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
     <ErrorBoundary onReset={handleErrorReset}>
       <ThemeProvider>
         <DatabaseInitializer>
@@ -134,11 +168,14 @@ export default function RootLayout() {
                     {/* InitializationGuard ensures ProductionStartup completes before rendering child components */}
                     {/* This prevents race conditions where components try to use features before they're initialized */}
                     <InitializationGuard>
-                      <SafeScreen>
-                        <OnboardingGuard>
-                          <Slot />
-                        </OnboardingGuard>
-                      </SafeScreen>
+                      {/* SmartNotificationInitializer activates data-driven notifications with witty messages */}
+                      <SmartNotificationInitializer>
+                        <SafeScreen>
+                          <OnboardingGuard>
+                            <Slot />
+                          </OnboardingGuard>
+                        </SafeScreen>
+                      </SmartNotificationInitializer>
                     </InitializationGuard>
                   </ApiInitializer>
                 </ProfileProvider>
@@ -150,5 +187,6 @@ export default function RootLayout() {
       </ThemeProvider>
       <Toast />
     </ErrorBoundary>
+    </View>
   );
 }

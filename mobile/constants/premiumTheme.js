@@ -250,6 +250,13 @@ export const TYPOGRAPHY = {
     normal: 1.5,
     relaxed: 1.75,
   },
+  // Font families - DM Sans for premium feel
+  family: {
+    regular: 'DMSans_400Regular',
+    medium: 'DMSans_500Medium',
+    semibold: 'DMSans_600SemiBold',
+    bold: 'DMSans_700Bold',
+  },
 };
 
 // SPACING (4pt grid)

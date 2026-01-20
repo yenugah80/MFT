@@ -14,9 +14,12 @@ import { smartNutritionResolver } from "../services/smartNutritionResolver.js";
 import { strategicFoodParser } from "../services/StrategicFoodParser.js";
 import { premiumFeaturesService } from "../services/PremiumFeatures.js";
 import { parseIngredientsText, shouldParseIngredients } from "../services/ingredientParser.js";
+import { estimateMicronutrients } from "../services/micronutrientService.js";
 import { v4 as uuidv4 } from "uuid";
 import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
 import { getSpellingSuggestions, findSimilarFoods } from "../utils/fuzzyMatch.js";
+import { buildDefaultPortion, getPortionAdjustmentOptions } from "../utils/portionDefaults.js";
+import { getIngredientBreakdown, hasIngredientData } from "../services/ingredientEstimator.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -84,6 +87,9 @@ router.post("/", async (req, res) => {
     if (userContext) {
       applyUserContext(resolvedDraft, userContext);
     }
+
+    // Enrich items with micronutrients if missing (USDA FoodData Central + AI fallback)
+    await enrichMissingMicronutrients(resolvedDraft);
 
     // Enrich with unified health metrics (healthScore, nutriScore, healthAnalysis)
     const enrichedDraft = enrichWithHealthMetrics(resolvedDraft);
@@ -520,10 +526,16 @@ async function resolveGenericFood(parsedFood) {
   const itemId = uuidv4();
 
   try {
-    // Build portion string for Smart Resolver
-    const portionStr = parsedFood.quantity && parsedFood.unit
-      ? `${parsedFood.quantity} ${parsedFood.unit}`
-      : '1 serving';
+    // 🆕 Smart portion defaulting - distinguishes unit-based foods (roti, egg) from serving-based (dal, rice)
+    // Fixes: "roti" defaulting to "1 serving" (interpreted as 2-3 rotis = 299 cal) instead of "1 medium roti" (120 cal)
+    const portionResult = buildDefaultPortion(
+      parsedFood.name,
+      parsedFood.quantity,
+      parsedFood.unit
+    );
+    const portionStr = portionResult.portionString;
+
+    console.log(`[Resolve] 🎯 Smart portion for "${parsedFood.name}": "${portionStr}" (source: ${portionResult.portionSource}, isCountable: ${portionResult.isCountable})`);
 
     // Use Smart Nutrition Resolver (OpenAI first, USDA verification for low confidence)
     // Use canonicalName for nutrition lookup (simplified for API), display name is preserved in parsedFood.name
@@ -567,19 +579,37 @@ async function resolveGenericFood(parsedFood) {
     const finalName = originalName || nutrition.foodName || 'Unknown Food';
     console.log(`[Resolve] 🔍 Food name resolution: parsed="${parsedFood.name}" → resolver="${nutrition.foodName}" → using="${finalName}"`);
 
+    // 🆕 Get portion adjustment options for UI (allows user to change quantity)
+    const portionAdjustmentOptions = getPortionAdjustmentOptions(parsedFood.name, portionStr);
+
+    // 🆕 Get ingredient breakdown if available (for foods like roti, idli, etc.)
+    const quantity = parsedFood.quantity || portionResult.quantity || 1;
+    const ingredientBreakdown = getIngredientBreakdown(parsedFood.name, quantity);
+
+    // Determine ingredients: use our curated breakdown if available, else use AI components
+    const ingredients = ingredientBreakdown
+      ? ingredientBreakdown.ingredients
+      : (nutrition.components || []);
+
     return {
       itemId,
       name: finalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
       portion: {
-        amount: parsedFood.quantity || 1,
-        unit: parsedFood.unit || 'serving',
-        gramsEquivalent: nutrition.servingGrams || 100,
+        amount: parsedFood.quantity || portionResult.quantity || 1,
+        unit: parsedFood.unit || portionResult.countableConfig?.defaultUnit || 'serving',
+        gramsEquivalent: portionResult.gramsEquivalent || nutrition.servingGrams || 100,
         servingText: nutrition.portionSize,
-        isEstimated: !parsedFood.quantity
+        isEstimated: !parsedFood.quantity,
+        // 🆕 Smart portion metadata for UI
+        portionSource: portionResult.portionSource,
+        isCountable: portionResult.isCountable,
+        expectedCalories: portionResult.expectedCalories,
+        adjustmentOptions: portionAdjustmentOptions, // For UI quantity picker
       },
       macros: nutrition.macros,
       micros: nutrition.micros || {},
-      ingredients: nutrition.components || [], // 🆕 Map components to ingredients for frontend
+      ingredients, // 🆕 Curated ingredient breakdown or AI components
+      ingredientBreakdown, // 🆕 Full ingredient data with add-ons and edit capability
       components: nutrition.components || [], // Component breakdown for complex foods
       allergens: nutrition.potentialAllergens || nutrition.allergens || [], // 🆕 Allergen info from AI
       isComplex: nutrition.isComplex || false, // Whether food has multiple ingredients
@@ -652,6 +682,105 @@ async function resolveGenericFood(parsedFood) {
 }
 
 // ==================== HELPER FUNCTIONS ====================
+
+/**
+ * KEY MICRONUTRIENTS to track (matches micronutrientService.js)
+ * These are the essential vitamins and minerals for health tracking
+ */
+const KEY_MICRONUTRIENTS = [
+  'calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'sodium',
+  'vitaminA', 'vitaminC', 'vitaminD', 'vitaminB12', 'folate'
+];
+
+/**
+ * Check if micros are complete (has at least 3 key micronutrients with non-zero values)
+ */
+function isMicrosComplete(micros) {
+  if (!micros || typeof micros !== 'object') return false;
+
+  let nonZeroCount = 0;
+  for (const key of KEY_MICRONUTRIENTS) {
+    const value = micros[key];
+    const numValue = typeof value === 'number' ? value :
+                     (value?.value ? parseFloat(value.value) : 0);
+    if (numValue > 0) nonZeroCount++;
+  }
+
+  return nonZeroCount >= 3;
+}
+
+/**
+ * Enrich food items with micronutrients if missing
+ * Uses USDA FoodData Central as primary source, AI fallback
+ */
+async function enrichMissingMicronutrients(draft) {
+  if (!draft?.items || draft.items.length === 0) return;
+
+  const enrichmentPromises = draft.items.map(async (item) => {
+    // Skip if micros are already complete
+    if (isMicrosComplete(item.micros)) {
+      return;
+    }
+
+    try {
+      const portion = item.portion?.servingText ||
+                      `${item.portion?.amount || 1} ${item.portion?.unit || 'serving'}`;
+      const macros = {
+        calories: item.macros?.calories_kcal || 0,
+        protein: item.macros?.protein_g || 0,
+        carbs: item.macros?.carbs_g || 0,
+        fat: item.macros?.fat_g || 0
+      };
+
+      // Call micronutrientService to get USDA/AI-estimated micros
+      const estimatedMicros = await estimateMicronutrients(item.name, portion, macros);
+
+      if (estimatedMicros && Object.keys(estimatedMicros).length > 0) {
+        // Merge estimated micros with existing (don't overwrite non-zero values)
+        item.micros = item.micros || {};
+        for (const [key, value] of Object.entries(estimatedMicros)) {
+          const existingValue = item.micros[key];
+          const existingNumValue = typeof existingValue === 'number' ? existingValue :
+                                   (existingValue?.value ? parseFloat(existingValue.value) : 0);
+
+          // Only fill in if existing value is 0 or missing
+          if (!existingNumValue || existingNumValue === 0) {
+            item.micros[key] = value;
+          }
+        }
+
+        // Add flag to indicate micros were enriched
+        if (!item.flags) item.flags = [];
+        if (!item.flags.includes('micros_enriched')) {
+          item.flags.push('micros_enriched');
+        }
+
+        console.log(`[Resolve] ✅ Enriched micros for "${item.name}": ${Object.keys(estimatedMicros).length} nutrients`);
+      }
+    } catch (error) {
+      console.warn(`[Resolve] Failed to enrich micros for "${item.name}":`, error.message);
+      // Don't fail the whole request, just skip enrichment
+    }
+  });
+
+  await Promise.all(enrichmentPromises);
+
+  // Recalculate totals.micros after enrichment
+  if (draft.totals) {
+    draft.totals.micros = {};
+    draft.items.forEach(item => {
+      if (item.micros && typeof item.micros === 'object') {
+        Object.entries(item.micros).forEach(([key, value]) => {
+          const numValue = typeof value === 'number' ? value :
+                           (value?.value ? parseFloat(value.value) : parseFloat(String(value).replace(/[^0-9.]/g, '')));
+          if (!isNaN(numValue) && numValue > 0) {
+            draft.totals.micros[key] = (draft.totals.micros[key] || 0) + numValue;
+          }
+        });
+      }
+    });
+  }
+}
 
 function isNutrientsComplete(macros) {
   return macros.calories_kcal > 0 &&

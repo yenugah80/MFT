@@ -54,6 +54,30 @@ function getScoreValue(foodMoodScore) {
   return typeof foodMoodScore === 'number' ? foodMoodScore : 0;
 }
 
+// Get color based on wellness score (0-100)
+function getScoreColor(score) {
+  if (score >= 80) return { bg: 'rgba(16, 185, 129, 0.12)', border: '#10B981', text: '#059669' }; // Excellent - Green
+  if (score >= 60) return { bg: 'rgba(59, 130, 246, 0.12)', border: '#3B82F6', text: '#2563EB' }; // Good - Blue
+  if (score >= 40) return { bg: 'rgba(245, 158, 11, 0.12)', border: '#F59E0B', text: '#D97706' }; // Fair - Amber
+  return { bg: 'rgba(239, 68, 68, 0.12)', border: '#EF4444', text: '#DC2626' }; // Needs work - Red
+}
+
+// Get score label
+function getScoreLabel(score) {
+  if (score >= 80) return 'Excellent';
+  if (score >= 60) return 'Good';
+  if (score >= 40) return 'Fair';
+  if (score > 0) return 'Keep going';
+  return 'Start logging';
+}
+
+// Calculate trend percentage between two values
+function calculateTrend(current, previous) {
+  if (!previous || previous === 0) return null;
+  const change = ((current - previous) / previous) * 100;
+  return Math.round(change);
+}
+
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -308,8 +332,11 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
 
   // Check if viewing yesterday and if it's a missed day (for backfill option)
   const isViewingYesterday = dateKey && isYesterday(new Date(dateKey));
+  // Check for ANY logged data (food, mood, or water)
   const hasDataForDay = dayData?.logged || dayData?.calories > 0 ||
-    dayData?.meals > 0 || dayData?.foodCount > 0;
+    dayData?.meals > 0 || dayData?.foodCount > 0 ||
+    dayData?.moodAvg > 0 || dayData?.moodCount > 0 ||
+    dayData?.hydrationPercent > 0 || dayData?.water > 0;
   const canBackfill = isViewingYesterday && !hasDataForDay;
 
   // Get Lottie source for mood display
@@ -350,7 +377,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
     const stats = {
       totalCalories: 0, totalMeals: 0, avgMood: 0, avgHydration: 0,
       daysLogged: 0, totalDays: days, bestDay: null, moodEntries: 0,
-      avgWellnessScore: 0, streakDays: 0
+      avgWellnessScore: 0, streakDays: 0, totalActivityMinutes: 0, activityDays: 0
     };
 
     let moodSum = 0, hydrationSum = 0, wellnessSum = 0;
@@ -363,15 +390,31 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
       const key = formatDateKey(date);
       const data = allData[key];
 
-      if (data && (data.logged || data.calories > 0)) {
+      // Check for ANY logged data (food, mood, or water)
+      const hasAnyData = data && (
+        data.logged || data.calories > 0 ||
+        data.avgMood > 0 || data.moodCount > 0 ||
+        data.hydrationPercent > 0 || data.water > 0 ||
+        data.activityMinutes > 0
+      );
+
+      if (hasAnyData) {
         stats.daysLogged++;
         stats.totalCalories += data.calories || 0;
         stats.totalMeals += data.meals || data.foodCount || 0;
 
-        if (data.avgMood) { moodSum += data.avgMood; moodCount++; }
+        if (data.avgMood || data.moodAvg) {
+          moodSum += data.avgMood || data.moodAvg;
+          moodCount++;
+          stats.moodEntries += data.moodCount || 1;
+        }
         if (data.hydrationPercent || data.water) {
           hydrationSum += data.hydrationPercent || data.water || 0;
           hydrationCount++;
+        }
+        if (data.activityMinutes > 0) {
+          stats.totalActivityMinutes += data.activityMinutes;
+          stats.activityDays++;
         }
         const scoreVal = getScoreValue(data.foodMoodScore);
         if (scoreVal > 0) { wellnessSum += scoreVal; wellnessCount++; }
@@ -393,8 +436,9 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
   const periodDays = selectedPeriod === 'day' ? 1 : selectedPeriod === '30d' ? 30 : selectedPeriod === '60d' ? 60 : 90;
   const periodStats = selectedPeriod === 'day' ? null : getPeriodStats(periodDays);
 
+  // Check for ANY logged data (food, mood, or water) - not just food
   const hasData = selectedPeriod === 'day'
-    ? (dayData?.logged || dayData?.calories > 0)
+    ? (dayData?.logged || dayData?.calories > 0 || dayData?.moodAvg > 0 || dayData?.moodCount > 0 || dayData?.hydrationPercent > 0 || dayData?.water > 0)
     : (periodStats?.daysLogged > 0);
 
   // Share functionality
@@ -450,131 +494,148 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
 
           {hasData ? (
             <>
-              {/* Wellness Score Hero */}
-              <View style={dayDetailStyles.scoreHero}>
-                <View style={dayDetailStyles.scoreRing}>
-                  <Text style={dayDetailStyles.scoreValue}>
-                    {selectedPeriod === 'day' ? getScoreValue(dayData?.foodMoodScore) : periodStats.avgWellnessScore}
-                  </Text>
-                  <Text style={dayDetailStyles.scoreLabel}>
-                    {selectedPeriod === 'day' ? 'Wellness' : 'Avg Score'}
-                  </Text>
-                </View>
-                {selectedPeriod !== 'day' && (
-                  <View style={dayDetailStyles.periodSummary}>
-                    <Text style={dayDetailStyles.periodSummaryText}>
-                      <Text style={{ fontWeight: '700', color: BRAND.primary }}>{periodStats.daysLogged}</Text> of {periodStats.totalDays} days logged
-                    </Text>
+              {/* Wellness Score Hero - Color coded */}
+              {(() => {
+                const score = selectedPeriod === 'day' ? getScoreValue(dayData?.foodMoodScore) : periodStats.avgWellnessScore;
+                const colors = getScoreColor(score);
+                const label = getScoreLabel(score);
+                return (
+                  <View style={dayDetailStyles.scoreHero}>
+                    <View style={[dayDetailStyles.scoreRing, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                      <Text style={[dayDetailStyles.scoreValue, { color: colors.text }]}>
+                        {score}
+                      </Text>
+                      <Text style={[dayDetailStyles.scoreLabelBadge, { color: colors.text }]}>
+                        {label}
+                      </Text>
+                    </View>
+                    {selectedPeriod !== 'day' && (
+                      <View style={dayDetailStyles.periodSummary}>
+                        <Text style={dayDetailStyles.periodSummaryText}>
+                          <Text style={{ fontWeight: '700', color: colors.text }}>{periodStats.daysLogged}</Text> of {periodStats.totalDays} days logged
+                        </Text>
+                      </View>
+                    )}
+                    {selectedPeriod === 'day' && (
+                      <Text style={dayDetailStyles.scoreSubLabel}>Wellness Score</Text>
+                    )}
                   </View>
-                )}
-              </View>
+                );
+              })()}
 
-              {/* Stats Cards */}
-              <View style={dayDetailStyles.statsSection}>
-                {/* Food Card */}
-                <View style={dayDetailStyles.statCard}>
-                  <View style={dayDetailStyles.statCardHeader}>
-                    <View style={[dayDetailStyles.statCardIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                      <Ionicons name="restaurant" size={18} color="#10B981" />
-                    </View>
-                    <Text style={dayDetailStyles.statCardTitle}>Food</Text>
+              {/* Stats Cards - 2x2 Grid */}
+              <View style={dayDetailStyles.statsGrid}>
+                {/* Food Card with Macros */}
+                <View style={[dayDetailStyles.statCardCompact, { borderLeftColor: '#10B981' }]}>
+                  <View style={dayDetailStyles.statCardHeaderCompact}>
+                    <Ionicons name="restaurant" size={16} color="#10B981" />
+                    <Text style={dayDetailStyles.statCardTitleCompact}>Nutrition</Text>
                   </View>
-                  <View style={dayDetailStyles.statCardBody}>
-                    <View style={dayDetailStyles.statCardItem}>
-                      <Text style={dayDetailStyles.statCardValue}>
-                        {selectedPeriod === 'day' ? (dayData?.calories || 0) : periodStats.avgCalories}
-                      </Text>
-                      <Text style={dayDetailStyles.statCardLabel}>
-                        {selectedPeriod === 'day' ? 'Calories' : 'Avg Cal/Day'}
-                      </Text>
+                  <Text style={dayDetailStyles.statCardValueLarge}>
+                    {selectedPeriod === 'day' ? (dayData?.calories || 0) : periodStats.avgCalories}
+                    <Text style={dayDetailStyles.statCardUnit}> cal</Text>
+                  </Text>
+                  {selectedPeriod === 'day' && (dayData?.protein > 0 || dayData?.carbs > 0 || dayData?.fat > 0) && (
+                    <View style={dayDetailStyles.macrosRow}>
+                      <Text style={dayDetailStyles.macroItem}>P: {Math.round(dayData?.protein || 0)}g</Text>
+                      <Text style={dayDetailStyles.macroDot}>•</Text>
+                      <Text style={dayDetailStyles.macroItem}>C: {Math.round(dayData?.carbs || 0)}g</Text>
+                      <Text style={dayDetailStyles.macroDot}>•</Text>
+                      <Text style={dayDetailStyles.macroItem}>F: {Math.round(dayData?.fat || 0)}g</Text>
                     </View>
-                    <View style={dayDetailStyles.statCardDivider} />
-                    <View style={dayDetailStyles.statCardItem}>
-                      <Text style={dayDetailStyles.statCardValue}>
-                        {selectedPeriod === 'day' ? (dayData?.meals || dayData?.foodCount || 0) : periodStats.totalMeals}
-                      </Text>
-                      <Text style={dayDetailStyles.statCardLabel}>
-                        {selectedPeriod === 'day' ? 'Meals' : 'Total Meals'}
-                      </Text>
-                    </View>
-                  </View>
+                  )}
+                  {selectedPeriod !== 'day' && (
+                    <Text style={dayDetailStyles.statCardSubtext}>
+                      {periodStats.totalMeals || 0} meals logged
+                    </Text>
+                  )}
                 </View>
 
                 {/* Mood Card */}
-                <View style={dayDetailStyles.statCard}>
-                  <View style={dayDetailStyles.statCardHeader}>
-                    <View style={[dayDetailStyles.statCardIcon, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                      <Ionicons name="happy" size={18} color="#F59E0B" />
-                    </View>
-                    <Text style={dayDetailStyles.statCardTitle}>Mood</Text>
+                <View style={[dayDetailStyles.statCardCompact, { borderLeftColor: '#F59E0B' }]}>
+                  <View style={dayDetailStyles.statCardHeaderCompact}>
+                    <Ionicons name="happy" size={16} color="#F59E0B" />
+                    <Text style={dayDetailStyles.statCardTitleCompact}>Mood</Text>
                   </View>
-                  <View style={dayDetailStyles.statCardBody}>
-                    <View style={dayDetailStyles.statCardItem}>
-                      <Text style={dayDetailStyles.statCardValue}>
-                        {selectedPeriod === 'day'
-                          ? (dayData?.avgMood ? dayData.avgMood.toFixed(1) : '-')
-                          : periodStats.avgMood}
-                      </Text>
-                      <Text style={dayDetailStyles.statCardLabel}>
-                        {selectedPeriod === 'day' ? 'Average' : 'Avg Mood'}/5
-                      </Text>
-                    </View>
-                    <View style={dayDetailStyles.statCardDivider} />
-                    <View style={dayDetailStyles.statCardItem}>
-                      <LottieView
-                        source={selectedPeriod === 'day'
-                          ? getMoodLottie(dayData?.moodType, dayData?.avgMood)
-                          : getMoodLottie(null, parseFloat(periodStats.avgMood))}
-                        autoPlay
-                        loop
-                        style={{ width: 32, height: 32 }}
-                      />
-                      <Text style={dayDetailStyles.statCardLabel}>Feeling</Text>
-                    </View>
+                  <View style={dayDetailStyles.moodDisplay}>
+                    <LottieView
+                      source={selectedPeriod === 'day'
+                        ? getMoodLottie(dayData?.moodType, dayData?.avgMood)
+                        : getMoodLottie(null, parseFloat(periodStats.avgMood))}
+                      autoPlay
+                      loop
+                      style={{ width: 36, height: 36 }}
+                    />
+                    <Text style={dayDetailStyles.statCardValueLarge}>
+                      {selectedPeriod === 'day'
+                        ? (dayData?.avgMood ? dayData.avgMood.toFixed(1) : '-')
+                        : periodStats.avgMood}
+                      <Text style={dayDetailStyles.statCardUnit}>/5</Text>
+                    </Text>
                   </View>
+                  <Text style={dayDetailStyles.statCardSubtext}>
+                    {selectedPeriod === 'day'
+                      ? (dayData?.moodCount > 0 ? `${dayData.moodCount} check-in${dayData.moodCount > 1 ? 's' : ''}` : 'No check-ins')
+                      : `${periodStats.moodEntries || 0} entries`}
+                  </Text>
                 </View>
 
                 {/* Hydration Card */}
-                <View style={dayDetailStyles.statCard}>
-                  <View style={dayDetailStyles.statCardHeader}>
-                    <View style={[dayDetailStyles.statCardIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                      <Ionicons name="water" size={18} color="#3B82F6" />
-                    </View>
-                    <Text style={dayDetailStyles.statCardTitle}>Hydration</Text>
+                <View style={[dayDetailStyles.statCardCompact, { borderLeftColor: '#3B82F6' }]}>
+                  <View style={dayDetailStyles.statCardHeaderCompact}>
+                    <Ionicons name="water" size={16} color="#3B82F6" />
+                    <Text style={dayDetailStyles.statCardTitleCompact}>Hydration</Text>
                   </View>
-                  <View style={dayDetailStyles.statCardBody}>
-                    <View style={dayDetailStyles.statCardItem}>
-                      <Text style={dayDetailStyles.statCardValue}>
-                        {selectedPeriod === 'day'
-                          ? Math.round(dayData?.hydrationPercent || dayData?.water || 0)
-                          : periodStats.avgHydration}%
-                      </Text>
-                      <Text style={dayDetailStyles.statCardLabel}>
-                        {selectedPeriod === 'day' ? 'Of Goal' : 'Avg/Day'}
-                      </Text>
-                    </View>
-                    <View style={dayDetailStyles.statCardDivider} />
-                    <View style={dayDetailStyles.statCardItem}>
-                      <View style={dayDetailStyles.hydrationBar}>
-                        <View style={[dayDetailStyles.hydrationFill, {
-                          width: `${Math.min(100, selectedPeriod === 'day'
-                            ? (dayData?.hydrationPercent || dayData?.water || 0)
-                            : periodStats.avgHydration)}%`
-                        }]} />
-                      </View>
-                      <Text style={dayDetailStyles.statCardLabel}>Progress</Text>
-                    </View>
+                  <Text style={dayDetailStyles.statCardValueLarge}>
+                    {selectedPeriod === 'day'
+                      ? Math.round(dayData?.hydrationPercent || dayData?.water || 0)
+                      : periodStats.avgHydration}
+                    <Text style={dayDetailStyles.statCardUnit}>%</Text>
+                  </Text>
+                  <View style={dayDetailStyles.hydrationBarCompact}>
+                    <View style={[dayDetailStyles.hydrationFillCompact, {
+                      width: `${Math.min(100, selectedPeriod === 'day'
+                        ? (dayData?.hydrationPercent || dayData?.water || 0)
+                        : periodStats.avgHydration)}%`
+                    }]} />
                   </View>
+                  <Text style={dayDetailStyles.statCardSubtext}>
+                    {selectedPeriod === 'day' ? 'of daily goal' : 'avg per day'}
+                  </Text>
+                </View>
+
+                {/* Activity Card */}
+                <View style={[dayDetailStyles.statCardCompact, { borderLeftColor: '#8B5CF6' }]}>
+                  <View style={dayDetailStyles.statCardHeaderCompact}>
+                    <Ionicons name="fitness" size={16} color="#8B5CF6" />
+                    <Text style={dayDetailStyles.statCardTitleCompact}>Activity</Text>
+                  </View>
+                  <Text style={dayDetailStyles.statCardValueLarge}>
+                    {selectedPeriod === 'day'
+                      ? (dayData?.activityMinutes || 0)
+                      : Math.round((periodStats.totalActivityMinutes || 0) / Math.max(1, periodStats.daysLogged))}
+                    <Text style={dayDetailStyles.statCardUnit}> min</Text>
+                  </Text>
+                  <Text style={dayDetailStyles.statCardSubtext}>
+                    {selectedPeriod === 'day'
+                      ? (dayData?.activityCount > 0 ? `${dayData.activityCount} workout${dayData.activityCount > 1 ? 's' : ''}` : 'No workouts')
+                      : `${periodStats.totalActivityMinutes || 0} min total`}
+                  </Text>
                 </View>
               </View>
 
-              {/* Story Line (Day view only) */}
+              {/* Story Line (Day view only) - Enhanced */}
               {selectedPeriod === 'day' && (
                 <View style={dayDetailStyles.storyContainer}>
-                  <Ionicons name="sparkles" size={18} color={BRAND.primary} />
-                  <Text style={dayDetailStyles.storyText}>
-                    {dayData?.storyLine || generateStoryLine(dayData) || 'Start logging to get personalized insights!'}
-                  </Text>
+                  <View style={dayDetailStyles.storyIcon}>
+                    <Ionicons name="sparkles" size={16} color={BRAND.primary} />
+                  </View>
+                  <View style={dayDetailStyles.storyContent}>
+                    <Text style={dayDetailStyles.storyLabel}>Your Day Summary</Text>
+                    <Text style={dayDetailStyles.storyText}>
+                      {dayData?.storyLine || generateStoryLine(dayData) || 'Start logging to get personalized insights!'}
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -593,17 +654,46 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
             </>
           ) : (
             <View style={dayDetailStyles.emptyState}>
-              <Ionicons name="calendar-outline" size={56} color={TEXT.muted} />
+              <View style={dayDetailStyles.emptyIconContainer}>
+                <Ionicons name="calendar-outline" size={48} color={TEXT.muted} />
+              </View>
               <Text style={dayDetailStyles.emptyTitle}>
-                {canBackfill ? 'Missed Yesterday?' : 'Your stats'}
+                {canBackfill ? 'Missed Yesterday?' : selectedPeriod === 'day' ? 'No data yet' : 'Start tracking'}
               </Text>
               <Text style={dayDetailStyles.emptyText}>
                 {canBackfill
                   ? 'You can still log yesterday\'s meals to maintain your streak!'
                   : selectedPeriod === 'day'
-                    ? 'Stats appear as you log food, mood & water'
-                    : 'Stats will populate as you log'}
+                    ? 'Log your meals, mood, and water to see insights'
+                    : `Log daily to build your ${periodDays}-day insights`}
               </Text>
+
+              {/* Quick Log Buttons (Day view only) */}
+              {selectedPeriod === 'day' && !canBackfill && (
+                <View style={dayDetailStyles.quickLogGrid}>
+                  <TouchableOpacity
+                    style={[dayDetailStyles.quickLogBtn, { borderColor: '#10B981' }]}
+                    onPress={() => { onClose(); router.push('/(tabs)/log'); }}
+                  >
+                    <Ionicons name="restaurant" size={20} color="#10B981" />
+                    <Text style={[dayDetailStyles.quickLogText, { color: '#10B981' }]}>Log Food</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[dayDetailStyles.quickLogBtn, { borderColor: '#F59E0B' }]}
+                    onPress={() => { onClose(); router.push('/(tabs)/dashboard'); }}
+                  >
+                    <Ionicons name="happy" size={20} color="#F59E0B" />
+                    <Text style={[dayDetailStyles.quickLogText, { color: '#F59E0B' }]}>Log Mood</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[dayDetailStyles.quickLogBtn, { borderColor: '#3B82F6' }]}
+                    onPress={() => { onClose(); router.push('/(tabs)/dashboard'); }}
+                  >
+                    <Ionicons name="water" size={20} color="#3B82F6" />
+                    <Text style={[dayDetailStyles.quickLogText, { color: '#3B82F6' }]}>Log Water</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Backfill Button for Yesterday */}
               {canBackfill && (
@@ -845,23 +935,144 @@ const dayDetailStyles = StyleSheet.create({
     borderRadius: 4,
   },
 
-  // Story container
+  // Score enhancements
+  scoreLabelBadge: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  scoreSubLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+    marginTop: SPACING[1],
+  },
+
+  // 2x2 Stats Grid
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
+  },
+  statCardCompact: {
+    width: '47.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    borderLeftWidth: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  statCardHeaderCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[2],
+  },
+  statCardTitleCompact: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  statCardValueLarge: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+  },
+  statCardUnit: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
+  },
+  statCardSubtext: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: SPACING[1],
+  },
+
+  // Macros row
+  macrosRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING[2],
+    flexWrap: 'wrap',
+  },
+  macroItem: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.secondary,
+    fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  macroDot: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.muted,
+    marginHorizontal: 4,
+  },
+
+  // Mood display
+  moodDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+
+  // Hydration bar compact
+  hydrationBarCompact: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: SPACING[2],
+  },
+  hydrationFillCompact: {
+    height: '100%',
+    backgroundColor: '#3B82F6',
+    borderRadius: 3,
+  },
+
+  // Story container enhanced
   storyContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING[3],
-    backgroundColor: `${SEMANTIC_ACTIONS.success}0F`,
+    backgroundColor: `${SEMANTIC_ACTIONS.success}08`,
     padding: SPACING[4],
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
+    borderColor: `${SEMANTIC_ACTIONS.success}15`,
+  },
+  storyIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: `${SEMANTIC_ACTIONS.success}14`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyContent: {
+    flex: 1,
+  },
+  storyLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: BRAND.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: SPACING[1],
   },
   storyText: {
     flex: 1,
-    fontSize: TYPOGRAPHY.size.base,
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.primary,
-    lineHeight: 22,
+    lineHeight: 20,
     fontWeight: '500',
   },
 
@@ -889,16 +1100,25 @@ const dayDetailStyles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Empty state
+  // Empty state enhanced
   emptyState: {
     alignItems: 'center',
-    paddingVertical: SPACING[8],
+    paddingVertical: SPACING[6],
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(107, 114, 128, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
   },
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.secondary,
-    marginTop: SPACING[3],
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+    marginTop: SPACING[2],
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -906,6 +1126,26 @@ const dayDetailStyles = StyleSheet.create({
     marginTop: SPACING[2],
     textAlign: 'center',
     paddingHorizontal: SPACING[4],
+    lineHeight: 20,
+  },
+  quickLogGrid: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+    marginTop: SPACING[5],
+  },
+  quickLogBtn: {
+    alignItems: 'center',
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+    minWidth: 85,
+  },
+  quickLogText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    marginTop: SPACING[1],
   },
 
   // Action buttons

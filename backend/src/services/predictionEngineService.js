@@ -50,6 +50,219 @@ const HOURS_FOR_IMMEDIATE = 4;
 const HOURS_FOR_SAME_DAY = 24;
 
 // ============================================================================
+// PREDICTION CALIBRATION (Platt Scaling & Confidence Intervals)
+// ============================================================================
+
+/**
+ * Platt scaling parameters (logistic regression on prediction outputs)
+ * These are default parameters - in production, calibrate per-user based on
+ * logged predictions vs actual outcomes
+ *
+ * P(correct) = 1 / (1 + exp(A * rawScore + B))
+ */
+const PLATT_PARAMS = {
+  // Default params for uncalibrated users
+  default: { A: -2.0, B: 0.5 },
+  // User-specific calibration would be loaded from DB
+};
+
+/**
+ * Apply Platt scaling to convert raw confidence to calibrated probability
+ *
+ * @param {number} rawConfidence - Raw confidence score (0-1)
+ * @param {string} userId - User ID for personalized calibration
+ * @returns {number} Calibrated probability (0-1)
+ */
+function applyPlattScaling(rawConfidence, userId = null) {
+  // Get calibration params (user-specific or default)
+  const params = PLATT_PARAMS.default;
+
+  // Transform confidence to logit scale
+  const logit = Math.log(rawConfidence / (1 - rawConfidence + 0.001));
+
+  // Apply Platt transformation
+  const calibrated = 1 / (1 + Math.exp(params.A * logit + params.B));
+
+  // Clamp to valid range
+  return Math.max(0.05, Math.min(0.95, calibrated));
+}
+
+/**
+ * Calculate confidence interval for a prediction
+ *
+ * Uses Wilson score interval for proportion estimation
+ *
+ * @param {number} confidence - Confidence (0-1)
+ * @param {number} sampleSize - Number of data points used
+ * @param {number} level - Confidence level (default 0.8 for 80% CI)
+ * @returns {object} { low, high, halfWidth }
+ */
+function calculateConfidenceInterval(confidence, sampleSize, level = 0.8) {
+  // Z-score for confidence level (80% = 1.28, 90% = 1.645, 95% = 1.96)
+  const zScores = { 0.8: 1.28, 0.9: 1.645, 0.95: 1.96 };
+  const z = zScores[level] || 1.28;
+
+  // For prediction scores (0-10 scale), convert from probability
+  const p = confidence;
+  const n = Math.max(sampleSize, 3);
+
+  // Wilson score interval
+  const denominator = 1 + (z * z) / n;
+  const center = (p + (z * z) / (2 * n)) / denominator;
+  const halfWidth = (z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) / denominator;
+
+  return {
+    low: Math.max(0, Math.round((center - halfWidth) * 100) / 100),
+    high: Math.min(1, Math.round((center + halfWidth) * 100) / 100),
+    halfWidth: Math.round(halfWidth * 100) / 100,
+    level,
+  };
+}
+
+/**
+ * Decompose prediction uncertainty into understandable factors
+ *
+ * @param {object} context - Prediction context (data availability, etc.)
+ * @returns {object} { sources: string[], totalUncertainty: number }
+ */
+function decomposeUncertainty(context) {
+  const {
+    mealsSampled = 0,
+    moodsSampled = 0,
+    correlationsCount = 0,
+    dataGaps = [],
+    isNewPattern = false,
+    weatherData = null,
+    sleepData = null,
+  } = context;
+
+  const sources = [];
+  let totalPenalty = 0;
+
+  // Check data sufficiency
+  if (mealsSampled < 7) {
+    sources.push(`Limited meal history (${mealsSampled} meals)`);
+    totalPenalty += 0.15;
+  }
+
+  if (moodsSampled < 5) {
+    sources.push(`Limited mood data (${moodsSampled} entries)`);
+    totalPenalty += 0.15;
+  }
+
+  if (correlationsCount < 3) {
+    sources.push('Few established patterns');
+    totalPenalty += 0.10;
+  }
+
+  // Check for data gaps
+  if (dataGaps.length > 2) {
+    sources.push(`Recent logging gaps (${dataGaps.length} days missing)`);
+    totalPenalty += 0.10;
+  }
+
+  // Check for novel patterns
+  if (isNewPattern) {
+    sources.push('New food/behavior pattern');
+    totalPenalty += 0.15;
+  }
+
+  // Missing contextual data
+  if (!sleepData) {
+    sources.push('No sleep data');
+    totalPenalty += 0.05;
+  }
+
+  // If no uncertainty sources found, still cap at reasonable maximum
+  if (sources.length === 0) {
+    sources.push('Standard prediction variability');
+    totalPenalty = 0.1;
+  }
+
+  return {
+    sources,
+    totalUncertainty: Math.min(totalPenalty, 0.5), // Cap at 50% reduction
+    confidenceMultiplier: 1 - Math.min(totalPenalty, 0.5),
+  };
+}
+
+/**
+ * Build a calibrated prediction with confidence intervals and uncertainty decomposition
+ *
+ * @param {number} rawValue - Raw predicted value
+ * @param {number} rawConfidence - Raw confidence (0-1)
+ * @param {object} context - Context for uncertainty decomposition
+ * @param {string} userId - User ID for personalized calibration
+ * @returns {object} Calibrated prediction with intervals
+ */
+function buildCalibratedPrediction(rawValue, rawConfidence, context, userId = null) {
+  // Apply Platt scaling
+  const calibratedConfidence = applyPlattScaling(rawConfidence, userId);
+
+  // Decompose uncertainty
+  const uncertainty = decomposeUncertainty(context);
+
+  // Adjust confidence by uncertainty
+  const finalConfidence = calibratedConfidence * uncertainty.confidenceMultiplier;
+
+  // Calculate confidence interval
+  const interval = calculateConfidenceInterval(
+    finalConfidence,
+    context.mealsSampled || 10,
+    0.8 // 80% confidence interval
+  );
+
+  // Scale interval to prediction value range (e.g., 0-10 for mood/energy)
+  const valueScale = 10; // Assuming 0-10 scale
+  const scaledInterval = {
+    low: Math.max(0, rawValue - interval.halfWidth * valueScale),
+    high: Math.min(valueScale, rawValue + interval.halfWidth * valueScale),
+    level: interval.level,
+  };
+
+  return {
+    // Core prediction
+    predictedValue: Math.round(rawValue * 10) / 10,
+    rawConfidence: Math.round(rawConfidence * 100) / 100,
+
+    // Calibrated confidence
+    calibratedConfidence: Math.round(finalConfidence * 100) / 100,
+    confidenceLabel: getConfidenceLabel(finalConfidence),
+
+    // Confidence interval
+    interval: {
+      low: Math.round(scaledInterval.low * 10) / 10,
+      high: Math.round(scaledInterval.high * 10) / 10,
+      level: scaledInterval.level,
+    },
+
+    // Uncertainty breakdown
+    uncertainty: {
+      sources: uncertainty.sources,
+      totalUncertainty: Math.round(uncertainty.totalUncertainty * 100) + '%',
+    },
+
+    // Metadata for future calibration
+    meta: {
+      calibrationApplied: true,
+      plattParams: PLATT_PARAMS.default,
+      timestamp: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Get human-readable confidence label
+ */
+function getConfidenceLabel(confidence) {
+  if (confidence >= 0.8) return 'Very High';
+  if (confidence >= 0.65) return 'High';
+  if (confidence >= 0.5) return 'Moderate';
+  if (confidence >= 0.35) return 'Low';
+  return 'Very Low';
+}
+
+// ============================================================================
 // PERSONALIZED THRESHOLDS (calculated from user's historical data)
 // ============================================================================
 
@@ -833,6 +1046,24 @@ export async function predictMealFeeling(userId, mealData) {
     // Generate insights based on patterns
     const insights = generateMealInsights(mealCharacteristics, correlations, similarMeals.length);
 
+    // Build calibrated prediction with confidence intervals
+    const rawConfidence = Math.min(0.9, 0.5 + (similarMeals.length * 0.01));
+    const predictionContext = {
+      mealsSampled: similarMeals.length,
+      moodsSampled: 0, // Would need mood data
+      correlationsCount: correlations.length,
+      dataGaps: [],
+      isNewPattern: similarMeals.length < 3,
+      sleepData: null,
+    };
+
+    const calibratedPrediction = buildCalibratedPrediction(
+      (impactScore + 100) / 20, // Convert -100 to +100 → 0 to 10
+      rawConfidence,
+      predictionContext,
+      userId
+    );
+
     return {
       success: true,
       feeling: {
@@ -855,7 +1086,15 @@ export async function predictMealFeeling(userId, mealData) {
 
         // Based on historical data
         basedOnMeals: similarMeals.length,
-        confidence: Math.min(0.9, 0.5 + (similarMeals.length * 0.01)),
+        confidence: rawConfidence,
+
+        // Enhanced: Calibrated prediction with intervals
+        calibrated: {
+          confidence: calibratedPrediction.calibratedConfidence,
+          confidenceLabel: calibratedPrediction.confidenceLabel,
+          interval: calibratedPrediction.interval,
+          uncertainty: calibratedPrediction.uncertainty,
+        },
       },
     };
   } catch (error) {

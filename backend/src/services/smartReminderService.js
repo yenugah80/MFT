@@ -1057,8 +1057,8 @@ async function getTodayStats(userId) {
         .from(activityLogTable)
         .where(and(
           eq(activityLogTable.userId, userId),
-          gte(activityLogTable.loggedDate, today),
-          lte(activityLogTable.loggedDate, tomorrow)
+          gte(activityLogTable.loggedAt, today),
+          lte(activityLogTable.loggedAt, tomorrow)
         )),
     ]);
 

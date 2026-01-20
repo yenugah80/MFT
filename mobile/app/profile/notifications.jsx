@@ -270,12 +270,20 @@ const PermissionBanner = ({ status, onRequestPermission, isLoading }) => {
   );
 };
 
+// Default notification settings fallback
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  dailyReminder: true,
+  hydrationNudges: true,
+  insightDrops: true,
+  streakCelebrations: true,
+};
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const notify = useNotification();
 
-  // Initialize settings from NotificationProvider context (eliminates duplicate API fetch)
-  const [settings, setSettings] = useState(() => notify.push.preferences);
+  // Initialize settings from NotificationProvider context with fallback
+  const [settings, setSettings] = useState(() => notify?.push?.preferences ?? DEFAULT_NOTIFICATION_SETTINGS);
   const [permissionStatus, setPermissionStatus] = useState('undetermined');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -335,15 +343,17 @@ export default function NotificationsScreen() {
     try {
       await apiClient.post('/profile/notifications', { notifications: newSettings });
 
-      // Sync notification schedules
-      await notify.push.syncSchedules();
+      // Sync notification schedules (if available)
+      if (notify?.push?.syncSchedules) {
+        await notify.push.syncSchedules();
+      }
 
       console.log('[NotificationsScreen] Settings saved:', newSettings);
     } catch (error) {
       console.error('[NotificationsScreen] Failed to save:', error);
       // Rollback on error
       setSettings(oldSettings);
-      notify.error('Failed to save setting');
+      notify?.error?.('Failed to save setting');
     } finally {
       setIsSaving(false);
     }
@@ -456,9 +466,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -468,7 +478,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    fontSize: TYPOGRAPHY.size['3xl'],
+    fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.extrabold,
     color: '#FFFFFF',
   },

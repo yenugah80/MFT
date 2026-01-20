@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import SafeScreen from "../../components/SafeScreen";
-import { SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../../constants/premiumTheme";
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../../constants/premiumTheme";
 import apiClient from "../../services/apiClient";
 
 export default function PreferencesScreen() {
@@ -13,25 +13,28 @@ export default function PreferencesScreen() {
   const [hapticFeedback, setHapticFeedback] = useState(true);
   const [metricUnits, setMetricUnits] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  const loadSettings = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await apiClient.get("/profile/preferences");
+      setAutoAnalyze(data?.autoAnalyze !== false);
+      setHapticFeedback(data?.hapticFeedback !== false);
+      setMetricUnits(data?.metricUnits !== false);
+    } catch (error) {
+      console.error("[PreferencesScreen] Failed to load settings", error);
+      setLoadError("Failed to load preferences");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    const loadSettings = async () => {
-      try {
-        const data = await apiClient.get("/profile/preferences");
-        if (!isMounted) return;
-        setAutoAnalyze(data?.autoAnalyze !== false);
-        setHapticFeedback(data?.hapticFeedback !== false);
-        setMetricUnits(data?.metricUnits !== false);
-      } catch (error) {
-        console.error("[PreferencesScreen] Failed to load settings", error);
-      }
-    };
     loadSettings();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [loadSettings]);
 
   const persistPreferences = async (nextState) => {
     // Store old state for rollback on error
@@ -52,10 +55,36 @@ export default function PreferencesScreen() {
       setAutoAnalyze(oldState.autoAnalyze);
       setHapticFeedback(oldState.hapticFeedback);
       setMetricUnits(oldState.metricUnits);
+      Alert.alert("Save Failed", "Could not save your preferences. Please try again.");
     } finally {
       setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <SafeScreen>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={BRAND.primary} />
+          <Text style={styles.loadingText}>Loading preferences...</Text>
+        </View>
+      </SafeScreen>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SafeScreen>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={TEXT.tertiary} />
+          <Text style={styles.errorText}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadSettings}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeScreen>
+    );
+  }
 
   return (
     <SafeScreen>
@@ -210,5 +239,41 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     marginTop: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.primary,
+  },
+  loadingText: {
+    marginTop: SPACING[3],
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.secondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: SURFACES.background.primary,
+    padding: SPACING[5],
+  },
+  errorText: {
+    marginTop: SPACING[3],
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.secondary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: SPACING[4],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[5],
+    backgroundColor: BRAND.primary,
+    borderRadius: RADIUS.lg,
+  },
+  retryText: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: '#FFFFFF',
   },
 });

@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import apiClient from '../../services/apiClient';
-import { TEXT, SURFACES, SHADOWS, SPACING, RADIUS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const CIRCLE_RADIUS = 45;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
@@ -393,7 +393,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.muted,
+    fontStyle: 'italic',
   },
 });

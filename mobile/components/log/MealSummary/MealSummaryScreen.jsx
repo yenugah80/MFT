@@ -30,6 +30,8 @@ import IngredientsSection from './IngredientsSection';
 import MicrosGrid from './MicrosGrid';
 import ActionButtons from './ActionButtons';
 import MealFeelingPrediction from '../MealFeelingPrediction';
+import QuantityAdjuster from '../QuantityAdjuster';
+import EditableIngredientsSection from '../EditableIngredientsSection';
 
 /**
  * Extract sodium from micros object (handles multiple formats)
@@ -147,11 +149,47 @@ export default function MealSummaryScreen({
 }) {
   const { isDark } = useTheme();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [modifiedNutrition, setModifiedNutrition] = useState(null);
+  const [currentQuantity, setCurrentQuantity] = useState(1);
 
   // Aggregate nutrition data
   const nutrition = useMemo(() => {
     return aggregateNutrition(analysisResult);
   }, [analysisResult]);
+
+  // Check if this is a countable food (roti, idli, egg, etc.)
+  const portionInfo = nutrition?.item?.portion || {};
+  const isCountable = portionInfo.isCountable || false;
+  const adjustmentOptions = portionInfo.adjustmentOptions || null;
+
+  // Get ingredient breakdown from the first item (for single-item meals)
+  const ingredientBreakdown = nutrition?.item?.ingredientBreakdown || null;
+
+  // Handle quantity change for countable foods
+  const handleQuantityChange = (quantityData) => {
+    setCurrentQuantity(quantityData.quantity);
+    if (quantityData.calories) {
+      setModifiedNutrition((prev) => ({
+        ...prev,
+        calories: quantityData.calories,
+        macros: quantityData.macros,
+        quantityChanged: true,
+      }));
+    }
+  };
+
+  // Handle nutrition change from ingredient editing
+  const handleNutritionChange = (nutritionData) => {
+    setModifiedNutrition((prev) => ({
+      ...prev,
+      ...nutritionData,
+      ingredientsChanged: true,
+    }));
+  };
+
+  // Get display values (use modified if available)
+  const displayCalories = modifiedNutrition?.calories || nutrition?.macros?.calories_kcal || nutrition?.macros?.calories;
+  const displayMacros = modifiedNutrition?.macros || nutrition?.macros;
 
   // Theme colors
   const cardBg = isDark ? 'rgba(30, 30, 35, 0.95)' : 'rgba(255, 255, 255, 0.98)';
@@ -227,9 +265,9 @@ export default function MealSummaryScreen({
           <View style={[styles.card, { backgroundColor: cardBg }]}>
             <MealFeelingPrediction
               mealData={{
-                calories: nutrition.macros?.calories,
-                protein: nutrition.macros?.protein_g,
-                carbs: nutrition.macros?.carbs_g,
+                calories: displayCalories,
+                protein: displayMacros?.protein_g,
+                carbs: displayMacros?.carbs_g,
                 sugar: nutrition.micros?.sugar?.value || nutrition.micros?.sugar,
                 fiber: nutrition.micros?.fiber?.value || nutrition.micros?.fiber,
                 novaScore: nutrition.item?.novaScore,
@@ -238,9 +276,37 @@ export default function MealSummaryScreen({
             />
           </View>
 
+          {/* Quantity Adjuster - for countable foods (roti, idli, egg, etc.) */}
+          {isCountable && (
+            <View style={[styles.card, { backgroundColor: cardBg }]}>
+              <QuantityAdjuster
+                foodName={nutrition.name}
+                initialQuantity={portionInfo.amount || 1}
+                caloriesPerUnit={adjustmentOptions?.caloriesPerUnit}
+                macrosPerUnit={adjustmentOptions?.macrosPerUnit}
+                unitLabel={adjustmentOptions?.unitLabel || portionInfo.unit}
+                onQuantityChange={handleQuantityChange}
+                isCountable={true}
+                adjustmentOptions={adjustmentOptions}
+              />
+            </View>
+          )}
+
+          {/* Editable Ingredients Section */}
+          {ingredientBreakdown && (
+            <View style={[styles.card, { backgroundColor: cardBg }]}>
+              <EditableIngredientsSection
+                ingredientBreakdown={ingredientBreakdown}
+                totalCalories={displayCalories}
+                onNutritionChange={handleNutritionChange}
+                isEditable={true}
+              />
+            </View>
+          )}
+
           {/* Macro Progress - shows meal composition, not daily goals */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <MacroProgressSection macros={nutrition.macros} />
+            <MacroProgressSection macros={displayMacros} />
           </View>
 
           {/* Ingredients (for complex meals) */}

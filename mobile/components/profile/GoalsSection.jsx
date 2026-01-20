@@ -25,7 +25,13 @@ import * as Haptics from 'expo-haptics';
 
 import EditableSection from '../EditableSection';
 import { PRIMARY_GOAL_OPTIONS } from '../../constants/profileConfig';
-import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, MACRO_COLORS, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, MACRO_COLORS, ICON_SIZES } from '../../constants/premiumTheme';
+
+// Format number with locale-appropriate separators
+const formatNumber = (value) => {
+  if (value == null) return '—';
+  return typeof value === 'number' ? value.toLocaleString() : value;
+};
 
 // Goal option icons
 const GOAL_ICONS = {
@@ -151,7 +157,7 @@ const MacroInput = ({ label, value, unit, color, onChangeText, isEditing, icon }
         <View style={styles.macroInputWrapper}>
           <TextInput
             style={styles.macroInput}
-            value={value?.toString() || ''}
+            value={value != null ? String(value) : ''}
             onChangeText={onChangeText}
             keyboardType="numeric"
             placeholder="0"
@@ -162,7 +168,7 @@ const MacroInput = ({ label, value, unit, color, onChangeText, isEditing, icon }
       ) : (
         <View style={styles.macroDisplayWrapper}>
           <Text style={[styles.macroValue, { color }]}>
-            {value || '—'}
+            {formatNumber(value)}
           </Text>
           <Text style={styles.macroUnit}>{unit}</Text>
         </View>
@@ -173,7 +179,7 @@ const MacroInput = ({ label, value, unit, color, onChangeText, isEditing, icon }
 
 // Water goal display with visual indicator
 const WaterGoalDisplay = ({ value, isEditing, onChangeText }) => {
-  const fillPercent = Math.min((value || 0) / 4 * 100, 100);
+  const fillPercent = Math.min(((value ?? 0) / 4) * 100, 100);
 
   return (
     <View style={styles.waterContainer}>
@@ -182,7 +188,7 @@ const WaterGoalDisplay = ({ value, isEditing, onChangeText }) => {
           colors={SURFACES.gradient.softBlue}
           style={styles.waterIcon}
         >
-          <Ionicons name="water" size={18} color={SEMANTIC.info.base} />
+          <Ionicons name="water" size={ICON_SIZES.xs} color={SEMANTIC.info.base} />
         </LinearGradient>
         <Text style={styles.waterLabel}>Daily Water Goal</Text>
       </View>
@@ -191,7 +197,7 @@ const WaterGoalDisplay = ({ value, isEditing, onChangeText }) => {
         <View style={styles.waterInputWrapper}>
           <TextInput
             style={styles.waterInput}
-            value={value?.toString() || ''}
+            value={value != null ? String(value) : ''}
             onChangeText={onChangeText}
             keyboardType="decimal-pad"
             placeholder="2.5"
@@ -204,7 +210,7 @@ const WaterGoalDisplay = ({ value, isEditing, onChangeText }) => {
           <View style={styles.waterBarContainer}>
             <View style={[styles.waterBarFill, { width: `${fillPercent}%` }]} />
           </View>
-          <Text style={styles.waterValue}>{value || '—'} L</Text>
+          <Text style={styles.waterValue}>{value != null ? value : '—'} L</Text>
         </View>
       )}
     </View>
@@ -225,23 +231,28 @@ export default function GoalsSection({
   }, [updateField]);
 
   const handleCaloriesChange = useCallback((text) => {
-    updateField('goals', 'dailyCalories', parseInt(text, 10) || 0);
+    const parsed = parseInt(text, 10);
+    updateField('goals', 'dailyCalories', Number.isNaN(parsed) ? null : parsed);
   }, [updateField]);
 
   const handleProteinChange = useCallback((text) => {
-    updateField('goals', 'proteinG', parseInt(text, 10) || 0);
+    const parsed = parseInt(text, 10);
+    updateField('goals', 'proteinG', Number.isNaN(parsed) ? null : parsed);
   }, [updateField]);
 
   const handleCarbsChange = useCallback((text) => {
-    updateField('goals', 'carbsG', parseInt(text, 10) || 0);
+    const parsed = parseInt(text, 10);
+    updateField('goals', 'carbsG', Number.isNaN(parsed) ? null : parsed);
   }, [updateField]);
 
   const handleFatsChange = useCallback((text) => {
-    updateField('goals', 'fatsG', parseInt(text, 10) || 0);
+    const parsed = parseInt(text, 10);
+    updateField('goals', 'fatsG', Number.isNaN(parsed) ? null : parsed);
   }, [updateField]);
 
   const handleWaterChange = useCallback((text) => {
-    updateField('goals', 'waterLiters', parseFloat(text) || 0);
+    const parsed = parseFloat(text);
+    updateField('goals', 'waterLiters', Number.isNaN(parsed) ? null : parsed);
   }, [updateField]);
 
   return (
@@ -261,7 +272,7 @@ export default function GoalsSection({
               colors={SURFACES.gradient.softPurple}
               style={styles.sectionIcon}
             >
-              <Ionicons name="flag" size={16} color={BRAND.primary} />
+              <Ionicons name="flag" size={ICON_SIZES.xs} color={BRAND.primary} />
             </LinearGradient>
             <Text style={styles.sectionTitle}>Primary Goal</Text>
           </View>
@@ -287,7 +298,7 @@ export default function GoalsSection({
               colors={SURFACES.gradient.warning}
               style={styles.sectionIcon}
             >
-              <Ionicons name="flame" size={16} color={TEXT.white} />
+              <Ionicons name="flame" size={ICON_SIZES.xs} color={TEXT.white} />
             </LinearGradient>
             <Text style={styles.sectionTitle}>Daily Calories</Text>
           </View>
@@ -296,7 +307,7 @@ export default function GoalsSection({
             <View style={styles.calorieInputWrapper}>
               <TextInput
                 style={styles.calorieInput}
-                value={goals.dailyCalories?.toString() || ''}
+                value={goals.dailyCalories != null ? String(goals.dailyCalories) : ''}
                 onChangeText={handleCaloriesChange}
                 keyboardType="numeric"
                 placeholder="2000"
@@ -307,7 +318,7 @@ export default function GoalsSection({
           ) : (
             <View style={styles.calorieDisplay}>
               <Text style={styles.calorieValue}>
-                {goals.dailyCalories || '—'}
+                {formatNumber(goals.dailyCalories)}
               </Text>
               <Text style={styles.calorieUnit}>kcal</Text>
             </View>
@@ -321,7 +332,7 @@ export default function GoalsSection({
               colors={SURFACES.gradient.success}
               style={styles.sectionIcon}
             >
-              <Ionicons name="nutrition" size={16} color={TEXT.white} />
+              <Ionicons name="nutrition" size={ICON_SIZES.xs} color={TEXT.white} />
             </LinearGradient>
             <Text style={styles.sectionTitle}>Macro Targets</Text>
           </View>
@@ -449,7 +460,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[3],
     borderWidth: 1,
-    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
+    borderColor: SURFACES.card.border,
   },
   calorieInput: {
     flex: 1,
@@ -483,7 +494,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     borderWidth: 1,
-    borderColor: `${SEMANTIC_ACTIONS.success}14`,
+    borderColor: SURFACES.card.border,
     ...SHADOWS.sm,
   },
   macroInputHeader: {

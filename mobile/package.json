@@ -12,13 +12,14 @@
     "reset-project": "node ./scripts/reset-project.js"
   },
   "dependencies": {
-    "@react-native-firebase/app": "^21.6.0",
-    "@react-native-firebase/messaging": "^21.6.0",
     "@clerk/clerk-expo": "^2.19.2",
+    "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
     "@lottiefiles/dotlottie-react": "^0.17.12",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "^8.4.4",
+    "@react-native-firebase/app": "^21.6.0",
+    "@react-native-firebase/messaging": "^21.6.0",
     "@react-native-picker/picker": "2.11.1",
     "@react-native-voice/voice": "^3.1.5",
     "@react-navigation/bottom-tabs": "^7.4.0",

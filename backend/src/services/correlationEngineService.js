@@ -27,6 +27,96 @@ import { eq, and, gte, lte, between, desc, sql } from 'drizzle-orm';
 
 /**
  * ============================================
+ * PRODUCTION STATISTICAL CONFIGURATION
+ * ============================================
+ *
+ * These thresholds ensure correlations are statistically meaningful
+ * and not just random coincidences. Based on behavioral science standards.
+ */
+const CORRELATION_CONFIG = {
+  // Minimum occurrences required before reporting a correlation
+  // 7+ occurrences provides stronger statistical validity
+  MIN_OCCURRENCES: 7,
+
+  // Minimum confidence threshold for reporting (0-1 scale)
+  // 0.7 = 70% confidence minimum - only show meaningful patterns
+  MIN_CONFIDENCE_THRESHOLD: 0.7,
+
+  // Minimum days of data before computing correlations
+  MIN_DAYS_FOR_ANALYSIS: 7,
+
+  // Minimum mood logs required
+  MIN_MOOD_LOGS: 5,
+
+  // Minimum food logs required
+  MIN_FOOD_LOGS: 10,
+
+  // Minimum water logs required
+  MIN_WATER_LOGS: 7,
+
+  // Confidence scaling factors based on sample size
+  // More occurrences = higher confidence multiplier
+  SAMPLE_SIZE_SCALING: {
+    5: 0.6,   // 5 occurrences = 60% of base confidence
+    10: 0.75, // 10 occurrences = 75%
+    15: 0.85, // 15 occurrences = 85%
+    20: 0.95, // 20 occurrences = 95%
+    30: 1.0,  // 30+ occurrences = full confidence
+  },
+
+  // Effect size thresholds (Cohen's d equivalents)
+  EFFECT_SIZE: {
+    SMALL: 0.2,
+    MEDIUM: 0.5,
+    LARGE: 0.8,
+  },
+};
+
+/**
+ * Calculate scaled confidence based on sample size
+ * Returns higher confidence for larger sample sizes
+ */
+function getScaledConfidence(occurrences, baseConfidence) {
+  const { SAMPLE_SIZE_SCALING, MIN_OCCURRENCES } = CORRELATION_CONFIG;
+
+  if (occurrences < MIN_OCCURRENCES) {
+    return 0; // Not enough data
+  }
+
+  // Find the appropriate scaling factor
+  let scaleFactor = 0.6;
+  const thresholds = Object.keys(SAMPLE_SIZE_SCALING).map(Number).sort((a, b) => a - b);
+
+  for (const threshold of thresholds) {
+    if (occurrences >= threshold) {
+      scaleFactor = SAMPLE_SIZE_SCALING[threshold];
+    }
+  }
+
+  return Math.min(baseConfidence * scaleFactor, 1.0);
+}
+
+/**
+ * Check if user has sufficient data for correlation analysis
+ */
+function hasInsufficientData(foodLogs, moodLogs, waterLogs) {
+  const { MIN_FOOD_LOGS, MIN_MOOD_LOGS, MIN_WATER_LOGS } = CORRELATION_CONFIG;
+
+  return {
+    isInsufficient: foodLogs.length < MIN_FOOD_LOGS || moodLogs.length < MIN_MOOD_LOGS,
+    reason: foodLogs.length < MIN_FOOD_LOGS
+      ? `Need ${MIN_FOOD_LOGS - foodLogs.length} more food logs`
+      : moodLogs.length < MIN_MOOD_LOGS
+        ? `Need ${MIN_MOOD_LOGS - moodLogs.length} more mood logs`
+        : null,
+    foodLogs: foodLogs.length,
+    moodLogs: moodLogs.length,
+    waterLogs: waterLogs.length,
+  };
+}
+
+/**
+ * ============================================
  * SIGNAL EXTRACTION LAYER
  * ============================================
  */
@@ -508,6 +598,12 @@ function detectBreakfastSkipAfternoonCrash(dayFoodLogs, dayMoodLogs, dayKey) {
   const avgEnergy = afternoonMoods.reduce((sum, m) => sum + m.energyLevel, 0) / afternoonMoods.length;
   const avgIntensity = afternoonMoods.reduce((sum, m) => sum + m.intensity, 0) / afternoonMoods.length;
 
+  // Find the average crash hour from negative moods
+  const crashHours = negativeMoods.map(m => m.loggedTime.getHours());
+  const avgCrashHour = crashHours.length > 0
+    ? Math.round(crashHours.reduce((s, h) => s + h, 0) / crashHours.length)
+    : 15;
+
   return {
     ruleName: 'breakfast_skip_afternoon_crash',
     correlationType: 'meal_timing_mood',
@@ -522,6 +618,7 @@ function detectBreakfastSkipAfternoonCrash(dayFoodLogs, dayMoodLogs, dayKey) {
       negativeMoodCount: negativeMoods.length,
       avgAfternoonEnergy: Math.round(avgEnergy * 10) / 10,
       avgAfternoonIntensity: Math.round(avgIntensity * 10) / 10,
+      avgCrashHour, // Specific hour when crash typically occurs (e.g., 15 = 3pm)
       moodTypes: [...new Set(negativeMoods.map(m => m.mood))],
     },
   };
@@ -577,13 +674,16 @@ function detectHighSugarDinnerMorningAnxiety(dinnerFoodLogs, nextMorningMoods) {
     strength: Math.min(totalDinnerSugar / 50, 1.0) * 0.75,
     confidence: 0.65,
     timeLag: 12 * 60, // ~12 hours overnight
+    signalAValue: totalDinnerSugar, // Sugar grams - used by suggestion generator
+    signalAUnit: 'g sugar',
     evidence: {
-      dinnerSugarGrams: totalDinnerSugar,
+      sugarGrams: totalDinnerSugar,
       dinnerMealCount: dinnerMeals.length,
       morningMoodCount: morningMoods.length,
       anxiousMoodCount: anxiousMoods.length,
       avgMorningStress: Math.round(avgMorningStress * 10) / 10,
       avgMorningEnergy: Math.round(avgMorningEnergy * 10) / 10,
+      foodName: dinnerMeals[0]?.foodName, // First dinner food for personalization
       dinnerFoods: dinnerMeals.map(f => f.foodName).slice(0, 3),
     },
   };
@@ -627,6 +727,9 @@ function detectHighCarbDinnerMorningSluggish(dinnerFoodLogs, nextMorningMoods) {
 
   if (sluggishMoods.length === 0) return null;
 
+  const avgMorningEnergy = Math.round(morningMoods.reduce((s, m) => s + m.energyLevel, 0) / morningMoods.length * 10) / 10;
+  const dinnerTime = Math.max(...lateDinnerMeals.map(f => f.loggedTime.getHours()));
+
   return {
     ruleName: 'high_carb_dinner_morning_sluggish',
     correlationType: 'carryover_next_day',
@@ -634,11 +737,14 @@ function detectHighCarbDinnerMorningSluggish(dinnerFoodLogs, nextMorningMoods) {
     strength: Math.min(totalCarbs / 100, 1.0) * 0.7,
     confidence: 0.6,
     timeLag: 10 * 60,
+    signalAValue: totalCarbs, // Carb grams - used by suggestion generator
+    signalAUnit: 'g carbs',
     evidence: {
-      dinnerCarbs: totalCarbs,
-      dinnerTime: Math.max(...lateDinnerMeals.map(f => f.loggedTime.getHours())),
+      carbGrams: totalCarbs,
+      dinnerTime, // Hour of dinner (e.g., 21 = 9pm)
+      morningEnergy: avgMorningEnergy, // Used by suggestion generator
       sluggishMoodCount: sluggishMoods.length,
-      avgMorningEnergy: Math.round(morningMoods.reduce((s, m) => s + m.energyLevel, 0) / morningMoods.length * 10) / 10,
+      foodName: lateDinnerMeals[0]?.foodName,
     },
   };
 }
@@ -672,16 +778,24 @@ function detectDailyHydrationMoodStability(dailyWaterTotal, dayMoodLogs, hydrati
 
   // Detect positive pattern: well hydrated + stable mood + low irritability
   if (isWellHydrated && energyStability > 0.6 && irritabilityRate < 0.3) {
+    // Calculate mood boost from baseline
+    const moodBoost = Math.round((avgEnergy - 5) * 10) / 10;
+
     return {
       ruleName: 'hydration_mood_stability_positive',
       correlationType: 'hydration_mood',
       severity: 'positive',
       strength: Math.min(hydrationPercent / 100, 1.0) * energyStability,
       confidence: 0.7,
+      signalAValue: Math.round(dailyWaterTotal * 10) / 10, // Liters
+      signalAUnit: 'L',
+      signalBValue: moodBoost > 0 ? moodBoost : 1, // Mood boost
+      signalBUnit: 'mood pts',
       evidence: {
         dayKey,
-        hydrationPercent: Math.round(hydrationPercent),
-        hydrationLiters: Math.round(dailyWaterTotal * 10) / 10,
+        avgHydration: Math.round(dailyWaterTotal * 10) / 10, // Used by suggestion generator
+        goalPercent: Math.round(hydrationPercent),
+        moodBoost: moodBoost > 0 ? moodBoost : 1,
         moodLogCount: dayMoodLogs.length,
         energyStability: Math.round(energyStability * 100) / 100,
         irritabilityRate: Math.round(irritabilityRate * 100),
@@ -692,16 +806,23 @@ function detectDailyHydrationMoodStability(dailyWaterTotal, dayMoodLogs, hydrati
 
   // Detect negative pattern: poorly hydrated + unstable mood + high irritability
   if (!isWellHydrated && (energyStability < 0.4 || irritabilityRate > 0.4)) {
+    // Calculate mood variance
+    const moodVariance = Math.round((1 - energyStability) * 100) / 100;
+
     return {
       ruleName: 'dehydration_mood_instability',
       correlationType: 'hydration_mood',
       severity: 'moderate',
       strength: Math.min((100 - hydrationPercent) / 50, 1.0) * (1 - energyStability),
       confidence: 0.65,
+      signalAValue: Math.round(dailyWaterTotal * 10) / 10, // Liters
+      signalAUnit: 'L',
       evidence: {
         dayKey,
+        lowIntakeLiters: Math.round(dailyWaterTotal * 10) / 10, // Used by suggestion generator
         hydrationPercent: Math.round(hydrationPercent),
         hydrationDeficit: Math.round(100 - hydrationPercent),
+        moodVariance, // Used by suggestion generator
         moodLogCount: dayMoodLogs.length,
         energyStability: Math.round(energyStability * 100) / 100,
         irritabilityRate: Math.round(irritabilityRate * 100),
@@ -746,15 +867,42 @@ function detectMealTimingMoodStability(weekFoodLogs, weekMoodLogs) {
   const energyVariance = energyLevels.reduce((s, e) => s + Math.pow(e - avgEnergy, 2), 0) / energyLevels.length;
 
   if (isConsistentTiming && energyVariance < 3) {
+    // Calculate average meal times for each meal type
+    const avgMealTimes = Object.values(mealsByDay).reduce((acc, hours) => {
+      if (hours.length >= 1) acc.breakfast.push(Math.min(...hours));
+      if (hours.length >= 2) acc.lunch.push(hours.sort()[Math.floor(hours.length/2)]);
+      if (hours.length >= 3) acc.dinner.push(Math.max(...hours));
+      return acc;
+    }, { breakfast: [], lunch: [], dinner: [] });
+
+    const avgBreakfastTime = avgMealTimes.breakfast.length > 0
+      ? Math.round(avgMealTimes.breakfast.reduce((s, h) => s + h, 0) / avgMealTimes.breakfast.length)
+      : null;
+    const avgLunchTime = avgMealTimes.lunch.length > 0
+      ? Math.round(avgMealTimes.lunch.reduce((s, h) => s + h, 0) / avgMealTimes.lunch.length)
+      : null;
+    const avgDinnerTime = avgMealTimes.dinner.length > 0
+      ? Math.round(avgMealTimes.dinner.reduce((s, h) => s + h, 0) / avgMealTimes.dinner.length)
+      : null;
+
+    // Calculate mood stability score
+    const moodStability = Math.round((1 - energyVariance / 10) * 100) / 100;
+
     return {
       ruleName: 'consistent_meal_timing_mood_stability',
       correlationType: 'meal_timing_mood',
       severity: 'positive',
       strength: Math.max(0, 1 - (firstMealVariance / 8)) * 0.7,
       confidence: 0.6,
+      signalBValue: moodStability, // Stability score
+      signalBUnit: 'stability',
       evidence: {
+        avgBreakfastTime, // Used by suggestion generator (e.g., 8 = 8am)
+        avgLunchTime,     // Used by suggestion generator (e.g., 13 = 1pm)
+        avgDinnerTime,    // Used by suggestion generator (e.g., 19 = 7pm)
         avgFirstMealTime: Math.round(avgFirstMeal * 10) / 10,
         firstMealVariance: Math.round(firstMealVariance * 100) / 100,
+        moodStability,    // Used by suggestion generator
         daysTracked: Object.keys(mealsByDay).length,
         avgEnergy: Math.round(avgEnergy * 10) / 10,
         energyVariance: Math.round(energyVariance * 100) / 100,
@@ -793,14 +941,23 @@ function detectProteinBreakfastSustainedEnergy(breakfastLogs, lateMorningMoods) 
 
   if (!hasGoodEnergy) return null;
 
+  // Calculate energy boost vs baseline
+  const energyBoost = Math.round((avgEnergy - 5) * 10) / 10;
+
   return {
     ruleName: 'protein_breakfast_sustained_energy',
     correlationType: 'meal_timing_mood',
     severity: 'positive',
     strength: Math.min(totalProtein / 25, 1.0) * 0.75,
     confidence: 0.65,
+    signalAValue: totalProtein, // Protein grams
+    signalAUnit: 'g protein',
+    signalBValue: energyBoost > 0 ? energyBoost : 1, // Energy boost
+    signalBUnit: 'energy pts',
     evidence: {
-      breakfastProtein: totalProtein,
+      proteinGrams: totalProtein, // Used by suggestion generator
+      energyBoost: energyBoost > 0 ? energyBoost : 1, // Used by suggestion generator
+      sustainedHours: 4, // How long energy is sustained
       lateMorningEnergy: Math.round(avgEnergy * 10) / 10,
       breakfastFoods: breakfastLogs.map(f => f.foodName).slice(0, 3),
     },
@@ -866,6 +1023,11 @@ function detectExerciseMoodBoost(dayActivityLogs, dayMoodLogs, dayKey) {
   const avgEnergy = postExerciseMoods.reduce((s, m) => s + m.energyLevel, 0) / postExerciseMoods.length;
   const avgValence = postExerciseMoods.reduce((s, m) => s + m.valence, 0) / postExerciseMoods.length;
 
+  // Calculate mood boost (energy gain from exercise)
+  const baselineEnergy = 5; // Neutral baseline
+  const moodBoost = Math.round((avgEnergy - baselineEnergy) * 10) / 10;
+  const activityTypes = [...new Set(dayActivityLogs.map(a => a.type))];
+
   return {
     ruleName: 'exercise_mood_boost',
     correlationType: 'activity_mood',
@@ -873,10 +1035,16 @@ function detectExerciseMoodBoost(dayActivityLogs, dayMoodLogs, dayKey) {
     strength: Math.min(totalMinutes / 60, 1.0) * 0.8,
     confidence: 0.7,
     timeLag: 2 * 60, // ~2 hours average
+    signalAValue: totalMinutes, // Activity minutes - used by suggestion generator
+    signalAUnit: 'min',
+    signalBValue: moodBoost > 0 ? moodBoost : 1, // Mood points gained
+    signalBUnit: 'mood pts',
     evidence: {
       dayKey,
-      totalMinutes,
-      activityTypes: [...new Set(dayActivityLogs.map(a => a.type))],
+      activityMinutes: totalMinutes,
+      activityType: activityTypes[0], // Primary activity type for personalization
+      activityTypes,
+      moodBoost: moodBoost > 0 ? moodBoost : 1,
       positiveMoodCount: positiveMoods.length,
       avgPostExerciseEnergy: Math.round(avgEnergy * 10) / 10,
       avgPostExerciseValence: Math.round(avgValence * 100) / 100,
@@ -918,17 +1086,28 @@ function detectMorningExerciseAllDayEnergy(dayActivityLogs, dayMoodLogs, dayKey)
 
   if (!hasStableAfternoonEnergy) return null;
 
+  // Calculate energy boost vs baseline
+  const baselineEnergy = 5;
+  const energyBoost = Math.round((avgAfternoonEnergy - baselineEnergy) * 10) / 10;
+  const exerciseHour = Math.min(...morningExercise.map(a => a.loggedTime.getHours()));
+
   return {
     ruleName: 'morning_exercise_all_day_energy',
     correlationType: 'activity_mood',
     severity: 'positive',
     strength: Math.min(morningMinutes / 45, 1.0) * 0.75,
     confidence: 0.65,
+    signalBValue: energyBoost > 0 ? energyBoost : 1,
+    signalBUnit: 'energy pts',
     evidence: {
       dayKey,
       morningExerciseMinutes: morningMinutes,
+      exerciseHour, // Earliest exercise time (e.g., 7 = 7am)
+      avgExerciseTime: exerciseHour,
       exerciseTypes: [...new Set(morningExercise.map(a => a.type))],
+      energyBoost: energyBoost > 0 ? energyBoost : 1,
       avgAfternoonEnergy: Math.round(avgAfternoonEnergy * 10) / 10,
+      sustainedHours: 8, // All-day effect
       afternoonMoodCount: afternoonMoods.length,
     },
   };
@@ -959,15 +1138,25 @@ function detectSedentaryDayMoodImpact(dayActivityLogs, dayMoodLogs, dayKey) {
 
   const avgEnergy = dayMoodLogs.reduce((s, m) => s + m.energyLevel, 0) / dayMoodLogs.length;
 
+  // Calculate mood drop from baseline
+  const baselineMood = 5;
+  const moodDrop = Math.round((baselineMood - avgEnergy) * 10) / 10;
+
   return {
     ruleName: 'sedentary_day_lower_mood',
     correlationType: 'activity_mood',
     severity: 'moderate',
     strength: Math.min(lowMoods.length / dayMoodLogs.length, 1.0) * 0.7,
     confidence: 0.6,
+    signalAValue: 15, // Activity threshold in minutes
+    signalAUnit: 'min',
+    signalBValue: moodDrop > 0 ? -moodDrop : -1, // Negative = mood drop
+    signalBUnit: 'mood pts',
     evidence: {
       dayKey,
       activityMinutes: totalMinutes,
+      activityThreshold: 15, // Min activity threshold
+      moodDrop: moodDrop > 0 ? moodDrop : 1,
       lowMoodCount: lowMoods.length,
       totalMoodCount: dayMoodLogs.length,
       avgEnergy: Math.round(avgEnergy * 10) / 10,
@@ -1018,8 +1207,11 @@ function detectHighIntensityRecoveryImpact(eveningActivityLogs, nextMorningMoods
       timeLag: 12 * 60,
       evidence: {
         eveningIntenseMinutes: intenseMinutes,
+        intensity: 'vigorous', // Intensity level
         exerciseTypes: [...new Set(eveningIntense.map(a => a.type))],
+        nextDayEnergy: Math.round(avgMorningEnergy * 10) / 10,
         avgNextMorningEnergy: Math.round(avgMorningEnergy * 10) / 10,
+        recoveryDays: avgMorningEnergy < 4 ? 2 : 1, // Suggested recovery time
       },
     };
   }
@@ -1058,17 +1250,25 @@ function detectConsistentExerciseMoodStability(weekActivityLogs, weekMoodLogs) {
 
   if (!isStableMood) return null;
 
+  // Calculate mood stability score (0-1 scale)
+  const moodStability = Math.round((1 - energyVariance / 10) * 100) / 100;
+
   return {
     ruleName: 'consistent_exercise_mood_stability',
     correlationType: 'activity_mood',
     severity: 'positive',
     strength: Math.min(activeDayCount / 5, 1.0) * 0.75,
     confidence: 0.65,
+    signalBValue: moodStability, // Stability score for suggestion generator
+    signalBUnit: 'stability',
     evidence: {
+      avgDaysPerWeek: activeDayCount, // Used by suggestion generator
       activeDays: activeDayCount,
       totalActivityMinutes: weekActivityLogs.reduce((s, a) => s + a.durationMinutes, 0),
       avgWeeklyEnergy: Math.round(avgEnergy * 10) / 10,
-      energyStability: Math.round((1 - energyVariance / 10) * 100) / 100,
+      moodStability, // 0-1 scale stability score
+      energyStability: moodStability,
+      consistencyScore: Math.round((activeDayCount / 7) * 100) / 100,
       activeDaysList: [...activeDays],
     },
   };
@@ -1246,8 +1446,11 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
 
   const correlations = [];
 
-  if (foodLogs.length === 0 || moodLogs.length === 0) {
-    console.log(`[Correlation Engine] Insufficient data for window ${windowType}: ${foodLogs.length} foods, ${moodLogs.length} moods`);
+  // Production-grade data sufficiency check
+  const dataCheck = hasInsufficientData(foodLogs, moodLogs, waterLogs);
+  if (dataCheck.isInsufficient) {
+    console.log(`[Correlation Engine] Insufficient data for window ${windowType}: ${dataCheck.reason}`);
+    console.log(`[Correlation Engine] Current counts: food=${dataCheck.foodLogs}, mood=${dataCheck.moodLogs}, water=${dataCheck.waterLogs}`);
     return correlations;
   }
 
@@ -1279,21 +1482,36 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
     }
   }
 
-  if (novaMoodMatches.length >= 1) {
-    // Aggregate occurrences
-    const strength = Math.min(novaMoodMatches.length / 3, 1.0);
-    const baseConfidence = 0.6;
-    const confidence = calculateConfidence(
-      novaMoodMatches.length,
-      baseConfidence,
-      {
-        hasPoorSleep: moodSignals.some(m => m.sleepQuality === 'poor'),
-        hasHighStress: moodSignals.some(m => m.stressLevel > 6),
-        hasExercise: moodSignals.some(m => m.exerciseLevel !== 'none'),
-      }
-    );
+  // Only report correlation if we have statistically meaningful occurrence count
+  if (novaMoodMatches.length >= CORRELATION_CONFIG.MIN_OCCURRENCES) {
+    // Calculate strength based on sample size (more occurrences = stronger signal)
+    const strength = Math.min(novaMoodMatches.length / 10, 1.0); // Scale to 10 for full strength
 
-    if (confidence >= 0.5) { // Threshold for reporting
+    // Calculate confidence with proper scaling based on sample size
+    const baseConfidence = 0.8; // Start high, scale down based on sample size
+    const scaledConfidence = getScaledConfidence(novaMoodMatches.length, baseConfidence);
+
+    // Apply confounding penalties
+    const confounderPenalties = {
+      hasPoorSleep: moodSignals.some(m => m.sleepQuality === 'poor'),
+      hasHighStress: moodSignals.some(m => m.stressLevel > 6),
+      hasExercise: moodSignals.some(m => m.exerciseLevel !== 'none'),
+    };
+    const confidence = calculateConfidence(novaMoodMatches.length, scaledConfidence, confounderPenalties);
+
+    // Use configured threshold for reporting
+    if (confidence >= CORRELATION_CONFIG.MIN_CONFIDENCE_THRESHOLD) {
+      // Calculate comparison stats: energy after high-NOVA vs healthy meals
+      const highNovaFoodDates = new Set(novaMoodMatches.map(m => m.food.loggedTime.toISOString().split('T')[0]));
+      const healthyMealMoods = moodSignals.filter(m => {
+        const dateKey = m.loggedTime.toISOString().split('T')[0];
+        return !highNovaFoodDates.has(dateKey);
+      });
+      const avgEnergyHealthyDays = healthyMealMoods.length > 0
+        ? healthyMealMoods.reduce((sum, m) => sum + m.energyLevel, 0) / healthyMealMoods.length
+        : null;
+      const avgEnergyHighNovaDays = novaMoodMatches.reduce((sum, m) => sum + m.mood.energyLevel, 0) / novaMoodMatches.length;
+
       correlations.push({
         correlationType: 'mood_food',
         ruleName: 'high_nova_mood_crash',
@@ -1316,19 +1534,32 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
         evidenceJson: {
           matchCount: novaMoodMatches.length,
           avgTimeLag: Math.round(novaMoodMatches.reduce((sum, m) => sum + getHoursBetween(m.food.loggedTime, m.mood.loggedTime), 0) / novaMoodMatches.length * 60),
-          examples: novaMoodMatches.slice(0, 3).map(m => ({
+          // Enhanced: Comparison stats for evidence anchoring
+          avgEnergyWith: Math.round(avgEnergyHighNovaDays * 10) / 10, // Energy after high-NOVA
+          avgEnergyWithout: avgEnergyHealthyDays ? Math.round(avgEnergyHealthyDays * 10) / 10 : null, // Energy on healthy days
+          countWith: novaMoodMatches.length,
+          countWithout: healthyMealMoods.length,
+          baseline: avgEnergyHealthyDays ? Math.round(avgEnergyHealthyDays * 10) / 10 : 6,
+          // Enhanced: Examples with dates for specific references
+          examples: novaMoodMatches.slice(0, 5).map(m => ({
+            date: m.food.loggedTime.toISOString().split('T')[0],
+            observationDate: m.food.loggedTime.toISOString().split('T')[0],
+            hour: m.food.loggedTime.getHours(),
             food: m.food.foodName,
+            foodName: m.food.foodName,
             sugarGrams: m.food.sugar,
             novaScore: m.food.novaScore,
             moodAfter: m.mood.mood,
             energyAfter: m.mood.energyLevel,
+            energyDrop: avgEnergyHealthyDays ? Math.round((avgEnergyHealthyDays - m.mood.energyLevel) * 10) / 10 : 0,
           })),
         },
       });
     }
   }
 
-  // Rule 2: Dehydration + Fatigue
+  // Rule 2: Dehydration + Fatigue - Collect all matches first for proper counting
+  const dehydrationMatches = [];
   for (const date in dailyWaterTotals) {
     const dailyWater = dailyWaterTotals[date];
     const dayMoods = moodSignals.filter(m => m.dayKey === date);
@@ -1336,36 +1567,76 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
     if (dayMoods.length > 0) {
       for (const mood of dayMoods) {
         const dehydrationMatch = detectDehydrationFatigue(dailyWater, mood, hydrationGoal);
-        if (dehydrationMatch && dehydrationMatch.confidence >= 0.5) {
-          correlations.push({
-            correlationType: 'hydration_mood',
-            ruleName: 'dehydration_fatigue_mood',
-            signalA: 'low_hydration',
-            signalAValue: Math.round(dailyWater * 10) / 10,
-            signalAUnit: 'liters',
-            signalB: 'fatigue_mood',
-            signalBValue: Math.round((7 - mood.energyLevel) * 10) / 10,
-            signalBUnit: 'points',
-            windowType,
-            strength: Math.round(dehydrationMatch.strength * 100) / 100,
-            confidence: Math.round(dehydrationMatch.confidence * 100) / 100,
-            occurrences: 1, // Will accumulate
-            healthImpactSeverity: 'moderate',
-            affectedDomains: ['energy', 'mood', 'focus'],
-            expectedOutcome: 'Low hydration (below 70% of daily goal) correlates with fatigue and low mood. Try increasing water intake throughout the day.',
-            lastObservedDate: date,
-            firstObservedDate: date,
-            isActive: true,
-            evidenceJson: {
-              dailyWater,
-              hydrationGoal,
-              deficit: Math.round((1 - dailyWater / hydrationGoal) * 100) + '%',
-              moodType: mood.mood,
-              energyLevel: mood.energyLevel,
-            },
+        if (dehydrationMatch) {
+          dehydrationMatches.push({
+            date,
+            dailyWater,
+            mood,
+            match: dehydrationMatch,
           });
         }
       }
+    }
+  }
+
+  // Only report if we have enough occurrences for statistical validity
+  if (dehydrationMatches.length >= CORRELATION_CONFIG.MIN_OCCURRENCES) {
+    const avgWater = dehydrationMatches.reduce((sum, m) => sum + m.dailyWater, 0) / dehydrationMatches.length;
+    const avgEnergy = dehydrationMatches.reduce((sum, m) => sum + m.mood.energyLevel, 0) / dehydrationMatches.length;
+    const scaledConfidence = getScaledConfidence(dehydrationMatches.length, 0.8);
+
+    // Calculate comparison stats: energy when dehydrated vs well-hydrated
+    const dehydratedDates = new Set(dehydrationMatches.map(m => m.date));
+    const wellHydratedMoods = moodSignals.filter(m => {
+      const dayWater = dailyWaterTotals[m.dayKey] || 0;
+      return dayWater >= hydrationGoal * 0.7 && !dehydratedDates.has(m.dayKey);
+    });
+    const avgEnergyWellHydrated = wellHydratedMoods.length > 0
+      ? wellHydratedMoods.reduce((sum, m) => sum + m.energyLevel, 0) / wellHydratedMoods.length
+      : null;
+
+    if (scaledConfidence >= CORRELATION_CONFIG.MIN_CONFIDENCE_THRESHOLD) {
+      correlations.push({
+        correlationType: 'hydration_mood',
+        ruleName: 'dehydration_fatigue_mood',
+        signalA: 'low_hydration',
+        signalAValue: Math.round(avgWater * 10) / 10,
+        signalAUnit: 'liters',
+        signalB: 'fatigue_mood',
+        signalBValue: Math.round((7 - avgEnergy) * 10) / 10,
+        signalBUnit: 'points',
+        windowType,
+        strength: Math.min(dehydrationMatches.length / 10, 1.0),
+        confidence: Math.round(scaledConfidence * 100) / 100,
+        occurrences: dehydrationMatches.length,
+        healthImpactSeverity: dehydrationMatches.length >= 10 ? 'high' : 'moderate',
+        affectedDomains: ['energy', 'mood', 'focus'],
+        expectedOutcome: 'Low hydration (below 70% of daily goal) correlates with fatigue and low mood. Try increasing water intake throughout the day.',
+        lastObservedDate: dehydrationMatches[dehydrationMatches.length - 1].date,
+        firstObservedDate: dehydrationMatches[0].date,
+        isActive: true,
+        evidenceJson: {
+          avgDailyWater: Math.round(avgWater * 10) / 10,
+          hydrationGoal,
+          avgDeficit: Math.round((1 - avgWater / hydrationGoal) * 100) + '%',
+          occurrences: dehydrationMatches.length,
+          // Enhanced: Comparison stats for evidence anchoring
+          avgEnergyWith: Math.round(avgEnergy * 10) / 10, // Energy when dehydrated
+          avgEnergyWithout: avgEnergyWellHydrated ? Math.round(avgEnergyWellHydrated * 10) / 10 : null, // Energy when well-hydrated
+          countWith: dehydrationMatches.length,
+          countWithout: wellHydratedMoods.length,
+          baseline: avgEnergyWellHydrated ? Math.round(avgEnergyWellHydrated * 10) / 10 : 6, // Baseline for counterfactual
+          // Enhanced: Examples with dates for specific references
+          examples: dehydrationMatches.slice(0, 5).map(m => ({
+            date: m.date,
+            observationDate: m.date,
+            hour: m.mood.loggedTime?.getHours?.() || 12,
+            water: Math.round(m.dailyWater * 10) / 10,
+            energy: m.mood.energyLevel,
+            energyDrop: avgEnergyWellHydrated ? Math.round((avgEnergyWellHydrated - m.mood.energyLevel) * 10) / 10 : 0,
+          })),
+        },
+      });
     }
   }
 

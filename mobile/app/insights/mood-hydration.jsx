@@ -521,32 +521,82 @@ export default function MoodHydrationScreen() {
 
   // Hooks for real data
   const { fetchHistory } = useWaterLog();
-  const { trends: moodTrends } = useMoodTrends();
+  const { trends: moodTrends, isLoading: moodLoading } = useMoodTrends({ period: 'week' });
 
-  // Generate mock week data (replace with real data from hooks)
+  // State for hydration history
+  const [hydrationHistory, setHydrationHistory] = useState({});
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+  // Fetch real hydration history on mount
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const today = new Date();
+        const weekAgo = new Date(today);
+        weekAgo.setDate(today.getDate() - 7);
+
+        const history = await fetchHistory({
+          startDate: weekAgo.toISOString(),
+          endDate: today.toISOString(),
+          limit: 100,
+        });
+
+        // Aggregate by date
+        const byDate = {};
+        (history?.logs || []).forEach(log => {
+          const date = getLocalDateKey(new Date(log.loggedDate || log.createdAt));
+          const ml = (parseFloat(log.amountLiters || log.hydrationLiters || 0)) * 1000;
+          byDate[date] = (byDate[date] || 0) + ml;
+        });
+        setHydrationHistory(byDate);
+      } catch (err) {
+        console.error('[mood-hydration] Failed to load history:', err);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    }
+    loadHistory();
+  }, [fetchHistory]);
+
+  // Build week data from real mood trends and hydration history
   const weekData = useMemo(() => {
     const today = new Date();
     const dayOfWeek = today.getDay();
     const data = [];
 
+    // Build mood lookup from trends
+    const moodByDate = {};
+    if (moodTrends?.trendData) {
+      moodTrends.trendData.forEach(entry => {
+        if (entry.dayKey) {
+          moodByDate[entry.dayKey] = entry.intensity || 0;
+        }
+      });
+    }
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + i);
+      const dateKey = getLocalDateKey(date);
 
-      // TODO: Replace with real data from moodTrends and hydration history
-      const isToday = getLocalDateKey(date) === getLocalDateKey(today);
-      const isPast = date < today;
-
+      // Use REAL data from hooks, default to 0 if no data
       data.push({
         day: DAYS[i],
-        date: getLocalDateKey(date),
-        mood: isPast || isToday ? 2 + Math.random() * 3 : 0,
-        hydrationMl: isPast || isToday ? 800 + Math.random() * 1400 : 0,
+        date: dateKey,
+        mood: moodByDate[dateKey] || 0, // Real mood data
+        hydrationMl: hydrationHistory[dateKey] || 0, // Real hydration data
+        hasData: Boolean(moodByDate[dateKey] || hydrationHistory[dateKey]),
       });
     }
 
     return data;
-  }, []);
+  }, [moodTrends, hydrationHistory]);
+
+  // Check if we have enough real data
+  const hasRealData = useMemo(() => {
+    const daysWithData = weekData.filter(d => d.hasData).length;
+    return daysWithData >= 3; // Need at least 3 days of data
+  }, [weekData]);
 
   const avgMood = useMemo(() => {
     const validDays = weekData.filter(d => d.mood > 0);
@@ -565,56 +615,98 @@ export default function MoodHydrationScreen() {
     return today ? Math.round((today.hydrationMl / GOAL_ML) * 100) : 0;
   }, [weekData]);
 
-  // Generate correlation insights based on data
+  // Generate correlation insights based on REAL data only
   const correlations = useMemo(() => {
     const insights = [];
 
-    // High hydration = better mood correlation
-    const highHydrationDays = weekData.filter(d => d.hydrationMl >= GOAL_ML);
-    const lowHydrationDays = weekData.filter(d => d.hydrationMl > 0 && d.hydrationMl < GOAL_ML * 0.6);
+    // Only compute correlations if we have enough real data
+    if (!hasRealData) {
+      return [{
+        icon: 'information-circle',
+        color: COLORS.text.secondary,
+        text: 'Log mood and hydration for 3+ days to see correlations',
+        stat: null,
+        isPlaceholder: true,
+      }];
+    }
 
-    if (highHydrationDays.length > 0 && lowHydrationDays.length > 0) {
+    // High hydration = better mood correlation (only with sufficient data)
+    const highHydrationDays = weekData.filter(d => d.hydrationMl >= GOAL_ML && d.mood > 0);
+    const lowHydrationDays = weekData.filter(d => d.hydrationMl > 0 && d.hydrationMl < GOAL_ML * 0.6 && d.mood > 0);
+
+    // Need at least 2 days in each category for meaningful comparison
+    if (highHydrationDays.length >= 2 && lowHydrationDays.length >= 2) {
       const highHydrationMood = highHydrationDays.reduce((s, d) => s + d.mood, 0) / highHydrationDays.length;
       const lowHydrationMood = lowHydrationDays.reduce((s, d) => s + d.mood, 0) / lowHydrationDays.length;
-      const moodDiff = Math.round(((highHydrationMood - lowHydrationMood) / lowHydrationMood) * 100);
 
-      if (moodDiff > 10) {
-        insights.push({
-          icon: 'trending-up',
-          color: COLORS.mood.excellent,
-          text: `On days you drink >2L, your mood is ${moodDiff}% higher`,
-          stat: `+${moodDiff}%`,
-        });
+      if (lowHydrationMood > 0) {
+        const moodDiff = Math.round(((highHydrationMood - lowHydrationMood) / lowHydrationMood) * 100);
+
+        // Only show if difference is statistically meaningful (>10%)
+        if (Math.abs(moodDiff) > 10) {
+          insights.push({
+            icon: moodDiff > 0 ? 'trending-up' : 'trending-down',
+            color: moodDiff > 0 ? COLORS.mood.excellent : COLORS.mood.low,
+            text: moodDiff > 0
+              ? `On days you drink >2L, your mood is ${moodDiff}% higher`
+              : `Your mood is ${Math.abs(moodDiff)}% lower on low hydration days`,
+            stat: moodDiff > 0 ? `+${moodDiff}%` : `${moodDiff}%`,
+          });
+        }
       }
     }
 
-    // Morning hydration correlation (placeholder - needs time-based data)
-    insights.push({
-      icon: 'sunny',
-      color: '#F59E0B',
-      text: 'Best mood days often start with morning hydration',
-      stat: null,
-    });
-
-    // Streak correlation
-    if (highHydrationDays.length >= 3) {
+    // Streak correlation (only show if actually achieved)
+    const goalMetDays = weekData.filter(d => d.hydrationMl >= GOAL_ML);
+    if (goalMetDays.length >= 3) {
       insights.push({
         icon: 'flame',
         color: '#EF4444',
-        text: `${highHydrationDays.length} days hitting your hydration goal this week`,
-        stat: `${highHydrationDays.length}/7`,
+        text: `${goalMetDays.length} days hitting your hydration goal this week`,
+        stat: `${goalMetDays.length}/7`,
+      });
+    }
+
+    // If no correlations found, provide helpful message
+    if (insights.length === 0) {
+      insights.push({
+        icon: 'analytics',
+        color: COLORS.text.secondary,
+        text: 'Keep logging to discover your mood-hydration patterns',
+        stat: null,
       });
     }
 
     return insights;
-  }, [weekData]);
+  }, [weekData, hasRealData]);
 
-  // Today's insight
+  // Today's insight - based on REAL data only
   const todayInsight = useMemo(() => {
-    if (avgHydration >= 80 && avgMood >= 4) {
+    // Don't show insights without real data
+    if (!hasRealData) {
+      return {
+        text: 'Start logging to see personalized insights',
+        stat: null,
+      };
+    }
+
+    // Calculate actual mood boost from data
+    const highHydrationDays = weekData.filter(d => d.hydrationMl >= GOAL_ML && d.mood > 0);
+    const lowHydrationDays = weekData.filter(d => d.hydrationMl > 0 && d.hydrationMl < GOAL_ML * 0.6 && d.mood > 0);
+
+    let moodBoostPercent = null;
+    if (highHydrationDays.length >= 2 && lowHydrationDays.length >= 2) {
+      const highMoodAvg = highHydrationDays.reduce((s, d) => s + d.mood, 0) / highHydrationDays.length;
+      const lowMoodAvg = lowHydrationDays.reduce((s, d) => s + d.mood, 0) / lowHydrationDays.length;
+      if (lowMoodAvg > 0) {
+        moodBoostPercent = Math.round(((highMoodAvg - lowMoodAvg) / lowMoodAvg) * 100);
+      }
+    }
+
+    if (avgHydration >= 80 && avgMood >= 4 && moodBoostPercent && moodBoostPercent > 0) {
       return {
         text: 'You report better mood on days you stay well-hydrated. Keep it up!',
-        stat: '+23% mood boost',
+        stat: `+${moodBoostPercent}% mood boost`, // Real calculated value
       };
     }
     if (avgHydration < 60) {

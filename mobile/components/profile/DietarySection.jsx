@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import EditableSection from '../EditableSection';
 import TagInput from '../TagInput';
 import { DIETARY_PRESETS } from '../../constants/profileConfig';
-import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { BRAND, SURFACES, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ANIMATION, ICON_SIZES } from '../../constants/premiumTheme';
 
 // Animated chip component with spring animation
 const AnimatedChip = ({ label, isSelected, onPress, index, isEditing }) => {
@@ -35,7 +35,7 @@ const AnimatedChip = ({ label, isSelected, onPress, index, isEditing }) => {
   useEffect(() => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      delay: index * 50,
+      delay: index * 80,
       tension: ANIMATION.spring.tension,
       friction: ANIMATION.spring.friction,
       useNativeDriver: true,
@@ -113,7 +113,7 @@ const AllergyPill = ({ label, onRemove, isEditing, index }) => {
   useEffect(() => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      delay: index * 30,
+      delay: index * 80,
       tension: ANIMATION.spring.tension,
       friction: ANIMATION.spring.friction,
       useNativeDriver: true,
@@ -169,7 +169,7 @@ const DislikePill = ({ label, onRemove, isEditing, index }) => {
   useEffect(() => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      delay: index * 30,
+      delay: index * 80,
       tension: ANIMATION.spring.tension,
       friction: ANIMATION.spring.friction,
       useNativeDriver: true,
@@ -271,7 +271,7 @@ export default function DietarySection({
               colors={SURFACES.gradient.softPurple}
               style={styles.subsectionIcon}
             >
-              <Ionicons name="leaf" size={16} color={BRAND.primary} />
+              <Ionicons name="leaf" size={ICON_SIZES.xs} color={BRAND.primary} />
             </LinearGradient>
             <Text style={styles.subsectionTitle}>Diet Type</Text>
           </View>
@@ -301,7 +301,7 @@ export default function DietarySection({
               colors={SURFACES.gradient.danger}
               style={styles.subsectionIcon}
             >
-              <Ionicons name="warning" size={16} color={TEXT.white} />
+              <Ionicons name="warning" size={ICON_SIZES.xs} color={TEXT.white} />
             </LinearGradient>
             <Text style={styles.subsectionTitle}>Allergies & Restrictions</Text>
             <View style={styles.dangerBadge}>
@@ -343,7 +343,7 @@ export default function DietarySection({
               colors={SURFACES.gradient.purple}
               style={styles.subsectionIcon}
             >
-              <Ionicons name="thumbs-down" size={16} color={TEXT.white} />
+              <Ionicons name="thumbs-down" size={ICON_SIZES.xs} color={TEXT.white} />
             </LinearGradient>
             <Text style={styles.subsectionTitle}>Dislikes</Text>
           </View>
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     backgroundColor: SURFACES.card.primary,
     borderWidth: 1.5,
-    borderColor: `${SEMANTIC_ACTIONS.success}26`,
+    borderColor: SURFACES.card.border,
     ...SHADOWS.sm,
   },
   chipSelected: {

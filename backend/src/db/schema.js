@@ -1519,6 +1519,56 @@ export const predictionOutcomesTable = pgTable(
   })
 );
 
+// Wellness Insight Actions - Tracks user interactions with recommendations across all domains
+// Used by outcomeVerificationService for feedback loop optimization
+export const insightActionsTable = pgTable(
+  "insight_actions",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    // Recommendation identification
+    recommendationId: text("recommendation_id"),
+    recommendationType: text("recommendation_type").notNull(), // HYDRATION, ACTIVITY, NUTRITION, MOOD, etc.
+    domain: text("domain").notNull(), // hydration, nutrition, activity, mood, sleep
+
+    // Action tracking
+    actionType: text("action_type").notNull(), // 'shown', 'clicked', 'completed', 'dismissed', 'snoozed'
+    actionTimestamp: timestamp("action_timestamp").defaultNow(),
+
+    // Context at time of action
+    contextJson: json("context_json").default({}), // Time of day, user state, recommendation details
+
+    // Outcome verification scheduling
+    expectedOutcomeTime: timestamp("expected_outcome_time"), // When we expect to see results
+    outcomeWindowHours: integer("outcome_window_hours"), // Verification window duration
+
+    // Outcome measurement
+    outcomeVerified: boolean("outcome_verified").default(false),
+    outcomeJson: json("outcome_json"), // { baseline, postAction, improvement, success }
+    outcomeSuccess: boolean("outcome_success"), // Did the recommendation help?
+
+    // Thompson Sampling integration
+    armKey: text("arm_key"), // For updating bandit arms
+    armUpdated: boolean("arm_updated").default(false),
+
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("insight_actions_user_idx").on(table.userId),
+    domainIdx: index("insight_actions_domain_idx").on(table.userId, table.domain),
+    actionTypeIdx: index("insight_actions_action_type_idx").on(table.userId, table.actionType),
+    pendingVerificationIdx: index("insight_actions_pending_verification_idx").on(
+      table.outcomeVerified,
+      table.actionType,
+      table.expectedOutcomeTime
+    ),
+  })
+);
+
 // User Thresholds - Personalized thresholds that evolve over time
 export const userThresholdsTable = pgTable(
   "user_thresholds",

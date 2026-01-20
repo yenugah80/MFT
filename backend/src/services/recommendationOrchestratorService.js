@@ -51,6 +51,63 @@ function getConfidenceLabel(confidence) {
 }
 
 /**
+ * Format raw rule names into human-readable titles
+ */
+function formatCorrelationTitle(ruleName) {
+  if (!ruleName) return 'Pattern detected';
+
+  const titleMap = {
+    'high_nova_mood_crash': 'Processed foods affect your mood',
+    'dehydration_fatigue_mood': 'Hydration impacts your energy',
+    'breakfast_skip_afternoon_crash': 'Skipping breakfast affects afternoon',
+    'protein_breakfast_energy': 'Protein breakfast boosts energy',
+    'high_sugar_dinner_morning_anxiety': 'Evening sugar affects next morning',
+    'exercise_mood_boost': 'Exercise improves your mood',
+    'sedentary_mood_impact': 'Movement helps your mood',
+    'beverage_variety_compliance': 'Drink variety helps you stay hydrated',
+    'hydration_mood_stability': 'Hydration keeps mood stable',
+    'caffeine_energy_crash': 'Caffeine causes energy dips',
+    'evening_caffeine_sleep_impact': 'Late caffeine affects sleep',
+    'alcohol_mood_impact': 'Alcohol affects next-day mood',
+    'stress_eating_disruption': 'Stress changes eating patterns',
+    'meal_timing_energy': 'Meal timing affects energy',
+    'goal_compliance': 'You hit your daily goals',
+  };
+
+  return titleMap[ruleName] || ruleName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+/**
+ * Deduplicate and filter correlations for display
+ * - Remove duplicates (keep highest confidence for each ruleName)
+ * - Filter out patterns with insufficient occurrences (<7)
+ * - Filter out low confidence patterns (<0.6)
+ */
+function filterAndDeduplicateCorrelations(correlations, minOccurrences = 7, minConfidence = 0.6) {
+  if (!correlations || !Array.isArray(correlations)) return [];
+
+  // First filter by minimum thresholds
+  const validCorrelations = correlations.filter(c =>
+    (c.occurrences || 0) >= minOccurrences &&
+    (parseFloat(c.confidence) || 0) >= minConfidence
+  );
+
+  // Then deduplicate by ruleName - keep highest confidence version
+  const seen = new Map();
+  for (const corr of validCorrelations) {
+    const key = corr.ruleName;
+    if (!seen.has(key) || parseFloat(corr.confidence) > parseFloat(seen.get(key).confidence)) {
+      seen.set(key, corr);
+    }
+  }
+
+  // Return sorted by confidence (highest first)
+  return Array.from(seen.values()).sort((a, b) =>
+    parseFloat(b.confidence) - parseFloat(a.confidence)
+  );
+}
+
+/**
  * Calculate the total number of distinct days with any logged activity
  * This is the correct way to measure user engagement - not totalMealsLogged/3
  */
@@ -613,12 +670,12 @@ export async function orchestrateDailyRecommendations(userId) {
         visualComponent: message.visual?.type,
       },
 
-      // Supporting correlations
-      correlations: correlations
+      // Supporting correlations (deduplicated, filtered for quality)
+      correlations: filterAndDeduplicateCorrelations(correlations)
         .slice(0, lifecycleStage.correlationsToShow)
         .map(c => ({
           id: c.id,
-          pattern: c.ruleName,
+          pattern: formatCorrelationTitle(c.ruleName),
           confidence: parseFloat(c.confidence),
           occurrences: c.occurrences,
           affectedDomains: c.affectedDomains,

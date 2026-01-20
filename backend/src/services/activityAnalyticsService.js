@@ -160,7 +160,7 @@ class ActivityAnalyticsService {
           COUNT(DISTINCT DATE(logged_at)) as distinct_days,
           MIN(logged_at) as first_log,
           MAX(logged_at) as last_log
-        FROM activity_logs
+        FROM activity_log
         WHERE user_id = ${userId}
           AND logged_at >= NOW() - INTERVAL '30 days'
       `);
@@ -221,7 +221,7 @@ class ActivityAnalyticsService {
           notes,
           EXTRACT(DOW FROM logged_at) as day_of_week,
           EXTRACT(HOUR FROM logged_at) as hour_of_day
-        FROM activity_logs
+        FROM activity_log
         WHERE user_id = ${userId}
           AND logged_at >= ${startDate.toISOString()}
           AND logged_at <= ${endDate.toISOString()}
@@ -406,7 +406,7 @@ class ActivityAnalyticsService {
   async getActivityLogs(userId, startDate, endDate) {
     try {
       const result = await db.execute(sql`
-        SELECT * FROM activity_logs
+        SELECT * FROM activity_log
         WHERE user_id = ${userId}
           AND logged_at >= ${startDate.toISOString()}
           AND logged_at <= ${endDate.toISOString()}
@@ -420,10 +420,10 @@ class ActivityAnalyticsService {
   async getMoodLogs(userId, startDate, endDate) {
     try {
       const result = await db.execute(sql`
-        SELECT * FROM mood_logs
+        SELECT * FROM mood_log
         WHERE user_id = ${userId}
-          AND logged_at >= ${startDate.toISOString()}
-          AND logged_at <= ${endDate.toISOString()}
+          AND logged_date >= ${startDate.toISOString()}
+          AND logged_date <= ${endDate.toISOString()}
       `);
       return result.rows || [];
     } catch {
@@ -434,10 +434,10 @@ class ActivityAnalyticsService {
   async getFoodLogs(userId, startDate, endDate) {
     try {
       const result = await db.execute(sql`
-        SELECT * FROM food_logs
+        SELECT * FROM food_log
         WHERE user_id = ${userId}
-          AND logged_at >= ${startDate.toISOString()}
-          AND logged_at <= ${endDate.toISOString()}
+          AND logged_date >= ${startDate.toISOString()}
+          AND logged_date <= ${endDate.toISOString()}
       `);
       return result.rows || [];
     } catch {
@@ -448,10 +448,10 @@ class ActivityAnalyticsService {
   async getWaterLogs(userId, startDate, endDate) {
     try {
       const result = await db.execute(sql`
-        SELECT * FROM water_logs
+        SELECT * FROM water_log
         WHERE user_id = ${userId}
-          AND logged_at >= ${startDate.toISOString()}
-          AND logged_at <= ${endDate.toISOString()}
+          AND logged_date >= ${startDate.toISOString()}
+          AND logged_date <= ${endDate.toISOString()}
       `);
       return result.rows || [];
     } catch {
@@ -473,7 +473,7 @@ class ActivityAnalyticsService {
     // Group mood (convert mood to numeric scale)
     const moodScale = { happy: 5, energized: 5, calm: 4, focused: 4, neutral: 3, tired: 2, stressed: 1, sad: 1 };
     moodLogs.forEach(log => {
-      const date = new Date(log.logged_at).toISOString().split('T')[0];
+      const date = new Date(log.logged_date).toISOString().split('T')[0];
       if (!dailyData[date]) dailyData[date] = { date };
       const moodValue = moodScale[log.mood] || parseInt(log.energy_level) || 3;
       if (!dailyData[date].moodValues) dailyData[date].moodValues = [];
@@ -490,7 +490,7 @@ class ActivityAnalyticsService {
 
     // Group food (calculate calorie quality score)
     foodLogs.forEach(log => {
-      const date = new Date(log.logged_at).toISOString().split('T')[0];
+      const date = new Date(log.logged_date).toISOString().split('T')[0];
       if (!dailyData[date]) dailyData[date] = { date };
       // Simple quality score based on protein ratio and fiber
       const protein = parseFloat(log.protein) || 0;
@@ -511,10 +511,11 @@ class ActivityAnalyticsService {
 
     // Group water
     waterLogs.forEach(log => {
-      const date = new Date(log.logged_at).toISOString().split('T')[0];
+      const date = new Date(log.logged_date).toISOString().split('T')[0];
       if (!dailyData[date]) dailyData[date] = { date };
+      // Convert liters to ml for consistency
       dailyData[date].waterIntake = (dailyData[date].waterIntake || 0) +
-        (parseFloat(log.amount_ml) || 0);
+        (parseFloat(log.amount_liters) * 1000 || 0);
     });
 
     return dailyData;
@@ -786,7 +787,7 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
           DATE(logged_at) as date,
           SUM(duration_minutes) as minutes,
           STRING_AGG(DISTINCT type, ', ') as types
-        FROM activity_logs
+        FROM activity_log
         WHERE user_id = ${userId}
           AND logged_at >= ${weekAgo.toISOString()}
           AND logged_at <= ${today.toISOString()}

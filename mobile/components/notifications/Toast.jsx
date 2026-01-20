@@ -2,6 +2,16 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import LottieView from 'lottie-react-native';
+
+// Lottie animation assets for celebrations
+const LOTTIE_ANIMATIONS = {
+  celebration: require('../../assets/animations/celebration.json'),
+  success: require('../../assets/animations/success.json'),
+  sparkle: require('../../assets/animations/sparkle.json'),
+  streak: require('../../assets/animations/streak.json'),
+  stars: require('../../assets/animations/stars.json'),
+};
 
 /**
  * Toast Component - Premium, Personality-Driven Notifications
@@ -12,8 +22,9 @@ import { LinearGradient } from 'expo-linear-gradient';
  * - Domain-specific theming (food, hydration, mood, activity)
  * - Smooth spring animations with bounce
  * - Glassmorphism-inspired design
+ * - Optional Lottie animations for celebrations
  */
-const Toast = ({ type = 'info', domain, title, message, onDismiss, style }) => {
+const Toast = ({ type = 'info', domain, title, message, onDismiss, style, celebration = false, lottieAnimation }) => {
   const translateY = useRef(new Animated.Value(-20)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
@@ -168,6 +179,23 @@ const Toast = ({ type = 'info', domain, title, message, onDismiss, style }) => {
 
   const { icon, color, backgroundColor, borderColor, gradient, iconBg } = activeConfig;
 
+  // Determine which Lottie animation to use
+  const getLottieSource = () => {
+    if (lottieAnimation && LOTTIE_ANIMATIONS[lottieAnimation]) {
+      return LOTTIE_ANIMATIONS[lottieAnimation];
+    }
+    if (celebration) {
+      // Auto-select based on domain or type
+      if (domain === 'streak') return LOTTIE_ANIMATIONS.streak;
+      if (type === 'success') return LOTTIE_ANIMATIONS.success;
+      return LOTTIE_ANIMATIONS.celebration;
+    }
+    return null;
+  };
+
+  const lottieSource = getLottieSource();
+  const showLottie = celebration || lottieAnimation;
+
   return (
     <Animated.View
       style={[
@@ -181,6 +209,19 @@ const Toast = ({ type = 'info', domain, title, message, onDismiss, style }) => {
         style,
       ]}
     >
+      {/* Celebration Lottie overlay */}
+      {showLottie && lottieSource && (
+        <View style={styles.lottieOverlay} pointerEvents="none">
+          <LottieView
+            source={lottieSource}
+            autoPlay
+            loop={false}
+            style={styles.lottieAnimation}
+            speed={1.2}
+          />
+        </View>
+      )}
+
       {/* Gradient accent bar */}
       <LinearGradient
         colors={gradient}
@@ -189,9 +230,18 @@ const Toast = ({ type = 'info', domain, title, message, onDismiss, style }) => {
         end={{ x: 0, y: 1 }}
       />
 
-      {/* Icon in colored circle */}
+      {/* Icon in colored circle - or mini Lottie for celebrations */}
       <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={22} color={color} />
+        {showLottie && lottieSource ? (
+          <LottieView
+            source={LOTTIE_ANIMATIONS.sparkle}
+            autoPlay
+            loop
+            style={styles.iconLottie}
+          />
+        ) : (
+          <Ionicons name={icon} size={22} color={color} />
+        )}
       </View>
 
       {/* Content */}
@@ -245,6 +295,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
   },
+  lottieOverlay: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
+    zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lottieAnimation: {
+    width: 150,
+    height: 150,
+  },
+  iconLottie: {
+    width: 32,
+    height: 32,
+  },
   accentBar: {
     width: 5,
     height: '100%',
@@ -259,6 +327,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    zIndex: 20, // Above Lottie overlay
   },
   textContainer: {
     flex: 1,

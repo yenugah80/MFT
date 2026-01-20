@@ -33,50 +33,22 @@ export const ACTIVITY_ANALYTICS_KEYS = {
 };
 
 // ============================================================================
-// FALLBACK DATA - Used when backend is not available
+// DATA STATUS CONSTANTS - For production-grade error handling
 // ============================================================================
 
-const FALLBACK_PERSONAS = [
-  {
-    title: 'Building Momentum',
-    description: 'You\'re starting your activity journey. Small consistent steps lead to big changes.',
-    recommendation: 'Start with 10-minute walks and gradually increase duration.',
-    icon: 'trending-up',
-  },
-  {
-    title: 'Consistent Mover',
-    description: 'You maintain regular activity throughout the week. Great foundation!',
-    recommendation: 'Try adding variety with different activities to keep things fresh.',
-    icon: 'walk',
-  },
-  {
-    title: 'Active Achiever',
-    description: 'You exceed activity goals regularly. Your commitment is paying off!',
-    recommendation: 'Consider setting new challenges to continue growing.',
-    icon: 'trophy',
-  },
-];
-
-const FALLBACK_RECOMMENDATIONS = [
-  {
-    title: 'Morning Movement',
-    description: 'A 10-minute morning walk can boost mood and energy for the entire day.',
-    action: 'Try tomorrow',
-    icon: 'sunny-outline',
-  },
-  {
-    title: 'Activity Breaks',
-    description: 'Taking short movement breaks every hour improves focus and reduces fatigue.',
-    action: 'Set reminders',
-    icon: 'alarm-outline',
-  },
-  {
-    title: 'Social Exercise',
-    description: 'Exercising with others increases motivation and consistency.',
-    action: 'Invite a friend',
-    icon: 'people-outline',
-  },
-];
+/**
+ * Data availability status to distinguish between:
+ * - 'loading': Still fetching data
+ * - 'ready': Real data available from backend
+ * - 'insufficient': User hasn't logged enough data yet
+ * - 'error': API call failed
+ */
+export const DATA_STATUS = {
+  LOADING: 'loading',
+  READY: 'ready',
+  INSUFFICIENT: 'insufficient',
+  ERROR: 'error',
+};
 
 // ============================================================================
 // MAIN DASHBOARD HOOK
@@ -92,28 +64,32 @@ export function useActivityAnalytics(options = {}) {
   const query = useQuery({
     queryKey: ACTIVITY_ANALYTICS_KEYS.dashboard(),
     queryFn: async () => {
-      const fallbackData = {
-        coldStart: { stage: 'day0', daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
-        patterns: null,
-        persona: FALLBACK_PERSONAS[0],
-        personaConfidence: 0.5,
-        prediction: null,
-        recommendations: FALLBACK_RECOMMENDATIONS,
-        weekData: generateFallbackWeekData(),
-        dismissedInsightTypes: [],
-      };
+      const response = await apiClient.get('/activity/analytics/dashboard');
 
-      try {
-        const data = await apiClient.get('/activity/analytics/dashboard');
-        // React Query requires returning a value - never undefined
-        return data ?? fallbackData;
-      } catch (error) {
-        // Silently return fallback data - backend may not have endpoint yet
-        if (__DEV__) {
-          console.warn('[useActivityAnalytics] Using fallback data (endpoint may not exist yet)');
-        }
-        return fallbackData;
+      // Validate response has real data
+      if (!response || typeof response !== 'object') {
+        return {
+          status: DATA_STATUS.ERROR,
+          coldStart: { stage: 'day0', daysSinceFirstLog: 0, totalLogs: 0, distinctDays: 0 },
+          patterns: null,
+          persona: null,
+          personaConfidence: 0,
+          prediction: null,
+          recommendations: [],
+          weekData: generateEmptyWeekData(),
+          dismissedInsightTypes: [],
+          message: 'Unable to load activity data',
+        };
       }
+
+      // Check if user has sufficient data
+      const hasData = response.coldStart?.totalLogs > 0 || response.weekData?.some(d => d.minutes > 0);
+
+      return {
+        ...response,
+        status: hasData ? DATA_STATUS.READY : DATA_STATUS.INSUFFICIENT,
+        message: hasData ? null : 'Log your first activity to see personalized insights',
+      };
     },
     enabled,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -122,20 +98,32 @@ export function useActivityAnalytics(options = {}) {
     refetchOnWindowFocus: false,
   });
 
+  // Derive status from query state and data
+  const dataStatus = useMemo(() => {
+    if (query.isLoading) return DATA_STATUS.LOADING;
+    if (query.error) return DATA_STATUS.ERROR;
+    return query.data?.status || DATA_STATUS.INSUFFICIENT;
+  }, [query.isLoading, query.error, query.data?.status]);
+
   return useMemo(() => ({
     analytics: query.data,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     error: query.error,
     refetch: query.refetch,
-    // Convenience accessors
+    // Production-grade status indicators
+    dataStatus,
+    hasRealData: dataStatus === DATA_STATUS.READY,
+    isInsufficientData: dataStatus === DATA_STATUS.INSUFFICIENT,
+    statusMessage: query.data?.message || null,
+    // Convenience accessors (only return if we have real data)
     coldStart: query.data?.coldStart,
     patterns: query.data?.patterns,
-    persona: query.data?.persona,
-    prediction: query.data?.prediction,
-    recommendations: query.data?.recommendations,
-    weekData: query.data?.weekData,
-  }), [query.data, query.isLoading, query.isFetching, query.error, query.refetch]);
+    persona: dataStatus === DATA_STATUS.READY ? query.data?.persona : null,
+    prediction: dataStatus === DATA_STATUS.READY ? query.data?.prediction : null,
+    recommendations: dataStatus === DATA_STATUS.READY ? (query.data?.recommendations || []) : [],
+    weekData: query.data?.weekData || generateEmptyWeekData(),
+  }), [query.data, query.isLoading, query.isFetching, query.error, query.refetch, dataStatus]);
 }
 
 // ============================================================================
@@ -212,6 +200,7 @@ export function useActivityPrediction(options = {}) {
 
 /**
  * Hook for personalized activity recommendations
+ * Returns empty array when no real data available - UI should handle empty state
  */
 export function useActivityRecommendations(options = {}) {
   const { enabled = true } = options;
@@ -219,19 +208,23 @@ export function useActivityRecommendations(options = {}) {
   const query = useQuery({
     queryKey: ACTIVITY_ANALYTICS_KEYS.recommendations(),
     queryFn: async () => {
-      try {
-        const response = await apiClient.get('/activity/analytics/recommendations');
-        return response?.recommendations || FALLBACK_RECOMMENDATIONS;
-      } catch {
-        return FALLBACK_RECOMMENDATIONS;
-      }
+      const response = await apiClient.get('/activity/analytics/recommendations');
+      // Only return real recommendations from backend, never fake data
+      const recommendations = response?.recommendations || [];
+      return {
+        recommendations,
+        hasData: recommendations.length > 0,
+        status: recommendations.length > 0 ? DATA_STATUS.READY : DATA_STATUS.INSUFFICIENT,
+      };
     },
     enabled,
     staleTime: 30 * 60 * 1000, // 30 minutes
   });
 
   return {
-    recommendations: query.data,
+    recommendations: query.data?.recommendations || [],
+    hasData: query.data?.hasData || false,
+    dataStatus: query.isLoading ? DATA_STATUS.LOADING : (query.data?.status || DATA_STATUS.INSUFFICIENT),
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,
@@ -328,10 +321,11 @@ export function useLogActivity() {
 // ============================================================================
 
 /**
- * Generate fallback week data for display
+ * Generate empty week data structure for display when no data exists
  * Uses 2-char labels for Tuesday (Tu) and Thursday (Th) to avoid confusion
+ * NOTE: This returns EMPTY data (0 minutes), not fake sample data
  */
-function generateFallbackWeekData() {
+function generateEmptyWeekData() {
   const today = new Date();
   const weekData = [];
   // Use 2-char for Tu/Th to distinguish, 1-char for others
@@ -344,8 +338,9 @@ function generateFallbackWeekData() {
     weekData.push({
       date: date.toISOString().split('T')[0],
       label: dayLabels[dayOfWeek],
-      minutes: 0,
+      minutes: 0, // Real zero, not fake data
       type: null,
+      hasData: false, // Explicit flag that this is empty
     });
   }
 

@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * Smart Notification Engine - Data-Driven Zomato-Style Messaging
+ * Smart Notification Engine - Data-Driven Witty Messaging
  * ============================================================================
  *
- * KEY PRINCIPLE: NO default/generic messages. ONLY data-driven insights.
+ * KEY PRINCIPLE: Data-driven insights + Gen-Z playful personality.
  *
  * All notifications are generated from:
  * - User's actual logged data (hydration, meals, activity, mood)
@@ -11,15 +11,25 @@
  * - User's lifecycle stage (newcomer, building, established, expert)
  * - Real-time context (time since last log, pace vs goal)
  *
- * Zomato-style characteristics:
- * - Witty, personality-driven copy
+ * Personality characteristics:
+ * - 70% playful Gen-Z energy, 30% clear and warm
  * - Never annoying - always relevant
  * - Contextual and personalized
  * - Action-oriented with clear CTAs
+ * - Uses MessageFreshnessManager for variety (no repeats)
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
+import {
+  hydrationMessages,
+  reminderMessages,
+  streakMessages,
+  engagementMessages,
+  moodMessages,
+  activityMessages,
+} from '../utils/wittyMessages';
+import { pickFresh } from './intelligence/MessageFreshnessManager';
 
 // ============================================================================
 // STORAGE KEYS
@@ -152,17 +162,41 @@ export const analyzeUserPatterns = async () => {
 // ============================================================================
 
 /**
+ * Get time period for contextual messages
+ */
+const getTimePeriod = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  return 'evening';
+};
+
+/**
+ * Pick a fresh message from an array using freshness manager
+ */
+const pickFreshMessage = (arr, category) => {
+  if (!arr || arr.length === 0) return null;
+  try {
+    return pickFresh(arr, category);
+  } catch {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+};
+
+/**
  * Generate hydration reminder based on ACTUAL user data
  * Returns null if no relevant data to base message on
+ * Uses wittyMessages for Gen-Z playful personality
  */
 export const generateHydrationMessage = async () => {
   const status = await fetchHydrationStatus();
   if (!status) return null;
 
-  const { currentMl, goalMl, lastLogTime, logCount, streak, beverageTypes } = status;
+  const { currentMl, goalMl, lastLogTime, logCount, streak } = status;
   const percentage = Math.round((currentMl / goalMl) * 100);
   const remaining = goalMl - currentMl;
   const hour = new Date().getHours();
+  const timePeriod = getTimePeriod();
 
   // Calculate time since last log
   let minutesSinceLastLog = null;
@@ -172,35 +206,29 @@ export const generateHydrationMessage = async () => {
 
   // NO LOGS TODAY - but only send if it's past 10am
   if (logCount === 0 && hour >= 10) {
+    const timeMessages = reminderMessages.hydration[timePeriod] || reminderMessages.hydration.morning;
+    const body = pickFreshMessage(timeMessages, `reminder.hydration.${timePeriod}`);
     return {
       title: "Day started, hydration hasn't 💧",
-      body: "Your first glass kicks off the day. Ready when you are.",
+      body: body || "Your first glass kicks off the day. Ready when you are.",
       data: { type: 'hydration', action: 'open_hydration', reason: 'no_logs_today' },
     };
   }
 
-  // GOAL ACHIEVED
+  // GOAL ACHIEVED - Don't send notification here
+  // HydrationTracker's MilestoneToast handles goal celebrations to avoid duplicates
   if (percentage >= 100) {
-    if (streak > 1) {
-      return {
-        title: `${streak} days hydrated! 🔥`,
-        body: "Your consistency is paying off. Keep the streak alive tomorrow!",
-        data: { type: 'hydration', action: 'celebrate', reason: 'goal_achieved_streak' },
-      };
-    }
-    return {
-      title: "Hydration goal: Crushed! 💪",
-      body: "Your body is running on full hydration. Nice work today.",
-      data: { type: 'hydration', action: 'celebrate', reason: 'goal_achieved' },
-    };
+    return null;
   }
 
   // BEHIND PACE - Only if we have timing data
   if (minutesSinceLastLog !== null && minutesSinceLastLog > 120 && percentage < 80) {
     const hoursSince = Math.round(minutesSinceLastLog / 60);
+    const urgentMessages = reminderMessages.hydration.urgent;
+    const body = pickFreshMessage(urgentMessages, 'reminder.hydration.urgent');
     return {
       title: `${hoursSince}h since your last sip`,
-      body: `${remaining}ml to go. A glass now keeps you on track.`,
+      body: body ? `${body} ${remaining}ml to go!` : `${remaining}ml to go. A glass now keeps you on track.`,
       data: { type: 'hydration', action: 'open_hydration', reason: 'behind_pace', behindBy: remaining },
     };
   }
@@ -209,28 +237,30 @@ export const generateHydrationMessage = async () => {
   if (percentage >= 75 && percentage < 100) {
     return {
       title: "Almost there! 💧",
-      body: `Just ${remaining}ml more. You've got this.`,
+      body: `Just ${remaining}ml more. ${percentage}% done - you absolute legend!`,
       data: { type: 'hydration', action: 'open_hydration', reason: 'almost_goal' },
     };
   }
 
   // MODERATE PROGRESS with context
   if (percentage >= 40 && percentage < 75 && hour >= 14) {
+    const afternoonMessages = reminderMessages.hydration.afternoon;
+    const body = pickFreshMessage(afternoonMessages, 'reminder.hydration.afternoon');
     return {
       title: "Afternoon hydration check",
-      body: `${percentage}% done, ${remaining}ml to go. Pace yourself for the evening.`,
+      body: body ? `${body} ${remaining}ml to go!` : `${percentage}% done, ${remaining}ml to go.`,
       data: { type: 'hydration', action: 'open_hydration', reason: 'afternoon_check' },
     };
   }
 
   // If none of the above conditions, don't send a notification
-  // Better to send nothing than a generic message
   return null;
 };
 
 /**
  * Generate meal logging reminder based on ACTUAL user data
  * Returns null if no relevant data
+ * Uses wittyMessages for Gen-Z playful personality
  */
 export const generateMealMessage = async () => {
   const status = await fetchMealStatus();
@@ -245,37 +275,44 @@ export const generateMealMessage = async () => {
     hoursSinceLastMeal = Math.round((Date.now() - new Date(lastMealTime).getTime()) / 3600000);
   }
 
-  // NO MEALS LOGGED - Contextual by time
+  // NO MEALS LOGGED - Contextual by time with witty messages
   if (mealsLogged === 0) {
     if (hour >= 9 && hour < 11) {
+      const breakfastMessages = reminderMessages.nutrition.breakfast;
+      const body = pickFreshMessage(breakfastMessages, 'reminder.nutrition.breakfast');
       return {
         title: "Breakfast fuel? 🍳",
-        body: "What powered your morning? Log it in 10 seconds.",
+        body: body || "What powered your morning? Log it in 10 seconds.",
         data: { type: 'meal', action: 'open_log', meal: 'breakfast' },
       };
     }
     if (hour >= 12 && hour < 14) {
+      const lunchMessages = reminderMessages.nutrition.lunch;
+      const body = pickFreshMessage(lunchMessages, 'reminder.nutrition.lunch');
       return {
-        title: "Lunch break?",
-        body: "Your nutrition insights are waiting. Quick log keeps them accurate.",
+        title: "Lunch o'clock! 🥗",
+        body: body || "Your nutrition insights are waiting. Quick log keeps them accurate.",
         data: { type: 'meal', action: 'open_log', meal: 'lunch' },
       };
     }
     if (hour >= 18 && hour < 21) {
+      const dinnerMessages = reminderMessages.nutrition.dinner;
+      const body = pickFreshMessage(dinnerMessages, 'reminder.nutrition.dinner');
       return {
         title: "Dinner time! 🍽️",
-        body: "End the day with a log. Your streak depends on it.",
+        body: body || "End the day with a log. Your streak depends on it.",
         data: { type: 'meal', action: 'open_log', meal: 'dinner' },
       };
     }
     return null;
   }
 
-  // STREAK REMINDER - Evening nudge
+  // STREAK REMINDER - Evening nudge with witty streak messages
   if (streak > 0 && hour >= 20 && mealsLogged < 2) {
+    const streakMsg = streakMessages.atRisk(4); // 4 hours assumed
     return {
       title: `${streak}-day streak on the line! 🔥`,
-      body: "One more meal log keeps it alive. Don't let it slip.",
+      body: streakMsg || "One more meal log keeps it alive. Don't let it slip.",
       data: { type: 'meal', action: 'open_log', reason: 'streak_protection' },
     };
   }
@@ -286,7 +323,7 @@ export const generateMealMessage = async () => {
     if (remaining > 0 && remaining < 500 && hour >= 18) {
       return {
         title: "Room for a snack? 🍿",
-        body: `${remaining} calories left in your budget today.`,
+        body: `${remaining} calories left in your budget. Treat yourself (mindfully)!`,
         data: { type: 'meal', action: 'open_log', reason: 'calorie_budget' },
       };
     }
@@ -298,40 +335,44 @@ export const generateMealMessage = async () => {
 /**
  * Generate activity reminder based on ACTUAL user data
  * Returns null if no relevant data
+ * Uses wittyMessages for Gen-Z playful personality
  */
 export const generateActivityMessage = async () => {
   const status = await fetchActivityStatus();
   if (!status) return null;
 
-  const { steps, stepGoal, activeMinutes, lastActivityTime } = status;
+  const { steps, stepGoal } = status;
   const percentage = Math.round((steps / stepGoal) * 100);
   const hour = new Date().getHours();
+  const timePeriod = getTimePeriod();
 
-  // GOAL ACHIEVED
+  // GOAL ACHIEVED - Celebrate!
   if (percentage >= 100) {
     return {
-      title: "Step goal: Done! 🎯",
-      body: `${steps.toLocaleString()} steps today. Your body thanks you.`,
+      title: "Step goal: CRUSHED! 🎯",
+      body: `${steps.toLocaleString()} steps today. You absolute movement legend! 💪`,
       data: { type: 'activity', action: 'celebrate', reason: 'step_goal' },
     };
   }
 
-  // LOW ACTIVITY - Afternoon nudge
+  // LOW ACTIVITY - Time-based nudge with witty messages
   if (percentage < 30 && hour >= 14 && hour < 18) {
     const remaining = stepGoal - steps;
+    const activityMessages = reminderMessages.activity[timePeriod] || reminderMessages.activity.afternoon;
+    const body = pickFreshMessage(activityMessages, `reminder.activity.${timePeriod}`);
     return {
       title: "Movement break? 🚶",
-      body: `${remaining.toLocaleString()} steps to go. Even a short walk helps.`,
+      body: body ? `${body} ${remaining.toLocaleString()} steps to go!` : `${remaining.toLocaleString()} steps to go. Even a short walk helps.`,
       data: { type: 'activity', action: 'open_activity', reason: 'low_steps' },
     };
   }
 
-  // CLOSE TO GOAL
+  // CLOSE TO GOAL - Motivation boost
   if (percentage >= 80 && percentage < 100) {
     const remaining = stepGoal - steps;
     return {
       title: "So close! 👟",
-      body: `Just ${remaining.toLocaleString()} more steps to hit your goal.`,
+      body: `Just ${remaining.toLocaleString()} more steps. You're literally almost there!`,
       data: { type: 'activity', action: 'open_activity', reason: 'almost_goal' },
     };
   }
@@ -342,6 +383,7 @@ export const generateActivityMessage = async () => {
 /**
  * Generate mood check-in based on ACTUAL user data
  * Only prompts if user has been logging mood consistently
+ * Uses wittyMessages for Gen-Z playful personality
  */
 export const generateMoodMessage = async () => {
   const patterns = await analyzeUserPatterns();
@@ -352,13 +394,27 @@ export const generateMoodMessage = async () => {
   if (patterns.lifecycleStage === 'newcomer') return null;
 
   const hour = new Date().getHours();
+  const timePeriod = getTimePeriod();
 
-  // Evening check-in for active users
+  // Time-based check-in with witty messages
   if (hour >= 19 && hour < 22) {
+    const moodMessages = reminderMessages.mood[timePeriod] || reminderMessages.mood.evening;
+    const body = pickFreshMessage(moodMessages, `reminder.mood.${timePeriod}`);
     return {
       title: "Quick vibe check 🌤️",
-      body: "How's today treating you? 5 seconds to log, days of insights.",
+      body: body || "How's today treating you? 5 seconds to log, days of insights.",
       data: { type: 'mood', action: 'open_mood', reason: 'evening_checkin' },
+    };
+  }
+
+  // Morning mood check for power users
+  if (hour >= 8 && hour < 10 && patterns.lifecycleStage === 'expert') {
+    const morningMessages = reminderMessages.mood.morning;
+    const body = pickFreshMessage(morningMessages, 'reminder.mood.morning');
+    return {
+      title: "Morning mood check 🌅",
+      body: body || "How are we starting today? Quick vibe log?",
+      data: { type: 'mood', action: 'open_mood', reason: 'morning_checkin' },
     };
   }
 
@@ -478,6 +534,7 @@ export const recordNotificationSent = async (type) => {
 /**
  * Generate re-engagement message for inactive users
  * ONLY if user has meaningful history
+ * Uses wittyMessages for Gen-Z playful personality
  */
 export const generateReengagementMessage = async () => {
   const patterns = await analyzeUserPatterns();
@@ -491,22 +548,68 @@ export const generateReengagementMessage = async () => {
   const daysSinceActive = Math.round((Date.now() - patterns.analyzedAt) / (24 * 60 * 60 * 1000));
 
   if (daysSinceActive >= 3 && daysSinceActive < 7) {
+    const atRiskMessages = engagementMessages.atRisk;
+    const body = pickFreshMessage(atRiskMessages, 'engagement.atRisk');
     return {
-      title: "Your insights miss you 📊",
-      body: `${patterns.totalDaysActive} days of data waiting. One log to pick up where you left off.`,
+      title: "We miss you! 👋",
+      body: body || `${patterns.totalDaysActive} days of data waiting. One log to pick up where you left off.`,
       data: { type: 'reengagement', action: 'open_dashboard', reason: 'inactive_3_days' },
     };
   }
 
   if (daysSinceActive >= 7 && patterns.longestStreak > 0) {
+    const streakLostMsg = streakMessages.lost(patterns.longestStreak);
     return {
       title: "Remember that streak? 🔥",
-      body: `You hit ${patterns.longestStreak} days once. Ready to beat it?`,
+      body: streakLostMsg || `You hit ${patterns.longestStreak} days once. Ready to beat it?`,
       data: { type: 'reengagement', action: 'open_dashboard', reason: 'inactive_7_days' },
     };
   }
 
   return null;
+};
+
+// ============================================================================
+// CELEBRATION GENERATORS - For goal achievements and milestones
+// ============================================================================
+
+/**
+ * Generate celebration message for achievements
+ * Called when user completes goals, milestones, etc.
+ */
+export const generateCelebrationMessage = async (type, data = {}) => {
+  switch (type) {
+    case 'hydration_goal':
+      return {
+        title: hydrationMessages.goalReached(),
+        body: data.streak > 1 ? `${data.streak} days of crushing it! Keep it going.` : 'Your body is loving this hydration energy.',
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'hydration_goal' },
+      };
+
+    case 'streak_milestone':
+      return {
+        title: streakMessages.milestone(data.days),
+        body: `${data.days} days of consistency. You're officially in the elite club.`,
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'streak_milestone', days: data.days },
+      };
+
+    case 'step_goal':
+      return {
+        title: "Step goal: DESTROYED! 🏃",
+        body: `${data.steps?.toLocaleString() || 'All'} steps done. Your legs are thanking you.`,
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'step_goal' },
+      };
+
+    case 'first_log':
+      return {
+        title: "First log! 🚀",
+        body: "The journey of a thousand logs begins with this one. Welcome!",
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'first_log' },
+      };
+
+    default:
+      return null;
+  }
 };
 
 export default {
@@ -516,6 +619,7 @@ export default {
   generateActivityMessage,
   generateMoodMessage,
   generateReengagementMessage,
+  generateCelebrationMessage,
   getOptimalNotificationTimes,
   shouldSendNotification,
   recordNotificationSent,

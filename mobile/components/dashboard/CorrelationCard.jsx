@@ -34,6 +34,18 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 /**
+ * Format domain name: snake_case → Title Case
+ * "Goal_compliance" → "Goal Compliance"
+ */
+function formatDomainName(domain) {
+  if (!domain) return '';
+  return domain
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
  * DomainPill - Small colored tag for affected areas
  */
 function DomainPill({ domain }) {
@@ -43,7 +55,7 @@ function DomainPill({ domain }) {
   return (
     <View style={[styles.domainPill, { backgroundColor: bg }]}>
       <Ionicons name={icon} size={12} color={color} />
-      <Text style={[styles.domainText, { color }]}>{domain}</Text>
+      <Text style={[styles.domainText, { color }]}>{formatDomainName(domain)}</Text>
     </View>
   );
 }

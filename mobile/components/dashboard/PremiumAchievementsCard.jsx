@@ -175,12 +175,12 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
   );
 };
 
-// Calculate next level XP requirement (aligned with backend level calculator)
+// Calculate next level XP requirement (MUST match backend levelCalculator.js)
+// Backend formula: 100 + (50 * level) - linear progression
 const getNextLevelXp = (currentLevel) => {
-  // Formula: Base XP * ((level + 1) ^ 1.3)
-  // Level 1 → 2: 2462, Level 2 → 3: 4327, Level 4 → 5: 9036
-  const baseXp = 1000;
-  return Math.floor(baseXp * Math.pow(currentLevel + 1, 1.3));
+  // Linear formula matching backend/src/utils/levelCalculator.js
+  // Level 2: 200 XP, Level 5: 350 XP, Level 10: 600 XP, Level 11: 650 XP
+  return 100 + (50 * (currentLevel + 1));
 };
 
 export default function PremiumAchievementsCard({

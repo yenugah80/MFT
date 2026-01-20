@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { calculateWeeklyGoalProgress } from '../../utils/activityAnalytics';
+import { useActivityLog } from '../../hooks/useActivityLog';
 import { getAdjustedCalorieGoal } from '../../utils/activityNutrition';
 import { TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY, SEMANTIC, BRAND } from '../../constants/premiumTheme';
-
-const STORAGE_KEY = '@activity_log';
 
 /**
  * Activity Summary Card for Dashboard
@@ -17,66 +14,45 @@ const STORAGE_KEY = '@activity_log';
  */
 export default function ActivitySummaryCard() {
   const router = useRouter();
-  const [todayActivities, setTodayActivities] = useState([]);
-  const [allActivities, setAllActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  // Use the useActivityLog hook to get real activity data from the backend
+  const {
+    todaySummary,
+    activities,
+    weeklyProgress,
+    isTodayLoading: loading
+  } = useActivityLog();
 
   const handleViewInsights = () => {
     Haptics.selectionAsync();
     router.push('/insights/activity-insights');
   };
 
-  useEffect(() => {
-    loadActivities();
-  }, []);
-
-  const loadActivities = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        const today = new Date().toDateString();
-
-        // Today's activities
-        const todaysData = data.filter(
-          (activity) => new Date(activity.timestamp).toDateString() === today
-        );
-        setTodayActivities(todaysData);
-
-        // Last 30 days for weekly progress
-        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-        const recentActivities = data.filter(
-          (activity) => new Date(activity.timestamp).getTime() >= thirtyDaysAgo
-        );
-        setAllActivities(recentActivities);
-      }
-    } catch (error) {
-      console.error('Error loading activities:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Calculate stats
-  const todayCalories = todayActivities.reduce((sum, a) => sum + (a.calories || 0), 0);
-  const todayDuration = todayActivities.reduce((sum, a) => sum + (a.duration || 0), 0);
-  const weeklyProgress = calculateWeeklyGoalProgress(allActivities);
+  // Get today's stats from the hook
+  const todayCalories = todaySummary.totalCalories || 0;
+  const todayDuration = todaySummary.totalMinutes || 0;
+  const todayActivityCount = todaySummary.activityCount || 0;
 
   // Calculate earned food calories from activity
   const calorieAdjustment = useMemo(() => {
-    if (todayActivities.length === 0) return null;
+    if (!activities || activities.length === 0) return null;
 
     // Transform activities to format expected by getAdjustedCalorieGoal
-    const formattedActivities = todayActivities.map(activity => ({
-      type: activity.type || 'general',
-      durationMinutes: activity.duration || 0,
+    const formattedActivities = activities.map(activity => ({
+      type: activity.type || activity.activityType || 'general',
+      durationMinutes: activity.durationMinutes || activity.duration || 0,
       intensity: activity.intensity || 'moderate',
     }));
 
     // Use a base of 2000 cal (this is just for calculation, actual goal comes from user profile)
     const result = getAdjustedCalorieGoal(2000, formattedActivities);
     return result;
-  }, [todayActivities]);
+  }, [activities]);
+
+  // Calculate weekly progress percentage (minutes-based)
+  const weeklyProgressPercent = Math.round((weeklyProgress.progress || 0));
+  const weeklyMinutes = weeklyProgress.weeklyMinutes || 0;
+  const weeklyTarget = weeklyProgress.target || 150;
 
   // Get progress color (using brand purple)
   const getProgressColor = (percentage) => {
@@ -86,7 +62,7 @@ export default function ActivitySummaryCard() {
     return TEXT.tertiary;
   };
 
-  const progressColor = getProgressColor(weeklyProgress.percentage);
+  const progressColor = getProgressColor(weeklyProgressPercent);
 
   return (
     <TouchableOpacity style={styles.container} onPress={handleViewInsights} activeOpacity={0.9}>
@@ -128,8 +104,8 @@ export default function ActivitySummaryCard() {
 
           <View style={styles.statItem}>
             <Ionicons name="barbell" size={24} color="#8B5CF6" />
-            <Text style={styles.statValue}>{todayActivities.length}</Text>
-            <Text style={styles.statLabel}>workout{todayActivities.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.statValue}>{todayActivityCount}</Text>
+            <Text style={styles.statLabel}>workout{todayActivityCount !== 1 ? 's' : ''}</Text>
           </View>
         </View>
 
@@ -157,7 +133,7 @@ export default function ActivitySummaryCard() {
             <Text style={styles.weeklyTitle}>Week Progress</Text>
             <View style={[styles.progressBadge, { backgroundColor: progressColor + '20' }]}>
               <Text style={[styles.progressPercentage, { color: progressColor }]}>
-                {Math.round(weeklyProgress.percentage)}%
+                {weeklyProgressPercent}%
               </Text>
             </View>
           </View>
@@ -169,35 +145,35 @@ export default function ActivitySummaryCard() {
                 style={[
                   styles.progressBarFill,
                   {
-                    width: `${Math.min(weeklyProgress.percentage, 100)}%`,
+                    width: `${Math.min(weeklyProgressPercent, 100)}%`,
                     backgroundColor: progressColor,
                   },
                 ]}
               />
             </View>
             <Text style={styles.progressText}>
-              {weeklyProgress.calories} / {weeklyProgress.goal} kcal
+              {weeklyMinutes} / {weeklyTarget} min
             </Text>
           </View>
 
           {/* Quick Insight */}
-          {weeklyProgress.percentage >= 100 ? (
+          {weeklyProgressPercent >= 100 ? (
             <View style={styles.insightRow}>
               <Ionicons name="trophy" size={16} color="#F59E0B" />
               <Text style={styles.insightText}>Goal achieved! Keep it up!</Text>
             </View>
-          ) : weeklyProgress.percentage >= 80 ? (
+          ) : weeklyProgressPercent >= 80 ? (
             <View style={styles.insightRow}>
               <Ionicons name="flame" size={16} color="#F59E0B" />
               <Text style={styles.insightText}>
-                {weeklyProgress.remaining} kcal to go!
+                {weeklyProgress.remaining || (weeklyTarget - weeklyMinutes)} min to go!
               </Text>
             </View>
           ) : (
             <View style={styles.insightRow}>
               <Ionicons name="trending-up" size={16} color={TEXT.tertiary} />
               <Text style={styles.insightText}>
-                {weeklyProgress.workoutCount} / {weeklyProgress.workoutGoal} workouts this week
+                {weeklyProgress.onTrack ? 'You\'re on track this week!' : `${weeklyMinutes} min active this week`}
               </Text>
             </View>
           )}

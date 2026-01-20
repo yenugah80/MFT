@@ -36,9 +36,7 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
-  SEMANTIC_ACTIONS,
-  getMutedToVibrantSolid,
-  getMutedToVibrantColor,
+  ICON_SIZES,
 } from '../../constants/premiumTheme';
 
 // Activity level configuration with visual representation
@@ -57,7 +55,7 @@ const GENDER_OPTIONS = [
 ];
 
 // Circular Progress Ring
-function ProgressRing({ progress, size = 60, strokeWidth = 6, color = SEMANTIC_ACTIONS.success }) {
+function ProgressRing({ progress, size = 60, strokeWidth = 6, color = BRAND.primary }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -124,7 +122,7 @@ function MetricDisplay({ label, value, unit, progress, icon, onPress }) {
           </View>
         </View>
         <Text style={styles.metricValue}>
-          {value || '—'}
+          {value != null ? value : '—'}
           {unit && <Text style={styles.metricUnit}> {unit}</Text>}
         </Text>
         <Text style={styles.metricLabel}>{label}</Text>
@@ -227,27 +225,27 @@ export default function BodyProfileCard({
 
   // Calculate progress percentages for visual display
   const ageProgress = useMemo(() => {
-    const age = basics.age || 0;
-    return Math.min(100, (age / 100) * 100);
+    const age = basics.age ?? 0;
+    return Math.min(100, Math.max(0, (age / 100) * 100));
   }, [basics.age]);
 
   const weightProgress = useMemo(() => {
-    const weight = basics.weightKg || 0;
+    const weight = basics.weightKg ?? 0;
     // Assuming 40-150kg range
-    return Math.min(100, ((weight - 40) / 110) * 100);
+    return Math.min(100, Math.max(0, ((weight - 40) / 110) * 100));
   }, [basics.weightKg]);
 
   const heightProgress = useMemo(() => {
-    const height = basics.heightCm || 0;
+    const height = basics.heightCm ?? 0;
     // Assuming 120-220cm range
-    return Math.min(100, ((height - 120) / 100) * 100);
+    return Math.min(100, Math.max(0, ((height - 120) / 100) * 100));
   }, [basics.heightCm]);
 
   // Open edit modal
   const openEdit = useCallback(async (field) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditingField(field);
-    setEditValue(String(basics[field] || ''));
+    setEditValue(basics[field] != null ? String(basics[field]) : '');
     setError(null);
   }, [basics]);
 
@@ -312,7 +310,7 @@ export default function BodyProfileCard({
           colors={SURFACES.gradient.softPurple}
           style={styles.headerIcon}
         >
-          <Ionicons name="body-outline" size={18} color={BRAND.primary} />
+          <Ionicons name="body-outline" size={ICON_SIZES.xs} color={BRAND.primary} />
         </LinearGradient>
         <Text style={styles.headerTitle}>Body Profile</Text>
       </View>
@@ -580,7 +578,7 @@ const styles = StyleSheet.create({
   // Divider
   divider: {
     height: 1,
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}14`',
+    backgroundColor: SURFACES.card.border,
     marginVertical: SPACING[3],
   },
 
@@ -631,7 +629,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[3],
   },
   activityContainer: {
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}0D`',
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.xl,
     padding: SPACING[4],
   },
@@ -667,7 +665,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}26`',
+    backgroundColor: `${BRAND.primary}26`,
   },
   activityBarActive: {
     backgroundColor: BRAND.primary,
@@ -681,12 +679,13 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: SURFACES.background.primary,
-    borderTopLeftRadius: RADIUS['3xl'],
-    borderTopRightRadius: RADIUS['3xl'],
-    paddingHorizontal: SPACING[6],
-    paddingBottom: SPACING[10],
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: SPACING[5],
+    paddingBottom: SPACING[8],
     paddingTop: SPACING[3],
-    maxHeight: '80%',
+    maxHeight: '90%',
+    ...SHADOWS.lg,
   },
   modalHandle: {
     width: 40,
@@ -711,7 +710,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: SURFACES.background.tertiary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -775,7 +774,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING[5],
     paddingHorizontal: SPACING[3],
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}14`',
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.xl,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -802,7 +801,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING[4],
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}0D`',
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[3],
     borderWidth: 2,
@@ -810,7 +809,7 @@ const styles = StyleSheet.create({
   },
   activityOptionActive: {
     borderColor: BRAND.primary,
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}1A`',
+    backgroundColor: `${BRAND.primary}1A`,
   },
   activityOptionEmoji: {
     fontSize: 28,
@@ -841,10 +840,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 20,
     borderRadius: 3,
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}26`',
+    backgroundColor: `${BRAND.primary}26`,
   },
   activityOptionBarActive: {
-    backgroundColor: '`${SEMANTIC_ACTIONS.success}66`',
+    backgroundColor: `${BRAND.primary}66`,
   },
   activityOptionBarActiveSelected: {
     backgroundColor: BRAND.primary,

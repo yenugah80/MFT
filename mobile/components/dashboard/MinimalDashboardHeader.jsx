@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   },
   brandName: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.3,
   },
@@ -437,12 +437,13 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     letterSpacing: -0.3,
   },
   date: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
   },
   streakText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: STAT_COLORS.streakActive,
   },
   streakTextLost: {
@@ -489,7 +490,7 @@ const styles = StyleSheet.create({
   },
   nudgeText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     flex: 1,
   },
 });

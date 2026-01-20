@@ -86,6 +86,217 @@ const CONFIDENCE_THRESHOLDS = {
 
 /**
  * ============================================================================
+ * EVIDENCE EXTRACTION UTILITIES
+ * ============================================================================
+ *
+ * These utilities extract rich evidence from correlation data for
+ * hyper-personalized, evidence-anchored insights.
+ */
+
+/**
+ * Format a date as a human-readable day reference
+ * e.g., "Last Tuesday", "Yesterday", "Jan 15"
+ */
+function formatDateReference(dateStr) {
+  if (!dateStr) return null;
+
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return `Last ${days[date.getDay()]}`;
+  }
+  if (diffDays < 14) {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[date.getDay()];
+  }
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Format time as 12-hour with am/pm
+ */
+function formatTimeOfDay(hour) {
+  if (hour === undefined || hour === null) return null;
+  const h = parseInt(hour);
+  if (h === 0 || h === 24) return '12am';
+  if (h === 12) return '12pm';
+  if (h < 12) return `${h}am`;
+  return `${h - 12}pm`;
+}
+
+/**
+ * Extract the best (most impactful) evidence example from correlation data
+ * Returns a specific instance with date, time, and outcome for personalization
+ */
+function extractBestEvidence(correlation) {
+  const { evidenceJson = {}, ruleName } = correlation;
+  const examples = evidenceJson.examples || [];
+
+  if (examples.length === 0) {
+    return {
+      hasBestExample: false,
+      bestInstance: null,
+      recentInstances: [],
+    };
+  }
+
+  // Sort by impact (most negative outcome first for negative correlations)
+  const sortedExamples = [...examples].sort((a, b) => {
+    const impactA = a.moodDrop || a.energyDrop || -(a.moodBoost || a.energyBoost || 0);
+    const impactB = b.moodDrop || b.energyDrop || -(b.moodBoost || b.energyBoost || 0);
+    return impactB - impactA;
+  });
+
+  const best = sortedExamples[0];
+  const recent = sortedExamples.slice(0, 3);
+
+  return {
+    hasBestExample: true,
+    bestInstance: {
+      date: best.date || best.observationDate,
+      dateFormatted: formatDateReference(best.date || best.observationDate),
+      time: best.hour || best.hourOfDay,
+      timeFormatted: formatTimeOfDay(best.hour || best.hourOfDay),
+      trigger: best.food || best.foodName || best.beverageType || best.activity,
+      triggerValue: best.triggerValue || best.sugarGrams || best.caffeineCount || best.minutes,
+      outcome: best.moodAfter || best.energyAfter || best.sleepQuality,
+      outcomeDelta: best.moodDrop || best.energyDrop || best.moodBoost || best.energyBoost,
+    },
+    recentInstances: recent.map(ex => ({
+      date: ex.date || ex.observationDate,
+      dateFormatted: formatDateReference(ex.date || ex.observationDate),
+      trigger: ex.food || ex.foodName || ex.beverageType || ex.activity,
+      outcome: ex.moodAfter || ex.energyAfter,
+    })),
+  };
+}
+
+/**
+ * Compute aggregate statistics: condition met vs not met
+ * Returns comparison data for insights like "7.2 mood with X vs 5.1 without"
+ */
+function computeAggregateStats(correlation) {
+  const { evidenceJson = {}, signalAValue, signalBValue, occurrences = 0 } = correlation;
+
+  // Extract pre-computed stats if available
+  const avgWithCondition = evidenceJson.avgMoodWith || evidenceJson.avgEnergyWith || signalBValue;
+  const avgWithoutCondition = evidenceJson.avgMoodWithout || evidenceJson.avgEnergyWithout || evidenceJson.baseline;
+  const sampleSizeWith = evidenceJson.countWith || occurrences;
+  const sampleSizeWithout = evidenceJson.countWithout || 0;
+
+  // Calculate delta
+  const delta = avgWithCondition && avgWithoutCondition
+    ? Math.round((avgWithCondition - avgWithoutCondition) * 10) / 10
+    : null;
+
+  // Calculate percentage change
+  const percentChange = avgWithoutCondition && avgWithoutCondition !== 0 && delta
+    ? Math.round((delta / avgWithoutCondition) * 100)
+    : null;
+
+  return {
+    hasComparison: avgWithCondition != null && avgWithoutCondition != null,
+    avgWithCondition: avgWithCondition != null ? Math.round(avgWithCondition * 10) / 10 : null,
+    avgWithoutCondition: avgWithoutCondition != null ? Math.round(avgWithoutCondition * 10) / 10 : null,
+    delta,
+    percentChange,
+    sampleSizeWith,
+    sampleSizeWithout,
+    isStatisticallySignificant: sampleSizeWith >= 5 && Math.abs(delta || 0) > 0.5,
+  };
+}
+
+/**
+ * Generate a counterfactual prediction
+ * e.g., "If you had done X differently, predicted outcome would be Y"
+ */
+function generateCounterfactualPrediction(correlation, recentUserData = {}) {
+  const { ruleName, evidenceJson = {}, signalAValue, signalBValue } = correlation;
+  const stats = computeAggregateStats(correlation);
+
+  if (!stats.hasComparison || !stats.delta) {
+    return { hasCounterfactual: false };
+  }
+
+  let action = null;
+  let predictedOutcome = null;
+  let unit = '';
+
+  switch (ruleName) {
+    case 'dehydration_fatigue_mood':
+    case 'dehydration_mood_instability': {
+      const targetWater = (signalAValue || 2) * 1.3;
+      action = `drinking ${Math.round(targetWater * 10) / 10}L instead`;
+      predictedOutcome = Math.abs(stats.delta);
+      unit = 'mood points';
+      break;
+    }
+    case 'high_nova_mood_crash':
+    case 'high_sugar_dinner_morning_anxiety': {
+      const sugarReduction = Math.round((signalAValue || 30) * 0.4);
+      action = `reducing sugar by ${sugarReduction}g`;
+      predictedOutcome = Math.abs(stats.delta) * 0.6;
+      unit = 'energy points';
+      break;
+    }
+    case 'breakfast_skip_afternoon_crash':
+      action = 'eating a 200-300cal breakfast';
+      predictedOutcome = Math.abs(stats.delta);
+      unit = 'afternoon energy points';
+      break;
+    case 'exercise_mood_boost':
+    case 'morning_exercise_all_day_energy': {
+      const minutes = signalAValue || 20;
+      action = `${minutes}min activity today`;
+      predictedOutcome = stats.delta;
+      unit = 'mood points';
+      break;
+    }
+    case 'sedentary_day_lower_mood':
+      action = 'adding a 15min walk';
+      predictedOutcome = Math.abs(stats.delta) * 0.5;
+      unit = 'mood points';
+      break;
+    default:
+      return { hasCounterfactual: false };
+  }
+
+  return {
+    hasCounterfactual: true,
+    action,
+    predictedOutcome: Math.round(predictedOutcome * 10) / 10,
+    unit,
+    confidence: stats.isStatisticallySignificant ? 'high' : 'moderate',
+  };
+}
+
+/**
+ * Build a fully evidence-anchored insight object for a correlation
+ * Combines: specific example + aggregate stats + counterfactual
+ */
+function buildEvidenceAnchoredInsight(correlation, userHistory = {}) {
+  const evidence = extractBestEvidence(correlation);
+  const stats = computeAggregateStats(correlation);
+  const counterfactual = generateCounterfactualPrediction(correlation, userHistory);
+
+  return {
+    evidence,
+    stats,
+    counterfactual,
+    canShowSpecificExample: evidence.hasBestExample,
+    canShowComparison: stats.hasComparison,
+    canShowCounterfactual: counterfactual.hasCounterfactual,
+  };
+}
+
+/**
+ * ============================================================================
  * MAIN DECISION BRAIN FUNCTION
  * ============================================================================
  */
@@ -206,10 +417,10 @@ export async function generateIntelligentRecommendations(userId, options = {}) {
         visual: message.visual,
       },
 
-      // Supporting data
-      correlations: safeCorrelations.slice(0, maxRecommendations).map(c => ({
+      // Supporting data (deduplicated, filtered for quality)
+      correlations: filterAndDeduplicateCorrelations(safeCorrelations).slice(0, maxRecommendations).map(c => ({
         id: c.id || c.ruleName,
-        pattern: c.ruleName,
+        pattern: formatCorrelationTitle(c.ruleName),
         confidence: parseFloat(c.confidence) || 0,
         occurrences: c.occurrences || 1,
         affectedDomains: c.affectedDomains || [],
@@ -357,15 +568,24 @@ export async function generateMoodInsights(userId) {
         category: p.category,
       })),
 
-      // Correlations from ML
-      correlations: moodCorrelations.slice(0, 3).map(c => ({
-        id: c.id || c.ruleName,
-        pattern: c.ruleName,
-        statement: c.expectedOutcome,
-        confidence: parseFloat(c.confidence) || 0,
-        impactType: c.healthImpactSeverity || 'neutral',
-        suggestion: generateSuggestionForCorrelation(c),
-      })),
+      // Correlations from ML - enhanced with evidence anchoring (deduplicated, filtered)
+      correlations: filterAndDeduplicateCorrelations(moodCorrelations).slice(0, 3).map(c => {
+        const enhanced = generateEnhancedSuggestion(c);
+        return {
+          id: c.id || c.ruleName,
+          pattern: formatCorrelationTitle(c.ruleName),
+          statement: c.expectedOutcome,
+          confidence: parseFloat(c.confidence) || 0,
+          impactType: c.healthImpactSeverity || 'neutral',
+          suggestion: enhanced?.suggestion || generateSuggestionForCorrelation(c),
+          // Evidence-anchored data
+          evidence: enhanced?.evidence || null,
+          comparison: enhanced?.comparison || null,
+          counterfactual: enhanced?.counterfactual || null,
+          actionabilityScore: enhanced?.actionabilityScore || 0,
+          noveltyScore: enhanced?.noveltyScore || 0,
+        };
+      }),
 
       // Recommendations
       recommendations: recommendations.slice(0, 2).map(r => ({
@@ -503,14 +723,22 @@ export async function generateNutritionInsights(userId) {
         category: p.category,
       })),
 
-      correlations: nutritionCorrelations.slice(0, 3).map(c => ({
-        id: c.id || c.ruleName,
-        pattern: c.ruleName,
-        statement: c.expectedOutcome,
-        confidence: parseFloat(c.confidence) || 0,
-        impactType: c.healthImpactSeverity || 'neutral',
-        suggestion: generateSuggestionForCorrelation(c),
-      })),
+      correlations: filterAndDeduplicateCorrelations(nutritionCorrelations).slice(0, 3).map(c => {
+        const enhanced = generateEnhancedSuggestion(c);
+        return {
+          id: c.id || c.ruleName,
+          pattern: formatCorrelationTitle(c.ruleName),
+          statement: c.expectedOutcome,
+          confidence: parseFloat(c.confidence) || 0,
+          impactType: c.healthImpactSeverity || 'neutral',
+          suggestion: enhanced?.suggestion || generateSuggestionForCorrelation(c),
+          evidence: enhanced?.evidence || null,
+          comparison: enhanced?.comparison || null,
+          counterfactual: enhanced?.counterfactual || null,
+          actionabilityScore: enhanced?.actionabilityScore || 0,
+          noveltyScore: enhanced?.noveltyScore || 0,
+        };
+      }),
 
       recommendations: recommendations.slice(0, 3),
 
@@ -634,14 +862,22 @@ export async function generateHydrationInsights(userId) {
         category: p.category,
       })),
 
-      correlations: hydrationCorrelations.slice(0, 3).map(c => ({
-        id: c.id || c.ruleName,
-        pattern: c.ruleName,
-        statement: c.expectedOutcome,
-        confidence: parseFloat(c.confidence) || 0,
-        impactType: c.healthImpactSeverity || 'neutral',
-        suggestion: generateSuggestionForCorrelation(c),
-      })),
+      correlations: filterAndDeduplicateCorrelations(hydrationCorrelations).slice(0, 3).map(c => {
+        const enhanced = generateEnhancedSuggestion(c);
+        return {
+          id: c.id || c.ruleName,
+          pattern: formatCorrelationTitle(c.ruleName),
+          statement: c.expectedOutcome,
+          confidence: parseFloat(c.confidence) || 0,
+          impactType: c.healthImpactSeverity || 'neutral',
+          suggestion: enhanced?.suggestion || generateSuggestionForCorrelation(c),
+          evidence: enhanced?.evidence || null,
+          comparison: enhanced?.comparison || null,
+          counterfactual: enhanced?.counterfactual || null,
+          actionabilityScore: enhanced?.actionabilityScore || 0,
+          noveltyScore: enhanced?.noveltyScore || 0,
+        };
+      }),
 
       recommendations: recommendations.slice(0, 3),
 
@@ -764,14 +1000,22 @@ export async function generateActivityInsights(userId) {
         category: p.category,
       })),
 
-      correlations: activityCorrelations.slice(0, 3).map(c => ({
-        id: c.id || c.ruleName,
-        pattern: c.ruleName,
-        statement: c.expectedOutcome,
-        confidence: parseFloat(c.confidence) || 0,
-        impactType: c.healthImpactSeverity || 'neutral',
-        suggestion: generateSuggestionForCorrelation(c),
-      })),
+      correlations: filterAndDeduplicateCorrelations(activityCorrelations).slice(0, 3).map(c => {
+        const enhanced = generateEnhancedSuggestion(c);
+        return {
+          id: c.id || c.ruleName,
+          pattern: formatCorrelationTitle(c.ruleName),
+          statement: c.expectedOutcome,
+          confidence: parseFloat(c.confidence) || 0,
+          impactType: c.healthImpactSeverity || 'neutral',
+          suggestion: enhanced?.suggestion || generateSuggestionForCorrelation(c),
+          evidence: enhanced?.evidence || null,
+          comparison: enhanced?.comparison || null,
+          counterfactual: enhanced?.counterfactual || null,
+          actionabilityScore: enhanced?.actionabilityScore || 0,
+          noveltyScore: enhanced?.noveltyScore || 0,
+        };
+      }),
 
       recommendations: recommendations.slice(0, 3),
 
@@ -838,9 +1082,9 @@ async function gatherUserData(userId) {
       .from(activityLogTable)
       .where(and(
         eq(activityLogTable.userId, userId),
-        gte(activityLogTable.loggedDate, thirtyDaysAgo)
+        gte(activityLogTable.loggedAt, thirtyDaysAgo)
       ))
-      .orderBy(desc(activityLogTable.loggedDate))
+      .orderBy(desc(activityLogTable.loggedAt))
       .catch(() => []),
 
     db.select()
@@ -1378,6 +1622,36 @@ function generateMoodPatterns(moodData, moodStats, correlations) {
  * ============================================================================
  */
 
+/**
+ * Deduplicate and filter correlations for display
+ * - Remove duplicates (keep highest confidence for each ruleName)
+ * - Filter out patterns with insufficient occurrences (<7)
+ * - Filter out low confidence patterns (<0.6)
+ */
+function filterAndDeduplicateCorrelations(correlations, minOccurrences = 7, minConfidence = 0.6) {
+  if (!correlations || !Array.isArray(correlations)) return [];
+
+  // First filter by minimum thresholds
+  const validCorrelations = correlations.filter(c =>
+    (c.occurrences || 0) >= minOccurrences &&
+    (parseFloat(c.confidence) || 0) >= minConfidence
+  );
+
+  // Then deduplicate by ruleName - keep highest confidence version
+  const seen = new Map();
+  for (const corr of validCorrelations) {
+    const key = corr.ruleName;
+    if (!seen.has(key) || parseFloat(corr.confidence) > parseFloat(seen.get(key).confidence)) {
+      seen.set(key, corr);
+    }
+  }
+
+  // Return sorted by confidence (highest first)
+  return Array.from(seen.values()).sort((a, b) =>
+    parseFloat(b.confidence) - parseFloat(a.confidence)
+  );
+}
+
 function mergeCorrelations(computed, stored) {
   const merged = [...computed];
   const seenRules = new Set(computed.map(c => c.ruleName));
@@ -1572,13 +1846,36 @@ function formatCorrelationTitle(ruleName) {
   if (!ruleName) return 'Pattern detected';
 
   const titleMap = {
-    'high_nova_mood_crash': 'Processed foods affect mood',
-    'dehydration_fatigue_mood': 'Hydration affects energy',
-    'breakfast_skip_afternoon_crash': 'Breakfast impacts afternoon',
-    'protein_breakfast_energy': 'Protein breakfast helps',
-    'high_sugar_dinner_morning_anxiety': 'Evening sugar affects morning',
-    'exercise_mood_boost': 'Exercise boosts mood',
-    'sedentary_mood_impact': 'Movement helps mood',
+    // Food & Mood patterns
+    'high_nova_mood_crash': 'Processed foods affect your mood',
+    'dehydration_fatigue_mood': 'Hydration impacts your energy',
+    'breakfast_skip_afternoon_crash': 'Skipping breakfast affects afternoon',
+    'protein_breakfast_energy': 'Protein breakfast boosts energy',
+    'high_sugar_dinner_morning_anxiety': 'Evening sugar affects next morning',
+    'exercise_mood_boost': 'Exercise improves your mood',
+    'sedentary_mood_impact': 'Movement helps your mood',
+
+    // Hydration patterns
+    'beverage_variety_compliance': 'Drink variety helps you stay hydrated',
+    'hydration_mood_stability': 'Hydration keeps mood stable',
+    'caffeine_energy_crash': 'Caffeine causes energy dips',
+    'evening_caffeine_sleep_impact': 'Late caffeine affects sleep',
+    'alcohol_mood_impact': 'Alcohol affects next-day mood',
+
+    // Stress & eating patterns
+    'stress_eating_disruption': 'Stress changes eating patterns',
+    'meal_timing_energy': 'Meal timing affects energy',
+    'meal_skipping': 'Skipping meals affects energy',
+    'comfort_eating': 'Stress triggers comfort eating',
+
+    // Activity patterns
+    'morning_exercise_energy': 'Morning exercise boosts all-day energy',
+    'evening_activity_sleep': 'Evening activity improves sleep',
+    'step_count_mood': 'More steps improve mood',
+
+    // Goal patterns
+    'goal_compliance': 'You hit your daily goals',
+    'streak_consistency': 'Consistency builds momentum',
   };
 
   return titleMap[ruleName] || ruleName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -1596,20 +1893,553 @@ function getIconForCorrelation(ruleName) {
   return 'analytics-outline';
 }
 
+/**
+ * Generate user-data-oriented suggestions for ALL correlation types
+ *
+ * This function creates truly personalized recommendations using:
+ * - Actual values from user's data (times, amounts, foods)
+ * - Specific time patterns (e.g., "your 2:30pm crashes")
+ * - Named foods/beverages from their logs
+ * - Calculated thresholds based on their personal data
+ *
+ * Returns null if insufficient data - UI handles empty states
+ */
 function generateSuggestionForCorrelation(correlation) {
-  const ruleName = correlation.ruleName || '';
+  const {
+    ruleName = '',
+    signalAValue,
+    signalBValue,
+    signalAUnit,
+    signalBUnit,
+    occurrences = 0,
+    evidenceJson = {},
+    avgTimeLag,
+    timeLag,
+  } = correlation;
 
-  const suggestions = {
-    'high_nova_mood_crash': 'Your body\'s saying "less beige, more green!" 🥦',
-    'dehydration_fatigue_mood': 'Your brain is 75% water - keep it topped up! 💧',
-    'breakfast_skip_afternoon_crash': 'Morning fuel = afternoon superpowers 🦸',
-    'protein_breakfast_energy': 'Protein mornings are your thing - nice work! 💪',
-    'high_sugar_dinner_morning_anxiety': 'Sweet dreams need less sweet dinners 🌙',
-    'exercise_mood_boost': 'Your mood loves when you move - keep the streak! 🏃',
-    'sedentary_mood_impact': 'Even a 10-min walk can flip your vibe 🚶',
+  // Require minimum occurrences for statistical validity
+  if (occurrences < 5) {
+    return null;
+  }
+
+  // Extract common evidence fields
+  const examples = evidenceJson.examples || [];
+  const foodName = examples[0]?.food || examples[0]?.foodName || evidenceJson.foodName;
+  const beverageTypes = evidenceJson.beverageTypes || [];
+  const mealTime = evidenceJson.mealTime;
+  const crashTime = evidenceJson.crashTime || evidenceJson.avgCrashTime;
+  const timeLagMinutes = avgTimeLag || timeLag || evidenceJson.avgTimeLag;
+  const timeLagHours = timeLagMinutes ? Math.round(timeLagMinutes / 60 * 10) / 10 : null;
+
+  // Format time helper (converts 24h to 12h with am/pm)
+  const formatTime = (hour) => {
+    if (hour === undefined || hour === null) return null;
+    const h = parseInt(hour);
+    if (h === 0 || h === 24) return '12am';
+    if (h === 12) return '12pm';
+    if (h < 12) return `${h}am`;
+    return `${h - 12}pm`;
   };
 
-  return suggestions[ruleName] || 'We\'re onto something here... keep logging! 🔍';
+  // ============================================================================
+  // FOOD-MOOD CORRELATIONS
+  // ============================================================================
+
+  // 1. High NOVA + Sugar → Mood Crash
+  if (ruleName === 'high_nova_mood_crash') {
+    const sugar = signalAValue || evidenceJson.sugarGrams;
+    const energyDrop = Math.abs(signalBValue) || evidenceJson.energyAfter || 2;
+    const crashTimeFormatted = formatTime(crashTime);
+
+    if (foodName && sugar) {
+      return `"${foodName}" (${sugar}g sugar) → ${energyDrop}pt energy crash${crashTimeFormatted ? ` around ${crashTimeFormatted}` : ' within 3hrs'}`;
+    }
+    if (sugar) {
+      return `${sugar}g+ sugar meals trigger your ${timeLagHours || 3}hr energy crashes`;
+    }
+    return null;
+  }
+
+  // 9. Breakfast Skip → Afternoon Crash
+  if (ruleName === 'breakfast_skip_afternoon_crash') {
+    const avgEnergy = evidenceJson.avgEnergy || evidenceJson.avgAfternoonEnergy;
+    const crashHour = evidenceJson.avgCrashHour || 15; // Default 3pm
+
+    if (avgEnergy && crashHour) {
+      return `Skipped breakfast → ${formatTime(crashHour)} crash (avg ${avgEnergy}/10 energy). Even 200cal breakfast helps`;
+    }
+    if (timeLagHours) {
+      return `No breakfast → your ${timeLagHours}hr afternoon crash. Try small morning meal`;
+    }
+    return `Breakfast skipping correlates with your afternoon energy dips`;
+  }
+
+  // 10. High Sugar Dinner → Morning Anxiety
+  if (ruleName === 'high_sugar_dinner_morning_anxiety') {
+    const sugar = signalAValue || evidenceJson.sugarGrams;
+    const saferLimit = sugar ? Math.round(sugar * 0.6) : 15;
+
+    if (foodName && sugar) {
+      return `Dinners like "${foodName}" (${sugar}g sugar) → next-morning anxiety. Try <${saferLimit}g`;
+    }
+    if (sugar) {
+      return `${sugar}g+ sugar dinners → anxious mornings. Keep evening sweets <${saferLimit}g`;
+    }
+    return null;
+  }
+
+  // 11. High Carb Dinner → Morning Sluggishness
+  if (ruleName === 'high_carb_dinner_morning_sluggish') {
+    const carbs = signalAValue || evidenceJson.carbGrams;
+    const dinnerTime = evidenceJson.dinnerTime;
+    const morningEnergy = evidenceJson.morningEnergy;
+
+    if (carbs && morningEnergy) {
+      return `${carbs}g+ carb dinners → ${morningEnergy}/10 morning energy. Try lighter evenings`;
+    }
+    if (carbs && dinnerTime) {
+      return `Heavy dinners after ${formatTime(dinnerTime)} (${carbs}g carbs) slow your mornings`;
+    }
+    return null;
+  }
+
+  // 8. Late Heavy Meal → Poor Sleep
+  if (ruleName === 'late_heavy_meal_sleep_impact') {
+    const calories = evidenceJson.mealCalories;
+    const mealHour = mealTime || evidenceJson.mealTime;
+    const sleepQuality = evidenceJson.sleepQuality;
+
+    if (calories && mealHour) {
+      return `${calories}cal+ meals after ${formatTime(mealHour)} → ${sleepQuality || 'poor'} sleep. Eat earlier`;
+    }
+    return null;
+  }
+
+  // 14. Consistent Meal Timing → Mood Stability
+  if (ruleName === 'consistent_meal_timing_mood_stability') {
+    const avgBreakfastTime = evidenceJson.avgBreakfastTime;
+    const avgLunchTime = evidenceJson.avgLunchTime;
+    const avgDinnerTime = evidenceJson.avgDinnerTime;
+    const moodStability = signalBValue || evidenceJson.moodStability;
+
+    if (avgBreakfastTime && avgLunchTime && avgDinnerTime) {
+      return `Your best rhythm: breakfast ~${formatTime(avgBreakfastTime)}, lunch ~${formatTime(avgLunchTime)}, dinner ~${formatTime(avgDinnerTime)}`;
+    }
+    if (moodStability) {
+      return `Consistent meal times → ${Math.round(moodStability * 100)}% more mood stability for you`;
+    }
+    return null;
+  }
+
+  // 15. Protein Breakfast → Sustained Energy
+  if (ruleName === 'protein_breakfast_sustained_energy') {
+    const protein = signalAValue || evidenceJson.proteinGrams;
+    const energyGain = signalBValue || evidenceJson.energyBoost || 1;
+    const sustainedHours = evidenceJson.sustainedHours || 4;
+
+    if (protein && energyGain) {
+      return `${protein}g+ morning protein = +${energyGain}pt energy sustained for ${sustainedHours}hrs`;
+    }
+    return null;
+  }
+
+  // ============================================================================
+  // HYDRATION-MOOD CORRELATIONS
+  // ============================================================================
+
+  // 2. Dehydration → Fatigue
+  if (ruleName === 'dehydration_fatigue_mood') {
+    const currentIntake = signalAValue || evidenceJson.hydrationLiters;
+    const deficit = evidenceJson.hydrationDeficit;
+    const targetWater = currentIntake ? Math.round(currentIntake * 1.4 * 10) / 10 : 2.5;
+
+    if (currentIntake && deficit) {
+      return `${currentIntake}L days = ${Math.round(deficit)}% below goal → low energy. Aim ${targetWater}L+`;
+    }
+    if (currentIntake) {
+      return `<${currentIntake}L days correlate with your fatigue. Target ${targetWater}L+`;
+    }
+    return null;
+  }
+
+  // 12. Good Hydration → Mood Stability (Positive)
+  if (ruleName === 'hydration_mood_stability_positive') {
+    const hydration = signalAValue || evidenceJson.avgHydration;
+    const moodBoost = signalBValue || evidenceJson.moodBoost;
+    const goalPercent = evidenceJson.goalPercent;
+
+    if (hydration && moodBoost) {
+      return `${hydration}L+ days = +${moodBoost}pt mood stability. You hit this ${goalPercent || 60}% of the time`;
+    }
+    return null;
+  }
+
+  // 13. Dehydration → Mood Instability
+  if (ruleName === 'dehydration_mood_instability') {
+    const lowIntake = signalAValue || evidenceJson.lowIntakeLiters;
+    const moodVariance = evidenceJson.moodVariance;
+
+    if (lowIntake && moodVariance) {
+      return `<${lowIntake}L days → ${Math.round(moodVariance * 100)}% more mood swings. Stay hydrated`;
+    }
+    return null;
+  }
+
+  // 6. Beverage Variety → Better Compliance
+  if (ruleName === 'beverage_variety_compliance') {
+    const variety = signalAValue || evidenceJson.beverageVariety;
+    const compliance = signalBValue || evidenceJson.goalPercent;
+    const types = beverageTypes.slice(0, 3).join(', ');
+
+    if (variety && compliance) {
+      return `${variety}+ drink types (${types || 'water, tea, etc.'}) → ${compliance}% goal success`;
+    }
+    return null;
+  }
+
+  // ============================================================================
+  // CAFFEINE & BEVERAGE CORRELATIONS
+  // ============================================================================
+
+  // 4. Caffeine → Energy Crash
+  if (ruleName === 'caffeine_energy_crash') {
+    const caffeineCount = signalAValue || evidenceJson.caffeineCount;
+    const crashCount = signalBValue || evidenceJson.crashCount;
+    const avgLag = evidenceJson.avgTimeLag;
+    const lagHours = avgLag ? Math.round(avgLag / 60) : 4;
+
+    if (caffeineCount && crashCount) {
+      return `${caffeineCount}+ coffees → ${crashCount} crashes (${lagHours}hrs later). Space 4+ hrs apart`;
+    }
+    return null;
+  }
+
+  // 5. Evening Caffeine → Poor Sleep
+  if (ruleName === 'evening_caffeine_sleep_impact') {
+    const lastCaffeineHour = evidenceJson.lastCaffeineTime;
+    const poorSleepCount = evidenceJson.poorSleepCount;
+    const cutoffHour = lastCaffeineHour ? lastCaffeineHour - 2 : 16;
+
+    if (lastCaffeineHour && poorSleepCount) {
+      return `Caffeine after ${formatTime(lastCaffeineHour)} → poor sleep ${poorSleepCount}x. Cut off by ${formatTime(cutoffHour)}`;
+    }
+    if (lastCaffeineHour) {
+      return `Your ${formatTime(lastCaffeineHour)} caffeine hurts sleep. Try ${formatTime(cutoffHour)} cutoff`;
+    }
+    return null;
+  }
+
+  // 7. Alcohol → Next-Day Mood Impact
+  if (ruleName === 'alcohol_mood_impact') {
+    const alcoholCount = evidenceJson.alcoholCount;
+    const lowMoodMornings = evidenceJson.lowMoodMornings;
+    const avgMorningEnergy = evidenceJson.avgMorningEnergy;
+
+    if (alcoholCount && avgMorningEnergy) {
+      return `${alcoholCount}+ drinks → ${avgMorningEnergy}/10 next-morning energy`;
+    }
+    if (lowMoodMornings) {
+      return `Alcohol nights → low energy mornings ${lowMoodMornings}x in your data`;
+    }
+    return null;
+  }
+
+  // ============================================================================
+  // STRESS & EATING CORRELATIONS
+  // ============================================================================
+
+  // 3. Stress → Eating Disruption
+  if (ruleName === 'stress_eating_disruption') {
+    const stressLevel = signalAValue || evidenceJson.stressLevel;
+    const pattern = evidenceJson.pattern; // 'meal_skipping' or 'comfort_eating'
+    const calorieDeviation = evidenceJson.calorieDeviation;
+
+    if (stressLevel && pattern === 'meal_skipping') {
+      return `High stress (${stressLevel}/10) days → you skip meals. Plan easy backup meals`;
+    }
+    if (stressLevel && pattern === 'comfort_eating' && calorieDeviation) {
+      return `Stressed days → +${calorieDeviation}cal comfort eating. Try stress snack swaps`;
+    }
+    if (stressLevel) {
+      return `Stress level ${stressLevel}+ disrupts your eating pattern`;
+    }
+    return null;
+  }
+
+  // ============================================================================
+  // ACTIVITY-MOOD CORRELATIONS
+  // ============================================================================
+
+  // 16. Exercise → Mood Boost
+  if (ruleName === 'exercise_mood_boost') {
+    const minutes = signalAValue || evidenceJson.activityMinutes;
+    const moodGain = signalBValue || evidenceJson.moodBoost || 1;
+    const activityType = evidenceJson.activityType;
+    const timeToEffect = evidenceJson.timeToEffect; // minutes until mood boost
+
+    if (minutes && moodGain && activityType) {
+      return `${minutes}min ${activityType} = +${moodGain}pt mood boost for you`;
+    }
+    if (minutes && moodGain) {
+      return `${minutes}+ min active days = +${moodGain}pt mood. Consistent pattern`;
+    }
+    return null;
+  }
+
+  // 17. Morning Exercise → All-Day Energy
+  if (ruleName === 'morning_exercise_all_day_energy') {
+    const exerciseHour = evidenceJson.exerciseHour || evidenceJson.avgExerciseTime;
+    const energyBoost = signalBValue || evidenceJson.energyBoost;
+    const sustainedHours = evidenceJson.sustainedHours || 8;
+
+    if (exerciseHour && energyBoost) {
+      return `Exercise before ${formatTime(exerciseHour + 1)} → +${energyBoost}pt energy all day (${sustainedHours}hrs)`;
+    }
+    if (energyBoost) {
+      return `Morning workouts give you +${energyBoost}pt sustained energy`;
+    }
+    return null;
+  }
+
+  // 18. Sedentary Day → Lower Mood
+  if (ruleName === 'sedentary_day_lower_mood') {
+    const threshold = signalAValue || evidenceJson.activityThreshold || 15;
+    const moodDrop = Math.abs(signalBValue) || evidenceJson.moodDrop || 1;
+    const sedentaryCount = evidenceJson.sedentaryDays;
+
+    if (threshold && moodDrop && sedentaryCount) {
+      return `<${threshold}min activity → -${moodDrop}pt mood (happened ${sedentaryCount}x recently)`;
+    }
+    if (threshold && moodDrop) {
+      return `<${threshold}min activity days = ${moodDrop}pt lower mood for you`;
+    }
+    return null;
+  }
+
+  // 19. High Intensity → Recovery Impact
+  if (ruleName === 'high_intensity_recovery_impact') {
+    const intensity = evidenceJson.intensity || 'vigorous';
+    const recoveryDays = evidenceJson.recoveryDays || 1;
+    const nextDayEnergy = evidenceJson.nextDayEnergy;
+
+    if (intensity && nextDayEnergy) {
+      return `${intensity} workouts → ${nextDayEnergy}/10 next-day energy. Plan recovery`;
+    }
+    if (recoveryDays > 1) {
+      return `High intensity needs ${recoveryDays} recovery days based on your data`;
+    }
+    return null;
+  }
+
+  // 20. Consistent Exercise → Mood Stability
+  if (ruleName === 'consistent_exercise_mood_stability') {
+    const consistencyScore = evidenceJson.consistencyScore;
+    const moodStability = signalBValue || evidenceJson.moodStability;
+    const avgDaysPerWeek = evidenceJson.avgDaysPerWeek;
+
+    if (avgDaysPerWeek && moodStability) {
+      return `${avgDaysPerWeek} workout days/week → ${Math.round(moodStability * 100)}% more mood stability`;
+    }
+    if (consistencyScore && moodStability) {
+      return `Consistent exercise pattern = +${Math.round(moodStability * 10)}pt mood stability`;
+    }
+    return null;
+  }
+
+  // ============================================================================
+  // GENERIC FALLBACK (Only if we have actual values)
+  // ============================================================================
+
+  // For any other correlation with actual numeric values
+  if (signalAValue && signalBValue && signalAUnit && signalBUnit) {
+    const direction = signalBValue > 0 ? '+' : '';
+    return `${signalAValue} ${signalAUnit} → ${direction}${signalBValue} ${signalBUnit} (${occurrences}x observed)`;
+  }
+
+  // No suggestion if we don't have specific user data
+  return null;
+}
+
+/**
+ * Enhanced suggestion generator with evidence anchoring
+ *
+ * Returns a rich object with:
+ * - suggestion: The human-readable insight text
+ * - evidence: Specific examples from user's history
+ * - stats: Comparison statistics (with vs without condition)
+ * - counterfactual: Predicted outcome if behavior changed
+ * - actionability/novelty scores for prioritization
+ */
+function generateEnhancedSuggestion(correlation, userHistory = {}) {
+  // Get base suggestion text
+  const baseSuggestion = generateSuggestionForCorrelation(correlation);
+
+  if (!baseSuggestion) {
+    return null;
+  }
+
+  // Build evidence-anchored insight
+  const insight = buildEvidenceAnchoredInsight(correlation, userHistory);
+
+  // Generate enhanced suggestion with specific evidence
+  let enhancedSuggestion = baseSuggestion;
+
+  // Add specific date reference if we have a best example
+  if (insight.canShowSpecificExample && insight.evidence.bestInstance?.dateFormatted) {
+    const ex = insight.evidence.bestInstance;
+    const timeRef = ex.timeFormatted ? ` at ${ex.timeFormatted}` : '';
+    enhancedSuggestion = `${ex.dateFormatted}${timeRef}: ${baseSuggestion}`;
+  }
+
+  // Build comparison text if stats available
+  let comparisonText = null;
+  if (insight.canShowComparison && insight.stats.avgWithCondition && insight.stats.avgWithoutCondition) {
+    const { avgWithCondition, avgWithoutCondition, percentChange } = insight.stats;
+    const metric = correlation.ruleName.includes('mood') ? 'mood' : 'energy';
+    comparisonText = `Your ${metric} averages ${avgWithCondition}/10 vs ${avgWithoutCondition}/10 (${percentChange > 0 ? '+' : ''}${percentChange}%)`;
+  }
+
+  // Build counterfactual text if available
+  let counterfactualText = null;
+  if (insight.canShowCounterfactual) {
+    const cf = insight.counterfactual;
+    counterfactualText = `Try ${cf.action} → predicted +${cf.predictedOutcome} ${cf.unit}`;
+  }
+
+  // Calculate actionability score (0-1)
+  const actionabilityScore = calculateActionabilityScore(correlation);
+
+  // Calculate novelty score (0-1) - higher for rare/surprising patterns
+  const noveltyScore = calculateNoveltyScore(correlation);
+
+  return {
+    // Core suggestion
+    suggestion: enhancedSuggestion,
+    baseSuggestion,
+
+    // Evidence anchoring
+    evidence: insight.canShowSpecificExample ? {
+      bestExample: insight.evidence.bestInstance,
+      recentExamples: insight.evidence.recentInstances,
+      occurrences: correlation.occurrences || 0,
+    } : null,
+
+    // Comparison stats
+    comparison: insight.canShowComparison ? {
+      text: comparisonText,
+      withCondition: insight.stats.avgWithCondition,
+      withoutCondition: insight.stats.avgWithoutCondition,
+      delta: insight.stats.delta,
+      percentChange: insight.stats.percentChange,
+      sampleSize: insight.stats.sampleSizeWith,
+      isStatisticallySignificant: insight.stats.isStatisticallySignificant,
+    } : null,
+
+    // Counterfactual prediction
+    counterfactual: insight.canShowCounterfactual ? {
+      text: counterfactualText,
+      action: insight.counterfactual.action,
+      predictedOutcome: insight.counterfactual.predictedOutcome,
+      unit: insight.counterfactual.unit,
+      confidence: insight.counterfactual.confidence,
+    } : null,
+
+    // Prioritization scores
+    actionabilityScore,
+    noveltyScore,
+    priorityScore: (actionabilityScore * 0.6) + (noveltyScore * 0.4),
+
+    // Metadata
+    ruleName: correlation.ruleName,
+    correlationType: correlation.correlationType,
+    confidence: parseFloat(correlation.confidence) || 0,
+  };
+}
+
+/**
+ * Calculate actionability score based on correlation type
+ * Higher scores for patterns user can directly act on
+ */
+function calculateActionabilityScore(correlation) {
+  const { ruleName, occurrences = 0, confidence = 0 } = correlation;
+
+  // High actionability - user can take immediate action
+  const highActionability = [
+    'breakfast_skip_afternoon_crash',
+    'dehydration_fatigue_mood',
+    'exercise_mood_boost',
+    'morning_exercise_all_day_energy',
+    'protein_breakfast_sustained_energy',
+    'sedentary_day_lower_mood',
+    'caffeine_energy_crash',
+    'evening_caffeine_sleep_impact',
+  ];
+
+  // Medium actionability - requires planning
+  const mediumActionability = [
+    'high_nova_mood_crash',
+    'high_sugar_dinner_morning_anxiety',
+    'high_carb_dinner_morning_sluggish',
+    'late_heavy_meal_sleep_impact',
+    'consistent_meal_timing_mood_stability',
+    'consistent_exercise_mood_stability',
+    'beverage_variety_compliance',
+    'hydration_mood_stability_positive',
+  ];
+
+  let baseScore = 0.3; // Default low
+
+  if (highActionability.includes(ruleName)) {
+    baseScore = 0.9;
+  } else if (mediumActionability.includes(ruleName)) {
+    baseScore = 0.6;
+  }
+
+  // Adjust by confidence and occurrences
+  const confidenceMultiplier = Math.min(parseFloat(confidence) || 0.5, 1);
+  const occurrenceMultiplier = Math.min(occurrences / 10, 1);
+
+  return Math.min(baseScore * confidenceMultiplier * (0.5 + occurrenceMultiplier * 0.5), 1);
+}
+
+/**
+ * Calculate novelty score based on how surprising/unique the pattern is
+ * Higher scores for rare patterns the user hasn't seen before
+ */
+function calculateNoveltyScore(correlation) {
+  const { ruleName, occurrences = 0, evidenceJson = {} } = correlation;
+
+  // Less common patterns are more novel
+  const rarePatterns = [
+    'high_sugar_dinner_morning_anxiety',
+    'high_carb_dinner_morning_sluggish',
+    'high_intensity_recovery_impact',
+    'alcohol_mood_impact',
+    'stress_eating_disruption',
+  ];
+
+  // Common patterns everyone discovers
+  const commonPatterns = [
+    'dehydration_fatigue_mood',
+    'exercise_mood_boost',
+    'caffeine_energy_crash',
+  ];
+
+  let baseScore = 0.5; // Default medium
+
+  if (rarePatterns.includes(ruleName)) {
+    baseScore = 0.8;
+  } else if (commonPatterns.includes(ruleName)) {
+    baseScore = 0.3;
+  }
+
+  // New patterns (low occurrences) are more novel
+  const newPatternBonus = occurrences < 10 ? 0.2 : 0;
+
+  // First time seeing is highly novel
+  const firstTimeBonus = evidenceJson.isFirstDiscovery ? 0.3 : 0;
+
+  return Math.min(baseScore + newPatternBonus + firstTimeBonus, 1);
 }
 
 /**
@@ -1726,9 +2556,9 @@ async function gatherActivityData(userId) {
       .from(activityLogTable)
       .where(and(
         eq(activityLogTable.userId, userId),
-        gte(activityLogTable.loggedDate, fourteenDaysAgo)
+        gte(activityLogTable.loggedAt, fourteenDaysAgo)
       ))
-      .orderBy(desc(activityLogTable.loggedDate))
+      .orderBy(desc(activityLogTable.loggedAt))
       .catch(() => []),
 
     db.select()
@@ -1747,7 +2577,7 @@ async function gatherActivityData(userId) {
   ]);
 
   const todaysActivities = activityLogs.filter(log => {
-    const logDate = new Date(log.loggedDate);
+    const logDate = new Date(log.loggedAt);
     return logDate >= today;
   });
 

@@ -450,6 +450,20 @@ export default function MealLoggedCard({
           </View>
           <Text style={styles.headerTitle}>Meal Logged</Text>
           <Text style={styles.headerSubtitle}>{meal.foodName}</Text>
+          {/* Portion badge - shows actual portion like "1 medium roti (40g)" */}
+          {(meal.portion?.servingText || meal.servingSize) && (
+            <View style={styles.portionBadge}>
+              <Ionicons name="scale-outline" size={14} color={TEXT.secondary} />
+              <Text style={styles.portionBadgeText}>
+                {meal.portion?.servingText || meal.servingSize}
+              </Text>
+              {meal.portion?.isCountable && (
+                <View style={styles.countableIndicator}>
+                  <Ionicons name="cube-outline" size={12} color={BRAND.primary} />
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* ──────────────────────────────────────────── */}
@@ -861,6 +875,24 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.medium,
     color: TEXT.secondary,
     textAlign: 'center',
+  },
+  portionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginTop: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[1],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.full,
+  },
+  portionBadgeText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.secondary,
+  },
+  countableIndicator: {
+    marginLeft: SPACING[1],
   },
 
   // ──────────────────────────────────────────────

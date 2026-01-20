@@ -150,24 +150,31 @@ export function useCorrelations({ enabled = true, limit = 5 } = {}) {
     refetchOnWindowFocus: false,
   });
 
+  // Quality thresholds - only show meaningful patterns
+  const MIN_CONFIDENCE = 0.65; // 65% minimum confidence
+  const MIN_OCCURRENCES = 5;   // At least 5 observations
+
   // Transform backend correlations to frontend format
-  const transformedCorrelations = (data?.correlations || []).map(corr => ({
-    id: corr.id,
-    // Construct pattern from factor + outcome (e.g., "High-carb meals → afternoon tiredness")
-    pattern: corr.factor && corr.outcome
-      ? `${capitalizeFirst(corr.factor)} → ${corr.outcome}`
-      : corr.explanation || 'Pattern detected',
-    // Normalize confidence to 0-1 scale (backend may return 0-100 or 0-1)
-    confidence: corr.confidence > 1 ? corr.confidence / 100 : (corr.confidence || 0),
-    // Map instances/dataPoints to occurrences
-    occurrences: corr.instances || corr.dataPoints || corr.occurrences || 0,
-    // Transform for affected domains display
-    impacts: buildImpacts(corr),
-    // Original data for UI display
-    type: corr.type,
-    explanation: corr.explanation,
-    suggestion: corr.suggestion,
-  }));
+  const transformedCorrelations = (data?.correlations || [])
+    .map(corr => ({
+      id: corr.id,
+      // Construct pattern from factor + outcome (e.g., "High-carb meals → afternoon tiredness")
+      pattern: corr.factor && corr.outcome
+        ? `${capitalizeFirst(corr.factor)} → ${corr.outcome}`
+        : corr.explanation || 'Pattern detected',
+      // Normalize confidence to 0-1 scale (backend may return 0-100 or 0-1)
+      confidence: corr.confidence > 1 ? corr.confidence / 100 : (corr.confidence || 0),
+      // Map instances/dataPoints to occurrences
+      occurrences: corr.instances || corr.dataPoints || corr.occurrences || 0,
+      // Transform for affected domains display
+      impacts: buildImpacts(corr),
+      // Original data for UI display
+      type: corr.type,
+      explanation: corr.explanation,
+      suggestion: corr.suggestion,
+    }))
+    // Filter out low-quality patterns (weak confidence or few occurrences)
+    .filter(corr => corr.confidence >= MIN_CONFIDENCE && corr.occurrences >= MIN_OCCURRENCES);
 
   return {
     correlations: transformedCorrelations,
@@ -887,6 +894,343 @@ export function useInsights({ enabled = true } = {}) {
     hasWeeklyNarrative: combined.hasWeeklyNarrative,
     hasWhatToChange: combined.hasWhatToChange,
   };
+}
+
+// ============================================================================
+// NOVEL CORRELATIONS - Auto-discovered patterns unique to you
+// ============================================================================
+
+/**
+ * Transform technical correlation data into friendly, conversational language
+ */
+function humanizeCorrelation(correlation) {
+  const { factorA, factorB, direction, strength, lagHours, correlation: corr } = correlation;
+
+  // Map technical factor names to friendly descriptions
+  const factorNames = {
+    total_calories: 'your calorie intake',
+    total_protein: 'protein in your meals',
+    total_sugar: 'sugar consumption',
+    total_fiber: 'fiber intake',
+    total_carbs: 'carb intake',
+    daily_water_ml: 'water intake',
+    morning_hydration: 'morning hydration',
+    evening_hydration: 'evening hydration',
+    activity_minutes: 'physical activity',
+    morning_activity: 'morning exercise',
+    evening_activity: 'evening activity',
+    avg_mood: 'your mood',
+    avg_energy: 'energy levels',
+    mood_variance: 'mood stability',
+    late_eating: 'eating late at night',
+    breakfast_skip: 'skipping breakfast',
+    protein_ratio: 'protein balance',
+    avg_nova_score: 'processed food intake',
+    sleep_quality: 'sleep quality',
+    stress_level: 'stress levels',
+  };
+
+  const friendlyA = factorNames[factorA] || factorA.replace(/_/g, ' ');
+  const friendlyB = factorNames[factorB] || factorB.replace(/_/g, ' ');
+
+  // Build human-readable insight based on direction and lag
+  let insight = '';
+  let emoji = '';
+  let actionTip = '';
+
+  const isPositive = direction === 'positive';
+  const isStrong = strength === 'strong';
+  const hasDelay = lagHours > 0;
+
+  // Determine emoji based on pattern type
+  if (factorB.includes('mood') || factorB.includes('energy')) {
+    emoji = isPositive ? '✨' : '💡';
+  } else if (factorA.includes('water') || factorA.includes('hydration')) {
+    emoji = '💧';
+  } else if (factorA.includes('activity') || factorA.includes('exercise')) {
+    emoji = '🏃';
+  } else if (factorA.includes('sugar') || factorA.includes('calories')) {
+    emoji = '🍎';
+  } else {
+    emoji = '🔍';
+  }
+
+  // Build the insight message
+  if (isPositive) {
+    if (hasDelay) {
+      insight = `When ${friendlyA} increases, ${friendlyB} tends to improve about ${lagHours} hours later`;
+      actionTip = `Try increasing ${friendlyA} in the morning to feel the benefits by ${lagHours > 6 ? 'evening' : 'afternoon'}`;
+    } else {
+      insight = `Higher ${friendlyA} is linked to better ${friendlyB}`;
+      actionTip = `Focus on ${friendlyA} to boost ${friendlyB}`;
+    }
+  } else {
+    if (hasDelay) {
+      insight = `When ${friendlyA} is high, ${friendlyB} tends to dip about ${lagHours} hours later`;
+      actionTip = `Be mindful of ${friendlyA}, especially before important activities`;
+    } else {
+      insight = `Higher ${friendlyA} seems to affect ${friendlyB} negatively`;
+      actionTip = `Consider moderating ${friendlyA} to help with ${friendlyB}`;
+    }
+  }
+
+  // Add confidence qualifier
+  const confidenceNote = isStrong
+    ? "We've seen this pattern consistently in your data."
+    : "This is an emerging pattern we're still learning about.";
+
+  return {
+    emoji,
+    headline: insight,
+    explanation: confidenceNote,
+    actionTip,
+    isPersonalized: true,
+    strengthLabel: isStrong ? 'Strong pattern' : 'Emerging pattern',
+    delayLabel: hasDelay ? `${lagHours}h delay` : 'Immediate effect',
+  };
+}
+
+/**
+ * useNovelCorrelations - Fetch auto-discovered patterns unique to this user
+ *
+ * These are patterns the AI has discovered specifically for YOU - not generic
+ * health advice, but insights learned from YOUR data over time.
+ *
+ * @param {Object} options
+ * @param {boolean} options.enabled - Whether to auto-fetch (default: true)
+ * @param {number} options.lookbackDays - Days to analyze (default: 30)
+ * @param {number} options.limit - Max patterns to return (default: 5)
+ */
+export function useNovelCorrelations({ enabled = true, lookbackDays = 30, limit = 5 } = {}) {
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    isFetching
+  } = useQuery({
+    queryKey: ['insights', 'novel-correlations', lookbackDays, limit],
+    queryFn: async () => {
+      try {
+        console.log('[useInsights] Fetching novel correlations...');
+        const response = await apiClient.get('/insights/novel-correlations', {
+          params: { lookbackDays, limit }
+        });
+        console.log('[useInsights] Novel correlations received:', response?.data?.correlations?.length || 0);
+        return response?.data || response;
+      } catch (err) {
+        console.error('[useInsights] Novel correlations error:', err);
+        return {
+          correlations: [],
+          insights: [],
+          hasEnoughData: false,
+          daysAnalyzed: 0,
+        };
+      }
+    },
+    enabled,
+    staleTime: AI_STALE_TIME, // 30 minutes - discoveries don't change quickly
+    gcTime: AI_CACHE_TIME, // 2 hours cache
+    retry: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  // Transform raw correlations into user-friendly format
+  const rawCorrelations = data?.correlations || [];
+  const humanizedPatterns = rawCorrelations.map((corr, index) => ({
+    id: `novel_${corr.factorA}_${corr.factorB}_${index}`,
+    ...humanizeCorrelation(corr),
+    // Technical details (for curious users)
+    technical: {
+      factorA: corr.factorA,
+      factorB: corr.factorB,
+      correlation: corr.correlation,
+      pValue: corr.pValue,
+      sampleSize: corr.sampleSize,
+      lagHours: corr.lagHours,
+      noveltyScore: corr.noveltyScore,
+    },
+    // Visual metadata
+    priority: index + 1,
+    isNew: corr.noveltyScore > 0.7,
+    confidence: 1 - (corr.pValue || 0.5),
+  }));
+
+  // Get the most interesting discovery to highlight
+  const topDiscovery = humanizedPatterns.length > 0 ? humanizedPatterns[0] : null;
+
+  return {
+    // User-friendly patterns
+    patterns: humanizedPatterns,
+    topDiscovery,
+
+    // Data status
+    hasPatterns: humanizedPatterns.length > 0,
+    hasEnoughData: data?.hasEnoughData ?? false,
+    daysAnalyzed: data?.daysAnalyzed || 0,
+
+    // Metadata
+    totalDiscovered: data?.meta?.totalDiscovered || humanizedPatterns.length,
+
+    // Loading states
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+
+    // Helper for UI
+    emptyStateMessage: !data?.hasEnoughData
+      ? "Keep logging for a few more days and I'll start discovering patterns unique to you!"
+      : "No new patterns discovered yet. Keep logging and check back soon!",
+  };
+}
+
+// ============================================================================
+// RECOMMENDATION TRACKING - Feedback loop for smarter recommendations
+// ============================================================================
+
+/**
+ * useRecommendationTracking - Track user interactions with recommendations
+ *
+ * This powers the feedback loop that makes recommendations smarter over time.
+ * The more you interact, the better the AI learns what works for YOU.
+ */
+export function useRecommendationTracking() {
+  const queryClient = useQueryClient();
+
+  /**
+   * Track when a recommendation is shown to the user
+   */
+  const trackShown = async (recommendation) => {
+    try {
+      await apiClient.post('/insights/recommendations/track', {
+        recommendationId: recommendation.id,
+        recommendationType: recommendation.type || 'general',
+        domain: recommendation.domain || 'nutrition',
+        actionType: 'shown',
+        title: recommendation.title,
+      });
+    } catch (err) {
+      // Silent fail - don't disrupt UX for tracking
+      console.debug('[Tracking] Failed to track shown:', err.message);
+    }
+  };
+
+  /**
+   * Track when user taps on a recommendation to see details
+   */
+  const trackClicked = async (recommendation) => {
+    try {
+      await apiClient.post('/insights/recommendations/track', {
+        recommendationId: recommendation.id,
+        recommendationType: recommendation.type || 'general',
+        domain: recommendation.domain || 'nutrition',
+        actionType: 'clicked',
+        title: recommendation.title,
+        action: recommendation.action,
+      });
+    } catch (err) {
+      console.debug('[Tracking] Failed to track clicked:', err.message);
+    }
+  };
+
+  /**
+   * Track when user marks a recommendation as done
+   * This triggers outcome verification after the expected delay
+   */
+  const trackCompleted = async (recommendation) => {
+    try {
+      const response = await apiClient.post('/insights/recommendations/track', {
+        recommendationId: recommendation.id,
+        recommendationType: recommendation.type || 'general',
+        domain: recommendation.domain || 'nutrition',
+        actionType: 'completed',
+        title: recommendation.title,
+        action: recommendation.action,
+        difficultyTier: recommendation.difficultyTier,
+      });
+
+      // Invalidate recommendations to refresh with new learnings
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] });
+
+      return response;
+    } catch (err) {
+      console.debug('[Tracking] Failed to track completed:', err.message);
+      return null;
+    }
+  };
+
+  /**
+   * Track when user dismisses a recommendation
+   * Helps the AI learn what's not relevant
+   */
+  const trackDismissed = async (recommendation, reason = null) => {
+    try {
+      await apiClient.post('/insights/recommendations/track', {
+        recommendationId: recommendation.id,
+        recommendationType: recommendation.type || 'general',
+        domain: recommendation.domain || 'nutrition',
+        actionType: 'dismissed',
+        title: recommendation.title,
+        context: { dismissReason: reason },
+      });
+    } catch (err) {
+      console.debug('[Tracking] Failed to track dismissed:', err.message);
+    }
+  };
+
+  return {
+    trackShown,
+    trackClicked,
+    trackCompleted,
+    trackDismissed,
+  };
+}
+
+// ============================================================================
+// DIFFICULTY TIER HELPERS - For recommendation display
+// ============================================================================
+
+/**
+ * Get display properties for a difficulty tier
+ */
+export function getDifficultyTierDisplay(tier) {
+  const tiers = {
+    EASY: {
+      label: 'Quick Win',
+      description: 'Takes less than 5 minutes',
+      icon: 'sparkles-outline',
+      color: '#10B981', // green
+      bgColor: 'rgba(16, 185, 129, 0.1)',
+    },
+    MEDIUM: {
+      label: 'Worth It',
+      description: 'Takes 5-15 minutes',
+      icon: 'flash-outline',
+      color: '#F59E0B', // amber
+      bgColor: 'rgba(245, 158, 11, 0.1)',
+    },
+    HARD: {
+      label: 'Challenge',
+      description: 'Requires more effort but pays off',
+      icon: 'trophy-outline',
+      color: '#8B5CF6', // purple
+      bgColor: 'rgba(139, 92, 246, 0.1)',
+    },
+  };
+
+  return tiers[tier] || tiers.MEDIUM;
+}
+
+/**
+ * Get motivational message based on completion streak
+ */
+export function getStreakMessage(completedCount) {
+  if (completedCount === 0) return "Let's start building healthy habits!";
+  if (completedCount === 1) return "Great start! One down, momentum building.";
+  if (completedCount < 5) return `${completedCount} wins this week! Keep it up!`;
+  if (completedCount < 10) return `${completedCount} healthy choices! You're on fire! 🔥`;
+  return `${completedCount} wins! You're a wellness champion! 🏆`;
 }
 
 export default useInsights;
