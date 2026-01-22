@@ -1490,6 +1490,7 @@ export default function DashboardContent() {
             yesterdayMeals: data?.trends?.yesterdayMeals || 0,
             avgCalories: data?.trends?.avgCalories || 0,
           }}
+          onViewFoodHistory={() => router.push('/insights/food-analytics')}
         />
 
         {/* ============================================ */}
@@ -1650,7 +1651,6 @@ export default function DashboardContent() {
           onViewMoodHistory={() => router.push('/insights/mood-history')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
           onViewHydrationHistory={() => router.push('/insights/hydration-history')}
-          onViewFoodHistory={() => router.push('/insights/food-history')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}

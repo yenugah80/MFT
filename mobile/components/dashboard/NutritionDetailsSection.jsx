@@ -88,6 +88,7 @@ export default function NutritionDetailsSection({
   goals = {},
   userHistory = {},
   streak = 0,
+  onViewFoodHistory,
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -250,6 +251,21 @@ export default function NutritionDetailsSection({
                     )}
                   </View>
                 </View>
+              )}
+
+              {/* View Food Analytics Link */}
+              {onViewFoodHistory && (
+                <TouchableOpacity
+                  style={styles.viewHistoryLink}
+                  onPress={onViewFoodHistory}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.viewHistoryIcon}>
+                    <Ionicons name="analytics-outline" size={16} color="#6B4EFF" />
+                  </View>
+                  <Text style={styles.viewHistoryText}>View Food Analytics</Text>
+                  <Ionicons name="chevron-forward" size={16} color={TEXT.tertiary} />
+                </TouchableOpacity>
               )}
             </>
           ) : (
@@ -491,5 +507,33 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
     textAlign: 'center',
     maxWidth: 280,
+  },
+
+  // View Food History Link
+  viewHistoryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: '#6B4EFF08',
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#6B4EFF15',
+    marginTop: SPACING[2],
+  },
+  viewHistoryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#6B4EFF15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewHistoryText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
   },
 });

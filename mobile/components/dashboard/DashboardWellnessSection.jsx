@@ -37,7 +37,6 @@ export default function DashboardWellnessSection({
   onViewMoodHistory, // Navigate to mood history screen
   onOpenHydrationTracker,
   onViewHydrationHistory, // Navigate to hydration history/insights screen
-  onViewFoodHistory, // Navigate to food history screen
   moodInsights,
   moodInsightsLoading,
   wellnessScore,
@@ -81,21 +80,6 @@ export default function DashboardWellnessSection({
           onViewHistory={onViewMoodHistory}
           showWellnessScore={false}
         />
-
-        {/* Food History Quick Link */}
-        {onViewFoodHistory && (
-          <TouchableOpacity
-            style={localStyles.foodHistoryLink}
-            onPress={onViewFoodHistory}
-            activeOpacity={0.7}
-          >
-            <View style={localStyles.foodHistoryIcon}>
-              <Ionicons name="restaurant-outline" size={18} color={BRAND.primary} />
-            </View>
-            <Text style={localStyles.foodHistoryText}>View Food History</Text>
-            <Ionicons name="chevron-forward" size={16} color={TEXT.tertiary} />
-          </TouchableOpacity>
-        )}
       </View>
     </CollapsibleSection>
   );
@@ -132,31 +116,5 @@ const localStyles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: TEXT.secondary,
-  },
-  // Food History Link
-  foodHistoryLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-    paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[4],
-    backgroundColor: `${BRAND.primary}06`,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: `${BRAND.primary}10`,
-  },
-  foodHistoryIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.md,
-    backgroundColor: `${BRAND.primary}12`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  foodHistoryText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: TEXT.primary,
   },
 });
