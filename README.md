@@ -212,7 +212,21 @@ Smart Recommendation Engine
 ├── Thompson Sampling (learns from outcomes)
 ├── Auto-Correlation Discovery (finds patterns)
 ├── Platt Scaling (calibrated predictions)
-└── Outcome Verification (feedback loop)
+├── Outcome Verification (feedback loop)
+└── Intelligence Orchestrator (coordinates all subsystems)
+```
+
+### AI Recommendation System
+```
+Personalized Meal Suggestions
+├── GPT-4o-mini powered recommendations
+├── Allergen & dietary preference filtering
+├── Goal-based scoring (lose/maintain/gain)
+├── Lifecycle adaptation (new user → power user)
+├── Gamification level progression
+├── Mood-aware suggestions
+├── Micronutrient deficit targeting
+└── Correlation-based good/avoid foods
 ```
 
 ---
@@ -302,19 +316,30 @@ MyFoodTracker/
 │   ├── app/                   # Expo Router screens
 │   │   ├── (auth)/           # Sign-in, sign-up
 │   │   ├── (tabs)/           # Dashboard, log, profile
+│   │   ├── analytics/        # Analytics & recommendations
 │   │   └── insights/         # Intelligence screens
 │   ├── components/           # Reusable UI
+│   │   ├── dashboard/        # Dashboard cards & sections
+│   │   ├── analytics/        # Analytics domain tabs
+│   │   └── intelligence/     # AI insight components
 │   ├── hooks/                # Custom hooks
+│   │   ├── useRecommendations.js
+│   │   ├── useUnifiedIntelligence.js
+│   │   └── useAnalytics.js
 │   ├── services/             # API clients
 │   └── constants/            # Theme, tokens
 ├── backend/                   # Node.js Express API
 │   └── src/
 │       ├── routes/           # API endpoints
+│       │   ├── recommendations.js
+│       │   └── intelligence.js
 │       ├── services/         # Business logic
 │       │   ├── thompsonSamplingService.js
 │       │   ├── autoCorrelationDiscoveryService.js
 │       │   ├── predictionEngineService.js
-│       │   └── outcomeVerificationService.js
+│       │   ├── outcomeVerificationService.js
+│       │   ├── intelligenceOrchestratorService.js
+│       │   └── analyticsRecommendationService.js
 │       └── db/               # Drizzle ORM models
 └── CLAUDE.md                  # AI assistant instructions
 ```
