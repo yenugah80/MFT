@@ -193,7 +193,7 @@ export default function RecommendationsScreen() {
   }, [trackInteraction, refetch]);
 
   const handleUpgrade = useCallback(() => {
-    router.push('/profile/subscription');
+    router.push('/(tabs)/profile');
   }, [router]);
 
   const handlePressDetails = useCallback((rec) => {

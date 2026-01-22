@@ -195,7 +195,7 @@ export default function MomentumCard({
     if (onViewProgress) {
       onViewProgress();
     } else {
-      router.push('/insights/progress');
+      router.push('/insights');
     }
   }, [onViewProgress, router]);
 

@@ -102,7 +102,7 @@ export default function LogScreen() {
 
   // Hooks
   const router = useRouter();
-  const { focus, mealType } = useLocalSearchParams();
+  const { focus, mealType, prefill } = useLocalSearchParams();
   const foodAnalysis = useFoodAnalysis();
   const voiceHook = useServerVoice({ mealType });
   const foodLog = useFoodLog();
@@ -162,6 +162,17 @@ export default function LogScreen() {
 
     router.setParams({ focus: undefined, mealType: undefined });
   }, [focus, mealType, notify, router, closeAllModals]);
+
+  // Handle prefill param from quick re-log in Food Analytics
+  useEffect(() => {
+    if (prefill && typeof prefill === 'string' && prefill.trim()) {
+      foodAnalysis.setInputText(prefill.trim());
+      setInputMode('text');
+      setAnalysisSource('text');
+      // Clear the param to prevent re-triggering
+      router.setParams({ prefill: undefined });
+    }
+  }, [prefill, foodAnalysis, router]);
 
   /**
    * Auto-show analysis details screen when analysis completes
@@ -950,8 +961,8 @@ export default function LogScreen() {
           <View style={styles.headerLeft}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.replace('/')}
-              accessibilityLabel="Go to Recipes tab"
+              onPress={() => router.replace('/(tabs)/dashboard')}
+              accessibilityLabel="Go to Dashboard"
             >
               <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>

@@ -88,7 +88,7 @@ export default function DailyIntelligenceBehaviorSection({
     if (onViewProgress) {
       onViewProgress();
     } else {
-      router.push('/insights/progress');
+      router.push('/insights');
     }
   }, [onViewProgress, router]);
 

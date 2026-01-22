@@ -1539,7 +1539,7 @@ export default function DashboardContent() {
                 uniqueFoodsThisWeek={uniqueFoodLogs?.length || 0}
                 onRequestDismiss={handleDismissRequest}
                 onAction={handleIntelligenceAction}
-                onViewProgress={() => router.push('/insights/progress')}
+                onViewProgress={() => router.push('/insights')}
               />
             ) : null}
           </DailyIntelligenceErrorBoundary>
