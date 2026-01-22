@@ -53,18 +53,22 @@ const { buildMoodProfile: generateMoodProfile, generateMoodRecommendations } = m
  */
 
 // Minimum thresholds before showing insights
+// UPDATED: Lowered thresholds for early user engagement
+// Analytics show from Day 1, recommendations from Day 2
 const DATA_THRESHOLDS = {
-  // Before any correlations can be shown
-  MIN_DAYS_FOR_CORRELATIONS: 7,
-  MIN_FOOD_LOGS: 10,
-  MIN_MOOD_LOGS: 5,
+  // Before any correlations can be shown (lowered from 7 to 2)
+  // Users see basic patterns from Day 2, refined patterns from Day 7+
+  MIN_DAYS_FOR_CORRELATIONS: 2,
+  MIN_FOOD_LOGS: 3,  // Lowered from 10
+  MIN_MOOD_LOGS: 2,  // Lowered from 5
 
-  // Before predictive insights
-  MIN_DAYS_FOR_PREDICTIONS: 14,
-  MIN_CORRELATION_CONFIDENCE: 0.55,
+  // Before predictive insights (lowered from 14 to 3)
+  // Early predictions from Day 3, calibrated predictions from Day 14+
+  MIN_DAYS_FOR_PREDICTIONS: 3,
+  MIN_CORRELATION_CONFIDENCE: 0.45,  // Lowered from 0.55 for early insights
 
-  // Validation requirements
-  MIN_EVIDENCE_COUNT: 3,
+  // Validation requirements (lowered from 3 to 2)
+  MIN_EVIDENCE_COUNT: 2,
 };
 
 // Decision types with their priorities

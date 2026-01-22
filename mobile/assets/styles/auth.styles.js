@@ -20,9 +20,17 @@ export const authStyles = StyleSheet.create({
     paddingTop: 60,
   },
   image: {
-    width: "200%",
-    height: 200,
-    maxHeight: 240,
+    width: 120,
+    height: 120,
+    borderRadius: 24,
+  },
+  brandName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#7C3AED',
+    textAlign: 'center',
+    marginTop: 16,
+    letterSpacing: -0.5,
   },
   formContainer: {
     marginTop: 20,

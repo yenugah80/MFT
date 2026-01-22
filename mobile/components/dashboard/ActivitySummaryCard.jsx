@@ -25,7 +25,7 @@ export default function ActivitySummaryCard() {
 
   const handleViewInsights = () => {
     Haptics.selectionAsync();
-    router.push('/insights/activity-insights');
+    router.push('/insights/activity-analytics');
   };
 
   // Get today's stats from the hook

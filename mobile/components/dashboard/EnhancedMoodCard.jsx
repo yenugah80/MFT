@@ -119,6 +119,7 @@ const EnhancedMoodCard = ({
   wellnessScore = null,
   showWellnessScore = true,
   onOpenInsights,
+  onViewHistory,
 }) => {
   const { colors, isDark } = useTheme();
 
@@ -270,33 +271,53 @@ const EnhancedMoodCard = ({
         </TouchableOpacity>
       )}
 
-      {/* View Insights Button */}
-      {onOpenInsights && (
-        <TouchableOpacity
-          style={[styles.insightsButton, { backgroundColor: sectionBg, borderColor }]}
-          onPress={onOpenInsights}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Open mood insights"
-        >
-          <View style={styles.insightsButtonLeft}>
-            <Ionicons name="analytics-outline" size={18} color={moodColors?.base || textSecondary} />
-            <Text style={[styles.insightsButtonText, { color: textPrimary }]}>View Insights & Trends</Text>
-          </View>
-          <View style={styles.insightsButtonRight}>
-            {trendSummary?.direction && trendSummary.direction !== 'insufficient' && (
-              <View style={[styles.trendBadge, { backgroundColor: pillBg }]}>
-                <Ionicons
-                  name={trendSummary.direction === 'up' ? 'trending-up' : trendSummary.direction === 'down' ? 'trending-down' : 'remove'}
-                  size={12}
-                  color={trendSummary.direction === 'up' ? '#0F766E' : trendSummary.direction === 'down' ? '#B45309' : textTertiary}
-                />
-              </View>
-            )}
+      {/* Action Buttons Row */}
+      <View style={styles.actionButtonsRow}>
+        {/* View Insights Button */}
+        {onOpenInsights && (
+          <TouchableOpacity
+            style={[styles.insightsButton, styles.actionButton, { backgroundColor: sectionBg, borderColor }]}
+            onPress={onOpenInsights}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open mood insights"
+          >
+            <View style={styles.insightsButtonLeft}>
+              <Ionicons name="analytics-outline" size={18} color={moodColors?.base || textSecondary} />
+              <Text style={[styles.insightsButtonText, { color: textPrimary }]}>Insights</Text>
+            </View>
+            <View style={styles.insightsButtonRight}>
+              {trendSummary?.direction && trendSummary.direction !== 'insufficient' && (
+                <View style={[styles.trendBadge, { backgroundColor: pillBg }]}>
+                  <Ionicons
+                    name={trendSummary.direction === 'up' ? 'trending-up' : trendSummary.direction === 'down' ? 'trending-down' : 'remove'}
+                    size={12}
+                    color={trendSummary.direction === 'up' ? '#0F766E' : trendSummary.direction === 'down' ? '#B45309' : textTertiary}
+                  />
+                </View>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={textTertiary} />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* View History Button */}
+        {onViewHistory && (
+          <TouchableOpacity
+            style={[styles.insightsButton, styles.actionButton, { backgroundColor: sectionBg, borderColor }]}
+            onPress={onViewHistory}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="View mood history"
+          >
+            <View style={styles.insightsButtonLeft}>
+              <Ionicons name="time-outline" size={18} color={moodColors?.base || textSecondary} />
+              <Text style={[styles.insightsButtonText, { color: textPrimary }]}>History</Text>
+            </View>
             <Ionicons name="chevron-forward" size={16} color={textTertiary} />
-          </View>
-        </TouchableOpacity>
-      )}
+          </TouchableOpacity>
+        )}
+      </View>
 
     </View>
   );
@@ -428,9 +449,18 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
   },
-  insightsButton: {
+  actionButtonsRow: {
+    flexDirection: 'row',
     marginHorizontal: SPACING[4],
     marginBottom: SPACING[3],
+    gap: SPACING[2],
+  },
+  actionButton: {
+    flex: 1,
+    marginHorizontal: 0,
+    marginBottom: 0,
+  },
+  insightsButton: {
     padding: SPACING[3],
     borderRadius: RADIUS.lg,
     backgroundColor: '#F8FAFE',

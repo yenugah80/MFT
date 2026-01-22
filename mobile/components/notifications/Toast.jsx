@@ -247,12 +247,12 @@ const Toast = ({ type = 'info', domain, title, message, onDismiss, style, celebr
       {/* Content */}
       <View style={styles.textContainer}>
         {typeof title === 'string' && title.trim() ? (
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>
         ) : null}
         {typeof message === 'string' && message.trim() ? (
-          <Text style={[styles.message, { color }]} numberOfLines={2}>
+          <Text style={[styles.message, { color }]} numberOfLines={4}>
             {message}
           </Text>
         ) : (
@@ -277,10 +277,9 @@ const Toast = ({ type = 'info', domain, title, message, onDismiss, style, celebr
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     minHeight: 64,
-    minWidth: 300,
-    maxWidth: 380,
+    width: '100%',
     paddingVertical: 14,
     paddingRight: 14,
     paddingLeft: 0, // Accent bar takes the left

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BackButton from './BackButton';
@@ -90,6 +91,17 @@ const OnboardingContent = ({
     <View style={styles.flex}>
       {/* Header with back button and progress */}
       <View style={styles.header}>
+        {/* Logo and Brand - shown on first step */}
+        {step === 1 && (
+          <View style={styles.brandSection}>
+            <Image
+              source={require('../../assets/images/app-logo.png')}
+              style={styles.logoImage}
+            />
+            <Text style={styles.brandName}>MyFoodTracker</Text>
+          </View>
+        )}
+
         <View style={styles.headerTop}>
           {canGoBack ? (
             <BackButton onPress={onBack} enabled={canGoBack} />
@@ -167,6 +179,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: SURFACES.card.border,
     ...SHADOWS.sm,
+  },
+  brandSection: {
+    alignItems: 'center',
+    marginBottom: SPACING[4],
+  },
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    marginBottom: SPACING[2],
+  },
+  brandName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: BRAND.primary,
+    letterSpacing: -0.5,
   },
   headerTop: {
     flexDirection: 'row',

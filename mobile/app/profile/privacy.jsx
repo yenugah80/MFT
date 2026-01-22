@@ -3,18 +3,25 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityI
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import * as Haptics from "expo-haptics";
 import SafeScreen from "../../components/SafeScreen";
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../../constants/premiumTheme";
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, VIBRANT_WELLNESS } from "../../constants/premiumTheme";
 import apiClient from "../../services/apiClient";
+import { useAuth } from "@clerk/clerk-expo";
 
 export default function PrivacyScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const [shareInsights, setShareInsights] = useState(false);
   const [analytics, setAnalytics] = useState(true);
   const [biometricLock, setBiometricLock] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -58,6 +65,63 @@ export default function PrivacyScreen() {
       Alert.alert("Save Failed", "Could not save your privacy settings. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsExporting(true);
+    try {
+      const data = await apiClient.get("/profile/export");
+      const jsonString = JSON.stringify(data, null, 2);
+      const fileName = `myfoodtracker-data-${new Date().toISOString().split('T')[0]}.json`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(filePath, jsonString);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Your Data',
+        });
+      } else {
+        Alert.alert("Success", "Your data has been saved to your device.");
+      }
+    } catch (error) {
+      console.error("[PrivacyScreen] Export failed", error);
+      Alert.alert("Export Failed", "Could not export your data. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete all your data including meals, mood entries, and health metrics. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Everything",
+          style: "destructive",
+          onPress: confirmDeleteAccount,
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await apiClient.delete("/profile/delete-account");
+      await signOut();
+      router.replace("/(auth)/sign-in");
+    } catch (error) {
+      console.error("[PrivacyScreen] Delete account failed", error);
+      Alert.alert("Delete Failed", "Could not delete your account. Please try again or contact support.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -169,6 +233,53 @@ export default function PrivacyScreen() {
             />
           </View>
         </View>
+
+        {/* GDPR Data Rights */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Your Data</Text>
+
+          <TouchableOpacity
+            style={styles.dataRow}
+            onPress={handleExportData}
+            disabled={isExporting}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: VIBRANT_WELLNESS.success.subtle }]}>
+              <Ionicons name="download-outline" size={18} color={VIBRANT_WELLNESS.success.base} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Download My Data</Text>
+              <Text style={styles.rowSubtitle}>Export all your data as JSON</Text>
+            </View>
+            {isExporting ? (
+              <ActivityIndicator size="small" color={BRAND.primary} />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.dataRow}
+            onPress={handleDeleteAccount}
+            disabled={isDeleting}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: VIBRANT_WELLNESS.danger.subtle }]}>
+              <Ionicons name="trash-outline" size={18} color={VIBRANT_WELLNESS.danger.base} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={[styles.rowTitle, { color: VIBRANT_WELLNESS.danger.base }]}>Delete Account</Text>
+              <Text style={styles.rowSubtitle}>Permanently remove all your data</Text>
+            </View>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={VIBRANT_WELLNESS.danger.base} />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.footerNote}>
+          Under GDPR, you have the right to access, export, and delete your personal data at any time.
+        </Text>
       </ScrollView>
     </SafeScreen>
   );
@@ -275,5 +386,25 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: '#FFFFFF',
+  },
+  dataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING[3],
+    paddingVertical: SPACING[2],
+  },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  footerNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    textAlign: "center",
+    paddingHorizontal: SPACING[4],
+    lineHeight: 18,
   },
 });

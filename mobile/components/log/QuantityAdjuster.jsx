@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: SURFACES.background.primary,
     borderWidth: 1,
-    borderColor: SURFACES.border.light,
+    borderColor: SURFACES.card.border,
   },
   quickButtonActive: {
     backgroundColor: BRAND.primary,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: SURFACES.border.light,
+    borderTopColor: SURFACES.card.border,
   },
   perUnitText: {
     fontSize: 13,
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: SURFACES.border.light,
+    borderTopColor: SURFACES.card.border,
   },
   optionsTitle: {
     fontSize: 12,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: SURFACES.background.primary,
     borderWidth: 1,
-    borderColor: SURFACES.border.light,
+    borderColor: SURFACES.card.border,
     alignItems: 'center',
   },
   optionPillActive: {

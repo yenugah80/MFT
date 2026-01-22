@@ -38,6 +38,7 @@ import {
   dailyNutritionSummaryTable,
   nutritionGoalsTable,
   moodMealCorrelationsTable,
+  insightFeedbackTable,
 } from '../db/schema.js';
 import { generateDailyStoryLine, calculateDailyScore } from '../services/storyLineService.js';
 import { generateMoodInsights, generateBasicMoodInsights } from '../services/moodInsightService.js';
@@ -52,6 +53,8 @@ import {
   logPrediction,
   verifyPrediction,
   calculatePredictionAccuracy,
+  getPredictionAccuracyStats,
+  measureImplicitOutcomes,
 } from '../services/outcomeVerificationService.js';
 
 const router = express.Router();
@@ -1047,9 +1050,19 @@ function analyzeTemporalPatterns(foodLogs, moodLogs, waterLogs) {
 
 /**
  * Generate predictive insights based on historical patterns
+ * Returns predictions from Day 2 onwards with early-stage insights
  */
 function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals) {
   const predictions = {};
+  const totalDataDays = new Set([
+    ...foodLogs.map(f => new Date(f.loggedDate).toDateString()),
+    ...moodLogs.map(m => new Date(m.loggedDate).toDateString()),
+    ...waterLogs.map(w => new Date(w.loggedDate).toDateString()),
+  ]).size;
+
+  // Minimum 2 days required for any predictions
+  const MIN_DAYS = 2;
+  const hasMinimumData = totalDataDays >= MIN_DAYS;
 
   // Energy Prediction
   const hourlyEnergy = analyzeEnergyPatterns(foodLogs, moodLogs);
@@ -1060,7 +1073,24 @@ function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals) {
       statement: `Based on your meal timing, you may experience an energy dip around ${formatHour(energyDipHour)}.`,
       hourlyLevels: hourlyEnergy,
       prevention: `Have a protein-rich snack at ${formatHour(energyDipHour - 1)} to maintain steady energy`,
-      confidence: calculateConfidence(moodLogs.length, 14),
+      confidence: calculateConfidence(moodLogs.length, 7),
+    };
+  } else if (hasMinimumData && foodLogs.length > 0) {
+    // Early-stage energy prediction based on meal distribution
+    const avgMealsPerDay = foodLogs.length / Math.max(totalDataDays, 1);
+    const hasRegularMeals = avgMealsPerDay >= 2;
+    const confidenceLevel = Math.min(80, 30 + (totalDataDays * 5));
+    predictions.energy = {
+      statement: hasRegularMeals
+        ? `Your meal pattern shows ${Math.round(avgMealsPerDay)} meals/day. This supports steady energy.`
+        : `Logging ${Math.round(avgMealsPerDay)} meal/day so far. Aim for 3 meals for optimal energy.`,
+      hourlyLevels: hourlyEnergy,
+      prevention: hasRegularMeals
+        ? `Keep up your current routine with balanced meals`
+        : `Try adding breakfast and a midday meal for better energy`,
+      confidence: confidenceLevel,
+      type: 'early',
+      daysAnalyzed: totalDataDays,
     };
   }
 
@@ -1075,16 +1105,65 @@ function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals) {
       suggestion: moodPatterns.suggestion,
       confidence: moodPatterns.confidence,
     };
+  } else if (hasMinimumData && moodLogs.length >= 1) {
+    // Early-stage mood insight
+    const avgMood = moodLogs.reduce((sum, m) => sum + (m.intensity || 5), 0) / moodLogs.length;
+    const moodTrend = avgMood >= 7 ? 'great' : avgMood >= 5 ? 'good' : 'could improve';
+    const confidenceLevel = Math.min(75, 25 + (moodLogs.length * 8));
+    predictions.mood = {
+      statement: moodLogs.length === 1
+        ? `First mood logged at ${Math.round(avgMood)}/10. Keep tracking to see patterns emerge.`
+        : `Average mood: ${avgMood.toFixed(1)}/10 across ${moodLogs.length} entries. ${moodTrend === 'great' ? 'Looking great!' : 'Keep logging to find what affects it.'}`,
+      moodScores: { average: Math.round(avgMood * 10) / 10, count: moodLogs.length },
+      factor: 'overall wellness',
+      percentage: Math.round(avgMood * 10),
+      suggestion: moodTrend === 'great'
+        ? 'Note what you did today - it\'s working!'
+        : 'Track meals and activities to find mood boosters',
+      confidence: confidenceLevel,
+      type: 'early',
+      daysAnalyzed: totalDataDays,
+    };
   }
 
   // Nutrient Projection
   const nutrientGaps = analyzeNutrientGaps(foodLogs, goals);
   if (nutrientGaps.length > 0) {
-    predictions.nutrient = {
+    predictions.nutrients = {
       statement: `At your current rate, you may fall short on ${nutrientGaps.map(n => n.name).join(' and ')} this week.`,
       nutrients: nutrientGaps,
       recommendation: generateNutrientRecommendation(nutrientGaps),
-      confidence: calculateConfidence(foodLogs.length, 21),
+      confidence: calculateConfidence(foodLogs.length, 7),
+    };
+  } else if (hasMinimumData && foodLogs.length >= 1) {
+    // Early-stage nutrient insight
+    const avgCalories = foodLogs.reduce((sum, f) => sum + (f.calories || 0), 0) / foodLogs.length;
+    const avgProtein = foodLogs.reduce((sum, f) => sum + (f.protein || 0), 0) / foodLogs.length;
+    const calorieGoal = goals.dailyCalories || 2000;
+    const proteinGoal = goals.proteinG || 50;
+
+    const meetsCalories = avgCalories >= calorieGoal * 0.8;
+    const meetsProtein = avgProtein >= proteinGoal * 0.8;
+
+    const confidenceLevel = Math.min(75, 25 + (foodLogs.length * 5));
+    predictions.nutrients = {
+      statement: foodLogs.length === 1
+        ? `First meal: ${Math.round(avgCalories)} cal, ${Math.round(avgProtein)}g protein. Keep logging!`
+        : meetsCalories && meetsProtein
+        ? `Averaging ${Math.round(avgCalories)} cal & ${Math.round(avgProtein)}g protein. On track!`
+        : `Averaging ${Math.round(avgCalories)} cal across ${foodLogs.length} meals. Goal: ${calorieGoal}.`,
+      nutrients: [
+        { name: 'Calories', current: Math.round(avgCalories), goal: calorieGoal },
+        { name: 'Protein', current: Math.round(avgProtein), goal: proteinGoal },
+      ],
+      recommendation: foodLogs.length < 3
+        ? 'Log more meals to get accurate daily averages'
+        : meetsCalories && meetsProtein
+        ? 'Maintain your current balanced approach'
+        : 'Consider adding lean protein sources',
+      confidence: confidenceLevel,
+      type: 'early',
+      daysAnalyzed: totalDataDays,
     };
   }
 
@@ -2122,6 +2201,191 @@ router.get('/novel-correlations', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/insights/unified-correlations
+ * Returns a unified view of correlations from both:
+ * - Rule-based correlation engine (verified patterns)
+ * - Auto-discovery engine (novel patterns)
+ *
+ * Deduplicates, ranks by importance, and provides a single stream.
+ */
+router.get('/unified-correlations', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { limit = 10, lookbackDays = 30 } = req.query;
+
+    // Fetch from both systems in parallel
+    const [ruleBasedResult, novelResult] = await Promise.all([
+      // Rule-based correlations
+      computeUserCorrelations(userId).catch(err => {
+        console.warn('[UnifiedCorrelations] Rule-based error:', err.message);
+        return { success: false, correlations: [] };
+      }),
+      // Auto-discovered correlations
+      discoverNovelCorrelations(userId, parseInt(lookbackDays)).catch(err => {
+        console.warn('[UnifiedCorrelations] Novel discovery error:', err.message);
+        return { success: false, correlations: [] };
+      }),
+    ]);
+
+    const ruleBased = ruleBasedResult?.correlations || [];
+    const novel = novelResult?.correlations || [];
+
+    // Normalize both to a common format
+    const normalizedRuleBased = ruleBased.map(c => ({
+      id: c.id || `rule-${c.correlationType}-${c.ruleName}`,
+      source: 'rule_based',
+      type: c.correlationType,
+      ruleName: c.ruleName,
+      title: formatCorrelationTitle(c),
+      description: c.expectedOutcome || c.description,
+      strength: parseFloat(c.strength) || 0,
+      confidence: parseFloat(c.confidence) || 0,
+      occurrences: c.occurrences || 0,
+      healthImpact: c.healthImpactSeverity || 'moderate',
+      domains: c.affectedDomains || [],
+      evidence: c.evidenceJson || {},
+      signalA: { name: c.signalA, value: c.signalAValue, unit: c.signalAUnit },
+      signalB: { name: c.signalB, value: c.signalBValue, unit: c.signalBUnit },
+      isActive: c.isActive !== false,
+      firstObserved: c.firstObservedDate,
+      lastObserved: c.lastObservedDate,
+    }));
+
+    const normalizedNovel = novel.map(c => ({
+      id: c.id || `novel-${c.factorA}-${c.factorB}-${c.lagHours}`,
+      source: 'auto_discovery',
+      type: 'discovered',
+      ruleName: null,
+      title: `${formatFactorName(c.factorA)} affects ${formatFactorName(c.factorB)}`,
+      description: c.description || generateNovelDescription(c),
+      strength: Math.abs(c.correlation) || 0,
+      confidence: c.confidence || 0,
+      occurrences: c.sampleSize || 0,
+      healthImpact: c.noveltyScore > 0.7 ? 'novel' : 'moderate',
+      domains: [c.factorA.split('_')[0], c.factorB.split('_')[0]],
+      evidence: {
+        correlation: c.correlation,
+        pValue: c.pValue,
+        lagHours: c.lagHours,
+        noveltyScore: c.noveltyScore,
+        sampleSize: c.sampleSize,
+      },
+      signalA: { name: c.factorA, value: null, unit: null },
+      signalB: { name: c.factorB, value: null, unit: null },
+      isActive: true,
+      firstObserved: null,
+      lastObserved: null,
+    }));
+
+    // Merge and deduplicate
+    const allCorrelations = [...normalizedRuleBased, ...normalizedNovel];
+
+    // Deduplicate by similar patterns
+    const deduped = deduplicateCorrelations(allCorrelations);
+
+    // Rank by importance (combination of confidence, occurrences, novelty)
+    const ranked = deduped.sort((a, b) => {
+      const scoreA = computeImportanceScore(a);
+      const scoreB = computeImportanceScore(b);
+      return scoreB - scoreA;
+    });
+
+    // Limit results
+    const limited = ranked.slice(0, parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        correlations: limited,
+        meta: {
+          totalRuleBased: normalizedRuleBased.length,
+          totalNovel: normalizedNovel.length,
+          totalBeforeDedup: allCorrelations.length,
+          totalAfterDedup: deduped.length,
+          returned: limited.length,
+          sources: {
+            ruleBased: ruleBasedResult?.success !== false,
+            novel: novelResult?.success !== false,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[UnifiedCorrelations] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch unified correlations',
+      message: error.message,
+    });
+  }
+});
+
+// Helper functions for unified correlations
+function formatCorrelationTitle(correlation) {
+  const titles = {
+    'food_mood': 'Food affects your mood',
+    'hydration_mood': 'Hydration affects your energy',
+    'beverage_energy': 'Caffeine affects your energy',
+    'beverage_sleep': 'Evening caffeine affects sleep',
+    'meal_timing_mood': 'Meal timing affects mood',
+    'carryover_next_day': 'Evening food affects tomorrow',
+    'activity_mood': 'Activity affects mood',
+  };
+  return titles[correlation.correlationType] || correlation.ruleName?.replace(/_/g, ' ') || 'Pattern detected';
+}
+
+function formatFactorName(factor) {
+  if (!factor) return 'Unknown';
+  return factor
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function generateNovelDescription(correlation) {
+  const direction = correlation.correlation > 0 ? 'increases' : 'decreases';
+  const lagText = correlation.lagHours > 0 ? ` after ${correlation.lagHours}h` : '';
+  return `${formatFactorName(correlation.factorA)} ${direction} ${formatFactorName(correlation.factorB)}${lagText}`;
+}
+
+function deduplicateCorrelations(correlations) {
+  const seen = new Map();
+
+  for (const corr of correlations) {
+    // Create a key based on the pattern essence
+    const key = [
+      corr.signalA?.name || '',
+      corr.signalB?.name || '',
+      corr.type,
+    ].sort().join('|');
+
+    const existing = seen.get(key);
+    if (!existing || computeImportanceScore(corr) > computeImportanceScore(existing)) {
+      seen.set(key, corr);
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
+function computeImportanceScore(correlation) {
+  // Weight factors: confidence (40%), occurrences (30%), novelty (20%), recency (10%)
+  const confidenceScore = (correlation.confidence || 0) * 0.4;
+
+  const occurrenceScore = Math.min((correlation.occurrences || 0) / 20, 1) * 0.3;
+
+  const noveltyScore = correlation.source === 'auto_discovery'
+    ? (correlation.evidence?.noveltyScore || 0.5) * 0.2
+    : 0.1; // Rule-based gets baseline novelty
+
+  const recencyScore = correlation.lastObserved
+    ? (1 - Math.min((Date.now() - new Date(correlation.lastObserved).getTime()) / (30 * 24 * 60 * 60 * 1000), 1)) * 0.1
+    : 0.05;
+
+  return confidenceScore + occurrenceScore + noveltyScore + recencyScore;
+}
+
 // ============================================================================
 // OUTCOME VERIFICATION ENDPOINTS - Feedback loop for recommendation effectiveness
 // ============================================================================
@@ -2322,6 +2586,242 @@ router.get('/predictions/accuracy', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to calculate prediction accuracy',
+      message: error.message,
+    });
+  }
+});
+
+// ============================================================================
+// INSIGHT FEEDBACK ENDPOINTS
+// ============================================================================
+
+/**
+ * POST /api/insights/feedback
+ * Submit feedback (thumbs up/down) on an insight
+ *
+ * This closes the feedback loop by allowing users to rate insights,
+ * which feeds back into the learning system.
+ */
+router.post('/feedback', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const {
+      insightId,
+      insightType, // 'correlation', 'prediction', 'recommendation', 'pattern'
+      feedbackType, // 'helpful' (thumbs up), 'not_helpful' (thumbs down), 'dismiss'
+      insightContent, // Optional: the insight text for context
+      additionalContext, // Optional: any additional context
+    } = req.body;
+
+    if (!insightId || !insightType || !feedbackType) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: insightId, insightType, feedbackType',
+      });
+    }
+
+    // Validate feedback type
+    const validFeedbackTypes = ['helpful', 'not_helpful', 'dismiss', 'acted_on'];
+    if (!validFeedbackTypes.includes(feedbackType)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid feedbackType. Must be one of: ${validFeedbackTypes.join(', ')}`,
+      });
+    }
+
+    // Check if feedback already exists for this insight
+    const [existing] = await db
+      .select()
+      .from(insightFeedbackTable)
+      .where(and(
+        eq(insightFeedbackTable.userId, userId),
+        eq(insightFeedbackTable.insightId, insightId)
+      ))
+      .limit(1);
+
+    let record;
+    if (existing) {
+      // Update existing feedback
+      [record] = await db
+        .update(insightFeedbackTable)
+        .set({
+          feedbackType,
+          additionalContext: additionalContext || existing.additionalContext,
+          updatedAt: new Date(),
+        })
+        .where(eq(insightFeedbackTable.id, existing.id))
+        .returning();
+    } else {
+      // Insert new feedback
+      [record] = await db
+        .insert(insightFeedbackTable)
+        .values({
+          userId,
+          insightId,
+          insightType,
+          feedbackType,
+          insightContent: insightContent || null,
+          additionalContext: additionalContext || null,
+        })
+        .returning();
+    }
+
+    // If the user found it helpful, this is positive signal
+    // If not helpful, this is negative signal for future insights
+    const isPositive = feedbackType === 'helpful' || feedbackType === 'acted_on';
+
+    res.json({
+      success: true,
+      data: {
+        feedbackId: record.id,
+        insightId,
+        feedbackType,
+        isPositive,
+        message: isPositive
+          ? 'Thanks for the feedback! We\'ll show more insights like this.'
+          : 'Got it! We\'ll adjust future insights based on your feedback.',
+      },
+    });
+  } catch (error) {
+    console.error('[InsightFeedback] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit feedback',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/insights/feedback
+ * Get feedback history for the user
+ */
+router.get('/feedback', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { limit = 50, insightType } = req.query;
+
+    const conditions = [eq(insightFeedbackTable.userId, userId)];
+    if (insightType) {
+      conditions.push(eq(insightFeedbackTable.insightType, insightType));
+    }
+
+    const feedback = await db
+      .select()
+      .from(insightFeedbackTable)
+      .where(and(...conditions))
+      .orderBy(desc(insightFeedbackTable.createdAt))
+      .limit(parseInt(limit));
+
+    // Calculate summary stats
+    const helpful = feedback.filter(f => f.feedbackType === 'helpful' || f.feedbackType === 'acted_on').length;
+    const notHelpful = feedback.filter(f => f.feedbackType === 'not_helpful').length;
+    const dismissed = feedback.filter(f => f.feedbackType === 'dismiss').length;
+
+    res.json({
+      success: true,
+      data: {
+        feedback,
+        summary: {
+          total: feedback.length,
+          helpful,
+          notHelpful,
+          dismissed,
+          helpfulRate: feedback.length > 0 ? Math.round((helpful / feedback.length) * 100) : 0,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[GetFeedback] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get feedback history',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/insights/stats
+ * Get comprehensive insight accuracy and learning stats
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    // Get prediction accuracy stats
+    const predictionStats = await getPredictionAccuracyStats(userId);
+
+    // Get feedback stats
+    const feedback = await db
+      .select()
+      .from(insightFeedbackTable)
+      .where(eq(insightFeedbackTable.userId, userId));
+
+    const feedbackByType = {};
+    for (const f of feedback) {
+      if (!feedbackByType[f.insightType]) {
+        feedbackByType[f.insightType] = { helpful: 0, notHelpful: 0, total: 0 };
+      }
+      feedbackByType[f.insightType].total++;
+      if (f.feedbackType === 'helpful' || f.feedbackType === 'acted_on') {
+        feedbackByType[f.insightType].helpful++;
+      } else if (f.feedbackType === 'not_helpful') {
+        feedbackByType[f.insightType].notHelpful++;
+      }
+    }
+
+    // Calculate helpfulness rate per type
+    for (const [type, stats] of Object.entries(feedbackByType)) {
+      stats.helpfulRate = stats.total > 0
+        ? Math.round((stats.helpful / stats.total) * 100)
+        : 0;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        predictions: predictionStats,
+        feedback: {
+          total: feedback.length,
+          byType: feedbackByType,
+        },
+        learningStatus: {
+          hasEnoughFeedback: feedback.length >= 10,
+          hasCalibratedPredictions: predictionStats.hasData && predictionStats.totalPredictions >= 10,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[InsightStats] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get insight stats',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/insights/implicit-outcomes
+ * Process implicit outcomes from user behavior
+ * (For predictions that didn't receive explicit feedback)
+ */
+router.post('/implicit-outcomes', async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    const results = await measureImplicitOutcomes(userId);
+
+    res.json({
+      success: true,
+      data: results,
+    });
+  } catch (error) {
+    console.error('[ImplicitOutcomes] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process implicit outcomes',
       message: error.message,
     });
   }

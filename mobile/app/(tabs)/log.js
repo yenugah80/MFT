@@ -1254,7 +1254,7 @@ export default function LogScreen() {
             totalCaffeine={totalCaffeine}
             onViewHistory={() => {
               setShowHydrationModal(false);
-              router.push('/insights/hydration-history');
+              router.push('/analytics');
             }}
           />
         </View>

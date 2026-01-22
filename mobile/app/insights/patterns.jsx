@@ -1937,11 +1937,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING[4],
   },
-  loadingText: {
-    fontSize: TYPOGRAPHY.size.md,
-    color: TEXT.secondary,
-    fontWeight: TYPOGRAPHY.weight.medium,
-  },
 
   // Error State
   errorContainer: {

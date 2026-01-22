@@ -2,14 +2,36 @@
  * Macro Breakdown Section
  * Displays Protein, Carbs, Fat with horizontal progress bars
  * Inspired by reference nutrition tracking designs
+ *
+ * Uses light theme (premiumTheme.js) for consistent styling
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designSystem';
+import {
+  TEXT,
+  SURFACES,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  VIBRANT_WELLNESS,
+} from '../../constants/premiumTheme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Macro-specific gradients
+const MACRO_GRADIENTS = {
+  protein: ['#10B981', '#059669'], // Green
+  carbs: ['#F59E0B', '#D97706'],   // Amber
+  fat: ['#8B5CF6', '#7C3AED'],     // Purple
+};
+
+// Macro-specific icons (replacing emojis with Ionicons)
+const MACRO_ICONS = {
+  protein: 'fitness',
+  carbs: 'flash',
+  fat: 'water',
+};
 
 export default function MacroBreakdownSection({
   protein = 68,
@@ -18,35 +40,28 @@ export default function MacroBreakdownSection({
   proteinGoal = 100,
   carbsGoal = 250,
   fatGoal = 65,
-  isDarkMode = false,
 }) {
   const proteinPercent = Math.min((protein / proteinGoal) * 100, 100);
   const carbsPercent = Math.min((carbs / carbsGoal) * 100, 100);
   const fatPercent = Math.min((fat / fatGoal) * 100, 100);
 
-  // Theme-aware colors
-  const titleColor = isDarkMode ? '#FFFFFF' : COLORS.text.primary;
-  const labelColor = isDarkMode ? '#FFFFFF' : COLORS.text.primary;
-  const valueColor = isDarkMode ? 'rgba(255, 255, 255, 0.7)' : COLORS.text.secondary;
-  const bgColor = isDarkMode ? 'rgba(255, 255, 255, 0.05)' : COLORS.surface.secondary;
-  const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : COLORS.border.light;
-  const barBgColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : COLORS.border.medium;
-
-  const MacroBar = ({ label, emoji, current, goal, percent, colors }) => (
+  const MacroBar = ({ label, iconName, current, goal, percent, colors }) => (
     <View style={styles.macroItem}>
       {/* Label */}
       <View style={styles.labelRow}>
         <View style={styles.labelLeft}>
-          <Text style={styles.emoji}>{emoji}</Text>
-          <Text style={[styles.macroLabel, { color: labelColor }]}>{label}</Text>
+          <View style={[styles.iconContainer, { backgroundColor: `${colors[0]}15` }]}>
+            <Ionicons name={iconName} size={16} color={colors[0]} />
+          </View>
+          <Text style={styles.macroLabel}>{label}</Text>
         </View>
-        <Text style={[styles.macroValue, { color: valueColor }]}>
+        <Text style={styles.macroValue}>
           {current}g / {goal}g
         </Text>
       </View>
 
       {/* Progress bar */}
-      <View style={[styles.barBackground, { backgroundColor: barBgColor }]}>
+      <View style={styles.barBackground}>
         <LinearGradient
           colors={colors}
           start={{ x: 0, y: 0 }}
@@ -56,44 +71,44 @@ export default function MacroBreakdownSection({
       </View>
 
       {/* Percentage */}
-      <Text style={[styles.percentage, { color: valueColor }]}>{Math.round(percent)}%</Text>
+      <Text style={styles.percentage}>{Math.round(percent)}%</Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <View style={[styles.card, { backgroundColor: bgColor, borderColor: borderColor }]}>
+      <View style={styles.card}>
         {/* Header */}
-        <Text style={[styles.title, { color: titleColor }]}>Today's Macros</Text>
+        <Text style={styles.title}>Today's Macros</Text>
 
         {/* Protein */}
         <MacroBar
           label="Protein"
-          emoji="💪"
+          iconName={MACRO_ICONS.protein}
           current={protein}
           goal={proteinGoal}
           percent={proteinPercent}
-          colors={[COLORS.nutrition.primary, COLORS.nutrition.secondary]}
+          colors={MACRO_GRADIENTS.protein}
         />
 
         {/* Carbs */}
         <MacroBar
           label="Carbs"
-          emoji="🍚"
+          iconName={MACRO_ICONS.carbs}
           current={carbs}
           goal={carbsGoal}
           percent={carbsPercent}
-          colors={[COLORS.progress[0], COLORS.progress[1]]}
+          colors={MACRO_GRADIENTS.carbs}
         />
 
         {/* Fat */}
         <MacroBar
           label="Fat"
-          emoji="🌰"
+          iconName={MACRO_ICONS.fat}
           current={fat}
           goal={fatGoal}
           percent={fatPercent}
-          colors={[COLORS.activity[0], COLORS.activity[1]]}
+          colors={MACRO_GRADIENTS.fat}
         />
       </View>
     </View>
@@ -102,63 +117,74 @@ export default function MacroBreakdownSection({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[3],
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: RADIUS.lg,
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: SPACING.lg,
+    borderColor: SURFACES.card.border,
+    padding: SPACING[4],
+
+    // Premium shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: {
-    fontSize: TYPOGRAPHY.size.headline,
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#FFFFFF',
-    marginBottom: SPACING.lg,
+    color: TEXT.primary,
+    marginBottom: SPACING[4],
   },
   macroItem: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING[4],
   },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING[2],
   },
   labelLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING[2],
   },
-  emoji: {
-    fontSize: TYPOGRAPHY.size.title2,
-    marginRight: SPACING.sm,
+  iconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   macroLabel: {
-    fontSize: TYPOGRAPHY.size.body,
+    fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: '#FFFFFF',
+    color: TEXT.primary,
   },
   macroValue: {
-    fontSize: TYPOGRAPHY.size.callout,
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: TEXT.secondary,
   },
   barBackground: {
     height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.full,
     overflow: 'hidden',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING[1],
   },
   barFilled: {
     height: '100%',
     borderRadius: RADIUS.full,
   },
   percentage: {
-    fontSize: TYPOGRAPHY.size.caption,
-    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
     textAlign: 'right',
   },
 });

@@ -52,7 +52,9 @@ import mtlPredictionsRouter from "./routes/mtlPredictions.js";
 import unifiedAnalyticsRouter from "./routes/unifiedAnalytics.js";
 import remindersRouter from "./routes/reminders.js";
 import predictionsRouter from "./routes/predictions.js";
+import intelligenceRouter from "./routes/intelligence.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
+import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartReminderJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 import { initializeFirebase, isFirebaseReady } from "./config/firebase.js";
 import { globalLimiter, aiLimiter, imageLimiter, burstLimiter } from "./middleware/rateLimiter.js";
@@ -466,6 +468,28 @@ app.get("/health", (req, res) => {
 });
 
 /* -------------------------------------------
+   SMART REMINDER METRICS ENDPOINT
+   For monitoring notification delivery system
+-------------------------------------------- */
+app.get("/api/internal/reminder-metrics", (req, res) => {
+  // Only allow with debug key for security
+  const debugKey = req.headers['x-debug-key'];
+  const validDebugKey = process.env.DEBUG_KEY || 'mft-debug-2024';
+
+  if (debugKey !== validDebugKey) {
+    return res.status(403).json({ error: 'Metrics endpoint requires debug key' });
+  }
+
+  const metrics = getSmartReminderMetrics();
+  res.status(200).json({
+    success: true,
+    metrics,
+    firebaseReady: isFirebaseReady(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* -------------------------------------------
    CLOUDFLARE DEBUG ENDPOINT
    Use this to verify Cloudflare integration
 -------------------------------------------- */
@@ -675,6 +699,11 @@ app.use("/api/predictions", predictionsRouter);
 import decisionBrainRouter from "./routes/decisionBrain.js";
 app.use("/api/decision-brain", decisionBrainRouter);
 
+// Mount Intelligence Router (Unified Intelligence Orchestration)
+// Note: Single entry point for all intelligence - correlations, predictions, recommendations
+// Replaces fragmented analytics endpoints with coordinated, prediction-aware intelligence
+app.use("/api/intelligence", intelligenceRouter);
+
 /* -------------------------------------------
    EXISTING ROUTES
 -------------------------------------------- */
@@ -828,6 +857,15 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   // Initialize daily streak check cron job
   initStreakCronJob();
+
+  // Initialize smart reminder push notification cron job
+  // Only start if Firebase is configured (FCM available)
+  if (isFirebaseReady()) {
+    initSmartReminderCronJob();
+    console.log('[Server] Smart reminder cron job started (Firebase ready)');
+  } else {
+    console.log('[Server] Smart reminder cron job skipped (Firebase not configured)');
+  }
 });
 
 // Global Error Handler

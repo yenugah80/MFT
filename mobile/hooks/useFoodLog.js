@@ -20,6 +20,7 @@ import { API_URL } from '../constants/api';
 import { validateFoodLog, transformFoodLogToBackend, transformBackendToFoodLog } from '../types/foodLog';
 import { db, runInTransaction } from '../services/database';
 import { generateClientEventId } from '../utils/idGenerator';
+import { cancelStreakProtectionIfLoggedToday } from '../services/pushNotifications';
 
 // ============================================================================
 // CONSTANTS
@@ -567,6 +568,11 @@ export function useFoodLog() {
 
       // Trigger background sync (debounced)
       triggerSync();
+
+      // Smart notification: Cancel streak protection since user logged today
+      cancelStreakProtectionIfLoggedToday().catch(() => {
+        // Non-blocking - ignore errors
+      });
 
       console.log('[useFoodLog] ✅ Log added:', newLog.foodName);
 

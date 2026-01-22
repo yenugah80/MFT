@@ -24,8 +24,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { COLORS, getDomainColor } from '../../constants/unifiedColors';
+import { SPACING, RADIUS, TYPOGRAPHY, TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { getDomainColor } from '../../constants/unifiedColors';
 import { getDomainIcon, PATTERN_ICONS } from '../../constants/iconSystem';
 
 // Enable LayoutAnimation on Android
@@ -167,7 +167,7 @@ export function CorrelationCard({
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
               size={20}
-              color={COLORS.text.tertiary}
+              color={TEXT.tertiary}
             />
           </View>
 
@@ -201,7 +201,7 @@ export function CorrelationCard({
                   <Ionicons
                     name="close-outline"
                     size={18}
-                    color={COLORS.text.secondary}
+                    color={TEXT.secondary}
                   />
                   <Text style={styles.dismissText}>Not relevant</Text>
                 </TouchableOpacity>
@@ -216,7 +216,7 @@ export function CorrelationCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.background.secondary,
+    backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
     marginBottom: SPACING[3],
     overflow: 'hidden',
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   pattern: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     lineHeight: 22,
   },
 
@@ -284,16 +284,16 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.border.light,
+    backgroundColor: SURFACES.card.border,
   },
 
   strengthDotFilled: {
-    backgroundColor: COLORS.brand.primary,
+    backgroundColor: BRAND.primary,
   },
 
   occurrences: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 
@@ -326,14 +326,14 @@ const styles = StyleSheet.create({
   },
 
   explanationBox: {
-    backgroundColor: COLORS.background.tertiary,
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
   },
 
   explanationText: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.secondary,
+    color: TEXT.secondary,
     lineHeight: 20,
   },
 
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
 
   dismissText: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: COLORS.text.secondary,
+    color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 });

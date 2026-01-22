@@ -35,29 +35,38 @@ import { eq, and, gte, lte, between, desc, sql } from 'drizzle-orm';
  */
 const CORRELATION_CONFIG = {
   // Minimum occurrences required before reporting a correlation
-  // 7+ occurrences provides stronger statistical validity
-  MIN_OCCURRENCES: 7,
+  // UPDATED: Lowered from 7 to 3 for early user engagement
+  // Early patterns shown from Day 2, statistically robust patterns from Day 7+
+  MIN_OCCURRENCES: 3,
 
   // Minimum confidence threshold for reporting (0-1 scale)
-  // 0.7 = 70% confidence minimum - only show meaningful patterns
-  MIN_CONFIDENCE_THRESHOLD: 0.7,
+  // UPDATED: Lowered from 0.7 to 0.5 to show early patterns
+  // Higher confidence patterns prioritized in UI
+  MIN_CONFIDENCE_THRESHOLD: 0.5,
 
   // Minimum days of data before computing correlations
-  MIN_DAYS_FOR_ANALYSIS: 7,
+  // UPDATED: Lowered from 7 to 2 for Day 2 recommendations
+  MIN_DAYS_FOR_ANALYSIS: 2,
 
   // Minimum mood logs required
-  MIN_MOOD_LOGS: 5,
+  // UPDATED: Lowered from 5 to 2
+  MIN_MOOD_LOGS: 2,
 
   // Minimum food logs required
-  MIN_FOOD_LOGS: 10,
+  // UPDATED: Lowered from 10 to 3
+  MIN_FOOD_LOGS: 3,
 
   // Minimum water logs required
-  MIN_WATER_LOGS: 7,
+  // UPDATED: Lowered from 7 to 2
+  MIN_WATER_LOGS: 2,
 
   // Confidence scaling factors based on sample size
   // More occurrences = higher confidence multiplier
+  // UPDATED: Added lower sample size tiers for early detection
   SAMPLE_SIZE_SCALING: {
-    5: 0.6,   // 5 occurrences = 60% of base confidence
+    2: 0.4,   // 2 occurrences = 40% (early pattern)
+    3: 0.5,   // 3 occurrences = 50% (emerging pattern)
+    5: 0.6,   // 5 occurrences = 60%
     10: 0.75, // 10 occurrences = 75%
     15: 0.85, // 15 occurrences = 85%
     20: 0.95, // 20 occurrences = 95%
@@ -94,6 +103,108 @@ function getScaledConfidence(occurrences, baseConfidence) {
   }
 
   return Math.min(baseConfidence * scaleFactor, 1.0);
+}
+
+/**
+ * Get the previous day's date key (YYYY-MM-DD format)
+ */
+function getPreviousDay(dateKey) {
+  if (!dateKey) return null;
+  const date = new Date(dateKey);
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * Build standardized evidence JSON with all fields needed for evidence-anchored insights
+ *
+ * @param {Object} params
+ * @param {Array} params.examples - Specific instances with dates and values
+ * @param {number} params.avgValueWith - Average value when condition is true
+ * @param {number} params.avgValueWithout - Average value when condition is false (baseline)
+ * @param {number} params.countWith - Count of instances with condition
+ * @param {number} params.countWithout - Count of instances without condition (baseline)
+ * @param {number} params.delta - Difference (with - without)
+ * @param {string} params.metricUnit - Unit of measurement
+ * @param {Object} params.additionalFields - Any extra fields specific to this correlation
+ * @returns {Object} Standardized evidence JSON
+ */
+function buildStandardizedEvidence({
+  examples = [],
+  avgValueWith = null,
+  avgValueWithout = null,
+  countWith = 0,
+  countWithout = 0,
+  delta = null,
+  metricUnit = 'points',
+  additionalFields = {},
+}) {
+  // Calculate delta if not provided
+  const computedDelta = delta !== null ? delta :
+    (avgValueWith !== null && avgValueWithout !== null ? avgValueWith - avgValueWithout : null);
+
+  // Calculate effect size (Cohen's d approximation)
+  let effectSize = null;
+  if (avgValueWith !== null && avgValueWithout !== null && countWith > 0) {
+    const pooledStd = 2; // Rough estimate for mood/energy (1-10 scale)
+    effectSize = Math.abs(avgValueWith - avgValueWithout) / pooledStd;
+  }
+
+  // Determine confidence level from sample sizes
+  const sampleQuality = countWith >= 20 ? 'high' :
+    countWith >= 10 ? 'medium' :
+    countWith >= 5 ? 'low' : 'very_low';
+
+  // Format examples for display (max 5)
+  const formattedExamples = examples.slice(0, 5).map(ex => ({
+    ...ex,
+    // Ensure date is in readable format
+    date: ex.date || ex.observationDate,
+    displayDate: ex.date ? new Date(ex.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
+  }));
+
+  return {
+    // Core comparison stats (for evidence-anchored messaging)
+    comparison: {
+      avgWith: avgValueWith !== null ? Math.round(avgValueWith * 10) / 10 : null,
+      avgWithout: avgValueWithout !== null ? Math.round(avgValueWithout * 10) / 10 : null,
+      delta: computedDelta !== null ? Math.round(computedDelta * 10) / 10 : null,
+      percentChange: avgValueWithout && avgValueWithout !== 0
+        ? Math.round(((avgValueWith - avgValueWithout) / Math.abs(avgValueWithout)) * 100)
+        : null,
+      unit: metricUnit,
+    },
+
+    // Sample info
+    samples: {
+      countWith,
+      countWithout,
+      totalObservations: countWith + countWithout,
+      quality: sampleQuality,
+    },
+
+    // Statistical significance estimate
+    statistics: {
+      effectSize: effectSize !== null ? Math.round(effectSize * 100) / 100 : null,
+      effectLabel: effectSize >= 0.8 ? 'large' :
+        effectSize >= 0.5 ? 'medium' :
+        effectSize >= 0.2 ? 'small' : null,
+      isStatisticallyMeaningful: countWith >= 7 && (effectSize === null || effectSize >= 0.2),
+    },
+
+    // Specific examples for personalization (anchoring to real dates)
+    examples: formattedExamples,
+
+    // Counterfactual for "what if" messaging
+    counterfactual: {
+      baseline: avgValueWithout !== null ? Math.round(avgValueWithout * 10) / 10 : null,
+      potentialImprovement: computedDelta !== null ? Math.abs(Math.round(computedDelta * 10) / 10) : null,
+      direction: computedDelta > 0 ? 'improvement' : computedDelta < 0 ? 'decline' : 'neutral',
+    },
+
+    // Additional correlation-specific fields
+    ...additionalFields,
+  };
 }
 
 /**
@@ -1276,6 +1387,236 @@ function detectConsistentExerciseMoodStability(weekActivityLogs, weekMoodLogs) {
 
 /**
  * ============================================
+ * CROSS-DOMAIN CORRELATION RULES
+ * ============================================
+ */
+
+/**
+ * Detect morning hydration → daytime focus correlation
+ * Pattern: Good morning hydration (6-11am) leads to better focus/energy (10am-4pm)
+ */
+function detectMorningHydrationDaytimeFocus(morningWater, dayMoods, hydrationGoal, dayKey) {
+  if (!morningWater || morningWater.length === 0 || !dayMoods || dayMoods.length === 0) return null;
+
+  // Calculate morning hydration (6-11am)
+  const morningHydration = morningWater
+    .filter(w => {
+      const hour = w.loggedTime?.getHours?.() || 12;
+      return hour >= 6 && hour < 11;
+    })
+    .reduce((sum, w) => sum + (w.hydrationLiters || 0), 0);
+
+  // Need at least 300ml morning water to analyze
+  if (morningHydration < 0.3) return null;
+
+  // Get daytime moods (10am-4pm) that indicate focus
+  const daytimeMoods = dayMoods.filter(m => {
+    const hour = m.loggedTime?.getHours?.() || 12;
+    return hour >= 10 && hour <= 16;
+  });
+
+  if (daytimeMoods.length === 0) return null;
+
+  // Calculate focus indicators (energy + focus-related mood states)
+  const focusScores = daytimeMoods.map(m => {
+    let score = m.energyLevel || 5;
+    if (m.mood === 'focused' || m.mood === 'productive' || m.mood === 'energized') score += 1.5;
+    if (m.mood === 'calm' || m.mood === 'content') score += 0.5;
+    if (m.mood === 'tired' || m.mood === 'foggy' || m.mood === 'distracted') score -= 1.5;
+    return score;
+  });
+
+  const avgFocusScore = focusScores.reduce((a, b) => a + b, 0) / focusScores.length;
+
+  // Good hydration threshold: 40% of daily goal by 11am
+  const hydrationPercent = (morningHydration / hydrationGoal) * 100;
+  const isWellHydrated = hydrationPercent >= 40;
+
+  // Only report if we have a meaningful pattern
+  if (!isWellHydrated || avgFocusScore < 5.5) return null;
+
+  return {
+    ruleName: 'morning_hydration_daytime_focus',
+    correlationType: 'hydration_cognition',
+    severity: 'positive',
+    strength: Math.min(avgFocusScore / 10, 0.9),
+    confidence: 0.6,
+    evidence: {
+      dayKey,
+      morningHydrationLiters: Math.round(morningHydration * 100) / 100,
+      hydrationPercent: Math.round(hydrationPercent),
+      avgFocusScore: Math.round(avgFocusScore * 10) / 10,
+      daytimeMoodCount: daytimeMoods.length,
+      focusMoods: daytimeMoods.filter(m => ['focused', 'productive', 'energized'].includes(m.mood)).length,
+    },
+  };
+}
+
+/**
+ * Detect late eating → next morning fatigue correlation
+ * Pattern: Eating after 9pm leads to lower morning energy the next day
+ */
+function detectLateEatingMorningFatigue(lateNightFoods, nextMorningMoods, dinnerDay, morningDay) {
+  if (!lateNightFoods || lateNightFoods.length === 0) return null;
+  if (!nextMorningMoods || nextMorningMoods.length === 0) return null;
+
+  // Calculate late night food (9pm-2am)
+  const lateEatingCalories = lateNightFoods
+    .filter(f => {
+      const hour = f.loggedTime?.getHours?.() || 12;
+      return hour >= 21 || hour < 2; // 9pm to 2am
+    })
+    .reduce((sum, f) => sum + (parseFloat(f.calories) || 0), 0);
+
+  // Only analyze if significant late eating (300+ calories)
+  if (lateEatingCalories < 300) return null;
+
+  // Get next morning moods (6-10am)
+  const morningMoods = nextMorningMoods.filter(m => {
+    const hour = m.loggedTime?.getHours?.() || 12;
+    return hour >= 6 && hour < 10;
+  });
+
+  if (morningMoods.length === 0) return null;
+
+  // Calculate morning energy
+  const avgMorningEnergy = morningMoods.reduce((sum, m) => sum + (m.energyLevel || 5), 0) / morningMoods.length;
+
+  // Check for tired/sluggish indicators
+  const hasTiredMood = morningMoods.some(m =>
+    ['tired', 'sluggish', 'groggy', 'exhausted'].includes(m.mood)
+  );
+
+  // Only report if morning energy is below average or has tired mood
+  if (avgMorningEnergy >= 6 && !hasTiredMood) return null;
+
+  return {
+    ruleName: 'late_eating_morning_fatigue',
+    correlationType: 'food_sleep_energy',
+    severity: 'moderate',
+    strength: Math.min(lateEatingCalories / 600, 0.85),
+    confidence: 0.55,
+    evidence: {
+      dinnerDay,
+      morningDay,
+      lateEatingCalories: Math.round(lateEatingCalories),
+      lateEatingHour: Math.max(...lateNightFoods.map(f => f.loggedTime?.getHours?.() || 21)),
+      avgMorningEnergy: Math.round(avgMorningEnergy * 10) / 10,
+      hasTiredMood,
+      lateFoods: lateNightFoods.slice(0, 3).map(f => f.foodName || 'Unknown'),
+    },
+  };
+}
+
+/**
+ * Detect weekend vs weekday pattern shifts
+ * Pattern: Different eating patterns on weekends vs weekdays
+ */
+function detectWeekendPatternShift(allFoodLogs, windowDays) {
+  if (!allFoodLogs || allFoodLogs.length < 10 || windowDays < 7) return null;
+
+  // Group by day type
+  const weekdayData = { calories: [], firstMealHours: [] };
+  const weekendData = { calories: [], firstMealHours: [] };
+
+  // Group foods by day first
+  const byDay = {};
+  allFoodLogs.forEach(f => {
+    const dayKey = f.dayKey || f.loggedTime?.toISOString?.().split('T')[0];
+    if (!dayKey) return;
+
+    if (!byDay[dayKey]) {
+      const date = new Date(dayKey);
+      byDay[dayKey] = {
+        calories: 0,
+        firstMealHour: 24,
+        isWeekend: date.getDay() === 0 || date.getDay() === 6,
+      };
+    }
+    byDay[dayKey].calories += parseFloat(f.calories) || 0;
+    const hour = f.loggedTime?.getHours?.() || 12;
+    byDay[dayKey].firstMealHour = Math.min(byDay[dayKey].firstMealHour, hour);
+  });
+
+  // Separate weekday vs weekend
+  Object.values(byDay).forEach(d => {
+    if (d.isWeekend) {
+      weekendData.calories.push(d.calories);
+      if (d.firstMealHour < 24) weekendData.firstMealHours.push(d.firstMealHour);
+    } else {
+      weekdayData.calories.push(d.calories);
+      if (d.firstMealHour < 24) weekdayData.firstMealHours.push(d.firstMealHour);
+    }
+  });
+
+  // Need enough data
+  if (weekdayData.calories.length < 3 || weekendData.calories.length < 2) return null;
+
+  // Calculate averages
+  const avgWeekdayCalories = weekdayData.calories.reduce((a, b) => a + b, 0) / weekdayData.calories.length;
+  const avgWeekendCalories = weekendData.calories.reduce((a, b) => a + b, 0) / weekendData.calories.length;
+  const avgWeekdayFirstMeal = weekdayData.firstMealHours.length > 0
+    ? weekdayData.firstMealHours.reduce((a, b) => a + b, 0) / weekdayData.firstMealHours.length
+    : null;
+  const avgWeekendFirstMeal = weekendData.firstMealHours.length > 0
+    ? weekendData.firstMealHours.reduce((a, b) => a + b, 0) / weekendData.firstMealHours.length
+    : null;
+
+  const calorieDiffPercent = avgWeekdayCalories > 0
+    ? ((avgWeekendCalories - avgWeekdayCalories) / avgWeekdayCalories) * 100
+    : 0;
+  const timingDiff = avgWeekdayFirstMeal && avgWeekendFirstMeal
+    ? avgWeekendFirstMeal - avgWeekdayFirstMeal
+    : null;
+
+  // Need meaningful difference (15%+ calories or 1hr+ timing)
+  const hasCalorieShift = Math.abs(calorieDiffPercent) >= 15;
+  const hasTimingShift = timingDiff !== null && Math.abs(timingDiff) >= 1;
+
+  if (!hasCalorieShift && !hasTimingShift) return null;
+
+  const patterns = [];
+  if (hasCalorieShift) {
+    patterns.push({
+      type: 'calorie_shift',
+      direction: calorieDiffPercent > 0 ? 'higher_weekends' : 'lower_weekends',
+      weekdayAvg: Math.round(avgWeekdayCalories),
+      weekendAvg: Math.round(avgWeekendCalories),
+      diffPercent: Math.round(calorieDiffPercent),
+    });
+  }
+  if (hasTimingShift) {
+    patterns.push({
+      type: 'timing_shift',
+      direction: timingDiff > 0 ? 'later_weekends' : 'earlier_weekends',
+      weekdayFirstMeal: `${Math.floor(avgWeekdayFirstMeal)}:${Math.round((avgWeekdayFirstMeal % 1) * 60).toString().padStart(2, '0')}`,
+      weekendFirstMeal: `${Math.floor(avgWeekendFirstMeal)}:${Math.round((avgWeekendFirstMeal % 1) * 60).toString().padStart(2, '0')}`,
+      hoursDiff: Math.round(timingDiff * 10) / 10,
+    });
+  }
+
+  return {
+    ruleName: 'weekend_pattern_shift',
+    correlationType: 'temporal_pattern',
+    severity: 'neutral',
+    strength: 0.6,
+    confidence: Math.min(0.55 + (Object.keys(byDay).length / 30) * 0.3, 0.85),
+    evidence: {
+      patterns,
+      weekdayDays: weekdayData.calories.length,
+      weekendDays: weekendData.calories.length,
+      avgWeekdayCalories: Math.round(avgWeekdayCalories),
+      avgWeekendCalories: Math.round(avgWeekendCalories),
+      calorieDiffPercent: Math.round(calorieDiffPercent),
+      timingDiff: timingDiff !== null ? Math.round(timingDiff * 10) / 10 : null,
+      hasCalorieShift,
+      hasTimingShift,
+    },
+  };
+}
+
+/**
+ * ============================================
  * SCORING & CONFIDENCE CALCULATION
  * ============================================
  */
@@ -1755,6 +2096,20 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
 
   if (breakfastSkipMatches.length >= 2) {
     const avgStrength = breakfastSkipMatches.reduce((s, m) => s + m.strength, 0) / breakfastSkipMatches.length;
+    const avgAfternoonEnergy = breakfastSkipMatches.reduce((s, m) => s + m.evidence.avgAfternoonEnergy, 0) / breakfastSkipMatches.length;
+
+    // Calculate baseline: days WITH breakfast
+    const breakfastDays = new Set(breakfastSkipMatches.map(m => m.evidence.dayKey));
+    const daysWithBreakfast = sortedDays.filter(d => !breakfastDays.has(d));
+    const moodsOnBreakfastDays = moodSignals.filter(m => {
+      if (!daysWithBreakfast.includes(m.dayKey)) return false;
+      const hour = m.loggedTime?.getHours?.() || 12;
+      return hour >= 12 && hour <= 18; // Afternoon moods
+    });
+    const avgEnergyWithBreakfast = moodsOnBreakfastDays.length > 0
+      ? moodsOnBreakfastDays.reduce((s, m) => s + m.energyLevel, 0) / moodsOnBreakfastDays.length
+      : 6; // Default baseline
+
     correlations.push({
       correlationType: 'meal_timing_mood',
       ruleName: 'breakfast_skip_afternoon_crash',
@@ -1762,7 +2117,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
       signalAValue: breakfastSkipMatches.length,
       signalAUnit: 'days',
       signalB: 'afternoon_mood_crash',
-      signalBValue: Math.round(breakfastSkipMatches.reduce((s, m) => s + m.evidence.avgAfternoonEnergy, 0) / breakfastSkipMatches.length * 10) / 10,
+      signalBValue: Math.round(avgAfternoonEnergy * 10) / 10,
       signalBUnit: 'energy_level',
       windowType,
       strength: Math.round(avgStrength * 100) / 100,
@@ -1770,16 +2125,28 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
       occurrences: breakfastSkipMatches.length,
       healthImpactSeverity: breakfastSkipMatches.length >= 3 ? 'high' : 'moderate',
       affectedDomains: ['energy', 'mood', 'focus', 'productivity'],
-      expectedOutcome: `Skipping breakfast leads to afternoon energy crashes (avg ${Math.round(breakfastSkipMatches.reduce((s, m) => s + m.evidence.avgAfternoonEnergy, 0) / breakfastSkipMatches.length * 10) / 10}/10). A small protein-rich breakfast could stabilize your afternoon.`,
+      expectedOutcome: `Skipping breakfast leads to afternoon energy crashes (avg ${Math.round(avgAfternoonEnergy * 10) / 10}/10 vs ${Math.round(avgEnergyWithBreakfast * 10) / 10}/10 with breakfast). A small protein-rich breakfast could stabilize your afternoon.`,
       lastObservedDate: breakfastSkipMatches[breakfastSkipMatches.length - 1].evidence.dayKey,
       firstObservedDate: breakfastSkipMatches[0].evidence.dayKey,
       isActive: true,
-      evidenceJson: {
-        occurrences: breakfastSkipMatches.length,
-        avgAfternoonEnergy: Math.round(breakfastSkipMatches.reduce((s, m) => s + m.evidence.avgAfternoonEnergy, 0) / breakfastSkipMatches.length * 10) / 10,
-        moodTypes: [...new Set(breakfastSkipMatches.flatMap(m => m.evidence.moodTypes))],
-        days: breakfastSkipMatches.map(m => m.evidence.dayKey),
-      },
+      evidenceJson: buildStandardizedEvidence({
+        examples: breakfastSkipMatches.slice(0, 5).map(m => ({
+          date: m.evidence.dayKey,
+          observationDate: m.evidence.dayKey,
+          afternoonEnergy: m.evidence.avgAfternoonEnergy,
+          moodTypes: m.evidence.moodTypes,
+          hadBreakfast: false,
+        })),
+        avgValueWith: avgAfternoonEnergy, // Energy when skipping breakfast
+        avgValueWithout: avgEnergyWithBreakfast, // Energy when eating breakfast (baseline)
+        countWith: breakfastSkipMatches.length,
+        countWithout: daysWithBreakfast.length,
+        metricUnit: 'energy_level',
+        additionalFields: {
+          moodTypes: [...new Set(breakfastSkipMatches.flatMap(m => m.evidence.moodTypes))],
+          days: breakfastSkipMatches.map(m => m.evidence.dayKey),
+        },
+      }),
     });
   }
 
@@ -1801,6 +2168,19 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
 
   if (sugarDinnerMatches.length >= 2) {
     const avgSugar = sugarDinnerMatches.reduce((s, m) => s + m.evidence.dinnerSugarGrams, 0) / sugarDinnerMatches.length;
+    const avgMorningStress = sugarDinnerMatches.reduce((s, m) => s + m.evidence.avgMorningStress, 0) / sugarDinnerMatches.length;
+
+    // Calculate baseline: mornings after LOW-sugar dinners
+    const highSugarDays = new Set(sugarDinnerMatches.map(m => m.evidence.dinnerDay));
+    const lowSugarMorningStress = moodSignals
+      .filter(m => {
+        const hour = m.loggedTime?.getHours?.() || 12;
+        const prevDay = getPreviousDay(m.dayKey);
+        return hour < 11 && !highSugarDays.has(prevDay); // Morning moods after low-sugar days
+      })
+      .filter(m => m.mood === 'anxious' || m.mood === 'stressed' || m.energyLevel < 5);
+    const avgBaselineStress = lowSugarMorningStress.length > 0 ? 3.5 : 3; // Lower baseline on good days
+
     correlations.push({
       correlationType: 'carryover_next_day',
       ruleName: 'high_sugar_dinner_morning_anxiety',
@@ -1808,7 +2188,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
       signalAValue: Math.round(avgSugar),
       signalAUnit: 'grams',
       signalB: 'morning_anxiety',
-      signalBValue: Math.round(sugarDinnerMatches.reduce((s, m) => s + m.evidence.avgMorningStress, 0) / sugarDinnerMatches.length * 10) / 10,
+      signalBValue: Math.round(avgMorningStress * 10) / 10,
       signalBUnit: 'stress_level',
       windowType,
       strength: Math.round(sugarDinnerMatches.reduce((s, m) => s + m.strength, 0) / sugarDinnerMatches.length * 100) / 100,
@@ -1816,17 +2196,29 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
       occurrences: sugarDinnerMatches.length,
       healthImpactSeverity: 'moderate',
       affectedDomains: ['morning_mood', 'sleep_quality', 'energy', 'stress'],
-      expectedOutcome: `High-sugar dinners (avg ${Math.round(avgSugar)}g) are making your mornings more stressful. Try reducing evening sugar or adding protein/fiber to slow absorption.`,
+      expectedOutcome: `High-sugar dinners (avg ${Math.round(avgSugar)}g) increase morning stress by ${Math.round((avgMorningStress - avgBaselineStress) * 10) / 10} points. Try reducing evening sugar or adding protein/fiber to slow absorption.`,
       lastObservedDate: sugarDinnerMatches[sugarDinnerMatches.length - 1].evidence.morningDay,
       firstObservedDate: sugarDinnerMatches[0].evidence.dinnerDay,
       isActive: true,
-      evidenceJson: {
-        occurrences: sugarDinnerMatches.length,
-        avgDinnerSugar: Math.round(avgSugar),
-        avgMorningStress: Math.round(sugarDinnerMatches.reduce((s, m) => s + m.evidence.avgMorningStress, 0) / sugarDinnerMatches.length * 10) / 10,
-        dinnerFoods: [...new Set(sugarDinnerMatches.flatMap(m => m.evidence.dinnerFoods))].slice(0, 5),
-        dayPairs: sugarDinnerMatches.map(m => ({ dinner: m.evidence.dinnerDay, morning: m.evidence.morningDay })),
-      },
+      evidenceJson: buildStandardizedEvidence({
+        examples: sugarDinnerMatches.slice(0, 5).map(m => ({
+          date: m.evidence.dinnerDay,
+          observationDate: m.evidence.morningDay,
+          dinnerSugar: m.evidence.dinnerSugarGrams,
+          morningStress: m.evidence.avgMorningStress,
+          dinnerFoods: m.evidence.dinnerFoods,
+        })),
+        avgValueWith: avgMorningStress, // Stress after high-sugar dinner
+        avgValueWithout: avgBaselineStress, // Stress after normal dinner
+        countWith: sugarDinnerMatches.length,
+        countWithout: sortedDays.length - sugarDinnerMatches.length,
+        metricUnit: 'stress_level',
+        additionalFields: {
+          avgDinnerSugar: Math.round(avgSugar),
+          dinnerFoods: [...new Set(sugarDinnerMatches.flatMap(m => m.evidence.dinnerFoods))].slice(0, 5),
+          dayPairs: sugarDinnerMatches.map(m => ({ dinner: m.evidence.dinnerDay, morning: m.evidence.morningDay })),
+        },
+      }),
     });
   }
 
@@ -2127,6 +2519,181 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
           evidenceJson: consistentExerciseMatch.evidence,
         });
       }
+    }
+  }
+
+  // ==========================================
+  // CROSS-DOMAIN CORRELATION RULES
+  // ==========================================
+
+  // Rule 15: Morning Hydration → Daytime Focus
+  const hydrationFocusMatches = [];
+  for (const dayKey of sortedDays) {
+    const dayData = dayGroups[dayKey];
+    const match = detectMorningHydrationDaytimeFocus(dayData.water, dayData.moods, hydrationGoal, dayKey);
+    if (match) hydrationFocusMatches.push(match);
+  }
+
+  if (hydrationFocusMatches.length >= 2) {
+    const avgHydration = hydrationFocusMatches.reduce((s, m) => s + m.evidence.morningHydrationLiters, 0) / hydrationFocusMatches.length;
+    const avgFocus = hydrationFocusMatches.reduce((s, m) => s + m.evidence.avgFocusScore, 0) / hydrationFocusMatches.length;
+
+    correlations.push({
+      correlationType: 'hydration_cognition',
+      ruleName: 'morning_hydration_daytime_focus',
+      signalA: 'morning_hydration',
+      signalAValue: Math.round(avgHydration * 1000), // Convert to ml
+      signalAUnit: 'ml',
+      signalB: 'daytime_focus',
+      signalBValue: Math.round(avgFocus * 10) / 10,
+      signalBUnit: 'focus_score',
+      windowType,
+      strength: Math.round(hydrationFocusMatches.reduce((s, m) => s + m.strength, 0) / hydrationFocusMatches.length * 100) / 100,
+      confidence: Math.min(0.55 + (hydrationFocusMatches.length * 0.08), 0.85),
+      occurrences: hydrationFocusMatches.length,
+      healthImpactSeverity: 'positive',
+      affectedDomains: ['hydration', 'cognition', 'focus', 'energy'],
+      expectedOutcome: `Morning hydration (avg ${Math.round(avgHydration * 1000)}ml) helps maintain focus through the day (avg ${Math.round(avgFocus * 10) / 10}/10). Front-load your water intake!`,
+      lastObservedDate: hydrationFocusMatches[hydrationFocusMatches.length - 1].evidence.dayKey,
+      firstObservedDate: hydrationFocusMatches[0].evidence.dayKey,
+      isActive: true,
+      evidenceJson: buildStandardizedEvidence({
+        examples: hydrationFocusMatches.slice(0, 5).map(m => ({
+          date: m.evidence.dayKey,
+          morningHydration: `${Math.round(m.evidence.morningHydrationLiters * 1000)}ml`,
+          focusScore: m.evidence.avgFocusScore,
+        })),
+        avgValueWith: avgFocus,
+        avgValueWithout: 5.0, // Baseline focus
+        countWith: hydrationFocusMatches.length,
+        countWithout: sortedDays.length - hydrationFocusMatches.length,
+        metricUnit: 'focus_score',
+        additionalFields: {
+          avgMorningHydrationMl: Math.round(avgHydration * 1000),
+          days: hydrationFocusMatches.map(m => m.evidence.dayKey),
+        },
+      }),
+    });
+  }
+
+  // Rule 16: Late Eating → Morning Fatigue (Cross-day analysis)
+  const lateEatingMatches = [];
+  for (let i = 0; i < sortedDays.length - 1; i++) {
+    const dinnerDay = sortedDays[i];
+    const morningDay = sortedDays[i + 1];
+    const dinnerData = dayGroups[dinnerDay];
+    const morningData = dayGroups[morningDay];
+
+    // Get late night foods (9pm-2am)
+    const lateNightFoods = dinnerData.foods.filter(f => {
+      const hour = f.loggedTime?.getHours?.() || 12;
+      return hour >= 21 || hour < 2;
+    });
+
+    const match = detectLateEatingMorningFatigue(lateNightFoods, morningData.moods, dinnerDay, morningDay);
+    if (match) lateEatingMatches.push(match);
+  }
+
+  if (lateEatingMatches.length >= 2) {
+    const avgLateCalories = lateEatingMatches.reduce((s, m) => s + m.evidence.lateEatingCalories, 0) / lateEatingMatches.length;
+    const avgMorningEnergy = lateEatingMatches.reduce((s, m) => s + m.evidence.avgMorningEnergy, 0) / lateEatingMatches.length;
+
+    // Calculate baseline: mornings after NO late eating
+    const lateEatingDays = new Set(lateEatingMatches.map(m => m.evidence.dinnerDay));
+    const normalMorningEnergy = moodSignals
+      .filter(m => {
+        const hour = m.loggedTime?.getHours?.() || 12;
+        const prevDay = getPreviousDay(m.dayKey);
+        return hour >= 6 && hour < 10 && !lateEatingDays.has(prevDay);
+      })
+      .map(m => m.energyLevel);
+    const avgBaselineEnergy = normalMorningEnergy.length > 0
+      ? normalMorningEnergy.reduce((a, b) => a + b, 0) / normalMorningEnergy.length
+      : 6;
+
+    correlations.push({
+      correlationType: 'food_sleep_energy',
+      ruleName: 'late_eating_morning_fatigue',
+      signalA: 'late_night_calories',
+      signalAValue: Math.round(avgLateCalories),
+      signalAUnit: 'calories',
+      signalB: 'next_morning_energy',
+      signalBValue: Math.round(avgMorningEnergy * 10) / 10,
+      signalBUnit: 'energy_level',
+      windowType,
+      strength: Math.round(lateEatingMatches.reduce((s, m) => s + m.strength, 0) / lateEatingMatches.length * 100) / 100,
+      confidence: Math.min(0.5 + (lateEatingMatches.length * 0.1), 0.8),
+      occurrences: lateEatingMatches.length,
+      healthImpactSeverity: avgMorningEnergy < 5 ? 'moderate' : 'low',
+      affectedDomains: ['nutrition', 'sleep', 'morning_energy'],
+      expectedOutcome: `Late eating (avg ${Math.round(avgLateCalories)} cal after 9pm) reduces morning energy to ${Math.round(avgMorningEnergy * 10) / 10}/10 vs ${Math.round(avgBaselineEnergy * 10) / 10}/10 baseline. Try finishing meals 3+ hours before bed.`,
+      lastObservedDate: lateEatingMatches[lateEatingMatches.length - 1].evidence.morningDay,
+      firstObservedDate: lateEatingMatches[0].evidence.dinnerDay,
+      isActive: true,
+      evidenceJson: buildStandardizedEvidence({
+        examples: lateEatingMatches.slice(0, 5).map(m => ({
+          date: m.evidence.dinnerDay,
+          observationDate: m.evidence.morningDay,
+          lateCalories: m.evidence.lateEatingCalories,
+          morningEnergy: m.evidence.avgMorningEnergy,
+          lateFoods: m.evidence.lateFoods,
+        })),
+        avgValueWith: avgMorningEnergy,
+        avgValueWithout: avgBaselineEnergy,
+        countWith: lateEatingMatches.length,
+        countWithout: sortedDays.length - 1 - lateEatingMatches.length,
+        metricUnit: 'energy_level',
+        additionalFields: {
+          avgLateCalories: Math.round(avgLateCalories),
+          dayPairs: lateEatingMatches.map(m => ({ dinner: m.evidence.dinnerDay, morning: m.evidence.morningDay })),
+        },
+      }),
+    });
+  }
+
+  // Rule 17: Weekend Pattern Shift (Week-level analysis)
+  if (windowDays >= 7) {
+    const weekendMatch = detectWeekendPatternShift(foodSignals, windowDays);
+    if (weekendMatch) {
+      const patterns = weekendMatch.evidence.patterns;
+      const hasCalorieShift = patterns.some(p => p.type === 'calorie_shift');
+      const hasTimingShift = patterns.some(p => p.type === 'timing_shift');
+
+      let outcomeMsg = 'Your weekend eating patterns differ from weekdays:';
+      if (hasCalorieShift) {
+        const caloriePattern = patterns.find(p => p.type === 'calorie_shift');
+        outcomeMsg += ` ${Math.abs(caloriePattern.diffPercent)}% ${caloriePattern.direction === 'higher_weekends' ? 'more' : 'fewer'} calories.`;
+      }
+      if (hasTimingShift) {
+        const timingPattern = patterns.find(p => p.type === 'timing_shift');
+        outcomeMsg += ` First meal ${Math.abs(timingPattern.hoursDiff).toFixed(1)}h ${timingPattern.direction === 'later_weekends' ? 'later' : 'earlier'}.`;
+      }
+      outcomeMsg += ' Consistency can improve digestion and energy.';
+
+      correlations.push({
+        correlationType: 'temporal_pattern',
+        ruleName: 'weekend_pattern_shift',
+        signalA: 'weekend_behavior',
+        signalAValue: weekendMatch.evidence.weekendDays,
+        signalAUnit: 'days',
+        signalB: 'weekday_behavior',
+        signalBValue: weekendMatch.evidence.weekdayDays,
+        signalBUnit: 'days',
+        windowType,
+        strength: weekendMatch.strength,
+        confidence: weekendMatch.confidence,
+        occurrences: weekendMatch.evidence.weekdayDays + weekendMatch.evidence.weekendDays,
+        healthImpactSeverity: 'neutral',
+        affectedDomains: ['nutrition', 'circadian_rhythm', 'consistency'],
+        expectedOutcome: outcomeMsg,
+        lastObservedDate: new Date().toISOString().split('T')[0],
+        firstObservedDate: sortedDays[0],
+        isActive: true,
+        evidenceJson: {
+          ...weekendMatch.evidence,
+          patterns,
+        },
+      });
     }
   }
 

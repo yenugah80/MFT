@@ -24,8 +24,10 @@ import {
   userCorrelationsTable,
   nutritionGoalsTable,
   profilesTable,
+  predictionLogTable,
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { getUserPlattParams, getUserThresholds } from './outcomeVerificationService.js';
 
 // ============================================================================
 // CONSTANTS
@@ -68,14 +70,15 @@ const PLATT_PARAMS = {
 
 /**
  * Apply Platt scaling to convert raw confidence to calibrated probability
+ * Now supports per-user calibration parameters learned from outcome verification
  *
  * @param {number} rawConfidence - Raw confidence score (0-1)
- * @param {string} userId - User ID for personalized calibration
+ * @param {Object} userPlattParams - User-specific Platt params or null for defaults
  * @returns {number} Calibrated probability (0-1)
  */
-function applyPlattScaling(rawConfidence, userId = null) {
+function applyPlattScaling(rawConfidence, userPlattParams = null) {
   // Get calibration params (user-specific or default)
-  const params = PLATT_PARAMS.default;
+  const params = userPlattParams || PLATT_PARAMS.default;
 
   // Transform confidence to logit scale
   const logit = Math.log(rawConfidence / (1 - rawConfidence + 0.001));
@@ -192,12 +195,12 @@ function decomposeUncertainty(context) {
  * @param {number} rawValue - Raw predicted value
  * @param {number} rawConfidence - Raw confidence (0-1)
  * @param {object} context - Context for uncertainty decomposition
- * @param {string} userId - User ID for personalized calibration
+ * @param {Object} userPlattParams - User-specific Platt params (from getUserPlattParams)
  * @returns {object} Calibrated prediction with intervals
  */
-function buildCalibratedPrediction(rawValue, rawConfidence, context, userId = null) {
-  // Apply Platt scaling
-  const calibratedConfidence = applyPlattScaling(rawConfidence, userId);
+function buildCalibratedPrediction(rawValue, rawConfidence, context, userPlattParams = null) {
+  // Apply Platt scaling with user-specific calibration
+  const calibratedConfidence = applyPlattScaling(rawConfidence, userPlattParams);
 
   // Decompose uncertainty
   const uncertainty = decomposeUncertainty(context);
@@ -245,7 +248,8 @@ function buildCalibratedPrediction(rawValue, rawConfidence, context, userId = nu
     // Metadata for future calibration
     meta: {
       calibrationApplied: true,
-      plattParams: PLATT_PARAMS.default,
+      plattParams: userPlattParams || PLATT_PARAMS.default,
+      isPersonalizedCalibration: !!userPlattParams,
       timestamp: new Date().toISOString(),
     },
   };
@@ -711,6 +715,64 @@ function detectWeekendPatterns(twoWeekMeals, twoWeekMoods) {
 }
 
 // ============================================================================
+// PREDICTION LOGGING
+// ============================================================================
+
+/**
+ * Log a prediction to the database for outcome tracking
+ *
+ * @param {string} userId
+ * @param {object} prediction
+ * @param {object} context
+ * @returns {Promise<object|null>}
+ */
+async function logPredictionToDatabase(userId, prediction, context) {
+  try {
+    const now = new Date();
+    const windowMinutes = 240; // 4 hours
+    const predictedTime = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours from now
+    const expiresAt = new Date(predictedTime.getTime() + windowMinutes * 60 * 1000);
+
+    // Determine prediction type and severity from risks
+    const primaryRisk = prediction.risks?.[0];
+    const predictionType = primaryRisk?.type || 'energy';
+    const predictedSeverity = primaryRisk?.severity || 'low';
+
+    const [record] = await db
+      .insert(predictionLogTable)
+      .values({
+        userId,
+        predictionType,
+        predictionSubtype: primaryRisk?.type,
+        predictedOutcome: primaryRisk?.title || 'energy_level',
+        predictedSeverity,
+        predictedTime,
+        predictionWindowMinutes: windowMinutes,
+        triggerType: context.lastNightDinner?.hasData ? 'meal' : 'pattern',
+        triggerData: {
+          dinner: context.lastNightDinner,
+          todayProgress: context.todayProgress,
+          personalization: context.personalization,
+        },
+        confidence: (prediction.confidence || 0.5).toFixed(2),
+        confidenceFactors: { dataPoints: prediction.dataPointsUsed },
+        thresholdsUsed: context.personalization?.userAverages || {},
+        wasPersonalized: context.personalization?.isPersonalized || false,
+        userMessage: primaryRisk?.description || 'Daily energy prediction',
+        preventionTip: prediction.preventionTips?.[0]?.action,
+        outcomeStatus: 'pending',
+        expiresAt,
+      })
+      .returning();
+
+    return record;
+  } catch (error) {
+    console.warn('[PredictionEngine] Error logging prediction:', error.message);
+    return null;
+  }
+}
+
+// ============================================================================
 // MORNING PREDICTION
 // ============================================================================
 
@@ -725,6 +787,18 @@ export async function generateMorningPrediction(userId) {
     const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
     const lastWeekStart = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
     const last14DaysStart = new Date(todayStart.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    // Fetch user-specific calibration parameters
+    let userPlattParams = null;
+    let userThresholds = {};
+    try {
+      [userPlattParams, userThresholds] = await Promise.all([
+        getUserPlattParams(userId),
+        getUserThresholds(userId),
+      ]);
+    } catch (e) {
+      console.warn('[PredictionEngine] Could not load user calibration:', e.message);
+    }
 
     // Fetch data in parallel
     const [
@@ -829,7 +903,20 @@ export async function generateMorningPrediction(userId) {
     ]);
 
     // Calculate PERSONALIZED thresholds from user's historical data
-    const thresholds = calculatePersonalizedThresholds(weekMeals, weekMoods, goals[0]);
+    // Merge with learned thresholds from outcome verification
+    const baseThresholds = calculatePersonalizedThresholds(weekMeals, weekMoods, goals[0]);
+
+    // Override with learned thresholds where available and confident
+    const thresholds = { ...baseThresholds };
+    for (const [key, learned] of Object.entries(userThresholds)) {
+      if (learned.confidence === 'high' || learned.confidence === 'validated') {
+        // Map threshold types to our threshold keys
+        if (key === 'sugar_crash' && learned.value) thresholds.highSugar = learned.value;
+        if (key === 'protein_fatigue' && learned.value) thresholds.lowProtein = learned.value;
+        if (key === 'hydration_warning' && learned.value) thresholds.hydrationWarning = learned.value / 100;
+      }
+    }
+    thresholds.hasLearnedThresholds = Object.keys(userThresholds).length > 0;
 
     // Analyze last night's dinner (using personalized thresholds)
     const dinnerAnalysis = analyzeDinnerImpact(lastNightMeals, thresholds);
@@ -888,7 +975,7 @@ export async function generateMorningPrediction(userId) {
       currentHour
     );
 
-    return {
+    const result = {
       success: true,
       prediction: {
         generatedAt: now.toISOString(),
@@ -920,14 +1007,22 @@ export async function generateMorningPrediction(userId) {
           // Include personalization info for transparency
           personalization: {
             isPersonalized: thresholds.isPersonalized,
+            hasLearnedThresholds: thresholds.hasLearnedThresholds,
             userAverages: thresholds.userAverages || null,
             breakfastHour: thresholds.breakfastHour,
           },
         },
 
-        // Confidence in prediction
+        // Confidence in prediction (now with per-user calibration)
         confidence: calculatePredictionConfidence(weekMoods.length, weekMeals.length, correlations.length),
         dataPointsUsed: weekMoods.length + weekMeals.length,
+
+        // Calibration info for transparency
+        calibration: {
+          isPersonalizedCalibration: !!userPlattParams?.sampleCount,
+          sampleCount: userPlattParams?.sampleCount || 0,
+          calibrationAccuracy: userPlattParams?.accuracy || null,
+        },
 
         // 14-day deep insights (only populated when enough data exists)
         // These are SUPPLEMENTARY - predictions work without them
@@ -968,6 +1063,14 @@ export async function generateMorningPrediction(userId) {
         },
       },
     };
+
+    // Log prediction to database for outcome tracking (async, don't block response)
+    if (result.prediction.hasHighRisk || risks.length > 0) {
+      logPredictionToDatabase(userId, result.prediction, result.prediction.context)
+        .catch(err => console.warn('[PredictionEngine] Non-blocking prediction log error:', err.message));
+    }
+
+    return result;
   } catch (error) {
     console.error('[PredictionEngine] Morning prediction error:', error);
     return {
@@ -1001,6 +1104,14 @@ export async function predictMealFeeling(userId, mealData) {
     const now = new Date();
     const currentHour = now.getHours();
     const lastWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Fetch user-specific Platt calibration
+    let userPlattParams = null;
+    try {
+      userPlattParams = await getUserPlattParams(userId);
+    } catch (e) {
+      console.warn('[PredictionEngine] Could not load user calibration:', e.message);
+    }
 
     // Fetch user's historical patterns
     const [correlations, similarMeals] = await Promise.all([
@@ -1061,7 +1172,7 @@ export async function predictMealFeeling(userId, mealData) {
       (impactScore + 100) / 20, // Convert -100 to +100 → 0 to 10
       rawConfidence,
       predictionContext,
-      userId
+      userPlattParams
     );
 
     return {

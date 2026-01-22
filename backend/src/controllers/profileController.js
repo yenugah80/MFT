@@ -5,6 +5,10 @@ import {
   nutritionGoalsTable,
   gamificationTable,
   accountSettingsTable,
+  foodLogTable,
+  waterLogTable,
+  moodLogTable,
+  activityLogTable,
 } from "../db/schema.js";
 import { sendDevError } from "../utils/sendDevError.js";
 // Utility to ensure table shape (imported from server.js)
@@ -1164,6 +1168,106 @@ export async function completeOnboarding(req, res) {
     });
   } catch (error) {
     console.error("❌ Error completing onboarding:", error);
+    sendDevError(res, error);
+  }
+}
+
+// --- GDPR Data Export ---
+export async function exportUserData(req, res) {
+  try {
+    const { userId } = req.auth;
+    console.log(`[exportUserData] Exporting data for user ${userId}`);
+
+    // Load all user data in parallel
+    const [profile, dietary, goals, gamification, settings, foodLogs, waterLogs, moodLogs, activityLogs] = await Promise.all([
+      req.db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).then(r => r[0]),
+      req.db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).then(r => r[0]),
+      req.db.select().from(nutritionGoalsTable).where(eq(nutritionGoalsTable.userId, userId)).then(r => r[0]),
+      req.db.select().from(gamificationTable).where(eq(gamificationTable.userId, userId)).then(r => r[0]),
+      req.db.select().from(accountSettingsTable).where(eq(accountSettingsTable.userId, userId)).then(r => r[0]),
+      req.db.select().from(foodLogTable).where(eq(foodLogTable.userId, userId)),
+      req.db.select().from(waterLogTable).where(eq(waterLogTable.userId, userId)).catch(() => []),
+      req.db.select().from(moodLogTable).where(eq(moodLogTable.userId, userId)).catch(() => []),
+      req.db.select().from(activityLogTable).where(eq(activityLogTable.userId, userId)).catch(() => []),
+    ]);
+
+    // Sanitize profile data (remove internal IDs)
+    const sanitizeRecord = (record) => {
+      if (!record) return null;
+      const { id, ...rest } = record;
+      return rest;
+    };
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      userId,
+      profile: sanitizeRecord(profile),
+      dietaryPreferences: sanitizeRecord(dietary),
+      nutritionGoals: sanitizeRecord(goals),
+      gamification: sanitizeRecord(gamification),
+      accountSettings: sanitizeRecord(settings),
+      foodLogs: foodLogs.map(sanitizeRecord),
+      waterLogs: waterLogs.map(sanitizeRecord),
+      moodLogs: moodLogs.map(sanitizeRecord),
+      activityLogs: activityLogs.map(sanitizeRecord),
+      summary: {
+        totalFoodLogs: foodLogs.length,
+        totalWaterLogs: waterLogs.length,
+        totalMoodLogs: moodLogs.length,
+        totalActivityLogs: activityLogs.length,
+        accountCreated: profile?.createdAt || null,
+      }
+    };
+
+    console.log(`[exportUserData] ✅ Exported ${foodLogs.length} food logs, ${waterLogs.length} water logs for user ${userId}`);
+    res.status(200).json(exportData);
+  } catch (error) {
+    console.error("[exportUserData] ❌ Error exporting user data:", error);
+    sendDevError(res, error);
+  }
+}
+
+// --- GDPR Account Deletion ---
+export async function deleteAccount(req, res) {
+  try {
+    const { userId } = req.auth;
+    console.log(`[deleteAccount] ⚠️ Deleting account for user ${userId}`);
+
+    // Check if profile exists
+    const [profile] = await req.db
+      .select({ id: profilesTable.id })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId));
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "Profile not found",
+        message: "No account found to delete"
+      });
+    }
+
+    // Delete profile - cascade will delete all related data
+    // Tables with onDelete: "cascade" will automatically be cleaned up:
+    // - account_settings
+    // - dietary_preferences
+    // - nutrition_goals
+    // - gamification
+    // - food_log
+    // - water_log
+    // - mood_log
+    // - activity_log
+    await req.db
+      .delete(profilesTable)
+      .where(eq(profilesTable.userId, userId));
+
+    console.log(`[deleteAccount] ✅ Account deleted for user ${userId}`);
+    res.status(200).json({
+      success: true,
+      message: "Account and all associated data have been permanently deleted",
+      deletedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("[deleteAccount] ❌ Error deleting account:", error);
     sendDevError(res, error);
   }
 }

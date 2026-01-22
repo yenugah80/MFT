@@ -184,14 +184,17 @@ export async function unregisterFCMToken() {
 /**
  * Set up FCM message handlers
  * @param {Function} onForegroundMessage - Handler for messages when app is in foreground
+ * @param {Function} onColdStart - Handler for when app was opened from killed state via notification
+ * @param {Function} onBackgroundToForeground - Handler for when app comes from background via notification
  * @returns {object} - Cleanup functions for listeners
  */
-export async function setupFCMListeners(onForegroundMessage) {
+export async function setupFCMListeners(onForegroundMessage, onColdStart, onBackgroundToForeground) {
   const fcm = await loadFirebaseMessaging();
   if (!fcm) {
     return {
       foreground: { remove: () => {} },
       tokenRefresh: { remove: () => {} },
+      backgroundOpen: { remove: () => {} },
     };
   }
 
@@ -214,17 +217,21 @@ export async function setupFCMListeners(onForegroundMessage) {
     await registerFCMTokenWithBackend(newToken);
   });
 
-  // Check if app was opened from a notification
+  // Check if app was opened from a notification (cold start)
   const initialNotification = await fcm.getInitialNotification();
   if (initialNotification) {
-    console.log('[FCM] App opened from notification:', initialNotification.notification?.title);
-    // You can handle navigation here based on initialNotification.data
+    console.log('[FCM] App opened from notification (cold start):', initialNotification.notification?.title);
+    if (onColdStart) {
+      onColdStart(initialNotification);
+    }
   }
 
   // Handle notification that opened the app from background
-  fcm.onNotificationOpenedApp((remoteMessage) => {
+  const unsubscribeBackgroundOpen = fcm.onNotificationOpenedApp((remoteMessage) => {
     console.log('[FCM] Notification opened app from background:', remoteMessage.notification?.title);
-    // You can handle navigation here based on remoteMessage.data
+    if (onBackgroundToForeground) {
+      onBackgroundToForeground(remoteMessage);
+    }
   });
 
   fcmInitialized = true;
@@ -232,6 +239,7 @@ export async function setupFCMListeners(onForegroundMessage) {
   return {
     foreground: { remove: unsubscribeForeground },
     tokenRefresh: { remove: unsubscribeTokenRefresh },
+    backgroundOpen: { remove: unsubscribeBackgroundOpen },
   };
 }
 

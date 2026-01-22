@@ -22,9 +22,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { COLORS, GRADIENTS } from '../../constants/unifiedColors';
-import { ACTION_ICONS } from '../../constants/iconSystem';
+import {
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  TEXT,
+  SURFACES,
+  BRAND,
+} from '../../constants/premiumTheme';
+
+// Premium gradient for action buttons
+const PREMIUM_GRADIENT = [BRAND.primary, BRAND.secondary];
 
 /**
  * ActionItem Component
@@ -81,13 +89,13 @@ export function ActionItem({
           accessibilityHint={description}
         >
           <LinearGradient
-            colors={GRADIENTS.premium}
+            colors={PREMIUM_GRADIENT}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradientContent}
           >
             <View style={styles.iconContainer}>
-              <Ionicons name={iconName} size={24} color={COLORS.text.inverse} />
+              <Ionicons name={iconName} size={24} color="#FFFFFF" />
             </View>
             <View style={styles.textContainer}>
               <Text style={styles.primaryText}>{text}</Text>
@@ -100,7 +108,7 @@ export function ActionItem({
             <Ionicons
               name="chevron-forward"
               size={20}
-              color={COLORS.text.inverse}
+              color="#FFFFFF"
               style={styles.chevron}
             />
           </LinearGradient>
@@ -123,7 +131,7 @@ export function ActionItem({
           accessibilityLabel={text}
         >
           <View style={styles.secondaryIconContainer}>
-            <Ionicons name={iconName} size={22} color={COLORS.brand.primary} />
+            <Ionicons name={iconName} size={22} color={BRAND.primary} />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.secondaryText}>{text}</Text>
@@ -136,7 +144,7 @@ export function ActionItem({
           <Ionicons
             name="chevron-forward"
             size={18}
-            color={COLORS.text.tertiary}
+            color={TEXT.tertiary}
           />
         </TouchableOpacity>
       </Animated.View>
@@ -152,7 +160,7 @@ export function ActionItem({
       accessibilityRole="button"
       accessibilityLabel={text}
     >
-      <Ionicons name={iconName} size={20} color={COLORS.brand.primary} />
+      <Ionicons name={iconName} size={20} color={BRAND.primary} />
       <Text style={styles.ghostText}>{text}</Text>
     </TouchableOpacity>
   );
@@ -170,9 +178,10 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     borderRadius: RADIUS.xl,
     gap: SPACING[3],
+    minHeight: 64, // Ensure touch target > 44px
 
     // Shadow for depth
-    shadowColor: COLORS.brand.primary,
+    shadowColor: BRAND.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -196,7 +205,7 @@ const styles = StyleSheet.create({
   primaryText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
-    color: COLORS.text.inverse,
+    color: '#FFFFFF',
   },
 
   primaryDescription: {
@@ -214,17 +223,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING[4],
     borderRadius: RADIUS.xl,
-    backgroundColor: COLORS.background.secondary,
+    backgroundColor: SURFACES.card.primary,
     borderWidth: 1,
-    borderColor: COLORS.border.light,
+    borderColor: SURFACES.card.border,
     gap: SPACING[3],
+    minHeight: 64, // Ensure touch target > 44px
   },
 
   secondaryIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: `${COLORS.brand.primary}10`,
+    backgroundColor: `${BRAND.primary}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -232,12 +242,12 @@ const styles = StyleSheet.create({
   secondaryText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
   },
 
   secondaryDescription: {
     fontSize: TYPOGRAPHY.size.xs,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
 
   // Ghost variant (minimal)
@@ -246,12 +256,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[2],
     paddingVertical: SPACING[2],
+    minHeight: 44, // Ensure touch target meets minimum
   },
 
   ghostText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
-    color: COLORS.brand.primary,
+    color: BRAND.primary,
   },
 });
 

@@ -120,10 +120,12 @@ export function initStreakCronJob() {
                 freezesUsed++;
                 console.log(`[Streak] ❄️ User ${userId} used freeze (${streakFreezes - 1} remaining)`);
               } else {
-                // Reset streak
+                // Reset streak - store previous value for potential restoration
                 await db
                   .update(gamificationTable)
                   .set({
+                    previousStreak: streak, // Store the streak before reset
+                    streakResetAt: new Date(), // Track when it was reset
                     streak: 0,
                     lastStreakUpdatedAt: new Date(),
                     updatedAt: new Date(),
@@ -131,7 +133,7 @@ export function initStreakCronJob() {
                   .where(eq(gamificationTable.userId, userId));
 
                 streaksReset++;
-                console.log(`[Streak] 🔄 User ${userId} streak reset (was ${streak} days)`);
+                console.log(`[Streak] 🔄 User ${userId} streak reset (was ${streak} days, saved for restore)`);
               }
             } else {
               // User had activity yesterday (food, water, or mood), streak is safe

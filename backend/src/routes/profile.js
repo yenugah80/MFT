@@ -22,6 +22,8 @@ import {
   deleteFCMToken,
   getFCMTokenStatus,
   saveBothPushTokens,
+  exportUserData,
+  deleteAccount,
 } from "../controllers/profileController.js";
 
 const router = express.Router();
@@ -65,5 +67,9 @@ router.get("/preferences", getPreferences);
 router.post("/preferences", savePreferences);
 
 router.post("/gamification", saveGamification);
+
+// GDPR Data Rights
+router.get("/export", exportUserData);
+router.delete("/delete-account", deleteAccount);
 
 export default router;

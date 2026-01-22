@@ -27,13 +27,16 @@ import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
  */
 
 // Minimum data points required before surfacing a correlation
-const MIN_SAMPLE_SIZE = 10;
+// Lowered to 3 to show discoveries from Day 2 onwards
+const MIN_SAMPLE_SIZE = 3;
 
 // Minimum correlation strength to consider significant
-const MIN_CORRELATION = 0.3;
+// Lowered for early-stage users
+const MIN_CORRELATION = 0.25;
 
 // Maximum p-value for statistical significance
-const MAX_P_VALUE = 0.05;
+// Relaxed slightly for early-stage discoveries
+const MAX_P_VALUE = 0.1;
 
 // Time lags to test (in hours)
 const LAG_HOURS = [0, 2, 6, 12, 24, 48];

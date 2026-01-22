@@ -8,6 +8,10 @@ import { useState, useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import apiClient from '../services/apiClient';
+import {
+  cancelStreakProtectionIfLoggedToday,
+  cancelHydrationIfGoalReached,
+} from '../services/pushNotifications';
 
 /**
  * Quick add presets (in liters)
@@ -72,10 +76,20 @@ export function useWaterLog() {
         queryClient.setQueryData(['dashboard'], context.previousData);
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate to get fresh data from server
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['waterToday'] });
+
+      // Smart notifications: Cancel streak protection since user logged water today
+      cancelStreakProtectionIfLoggedToday().catch(() => {});
+
+      // Check if hydration goal reached to cancel hydration reminders
+      if (data?.todayTotal && data?.goal) {
+        const currentMl = Math.round(data.todayTotal * 1000);
+        const goalMl = Math.round(data.goal * 1000);
+        cancelHydrationIfGoalReached(currentMl, goalMl).catch(() => {});
+      }
     },
   });
 

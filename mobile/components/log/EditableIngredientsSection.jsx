@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: SURFACES.border.light,
+    borderBottomColor: SURFACES.card.border,
   },
   ingredientRowRemoved: {
     opacity: 0.5,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: SURFACES.border.light,
+    borderTopColor: SURFACES.card.border,
   },
   addOnsTitle: {
     fontSize: 12,
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: SURFACES.border.light,
+    borderTopColor: SURFACES.card.border,
   },
   disclaimerText: {
     flex: 1,

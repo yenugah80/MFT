@@ -66,12 +66,13 @@ const SignInScreen = () => {
         <ScrollView contentContainerStyle={authStyles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={authStyles.imageContainer}>
             <Image
-              source={require("../../assets/styles/images/chef.png")}
+              source={require("../../assets/images/app-logo.png")}
               style={authStyles.image}
               contentFit="contain"
             />
           </View>
 
+          <Text style={authStyles.brandName}>MyFoodTracker</Text>
           <Text style={authStyles.title}>Welcome Back</Text>
 
           <View style={authStyles.formContainer}>

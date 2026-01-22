@@ -21,6 +21,7 @@ import {
   interpolateMissingDays,
   TIMEFRAMES,
 } from '../services/unifiedAnalyticsEngine.js';
+import { getAnalyticsRecommendations } from '../services/analyticsRecommendationService.js';
 
 const router = express.Router();
 
@@ -357,5 +358,33 @@ function calculateTrends(current, previous) {
 
   return trends;
 }
+
+/**
+ * GET /api/analytics/recommendations
+ * Get comprehensive analytics with personalized recommendations for all domains
+ *
+ * World-class recommendation system inspired by Netflix/LinkedIn/Spotify
+ * - Analytics from Day 1
+ * - Recommendations from Day 2
+ * - Cross-domain insights
+ * - Evidence-anchored suggestions
+ */
+router.get('/recommendations', requireAuth(), async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const period = req.query.period || 'week'; // today, week, month, all
+
+    const recommendations = await getAnalyticsRecommendations(userId, period);
+
+    res.json(recommendations);
+  } catch (error) {
+    console.error('[UnifiedAnalytics API] Recommendations error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get analytics recommendations',
+      message: error.message,
+    });
+  }
+});
 
 export default router;

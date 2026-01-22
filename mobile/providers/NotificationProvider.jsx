@@ -29,10 +29,18 @@ import {
   addNotificationResponseReceivedListener,
   scheduleDailyReminder,
   scheduleHydrationReminders,
+  scheduleActivityReminders,
+  scheduleMoodCheckIn,
+  scheduleStreakProtectionReminder,
+  syncAllNotificationSchedules,
   cancelScheduledNotifications,
   NOTIFICATION_CATEGORIES,
   getNotificationPermissionStatus,
+  getScheduledNotifications,
+  resetDailyNotifications,
+  showLocalNotification,
 } from '../services/pushNotifications';
+import { router } from 'expo-router';
 import apiClient from '../services/apiClient';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
 import fcmService from '../services/fcmService';
@@ -74,6 +82,7 @@ export const NotificationProvider = ({ children }) => {
   const responseListener = useRef();
   const fcmListenersRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const lastResetDateRef = useRef(new Date().toDateString());
 
   // ============== Toast Management ==============
   const removeToast = useCallback((id) => {
@@ -148,16 +157,42 @@ export const NotificationProvider = ({ children }) => {
         error: result.error,
       });
 
+      // Custom handlers for FCM that include navigation
+      const handleFCMNavigation = (remoteMessage) => {
+        const data = remoteMessage.data || {};
+        const screen = data.screen;
+        const category = data.category;
+        navigateFromNotification(screen, category);
+      };
+
       // Set up FCM message handlers for foreground notifications
-      const listeners = await fcmService.setupFCMListeners((message) => {
-        // Show FCM messages as toasts when app is in foreground
-        addToast({
-          type: 'info',
-          title: message.title,
-          message: message.body,
-          duration: 5000, // 5 seconds for push notifications
-        });
-      });
+      const listeners = await fcmService.setupFCMListeners(
+        // Foreground message handler
+        (message) => {
+          // Show FCM messages as toasts when app is in foreground
+          addToast({
+            type: 'info',
+            title: message.title,
+            message: message.body,
+            duration: 5000,
+          });
+        },
+        // Cold start handler (app was killed, opened from notification)
+        (initialNotification) => {
+          if (initialNotification) {
+            console.log('[NotificationProvider] FCM cold start navigation');
+            // Delay to ensure router is ready
+            setTimeout(() => {
+              handleFCMNavigation(initialNotification);
+            }, 500);
+          }
+        },
+        // Background->Foreground handler (app was in background)
+        (remoteMessage) => {
+          console.log('[NotificationProvider] FCM background->foreground navigation');
+          handleFCMNavigation(remoteMessage);
+        }
+      );
 
       fcmListenersRef.current = listeners;
       console.log('[NotificationProvider] FCM initialized successfully');
@@ -170,7 +205,7 @@ export const NotificationProvider = ({ children }) => {
         error: 'FCM unavailable on this device',
       });
     }
-  }, [isSignedIn, addToast]);
+  }, [isSignedIn, addToast, navigateFromNotification]);
 
   // Sync notification schedules with user preferences
   const syncNotificationSchedules = useCallback(async () => {
@@ -180,6 +215,9 @@ export const NotificationProvider = ({ children }) => {
       const prefs = {
         dailyReminder: data?.dailyReminder !== false,
         hydrationNudges: data?.hydrationNudges !== false,
+        activityReminders: data?.activityReminders !== false,
+        moodCheckins: data?.moodCheckins !== false,
+        streakProtection: data?.streakProtection !== false,
         insightDrops: data?.insightDrops !== false,
         streakCelebrations: data?.streakCelebrations !== false,
       };
@@ -189,31 +227,135 @@ export const NotificationProvider = ({ children }) => {
       // Use smart notification engine for data-driven scheduling
       const optimalTimes = await SmartNotificationEngine.getOptimalNotificationTimes();
 
-      // Schedule or cancel based on preferences AND user patterns
-      if (prefs.dailyReminder) {
-        // Use user's optimal meal times if available, otherwise default to noon
-        const mealHour = optimalTimes.meals?.[0] || 12;
-        await scheduleDailyReminder(mealHour, 0);
-      } else {
-        await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
-      }
+      // Use comprehensive sync function
+      const result = await syncAllNotificationSchedules(prefs, optimalTimes);
 
-      if (prefs.hydrationNudges) {
-        // Use user's optimal hydration times if available
-        const hydrationHours = optimalTimes.hydration?.length > 0
-          ? optimalTimes.hydration
-          : [10, 14, 18];
-        await scheduleHydrationReminders(hydrationHours);
-      } else {
-        await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
-      }
-
-      console.log('[NotificationProvider] Notification schedules synced with user patterns');
+      console.log('[NotificationProvider] Notification schedules synced:', result);
     } catch (error) {
       // Use console.warn to avoid red error screen in development
       console.warn('[NotificationProvider] Failed to sync schedules (non-critical):', error?.message || error);
     }
   }, []);
+
+  // Navigate from notification tap
+  const navigateFromNotification = useCallback((screen, category) => {
+    // Define route mappings
+    const screenRoutes = {
+      // Direct screen routes
+      log: '/(tabs)/log',
+      water: '/(tabs)/log', // Water is part of log tab
+      dashboard: '/(tabs)/dashboard',
+      profile: '/(tabs)/profile',
+      activity: '/activity/today',
+      mood: '/insights/patterns',
+      insights: '/insights/patterns',
+    };
+
+    // Category-based fallback routes
+    const categoryRoutes = {
+      [NOTIFICATION_CATEGORIES.DAILY_REMINDER]: '/(tabs)/log',
+      [NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]: '/(tabs)/log',
+      [NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]: '/activity/today',
+      [NOTIFICATION_CATEGORIES.MOOD_CHECKIN]: '/insights/patterns',
+      [NOTIFICATION_CATEGORIES.STREAK_AT_RISK]: '/(tabs)/log',
+      [NOTIFICATION_CATEGORIES.STREAK_CELEBRATION]: '/(tabs)/profile',
+      [NOTIFICATION_CATEGORIES.GOAL_ACHIEVED]: '/(tabs)/dashboard',
+      [NOTIFICATION_CATEGORIES.INSIGHT_DROP]: '/insights/patterns',
+    };
+
+    try {
+      // Use screen if provided, otherwise fall back to category
+      const route = screenRoutes[screen] || categoryRoutes[category] || '/(tabs)/dashboard';
+
+      console.log(`[NotificationProvider] Navigating to: ${route}`);
+
+      // Use setTimeout to ensure navigation happens after any pending renders
+      setTimeout(() => {
+        router.push(route);
+      }, 100);
+    } catch (error) {
+      console.warn('[NotificationProvider] Navigation error:', error?.message || error);
+      // Fallback to dashboard
+      router.push('/(tabs)/dashboard');
+    }
+  }, []);
+
+  // Track notification click for analytics
+  const trackNotificationClick = useCallback(async (category, screen, actionId = null) => {
+    try {
+      await apiClient.post('/reminders/clicked', {
+        notificationType: category,
+        screenNavigated: screen,
+        actionIdentifier: actionId,
+      });
+    } catch (error) {
+      // Non-critical - don't block on analytics
+      console.warn('[NotificationProvider] Failed to track click:', error?.message || error);
+    }
+  }, []);
+
+  // Handle notification action buttons (Snooze, Log now, etc.)
+  const handleNotificationAction = useCallback(async (actionIdentifier, category) => {
+    console.log(`[NotificationProvider] Action: ${actionIdentifier} for ${category}`);
+
+    switch (actionIdentifier) {
+      case 'SNOOZE_30':
+        // Snooze for 30 minutes - persist to backend
+        try {
+          await apiClient.post('/reminders/snooze', {
+            reminderType: category,
+            snoozeDuration: 30,
+          });
+          addToast({
+            type: 'info',
+            message: 'Snoozed for 30 minutes',
+            duration: 3000,
+          });
+        } catch (error) {
+          console.warn('[NotificationProvider] Failed to snooze:', error?.message || error);
+        }
+        break;
+
+      case 'SNOOZE_60':
+        // Snooze for 60 minutes
+        try {
+          await apiClient.post('/reminders/snooze', {
+            reminderType: category,
+            snoozeDuration: 60,
+          });
+          addToast({
+            type: 'info',
+            message: 'Snoozed for 1 hour',
+            duration: 3000,
+          });
+        } catch (error) {
+          console.warn('[NotificationProvider] Failed to snooze:', error?.message || error);
+        }
+        break;
+
+      case 'DISMISS':
+        // Dismiss and record for ML learning
+        try {
+          await apiClient.post('/reminders/dismiss', {
+            reminderType: category,
+            reason: 'user_dismissed',
+          });
+        } catch (error) {
+          console.warn('[NotificationProvider] Failed to dismiss:', error?.message || error);
+        }
+        break;
+
+      case 'LOG_NOW':
+      case 'LOG_WATER':
+      case 'LOG_ACTIVITY':
+      case 'LOG_MOOD':
+        // These open the app - navigation handled separately
+        break;
+
+      default:
+        console.log('[NotificationProvider] Unknown action:', actionIdentifier);
+    }
+  }, [addToast]);
 
   // Generate and show smart data-driven notification
   const triggerSmartNotification = useCallback(async (type) => {
@@ -289,6 +431,21 @@ export const NotificationProvider = ({ children }) => {
     return status;
   }, []);
 
+  // Check if it's a new day and reset notifications
+  const checkDailyReset = useCallback(async () => {
+    const today = new Date().toDateString();
+    if (lastResetDateRef.current !== today) {
+      console.log('[NotificationProvider] New day detected, resetting notifications');
+      lastResetDateRef.current = today;
+
+      // Get optimal times for scheduling
+      const optimalTimes = await SmartNotificationEngine.getOptimalNotificationTimes().catch(() => ({}));
+
+      // Reset daily notifications (re-enable streak protection, hydration reminders)
+      await resetDailyNotifications(preferences, optimalTimes);
+    }
+  }, [preferences]);
+
   // ============== Effects ==============
 
   // Initialize push notifications when signed in
@@ -321,15 +478,29 @@ export const NotificationProvider = ({ children }) => {
 
     // Listener for user interaction with notifications
     responseListener.current = addNotificationResponseReceivedListener((response) => {
-      console.log('[NotificationProvider] Notification tapped:', response);
+      console.log('[NotificationProvider] Notification response:', response);
 
       const data = response.notification.request.content.data;
-      // Handle navigation based on notification category
-      if (data?.category === NOTIFICATION_CATEGORIES.DAILY_REMINDER) {
-        // Could navigate to food log screen
-      } else if (data?.category === NOTIFICATION_CATEGORIES.HYDRATION_NUDGE) {
-        // Could navigate to water log screen
+      const category = data?.category;
+      const screen = data?.screen;
+      const actionIdentifier = response.actionIdentifier;
+
+      // Track notification click for analytics
+      trackNotificationClick(category, screen, actionIdentifier);
+
+      // Handle action buttons (Snooze, Dismiss)
+      if (actionIdentifier && actionIdentifier !== 'expo.modules.notifications.actions.DEFAULT') {
+        handleNotificationAction(actionIdentifier, category);
+
+        // Only navigate if action opens app (LOG_* actions)
+        if (actionIdentifier.startsWith('LOG_')) {
+          navigateFromNotification(screen, category);
+        }
+        return;
       }
+
+      // Default tap - navigate based on screen data or category
+      navigateFromNotification(screen, category);
     });
 
     return () => {
@@ -343,6 +514,7 @@ export const NotificationProvider = ({ children }) => {
       if (fcmListenersRef.current) {
         fcmListenersRef.current.foreground?.remove();
         fcmListenersRef.current.tokenRefresh?.remove();
+        fcmListenersRef.current.backgroundOpen?.remove();
       }
     };
   }, [addToast]);
@@ -356,6 +528,9 @@ export const NotificationProvider = ({ children }) => {
       ) {
         // App has come to foreground - recheck permission status
         checkPermissionStatus();
+
+        // Check if it's a new day and reset daily notifications
+        checkDailyReset().catch(() => {});
       }
       appStateRef.current = nextAppState;
     });
@@ -363,7 +538,7 @@ export const NotificationProvider = ({ children }) => {
     return () => {
       subscription.remove();
     };
-  }, [checkPermissionStatus]);
+  }, [checkPermissionStatus, checkDailyReset]);
 
   // ============== Notify API ==============
   const notify = {
@@ -451,6 +626,18 @@ export const NotificationProvider = ({ children }) => {
       checkPermission: checkPermissionStatus,
       updatePreferences: updateNotificationPreferences,
       syncSchedules: syncNotificationSchedules,
+      // Debug: Get all scheduled notifications
+      getScheduled: getScheduledNotifications,
+      // Debug: Send a test notification to verify system works
+      sendTest: async () => {
+        const result = await showLocalNotification({
+          title: '🔔 Test Notification',
+          body: 'If you see this in the notification center, notifications are working!',
+          data: { category: 'test', screen: 'dashboard' },
+        });
+        console.log('[NotificationProvider] Test notification sent:', result);
+        return result;
+      },
     },
 
     // Smart data-driven notifications (Zomato-style)
@@ -517,7 +704,7 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 9999,
     pointerEvents: 'box-none',
-    alignItems: 'flex-end', // Align toasts to right
+    alignItems: 'stretch', // Full width toasts
   },
 });
 

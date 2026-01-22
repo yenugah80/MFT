@@ -156,12 +156,16 @@ export default function EditableSection({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
+    borderRadius: RADIUS['2xl'],
     padding: SPACING[5],
     marginBottom: SPACING[4],
     borderWidth: 1,
-    borderColor: `${SEMANTIC_ACTIONS.success}1A`,
-    ...SHADOWS.md,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
@@ -170,12 +174,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[4],
     paddingBottom: SPACING[3],
     borderBottomWidth: 1,
-    borderBottomColor: `${SEMANTIC_ACTIONS.success}1A`,
+    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
   },
   title: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontWeight: '700',
     color: TEXT.primary,
+    letterSpacing: -0.3,
   },
   actions: {
     flexDirection: 'row',

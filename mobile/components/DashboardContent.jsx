@@ -39,6 +39,7 @@ import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
+import StreakRestoreModal from "./dashboard/StreakRestoreModal";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
 import MinimalDashboardHeader from "./dashboard/MinimalDashboardHeader";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
@@ -76,8 +77,8 @@ import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErr
 import NotificationCenter from "./notifications/NotificationCenter";
 
 // Design tokens - using unified premium theme
-import { TYPOGRAPHY, SPACING, RADIUS, detectDataState } from "../constants/designTokens";
-import { BRAND, SURFACES, TEXT, SEMANTIC, SEMANTIC_ACTIONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
+import { detectDataState } from "../constants/designTokens";
+import { TYPOGRAPHY, SPACING, RADIUS, BRAND, SURFACES, TEXT, SEMANTIC, SEMANTIC_ACTIONS, SHADOWS as PREMIUM_SHADOWS } from "../constants/premiumTheme";
 import { BOLD_GRADIENTS, WELLNESS_COLORS, DEPTH_SHADOWS } from "../constants/modernColorPalette";
 
 // Utility functions
@@ -201,7 +202,28 @@ export default function DashboardContent() {
   const { logs: localFoodLogs } = useFoodLog(); // Get local SQLite logs
   const { profile: contextProfile } = useProfileContext(); // Get profile from context (eliminates duplicate /profile/me fetch)
   const [refreshing, setRefreshing] = useState(false);
+
+  // Yesterday fallback: When today is empty, show yesterday's data to avoid zeros
+  const showYesterdayFallback = data?.showYesterdayFallback && data?.yesterday;
+  const displayData = useMemo(() => {
+    if (!data) return null;
+    // If showing yesterday's data, use it instead of empty today
+    if (showYesterdayFallback) {
+      return {
+        ...data.yesterday,
+        // Keep today's date for display purposes but mark it as fallback
+        isYesterdayFallback: true,
+        fallbackDate: data.yesterday.date,
+      };
+    }
+    return {
+      ...data.today,
+      isYesterdayFallback: false,
+    };
+  }, [data, showYesterdayFallback]);
   const [streakSavedVisible, setStreakSavedVisible] = useState(false);
+  const [streakRestoreVisible, setStreakRestoreVisible] = useState(false);
+  const [streakRestoreChecked, setStreakRestoreChecked] = useState(false);
   const notify = useNotification();
   const router = useRouter();
   const { user } = useUser();
@@ -255,7 +277,7 @@ export default function DashboardContent() {
   const [dismissedNotifications, setDismissedNotifications] = useState(new Set());
 
   // Recommendations hook (handles caching internally with 5-min cache)
-  // eslint-disable-next-line no-unused-vars
+  // AI-powered recommendations from backend
   const {
     recommendations,
     loading: recommendationsLoading,
@@ -263,7 +285,7 @@ export default function DashboardContent() {
     fetchRecommendations,
     acceptRecommendation: acceptRecommendationAction,
     trackInteraction,
-  } = useRecommendations();
+  } = useRecommendations({ enabled: true });
 
   // Mood tracking hooks
   const { data: trendData } = useMoodTrends({ period: 'week' });
@@ -492,6 +514,20 @@ export default function DashboardContent() {
       setStreakSavedVisible(true);
     }
   }, [data?.gamification?.freezeConsumed]);
+
+  // Check if streak can be restored (user lost streak but has freezes and within 24h)
+  useEffect(() => {
+    // Only check once per session to avoid re-showing on every data refresh
+    if (streakRestoreChecked) return;
+
+    const canRestore = data?.gamification?.canRestoreStreak;
+    const previousStreak = data?.gamification?.previousStreak;
+
+    if (canRestore && previousStreak > 0) {
+      setStreakRestoreVisible(true);
+      setStreakRestoreChecked(true);
+    }
+  }, [data?.gamification?.canRestoreStreak, data?.gamification?.previousStreak, streakRestoreChecked]);
 
   // Deduplicate food logs for today (merge local SQLite + backend)
   const uniqueFoodLogs = useMemo(() => {
@@ -1288,14 +1324,16 @@ export default function DashboardContent() {
 
   if (!data) return null;
 
-  const { today, goals, gamification, trends, recentWeight, userLifecycle } = data;
+  const { goals, gamification, trends, recentWeight, userLifecycle } = data;
+  // Use displayData (yesterday's data) when today is empty, otherwise use today's data
+  const today = showYesterdayFallback && data.yesterday ? data.yesterday : data.today;
 
   // ============================================================================
   // USER LIFECYCLE DETECTION - Single source of truth from backend
   // Properly distinguishes: brand new user vs returning user who missed a day
   // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
   // ============================================================================
-  const isNewUser = userLifecycle?.stage === 'brand_new';
+  const isNewUser = userLifecycle?.stage === 'brand_new' && !showYesterdayFallback;
   const isOnboarding = ['brand_new', 'onboarding'].includes(userLifecycle?.stage);
   const isReturning = userLifecycle?.isReturning ?? false;
   const hasLoggedToday = userLifecycle?.hasLoggedToday ?? false;
@@ -1347,6 +1385,13 @@ export default function DashboardContent() {
           streak={currentStreak}
           bestStreak={parseDecimal(gamification?.bestStreak, 0)}
           notificationCount={notificationCount}
+          // NEW: Personalization props for smarter nudges
+          level={gamification?.level ?? 1}
+          lifecycleStage={userLifecycle?.stage}
+          isReturning={isReturning}
+          hoursSinceLastMeal={userLifecycle?.hoursSinceLastMeal}
+          xpToNextLevel={gamification?.nextLevelXp ? (gamification.nextLevelXp - (gamification?.currentLevelXp ?? 0)) : null}
+          // Callbacks
           onMealsPress={() => router.push('/(tabs)/log')}
           onWaterPress={() => router.push('/(tabs)/log?focus=hydration')}
           onMoodPress={() => router.push('/(tabs)/log?focus=mood')}
@@ -1354,9 +1399,29 @@ export default function DashboardContent() {
           onSettingsPress={() => router.push('/(tabs)/profile')}
         />
 
+        {/* YESTERDAY'S DATA BANNER - Shows when today is empty */}
+        {showYesterdayFallback && (
+          <TouchableOpacity
+            style={styles.yesterdayBanner}
+            onPress={() => router.push('/(tabs)/log')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.yesterdayBannerContent}>
+              <View style={styles.yesterdayBannerIcon}>
+                <Ionicons name="time-outline" size={20} color={BRAND.primary} />
+              </View>
+              <View style={styles.yesterdayBannerText}>
+                <Text style={styles.yesterdayBannerTitle}>Showing yesterday's snapshot</Text>
+                <Text style={styles.yesterdayBannerSubtitle}>Tap to start logging today</Text>
+              </View>
+              <Ionicons name="add-circle" size={28} color={BRAND.primary} />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* FIRST-TIME USER ONLY - Brand new users see clean onboarding */}
         {/* Returning users who missed a day see full dashboard, not this */}
-        {isNewUser && (
+        {isNewUser && !showYesterdayFallback && (
           <EmptyState
             icon="scan-outline"
             title="3 meals unlocks your baseline"
@@ -1405,7 +1470,7 @@ export default function DashboardContent() {
             }}
             userName={user?.firstName || user?.fullName || ''}
             historicalScores={[]}
-            onViewDetails={() => router.push('/insights/wellness-history')}
+            onViewDetails={() => router.push('/insights')}
           />
         )}
 
@@ -1428,54 +1493,25 @@ export default function DashboardContent() {
         />
 
         {/* ============================================ */}
-        {/* QUICK ANALYTICS - Navigation to dedicated screens */}
+        {/* ANALYTICS - Link to unified analytics screen */}
         {/* ============================================ */}
         {hasAnyData && (
-          <View style={styles.analyticsSection}>
-            <Text style={styles.analyticsSectionTitle}>Explore Analytics</Text>
-            <View style={styles.analyticsGrid}>
-              <TouchableOpacity
-                style={styles.analyticsCard}
-                onPress={() => router.push('/insights/food-analytics')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.analyticsIconContainer, { backgroundColor: '#10B98115' }]}>
-                  <Ionicons name="restaurant" size={20} color="#10B981" />
-                </View>
-                <Text style={styles.analyticsCardTitle}>Food</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.analyticsCard}
-                onPress={() => router.push('/insights/activity-analytics')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.analyticsIconContainer, { backgroundColor: '#F5910015' }]}>
-                  <Ionicons name="barbell" size={20} color="#F59100" />
-                </View>
-                <Text style={styles.analyticsCardTitle}>Activity</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.analyticsCard}
-                onPress={() => router.push('/insights/hydration-analytics')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.analyticsIconContainer, { backgroundColor: '#3B82F615' }]}>
-                  <Ionicons name="water" size={20} color="#3B82F6" />
-                </View>
-                <Text style={styles.analyticsCardTitle}>Hydration</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.analyticsCard}
-                onPress={() => router.push('/insights')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.analyticsIconContainer, { backgroundColor: '#8B5CF615' }]}>
-                  <Ionicons name="stats-chart" size={20} color="#8B5CF6" />
-                </View>
-                <Text style={styles.analyticsCardTitle}>All</Text>
-              </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.analyticsLinkCard}
+            onPress={() => router.push('/analytics')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.analyticsLinkContent}>
+              <View style={[styles.analyticsIconContainer, { backgroundColor: '#6B4EFF15' }]}>
+                <Ionicons name="stats-chart" size={24} color="#6B4EFF" />
+              </View>
+              <View style={styles.analyticsLinkText}>
+                <Text style={styles.analyticsLinkTitle}>View Analytics</Text>
+                <Text style={styles.analyticsLinkSubtitle}>Nutrition, Mood, Activity & Hydration</Text>
+              </View>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color="#8A7F78" />
+          </TouchableOpacity>
         )}
 
         {/* ============================================ */}
@@ -1495,8 +1531,14 @@ export default function DashboardContent() {
             ) : correctedOrchestratorData ? (
               <DailyIntelligenceBehaviorSection
                 orchestratorData={correctedOrchestratorData}
+                gamification={data?.gamification}
+                goals={data?.goals}
+                todayData={displayData}
+                weeklyComplianceDays={data?.trends?.weekSummaries?.filter(d => d.totalCalories > 0)?.length || 0}
+                uniqueFoodsThisWeek={uniqueFoodLogs?.length || 0}
                 onRequestDismiss={handleDismissRequest}
                 onAction={handleIntelligenceAction}
+                onViewProgress={() => router.push('/insights/progress')}
               />
             ) : null}
           </DailyIntelligenceErrorBoundary>
@@ -1538,20 +1580,39 @@ export default function DashboardContent() {
 
         {/* NOTE: Wellness Score is now integrated into EnhancedMoodCard in Wellness Section */}
 
-        {/* Smart Meal Suggestion - Context-Aware (ALWAYS SHOW) */}
+        {/* Smart Meal Suggestion - Context-Aware with AI Recommendations */}
         {uniqueFoodLogs.length > 0 && (
           <SmartMealSuggestionCard
             today={today}
             goals={goals}
             recentMeals={uniqueFoodLogs}
             userProfile={userProfile}
+            // AI-powered backend recommendations
+            backendRecommendations={recommendations}
+            recommendationsLoading={recommendationsLoading}
+            onAcceptRecommendation={acceptRecommendationAction}
+            onTrackInteraction={trackInteraction}
+            // Personalization props for smarter suggestions
+            lifecycleStage={userLifecycle?.stage}
+            level={gamification?.level ?? 1}
+            // Future hooks for pattern-based features (pass null until implemented)
+            correlationInsights={correctedOrchestratorData?.correlations ?? null}
+            micronutrientDeficits={today?.nutrition?.micros ? {
+              low: Object.entries(today.nutrition.micros)
+                .filter(([_, val]) => val < 50) // Simplified deficit detection
+                .map(([key]) => key)
+            } : null}
+            moodContext={today?.moodLogs?.[0] ? {
+              currentMood: today.moodLogs[0].mood,
+              energyLevel: today.moodLogs[0].energyLevel
+            } : null}
             onSelectSuggestion={(suggestion) => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push({
                 pathname: '/(tabs)/log',
                 params: {
                   focus: 'meal',
-                  prefill: suggestion.name
+                  prefill: suggestion.name || suggestion.foodName
                 }
               });
             }}
@@ -1586,8 +1647,10 @@ export default function DashboardContent() {
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/insights/mood')}
+          onViewMoodHistory={() => router.push('/insights/mood-history')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
           onViewHydrationHistory={() => router.push('/insights/hydration-history')}
+          onViewFoodHistory={() => router.push('/insights/food-history')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}
@@ -1843,6 +1906,24 @@ export default function DashboardContent() {
         styles={styles}
       />
 
+      <StreakRestoreModal
+        visible={streakRestoreVisible}
+        onClose={() => setStreakRestoreVisible(false)}
+        onRestored={(result) => {
+          // Refresh dashboard data to show restored streak
+          refetch();
+          // Show celebration notification
+          notify({
+            title: 'Streak Restored!',
+            message: result.message,
+            type: 'success',
+          });
+        }}
+        previousStreak={gamification?.previousStreak || 0}
+        freezesAvailable={gamification?.streakFreezes || 0}
+        styles={styles}
+      />
+
       <ThemeSettingsModal
         visible={themeModalVisible}
         onClose={() => setThemeModalVisible(false)}
@@ -1931,6 +2012,47 @@ const styles = StyleSheet.create({
     flex: 1,
     // Background handled by LinearGradient wrapper
   },
+  // Yesterday's data fallback banner
+  yesterdayBanner: {
+    marginBottom: SPACING[4],
+    backgroundColor: SURFACES.background.primary,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: BRAND.primaryLight,
+    shadowColor: BRAND.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  yesterdayBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+  },
+  yesterdayBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${BRAND.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING[3],
+  },
+  yesterdayBannerText: {
+    flex: 1,
+  },
+  yesterdayBannerTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  yesterdayBannerSubtitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    marginTop: 2,
+  },
   shimmerOverlay: {
     position: 'absolute',
     top: 0,
@@ -1947,45 +2069,48 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING[16],
   },
   // Analytics Section - Explore buttons
-  analyticsSection: {
-    marginTop: SPACING[3],
-    marginBottom: SPACING[4], // Better separation from intelligence card
-  },
-  analyticsSectionTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[3],
-  },
-  analyticsGrid: {
+  analyticsLinkCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  analyticsCard: {
-    flex: 1,
     alignItems: 'center',
-    backgroundColor: SURFACES.background.primary,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING[3],
-    marginHorizontal: SPACING[1],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    justifyContent: 'space-between',
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginTop: SPACING[3],
+    marginBottom: SPACING[4],
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+    shadowColor: '#3D3633',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  analyticsLinkContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   analyticsIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING[1],
   },
-  analyticsCardTitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
+  analyticsLinkText: {
+    marginLeft: SPACING[3],
+    flex: 1,
+  },
+  analyticsLinkTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  analyticsLinkSubtitle: {
+    fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
+    marginTop: SPACING[0.5],
   },
   centerContainer: {
     flex: 1,

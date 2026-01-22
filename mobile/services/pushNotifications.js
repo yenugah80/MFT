@@ -73,8 +73,11 @@ loadNativeModules().catch(err => {
 export const NOTIFICATION_CATEGORIES = {
   DAILY_REMINDER: 'daily_reminder',
   HYDRATION_NUDGE: 'hydration_nudge',
+  ACTIVITY_REMINDER: 'activity_reminder',
+  MOOD_CHECKIN: 'mood_checkin',
   INSIGHT_DROP: 'insight_drop',
   STREAK_CELEBRATION: 'streak_celebration',
+  STREAK_AT_RISK: 'streak_at_risk',
   GOAL_ACHIEVED: 'goal_achieved',
 };
 
@@ -281,7 +284,14 @@ export async function setupPushNotifications() {
     const registered = await registerPushTokenWithBackend(token);
     result.success = registered;
 
-    // Set up Android notification channel - also handle gracefully
+    // Set up notification categories for action buttons (iOS & Android)
+    try {
+      await setupNotificationCategories();
+    } catch (categoryError) {
+      console.warn('[PushNotifications] Failed to setup notification categories:', categoryError);
+    }
+
+    // Set up Android notification channels
     if (Platform.OS === 'android') {
       try {
         await setupAndroidNotificationChannels();
@@ -299,7 +309,95 @@ export async function setupPushNotifications() {
 }
 
 /**
+ * Set up notification action categories
+ * Allows interactive buttons on notifications (Log now, Snooze, etc.)
+ */
+async function setupNotificationCategories() {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot setup categories - module not available');
+    return;
+  }
+
+  try {
+    // Daily reminder category - Log now or Snooze
+    await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.DAILY_REMINDER, [
+      {
+        identifier: 'LOG_NOW',
+        buttonTitle: 'Log now',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'SNOOZE_30',
+        buttonTitle: 'Snooze 30m',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+
+    // Hydration category
+    await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, [
+      {
+        identifier: 'LOG_WATER',
+        buttonTitle: 'Log water',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'SNOOZE_30',
+        buttonTitle: 'Later',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+
+    // Streak at risk category - urgent actions
+    await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.STREAK_AT_RISK, [
+      {
+        identifier: 'LOG_NOW',
+        buttonTitle: 'Save streak',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'DISMISS',
+        buttonTitle: 'Dismiss',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+
+    // Activity reminder category
+    await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, [
+      {
+        identifier: 'LOG_ACTIVITY',
+        buttonTitle: 'Log activity',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'SNOOZE_60',
+        buttonTitle: 'Remind in 1h',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+
+    // Mood check-in category
+    await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.MOOD_CHECKIN, [
+      {
+        identifier: 'LOG_MOOD',
+        buttonTitle: 'Check in',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'SNOOZE_30',
+        buttonTitle: 'Later',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+
+    console.log('[PushNotifications] Notification categories configured');
+  } catch (error) {
+    console.warn('[PushNotifications] Error setting up notification categories:', error);
+  }
+}
+
+/**
  * Set up Android notification channels
+ * Creates channels for all notification types with appropriate priorities
  */
 async function setupAndroidNotificationChannels() {
   if (!Notifications) {
@@ -308,6 +406,7 @@ async function setupAndroidNotificationChannels() {
   }
 
   try {
+    // Default channel - high priority
     await Notifications.setNotificationChannelAsync('default', {
       name: 'Default',
       importance: Notifications.AndroidImportance.MAX,
@@ -315,26 +414,61 @@ async function setupAndroidNotificationChannels() {
       lightColor: '#6B4EFF',
     });
 
+    // Daily meal reminders - high priority
     await Notifications.setNotificationChannelAsync('reminders', {
       name: 'Daily Reminders',
+      description: 'Meal logging reminders',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250],
       lightColor: '#6B4EFF',
     });
 
+    // Hydration nudges - default priority
     await Notifications.setNotificationChannelAsync('hydration', {
       name: 'Hydration Nudges',
+      description: 'Water intake reminders',
       importance: Notifications.AndroidImportance.DEFAULT,
       vibrationPattern: [0, 100],
       lightColor: '#3B82F6',
     });
 
-    await Notifications.setNotificationChannelAsync('insights', {
-      name: 'Insights & Achievements',
+    // Activity reminders - default priority
+    await Notifications.setNotificationChannelAsync('activity', {
+      name: 'Activity Reminders',
+      description: 'Movement and exercise nudges',
       importance: Notifications.AndroidImportance.DEFAULT,
-      vibrationPattern: [0, 100, 100, 100],
+      vibrationPattern: [0, 100],
       lightColor: '#10B981',
     });
+
+    // Mood check-ins - default priority
+    await Notifications.setNotificationChannelAsync('mood', {
+      name: 'Mood Check-ins',
+      description: 'Evening mood reflection prompts',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 100],
+      lightColor: '#8B5CF6',
+    });
+
+    // Streak protection - HIGH priority (urgent)
+    await Notifications.setNotificationChannelAsync('streak', {
+      name: 'Streak Alerts',
+      description: 'Streak at risk warnings',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 100, 250],
+      lightColor: '#EF4444',
+    });
+
+    // Insights & achievements - default priority
+    await Notifications.setNotificationChannelAsync('insights', {
+      name: 'Insights & Achievements',
+      description: 'Pattern insights and celebrations',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 100, 100, 100],
+      lightColor: '#F59E0B',
+    });
+
+    console.log('[PushNotifications] Android notification channels configured');
   } catch (error) {
     console.warn('[PushNotifications] Error setting up Android notification channels:', error);
   }
@@ -426,6 +560,248 @@ export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
 }
 
 /**
+ * Schedule activity reminder notifications
+ * Nudges users to move at optimal times based on their patterns
+ * @param {number[]} hours - Array of hours to remind (default: afternoon/evening)
+ */
+export async function scheduleActivityReminders(hours = [14, 17]) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot schedule - module not available');
+    return [];
+  }
+
+  try {
+    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER);
+
+    const identifiers = [];
+    const messages = [
+      { title: 'Move break', body: 'A quick walk does wonders. Your body will thank you.' },
+      { title: 'Stretch time', body: "Been sitting a while? Let's get those steps in." },
+      { title: 'Activity check', body: 'How about a short walk? Even 10 minutes helps.' },
+    ];
+
+    for (let i = 0; i < hours.length; i++) {
+      const msg = messages[i % messages.length];
+      const identifier = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: msg.title,
+          body: msg.body,
+          data: {
+            category: NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER,
+            screen: 'activity',
+          },
+          categoryIdentifier: NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER,
+        },
+        trigger: {
+          hour: hours[i],
+          minute: 0,
+          repeats: true,
+        },
+      });
+      identifiers.push(identifier);
+    }
+
+    console.log('[PushNotifications] Activity reminders scheduled:', identifiers);
+    return identifiers;
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to schedule activity reminders:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Schedule mood check-in reminder notifications
+ * Encourages users to reflect on their mood at optimal times
+ * @param {number} hour - Hour of day for mood check-in (default: 8pm)
+ */
+export async function scheduleMoodCheckIn(hour = 20) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot schedule - module not available');
+    return null;
+  }
+
+  try {
+    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.MOOD_CHECKIN);
+
+    const messages = [
+      { title: 'How are you feeling?', body: 'Take a moment to check in with yourself.' },
+      { title: 'Quick mood check', body: 'A few seconds of reflection goes a long way.' },
+      { title: 'Evening check-in', body: "How's your energy? Let's track it." },
+    ];
+
+    // Rotate messages based on day of week
+    const dayOfWeek = new Date().getDay();
+    const msg = messages[dayOfWeek % messages.length];
+
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: msg.title,
+        body: msg.body,
+        data: {
+          category: NOTIFICATION_CATEGORIES.MOOD_CHECKIN,
+          screen: 'mood',
+        },
+        categoryIdentifier: NOTIFICATION_CATEGORIES.MOOD_CHECKIN,
+      },
+      trigger: {
+        hour,
+        minute: 0,
+        repeats: true,
+      },
+    });
+
+    console.log('[PushNotifications] Mood check-in scheduled:', identifier);
+    return identifier;
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to schedule mood check-in:', error?.message || error);
+    return null;
+  }
+}
+
+/**
+ * Schedule streak protection reminder
+ * Fires in the evening if user hasn't logged anything that day
+ * @param {number} hour - Hour to check (default: 9pm)
+ */
+export async function scheduleStreakProtectionReminder(hour = 21) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot schedule - module not available');
+    return null;
+  }
+
+  try {
+    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
+
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Your streak is at risk',
+        body: "Log something quick to keep your streak alive. Don't lose your momentum!",
+        data: {
+          category: NOTIFICATION_CATEGORIES.STREAK_AT_RISK,
+          screen: 'log',
+          priority: 'high',
+        },
+        categoryIdentifier: NOTIFICATION_CATEGORIES.STREAK_AT_RISK,
+      },
+      trigger: {
+        hour,
+        minute: 0,
+        repeats: true,
+      },
+    });
+
+    console.log('[PushNotifications] Streak protection reminder scheduled:', identifier);
+    return identifier;
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to schedule streak protection:', error?.message || error);
+    return null;
+  }
+}
+
+/**
+ * Sync all notification schedules based on user preferences
+ * Call this when preferences change or on app launch
+ * @param {object} preferences - User notification preferences
+ * @param {object} optimalTimes - Optimal times from smart notification engine
+ */
+export async function syncAllNotificationSchedules(preferences = {}, optimalTimes = {}) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot sync - module not available');
+    return { scheduled: [], cancelled: [] };
+  }
+
+  const scheduled = [];
+  const cancelled = [];
+
+  try {
+    // Daily meal reminder
+    if (preferences.dailyReminder !== false) {
+      const mealHour = optimalTimes.meals?.[0] || 12;
+      const id = await scheduleDailyReminder(mealHour, 0);
+      if (id) scheduled.push({ type: 'daily_reminder', hour: mealHour });
+    } else {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
+      cancelled.push('daily_reminder');
+    }
+
+    // Hydration reminders
+    if (preferences.hydrationNudges !== false) {
+      const hydrationHours = optimalTimes.hydration?.length > 0
+        ? optimalTimes.hydration
+        : [10, 14, 18];
+      const ids = await scheduleHydrationReminders(hydrationHours);
+      if (ids.length) scheduled.push({ type: 'hydration', hours: hydrationHours });
+    } else {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
+      cancelled.push('hydration');
+    }
+
+    // Activity reminders
+    if (preferences.activityReminders !== false) {
+      const activityHours = optimalTimes.activity?.length > 0
+        ? optimalTimes.activity
+        : [14, 17];
+      const ids = await scheduleActivityReminders(activityHours);
+      if (ids.length) scheduled.push({ type: 'activity', hours: activityHours });
+    } else {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER);
+      cancelled.push('activity');
+    }
+
+    // Mood check-in
+    if (preferences.moodCheckins !== false) {
+      const moodHour = optimalTimes.mood || 20;
+      const id = await scheduleMoodCheckIn(moodHour);
+      if (id) scheduled.push({ type: 'mood', hour: moodHour });
+    } else {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.MOOD_CHECKIN);
+      cancelled.push('mood');
+    }
+
+    // Streak protection (always on if user has a streak)
+    if (preferences.streakProtection !== false) {
+      const streakHour = 21;
+      const id = await scheduleStreakProtectionReminder(streakHour);
+      if (id) scheduled.push({ type: 'streak_protection', hour: streakHour });
+    } else {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
+      cancelled.push('streak_protection');
+    }
+
+    console.log('[PushNotifications] Sync complete:', { scheduled: scheduled.length, cancelled: cancelled.length });
+    return { scheduled, cancelled };
+  } catch (error) {
+    console.warn('[PushNotifications] Sync failed:', error?.message || error);
+    return { scheduled, cancelled, error: error.message };
+  }
+}
+
+/**
+ * Get all currently scheduled notifications
+ * Useful for debugging and displaying to user
+ */
+export async function getScheduledNotifications() {
+  if (!Notifications) {
+    return [];
+  }
+
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    return scheduled.map(n => ({
+      id: n.identifier,
+      title: n.content.title,
+      body: n.content.body,
+      category: n.content.data?.category,
+      screen: n.content.data?.screen,
+      trigger: n.trigger,
+    }));
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to get scheduled notifications:', error?.message || error);
+    return [];
+  }
+}
+
+/**
  * Cancel scheduled notifications by category
  * @param {string} category - The notification category to cancel
  */
@@ -449,6 +825,56 @@ export async function cancelScheduledNotifications(category) {
     // Use console.warn to avoid red error screen in development
     console.warn('[PushNotifications] Failed to cancel notifications:', error?.message || error);
   }
+}
+
+/**
+ * Smart cancellation: Cancel streak protection notification when user logs food
+ * Call this after successful food/water/activity logging
+ */
+export async function cancelStreakProtectionIfLoggedToday() {
+  try {
+    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
+    console.log('[PushNotifications] Streak protection cancelled - user logged today');
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to cancel streak protection:', error?.message || error);
+  }
+}
+
+/**
+ * Smart cancellation: Cancel hydration reminders when goal is reached
+ * @param {number} currentMl - Current water intake in ml
+ * @param {number} goalMl - Daily water goal in ml
+ */
+export async function cancelHydrationIfGoalReached(currentMl, goalMl) {
+  if (currentMl >= goalMl) {
+    try {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
+      console.log('[PushNotifications] Hydration reminders cancelled - goal reached');
+    } catch (error) {
+      console.warn('[PushNotifications] Failed to cancel hydration reminders:', error?.message || error);
+    }
+  }
+}
+
+/**
+ * Re-schedule notifications for the next day
+ * Call this at midnight or when app resumes after midnight
+ */
+export async function resetDailyNotifications(preferences = {}, optimalTimes = {}) {
+  // Re-enable streak protection for new day
+  if (preferences.streakProtection !== false) {
+    await scheduleStreakProtectionReminder(21);
+  }
+
+  // Re-schedule hydration reminders
+  if (preferences.hydrationNudges !== false) {
+    const hydrationHours = optimalTimes.hydration?.length > 0
+      ? optimalTimes.hydration
+      : [10, 14, 18];
+    await scheduleHydrationReminders(hydrationHours);
+  }
+
+  console.log('[PushNotifications] Daily notifications reset');
 }
 
 /**

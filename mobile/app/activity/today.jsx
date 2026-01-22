@@ -284,7 +284,7 @@ export default function TodayActivityScreen() {
     } else if (activity.type === 'water') {
       router.push({ pathname: '/(tabs)/log', params: { focus: 'hydration' } });
     } else if (activity.type === 'mood') {
-      router.push('/insights/mood');
+      router.push('/analytics');
     }
   }, [router]);
 

@@ -3,20 +3,24 @@
  *
  * Wrapper for behavioral health intelligence display.
  * Renders:
- * 1. DailyIntelligenceCard (main decision: SPEAK/REINFORCE/PREDICT/SILENT)
- * 2. CorrelationCard list (supporting patterns)
- * 3. NO modal (callbacks only)
+ * 1. MomentumCard for REINFORCE decisions (data-driven "keep it up")
+ * 2. DailyIntelligenceCard for SPEAK/PREDICT decisions
+ * 3. CorrelationCard list (supporting patterns)
+ * 4. NO modal (callbacks only)
  *
  * CRITICAL FIX: Receives orchestratorData as prop (single fetch in parent)
  *
  * @param {Object} props
  * @param {Object} props.orchestratorData - From useOrchestrator() in DashboardContent
+ * @param {Object} props.gamification - Gamification data (streak, level, xp)
+ * @param {Object} props.goals - User's nutrition goals
+ * @param {Object} props.todayData - Today's nutrition/hydration data
  * @param {Function} props.onRequestDismiss - Callback: (correlationId) => parent shows modal
  * @param {Function} props.onAction - Callback: (action) => parent handles action
  * @returns {JSX.Element|null}
  */
 
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import {
   View,
   FlatList,
@@ -32,21 +36,27 @@ import { Ionicons } from '@expo/vector-icons';
 // Components
 import { DailyIntelligenceCard } from './DailyIntelligenceCard';
 import { CorrelationCard } from './CorrelationCard';
-import { QuietConfidenceCard } from './QuietConfidenceCard';
+import MomentumCard from './MomentumCard';
 
 // Design tokens
-import { SPACING } from '../../constants/designTokens';
-import { TEXT } from '../../constants/premiumTheme';
+import { SPACING, TEXT } from '../../constants/premiumTheme';
 
 /**
  * Main render component - CORRECTED ARCHITECTURE
  */
 export default function DailyIntelligenceBehaviorSection({
   orchestratorData,      // ← Passed from parent (NOT fetched here)
+  gamification,          // ← Gamification data for MomentumCard
+  goals,                 // ← User goals for progress calculation
+  todayData,             // ← Today's nutrition/hydration data
+  weeklyComplianceDays,  // ← Days on track this week
+  uniqueFoodsThisWeek,   // ← Food variety metric
   onRequestDismiss,      // ← Callback to parent (NO modal state here)
   onAction,
+  onViewProgress,        // ← Callback for MomentumCard CTA
 }) {
   const router = useRouter();
+  const [momentumDismissed, setMomentumDismissed] = useState(false);
 
   // Animation for section entry
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -70,6 +80,18 @@ export default function DailyIntelligenceBehaviorSection({
     onAction?.(action);
   }, [onAction]);
 
+  const handleMomentumDismiss = useCallback(() => {
+    setMomentumDismissed(true);
+  }, []);
+
+  const handleViewProgress = useCallback(() => {
+    if (onViewProgress) {
+      onViewProgress();
+    } else {
+      router.push('/insights/progress');
+    }
+  }, [onViewProgress, router]);
+
   // Guard: no data
   if (!orchestratorData) {
     return null;
@@ -90,6 +112,21 @@ export default function DailyIntelligenceBehaviorSection({
     return null;
   }
 
+  // Calculate metrics for MomentumCard
+  const streak = gamification?.streak || 0;
+  const level = gamification?.level || 1;
+  const xp = gamification?.xp || 0;
+  const waterGoal = parseFloat(goals?.waterLiters || '2.0');
+  const hydrationProgress = waterGoal > 0
+    ? ((todayData?.waterIntakeLiters || 0) / waterGoal) * 100
+    : 0;
+  const calorieProgress = goals?.dailyCalories > 0
+    ? ((todayData?.nutrition?.totalCalories || 0) / goals.dailyCalories) * 100
+    : 0;
+
+  // Show MomentumCard for REINFORCE decisions (keep it up)
+  const showMomentumCard = decision?.type === 'REINFORCE' && !momentumDismissed;
+
   return (
     <Animated.View
       style={[componentStyles.container, { opacity: fadeAnim }]}
@@ -97,18 +134,33 @@ export default function DailyIntelligenceBehaviorSection({
       accessibilityRole="summary"
       accessibilityLabel="Daily health intelligence and pattern insights"
     >
-      {/* Main Decision Card */}
+      {/* Main Decision Card - MomentumCard for REINFORCE, DailyIntelligenceCard for others */}
       <View style={componentStyles.mainCardWrapper}>
-        <DailyIntelligenceCard
-          type={decision.type}
-          headline={decision.headline}
-          subtitle={decision.subtitle}
-          confidence={decision.confidence}
-          confidenceLabel={decision.confidenceLabel}
-          actions={decision.actions || []}
-          onAction={handleAction}
-          lifecycleStage={orchestratorData.lifecycle?.stage}
-        />
+        {showMomentumCard ? (
+          <MomentumCard
+            streak={streak}
+            level={level}
+            xp={xp}
+            calorieProgress={calorieProgress}
+            hydrationProgress={hydrationProgress}
+            weeklyComplianceDays={weeklyComplianceDays || 0}
+            uniqueFoodsThisWeek={uniqueFoodsThisWeek || 0}
+            patternsDiscovered={correlations?.length || 0}
+            onDismiss={handleMomentumDismiss}
+            onViewProgress={handleViewProgress}
+          />
+        ) : (
+          <DailyIntelligenceCard
+            type={decision.type}
+            headline={decision.headline}
+            subtitle={decision.subtitle}
+            confidence={decision.confidence}
+            confidenceLabel={decision.confidenceLabel}
+            actions={decision.actions || []}
+            onAction={handleAction}
+            lifecycleStage={orchestratorData.lifecycle?.stage}
+          />
+        )}
       </View>
 
       {/* Supporting Correlations */}

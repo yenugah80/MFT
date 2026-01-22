@@ -789,6 +789,10 @@ router.get("/dashboard", async (req, res) => {
     const { start: todayStart, end: todayEnd } = getLocalDayRange(offsetMinutes);
     const today = getLocalDateUTC(offsetMinutes);
 
+    // Get yesterday's date range for fallback display
+    const yesterday = addDaysUTC(today, -1);
+    const { start: yesterdayStart, end: yesterdayEnd } = getLocalDayRange(offsetMinutes, yesterday);
+
     // Get last 7 days date range
     const sevenDaysAgo = addDaysUTC(today, -7);
 
@@ -812,6 +816,11 @@ router.get("/dashboard", async (req, res) => {
       goals,
       gamification,
       todayActivityLogsResult,
+      // Yesterday's data for fallback when today is empty
+      yesterdaySummary,
+      yesterdayFoodLogs,
+      yesterdayWaterLogs,
+      yesterdayMoodLogs,
     ] = await Promise.all([
       // Today's nutrition summary
       db.select()
@@ -937,6 +946,52 @@ router.get("/dashboard", async (req, res) => {
           return { rows: [] };
         }
       })(),
+
+      // Yesterday's nutrition summary (fallback when today is empty)
+      db.select()
+        .from(dailyNutritionSummaryTable)
+        .where(
+          and(
+            eq(dailyNutritionSummaryTable.userId, userId),
+            eq(dailyNutritionSummaryTable.date, yesterday)
+          )
+        )
+        .limit(1),
+
+      // Yesterday's food logs
+      db.selectDistinctOn([foodLogTable.clientEventId])
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.userId, userId),
+            gte(foodLogTable.loggedDate, yesterdayStart),
+            lte(foodLogTable.loggedDate, yesterdayEnd)
+          )
+        )
+        .orderBy(foodLogTable.clientEventId, desc(foodLogTable.loggedDate)),
+
+      // Yesterday's water intake
+      db.select()
+        .from(waterLogTable)
+        .where(
+          and(
+            eq(waterLogTable.userId, userId),
+            gte(waterLogTable.loggedDate, yesterdayStart),
+            lte(waterLogTable.loggedDate, yesterdayEnd)
+          )
+        ),
+
+      // Yesterday's mood logs
+      db.select()
+        .from(moodLogTable)
+        .where(
+          and(
+            eq(moodLogTable.userId, userId),
+            gte(moodLogTable.loggedDate, yesterdayStart),
+            lte(moodLogTable.loggedDate, yesterdayEnd)
+          )
+        )
+        .orderBy(desc(moodLogTable.loggedDate)),
     ]);
 
     // Extract today's activity logs from raw SQL result
@@ -948,6 +1003,30 @@ router.get("/dashboard", async (req, res) => {
       if (hydrationValue > 0) return sum + hydrationValue;
       return sum + parseFloat(log.amountLiters || 0);
     }, 0);
+
+    // Calculate yesterday's water total (for fallback)
+    const yesterdayWaterTotal = yesterdayWaterLogs.reduce((sum, log) => {
+      const hydrationValue = parseFloat(log.hydrationLiters || 0);
+      if (hydrationValue > 0) return sum + hydrationValue;
+      return sum + parseFloat(log.amountLiters || 0);
+    }, 0);
+
+    // Determine if today has any meaningful data
+    const todayHasNutrition = (todaySummary[0]?.totalCalories || 0) > 0;
+    const todayHasWater = todayWaterTotal > 0;
+    const todayHasMood = todayMoodLogs.length > 0;
+    const todayHasFood = todayFoodLogs.length > 0;
+    const todayIsEmpty = !todayHasNutrition && !todayHasWater && !todayHasMood && !todayHasFood;
+
+    // Check if yesterday has data to show
+    const yesterdayHasNutrition = (yesterdaySummary[0]?.totalCalories || 0) > 0;
+    const yesterdayHasWater = yesterdayWaterTotal > 0;
+    const yesterdayHasMood = yesterdayMoodLogs.length > 0;
+    const yesterdayHasFood = yesterdayFoodLogs.length > 0;
+    const yesterdayHasData = yesterdayHasNutrition || yesterdayHasWater || yesterdayHasMood || yesterdayHasFood;
+
+    // Show yesterday's data only when today is completely empty AND yesterday has data
+    const showYesterdayFallback = todayIsEmpty && yesterdayHasData;
 
     // Calculate weekly averages
     const weeklyAverages = weekSummaries.length > 0 ? {
@@ -967,7 +1046,12 @@ router.get("/dashboard", async (req, res) => {
 
     // Calculate streak (consecutive days with ANY activity)
     const activityDays = new Set();
-    const fallbackOffset = Number.isFinite(offsetMinutes) ? offsetMinutes : 0;
+    // Use stored timezone from gamification if request header is missing
+    // This ensures consistency with how updateStreak() calculates dates
+    const storedTimezoneOffset = gamification[0]?.timezoneOffset;
+    const fallbackOffset = Number.isFinite(offsetMinutes)
+      ? offsetMinutes
+      : (Number.isFinite(storedTimezoneOffset) ? storedTimezoneOffset : 0);
 
     const addActivityDay = (loggedDate, tzOffset) => {
       if (!loggedDate) return;
@@ -991,6 +1075,22 @@ router.get("/dashboard", async (req, res) => {
       } else {
         break;
       }
+    }
+
+    // Debug: Log when calculated streak differs from stored streak
+    const storedStreak = gamification[0]?.streak ?? 0;
+    if (currentStreak !== storedStreak) {
+      console.warn(`[Dashboard] Streak mismatch: user=${userId}, stored=${storedStreak}, calculated=${currentStreak}, tz_header=${offsetMinutes}, tz_stored=${storedTimezoneOffset}`);
+    }
+
+    // Calculate hours since last meal for personalized nudges
+    let hoursSinceLastMeal = null;
+    if (todayFoodLogs.length > 0) {
+      const sortedFoodLogs = [...todayFoodLogs].sort((a, b) =>
+        new Date(b.loggedDate) - new Date(a.loggedDate)
+      );
+      const lastMealTime = new Date(sortedFoodLogs[0].loggedDate);
+      hoursSinceLastMeal = Math.floor((Date.now() - lastMealTime.getTime()) / (1000 * 60 * 60));
     }
 
     // ============================================================================
@@ -1063,13 +1163,53 @@ router.get("/dashboard", async (req, res) => {
     // Calculate level info from XP - this is the source of truth, not DB level
     // CRITICAL FIX: Always use freshly calculated level, not potentially stale DB value
     const levelInfo = calculateLevel(gamificationRow?.xp || 0);
+
+    // Check if streak can be restored (within 24 hours of reset, has freezes)
+    const previousStreak = gamificationRow?.previousStreak || gamificationRow?.previous_streak || 0;
+    const streakResetAt = gamificationRow?.streakResetAt || gamificationRow?.streak_reset_at || null;
+    let canRestoreStreak = false;
+
+    if (
+      previousStreak > 0 &&
+      (gamificationRow?.streakFreezes || gamificationRow?.streak_freezes || 0) > 0 &&
+      (gamificationRow?.streak || 0) === 0 &&
+      streakResetAt
+    ) {
+      const hoursSinceReset = (Date.now() - new Date(streakResetAt).getTime()) / (1000 * 60 * 60);
+      canRestoreStreak = hoursSinceReset <= 24;
+    }
+
     const gamificationWithLevel = {
       ...gamificationRow,
       level: levelInfo.level,           // Override DB level with calculated level
       nextLevelXp: levelInfo.nextLevelXp,
       currentLevelXp: levelInfo.currentLevelXP,
       progressPercent: levelInfo.progressPercent,
+      // Streak restoration info
+      canRestoreStreak,
+      previousStreak,
+      streakResetAt,
     };
+
+    // Aggregate yesterday's micronutrients for fallback
+    const yesterdayMicros = {};
+    yesterdayFoodLogs.forEach(log => {
+      if (log.micros && typeof log.micros === 'object') {
+        Object.entries(log.micros).forEach(([key, value]) => {
+          let numValue;
+          if (typeof value === 'number') {
+            numValue = value;
+          } else if (typeof value === 'object' && value.value !== undefined) {
+            numValue = value.value;
+          } else if (typeof value === 'string') {
+            numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+          }
+          if (!isNaN(numValue) && numValue > 0) {
+            yesterdayMicros[key] = (yesterdayMicros[key] || 0) + numValue;
+          }
+        });
+      }
+    });
 
     const dashboard = {
       today: {
@@ -1091,6 +1231,25 @@ router.get("/dashboard", async (req, res) => {
         activityMinutes: todayActivityLogs.reduce((sum, log) => sum + (parseInt(log.duration_minutes) || 0), 0),
         hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
+      // Yesterday's data for fallback display when today is empty
+      yesterday: showYesterdayFallback ? {
+        date: yesterday,
+        nutrition: {
+          ...(yesterdaySummary[0] || {
+            totalCalories: 0,
+            totalProtein: 0,
+            totalCarbs: 0,
+            totalFats: 0,
+          }),
+          micros: yesterdayMicros,
+        },
+        waterIntakeLiters: yesterdayWaterTotal,
+        waterLogs: yesterdayWaterLogs,
+        foodLogs: yesterdayFoodLogs,
+        moodLogs: yesterdayMoodLogs,
+      } : null,
+      // Flag to indicate frontend should show yesterday's data
+      showYesterdayFallback,
       goals: goals[0] || null,
       gamification: gamificationWithLevel,
       trends: {
@@ -1115,6 +1274,7 @@ router.get("/dashboard", async (req, res) => {
         totalDaysWithLogs,               // Distinct days with any activity (lifetime)
         totalMealsLogged: gamificationRow?.totalMealsLogged || 0,
         reachedFirstMilestone: (gamificationRow?.totalMealsLogged || 0) >= 3,
+        hoursSinceLastMeal,              // Hours since last food log (for personalized nudges)
       },
     };
 

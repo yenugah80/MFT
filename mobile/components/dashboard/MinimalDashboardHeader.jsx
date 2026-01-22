@@ -22,6 +22,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -69,10 +70,33 @@ const getDateDisplay = () => {
 
 /**
  * Get contextual nudge - ONE LINE only
- * Based on time of day + current progress + streak status
+ * Based on time of day + current progress + streak status + user context
  * Returns: { text, icon, color, route: 'meals'|'water'|'mood' }
  */
-const getNudge = ({ mealsLogged, waterProgress, moodLogged, streak, bestStreak, hour }) => {
+const getNudge = ({
+  mealsLogged,
+  waterProgress,
+  moodLogged,
+  streak,
+  bestStreak,
+  hour,
+  // NEW: Personalization parameters
+  level = 1,
+  lifecycleStage = null,
+  isReturning = false,
+  hoursSinceLastMeal = null,
+  xpToNextLevel = null,
+}) => {
+  // Priority 0: Returning user who lost streak (personalized fresh start)
+  if (isReturning && bestStreak > 0 && streak === 0) {
+    return {
+      text: `Welcome back! Your new streak starts now.`,
+      icon: 'refresh-outline',
+      color: STAT_COLORS.streakActive,
+      route: 'meals',
+    };
+  }
+
   // Priority 1: Streak loss (Duolingo psychology)
   if (bestStreak > 0 && streak === 0) {
     return {
@@ -86,18 +110,48 @@ const getNudge = ({ mealsLogged, waterProgress, moodLogged, streak, bestStreak, 
   // Priority 2: Streak milestone celebration (subtle, not screaming)
   if (streak === 7 || streak === 14 || streak === 30 || streak === 100) {
     const emoji = streak >= 30 ? '🎯' : '🔥';
+    // Level-aware celebration
+    const message = level >= 8
+      ? `${streak} days! You're unstoppable. ${emoji}`
+      : `${streak} days strong. ${emoji}`;
     return {
-      text: `${streak} days strong. ${emoji}`,
+      text: message,
       icon: 'flame',
       color: STAT_COLORS.streakActive,
       route: 'meals',
     };
   }
 
-  // Priority 3: Time-based nudges (meal timing)
-  if (hour < 10 && mealsLogged === 0) {
+  // Priority 2.5: Near level-up nudge (gamification hook)
+  if (xpToNextLevel !== null && xpToNextLevel <= 30 && mealsLogged === 0) {
     return {
-      text: 'Log breakfast to start your day right.',
+      text: `Just ${xpToNextLevel} XP to level up! Log a meal.`,
+      icon: 'trending-up-outline',
+      color: STAT_COLORS.streakActive,
+      route: 'meals',
+    };
+  }
+
+  // Priority 2.7: Time gap nudge (been too long since eating)
+  if (hoursSinceLastMeal !== null && hoursSinceLastMeal >= 6 && hour < 21) {
+    return {
+      text: `${hoursSinceLastMeal}h since your last meal. Time to eat?`,
+      icon: 'time-outline',
+      color: TEXT.secondary,
+      route: 'meals',
+    };
+  }
+
+  // Priority 3: Time-based nudges (meal timing) - with lifecycle awareness
+  if (hour < 10 && mealsLogged === 0) {
+    // Lifecycle-aware breakfast nudge
+    const message = lifecycleStage === 'brand_new'
+      ? 'Start your journey—log breakfast!'
+      : lifecycleStage === 'onboarding'
+        ? 'Day by day! Log breakfast to build your habit.'
+        : 'Log breakfast to start your day right.';
+    return {
+      text: message,
       icon: 'sunny-outline',
       color: TEXT.tertiary,
       route: 'meals',
@@ -124,11 +178,15 @@ const getNudge = ({ mealsLogged, waterProgress, moodLogged, streak, bestStreak, 
 
   // Priority 4: Progress encouragement
   if (mealsLogged >= 3 && waterProgress >= 80 && moodLogged) {
+    // Level-aware completion message
+    const message = level >= 10
+      ? 'Perfect tracking. Elite consistency.'
+      : 'Great tracking today. You\'re all set.';
     return {
-      text: 'Great tracking today. You\'re all set.',
+      text: message,
       icon: 'checkmark-circle-outline',
       color: '#059669', // Muted green
-      route: 'meals', // No action needed, but tapping goes to log
+      route: 'meals',
     };
   }
 
@@ -138,6 +196,16 @@ const getNudge = ({ mealsLogged, waterProgress, moodLogged, streak, bestStreak, 
       icon: 'water-outline',
       color: STAT_COLORS.water,
       route: 'water',
+    };
+  }
+
+  // Priority 5: Power user streak encouragement
+  if (lifecycleStage === 'power_user' && streak >= 7 && mealsLogged === 0) {
+    return {
+      text: `${streak} days strong. Keep the momentum!`,
+      icon: 'flame',
+      color: STAT_COLORS.streakActive,
+      route: 'meals',
     };
   }
 
@@ -239,6 +307,13 @@ export default function MinimalDashboardHeader({
   streak = 0,
   bestStreak = 0,
   notificationCount = 0,
+  // NEW: Personalization props
+  level = 1,
+  lifecycleStage = null,
+  isReturning = false,
+  hoursSinceLastMeal = null,
+  xpToNextLevel = null,
+  // Callbacks
   onSettingsPress,
   onNotificationsPress,
   onMealsPress,
@@ -262,7 +337,7 @@ export default function MinimalDashboardHeader({
   const firstName = userName?.split(' ')[0] || '';
   const hour = new Date().getHours();
 
-  // Get contextual nudge
+  // Get contextual nudge with personalization
   const nudge = useMemo(() => getNudge({
     mealsLogged,
     waterProgress,
@@ -270,19 +345,23 @@ export default function MinimalDashboardHeader({
     streak,
     bestStreak,
     hour,
-  }), [mealsLogged, waterProgress, moodLogged, streak, bestStreak, hour]);
+    // Personalization
+    level,
+    lifecycleStage,
+    isReturning,
+    hoursSinceLastMeal,
+    xpToNextLevel,
+  }), [mealsLogged, waterProgress, moodLogged, streak, bestStreak, hour, level, lifecycleStage, isReturning, hoursSinceLastMeal, xpToNextLevel]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }, style]}>
       {/* Row 0: Brand Header - Logo + App Name + Notifications + Profile */}
       <View style={styles.brandHeader}>
         <View style={styles.brandLeft}>
-          <LinearGradient
-            colors={['#F97316', '#EA580C']}
-            style={styles.logoContainer}
-          >
-            <Ionicons name="nutrition" size={18} color="#FFF" />
-          </LinearGradient>
+          <Image
+            source={require('../../assets/images/app-logo.png')}
+            style={styles.logoImage}
+          />
           <Text style={styles.brandName}>MyFoodTracker</Text>
         </View>
         <View style={styles.headerActions}>
@@ -381,12 +460,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[2],
   },
-  logoContainer: {
-    width: 32,
-    height: 32,
+  logoImage: {
+    width: 36,
+    height: 36,
     borderRadius: RADIUS.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   brandName: {
     fontSize: TYPOGRAPHY.size.lg,

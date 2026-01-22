@@ -1,11 +1,14 @@
 /**
  * Outcome Verification Service
  *
- * Closes the feedback loop by:
+ * Closes the feedback loop for the intelligence system by:
  * 1. Tracking recommendation follow-through (did user do what we suggested?)
  * 2. Measuring outcomes (did it help their mood/energy/wellness?)
  * 3. Updating Thompson Sampling priors based on verified outcomes
  * 4. Monitoring prediction accuracy and triggering recalibration
+ * 5. Learning per-user Platt calibration parameters for confidence calibration
+ * 6. Adjusting personalized thresholds based on prediction accuracy
+ * 7. Implicit outcome detection from user behavior
  *
  * This is critical for continuous learning - recommendations that don't
  * produce positive outcomes should be deprioritized over time.
@@ -17,12 +20,15 @@ import {
   insightActionsTable,
   predictionOutcomesTable,
   predictionLogTable,
+  pendingCheckInsTable,
+  userThresholdsTable,
   moodLogTable,
   foodLogTable,
   waterLogTable,
   activityLogTable,
+  profilesTable,
 } from '../db/schema.js';
-import { eq, and, gte, lte, desc, sql, between } from 'drizzle-orm';
+import { eq, and, gte, lte, lt, desc, sql, isNull } from 'drizzle-orm';
 import { updateArm } from './thompsonSamplingService.js';
 
 /**
@@ -52,6 +58,14 @@ const SUCCESS_THRESHOLDS = {
 const ACCURACY_WINDOW_DAYS = 14;
 const MIN_PREDICTIONS_FOR_MONITORING = 10;
 const ACCURACY_THRESHOLD_FOR_RECALIBRATION = 0.6; // Recalibrate if < 60% accurate
+
+// Platt calibration parameters
+const DEFAULT_PLATT_PARAMS = { A: -2.0, B: 0.5 };
+const MIN_SAMPLES_FOR_PLATT_CALIBRATION = 10;
+
+// Threshold learning parameters
+const MIN_SAMPLES_FOR_THRESHOLD_ADJUSTMENT = 5;
+const THRESHOLD_ADJUSTMENT_RATE = 0.1; // 10% adjustment per iteration
 
 /**
  * ============================================
@@ -216,6 +230,104 @@ export async function verifyRecommendationOutcome(userId, trackingId) {
     };
   } catch (error) {
     console.error('[OutcomeVerification] Error verifying outcome:', error);
+    throw error;
+  }
+}
+
+/**
+ * Record explicit user satisfaction feedback for a recommendation
+ * Called when user rates a recommendation after completing it
+ *
+ * This closes the feedback loop by capturing:
+ * 1. Whether the recommendation was helpful (binary)
+ * 2. Satisfaction rating (1-5 scale)
+ * 3. Optional text feedback
+ *
+ * The feedback updates Thompson Sampling to improve future recommendations
+ *
+ * @param {string} userId - User ID
+ * @param {number} trackingId - The recommendation tracking record ID
+ * @param {Object} satisfaction - Satisfaction data
+ * @param {boolean} satisfaction.helpful - Was it helpful?
+ * @param {number} satisfaction.rating - 1-5 rating
+ * @param {string} [satisfaction.feedback] - Optional feedback text
+ * @returns {Promise<Object>} Result
+ */
+export async function recordRecommendationSatisfaction(userId, trackingId, satisfaction) {
+  try {
+    // Get the tracking record
+    const [record] = await db
+      .select()
+      .from(insightActionsTable)
+      .where(
+        and(
+          eq(insightActionsTable.id, trackingId),
+          eq(insightActionsTable.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!record) {
+      return { success: false, error: 'Tracking record not found' };
+    }
+
+    // Validate rating
+    const rating = Math.min(5, Math.max(1, parseInt(satisfaction.rating) || 3));
+    const helpful = satisfaction.helpful === true || rating >= 4;
+    const now = new Date();
+
+    // Update the record with satisfaction data using BOTH:
+    // 1. Dedicated columns (for indexed queries)
+    // 2. outcomeJson (for backward compatibility and full context)
+    await db
+      .update(insightActionsTable)
+      .set({
+        // Dedicated columns for efficient querying
+        satisfactionRating: rating,
+        satisfactionFeedback: satisfaction.feedback || null,
+        satisfactionRecordedAt: now,
+        // Also store in JSON for full context
+        outcomeJson: {
+          ...record.outcomeJson,
+          satisfaction: {
+            helpful,
+            rating,
+            feedback: satisfaction.feedback || null,
+            recordedAt: now.toISOString(),
+          },
+        },
+        updatedAt: now,
+      })
+      .where(eq(insightActionsTable.id, trackingId));
+
+    // Update Thompson Sampling with satisfaction signal
+    // This is crucial for the feedback loop
+    if (record.recommendationType) {
+      const actionTime = record.actionTimestamp || new Date();
+      const armKey = `${record.recommendationType}:${record.domain}:${getTimeBucket(new Date(actionTime).getHours())}`;
+
+      await updateArm(userId, armKey, helpful, {
+        source: 'explicit_satisfaction',
+        rating,
+        trackingId,
+      });
+
+      console.log(`[OutcomeVerification] Updated Thompson Sampling for arm ${armKey} with satisfaction: helpful=${helpful}, rating=${rating}`);
+    }
+
+    console.log(`[OutcomeVerification] Recorded satisfaction for ${trackingId}: helpful=${helpful}, rating=${rating}`);
+
+    return {
+      success: true,
+      trackingId,
+      recorded: {
+        helpful,
+        rating,
+        hasFeedback: !!satisfaction.feedback,
+      },
+    };
+  } catch (error) {
+    console.error('[OutcomeVerification] Error recording satisfaction:', error);
     throw error;
   }
 }
@@ -723,6 +835,530 @@ function getTimeBucket(hour) {
 
 /**
  * ============================================
+ * PLATT CALIBRATION LEARNING
+ * ============================================
+ */
+
+/**
+ * Update per-user Platt calibration parameters based on accumulated outcomes
+ * Uses gradient descent on (predicted confidence, actual accuracy) pairs
+ *
+ * @param {string} userId
+ * @returns {Promise<Object|null>} Updated Platt params or null if not enough data
+ */
+export async function updatePlattCalibration(userId) {
+  try {
+    // Get recent prediction outcomes for this user
+    const outcomes = await db
+      .select({
+        confidence: predictionLogTable.confidence,
+        accurate: predictionOutcomesTable.predictionAccurate,
+        accuracyScore: predictionOutcomesTable.accuracyScore,
+      })
+      .from(predictionOutcomesTable)
+      .innerJoin(
+        predictionLogTable,
+        eq(predictionOutcomesTable.predictionId, predictionLogTable.id)
+      )
+      .where(eq(predictionOutcomesTable.userId, userId))
+      .orderBy(desc(predictionOutcomesTable.createdAt))
+      .limit(100);
+
+    if (outcomes.length < MIN_SAMPLES_FOR_PLATT_CALIBRATION) {
+      return null;
+    }
+
+    // Calculate new Platt parameters using gradient descent
+    const params = calculatePlattParams(outcomes);
+
+    // Store calibration params in user profile
+    const [profile] = await db
+      .select()
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (profile) {
+      const notifications = profile.notifications || {};
+      notifications.plattCalibration = {
+        A: params.A,
+        B: params.B,
+        sampleCount: outcomes.length,
+        lastUpdated: new Date().toISOString(),
+        accuracy: params.accuracy,
+      };
+
+      await db
+        .update(profilesTable)
+        .set({ notifications, updatedAt: new Date() })
+        .where(eq(profilesTable.userId, userId));
+    }
+
+    console.log(`[OutcomeVerification] Updated Platt calibration for ${userId}: A=${params.A.toFixed(3)}, B=${params.B.toFixed(3)}`);
+    return params;
+  } catch (error) {
+    console.error('[OutcomeVerification] Error updating Platt calibration:', error);
+    return null;
+  }
+}
+
+/**
+ * Calculate Platt scaling parameters from outcomes using gradient descent
+ * Loss = sum((predicted_probability - actual_outcome)^2)
+ */
+function calculatePlattParams(outcomes) {
+  let A = DEFAULT_PLATT_PARAMS.A;
+  let B = DEFAULT_PLATT_PARAMS.B;
+
+  const learningRate = 0.01;
+  const iterations = 100;
+
+  const data = outcomes.map(o => ({
+    confidence: parseFloat(o.confidence) || 0.5,
+    actual: o.accurate ? 1 : (parseFloat(o.accuracyScore) || 0),
+  }));
+
+  for (let iter = 0; iter < iterations; iter++) {
+    let gradA = 0;
+    let gradB = 0;
+
+    for (const { confidence, actual } of data) {
+      const clippedConf = Math.max(0.01, Math.min(0.99, confidence));
+      const logit = Math.log(clippedConf / (1 - clippedConf));
+      const p = 1 / (1 + Math.exp(A * logit + B));
+      const error = p - actual;
+      const pDerivative = p * (1 - p);
+
+      gradA += error * pDerivative * logit;
+      gradB += error * pDerivative;
+    }
+
+    A -= learningRate * (gradA / data.length);
+    B -= learningRate * (gradB / data.length);
+  }
+
+  // Calculate final accuracy
+  let totalError = 0;
+  for (const { confidence, actual } of data) {
+    const clippedConf = Math.max(0.01, Math.min(0.99, confidence));
+    const logit = Math.log(clippedConf / (1 - clippedConf));
+    const p = 1 / (1 + Math.exp(A * logit + B));
+    totalError += Math.abs(p - actual);
+  }
+  const accuracy = 1 - (totalError / data.length);
+
+  return { A, B, accuracy };
+}
+
+/**
+ * Get user's Platt calibration parameters
+ * Returns personalized params if available, otherwise defaults
+ *
+ * @param {string} userId
+ * @returns {Promise<Object>} Platt params { A, B }
+ */
+export async function getUserPlattParams(userId) {
+  try {
+    const [profile] = await db
+      .select()
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (profile?.notifications?.plattCalibration) {
+      return profile.notifications.plattCalibration;
+    }
+
+    return DEFAULT_PLATT_PARAMS;
+  } catch (error) {
+    console.error('[OutcomeVerification] Error getting Platt params:', error);
+    return DEFAULT_PLATT_PARAMS;
+  }
+}
+
+/**
+ * ============================================
+ * THRESHOLD LEARNING
+ * ============================================
+ */
+
+/**
+ * Update personalized thresholds based on prediction outcome
+ *
+ * @param {string} userId
+ * @param {Object} prediction - The prediction that was verified
+ * @param {Object} outcome - The verified outcome
+ * @returns {Promise<Object|null>}
+ */
+export async function updateThresholdFromOutcome(userId, prediction, outcome) {
+  try {
+    const thresholdType = prediction.predictionSubtype || prediction.predictionType;
+    if (!thresholdType) return null;
+
+    const [existingThreshold] = await db
+      .select()
+      .from(userThresholdsTable)
+      .where(and(
+        eq(userThresholdsTable.userId, userId),
+        eq(userThresholdsTable.thresholdType, thresholdType)
+      ))
+      .limit(1);
+
+    const isAccurate = outcome.predictionAccurate || outcome.inConfidenceInterval;
+
+    if (existingThreshold) {
+      const currentValue = parseFloat(existingThreshold.thresholdValue);
+      const predictionsMade = (existingThreshold.predictionsMade || 0) + 1;
+      const predictionsCorrect = (existingThreshold.predictionsCorrect || 0) + (isAccurate ? 1 : 0);
+      const newAccuracyRate = predictionsCorrect / predictionsMade;
+
+      let newValue = currentValue;
+      let adjustmentReason = null;
+
+      if (predictionsMade >= MIN_SAMPLES_FOR_THRESHOLD_ADJUSTMENT) {
+        if (newAccuracyRate < 0.5) {
+          // Too many false positives - raise threshold
+          newValue = currentValue * (1 + THRESHOLD_ADJUSTMENT_RATE);
+          adjustmentReason = 'false_positive_reduction';
+        } else if (newAccuracyRate > 0.8 && isAccurate) {
+          // Very accurate - slightly lower threshold to catch more
+          newValue = currentValue * (1 - THRESHOLD_ADJUSTMENT_RATE * 0.5);
+          adjustmentReason = 'sensitivity_increase';
+        }
+      }
+
+      await db
+        .update(userThresholdsTable)
+        .set({
+          thresholdValue: newValue.toFixed(2),
+          predictionsMade,
+          predictionsCorrect,
+          accuracyRate: newAccuracyRate.toFixed(2),
+          adjustmentCount: newValue !== currentValue
+            ? (existingThreshold.adjustmentCount || 0) + 1
+            : existingThreshold.adjustmentCount,
+          lastAdjustmentAt: newValue !== currentValue ? new Date() : existingThreshold.lastAdjustmentAt,
+          adjustmentReason: adjustmentReason || existingThreshold.adjustmentReason,
+          confidenceLevel: getConfidenceLevel(predictionsMade, newAccuracyRate),
+          updatedAt: new Date(),
+        })
+        .where(eq(userThresholdsTable.id, existingThreshold.id));
+
+      return { updated: true, newValue, adjustmentReason };
+    } else {
+      // Create new threshold entry with defaults
+      await db.insert(userThresholdsTable).values({
+        userId,
+        thresholdType,
+        thresholdValue: '30.00', // Default starting value
+        thresholdUnit: getThresholdUnit(thresholdType),
+        source: 'personal_learning',
+        predictionsMade: 1,
+        predictionsCorrect: isAccurate ? 1 : 0,
+        accuracyRate: isAccurate ? '1.00' : '0.00',
+        initialValue: '30.00',
+        confidenceLevel: 'low',
+      });
+
+      return { created: true };
+    }
+  } catch (error) {
+    console.error('[OutcomeVerification] Error updating threshold:', error);
+    return null;
+  }
+}
+
+/**
+ * Get user's personalized thresholds
+ *
+ * @param {string} userId
+ * @returns {Promise<Object>} Map of threshold type to value/metadata
+ */
+export async function getUserThresholds(userId) {
+  try {
+    const thresholds = await db
+      .select()
+      .from(userThresholdsTable)
+      .where(eq(userThresholdsTable.userId, userId));
+
+    const thresholdMap = {};
+    for (const t of thresholds) {
+      thresholdMap[t.thresholdType] = {
+        value: parseFloat(t.thresholdValue),
+        unit: t.thresholdUnit,
+        confidence: t.confidenceLevel,
+        accuracy: parseFloat(t.accuracyRate || 0),
+        source: t.source,
+        sampleSize: t.predictionsMade || 0,
+      };
+    }
+
+    return thresholdMap;
+  } catch (error) {
+    console.error('[OutcomeVerification] Error getting user thresholds:', error);
+    return {};
+  }
+}
+
+function getConfidenceLevel(sampleCount, accuracy) {
+  if (sampleCount >= 30 && accuracy >= 0.7) return 'validated';
+  if (sampleCount >= 15 && accuracy >= 0.6) return 'high';
+  if (sampleCount >= 5 && accuracy >= 0.5) return 'medium';
+  return 'low';
+}
+
+function getThresholdUnit(thresholdType) {
+  const units = {
+    sugar_crash: 'grams',
+    protein_fatigue: 'grams',
+    hydration_warning: 'percent',
+    carb_threshold: 'grams',
+    calorie_threshold: 'calories',
+    energy_crash: 'grams',
+    mood_dip: 'grams',
+  };
+  return units[thresholdType] || 'units';
+}
+
+/**
+ * ============================================
+ * IMPLICIT OUTCOME DETECTION
+ * ============================================
+ */
+
+/**
+ * Measure outcomes implicitly from user's logged data
+ * For predictions that didn't receive explicit feedback
+ *
+ * @param {string} userId
+ * @returns {Promise<Object>}
+ */
+export async function measureImplicitOutcomes(userId) {
+  try {
+    const now = new Date();
+
+    // Get pending predictions past their expected time
+    const pendingPredictions = await db
+      .select()
+      .from(predictionLogTable)
+      .where(and(
+        eq(predictionLogTable.userId, userId),
+        eq(predictionLogTable.outcomeStatus, 'pending'),
+        lt(predictionLogTable.expiresAt, now)
+      ))
+      .orderBy(desc(predictionLogTable.createdAt))
+      .limit(20);
+
+    const results = [];
+
+    for (const prediction of pendingPredictions) {
+      const implicitOutcome = await detectImplicitOutcome(userId, prediction);
+
+      if (implicitOutcome) {
+        // Record the implicitly detected outcome
+        const [outcome] = await db
+          .insert(predictionOutcomesTable)
+          .values({
+            predictionId: prediction.id,
+            userId,
+            actualOutcome: implicitOutcome.outcome,
+            outcomeIntensity: implicitOutcome.intensity,
+            timingAccuracy: implicitOutcome.timingAccuracy,
+            actualTime: implicitOutcome.detectedAt,
+            feedbackMethod: 'implicit',
+            predictionAccurate: implicitOutcome.accurate,
+            accuracyScore: implicitOutcome.accuracyScore.toFixed(2),
+            contextFactors: implicitOutcome.contextFactors,
+          })
+          .returning();
+
+        // Update prediction status
+        await db
+          .update(predictionLogTable)
+          .set({ outcomeStatus: 'confirmed' })
+          .where(eq(predictionLogTable.id, prediction.id));
+
+        // Trigger learning updates
+        await updatePlattCalibration(userId);
+        await updateThresholdFromOutcome(userId, prediction, outcome);
+
+        results.push({ predictionId: prediction.id, outcome: implicitOutcome });
+      } else {
+        // Mark as skipped if we couldn't detect outcome
+        await db
+          .update(predictionLogTable)
+          .set({ outcomeStatus: 'skipped' })
+          .where(eq(predictionLogTable.id, prediction.id));
+
+        results.push({ predictionId: prediction.id, outcome: null, skipped: true });
+      }
+    }
+
+    return { processed: results.length, results };
+  } catch (error) {
+    console.error('[OutcomeVerification] Error measuring implicit outcomes:', error);
+    return { processed: 0, error: error.message };
+  }
+}
+
+/**
+ * Detect outcome implicitly from user data logged after prediction
+ */
+async function detectImplicitOutcome(userId, prediction) {
+  try {
+    const predictedTime = new Date(prediction.predictedTime);
+    const windowEnd = new Date(prediction.expiresAt);
+
+    // Look for mood logs in the prediction window
+    const moodLogs = await db
+      .select()
+      .from(moodLogTable)
+      .where(and(
+        eq(moodLogTable.userId, userId),
+        gte(moodLogTable.loggedDate, predictedTime),
+        lte(moodLogTable.loggedDate, windowEnd)
+      ))
+      .orderBy(moodLogTable.loggedDate);
+
+    if (moodLogs.length === 0) {
+      return null;
+    }
+
+    // Analyze the mood/energy data
+    const avgEnergy = moodLogs.reduce((sum, m) => sum + (m.energyLevel || 5), 0) / moodLogs.length;
+    const avgIntensity = moodLogs.reduce((sum, m) => sum + (m.intensity || 5), 0) / moodLogs.length;
+
+    const predictedNegative = ['high', 'medium'].includes(prediction.predictedSeverity);
+    let outcome, accurate, accuracyScore;
+
+    if (prediction.predictionType === 'energy_crash' || prediction.predictionType === 'energy') {
+      const hadCrash = avgEnergy <= 4;
+      if (predictedNegative) {
+        accurate = hadCrash;
+        accuracyScore = hadCrash ? 1.0 : (avgEnergy <= 5 ? 0.5 : 0.0);
+        outcome = hadCrash ? 'as_predicted' : 'better_than_predicted';
+      } else {
+        accurate = !hadCrash;
+        accuracyScore = !hadCrash ? 1.0 : 0.0;
+        outcome = !hadCrash ? 'as_predicted' : 'worse_than_predicted';
+      }
+    } else if (prediction.predictionType === 'mood_dip' || prediction.predictionType === 'mood') {
+      const hadDip = avgIntensity <= 4;
+      if (predictedNegative) {
+        accurate = hadDip;
+        accuracyScore = hadDip ? 1.0 : (avgIntensity <= 5 ? 0.5 : 0.0);
+        outcome = hadDip ? 'as_predicted' : 'better_than_predicted';
+      } else {
+        accurate = !hadDip;
+        accuracyScore = !hadDip ? 1.0 : 0.0;
+        outcome = !hadDip ? 'as_predicted' : 'worse_than_predicted';
+      }
+    } else {
+      const hadIssue = avgEnergy <= 4 || avgIntensity <= 4;
+      if (predictedNegative) {
+        accurate = hadIssue;
+        accuracyScore = hadIssue ? 1.0 : 0.5;
+        outcome = hadIssue ? 'as_predicted' : 'better_than_predicted';
+      } else {
+        accurate = !hadIssue;
+        accuracyScore = !hadIssue ? 1.0 : 0.0;
+        outcome = !hadIssue ? 'as_predicted' : 'worse_than_predicted';
+      }
+    }
+
+    const firstLog = moodLogs[0];
+    const logTime = new Date(firstLog.loggedDate);
+    const timeDiff = Math.abs((logTime - predictedTime) / (1000 * 60));
+    const timingAccuracy = timeDiff > 60 ? (logTime < predictedTime ? 'early' : 'late') : 'on_time';
+
+    return {
+      outcome,
+      accurate,
+      accuracyScore,
+      intensity: Math.round(avgEnergy),
+      timingAccuracy,
+      detectedAt: logTime,
+      contextFactors: {
+        moodLogsAnalyzed: moodLogs.length,
+        avgEnergy,
+        avgIntensity,
+        detectionMethod: 'implicit_mood_analysis',
+      },
+    };
+  } catch (error) {
+    console.error('[OutcomeVerification] Error detecting implicit outcome:', error);
+    return null;
+  }
+}
+
+/**
+ * ============================================
+ * PREDICTION ACCURACY STATS
+ * ============================================
+ */
+
+/**
+ * Get comprehensive prediction accuracy stats for a user
+ *
+ * @param {string} userId
+ * @returns {Promise<Object>}
+ */
+export async function getPredictionAccuracyStats(userId) {
+  try {
+    const outcomes = await db
+      .select({
+        predictionType: predictionLogTable.predictionType,
+        accurate: predictionOutcomesTable.predictionAccurate,
+        accuracyScore: predictionOutcomesTable.accuracyScore,
+      })
+      .from(predictionOutcomesTable)
+      .innerJoin(
+        predictionLogTable,
+        eq(predictionOutcomesTable.predictionId, predictionLogTable.id)
+      )
+      .where(eq(predictionOutcomesTable.userId, userId));
+
+    if (outcomes.length === 0) {
+      return { hasData: false };
+    }
+
+    const totalAccurate = outcomes.filter(o => o.accurate).length;
+    const overallAccuracy = totalAccurate / outcomes.length;
+
+    const byType = {};
+    for (const outcome of outcomes) {
+      const type = outcome.predictionType || 'unknown';
+      if (!byType[type]) {
+        byType[type] = { total: 0, accurate: 0 };
+      }
+      byType[type].total++;
+      if (outcome.accurate) {
+        byType[type].accurate++;
+      }
+    }
+
+    const typeAccuracies = {};
+    for (const [type, stats] of Object.entries(byType)) {
+      typeAccuracies[type] = {
+        accuracy: stats.accurate / stats.total,
+        sampleSize: stats.total,
+      };
+    }
+
+    return {
+      hasData: true,
+      totalPredictions: outcomes.length,
+      overallAccuracy: Math.round(overallAccuracy * 100) / 100,
+      byType: typeAccuracies,
+    };
+  } catch (error) {
+    console.error('[OutcomeVerification] Error getting accuracy stats:', error);
+    return { hasData: false, error: error.message };
+  }
+}
+
+/**
+ * ============================================
  * EXPORTS
  * ============================================
  */
@@ -731,9 +1367,20 @@ export default {
   // Recommendation tracking
   trackRecommendationAction,
   verifyRecommendationOutcome,
+  recordRecommendationSatisfaction,
   processPendingVerifications,
   // Prediction tracking
   logPrediction,
   verifyPrediction,
   calculatePredictionAccuracy,
+  // Platt calibration
+  updatePlattCalibration,
+  getUserPlattParams,
+  // Threshold learning
+  updateThresholdFromOutcome,
+  getUserThresholds,
+  // Implicit outcomes
+  measureImplicitOutcomes,
+  // Stats
+  getPredictionAccuracyStats,
 };

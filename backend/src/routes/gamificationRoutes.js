@@ -1,5 +1,5 @@
 import express from 'express';
-import { checkAndAwardStreakFreeze } from '../services/gamificationService.js';
+import { checkAndAwardStreakFreeze, restoreStreak } from '../services/gamificationService.js';
 import { getUserAchievements } from '../services/achievementService.js';
 import { requireAuth } from '../middleware/auth.js';
 import { db } from '../config/db.js';
@@ -28,6 +28,30 @@ router.post('/check-streak', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/gamification/restore-streak
+// Restore a broken streak using a streak freeze (within 24 hours of losing it)
+router.post('/restore-streak', requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const result = await restoreStreak(userId);
+
+    if (result.success) {
+      return res.json(result);
+    } else {
+      // Return appropriate status code based on error type
+      const statusCode = result.error === 'INTERNAL_ERROR' ? 500 : 400;
+      return res.status(statusCode).json(result);
+    }
+  } catch (error) {
+    console.error('[Gamification] Error restoring streak:', error);
+    res.status(500).json({
+      success: false,
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to restore streak',
+    });
+  }
+});
+
 // GET /api/gamification/user
 // Get full gamification data for the current user
 router.get('/user', requireAuth, async (req, res) => {
@@ -52,11 +76,30 @@ router.get('/user', requireAuth, async (req, res) => {
         currentLevelXp: 0,
         nextLevelXp: 100,
         progressPercent: 0,
+        // Streak restoration info
+        canRestoreStreak: false,
+        previousStreak: 0,
+        streakResetAt: null,
       });
     }
 
     // Calculate level info from XP
     const levelInfo = calculateLevel(gamification.xp || 0);
+
+    // Check if streak can be restored (within 24 hours and has freezes)
+    const previousStreak = gamification.previousStreak || 0;
+    const streakResetAt = gamification.streakResetAt || null;
+    let canRestoreStreak = false;
+
+    if (
+      previousStreak > 0 &&
+      gamification.streakFreezes > 0 &&
+      gamification.streak === 0 &&
+      streakResetAt
+    ) {
+      const hoursSinceReset = (Date.now() - new Date(streakResetAt).getTime()) / (1000 * 60 * 60);
+      canRestoreStreak = hoursSinceReset <= 24;
+    }
 
     res.json({
       xp: gamification.xp || 0,
@@ -69,6 +112,10 @@ router.get('/user', requireAuth, async (req, res) => {
       currentLevelXp: levelInfo.currentLevelXP || 0,
       nextLevelXp: levelInfo.nextLevelXp || 100,
       progressPercent: levelInfo.progressPercent || 0,
+      // Streak restoration info
+      canRestoreStreak,
+      previousStreak,
+      streakResetAt,
     });
   } catch (error) {
     console.error('[Gamification] Error fetching user data:', error);

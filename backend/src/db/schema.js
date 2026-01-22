@@ -126,6 +126,8 @@ export const gamificationTable = pgTable(
     xp: integer("xp").default(0),
     level: integer("level").default(1),
     streak: integer("streak").default(0), // days
+    previousStreak: integer("previous_streak").default(0), // streak value before last reset
+    streakResetAt: timestamp("streak_reset_at"), // when streak was last reset
     streakFreezes: integer("streak_freezes").default(0),
     lastFreezeAwardedAt: timestamp("last_freeze_awarded_at"),
     lastStreakUpdatedAt: timestamp("last_streak_updated_at"),
@@ -143,6 +145,7 @@ export const gamificationTable = pgTable(
     xpCheck: check("xp_check", sql`${table.xp} >= 0`),
     levelCheck: check("level_check", sql`${table.level} >= 1 AND ${table.level} <= 999`),
     streakCheck: check("streak_check", sql`${table.streak} >= 0`),
+    previousStreakCheck: check("previous_streak_check", sql`${table.previousStreak} >= 0`),
     streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
     totalMealsCheck: check("total_meals_check", sql`${table.totalMealsLogged} >= 0`),
   })
@@ -1554,6 +1557,11 @@ export const insightActionsTable = pgTable(
     armKey: text("arm_key"), // For updating bandit arms
     armUpdated: boolean("arm_updated").default(false),
 
+    // Satisfaction feedback tracking (for closed feedback loop)
+    satisfactionRating: integer("satisfaction_rating"), // 1-5 rating
+    satisfactionFeedback: text("satisfaction_feedback"), // Optional text feedback
+    satisfactionRecordedAt: timestamp("satisfaction_recorded_at"), // When feedback was given
+
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -1566,6 +1574,11 @@ export const insightActionsTable = pgTable(
       table.actionType,
       table.expectedOutcomeTime
     ),
+    // Satisfaction analytics indexes
+    satisfactionIdx: index("insight_actions_satisfaction_idx").on(table.userId, table.satisfactionRating),
+    typeSatisfactionIdx: index("insight_actions_type_satisfaction_idx").on(table.recommendationType, table.satisfactionRating),
+    // CHECK constraint for valid ratings
+    satisfactionRatingCheck: check("insight_actions_satisfaction_rating_check", sql`${table.satisfactionRating} IS NULL OR (${table.satisfactionRating} >= 1 AND ${table.satisfactionRating} <= 5)`),
   })
 );
 
@@ -1686,5 +1699,66 @@ export const pendingCheckInsTable = pgTable(
   (table) => ({
     userPendingIdx: index("pending_checkins_user_pending_idx").on(table.userId, table.status),
     scheduledIdx: index("pending_checkins_scheduled_idx").on(table.scheduledFor),
+  })
+);
+
+// ============================================================================
+// NOTIFICATION DELIVERY & TRACKING TABLES
+// Added for smart reminder system with snooze/dismiss persistence
+// ============================================================================
+
+// Notification Delivery Log - Tracks every notification sent
+export const notificationDeliveryLogTable = pgTable(
+  "notification_delivery_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    notificationType: text("notification_type").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    channel: text("channel").default("fcm"), // 'fcm' | 'expo' | 'local'
+    priority: integer("priority").default(3),
+    deliveryStatus: text("delivery_status").default("sent"), // 'sent' | 'delivered' | 'failed' | 'clicked'
+    errorMessage: text("error_message"),
+    clickedAt: timestamp("clicked_at"),
+    screenNavigated: text("screen_navigated"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    userCreatedIdx: index("notification_delivery_user_created_idx").on(table.userId, table.createdAt),
+    typeStatusIdx: index("notification_delivery_type_status_idx").on(table.notificationType, table.deliveryStatus),
+  })
+);
+
+// Notification Snoozes - Persists snooze state
+export const notificationSnoozesTable = pgTable(
+  "notification_snoozes",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    reminderType: text("reminder_type").notNull(),
+    snoozedUntil: timestamp("snoozed_until").notNull(),
+    snoozeCount: integer("snooze_count").default(1),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userReminderUnique: unique("unique_user_reminder_snooze").on(table.userId, table.reminderType),
+    activeSnoozeIdx: index("notification_snoozes_active_idx").on(table.userId, table.snoozedUntil),
+  })
+);
+
+// Notification Dismissals - Tracks dismissals for learning
+export const notificationDismissalsTable = pgTable(
+  "notification_dismissals",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    notificationType: text("notification_type").notNull(),
+    reason: text("reason"), // 'not_relevant' | 'too_frequent' | 'wrong_time' | 'other'
+    dismissedAt: timestamp("dismissed_at").defaultNow(),
+  },
+  (table) => ({
+    userTypeIdx: index("notification_dismissals_user_type_idx").on(table.userId, table.notificationType, table.dismissedAt),
   })
 );
