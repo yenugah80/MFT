@@ -58,7 +58,7 @@ class ApiClient {
     this.lastHealthCheck = 0;
     this.consecutiveFailures = 0;
     this.OFFLINE_THRESHOLD = 3; // Only mark offline after 3 consecutive failures
-    console.log(`[API] Client initialized with Base URL: ${this.baseURL}`);
+    if (__DEV__) console.log(`[API] Client initialized with Base URL: ${this.baseURL}`);
   }
 
   setTokenProvider(provider) {
@@ -70,7 +70,7 @@ class ApiClient {
     try {
       return await this.tokenProvider();
     } catch (error) {
-      console.error('[API] Token error:', error.message);
+      if (__DEV__) console.error('[API] Token error:', error.message);
       return null;
     }
   }
@@ -97,12 +97,12 @@ class ApiClient {
       this.isHealthy = response.ok;
       this.lastHealthCheck = now;
 
-      console.log(`[API] Health: ${this.isHealthy ? '✅' : '⚠️'}`);
+      if (__DEV__) console.log(`[API] Health: ${this.isHealthy ? '✅' : '⚠️'}`);
       return this.isHealthy;
     } catch (error) {
       this.isHealthy = false;
       this.lastHealthCheck = now;
-      console.error(`[API] ❌ Health check failed at ${this.baseURL}/health. Error: ${error.message}`);
+      if (__DEV__) console.error(`[API] ❌ Health check failed at ${this.baseURL}/health. Error: ${error.message}`);
       return false;
     }
   }
@@ -154,7 +154,7 @@ class ApiClient {
         // Fast retry logic
         if (isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
           const delay = RETRY_CONFIG.delays[attempt];
-          console.log(`[API] Retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
+          if (__DEV__) console.log(`[API] Retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
           await sleep(delay);
           return this.fetchWithRetry(url, options, attempt + 1);
         }
@@ -168,7 +168,7 @@ class ApiClient {
       this.consecutiveFailures = 0;
       if (this.isHealthy === false) {
         this.isHealthy = true;
-        console.log('[API] ✅ Backend recovered');
+        if (__DEV__) console.log('[API] ✅ Backend recovered');
       }
 
       return data;
@@ -176,7 +176,7 @@ class ApiClient {
       // Network error - fast retry
       if (!error.response && attempt < RETRY_CONFIG.maxRetries) {
         const delay = RETRY_CONFIG.delays[attempt];
-        console.log(`[API] Network error, retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
+        if (__DEV__) console.log(`[API] Network error, retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
         await sleep(delay);
         return this.fetchWithRetry(url, options, attempt + 1);
       }
@@ -191,7 +191,7 @@ class ApiClient {
       if (this.consecutiveFailures >= this.OFFLINE_THRESHOLD) {
         if (this.isHealthy !== false) {
           this.isHealthy = false;
-          if (error.message !== 'Request timeout') {
+          if (__DEV__ && error.message !== 'Request timeout') {
             const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
             console.error(
               `[API] ❌ Backend Error (${error.response?.status || 'Offline'}).\n` +
@@ -278,7 +278,7 @@ export function warmupBackend() {
 
   warmupPromise = (async () => {
     const startTime = Date.now();
-    console.log('[API] 🔥 Warming up backend...');
+    if (__DEV__) console.log('[API] 🔥 Warming up backend...');
 
     try {
       // Use a simple HEAD request to /health - minimal data transfer
@@ -295,18 +295,20 @@ export function warmupBackend() {
       const duration = Date.now() - startTime;
 
       if (response.ok) {
-        console.log(`[API] ✅ Backend warm (${duration}ms)`);
+        if (__DEV__) console.log(`[API] ✅ Backend warm (${duration}ms)`);
         apiClient.isHealthy = true;
         apiClient.consecutiveFailures = 0;
       } else {
-        console.log(`[API] ⚠️ Backend responded with ${response.status} (${duration}ms)`);
+        if (__DEV__) console.log(`[API] ⚠️ Backend responded with ${response.status} (${duration}ms)`);
       }
     } catch (error) {
-      const duration = Date.now() - startTime;
-      if (error.name === 'AbortError') {
-        console.log(`[API] ⏱️ Warmup timeout after ${duration}ms - backend may still be starting`);
-      } else {
-        console.log(`[API] ⚠️ Warmup failed (${duration}ms): ${error.message}`);
+      if (__DEV__) {
+        const duration = Date.now() - startTime;
+        if (error.name === 'AbortError') {
+          console.log(`[API] ⏱️ Warmup timeout after ${duration}ms - backend may still be starting`);
+        } else {
+          console.log(`[API] ⚠️ Warmup failed (${duration}ms): ${error.message}`);
+        }
       }
     }
   })();

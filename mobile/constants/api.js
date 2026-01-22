@@ -14,8 +14,8 @@ function getApiUrl() {
     return process.env.EXPO_PUBLIC_API_BASE_URL;
   }
 
-  // Production: Use custom domain with Cloudflare protection
-  return 'https://api.my-food-tracker.com/api';
+  // Production: Use Render backend (primary deployment)
+  return 'https://myfoodtracker.onrender.com/api';
 }
 
 // Base API URL

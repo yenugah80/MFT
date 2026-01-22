@@ -43,13 +43,13 @@ export function useRecommendations({ enabled = false } = {}) {
     queryKey: ['recommendations'],
     queryFn: async () => {
       try {
-        console.log('[useRecommendations] Fetching recommendations...');
+        if (__DEV__) if (__DEV__) console.log('[useRecommendations] Fetching recommendations...');
         // apiClient.get returns data directly, not a response wrapper
         const data = await apiClient.get('/recommendations', {
           params: { limit: 5 },
           timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
         });
-        console.log('[useRecommendations] Fetch successful');
+        if (__DEV__) if (__DEV__) console.log('[useRecommendations] Fetch successful');
         return data?.recommendations || [];
       } catch (err) {
         // Distinguish timeout from other errors
@@ -58,7 +58,7 @@ export function useRecommendations({ enabled = false } = {}) {
           ? 'Request took too long - try again later'
           : err?.response?.data?.error || 'Failed to load recommendations';
 
-        console.error('[useRecommendations] Fetch error:', errorMessage);
+        if (__DEV__) console.error('[useRecommendations] Fetch error:', errorMessage);
         throw new Error(errorMessage);
       }
     },
@@ -84,7 +84,7 @@ export function useRecommendations({ enabled = false } = {}) {
       return data;
     },
     onError: (err) => {
-      console.error('[useRecommendations] Track error:', err);
+      if (__DEV__) console.error('[useRecommendations] Track error:', err);
     }
   });
 
@@ -93,7 +93,7 @@ export function useRecommendations({ enabled = false } = {}) {
       await trackInteractionMutation.mutateAsync({ recommendationId, action, meta });
       return true;
     } catch (err) {
-      console.error('[useRecommendations] Track error:', err);
+      if (__DEV__) console.error('[useRecommendations] Track error:', err);
       return false;
     }
   }, [trackInteractionMutation]);
@@ -119,13 +119,13 @@ export function useRecommendations({ enabled = false } = {}) {
     onSuccess: () => {
       // CRITICAL FIX: Invalidate cache AND refetch new recommendations
       // React Query automatically handles this efficiently
-      console.log('[useRecommendations] Invalidating recommendations cache after accept');
+      if (__DEV__) console.log('[useRecommendations] Invalidating recommendations cache after accept');
       queryClient.invalidateQueries({ queryKey: ['recommendations'] });
       // Also invalidate dashboard cache so it updates immediately
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (err) => {
-      console.error('[useRecommendations] Accept error:', err);
+      if (__DEV__) console.error('[useRecommendations] Accept error:', err);
     }
   });
 
@@ -138,7 +138,7 @@ export function useRecommendations({ enabled = false } = {}) {
         message: result?.message || 'Added to food log!'
       };
     } catch (err) {
-      console.error('[useRecommendations] Accept error:', err);
+      if (__DEV__) console.error('[useRecommendations] Accept error:', err);
       return {
         success: false,
         error: err?.response?.data?.error || 'Failed to add to log',
@@ -155,7 +155,7 @@ export function useRecommendations({ enabled = false } = {}) {
       await trackInteraction(recommendationId, 'reject', { reason });
     },
     onError: (err) => {
-      console.error('[useRecommendations] Reject error:', err);
+      if (__DEV__) console.error('[useRecommendations] Reject error:', err);
     }
   });
 
@@ -164,7 +164,7 @@ export function useRecommendations({ enabled = false } = {}) {
       await rejectRecommendationMutation.mutateAsync({ recommendationId, reason });
       return { success: true };
     } catch (err) {
-      console.error('[useRecommendations] Reject error:', err);
+      if (__DEV__) console.error('[useRecommendations] Reject error:', err);
       return {
         success: false,
         error: err?.response?.data?.error || 'Failed to record rejection'
@@ -194,7 +194,7 @@ export function useRecommendations({ enabled = false } = {}) {
         stats: data?.stats || {}
       };
     } catch (err) {
-      console.error('[useRecommendations] History fetch error:', err);
+      if (__DEV__) console.error('[useRecommendations] History fetch error:', err);
       return {
         history: [],
         stats: {},
@@ -215,7 +215,7 @@ export function useRecommendations({ enabled = false } = {}) {
         data: data
       };
     } catch (err) {
-      console.error('[useRecommendations] Detail fetch error:', err);
+      if (__DEV__) console.error('[useRecommendations] Detail fetch error:', err);
       return {
         success: false,
         error: err?.response?.data?.error || 'Failed to fetch recommendation details',
@@ -228,7 +228,7 @@ export function useRecommendations({ enabled = false } = {}) {
   // CLEAR CACHE (React Query)
   // ============================================================================
   const clearCache = useCallback(() => {
-    console.log('[useRecommendations] Cache cleared on demand');
+    if (__DEV__) console.log('[useRecommendations] Cache cleared on demand');
     queryClient.invalidateQueries({ queryKey: ['recommendations'] });
   }, [queryClient]);
 
@@ -277,7 +277,7 @@ export function useRecommendationHistory() {
           stats: data?.stats || {}
         };
       } catch (err) {
-        console.error('[useRecommendationHistory] Fetch error:', err);
+        if (__DEV__) console.error('[useRecommendationHistory] Fetch error:', err);
         // Return empty state on error (prevents stale data display)
         throw err?.response?.data?.error || 'Failed to fetch history';
       }

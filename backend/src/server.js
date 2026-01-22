@@ -401,19 +401,24 @@ export async function ensureSleepStressTables() {
 }
 
 // CORS configuration – restrict to trusted origins only (security fix)
-// Allow your frontend domains and mobile app deep links
+// NOTE: Mobile apps (iOS/Android) don't send Origin headers, so they bypass CORS.
+// This is primarily for web-based testing and admin tools.
 const ALLOWED_ORIGINS = [
-  // Production frontend
-  process.env.CORS_ORIGIN || 'https://yourdomain.com',
-  // Development/Testing
+  // Production frontend (if any web interface exists)
+  ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
+  // MyFoodTracker production domains
+  'https://myfoodtracker.onrender.com',
+  'https://api.my-food-tracker.com',
+  // Development/Testing (only in development mode)
   ...(process.env.NODE_ENV === 'development' ? [
     'http://localhost:3000',
     'http://localhost:8081',
     'http://localhost:19000',  // Expo dev
     'http://localhost:19001',  // Expo dev
+    'http://localhost:19006',  // Expo web
   ] : []),
-  // Expo hosted app (add your actual Expo project slug)
-  process.env.EXPO_APP_URL || 'https://yourapp.expo.dev',
+  // Expo hosted app
+  ...(process.env.EXPO_APP_URL ? [process.env.EXPO_APP_URL] : []),
 ];
 
 app.use(
@@ -472,12 +477,13 @@ app.get("/health", (req, res) => {
    For monitoring notification delivery system
 -------------------------------------------- */
 app.get("/api/internal/reminder-metrics", (req, res) => {
-  // Only allow with debug key for security
+  // Only allow with debug key for security (DEBUG_KEY must be set in environment)
   const debugKey = req.headers['x-debug-key'];
-  const validDebugKey = process.env.DEBUG_KEY || 'mft-debug-2024';
+  const validDebugKey = process.env.DEBUG_KEY;
 
-  if (debugKey !== validDebugKey) {
-    return res.status(403).json({ error: 'Metrics endpoint requires debug key' });
+  // Require DEBUG_KEY to be set in production - no hardcoded fallback
+  if (!validDebugKey || debugKey !== validDebugKey) {
+    return res.status(403).json({ error: 'Metrics endpoint requires valid debug key' });
   }
 
   const metrics = getSmartReminderMetrics();
@@ -494,12 +500,13 @@ app.get("/api/internal/reminder-metrics", (req, res) => {
    Use this to verify Cloudflare integration
 -------------------------------------------- */
 app.get("/api/debug/cloudflare", (req, res) => {
-  // Only allow in development or with admin check
+  // Only allow in development or with valid debug key
   const isDev = process.env.NODE_ENV === 'development';
   const debugKey = req.headers['x-debug-key'];
-  const validDebugKey = process.env.DEBUG_KEY || 'mft-debug-2024';
+  const validDebugKey = process.env.DEBUG_KEY;
 
-  if (!isDev && debugKey !== validDebugKey) {
+  // In production, require DEBUG_KEY - no hardcoded fallback
+  if (!isDev && (!validDebugKey || debugKey !== validDebugKey)) {
     return res.status(403).json({ error: 'Debug endpoint not available' });
   }
 

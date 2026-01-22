@@ -290,9 +290,11 @@ export default function InsightsIndex() {
           <View style={styles.disclaimerContainer}>
             <Ionicons name="shield-checkmark-outline" size={16} color={TEXT.muted} />
             <Text style={styles.disclaimerText}>
-              These insights are for informational purposes only and are not medical advice.
-              Patterns shown are based on your personal data. Consult a healthcare professional
-              for health concerns.
+              MyFoodTracker is a wellness tool, not a medical device. The insights, predictions,
+              and recommendations provided are for informational purposes only and do not
+              constitute medical advice, diagnosis, or treatment. Always consult a qualified
+              healthcare professional before making dietary changes or health decisions.
+              Not intended to diagnose, treat, cure, or prevent any disease.
             </Text>
           </View>
           <Text style={styles.footerText}>

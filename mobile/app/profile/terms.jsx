@@ -53,9 +53,12 @@ export default function TermsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>4. Disclaimer</Text>
+          <Text style={styles.sectionTitle}>4. Health & Medical Disclaimer</Text>
           <Text style={styles.text}>
-            MyFoodTracker is provided &quot;as is&quot; without warranty of any kind. We do not warrant that the app will be uninterrupted or error-free. Nutritional information is for educational purposes and should not be considered medical advice.
+            IMPORTANT: MyFoodTracker is a wellness tool, NOT a medical device. The app, including all nutritional information, insights, predictions, correlations, and recommendations, is provided for informational and educational purposes only.{'\n\n'}
+            This app does NOT provide medical advice, diagnosis, or treatment. The information should not be used as a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of a qualified healthcare provider with any questions regarding a medical condition, dietary needs, or health goals.{'\n\n'}
+            MyFoodTracker is NOT intended to diagnose, treat, cure, or prevent any disease or health condition. If you have or suspect you have a medical problem, eating disorder, or other health condition, promptly contact your healthcare provider.{'\n\n'}
+            Never disregard professional medical advice or delay seeking it because of information provided by this app. Reliance on any information provided by MyFoodTracker is solely at your own risk.
           </Text>
         </View>
 

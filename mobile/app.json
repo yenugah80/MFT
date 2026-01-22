@@ -131,7 +131,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": "https://api.my-food-tracker.com/api",
+      "apiUrl": "https://myfoodtracker.onrender.com/api",
       "router": {},
       "eas": {
         "projectId": "91264355-29bc-4019-be18-08002c3180c2"
