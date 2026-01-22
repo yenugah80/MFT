@@ -43,13 +43,13 @@ export function useRecommendations({ enabled = false } = {}) {
     queryKey: ['recommendations'],
     queryFn: async () => {
       try {
-        if (__DEV__) if (__DEV__) console.log('[useRecommendations] Fetching recommendations...');
+        if (__DEV__) console.log('[useRecommendations] Fetching recommendations...');
         // apiClient.get returns data directly, not a response wrapper
         const data = await apiClient.get('/recommendations', {
           params: { limit: 5 },
           timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
         });
-        if (__DEV__) if (__DEV__) console.log('[useRecommendations] Fetch successful');
+        if (__DEV__) console.log('[useRecommendations] Fetch successful');
         return data?.recommendations || [];
       } catch (err) {
         // Distinguish timeout from other errors
