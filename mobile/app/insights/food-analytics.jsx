@@ -11,7 +11,7 @@
  * - /insights/predictive - Predictions based on multiple factors
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
   Dimensions,
   ActivityIndicator,
   AccessibilityInfo,
+  Animated,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,12 +53,49 @@ import { useDashboard } from '../../hooks/useDashboard';
 import { useRecommendations } from '../../hooks/useRecommendations';
 import { useDecisionBrainNutritionInsights } from '../../hooks/useMoodInsights';
 import { useFoodLog } from '../../hooks/useFoodLog';
+import { fetchFoodSuggestions, trackEvent, Events } from '../../services/analytics';
 
 // Responsive layout for small devices
 import { getResponsiveGaugeSize, IS_SMALL_DEVICE, getHorizontalPadding } from '../../utils/responsiveLayout';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GAUGE_CONFIG = getResponsiveGaugeSize('standard');
+
+// ============================================================================
+// SECTION ERROR BOUNDARY - Graceful fallback for individual sections
+// ============================================================================
+
+class SectionErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error(`[SectionErrorBoundary] ${this.props.sectionName || 'Section'} error:`, error.message);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{
+          marginTop: SPACING[4],
+          padding: SPACING[4],
+          backgroundColor: SURFACES.background.secondary,
+          borderRadius: RADIUS.md,
+          alignItems: 'center',
+        }}>
+          <Ionicons name="warning-outline" size={24} color={TEXT.tertiary} />
+          <Text style={{ color: TEXT.tertiary, fontSize: 12, marginTop: SPACING[2] }}>
+            {this.props.sectionName || 'Section'} unavailable
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -69,6 +107,25 @@ export default function FoodAnalyticsScreen() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [selectedMeals, setSelectedMeals] = useState([]);
+  const [selectedTrendDay, setSelectedTrendDay] = useState(null);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  // Expandable sections - default collapsed counts
+  const [expandedSections, setExpandedSections] = useState({
+    recommendations: false,
+    patterns: false,
+    correlations: false,
+    topFoods: false,
+    gaps: false,
+    recentMeals: false,
+  });
+
+  // Toggle section expansion
+  const toggleSection = useCallback((section) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  }, []);
 
   // Food log for recent meals and comparison
   const foodLog = useFoodLog();
@@ -80,6 +137,36 @@ export default function FoodAnalyticsScreen() {
     return () => subscription?.remove();
   }, []);
 
+  // Track screen view
+  useEffect(() => {
+    trackEvent('screen_view', { screen_name: 'food_analytics' });
+  }, []);
+
+  // Skeleton pulse animation
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    if (reducedMotion) return;
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.4,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+
+    return () => pulse.stop();
+  }, [reducedMotion, pulseAnim]);
+
   // Decision Brain - ML-powered insights (PRIMARY data source)
   const { data: decisionBrainData, isLoading: dbLoading, refetch: refetchDB } = useDecisionBrainNutritionInsights();
 
@@ -88,6 +175,7 @@ export default function FoodAnalyticsScreen() {
   const { recommendations, isLoading: recsLoading, refetch: refetchRecs, acceptRecommendation } = useRecommendations();
 
   const isLoading = dbLoading || dashboardLoading || recsLoading;
+  const isFoodLogLoading = foodLog.isLoading;
   // Critical error only if both Decision Brain and dashboard fail
   const hasError = !!dashboardError && !decisionBrainData?.success;
 
@@ -184,29 +272,22 @@ export default function FoodAnalyticsScreen() {
   }, [dashboard, decisionBrainData]);
 
   // Recommendations - PREFER Decision Brain witty recommendations, fall back to AI recs
+  // Return all recommendations, display count is controlled by expandedSections state
   const foodRecommendations = useMemo(() => {
-    // Decision Brain returns witty, personalized recommendations
     if (decisionBrainData?.recommendations?.length > 0) {
-      return decisionBrainData.recommendations.slice(0, 3);
+      return decisionBrainData.recommendations;
     }
-    if (!recommendations) return [];
-    return recommendations.slice(0, 3);
+    return recommendations || [];
   }, [recommendations, decisionBrainData]);
 
-  // ML-powered patterns from Decision Brain
+  // ML-powered patterns from Decision Brain - return all, display controlled by state
   const nutritionPatterns = useMemo(() => {
-    if (decisionBrainData?.patterns?.length > 0) {
-      return decisionBrainData.patterns.slice(0, 5);
-    }
-    return [];
+    return decisionBrainData?.patterns || [];
   }, [decisionBrainData]);
 
-  // ML correlations with confidence scores
+  // ML correlations with confidence scores - return all, display controlled by state
   const nutritionCorrelations = useMemo(() => {
-    if (decisionBrainData?.correlations?.length > 0) {
-      return decisionBrainData.correlations.slice(0, 4);
-    }
-    return [];
+    return decisionBrainData?.correlations || [];
   }, [decisionBrainData]);
 
   // Process micronutrient data for display
@@ -223,15 +304,14 @@ export default function FoodAnalyticsScreen() {
     };
   }, [nutritionMetrics?.micros]);
 
-  // Recent meals for comparison feature (last 7 days, max 10 items)
+  // Recent meals for comparison feature (last 7 days) - no hard limit, controlled by state
   const recentMeals = useMemo(() => {
     const now = Date.now();
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
     return (foodLog.logs || [])
       .filter(log => log.timestamp && log.timestamp > sevenDaysAgo)
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 10);
+      .sort((a, b) => b.timestamp - a.timestamp);
   }, [foodLog.logs]);
 
   // Weekly Trends - Daily calories and protein for past 7 days
@@ -271,18 +351,36 @@ export default function FoodAnalyticsScreen() {
     return { days, maxCalories, avgCalories, avgProtein };
   }, [foodLog.logs]);
 
-  // Top Foods - Most frequently logged items
+  // Normalize food name for better matching (handles variations)
+  const normalizeFood = useCallback((name) => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .trim()
+      // Remove common prefixes/suffixes
+      .replace(/^(grilled|baked|fried|steamed|roasted|fresh|organic)\s+/i, '')
+      // Remove portion descriptors
+      .replace(/\s+(small|medium|large|slice|piece|cup|bowl)$/i, '')
+      // Normalize whitespace
+      .replace(/\s+/g, ' ');
+  }, []);
+
+  // Top Foods - Most frequently logged items with normalized matching
   const topFoods = useMemo(() => {
     const logs = foodLog.logs || [];
     const foodCounts = {};
 
     logs.forEach(log => {
-      const name = (log.foodName || '').toLowerCase().trim();
-      if (!name) return;
+      const rawName = (log.foodName || '').trim();
+      if (!rawName) return;
 
-      if (!foodCounts[name]) {
-        foodCounts[name] = {
-          name: log.foodName,
+      const normalizedKey = normalizeFood(rawName);
+      if (!normalizedKey) return;
+
+      if (!foodCounts[normalizedKey]) {
+        foodCounts[normalizedKey] = {
+          name: rawName, // Keep original display name
+          normalizedKey,
           count: 0,
           avgCalories: 0,
           avgProtein: 0,
@@ -292,11 +390,13 @@ export default function FoodAnalyticsScreen() {
         };
       }
 
-      foodCounts[name].count++;
-      foodCounts[name].totalCalories += log.calories || 0;
-      foodCounts[name].totalProtein += log.protein || 0;
-      if (log.timestamp > foodCounts[name].lastLogged) {
-        foodCounts[name].lastLogged = log.timestamp;
+      foodCounts[normalizedKey].count++;
+      foodCounts[normalizedKey].totalCalories += log.calories || 0;
+      foodCounts[normalizedKey].totalProtein += log.protein || 0;
+      // Keep the most recent name variation for display
+      if (log.timestamp > foodCounts[normalizedKey].lastLogged) {
+        foodCounts[normalizedKey].lastLogged = log.timestamp;
+        foodCounts[normalizedKey].name = rawName;
       }
     });
 
@@ -306,9 +406,9 @@ export default function FoodAnalyticsScreen() {
         avgCalories: Math.round(f.totalCalories / f.count),
         avgProtein: Math.round(f.totalProtein / f.count),
       }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [foodLog.logs]);
+      .sort((a, b) => b.count - a.count);
+    // No slice - display count controlled by expandedSections state
+  }, [foodLog.logs, normalizeFood]);
 
   // Meal Timing Insights - When user typically eats
   const mealTimingInsights = useMemo(() => {
@@ -357,67 +457,154 @@ export default function FoodAnalyticsScreen() {
     };
   }, [foodLog.logs]);
 
-  // Goal Adherence Score - % of days hitting calorie/protein targets
+  // Goal Adherence Score - % of days hitting calorie/macro targets
   const goalAdherence = useMemo(() => {
     if (!nutritionMetrics || !weeklyTrends) return null;
 
     const calorieGoal = nutritionMetrics.calories?.budget || 2000;
     const proteinGoal = nutritionMetrics.macros?.protein?.goal || 120;
+    const carbsGoal = nutritionMetrics.macros?.carbs?.goal || 250;
+    const fatGoal = nutritionMetrics.macros?.fat?.goal || 65;
 
-    const daysWithLogs = weeklyTrends.days.filter(d => d.mealsCount > 0);
+    // Need to recalculate daily carbs/fat from logs
+    const logs = foodLog.logs || [];
+    const now = new Date();
+
+    const daysWithMacros = weeklyTrends.days.map((day, i) => {
+      const date = new Date(now);
+      date.setDate(date.getDate() - (6 - i));
+      date.setHours(0, 0, 0, 0);
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      const dayLogs = logs.filter(log => {
+        const logDate = new Date(log.timestamp);
+        return logDate >= date && logDate < nextDay;
+      });
+
+      return {
+        ...day,
+        carbs: Math.round(dayLogs.reduce((sum, log) => sum + (log.carbs || 0), 0)),
+        fat: Math.round(dayLogs.reduce((sum, log) => sum + (log.fat || log.fats || 0), 0)),
+      };
+    });
+
+    const daysWithLogs = daysWithMacros.filter(d => d.mealsCount > 0);
     if (daysWithLogs.length === 0) return null;
 
-    // Within 10% of goal counts as "hitting target"
+    // Calorie target: 80-110% of goal (avoid under/over eating)
     const calorieDaysHit = daysWithLogs.filter(d =>
       d.calories >= calorieGoal * 0.8 && d.calories <= calorieGoal * 1.1
     ).length;
 
-    const proteinDaysHit = daysWithLogs.filter(d =>
-      d.protein >= proteinGoal * 0.8
-    ).length;
+    // Macro targets: at least 80% of goal
+    const proteinDaysHit = daysWithLogs.filter(d => d.protein >= proteinGoal * 0.8).length;
+    const carbsDaysHit = daysWithLogs.filter(d => d.carbs >= carbsGoal * 0.7).length;
+    const fatDaysHit = daysWithLogs.filter(d => d.fat >= fatGoal * 0.7).length;
 
     const calorieAdherence = Math.round((calorieDaysHit / daysWithLogs.length) * 100);
     const proteinAdherence = Math.round((proteinDaysHit / daysWithLogs.length) * 100);
-    const overallAdherence = Math.round((calorieAdherence + proteinAdherence) / 2);
+    const carbsAdherence = Math.round((carbsDaysHit / daysWithLogs.length) * 100);
+    const fatAdherence = Math.round((fatDaysHit / daysWithLogs.length) * 100);
+
+    // Overall: weighted average (calories and protein more important)
+    const overallAdherence = Math.round(
+      (calorieAdherence * 0.35 + proteinAdherence * 0.35 + carbsAdherence * 0.15 + fatAdherence * 0.15)
+    );
 
     return {
       overall: overallAdherence,
       calories: calorieAdherence,
       protein: proteinAdherence,
+      carbs: carbsAdherence,
+      fat: fatAdherence,
       daysTracked: daysWithLogs.length,
       calorieGoal,
       proteinGoal,
+      carbsGoal,
+      fatGoal,
     };
-  }, [nutritionMetrics, weeklyTrends]);
+  }, [nutritionMetrics, weeklyTrends, foodLog.logs]);
 
-  // Nutritional Gaps - Identify micronutrients below 50%
-  const nutritionalGaps = useMemo(() => {
+  // Fallback suggestions (used when API fails)
+  const fallbackSuggestions = useMemo(() => ({
+    iron: 'spinach, lentils, red meat',
+    calcium: 'dairy, leafy greens, fortified foods',
+    vitamin_d: 'fatty fish, eggs, fortified milk',
+    vitamin_c: 'citrus fruits, bell peppers, berries',
+    potassium: 'bananas, potatoes, avocado',
+    magnesium: 'nuts, seeds, whole grains',
+    zinc: 'meat, shellfish, legumes',
+    fiber: 'whole grains, vegetables, legumes',
+    vitamin_a: 'carrots, sweet potato, leafy greens',
+    vitamin_b12: 'meat, fish, dairy, eggs',
+  }), []);
+
+  // Raw nutritional gaps (without suggestions) - no limit, controlled by expandedSections
+  const rawNutritionalGaps = useMemo(() => {
     if (!micronutrientData.items || micronutrientData.items.length === 0) return [];
 
-    const gaps = micronutrientData.items
+    return micronutrientData.items
       .filter(micro => micro.percentage < 50)
-      .sort((a, b) => a.percentage - b.percentage)
-      .slice(0, 3);
+      .sort((a, b) => a.percentage - b.percentage);
+  }, [micronutrientData.items]);
 
-    // Add food suggestions for common gaps
-    const suggestions = {
-      iron: 'spinach, lentils, red meat',
-      calcium: 'dairy, leafy greens, fortified foods',
-      vitamin_d: 'fatty fish, eggs, fortified milk',
-      vitamin_c: 'citrus fruits, bell peppers, berries',
-      potassium: 'bananas, potatoes, avocado',
-      magnesium: 'nuts, seeds, whole grains',
-      zinc: 'meat, shellfish, legumes',
-      fiber: 'whole grains, vegetables, legumes',
-      vitamin_a: 'carrots, sweet potato, leafy greens',
-      vitamin_b12: 'meat, fish, dairy, eggs',
+  // Fetch dynamic food suggestions when gaps change
+  useEffect(() => {
+    if (rawNutritionalGaps.length === 0) {
+      setDynamicSuggestions(null);
+      return;
+    }
+
+    const fetchSuggestions = async () => {
+      setSuggestionsLoading(true);
+      try {
+        const suggestions = await fetchFoodSuggestions(rawNutritionalGaps);
+        if (suggestions) {
+          setDynamicSuggestions(suggestions);
+          // Track successful AI suggestions load
+          trackEvent(Events.FEATURE_USED, {
+            feature: 'ai_food_suggestions',
+            action: 'loaded',
+            gaps_count: rawNutritionalGaps.length,
+            suggestions_count: Object.keys(suggestions).length,
+          });
+        }
+      } catch (error) {
+        console.warn('[FoodAnalytics] Failed to fetch suggestions:', error);
+        // Track failure for debugging
+        trackEvent(Events.FEATURE_USED, {
+          feature: 'ai_food_suggestions',
+          action: 'failed',
+          error_message: error?.message || 'unknown',
+        });
+      } finally {
+        setSuggestionsLoading(false);
+      }
     };
 
-    return gaps.map(gap => ({
-      ...gap,
-      suggestion: suggestions[gap.key] || 'varied whole foods',
-    }));
-  }, [micronutrientData.items]);
+    fetchSuggestions();
+  }, [rawNutritionalGaps]);
+
+  // Nutritional gaps with dynamic or fallback suggestions
+  const nutritionalGaps = useMemo(() => {
+    return rawNutritionalGaps.map(gap => {
+      // Try dynamic suggestions first
+      const dynamicSuggestion = dynamicSuggestions?.[gap.key];
+      if (dynamicSuggestion?.foods) {
+        return {
+          ...gap,
+          suggestion: dynamicSuggestion.foods.join(', '),
+          tip: dynamicSuggestion.tip,
+        };
+      }
+      // Fall back to static suggestions
+      return {
+        ...gap,
+        suggestion: fallbackSuggestions[gap.key] || 'varied whole foods',
+      };
+    });
+  }, [rawNutritionalGaps, dynamicSuggestions, fallbackSuggestions]);
 
   // Handlers
   const handleRefresh = useCallback(async () => {
@@ -442,6 +629,13 @@ export default function FoodAnalyticsScreen() {
 
   const handleAcceptRecommendation = useCallback(async (rec) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Track recommendation acceptance
+    trackEvent(Events.RECOMMENDATION_ACCEPTED, {
+      recommendation_name: rec?.name || rec?.title,
+      recommendation_id: rec?.id,
+      calories: rec?.calories,
+      protein: rec?.protein,
+    });
     try {
       await acceptRecommendation?.(rec);
     } catch (error) {
@@ -487,9 +681,34 @@ export default function FoodAnalyticsScreen() {
 
   const toggleCompareMode = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCompareMode(!compareMode);
+    const newMode = !compareMode;
+    setCompareMode(newMode);
     setSelectedMeals([]);
+    // Track compare mode usage
+    if (newMode) {
+      trackEvent(Events.FEATURE_USED, {
+        feature: 'meal_comparison',
+        action: 'compare_mode_enabled',
+      });
+    }
   }, [compareMode]);
+
+  // Handler for tapping a day on the trends chart
+  const handleTrendDayPress = useCallback((day, index) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (selectedTrendDay?.dayName === day.dayName) {
+      setSelectedTrendDay(null); // Toggle off if same day
+    } else {
+      setSelectedTrendDay({ ...day, index });
+      // Track chart interaction
+      trackEvent(Events.FEATURE_USED, {
+        feature: 'weekly_trends_chart',
+        action: 'day_selected',
+        day_name: day.dayName,
+        has_data: day.calories > 0,
+      });
+    }
+  }, [selectedTrendDay]);
 
   // Cold start check - show real data if user has ANY logged meals
   // Only show cold start screen for users with zero food history
@@ -695,32 +914,89 @@ export default function FoodAnalyticsScreen() {
           </View>
         )}
 
+        {/* Skeleton Loading for Food Log sections */}
+        {isFoodLogLoading && (
+          <Animated.View style={{ opacity: pulseAnim }}>
+            <View style={styles.skeletonCard}>
+              <View style={styles.skeletonHeader}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonTitle} />
+              </View>
+              <View style={styles.skeletonContent}>
+                <View style={styles.skeletonBar} />
+                <View style={styles.skeletonRow}>
+                  {[1, 2, 3, 4, 5, 6, 7].map(i => (
+                    <View key={i} style={[styles.skeletonBarSmall, { flex: 1 }]} />
+                  ))}
+                </View>
+              </View>
+            </View>
+            <View style={styles.skeletonCard}>
+              <View style={styles.skeletonHeader}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonTitle} />
+              </View>
+              <View style={styles.skeletonContent}>
+                <View style={styles.skeletonBar} />
+                <View style={styles.skeletonBar} />
+              </View>
+            </View>
+            <View style={styles.skeletonCard}>
+              <View style={styles.skeletonHeader}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonTitle} />
+              </View>
+              <View style={styles.skeletonContent}>
+                <View style={styles.skeletonBar} />
+                <View style={styles.skeletonBar} />
+                <View style={styles.skeletonBar} />
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Weekly Trends Chart */}
-        {weeklyTrends.days.some(d => d.mealsCount > 0) && (
-          <View style={[styles.trendsCard, CARD_SYSTEM.standard]}>
+        {!isFoodLogLoading && weeklyTrends.days.some(d => d.mealsCount > 0) && (
+          <SectionErrorBoundary sectionName="Weekly Trends">
+            <View
+              style={[styles.trendsCard, CARD_SYSTEM.standard]}
+              accessible={true}
+              accessibilityLabel={`Weekly calorie trends. Average ${weeklyTrends.avgCalories} calories and ${weeklyTrends.avgProtein} grams protein per day`}
+              accessibilityRole="summary"
+            >
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="trending-up" size={20} color={BRAND.primary} />
               <Text style={styles.cardTitle}>Weekly Trends</Text>
             </View>
             <View style={styles.trendsAvgRow}>
-              <View style={styles.trendsAvgItem}>
+              <View style={styles.trendsAvgItem} accessibilityLabel={`Average ${weeklyTrends.avgCalories} calories per day`}>
                 <Text style={styles.trendsAvgValue}>{weeklyTrends.avgCalories}</Text>
                 <Text style={styles.trendsAvgLabel}>avg cal/day</Text>
               </View>
               <View style={styles.trendsAvgDivider} />
-              <View style={styles.trendsAvgItem}>
+              <View style={styles.trendsAvgItem} accessibilityLabel={`Average ${weeklyTrends.avgProtein} grams protein per day`}>
                 <Text style={styles.trendsAvgValue}>{weeklyTrends.avgProtein}g</Text>
                 <Text style={styles.trendsAvgLabel}>avg protein/day</Text>
               </View>
             </View>
-            <View style={styles.trendsChart}>
+            <View style={styles.trendsChart} accessibilityRole="image" accessibilityLabel="Bar chart showing daily calorie intake for the past 7 days. Tap any day for details.">
               {weeklyTrends.days.map((day, index) => {
                 const barHeight = weeklyTrends.maxCalories > 0
                   ? (day.calories / weeklyTrends.maxCalories) * 80
                   : 0;
                 const isToday = index === 6;
+                const isSelected = selectedTrendDay?.dayName === day.dayName;
                 return (
-                  <View key={day.dayName} style={styles.trendsDayColumn}>
+                  <TouchableOpacity
+                    key={day.dayName}
+                    style={[styles.trendsDayColumn, isSelected && styles.trendsDayColumnSelected]}
+                    onPress={() => handleTrendDayPress(day, index)}
+                    activeOpacity={0.7}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${day.dayName}${isToday ? ', today' : ''}: ${day.calories > 0 ? `${day.calories} calories, ${day.protein}g protein, ${day.mealsCount} meals` : 'no data'}. Tap for details.`}
+                    accessibilityHint="Shows detailed nutrition breakdown for this day"
+                  >
                     <Text style={styles.trendsCalValue}>
                       {day.calories > 0 ? day.calories : '-'}
                     </Text>
@@ -730,24 +1006,79 @@ export default function FoodAnalyticsScreen() {
                           styles.trendsBar,
                           {
                             height: Math.max(barHeight, 4),
-                            backgroundColor: isToday ? BRAND.primary : `${BRAND.primary}60`,
+                            backgroundColor: isSelected ? SEMANTIC.success.base : isToday ? BRAND.primary : `${BRAND.primary}60`,
                           },
                         ]}
                       />
                     </View>
-                    <Text style={[styles.trendsDayLabel, isToday && styles.trendsDayLabelToday]}>
+                    <Text style={[styles.trendsDayLabel, isToday && styles.trendsDayLabelToday, isSelected && styles.trendsDayLabelSelected]}>
                       {day.dayName}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
-          </View>
+
+            {/* Selected Day Details */}
+            {selectedTrendDay && (
+              <View style={styles.trendsDayDetail}>
+                <View style={styles.trendsDayDetailHeader}>
+                  <Text style={styles.trendsDayDetailTitle}>
+                    {selectedTrendDay.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </Text>
+                  <TouchableOpacity onPress={() => setSelectedTrendDay(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close-circle" size={20} color={TEXT.tertiary} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.trendsDayDetailStats}>
+                  <View style={styles.trendsDayDetailStat}>
+                    <Text style={styles.trendsDayDetailValue}>{selectedTrendDay.calories}</Text>
+                    <Text style={styles.trendsDayDetailLabel}>calories</Text>
+                  </View>
+                  <View style={styles.trendsDayDetailDivider} />
+                  <View style={styles.trendsDayDetailStat}>
+                    <Text style={styles.trendsDayDetailValue}>{selectedTrendDay.protein}g</Text>
+                    <Text style={styles.trendsDayDetailLabel}>protein</Text>
+                  </View>
+                  <View style={styles.trendsDayDetailDivider} />
+                  <View style={styles.trendsDayDetailStat}>
+                    <Text style={styles.trendsDayDetailValue}>{selectedTrendDay.mealsCount}</Text>
+                    <Text style={styles.trendsDayDetailLabel}>meals</Text>
+                  </View>
+                </View>
+                {selectedTrendDay.calories > 0 && nutritionMetrics?.calories?.budget && (
+                  <View style={styles.trendsDayDetailProgress}>
+                    <View style={styles.trendsDayDetailProgressBar}>
+                      <View
+                        style={[
+                          styles.trendsDayDetailProgressFill,
+                          {
+                            width: `${Math.min((selectedTrendDay.calories / nutritionMetrics.calories.budget) * 100, 100)}%`,
+                            backgroundColor: selectedTrendDay.calories > nutritionMetrics.calories.budget ? SEMANTIC.danger.base : SEMANTIC.success.base,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.trendsDayDetailProgressText}>
+                      {Math.round((selectedTrendDay.calories / nutritionMetrics.calories.budget) * 100)}% of {nutritionMetrics.calories.budget} cal goal
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+            </View>
+          </SectionErrorBoundary>
         )}
 
         {/* Goal Adherence Score */}
-        {goalAdherence && goalAdherence.daysTracked >= 3 && (
-          <View style={[styles.adherenceCard, CARD_SYSTEM.standard]}>
+        {!isFoodLogLoading && goalAdherence && goalAdherence.daysTracked >= 3 && (
+          <SectionErrorBoundary sectionName="Goal Adherence">
+            <View
+              style={[styles.adherenceCard, CARD_SYSTEM.standard]}
+              accessible={true}
+              accessibilityLabel={`Goal adherence ${goalAdherence.overall}% based on ${goalAdherence.daysTracked} tracked days`}
+              accessibilityRole="summary"
+            >
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="ribbon-outline" size={20} color={goalAdherence.overall >= 70 ? SEMANTIC.success.base : goalAdherence.overall >= 40 ? SEMANTIC.warning.base : SEMANTIC.danger.base} />
               <Text style={styles.cardTitle}>Goal Adherence</Text>
@@ -761,42 +1092,73 @@ export default function FoodAnalyticsScreen() {
               Based on {goalAdherence.daysTracked} tracked days this week
             </Text>
             <View style={styles.adherenceMetrics}>
-              <View style={styles.adherenceMetric}>
+              <View style={styles.adherenceMetric} accessibilityLabel={`Calories ${goalAdherence.calories}% adherence`}>
                 <View style={styles.adherenceProgress}>
-                  <View style={[styles.adherenceProgressFill, { width: `${goalAdherence.calories}%`, backgroundColor: MACRO_COLORS.carbs.base }]} />
+                  <View style={[styles.adherenceProgressFill, { width: `${goalAdherence.calories}%`, backgroundColor: SEMANTIC.info.base }]} />
                 </View>
                 <Text style={styles.adherenceMetricLabel}>Calories ({goalAdherence.calories}%)</Text>
               </View>
-              <View style={styles.adherenceMetric}>
+              <View style={styles.adherenceMetric} accessibilityLabel={`Protein ${goalAdherence.protein}% adherence`}>
                 <View style={styles.adherenceProgress}>
                   <View style={[styles.adherenceProgressFill, { width: `${goalAdherence.protein}%`, backgroundColor: MACRO_COLORS.protein.base }]} />
                 </View>
                 <Text style={styles.adherenceMetricLabel}>Protein ({goalAdherence.protein}%)</Text>
               </View>
+              <View style={styles.adherenceMetric} accessibilityLabel={`Carbs ${goalAdherence.carbs}% adherence`}>
+                <View style={styles.adherenceProgress}>
+                  <View style={[styles.adherenceProgressFill, { width: `${goalAdherence.carbs}%`, backgroundColor: MACRO_COLORS.carbs.base }]} />
+                </View>
+                <Text style={styles.adherenceMetricLabel}>Carbs ({goalAdherence.carbs}%)</Text>
+              </View>
+              <View style={styles.adherenceMetric} accessibilityLabel={`Fat ${goalAdherence.fat}% adherence`}>
+                <View style={styles.adherenceProgress}>
+                  <View style={[styles.adherenceProgressFill, { width: `${goalAdherence.fat}%`, backgroundColor: MACRO_COLORS.fat.base }]} />
+                </View>
+                <Text style={styles.adherenceMetricLabel}>Fat ({goalAdherence.fat}%)</Text>
+              </View>
             </View>
-          </View>
+            </View>
+          </SectionErrorBoundary>
         )}
 
         {/* Top Foods Section */}
-        {topFoods.length >= 2 && (
-          <View style={[styles.topFoodsCard, CARD_SYSTEM.standard]}>
+        {!isFoodLogLoading && topFoods.length >= 2 && (
+          <SectionErrorBoundary sectionName="Top Foods">
+            <View
+              style={[styles.topFoodsCard, CARD_SYSTEM.standard]}
+              accessible={true}
+              accessibilityLabel={`Your top ${topFoods.length} most logged foods. Tap any food to quickly log it again.`}
+              accessibilityRole="list"
+            >
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="star-outline" size={20} color={VIBRANT_WELLNESS.nutrition.solid} />
               <Text style={styles.cardTitle}>Your Top Foods</Text>
             </View>
             <View style={styles.topFoodsList}>
-              {topFoods.map((food, index) => (
+              {(expandedSections.topFoods ? topFoods.slice(0, 10) : topFoods.slice(0, 5)).map((food, index) => (
                 <TouchableOpacity
                   key={food.name}
                   style={styles.topFoodItem}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    // Track quick re-log usage
+                    trackEvent(Events.FEATURE_USED, {
+                      feature: 'quick_relog',
+                      action: 'top_food_tapped',
+                      food_name: food.name,
+                      food_rank: index + 1,
+                      times_logged: food.count,
+                    });
                     router.push({
                       pathname: '/(tabs)/log',
                       params: { prefill: food.name },
                     });
                   }}
                   activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${food.name}, logged ${food.count} times, about ${food.avgCalories} calories. Double tap to log again.`}
+                  accessibilityHint="Opens the food log with this food pre-filled"
                 >
                   <View style={[styles.topFoodRank, { backgroundColor: index === 0 ? SEMANTIC.warning.light : SURFACES.background.secondary }]}>
                     <Text style={[styles.topFoodRankText, { color: index === 0 ? SEMANTIC.warning.base : TEXT.tertiary }]}>
@@ -815,12 +1177,31 @@ export default function FoodAnalyticsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
+            {topFoods.length > 5 && (
+              <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleSection('topFoods')}>
+                <Text style={styles.showMoreText}>
+                  {expandedSections.topFoods ? 'Show Less' : `Show ${Math.min(topFoods.length - 5, 5)} More`}
+                </Text>
+                <Ionicons
+                  name={expandedSections.topFoods ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
+            </View>
+          </SectionErrorBoundary>
         )}
 
         {/* Meal Timing Insights */}
-        {mealTimingInsights && mealTimingInsights.peakHours.length > 0 && (
-          <View style={[styles.timingCard, CARD_SYSTEM.standard]}>
+        {!isFoodLogLoading && mealTimingInsights && mealTimingInsights.peakHours.length > 0 && (
+          <SectionErrorBoundary sectionName="Eating Patterns">
+            <View
+              style={[styles.timingCard, CARD_SYSTEM.standard]}
+              accessible={true}
+              accessibilityLabel={`Eating patterns based on ${mealTimingInsights.totalMeals} logged meals`}
+              accessibilityRole="summary"
+            >
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="time-outline" size={20} color={BRAND.primary} />
               <Text style={styles.cardTitle}>Eating Patterns</Text>
@@ -830,7 +1211,12 @@ export default function FoodAnalyticsScreen() {
             </Text>
             <View style={styles.timingList}>
               {mealTimingInsights.peakHours.map((hour, index) => (
-                <View key={hour.hour} style={styles.timingItem}>
+                <View
+                  key={hour.hour}
+                  style={styles.timingItem}
+                  accessible={true}
+                  accessibilityLabel={`${hour.mealType} around ${hour.label}, ${hour.count} meals`}
+                >
                   <View style={[styles.timingIcon, { backgroundColor: index === 0 ? `${BRAND.primary}15` : SURFACES.background.secondary }]}>
                     <Ionicons
                       name={hour.mealType === 'Breakfast' ? 'sunny-outline' : hour.mealType === 'Dinner' ? 'moon-outline' : 'restaurant-outline'}
@@ -846,22 +1232,37 @@ export default function FoodAnalyticsScreen() {
                 </View>
               ))}
             </View>
-          </View>
+            </View>
+          </SectionErrorBoundary>
         )}
 
         {/* Nutritional Gaps Alert */}
         {nutritionalGaps.length > 0 && (
-          <View style={[styles.gapsCard, CARD_SYSTEM.standard]}>
+          <SectionErrorBoundary sectionName="Nutritional Gaps">
+            <View
+              style={[styles.gapsCard, CARD_SYSTEM.standard]}
+              accessible={true}
+              accessibilityLabel={`Nutritional gaps: ${nutritionalGaps.length} nutrients below 50% of daily recommended intake`}
+              accessibilityRole="alert"
+            >
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="alert-circle-outline" size={20} color={SEMANTIC.warning.base} />
               <Text style={styles.cardTitle}>Nutritional Gaps</Text>
+              {suggestionsLoading && (
+                <ActivityIndicator size="small" color={BRAND.primary} style={{ marginLeft: 'auto' }} />
+              )}
             </View>
             <Text style={styles.gapsSubtitle}>
               These nutrients are below 50% of daily recommended intake
             </Text>
             <View style={styles.gapsList}>
-              {nutritionalGaps.map((gap) => (
-                <View key={gap.key} style={styles.gapItem}>
+              {(expandedSections.gaps ? nutritionalGaps : nutritionalGaps.slice(0, 3)).map((gap) => (
+                <View
+                  key={gap.key}
+                  style={styles.gapItem}
+                  accessible={true}
+                  accessibilityLabel={`${gap.label} at ${gap.percentage}%. Try ${gap.suggestion}${gap.tip ? `. Tip: ${gap.tip}` : ''}`}
+                >
                   <View style={styles.gapHeader}>
                     <Text style={styles.gapName}>{gap.label}</Text>
                     <Text style={[styles.gapPercent, { color: gap.percentage < 25 ? SEMANTIC.danger.base : SEMANTIC.warning.base }]}>
@@ -874,10 +1275,29 @@ export default function FoodAnalyticsScreen() {
                   <Text style={styles.gapSuggestion}>
                     Try: {gap.suggestion}
                   </Text>
+                  {gap.tip && (
+                    <View style={styles.gapTipRow}>
+                      <Ionicons name="bulb-outline" size={12} color={TEXT.tertiary} />
+                      <Text style={styles.gapTip}>{gap.tip}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
-          </View>
+            {nutritionalGaps.length > 3 && (
+              <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleSection('gaps')}>
+                <Text style={styles.showMoreText}>
+                  {expandedSections.gaps ? 'Show Less' : `Show ${nutritionalGaps.length - 3} More`}
+                </Text>
+                <Ionicons
+                  name={expandedSections.gaps ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
+            </View>
+          </SectionErrorBoundary>
         )}
 
         {/* ML Patterns Section - Decision Brain detected patterns */}
@@ -890,7 +1310,7 @@ export default function FoodAnalyticsScreen() {
                 <Text style={styles.mlBadgeText}>ML</Text>
               </View>
             </View>
-            {nutritionPatterns.map((pattern, i) => (
+            {(expandedSections.patterns ? nutritionPatterns : nutritionPatterns.slice(0, 3)).map((pattern, i) => (
               <View key={i} style={styles.patternRow}>
                 <View style={[styles.patternIcon, { backgroundColor: (pattern.light || `${pattern.color}15`) }]}>
                   <Ionicons name={pattern.icon || 'nutrition'} size={18} color={pattern.color || VIBRANT_WELLNESS.nutrition.solid} />
@@ -904,6 +1324,18 @@ export default function FoodAnalyticsScreen() {
                 </View>
               </View>
             ))}
+            {nutritionPatterns.length > 3 && (
+              <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleSection('patterns')}>
+                <Text style={styles.showMoreText}>
+                  {expandedSections.patterns ? 'Show Less' : `Show ${nutritionPatterns.length - 3} More`}
+                </Text>
+                <Ionicons
+                  name={expandedSections.patterns ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -917,7 +1349,7 @@ export default function FoodAnalyticsScreen() {
                 <Text style={styles.mlBadgeText}>ML</Text>
               </View>
             </View>
-            {nutritionCorrelations.map((corr, i) => (
+            {(expandedSections.correlations ? nutritionCorrelations : nutritionCorrelations.slice(0, 3)).map((corr, i) => (
               <View key={corr.id || i} style={styles.correlationRow}>
                 <View style={[styles.correlationIcon, { backgroundColor: corr.impactType === 'positive' ? SEMANTIC.success.light : SEMANTIC.warning.light }]}>
                   <Ionicons
@@ -940,6 +1372,18 @@ export default function FoodAnalyticsScreen() {
                 </View>
               </View>
             ))}
+            {nutritionCorrelations.length > 3 && (
+              <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleSection('correlations')}>
+                <Text style={styles.showMoreText}>
+                  {expandedSections.correlations ? 'Show Less' : `Show ${nutritionCorrelations.length - 3} More`}
+                </Text>
+                <Ionicons
+                  name={expandedSections.correlations ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
             <View style={styles.mlAttribution}>
               <Ionicons name="sparkles" size={12} color={TEXT.muted} />
               <Text style={styles.mlAttributionText}>Powered by ML analysis of your data</Text>
@@ -955,7 +1399,7 @@ export default function FoodAnalyticsScreen() {
               <Text style={styles.sectionSubtitle}>Personalized for your goals</Text>
             </View>
 
-            {foodRecommendations.map((rec, index) => (
+            {(expandedSections.recommendations ? foodRecommendations : foodRecommendations.slice(0, 3)).map((rec, index) => (
               <View key={rec.id || index} style={[styles.recommendationCard, CARD_SYSTEM.standard]}>
                 <View style={styles.recommendationContent}>
                   <View style={[styles.recommendationIcon, { backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}15` }]}>
@@ -991,6 +1435,19 @@ export default function FoodAnalyticsScreen() {
                 )}
               </View>
             ))}
+
+            {foodRecommendations.length > 3 && (
+              <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleSection('recommendations')}>
+                <Text style={styles.showMoreText}>
+                  {expandedSections.recommendations ? 'Show Less' : `Show ${foodRecommendations.length - 3} More`}
+                </Text>
+                <Ionicons
+                  name={expandedSections.recommendations ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
           </>
         )}
 
@@ -1029,7 +1486,7 @@ export default function FoodAnalyticsScreen() {
             )}
 
             <View style={styles.recentMealsList}>
-              {recentMeals.slice(0, 5).map((meal, index) => {
+              {(expandedSections.recentMeals ? recentMeals.slice(0, 15) : recentMeals.slice(0, 5)).map((meal, index) => {
                 const isSelected = selectedMeals.some(m => getMealId(m) === getMealId(meal));
                 return (
                   <TouchableOpacity
@@ -1063,6 +1520,19 @@ export default function FoodAnalyticsScreen() {
                 );
               })}
             </View>
+
+            {recentMeals.length > 5 && (
+              <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleSection('recentMeals')}>
+                <Text style={styles.showMoreText}>
+                  {expandedSections.recentMeals ? 'Show Less' : `Show ${Math.min(recentMeals.length - 5, 10)} More`}
+                </Text>
+                <Ionicons
+                  name={expandedSections.recentMeals ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={BRAND.primary}
+                />
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.viewAllMealsButton}
@@ -1352,12 +1822,79 @@ const styles = StyleSheet.create({
   trendsAvgLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
   trendsAvgDivider: { width: 1, height: 30, backgroundColor: SURFACES.divider },
   trendsChart: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: SPACING[2] },
-  trendsDayColumn: { alignItems: 'center', flex: 1 },
+  trendsDayColumn: { alignItems: 'center', flex: 1, paddingVertical: SPACING[1], borderRadius: RADIUS.sm },
+  trendsDayColumnSelected: { backgroundColor: `${SEMANTIC.success.base}10` },
   trendsCalValue: { fontSize: 10, color: TEXT.tertiary, marginBottom: SPACING[1] },
   trendsBarContainer: { height: 80, width: 24, justifyContent: 'flex-end', alignItems: 'center' },
   trendsBar: { width: 16, borderRadius: 4 },
   trendsDayLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: SPACING[1] },
   trendsDayLabelToday: { color: BRAND.primary, fontWeight: TYPOGRAPHY.weight.semibold },
+  trendsDayLabelSelected: { color: SEMANTIC.success.base, fontWeight: TYPOGRAPHY.weight.semibold },
+
+  // Trend Day Detail Card
+  trendsDayDetail: {
+    marginTop: SPACING[3],
+    padding: SPACING[3],
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: RADIUS.md,
+    borderLeftWidth: 3,
+    borderLeftColor: SEMANTIC.success.base,
+  },
+  trendsDayDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
+  },
+  trendsDayDetailTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  trendsDayDetailStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: SPACING[2],
+  },
+  trendsDayDetailStat: { alignItems: 'center' },
+  trendsDayDetailValue: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: TEXT.primary,
+  },
+  trendsDayDetailLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 2,
+  },
+  trendsDayDetailDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: SURFACES.divider,
+  },
+  trendsDayDetailProgress: {
+    marginTop: SPACING[2],
+    paddingTop: SPACING[2],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  trendsDayDetailProgressBar: {
+    height: 6,
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: SPACING[1],
+  },
+  trendsDayDetailProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  trendsDayDetailProgressText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+  },
 
   // Goal Adherence
   adherenceCard: { marginTop: SPACING[4] },
@@ -1410,4 +1947,33 @@ const styles = StyleSheet.create({
   gapProgress: { height: 6, backgroundColor: SURFACES.background.secondary, borderRadius: 3, overflow: 'hidden', marginBottom: SPACING[2] },
   gapProgressFill: { height: '100%', borderRadius: 3 },
   gapSuggestion: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, fontStyle: 'italic' },
+  gapTipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[1], marginTop: SPACING[1] },
+  gapTip: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, lineHeight: 16 },
+
+  // Skeleton Loading
+  skeletonCard: { marginTop: SPACING[4], ...CARD_SYSTEM.standard, padding: SPACING[4] },
+  skeletonHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
+  skeletonIcon: { width: 20, height: 20, borderRadius: 4, backgroundColor: SURFACES.background.tertiary },
+  skeletonTitle: { width: 120, height: 18, borderRadius: 4, backgroundColor: SURFACES.background.tertiary },
+  skeletonContent: { gap: SPACING[2] },
+  skeletonBar: { height: 40, borderRadius: RADIUS.md, backgroundColor: SURFACES.background.tertiary },
+  skeletonBarSmall: { height: 24, borderRadius: RADIUS.sm, backgroundColor: SURFACES.background.tertiary },
+  skeletonRow: { flexDirection: 'row', gap: SPACING[2] },
+
+  // Show More Button
+  showMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[1],
+    paddingVertical: SPACING[3],
+    marginTop: SPACING[2],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  showMoreText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: BRAND.primary,
+  },
 });

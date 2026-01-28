@@ -2,11 +2,14 @@
  * Mood History Screen
  *
  * Features:
- * - Vibrant gradient hero card
+ * - Vibrant gradient hero card with streak badge
  * - Timeline view of mood entries grouped by date
  * - Time period filters (Week, Month, Year)
+ * - Mood type filter chips
+ * - Week-over-week comparison card
  * - ML-powered patterns and insights
- * - Detailed mood entry view
+ * - Edit/Delete mood entries
+ * - Export mood data
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -20,11 +23,15 @@ import {
   ActivityIndicator,
   SectionList,
   Dimensions,
+  Alert,
+  Share,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
+import apiClient from '../../services/apiClient';
 
 import { useMoodInsights, useDecisionBrainMoodInsights } from '../../hooks/useMoodInsights';
 import {
@@ -85,6 +92,9 @@ const TIME_PERIODS = [
   { key: 'month', label: 'Month', days: 30 },
   { key: 'year', label: 'Year', days: 365 },
 ];
+
+// All mood types for filtering
+const ALL_MOODS = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
 
 // ============================================================================
 // HELPERS
@@ -150,6 +160,221 @@ const TimePeriodSelector = ({ selected, onSelect }) => (
     ))}
   </View>
 );
+
+// Mood Filter Chips - Filter entries by mood type
+const MoodFilterChips = ({ selectedMoods, onToggleMood, logs }) => {
+  // Count moods in current data
+  const moodCounts = useMemo(() => {
+    const counts = {};
+    (logs || []).forEach((log) => {
+      const mood = log.mood || 'neutral';
+      counts[mood] = (counts[mood] || 0) + 1;
+    });
+    return counts;
+  }, [logs]);
+
+  const availableMoods = ALL_MOODS.filter((mood) => moodCounts[mood] > 0);
+
+  if (availableMoods.length <= 1) return null;
+
+  return (
+    <View style={styles.filterChipsContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterChipsScroll}
+      >
+        <TouchableOpacity
+          style={[
+            styles.filterChip,
+            selectedMoods.length === 0 && styles.filterChipActive,
+          ]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            onToggleMood(null); // Clear all filters
+          }}
+        >
+          <Text
+            style={[
+              styles.filterChipText,
+              selectedMoods.length === 0 && styles.filterChipTextActive,
+            ]}
+          >
+            All
+          </Text>
+        </TouchableOpacity>
+        {availableMoods.map((mood) => {
+          const meta = MOOD_META[mood];
+          const isSelected = selectedMoods.includes(mood);
+          return (
+            <TouchableOpacity
+              key={mood}
+              style={[
+                styles.filterChip,
+                isSelected && { backgroundColor: meta.color },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                onToggleMood(mood);
+              }}
+            >
+              <Text style={styles.filterChipEmoji}>{meta.emoji}</Text>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  isSelected && styles.filterChipTextActive,
+                ]}
+              >
+                {meta.label}
+              </Text>
+              <View style={[styles.filterChipCount, isSelected && { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
+                <Text style={[styles.filterChipCountText, isSelected && { color: '#FFFFFF' }]}>
+                  {moodCounts[mood] || 0}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
+
+// Streak Badge Component
+const StreakBadge = ({ streak }) => {
+  if (!streak || streak < 2) return null;
+
+  return (
+    <View style={styles.streakBadge}>
+      <Ionicons name="flame" size={14} color="#F59E0B" />
+      <Text style={styles.streakText}>{streak} day streak</Text>
+    </View>
+  );
+};
+
+// Week Comparison Card - Compare this week vs last week
+const WeekComparisonCard = ({ logs }) => {
+  const comparison = useMemo(() => {
+    if (!logs?.length) return null;
+
+    const now = new Date();
+    const oneWeekAgo = new Date(now);
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const twoWeeksAgo = new Date(now);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+    const thisWeekLogs = logs.filter((l) => new Date(l.loggedDate) >= oneWeekAgo);
+    const lastWeekLogs = logs.filter(
+      (l) => new Date(l.loggedDate) >= twoWeeksAgo && new Date(l.loggedDate) < oneWeekAgo
+    );
+
+    if (thisWeekLogs.length < 3 || lastWeekLogs.length < 3) return null;
+
+    const getAvgIntensity = (arr) => {
+      const withIntensity = arr.filter((l) => l.intensity);
+      return withIntensity.length
+        ? withIntensity.reduce((sum, l) => sum + l.intensity, 0) / withIntensity.length
+        : 0;
+    };
+
+    const getPositiveRate = (arr) => {
+      const positive = arr.filter((l) =>
+        ['happy', 'calm', 'focused', 'energized'].includes(l.mood)
+      );
+      return arr.length ? (positive.length / arr.length) * 100 : 0;
+    };
+
+    const thisWeekAvg = getAvgIntensity(thisWeekLogs);
+    const lastWeekAvg = getAvgIntensity(lastWeekLogs);
+    const thisWeekPositive = getPositiveRate(thisWeekLogs);
+    const lastWeekPositive = getPositiveRate(lastWeekLogs);
+
+    const avgDiff = thisWeekAvg - lastWeekAvg;
+    const positiveDiff = thisWeekPositive - lastWeekPositive;
+
+    return {
+      thisWeek: {
+        entries: thisWeekLogs.length,
+        avgIntensity: thisWeekAvg,
+        positiveRate: thisWeekPositive,
+      },
+      lastWeek: {
+        entries: lastWeekLogs.length,
+        avgIntensity: lastWeekAvg,
+        positiveRate: lastWeekPositive,
+      },
+      avgDiff,
+      positiveDiff,
+      improving: avgDiff > 0.5 || positiveDiff > 10,
+      declining: avgDiff < -0.5 || positiveDiff < -10,
+    };
+  }, [logs]);
+
+  if (!comparison) return null;
+
+  const trendColor = comparison.improving
+    ? COLORS.success
+    : comparison.declining
+      ? COLORS.danger
+      : COLORS.text.secondary;
+  const trendIcon = comparison.improving
+    ? 'trending-up'
+    : comparison.declining
+      ? 'trending-down'
+      : 'remove';
+
+  return (
+    <View style={styles.comparisonCard}>
+      <View style={styles.comparisonHeader}>
+        <Ionicons name="git-compare-outline" size={18} color={COLORS.primary} />
+        <Text style={styles.comparisonTitle}>Week Comparison</Text>
+        <View style={[styles.comparisonTrend, { backgroundColor: `${trendColor}15` }]}>
+          <Ionicons name={trendIcon} size={14} color={trendColor} />
+          <Text style={[styles.comparisonTrendText, { color: trendColor }]}>
+            {comparison.improving ? 'Improving' : comparison.declining ? 'Declining' : 'Stable'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.comparisonGrid}>
+        <View style={styles.comparisonColumn}>
+          <Text style={styles.comparisonColumnLabel}>This Week</Text>
+          <Text style={styles.comparisonValue}>{comparison.thisWeek.avgIntensity.toFixed(1)}</Text>
+          <Text style={styles.comparisonSubtext}>avg mood</Text>
+          <View style={styles.comparisonStat}>
+            <Text style={styles.comparisonStatValue}>{Math.round(comparison.thisWeek.positiveRate)}%</Text>
+            <Text style={styles.comparisonStatLabel}>positive</Text>
+          </View>
+        </View>
+
+        <View style={styles.comparisonDivider}>
+          <Ionicons name="arrow-forward" size={16} color={COLORS.text.tertiary} />
+        </View>
+
+        <View style={styles.comparisonColumn}>
+          <Text style={styles.comparisonColumnLabel}>Last Week</Text>
+          <Text style={[styles.comparisonValue, { color: COLORS.text.secondary }]}>
+            {comparison.lastWeek.avgIntensity.toFixed(1)}
+          </Text>
+          <Text style={styles.comparisonSubtext}>avg mood</Text>
+          <View style={styles.comparisonStat}>
+            <Text style={[styles.comparisonStatValue, { color: COLORS.text.secondary }]}>
+              {Math.round(comparison.lastWeek.positiveRate)}%
+            </Text>
+            <Text style={styles.comparisonStatLabel}>positive</Text>
+          </View>
+        </View>
+
+        <View style={styles.comparisonChange}>
+          <Text style={[styles.comparisonChangeValue, { color: trendColor }]}>
+            {comparison.avgDiff > 0 ? '+' : ''}{comparison.avgDiff.toFixed(1)}
+          </Text>
+          <Text style={styles.comparisonChangeLabel}>change</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 const HeroCard = ({ stats, latestMood }) => {
   const moodMeta = latestMood?.mood ? MOOD_META[latestMood.mood] : MOOD_META.neutral;
@@ -225,11 +450,32 @@ const HeroCard = ({ stats, latestMood }) => {
   );
 };
 
-const MoodEntryCard = ({ entry }) => {
+const MoodEntryCard = ({ entry, onDelete }) => {
   const moodMeta = MOOD_META[entry.mood] || MOOD_META.neutral;
 
+  const handleLongPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Mood Entry',
+      `${moodMeta.label} - ${formatTime(entry.loggedDate)}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => onDelete?.(entry),
+        },
+      ]
+    );
+  };
+
   return (
-    <View style={styles.entryCard}>
+    <TouchableOpacity
+      style={styles.entryCard}
+      onLongPress={handleLongPress}
+      activeOpacity={0.7}
+      delayLongPress={500}
+    >
       <View style={[styles.entryIconContainer, { backgroundColor: moodMeta.light }]}>
         <MoodIcon3D
           mood={entry.mood || 'neutral'}
@@ -244,7 +490,10 @@ const MoodEntryCard = ({ entry }) => {
           <Text style={[styles.entryMood, { color: moodMeta.color }]}>
             {moodMeta.label}
           </Text>
-          <Text style={styles.entryTime}>{formatTime(entry.loggedDate)}</Text>
+          <View style={styles.entryHeaderRight}>
+            <Text style={styles.entryTime}>{formatTime(entry.loggedDate)}</Text>
+            <Ionicons name="ellipsis-vertical" size={14} color={COLORS.text.tertiary} />
+          </View>
         </View>
         <View style={styles.entryMeta}>
           {entry.intensity && (
@@ -275,7 +524,7 @@ const MoodEntryCard = ({ entry }) => {
           </Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -803,7 +1052,9 @@ const WeeklyMiniTimeline = ({ logs }) => {
 
 export default function MoodHistoryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const [selectedMoods, setSelectedMoods] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
   // Get period days
@@ -889,6 +1140,113 @@ export default function MoodHistoryScreen() {
     return [];
   }, [decisionBrainData]);
 
+  // Calculate streak (consecutive days with mood logs)
+  const streak = useMemo(() => {
+    const logs = moodInsights?.logs || [];
+    if (!logs.length) return 0;
+
+    const uniqueDays = [...new Set(logs.map((l) => getLocalDateKey(l.loggedDate)))].sort().reverse();
+    if (!uniqueDays.length) return 0;
+
+    const today = getLocalDateKey(new Date());
+    const yesterday = getLocalDateKey(new Date(Date.now() - 86400000));
+
+    // Check if most recent log is today or yesterday
+    if (uniqueDays[0] !== today && uniqueDays[0] !== yesterday) return 0;
+
+    let count = 1;
+    for (let i = 1; i < uniqueDays.length; i++) {
+      const prevDate = new Date(uniqueDays[i - 1]);
+      const currDate = new Date(uniqueDays[i]);
+      const diffDays = Math.round((prevDate - currDate) / 86400000);
+      if (diffDays === 1) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }, [moodInsights]);
+
+  // Filter sections by selected moods
+  const filteredSections = useMemo(() => {
+    if (selectedMoods.length === 0) return sections;
+
+    return sections
+      .map((section) => ({
+        ...section,
+        data: section.data.filter((entry) => selectedMoods.includes(entry.mood)),
+      }))
+      .filter((section) => section.data.length > 0);
+  }, [sections, selectedMoods]);
+
+  // Toggle mood filter
+  const handleToggleMoodFilter = useCallback((mood) => {
+    if (mood === null) {
+      setSelectedMoods([]);
+    } else {
+      setSelectedMoods((prev) =>
+        prev.includes(mood) ? prev.filter((m) => m !== mood) : [...prev, mood]
+      );
+    }
+  }, []);
+
+  // Delete mood entry
+  const handleDeleteEntry = useCallback(async (entry) => {
+    const entryId = entry.id || entry.clientEventId;
+    if (!entryId) {
+      Alert.alert('Error', 'Cannot delete this entry');
+      return;
+    }
+
+    try {
+      await apiClient.delete(`/mood/${entryId}`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['moodInsights'] });
+      queryClient.invalidateQueries({ queryKey: ['decisionBrainMoodInsights'] });
+    } catch (error) {
+      console.error('Failed to delete mood entry:', error);
+      Alert.alert('Error', 'Failed to delete mood entry. Please try again.');
+    }
+  }, [queryClient]);
+
+  // Export mood data
+  const handleExport = useCallback(async () => {
+    Haptics.selectionAsync();
+    const logs = moodInsights?.logs || [];
+    if (!logs.length) {
+      Alert.alert('No Data', 'No mood entries to export.');
+      return;
+    }
+
+    const csvHeader = 'Date,Time,Mood,Intensity,Energy,Note,Tags\n';
+    const csvRows = logs.map((log) => {
+      const date = new Date(log.loggedDate);
+      return [
+        date.toLocaleDateString(),
+        date.toLocaleTimeString(),
+        log.mood || '',
+        log.intensity || '',
+        log.energyLevel || '',
+        `"${(log.note || '').replace(/"/g, '""')}"`,
+        `"${(log.tags || []).join(', ')}"`,
+      ].join(',');
+    });
+
+    const csvContent = csvHeader + csvRows.join('\n');
+    const periodLabel = selectedPeriod === 'week' ? '7 days' : selectedPeriod === 'month' ? '30 days' : '1 year';
+
+    try {
+      await Share.share({
+        message: csvContent,
+        title: `Mood History - ${periodLabel}`,
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+    }
+  }, [moodInsights, selectedPeriod]);
+
   // Handlers
   const handleRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -924,8 +1282,8 @@ export default function MoodHistoryScreen() {
 
   // Render item
   const renderItem = useCallback(
-    ({ item }) => <MoodEntryCard entry={item} />,
-    []
+    ({ item }) => <MoodEntryCard entry={item} onDelete={handleDeleteEntry} />,
+    [handleDeleteEntry]
   );
 
   // Key extractor
@@ -950,13 +1308,22 @@ export default function MoodHistoryScreen() {
             </TouchableOpacity>
           ),
           headerRight: () => (
-            <TouchableOpacity
-              onPress={handleViewInsights}
-              style={styles.headerButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="analytics-outline" size={22} color={COLORS.primary} />
-            </TouchableOpacity>
+            <View style={styles.headerRightContainer}>
+              <TouchableOpacity
+                onPress={handleExport}
+                style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="share-outline" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleViewInsights}
+                style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="analytics-outline" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -966,7 +1333,7 @@ export default function MoodHistoryScreen() {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading mood history...</Text>
         </View>
-      ) : sections.length === 0 ? (
+      ) : filteredSections.length === 0 && selectedMoods.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
@@ -981,7 +1348,7 @@ export default function MoodHistoryScreen() {
         </ScrollView>
       ) : (
         <SectionList
-          sections={sections}
+          sections={filteredSections}
           renderItem={renderItem}
           renderSectionHeader={renderSectionHeader}
           keyExtractor={keyExtractor}
@@ -997,14 +1364,31 @@ export default function MoodHistoryScreen() {
           }
           ListHeaderComponent={
             <>
-              {/* Hero Card */}
+              {/* Hero Card with Streak */}
               <HeroCard stats={stats} latestMood={latestMood} />
+
+              {/* Streak Badge */}
+              {streak >= 2 && (
+                <View style={styles.streakContainer}>
+                  <StreakBadge streak={streak} />
+                </View>
+              )}
 
               {/* Time Period Selector */}
               <TimePeriodSelector
                 selected={selectedPeriod}
                 onSelect={setSelectedPeriod}
               />
+
+              {/* Mood Filter Chips */}
+              <MoodFilterChips
+                selectedMoods={selectedMoods}
+                onToggleMood={handleToggleMoodFilter}
+                logs={moodInsights?.logs}
+              />
+
+              {/* Week Comparison Card */}
+              <WeekComparisonCard logs={moodInsights?.logs} />
 
               {/* Weekly Mini Timeline */}
               <WeeklyMiniTimeline logs={moodInsights?.logs} />
@@ -1020,12 +1404,40 @@ export default function MoodHistoryScreen() {
 
               {/* History Header */}
               <View style={styles.historyHeader}>
-                <Text style={styles.historyTitle}>Your Mood Log</Text>
-                <Text style={styles.historySubtitle}>
-                  {moodInsights?.logs?.length || 0} entries in {selectedPeriod}
-                </Text>
+                <View style={styles.historyHeaderRow}>
+                  <View>
+                    <Text style={styles.historyTitle}>Your Mood Log</Text>
+                    <Text style={styles.historySubtitle}>
+                      {selectedMoods.length > 0
+                        ? `${filteredSections.reduce((acc, s) => acc + s.data.length, 0)} filtered entries`
+                        : `${moodInsights?.logs?.length || 0} entries in ${selectedPeriod}`}
+                    </Text>
+                  </View>
+                  {selectedMoods.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.clearFilterButton}
+                      onPress={() => setSelectedMoods([])}
+                    >
+                      <Text style={styles.clearFilterText}>Clear filter</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             </>
+          }
+          ListEmptyComponent={
+            selectedMoods.length > 0 ? (
+              <View style={styles.noResultsContainer}>
+                <Ionicons name="search" size={48} color={COLORS.text.tertiary} />
+                <Text style={styles.noResultsText}>No entries match your filter</Text>
+                <TouchableOpacity
+                  style={styles.clearFilterButtonLarge}
+                  onPress={() => setSelectedMoods([])}
+                >
+                  <Text style={styles.clearFilterTextLarge}>Clear Filter</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null
           }
           ListFooterComponent={
             <TouchableOpacity
@@ -1061,6 +1473,218 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: SPACING[2],
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+  },
+
+  // Streak Badge
+  streakContainer: {
+    alignItems: 'center',
+    marginBottom: SPACING[3],
+    marginTop: -SPACING[2],
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+    gap: SPACING[1],
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  streakText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+
+  // Filter Chips
+  filterChipsContainer: {
+    marginBottom: SPACING[3],
+  },
+  filterChipsScroll: {
+    paddingHorizontal: 0,
+    gap: SPACING[2],
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+    gap: SPACING[1],
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipEmoji: {
+    fontSize: 14,
+  },
+  filterChipText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  filterChipCount: {
+    backgroundColor: COLORS.border,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  filterChipCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.text.tertiary,
+  },
+
+  // Week Comparison Card
+  comparisonCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  comparisonTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  comparisonTrend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    gap: 4,
+  },
+  comparisonTrendText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  comparisonGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  comparisonColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  comparisonColumnLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.text.tertiary,
+    marginBottom: SPACING[1],
+  },
+  comparisonValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  comparisonSubtext: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+  comparisonStat: {
+    marginTop: SPACING[2],
+    alignItems: 'center',
+  },
+  comparisonStatValue: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  comparisonStatLabel: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+  comparisonDivider: {
+    paddingHorizontal: SPACING[2],
+  },
+  comparisonChange: {
+    alignItems: 'center',
+    paddingLeft: SPACING[3],
+    borderLeftWidth: 1,
+    borderLeftColor: COLORS.border,
+  },
+  comparisonChangeValue: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  comparisonChangeLabel: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+
+  // Entry Card Header Right
+  entryHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+  },
+
+  // History Header Row
+  historyHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  clearFilterButton: {
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[1],
+  },
+  clearFilterText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+
+  // No Results
+  noResultsContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING[10],
+    gap: SPACING[3],
+  },
+  noResultsText: {
+    fontSize: TYPOGRAPHY.size.md,
+    color: COLORS.text.secondary,
+  },
+  clearFilterButtonLarge: {
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.lg,
+  },
+  clearFilterTextLarge: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   loadingContainer: {
     flex: 1,

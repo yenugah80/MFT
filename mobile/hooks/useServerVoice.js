@@ -1,5 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  useAudioRecorder,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  RecordingPresets,
+} from 'expo-audio';
 import apiClient from '../services/apiClient';
 
 // Stub Voice module for Expo Go compatibility
@@ -23,6 +29,10 @@ export const useServerVoice = (options = {}) => {
   const [transcript, setTranscript] = useState('');
   const [liveItems, setLiveItems] = useState([]);
   const [processingState, setProcessingState] = useState({ step: 0, label: '' });
+
+  // Audio file recording for playback (parallel with live transcription)
+  const [recordingUri, setRecordingUri] = useState(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   // Track volume for waveform visualization (simulated from speech activity)
   const [volume, setVolume] = useState(0);
@@ -130,6 +140,7 @@ export const useServerVoice = (options = {}) => {
       setLiveItems([]);
       setDuration(0);
       setVolume(0);
+      setRecordingUri(null); // Clear previous recording URI
 
       // Start duration timer
       const startTime = Date.now();
@@ -143,6 +154,23 @@ export const useServerVoice = (options = {}) => {
         setVolume(Math.random() * 0.5 + 0.3);
       }, 150);
 
+      // Start audio file recording in parallel (for playback feature)
+      try {
+        const permission = await requestRecordingPermissionsAsync();
+        if (permission.granted) {
+          await setAudioModeAsync({
+            allowsRecording: true,
+            playsInSilentMode: true,
+          });
+          await audioRecorder.prepareToRecordAsync();
+          audioRecorder.record();
+          console.log('[useServerVoice] Audio file recording started');
+        }
+      } catch (audioErr) {
+        // Audio file recording is optional - continue with voice recognition
+        console.warn('[useServerVoice] Audio file recording failed to start:', audioErr);
+      }
+
       await Voice.start('en-US');
     } catch (err) {
       console.error(err);
@@ -150,8 +178,12 @@ export const useServerVoice = (options = {}) => {
       // Clean up intervals on error
       if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
       if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+      // Stop audio recording if it was started
+      if (audioRecorder.isRecording) {
+        try { await audioRecorder.stop(); } catch {}
+      }
     }
-  }, []);
+  }, [audioRecorder]);
 
   /**
    * stopRecording - Step 1 of two-step flow
@@ -178,6 +210,21 @@ export const useServerVoice = (options = {}) => {
       console.warn('[useServerVoice] Voice.stop error:', e);
     }
 
+    // Stop audio file recording and capture URI for playback
+    let capturedUri = null;
+    if (audioRecorder.isRecording) {
+      try {
+        await audioRecorder.stop();
+        capturedUri = audioRecorder.uri;
+        if (capturedUri) {
+          setRecordingUri(capturedUri);
+          console.log('[useServerVoice] Audio file saved:', capturedUri);
+        }
+      } catch (audioErr) {
+        console.warn('[useServerVoice] Audio file recording stop failed:', audioErr);
+      }
+    }
+
     setIsRecording(false);
 
     // Return transcript with confidence for VoiceModal to display
@@ -187,8 +234,9 @@ export const useServerVoice = (options = {}) => {
     return {
       transcript: finalTranscript,
       confidence,
+      recordingUri: capturedUri, // Include URI for playback
     };
-  }, [transcript]);
+  }, [transcript, audioRecorder]);
 
   /**
    * analyzeTranscript - Step 2 of two-step flow
@@ -456,6 +504,13 @@ export const useServerVoice = (options = {}) => {
       } catch (e) {}
     }
 
+    // 3b. Stop audio file recording if active
+    if (audioRecorder.isRecording) {
+      try {
+        await audioRecorder.stop();
+      } catch (e) {}
+    }
+
     // 4. Reset state
     setIsRecording(false);
     setIsProcessing(false);
@@ -465,6 +520,14 @@ export const useServerVoice = (options = {}) => {
     setError(null);
     setVolume(0);
     setDuration(0);
+    setRecordingUri(null);
+  }, [audioRecorder]);
+
+  /**
+   * clearRecordingUri - Clears the recording URI (for cleanup after playback)
+   */
+  const clearRecordingUri = useCallback(() => {
+    setRecordingUri(null);
   }, []);
 
   return {
@@ -474,6 +537,7 @@ export const useServerVoice = (options = {}) => {
     analyzeTranscript,  // Step 2: Analyze nutrition
     cancelRecording,
     clearError,
+    clearRecordingUri,  // Cleanup recording URI after playback
 
     // Legacy (one-step flow)
     stopAndUpload,
@@ -487,5 +551,6 @@ export const useServerVoice = (options = {}) => {
     liveItems,          // Live parsed items for UI Pills
     processingState,
     error,
+    recordingUri,       // Audio file URI for playback
   };
 };

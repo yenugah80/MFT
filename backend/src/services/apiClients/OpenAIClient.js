@@ -724,7 +724,17 @@ Return JSON:
    * @param {boolean} options.includeIngredients - Attempt to list individual ingredients
    */
   async analyzeImage(base64Image, options = {}) {
-    const { highAccuracy = true, includeIngredients = true } = options; // Changed defaults for better quality
+    const {
+      highAccuracy = true,
+      includeIngredients = true,
+      cuisinePreference = null,
+      region = null,
+      cookingMethod = null,
+      userGoals = null,
+      mealType = null,
+      customInstructions = null,
+      voiceTranscript = null
+    } = options;
 
     // Model selection:
     // - gpt-4o: Default for high-quality analysis ($2.50/1M input, $10/1M output) - best for all foods
@@ -733,14 +743,26 @@ Return JSON:
       ? 'gpt-4o'
       : (process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini');
 
-    // Use separated prompts for better maintainability
+    // Build enhanced prompts with all available context
     const { systemPrompt, userPrompt: baseUserPrompt } = buildImageAnalysisPrompt({
       includeIngredients,
-      mealType: options.mealType,
-      customInstructions: options.customInstructions,
+      mealType,
+      customInstructions: customInstructions || voiceTranscript,
+      cuisinePreference,
+      region,
+      cookingMethod,
+      userGoals
     });
 
-    // baseUserPrompt already contains all the instructions from the separated prompts file
+    // Log analysis context for debugging
+    console.log(`[OpenAI] Image analysis context:`, {
+      model: visionModel,
+      cuisinePreference,
+      region,
+      hasVoiceContext: !!voiceTranscript,
+      mealType
+    });
+
     const userPrompt = baseUserPrompt;
 
     const messages = [

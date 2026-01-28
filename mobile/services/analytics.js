@@ -264,6 +264,18 @@ export const Events = {
   FOOD_LOGGED_BARCODE: 'food_logged_barcode',
   FOOD_LOG_FAILED: 'food_log_failed',
 
+  // Voice Logging - Detailed Analytics
+  VOICE_RECORDING_STARTED: 'voice_recording_started',
+  VOICE_RECORDING_COMPLETED: 'voice_recording_completed',
+  VOICE_RECORDING_CANCELLED: 'voice_recording_cancelled',
+  VOICE_TRANSCRIPTION_RECEIVED: 'voice_transcription_received',
+  VOICE_TRANSCRIPTION_EDITED: 'voice_transcription_edited',
+  VOICE_ANALYSIS_STARTED: 'voice_analysis_started',
+  VOICE_ANALYSIS_COMPLETED: 'voice_analysis_completed',
+  VOICE_ANALYSIS_FAILED: 'voice_analysis_failed',
+  VOICE_PLAYBACK_STARTED: 'voice_playback_started',
+  VOICE_RERECORD: 'voice_rerecord',
+
   // Mood
   MOOD_LOGGED: 'mood_logged',
   MOOD_INSIGHT_VIEWED: 'mood_insight_viewed',
@@ -289,6 +301,38 @@ export const Events = {
   UPGRADE_PROMPT_DISMISSED: 'upgrade_prompt_dismissed',
 };
 
+/**
+ * Fetch AI-powered food suggestions for nutritional gaps
+ * @param {Array} gaps - Array of { key, label, percentage }
+ * @returns {Object} suggestions by nutrient key
+ */
+export const fetchFoodSuggestions = async (gaps) => {
+  try {
+    if (!gaps || gaps.length === 0) {
+      return {};
+    }
+
+    const response = await fetch(`${API_URL}/analytics/food-suggestions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ gaps }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.suggestions || {};
+  } catch (error) {
+    console.warn('[Analytics] Failed to fetch food suggestions:', error.message);
+    // Return empty - component will use fallback
+    return null;
+  }
+};
+
 export default {
   initAnalytics,
   trackEvent,
@@ -297,5 +341,6 @@ export default {
   identifyUser,
   clearUser,
   cleanupAnalytics,
+  fetchFoodSuggestions,
   Events,
 };

@@ -552,19 +552,46 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
   /**
    * Analyze a food image and return normalized food object from AI.
    * base64Image: string (WITHOUT data: prefix)
-   * options: { highAccuracy: boolean, includeIngredients: boolean }
+   * options: {
+   *   highAccuracy: boolean,
+   *   includeIngredients: boolean,
+   *   cuisinePreference: string,
+   *   region: string,
+   *   cookingMethod: string,
+   *   voiceTranscript: string,
+   *   mealType: string,
+   *   userGoals: object
+   * }
    *
-   * NOW USING: Industrial-grade OpenAI client with cost tracking, vision model optimization
+   * NOW USING: Industrial-grade OpenAI client with enhanced regional context
    */
   analyzeImage: async (base64Image, options = {}) => {
     try {
-      // Delegate to industrial-grade client
-      const aiResult = await openaiClient.analyzeImage(base64Image, options);
+      console.log(`[FoodService] Analyzing image with context:`, {
+        hasRegion: !!options.region,
+        hasCuisine: !!options.cuisinePreference,
+        hasVoice: !!options.voiceTranscript,
+        mealType: options.mealType
+      });
+
+      // Delegate to industrial-grade client with full context
+      const aiResult = await openaiClient.analyzeImage(base64Image, {
+        highAccuracy: options.highAccuracy ?? true,
+        includeIngredients: options.includeIngredients ?? true,
+        cuisinePreference: options.cuisinePreference,
+        region: options.region,
+        cookingMethod: options.cookingMethod,
+        customInstructions: options.customInstructions,
+        voiceTranscript: options.voiceTranscript,
+        mealType: options.mealType,
+        userGoals: options.userGoals
+      });
+
       if (!aiResult) {
         throw new Error('AI returned no result for image analysis');
       }
 
-      // Transform to match FoodService format
+      // Transform to match FoodService format with enhanced fields
       return FoodService.transformAIResponse(aiResult);
     } catch (error) {
       console.error(`[FoodService] Image analysis failed:`, error.message);
@@ -772,46 +799,130 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
 
   /**
    * Transform AI response into standard Food object.
+   * Enhanced to handle multi-item responses and new analysis fields.
    * Ensures all required fields for FoodDetailsScreen are present.
    */
   transformAIResponse: (aiData) => {
-    // 1. Calculate NutriScore if not provided
-    let nutri = { grade: aiData.nutriscore || "UNKNOWN", score: null };
-    
-    if (!aiData.nutriscore) {
-      // Attempt to calculate from macros if we assume they are per 100g or similar density
-      // This is an estimation since AI usually returns per serving.
-      // We'll just skip calculation to avoid misleading scores unless we have 100g data.
-      // Or we can try to normalize if serving size is known (e.g. 200g serving -> divide by 2).
-      
-      // For now, let's default to 'C' or 'UNKNOWN' if not provided, 
-      // but we will ask AI to provide it in the prompt.
+    // Handle multi-item format (new enhanced format)
+    if (aiData.isMultiItem && Array.isArray(aiData.items)) {
+      const totals = aiData.totals || {};
+      const mealSummary = aiData.mealSummary || {};
+      const firstItem = aiData.items[0] || {};
+
+      return {
+        id: `ai_${Date.now()}`,
+        title: aiData.items.length === 1
+          ? firstItem.name
+          : `${mealSummary.dominantCuisine || 'Mixed'} Meal (${aiData.items.length} items)`,
+        foodName: firstItem.name || 'Analyzed Meal',
+        description: aiData.items.length === 1
+          ? firstItem.description
+          : `${aiData.items.map(i => i.name).join(', ')}`,
+        image: null,
+        // Use totals for multi-item meals
+        calories: Math.round(totals.calories || 0),
+        protein: Math.round(totals.protein || 0),
+        carbs: Math.round(totals.carbs || 0),
+        fats: Math.round(totals.fat || 0),
+        fiber: Math.round(totals.fiber || 0),
+        sugar: Math.round(totals.sugar || 0),
+        sodium: Math.round(totals.sodium || 0),
+        // Health scores
+        nutriscore: FoodService._calculateNutriScoreGrade(totals),
+        healthScore: mealSummary.healthScore || null,
+        // Enhanced metadata
+        cookingMethod: firstItem.cookingMethod || null,
+        cuisine: mealSummary.dominantCuisine || firstItem.cuisine || null,
+        isRestaurantStyle: firstItem.isRestaurantStyle || false,
+        portionAssessment: mealSummary.portionAssessment || null,
+        // Individual items for detailed view
+        items: aiData.items.map(item => ({
+          name: item.name,
+          description: item.description,
+          calories: item.macros?.calories || 0,
+          protein: item.macros?.protein || 0,
+          carbs: item.macros?.carbs || 0,
+          fat: item.macros?.fat || 0,
+          fiber: item.macros?.fiber || 0,
+          portion: item.portion,
+          cookingMethod: item.cookingMethod,
+          cuisine: item.cuisine,
+          confidence: item.confidence,
+          healthFlags: item.healthFlags,
+          ingredients: item.ingredients || []
+        })),
+        // Aggregate fields
+        category: mealSummary.mealType || "General",
+        servingSize: `${aiData.items.length} item(s)`,
+        ingredients: aiData.items.flatMap(i => i.ingredients || []),
+        micros: totals.micros || {},
+        confidence: Math.min(...aiData.items.map(i => i.confidence || 0.7)),
+        // Analysis metadata
+        imageAnalysis: aiData.imageAnalysis || null,
+        suggestions: mealSummary.suggestions || [],
+        isMultiItem: true,
+        itemCount: aiData.items.length
+      };
     }
+
+    // Handle legacy single-item format
+    const nutri = { grade: aiData.nutriscore || "UNKNOWN", score: null };
 
     return {
       id: `ai_${Date.now()}`,
       title: aiData.foodName || aiData.title || "Unknown Food",
+      foodName: aiData.foodName || aiData.title || "Unknown Food",
       description: aiData.description || "AI Analyzed Meal",
       image: null,
       calories: aiData.calories || 0,
       protein: aiData.protein || 0,
       carbs: aiData.carbs || 0,
       fats: aiData.fats || aiData.fat || 0,
+      fiber: aiData.fiber || 0,
+      sugar: aiData.sugar || 0,
+      sodium: aiData.sodium || 0,
       nutriscore: nutri.grade,
       nutriscoreScore: nutri.score,
+      healthScore: aiData.healthScore || null,
+      cookingMethod: aiData.cookingMethod || null,
+      cuisine: aiData.cuisine || null,
       ecoscore: "UNKNOWN",
       category: aiData.mealType || aiData.category || "General",
       servingSize: aiData.servingSize || "1 serving",
-      ingredients: Array.isArray(aiData.ingredients)
-        ? aiData.ingredients
-        : [],
-      micros: aiData.micros || {
-        calcium: "0mg",
-        iron: "0mg",
-        vitaminA: "0IU",
-        vitaminC: "0mg",
-        potassium: "0mg",
-      }
+      ingredients: Array.isArray(aiData.ingredients) ? aiData.ingredients : [],
+      micros: aiData.micros || {},
+      confidence: aiData.confidence || 0.75,
+      isMultiItem: false
     };
+  },
+
+  /**
+   * Calculate NutriScore grade from nutrition totals
+   * @private
+   */
+  _calculateNutriScoreGrade: (totals) => {
+    if (!totals || !totals.calories) return "UNKNOWN";
+
+    // Simple heuristic based on macro balance
+    const protein = totals.protein || 0;
+    const fiber = totals.fiber || 0;
+    const sodium = totals.sodium || 0;
+    const sugar = totals.sugar || 0;
+
+    let score = 0;
+
+    // Positive: protein and fiber
+    if (protein > 20) score -= 2;
+    if (fiber > 5) score -= 2;
+
+    // Negative: sodium and sugar
+    if (sodium > 600) score += 2;
+    if (sugar > 15) score += 2;
+
+    if (score <= -2) return "A";
+    if (score <= 0) return "B";
+    if (score <= 2) return "C";
+    if (score <= 4) return "D";
+    return "E";
   },
 };

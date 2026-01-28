@@ -60,6 +60,9 @@ export function normalizeMultiItemAnalysis(rawData) {
       }
     });
 
+    // Extract image analysis metadata if present
+    const imageAnalysis = rawData.imageAnalysis || {};
+
     return {
       isMultiItem: true,
       items: normalizedItems,
@@ -67,11 +70,101 @@ export function normalizeMultiItemAnalysis(rawData) {
       mealSummary: {
         totalItems: normalizedItems.length,
         totalCalories: Math.round(totals.calories),
-        dominantCuisine: rawData.mealSummary?.dominantCuisine || 'Mixed',
-        mealType: rawData.mealSummary?.mealType || 'meal'
+        totalProtein: Math.round(totals.protein),
+        totalCarbs: Math.round(totals.carbs),
+        totalFat: Math.round(totals.fat),
+        dominantCuisine: rawData.mealSummary?.dominantCuisine || detectDominantCuisine(normalizedItems),
+        mealType: validateMealType(rawData.mealSummary?.mealType),
+        portionAssessment: validatePortionAssessment(rawData.mealSummary?.portionAssessment, totals.calories),
+        healthScore: validateNumber(rawData.mealSummary?.healthScore, calculateHealthScore(normalizedItems, totals), 0, 100),
+        suggestions: Array.isArray(rawData.mealSummary?.suggestions) ? rawData.mealSummary.suggestions.slice(0, 5) : []
+      },
+      imageAnalysis: {
+        quality: validateImageQuality(imageAnalysis.quality),
+        referenceObjectsFound: Array.isArray(imageAnalysis.referenceObjectsFound) ? imageAnalysis.referenceObjectsFound : [],
+        confidenceFactors: Array.isArray(imageAnalysis.confidenceFactors) ? imageAnalysis.confidenceFactors : []
       }
     };
   }
+
+/**
+ * Detect dominant cuisine from items
+ */
+function detectDominantCuisine(items) {
+  if (!items || items.length === 0) return 'Unknown';
+
+  const cuisineCounts = {};
+  items.forEach(item => {
+    const cuisine = item.cuisine || 'Unknown';
+    cuisineCounts[cuisine] = (cuisineCounts[cuisine] || 0) + 1;
+  });
+
+  // Find the most common cuisine
+  let dominant = 'Mixed';
+  let maxCount = 0;
+  for (const [cuisine, count] of Object.entries(cuisineCounts)) {
+    if (count > maxCount && cuisine !== 'Unknown') {
+      maxCount = count;
+      dominant = cuisine;
+    }
+  }
+
+  return dominant;
+}
+
+/**
+ * Validate portion assessment
+ */
+function validatePortionAssessment(value, totalCalories) {
+  const validAssessments = ['small', 'moderate', 'large', 'very_large'];
+  const normalized = String(value || '').toLowerCase().trim().replace(/\s+/g, '_');
+
+  if (validAssessments.includes(normalized)) return normalized;
+
+  // Auto-calculate based on calories if not provided
+  if (totalCalories < 300) return 'small';
+  if (totalCalories < 600) return 'moderate';
+  if (totalCalories < 900) return 'large';
+  return 'very_large';
+}
+
+/**
+ * Validate image quality
+ */
+function validateImageQuality(value) {
+  const validQualities = ['excellent', 'good', 'fair', 'poor'];
+  const normalized = String(value || '').toLowerCase().trim();
+  return validQualities.includes(normalized) ? normalized : 'good';
+}
+
+/**
+ * Calculate health score based on meal composition
+ */
+function calculateHealthScore(items, totals) {
+  let score = 70; // Base score
+
+  // Penalize fried foods
+  const friedCount = items.filter(i => i.healthFlags?.isFried || i.cookingMethod?.includes('fried')).length;
+  score -= friedCount * 10;
+
+  // Penalize high sodium
+  if (totals.sodium > 1500) score -= 15;
+  else if (totals.sodium > 1000) score -= 10;
+
+  // Reward fiber
+  if (totals.fiber > 10) score += 10;
+  else if (totals.fiber > 5) score += 5;
+
+  // Reward protein balance
+  const proteinRatio = totals.protein / (totals.calories / 100);
+  if (proteinRatio > 4) score += 10;
+
+  // Penalize excessive calories per item
+  const avgCalPerItem = totals.calories / items.length;
+  if (avgCalPerItem > 500) score -= 10;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
 
   // Fallback: Single item format (legacy) - convert to multi-item structure
   console.log('[Schema] Single-item format detected, converting to multi-item structure');
@@ -124,7 +217,7 @@ export function normalizeMultiItemAnalysis(rawData) {
  * Normalize a single item from multi-item response
  * @param {Object} item - Raw item from items array
  * @param {number} index - Item index for error logging
- * @returns {Object} Normalized item
+ * @returns {Object} Normalized item with enhanced fields
  */
 function normalizeMultiItemEntry(item, index) {
   if (!item || typeof item !== 'object') {
@@ -133,6 +226,7 @@ function normalizeMultiItemEntry(item, index) {
 
   const macros = item.macros || {};
   const portion = item.portion || {};
+  const healthFlags = item.healthFlags || {};
 
   return {
     name: validateString(item.name, `Item ${index + 1}`, 1, 200),
@@ -140,7 +234,8 @@ function normalizeMultiItemEntry(item, index) {
     portion: {
       amount: validateNumber(portion.amount, 1, 0, 100),
       unit: validateString(portion.unit, 'serving', 1, 20),
-      estimatedGrams: validateNumber(portion.estimatedGrams || portion.grams, 100, 0, 5000)
+      estimatedGrams: validateNumber(portion.estimatedGrams || portion.grams, 100, 0, 5000),
+      visualBasis: validateString(portion.visualBasis, null, 0, 200)
     },
     macros: {
       calories: validateNumber(macros.calories, 0, 0, 5000),
@@ -153,9 +248,65 @@ function normalizeMultiItemEntry(item, index) {
     },
     micros: normalizeMicronutrients(item.micros),
     confidence: validateConfidence(item.confidence),
+    // Enhanced fields for better analysis
+    cookingMethod: validateCookingMethod(item.cookingMethod),
+    cuisine: validateCuisine(item.cuisine),
+    isRestaurantStyle: item.isRestaurantStyle === true,
     ingredients: validateIngredients(item.ingredients),
+    potentialAllergens: validateAllergens(item.potentialAllergens),
+    healthFlags: {
+      isHighCalorie: healthFlags.isHighCalorie === true,
+      isHighSodium: healthFlags.isHighSodium === true,
+      isFried: healthFlags.isFried === true,
+      isProcessed: healthFlags.isProcessed === true
+    },
     isComplex: item.isComplex === true || (item.ingredients && item.ingredients.length > 1)
   };
+}
+
+/**
+ * Validate cooking method
+ */
+function validateCookingMethod(value) {
+  const validMethods = [
+    'deep_fried', 'pan_fried', 'grilled', 'baked', 'steamed',
+    'boiled', 'raw', 'sauteed', 'roasted', 'stir_fried', 'unknown'
+  ];
+  const normalized = String(value || '').toLowerCase().trim().replace(/\s+/g, '_');
+  return validMethods.includes(normalized) ? normalized : 'unknown';
+}
+
+/**
+ * Validate cuisine type
+ */
+function validateCuisine(value) {
+  const validCuisines = [
+    'South Indian', 'North Indian', 'Indian', 'American', 'Chinese',
+    'Italian', 'Mediterranean', 'Japanese', 'Thai', 'Mexican',
+    'Korean', 'Vietnamese', 'French', 'Middle Eastern', 'Mixed', 'Unknown'
+  ];
+  const input = String(value || '').trim();
+
+  // Case-insensitive match
+  const match = validCuisines.find(c => c.toLowerCase() === input.toLowerCase());
+  return match || 'Unknown';
+}
+
+/**
+ * Validate allergens array
+ */
+function validateAllergens(value) {
+  if (!Array.isArray(value)) return [];
+
+  const validAllergens = [
+    'dairy', 'gluten', 'wheat', 'nuts', 'peanuts', 'soy',
+    'eggs', 'shellfish', 'fish', 'sesame', 'sulfites'
+  ];
+
+  return value
+    .map(a => String(a).toLowerCase().trim())
+    .filter(a => validAllergens.includes(a))
+    .slice(0, 10);
 }
 
 /**

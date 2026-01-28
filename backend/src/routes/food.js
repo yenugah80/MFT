@@ -119,35 +119,67 @@ router.post("/analyze-image", async (req, res) => {
     // Result should never be null now (FoodService throws on failure)
     if (!result) return res.status(500).json({ error: "AI could not analyze this image. Please try with a clearer photo." });
 
-    // Transform raw result to unified response format
-    // Convert FoodService.analyzeImage result to rawItems format for unified builder
-    const rawItems = [{
-      name: result.title || result.foodName || 'Unknown Food',
-      quantity: 1,
-      unit: 'serving',
-      canonical: {
-        nutrition: {
-          calories: result.calories || 0,
-          protein: result.protein || 0,
-          carbs: result.carbs || 0,
-          fats: result.fats || result.fat || 0,
-          fiber: result.fiber || 0,
-          sugar: result.sugar || 0,
-          sodium: result.sodium || 0,
-          micros: result.micros || {}
-        },
-        portion: { amount: 1, unit: result.servingSize || 'serving' },
-        healthScore: result.healthScore || null,
-        nutriScore: result.nutriscore || null,
-        cookingMethod: result.cookingMethod || null,
-        ingredients: result.ingredients || []
-      },
-      confidence: result.confidence || 0.75,
-      source: 'ai_estimate',
-      ingredients: result.ingredients || [],
-      healthScore: result.healthScore || null,
-      nutriScore: result.nutriscore || null
-    }];
+    // Transform result to rawItems format - handle both multi-item and single-item
+    const rawItems = result.isMultiItem && result.items
+      ? result.items.map(item => ({
+          name: item.name || 'Unknown Food',
+          quantity: item.portion?.amount || 1,
+          unit: item.portion?.unit || 'serving',
+          canonical: {
+            nutrition: {
+              calories: item.calories || 0,
+              protein: item.protein || 0,
+              carbs: item.carbs || 0,
+              fats: item.fat || 0,
+              fiber: item.fiber || 0,
+              sugar: item.sugar || 0,
+              sodium: item.sodium || 0,
+              micros: item.micros || {}
+            },
+            portion: item.portion || { amount: 1, unit: 'serving' },
+            healthScore: result.healthScore || null,
+            nutriScore: result.nutriscore || null,
+            cookingMethod: item.cookingMethod || null,
+            cuisine: item.cuisine || null,
+            ingredients: item.ingredients || []
+          },
+          confidence: item.confidence || 0.75,
+          source: 'ai_estimate',
+          ingredients: item.ingredients || [],
+          healthFlags: item.healthFlags || {},
+          cookingMethod: item.cookingMethod || null,
+          cuisine: item.cuisine || null
+        }))
+      : [{
+          name: result.title || result.foodName || 'Unknown Food',
+          quantity: 1,
+          unit: 'serving',
+          canonical: {
+            nutrition: {
+              calories: result.calories || 0,
+              protein: result.protein || 0,
+              carbs: result.carbs || 0,
+              fats: result.fats || result.fat || 0,
+              fiber: result.fiber || 0,
+              sugar: result.sugar || 0,
+              sodium: result.sodium || 0,
+              micros: result.micros || {}
+            },
+            portion: { amount: 1, unit: result.servingSize || 'serving' },
+            healthScore: result.healthScore || null,
+            nutriScore: result.nutriscore || null,
+            cookingMethod: result.cookingMethod || null,
+            cuisine: result.cuisine || null,
+            ingredients: result.ingredients || []
+          },
+          confidence: result.confidence || 0.75,
+          source: 'ai_estimate',
+          ingredients: result.ingredients || [],
+          healthScore: result.healthScore || null,
+          nutriScore: result.nutriscore || null,
+          cookingMethod: result.cookingMethod || null,
+          cuisine: result.cuisine || null
+        }];
 
     // Build unified response
     const unifiedResponse = buildUnifiedResponse({
@@ -163,7 +195,8 @@ router.post("/analyze-image", async (req, res) => {
 
     console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, foodName="${foodName}", healthScore=${unifiedResponse.healthScore}`);
 
-    res.json({
+    // Build enhanced response with all analysis metadata
+    const enhancedResponse = {
       success: true,
       data: {
         ...unifiedResponse,
@@ -181,8 +214,28 @@ router.post("/analyze-image", async (req, res) => {
         servingSize: rawItems[0]?.canonical?.portion?.unit || 'serving',
         micros: rawItems[0]?.canonical?.nutrition?.micros || {},
         ingredients: rawItems[0]?.ingredients || [],
+        // Enhanced analysis fields
+        isMultiItem: result.isMultiItem || false,
+        itemCount: result.itemCount || 1,
+        cookingMethod: result.cookingMethod || rawItems[0]?.cookingMethod || null,
+        cuisine: result.cuisine || rawItems[0]?.cuisine || null,
+        healthScore: result.healthScore || null,
+        portionAssessment: result.portionAssessment || null,
+        confidence: result.confidence || rawItems[0]?.confidence || 0.75,
+        suggestions: result.suggestions || [],
+        imageAnalysis: result.imageAnalysis || null
       }
+    };
+
+    console.log(`[FoodAnalyzeImage] Enhanced response:`, {
+      items: enhancedResponse.data.items?.length || 1,
+      calories: enhancedResponse.data.calories,
+      cuisine: enhancedResponse.data.cuisine,
+      cookingMethod: enhancedResponse.data.cookingMethod,
+      confidence: enhancedResponse.data.confidence
     });
+
+    res.json(enhancedResponse);
   } catch (error) {
     console.error("[FoodAnalyzeImage] Error:", error.message);
     // Return descriptive error message to frontend
@@ -356,61 +409,95 @@ router.post("/analyze-multimodal", async (req, res) => {
       customInstructions += `Adjust nutrition estimates based on these details.`;
     }
 
-    // Analyze image with regional and voice context
+    // Analyze image with full context for maximum accuracy
     const result = await FoodService.analyzeImage(image, {
       highAccuracy,
       includeIngredients,
       cuisinePreference,
       region,
       cookingMethod,
-      customInstructions, // Pass voice context to AI
-      voiceTranscript // Store for reference
+      customInstructions,
+      voiceTranscript,
+      mealType,
+      // Pass user goals if provided for personalized suggestions
+      userGoals: req.body.userGoals || null
     });
 
     if (!result) {
       return res.status(500).json({ error: "Multimodal analysis failed" });
     }
 
-    // Transform to unified response format
-    const rawItems = [{
-      name: result.title || result.foodName || 'Unknown Food',
-      quantity: 1,
-      unit: 'serving',
-      canonical: {
-        nutrition: {
-          calories: result.calories || 0,
-          protein: result.protein || 0,
-          carbs: result.carbs || 0,
-          fats: result.fats || result.fat || 0,
-          fiber: result.fiber || 0,
-          sugar: result.sugar || 0,
-          sodium: result.sodium || 0,
-          micros: result.micros || {}
-        },
-        portion: { amount: 1, unit: result.servingSize || 'serving' },
-        healthScore: result.healthScore || null,
-        nutriScore: result.nutriscore || null,
-        cookingMethod: cookingMethod || result.cookingMethod || null,
-        cuisine: cuisinePreference || result.cuisine || region || null,
-        ingredients: result.ingredients || []
-      },
-      confidence: voiceTranscript ? 0.85 : 0.75, // Higher confidence with voice context
-      source: 'ai_estimate',
-      ingredients: result.ingredients || [],
-      healthScore: result.healthScore || null,
-      nutriScore: result.nutriscore || null,
-      cookingMethod: cookingMethod || result.cookingMethod || null
-    }];
+    // Transform result to rawItems format - handle both multi-item and single-item
+    const rawItems = result.isMultiItem && result.items
+      ? result.items.map(item => ({
+          name: item.name || 'Unknown Food',
+          quantity: item.portion?.amount || 1,
+          unit: item.portion?.unit || 'serving',
+          canonical: {
+            nutrition: {
+              calories: item.calories || 0,
+              protein: item.protein || 0,
+              carbs: item.carbs || 0,
+              fats: item.fat || 0,
+              fiber: item.fiber || 0,
+              sugar: item.sugar || 0,
+              sodium: item.sodium || 0,
+              micros: item.micros || {}
+            },
+            portion: item.portion || { amount: 1, unit: 'serving' },
+            healthScore: result.healthScore || null,
+            nutriScore: result.nutriscore || null,
+            cookingMethod: cookingMethod || item.cookingMethod || null,
+            cuisine: cuisinePreference || item.cuisine || null,
+            ingredients: item.ingredients || []
+          },
+          confidence: voiceTranscript ? 0.85 : (item.confidence || 0.75),
+          source: 'ai_estimate',
+          ingredients: item.ingredients || [],
+          healthFlags: item.healthFlags || {},
+          cookingMethod: cookingMethod || item.cookingMethod || null,
+          cuisine: cuisinePreference || item.cuisine || null
+        }))
+      : [{
+          name: result.title || result.foodName || 'Unknown Food',
+          quantity: 1,
+          unit: 'serving',
+          canonical: {
+            nutrition: {
+              calories: result.calories || 0,
+              protein: result.protein || 0,
+              carbs: result.carbs || 0,
+              fats: result.fats || result.fat || 0,
+              fiber: result.fiber || 0,
+              sugar: result.sugar || 0,
+              sodium: result.sodium || 0,
+              micros: result.micros || {}
+            },
+            portion: { amount: 1, unit: result.servingSize || 'serving' },
+            healthScore: result.healthScore || null,
+            nutriScore: result.nutriscore || null,
+            cookingMethod: cookingMethod || result.cookingMethod || null,
+            cuisine: cuisinePreference || result.cuisine || region || null,
+            ingredients: result.ingredients || []
+          },
+          confidence: voiceTranscript ? 0.85 : 0.75,
+          source: 'ai_estimate',
+          ingredients: result.ingredients || [],
+          healthScore: result.healthScore || null,
+          nutriScore: result.nutriscore || null,
+          cookingMethod: cookingMethod || result.cookingMethod || null,
+          cuisine: cuisinePreference || result.cuisine || null
+        }];
 
     // Build unified response
     const unifiedResponse = buildUnifiedResponse({
       inputText: voiceTranscript || result.title || 'Multimodal analysis',
-      inputMode: 'photo', // Base mode is photo
+      inputMode: 'photo',
       mealType: mealType,
       rawItems: rawItems
     });
 
-    // Add multimodal metadata
+    // Add multimodal and enhanced analysis metadata
     unifiedResponse.multimodal = {
       hasVoice: !!voiceTranscript,
       voiceTranscript,
@@ -418,7 +505,23 @@ router.post("/analyze-multimodal", async (req, res) => {
       region
     };
 
-    console.log(`[FoodMultimodal] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
+    // Add enhanced fields from analysis
+    unifiedResponse.isMultiItem = result.isMultiItem || false;
+    unifiedResponse.itemCount = result.itemCount || rawItems.length;
+    unifiedResponse.cookingMethod = cookingMethod || result.cookingMethod || null;
+    unifiedResponse.cuisine = cuisinePreference || result.cuisine || null;
+    unifiedResponse.portionAssessment = result.portionAssessment || null;
+    unifiedResponse.suggestions = result.suggestions || [];
+    unifiedResponse.imageAnalysis = result.imageAnalysis || null;
+
+    console.log(`[FoodMultimodal] Enhanced response:`, {
+      items: unifiedResponse.items?.length || 1,
+      calories: unifiedResponse.totals?.calories,
+      cuisine: unifiedResponse.cuisine,
+      hasVoice: !!voiceTranscript,
+      confidence: rawItems[0]?.confidence
+    });
+
     res.json({ success: true, data: unifiedResponse });
   } catch (error) {
     console.error("[FoodMultimodal] Error:", error);

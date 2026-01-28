@@ -37,6 +37,20 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { useAudioPlayback } from '../../hooks/useAudioPlayback';
+import {
+  trackVoiceRecordingStarted,
+  trackVoiceRecordingCompleted,
+  trackVoiceRecordingCancelled,
+  trackVoiceTranscriptionReceived,
+  trackVoiceTranscriptionEdited,
+  trackVoiceAnalysisStarted,
+  trackVoiceAnalysisCompleted,
+  trackVoiceAnalysisFailed,
+  trackVoicePlaybackStarted,
+  trackVoiceRerecord,
+  clearVoiceSession,
+} from '../../services/voiceAnalytics';
 
 // ============================================================================
 // CONSTANTS
@@ -199,13 +213,19 @@ export function VoiceModal({
     analyzeTranscript,
     cancelRecording,
     clearError = () => {},
+    recordingUri,
+    clearRecordingUri = () => {},
   } = voiceHook;
+
+  // Audio playback for reviewing recording before confirm
+  const audioPlayback = useAudioPlayback();
 
   // ─────────────────────────────────────────────
   // State & Refs
   // ─────────────────────────────────────────────
   const [state, setState] = useState('idle');
   const [transcription, setTranscription] = useState('');
+  const [originalTranscription, setOriginalTranscription] = useState(''); // Track original for edit detection
   const [confidence, setConfidence] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -239,10 +259,18 @@ export function VoiceModal({
   const handleClose = useCallback(() => {
     isCancelledRef.current = true;
 
+    // Cleanup audio playback
+    audioPlayback.reset();
+    clearRecordingUri();
+
+    // Clear voice analytics session (without tracking - it's a cleanup)
+    clearVoiceSession();
+
     clearError();
     setLocalError(null);
     setState('idle');
     setTranscription('');
+    setOriginalTranscription('');
     setConfidence(null);
     setIsEditing(false);
     setIsSubmitting(false);
@@ -252,12 +280,15 @@ export function VoiceModal({
       clearTimeout(successTimeoutRef.current);
     }
     onClose();
-  }, [clearError, onClose]);
+  }, [clearError, onClose, audioPlayback, clearRecordingUri]);
 
   const handleStart = useCallback(async () => {
     isCancelledRef.current = false;
     stopCalledRef.current = false;
     setLocalError(null);
+
+    // Track recording started
+    trackVoiceRecordingStarted(isElderly ? 'elderly' : 'standard');
 
     clearError();
     await triggerHaptic(isElderly ? 'heavy' : 'light');
@@ -273,7 +304,11 @@ export function VoiceModal({
 
     try {
       await triggerHaptic();
+      const stopTime = Date.now();
       const result = await stopRecording();
+
+      // Track recording completed
+      trackVoiceRecordingCompleted(duration);
 
       if (isCancelledRef.current) {
         return;
@@ -283,9 +318,16 @@ export function VoiceModal({
       setTranscription(transcript);
       setConfidence(result.confidence ?? 0.9);
 
+      // Track transcription received
+      const transcriptionLatency = Date.now() - stopTime;
+      trackVoiceTranscriptionReceived(transcript, result.confidence ?? 0.9, transcriptionLatency);
+
       if (isElderly) {
         // Elderly mode: Auto-analyze immediately
         setState('analyzing');
+
+        // Track analysis started
+        trackVoiceAnalysisStarted();
 
         const nutritionResult = await analyzeTranscript(transcript);
 
@@ -295,6 +337,9 @@ export function VoiceModal({
 
         // Check if analysis failed (returned null)
         if (!nutritionResult) {
+          // Track analysis failed
+          trackVoiceAnalysisFailed('api_error', error || 'Unknown error');
+
           // Use error from hook if available, otherwise generic message
           setLocalError(error || 'Failed to analyze nutrition. Please try again.');
           setState('error');
@@ -303,6 +348,11 @@ export function VoiceModal({
           stopCalledRef.current = false;
           return;
         }
+
+        // Track analysis completed
+        const itemCount = nutritionResult.items?.length || 0;
+        const totalCalories = nutritionResult.totals?.macros?.calories_kcal || 0;
+        trackVoiceAnalysisCompleted(itemCount, totalCalories);
 
         setState('success');
         await triggerHaptic('success');
@@ -315,33 +365,16 @@ export function VoiceModal({
           }
         }, 2000);
       } else {
-        // Standard mode: Also auto-analyze immediately (same as elderly mode)
-        // User can still see results before confirming to log
-        setState('analyzing');
+        // Standard mode: Show transcribed state with playback option
+        // User can review recording, edit transcription, then confirm to analyze
+        setOriginalTranscription(transcript);
 
-        const nutritionResult = await analyzeTranscript(transcript);
-
-        if (isCancelledRef.current) {
-          return;
+        // Load audio for playback if available
+        if (result.recordingUri) {
+          await audioPlayback.loadAudio(result.recordingUri);
         }
 
-        // Check if analysis failed (returned null)
-        if (!nutritionResult) {
-          setLocalError(error || 'Failed to analyze nutrition. Please try again.');
-          setState('error');
-          await triggerHaptic('error');
-          stopCalledRef.current = false;
-          return;
-        }
-
-        // Store the result and show success with option to confirm
-        setTranscription(transcript);
-        setState('success');
-        await triggerHaptic('success');
-
-        // Pass result to parent immediately - AnalysisDetailsScreen will show
-        onComplete(nutritionResult);
-        handleClose();
+        setState('transcribed');
       }
     } catch (err) {
       console.error('[VoiceModal] Stop failed:', err);
@@ -352,17 +385,25 @@ export function VoiceModal({
       }
       stopCalledRef.current = false;
     }
-  }, [stopRecording, analyzeTranscript, onComplete, handleClose, isElderly, error]);
+  }, [stopRecording, analyzeTranscript, onComplete, handleClose, isElderly, error, audioPlayback]);
 
   const handleCancel = useCallback(async () => {
+    // Track recording cancelled
+    trackVoiceRecordingCancelled(duration, 'user_cancelled');
+
     await triggerHaptic();
     await cancelRecording();
     handleClose();
-  }, [cancelRecording, handleClose]);
+  }, [cancelRecording, handleClose, duration]);
 
   const handleConfirm = useCallback(async () => {
     if (isSubmitting) {
       return;
+    }
+
+    // Track if transcription was edited
+    if (originalTranscription && transcription !== originalTranscription) {
+      trackVoiceTranscriptionEdited(originalTranscription, transcription);
     }
 
     try {
@@ -370,6 +411,9 @@ export function VoiceModal({
       setLocalError(null);
       setState('analyzing');
       await triggerHaptic();
+
+      // Track analysis started
+      trackVoiceAnalysisStarted();
 
       const nutritionResult = await analyzeTranscript(transcription);
 
@@ -379,6 +423,9 @@ export function VoiceModal({
 
       // Check if analysis failed (returned null)
       if (!nutritionResult) {
+        // Track analysis failed
+        trackVoiceAnalysisFailed('api_error', error || 'Unknown error');
+
         // Use error from hook if available, otherwise generic message
         setLocalError(error || 'Failed to analyze nutrition. Please try again.');
         setState('error');
@@ -386,6 +433,11 @@ export function VoiceModal({
         setIsSubmitting(false);
         return;
       }
+
+      // Track analysis completed
+      const itemCount = nutritionResult.items?.length || 0;
+      const totalCalories = nutritionResult.totals?.macros?.calories_kcal || 0;
+      trackVoiceAnalysisCompleted(itemCount, totalCalories);
 
       setState('success');
       await triggerHaptic('success');
@@ -398,13 +450,16 @@ export function VoiceModal({
       }, 800);
     } catch (err) {
       console.error('[VoiceModal] Analysis failed:', err);
+      // Track analysis failed
+      trackVoiceAnalysisFailed('exception', err.message);
+
       if (!isCancelledRef.current) {
         setLocalError(err.message || 'Failed to analyze nutrition');
         setState('error');
       }
       setIsSubmitting(false);
     }
-  }, [analyzeTranscript, transcription, onComplete, handleClose, isSubmitting, error]);
+  }, [analyzeTranscript, transcription, originalTranscription, onComplete, handleClose, isSubmitting, error]);
 
   const handleEditTranscription = useCallback(() => {
     setIsEditing(true);
@@ -415,6 +470,33 @@ export function VoiceModal({
     setIsEditing(false);
     triggerHaptic();
   }, []);
+
+  const handleRerecord = useCallback(async () => {
+    // Track re-record
+    trackVoiceRerecord();
+
+    // Reset playback and transcription state
+    audioPlayback.reset();
+    clearRecordingUri();
+    setTranscription('');
+    setOriginalTranscription('');
+    setConfidence(null);
+    setIsEditing(false);
+    stopCalledRef.current = false;
+
+    // Restart recording
+    await triggerHaptic();
+    await handleStart();
+  }, [audioPlayback, clearRecordingUri, handleStart]);
+
+  const handlePlaybackToggle = useCallback(() => {
+    // Track playback started (only on play, not pause)
+    if (!audioPlayback.isPlaying) {
+      trackVoicePlaybackStarted();
+    }
+    audioPlayback.togglePlayback();
+    triggerHaptic();
+  }, [audioPlayback]);
 
   // ─────────────────────────────────────────────
   // Effects
@@ -684,6 +766,35 @@ export function VoiceModal({
               <View style={contentStyle}>
                 <Text style={styles.statusText}>Transcription</Text>
 
+                {/* Audio Playback Controls */}
+                {audioPlayback.audioUri && (
+                  <View style={styles.playbackContainer}>
+                    <TouchableOpacity
+                      style={styles.playbackButton}
+                      onPress={handlePlaybackToggle}
+                    >
+                      <Ionicons
+                        name={audioPlayback.isPlaying ? 'pause' : 'play'}
+                        size={ICON_SIZES.lg}
+                        color={BRAND.primary}
+                      />
+                    </TouchableOpacity>
+
+                    <View style={styles.progressBarContainer}>
+                      <View
+                        style={[
+                          styles.progressBar,
+                          { width: `${audioPlayback.progressPercent}%` }
+                        ]}
+                      />
+                    </View>
+
+                    <Text style={styles.playbackTime}>
+                      {formatDuration(audioPlayback.playbackProgress * 1000)} / {formatDuration(audioPlayback.duration * 1000)}
+                    </Text>
+                  </View>
+                )}
+
                 {confidence !== null && (
                   <View style={styles.confidenceContainer}>
                     <Ionicons
@@ -720,10 +831,17 @@ export function VoiceModal({
                     </TouchableOpacity>
                   ) : (
                     <>
+                      {/* Re-record Button */}
+                      <TouchableOpacity style={styles.reRecordButton} onPress={handleRerecord}>
+                        <Ionicons name="refresh" size={ICON_SIZES.md} color={TEXT.tertiary} />
+                        <Text style={styles.reRecordButtonText}>Re-record</Text>
+                      </TouchableOpacity>
+
                       <TouchableOpacity style={styles.secondaryButton} onPress={handleEditTranscription}>
                         <Ionicons name="create-outline" size={ICON_SIZES.md} color={BRAND.primary} />
                         <Text style={styles.secondaryButtonText}>Edit</Text>
                       </TouchableOpacity>
+
                       <TouchableOpacity style={styles.primaryButton} onPress={handleConfirm}>
                         <LinearGradient
                           colors={SURFACES.gradient.primary}
@@ -1251,6 +1369,60 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+  },
+  // Playback controls
+  playbackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING[3],
+    gap: SPACING[3],
+  },
+  playbackButton: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.full,
+    backgroundColor: SURFACES.background.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: BRAND.primary,
+  },
+  progressBarContainer: {
+    flex: 1,
+    height: 6,
+    backgroundColor: SURFACES.background.secondary,
+    borderRadius: RADIUS.full,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: BRAND.primary,
+    borderRadius: RADIUS.full,
+  },
+  playbackTime: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    minWidth: 70,
+    textAlign: 'right',
+  },
+  reRecordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.lg,
+    backgroundColor: SURFACES.background.tertiary,
+  },
+  reRecordButtonText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.tertiary,
   },
   transcriptionContainer: {
     width: '100%',
