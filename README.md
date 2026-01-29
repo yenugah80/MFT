@@ -42,19 +42,7 @@
 <br/>
 
 <p align="center">
-  <kbd>
-    <br/>
-    <img width="200" src="https://via.placeholder.com/200x400/1a1a2e/eaeaea?text=Dashboard" alt="Dashboard Screenshot"/>
-    &nbsp;&nbsp;
-    <img width="200" src="https://via.placeholder.com/200x400/1a1a2e/eaeaea?text=Insights" alt="Insights Screenshot"/>
-    &nbsp;&nbsp;
-    <img width="200" src="https://via.placeholder.com/200x400/1a1a2e/eaeaea?text=Food+Log" alt="Food Log Screenshot"/>
-    <br/><br/>
-  </kbd>
-</p>
-
-<p align="center">
-  <sub>Screenshots coming soon - app in active development</sub>
+  <img src="https://img.shields.io/badge/📱_App_Screenshots-Coming_Soon-blue?style=for-the-badge" alt="Screenshots Coming Soon"/>
 </p>
 
 ---
