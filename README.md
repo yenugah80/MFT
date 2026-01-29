@@ -22,7 +22,7 @@
 <br/>
 
 <h1 align="center">
-  <img src="mobile/assets/images/icon.png" alt="MyFoodTracker" width="140">
+  <img src="mobile/assets/images/app-logo.png" alt="MyFoodTracker" width="140">
   <br/>
   <b>MyFoodTracker</b>
 </h1>
@@ -42,9 +42,19 @@
 <br/>
 
 <p align="center">
-  <img src="mobile/assets/images/dashboard-preview.png" alt="Dashboard Preview" width="280">
-  <img src="mobile/assets/images/insights-preview.png" alt="Insights Preview" width="280">
-  <img src="mobile/assets/images/logging-preview.png" alt="Logging Preview" width="280">
+  <kbd>
+    <br/>
+    <img width="200" src="https://via.placeholder.com/200x400/1a1a2e/eaeaea?text=Dashboard" alt="Dashboard Screenshot"/>
+    &nbsp;&nbsp;
+    <img width="200" src="https://via.placeholder.com/200x400/1a1a2e/eaeaea?text=Insights" alt="Insights Screenshot"/>
+    &nbsp;&nbsp;
+    <img width="200" src="https://via.placeholder.com/200x400/1a1a2e/eaeaea?text=Food+Log" alt="Food Log Screenshot"/>
+    <br/><br/>
+  </kbd>
+</p>
+
+<p align="center">
+  <sub>Screenshots coming soon - app in active development</sub>
 </p>
 
 ---
