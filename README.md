@@ -236,6 +236,57 @@ Why uncertain: Limited sleep data this week, new caffeine pattern detected
 Model accuracy: 78% within interval over last 30 predictions
 ```
 
+### 🍕 Food Analysis: How It Works
+
+Our AI-powered food analysis uses a **multi-source cascade** for accuracy:
+
+```
+User Input → Parse Items → Resolve Nutrition → Validate → Enrich → Return
+```
+
+**Step 1: Smart Parsing**
+```
+Input: "rice with chicken curry and vegetables"
+                    ↓
+Parser splits into separate items:
+    ├─ rice
+    ├─ chicken curry
+    └─ vegetables
+```
+
+**Step 2: Multi-Source Resolution**
+
+| Source | Purpose | Confidence |
+|--------|---------|------------|
+| OpenAI GPT-4o | Primary estimation + photo analysis | 85-95% |
+| USDA FoodData Central | Verification + micronutrients | 95%+ |
+| Open Food Facts | Barcode lookup (900K+ products) | 90%+ |
+
+**Step 3: Validation**
+```
+Atwater Factor Check:
+calories ≈ (protein × 4) + (carbs × 4) + (fat × 9)
+
+If mismatch detected → Flag for review
+If validated → Cache for faster future lookups
+```
+
+**Step 4: Enrichment & Response**
+```
+┌─ Rice: 206 cal, 4g protein, 45g carbs
+├─ Chicken curry: 320 cal, 28g protein, 8g carbs
+├─ Vegetables: 45 cal, 2g protein, 9g carbs
+├─ Micronutrients: Iron, Calcium, Vitamins A/C/D...
+└─ TOTAL: 571 cal | 34g protein | NutriScore: B
+```
+
+**Why This Matters:**
+- ✅ Multi-item meals parsed correctly (not as one blob)
+- ✅ Each ingredient validated independently
+- ✅ Transparent confidence scores
+- ✅ 2-level caching (memory + Redis) for speed
+- ✅ Regional cuisine adjustments for accurate portions
+
 ---
 
 ## 🛠️ Tech Stack
