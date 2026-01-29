@@ -108,32 +108,70 @@ After you try a suggestion, we check if it actually helped—that's how we impro
 | **Text** | Type "2 eggs and toast" → Smart parsing → Done |
 | **Barcode** | Scan → 900,000+ product database lookup |
 
-### 📊 Track What Matters
+### 📊 Track 6 Wellness Pillars
 
 <table>
 <tr>
-<td align="center" width="25%">
+<td align="center" width="33%">
 <h3>🍽️</h3>
 <b>Nutrition</b><br>
-<sub>Calories, macros, 25+ micronutrients</sub>
+<sub>Calories, macros, 25+ micronutrients, NutriScore</sub>
 </td>
-<td align="center" width="25%">
+<td align="center" width="33%">
 <h3>😊</h3>
 <b>Mood</b><br>
-<sub>8 states, correlations found automatically</sub>
+<sub>8 emotional states, energy levels, correlations</sub>
 </td>
-<td align="center" width="25%">
+<td align="center" width="33%">
 <h3>💧</h3>
 <b>Hydration</b><br>
-<sub>One-tap logging, smart reminders</sub>
+<sub>Beverage-specific factors, dehydration alerts</sub>
 </td>
-<td align="center" width="25%">
+</tr>
+<tr>
+<td align="center" width="33%">
 <h3>🏃</h3>
 <b>Activity</b><br>
-<sub>CDC guidelines, impact tracking</sub>
+<sub>100+ exercises, MET-based calories, recovery tips</sub>
+</td>
+<td align="center" width="33%">
+<h3>😴</h3>
+<b>Sleep</b><br>
+<sub>Quality tracking, duration, sleep-mood patterns</sub>
+</td>
+<td align="center" width="33%">
+<h3>🧘</h3>
+<b>Stress</b><br>
+<sub>Trigger identification, coping strategies</sub>
 </td>
 </tr>
 </table>
+
+### 🔔 Smart Notifications
+
+| Feature | How It Works |
+|---------|--------------|
+| **Pattern-Based Timing** | Learns when YOU typically log and reminds at optimal times |
+| **Witty Messages** | AI-generated friendly nudges, not boring alerts |
+| **Smart Snoozing** | Adapts to your schedule automatically |
+| **Goal Reminders** | Hydration, meal, and activity prompts based on your targets |
+
+### 🎯 Personalized Recommendations
+
+| Type | What You Get |
+|------|--------------|
+| **Food Suggestions** | Meals based on your goals, allergies, and what worked before |
+| **Recovery Meals** | Post-workout nutrition optimized for your activity |
+| **Mood-Food Pairing** | Foods that correlate with YOUR better mood days |
+| **Hydration Targets** | Personalized water goals based on activity and weather |
+
+### 📈 Weekly Narrative
+
+Every week, get a personalized story summarizing your wellness journey:
+- What went well and what to improve
+- Patterns discovered in your data
+- Achievements and milestones reached
+- Actionable tips for the coming week
 
 ### 🎮 Gamification That Motivates
 
