@@ -1,4 +1,11 @@
 <p align="center">
+  <a href="https://github.com/yenugah80/MFT/stargazers"><img src="https://img.shields.io/github/stars/yenugah80/MFT?style=for-the-badge&logo=github&color=gold" alt="Stars"/></a>
+  <a href="https://github.com/yenugah80/MFT/network/members"><img src="https://img.shields.io/github/forks/yenugah80/MFT?style=for-the-badge&logo=github&color=blue" alt="Forks"/></a>
+  <a href="https://github.com/yenugah80/MFT/issues"><img src="https://img.shields.io/github/issues/yenugah80/MFT?style=for-the-badge&logo=github&color=red" alt="Issues"/></a>
+  <a href="https://github.com/yenugah80/MFT/commits/main"><img src="https://img.shields.io/github/last-commit/yenugah80/MFT?style=for-the-badge&logo=github&color=green" alt="Last Commit"/></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React Native"/>
   <img src="https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo"/>
   <img src="https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js"/>
@@ -6,23 +13,33 @@
   <img src="https://img.shields.io/badge/OpenAI-GPT--4-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI"/>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge" alt="PRs Welcome"/>
+  <img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/badge/Platform-iOS%20%7C%20Android-lightgrey?style=for-the-badge&logo=apple&logoColor=white" alt="Platform"/>
+</p>
+
+<br/>
+
 <h1 align="center">
-  <br>
-  <img src="mobile/assets/images/icon.png" alt="MyFoodTracker" width="120">
-  <br>
-  MyFoodTracker
-  <br>
+  <img src="mobile/assets/images/icon.png" alt="MyFoodTracker" width="140">
+  <br/>
+  <b>MyFoodTracker</b>
 </h1>
 
-<h4 align="center">AI-powered wellness intelligence that learns YOUR patterns, predicts YOUR outcomes, and adapts to YOUR unique physiology.</h4>
+<p align="center">
+  <i>AI-powered wellness intelligence that learns YOUR patterns, predicts YOUR outcomes, and adapts to YOUR unique physiology.</i>
+</p>
 
 <p align="center">
-  <a href="#-key-features">Features</a> •
-  <a href="#-how-it-works">How It Works</a> •
-  <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-getting-started">Getting Started</a> •
-  <a href="#-privacy">Privacy</a>
+  <a href="#-key-features"><b>Features</b></a> &nbsp;•&nbsp;
+  <a href="#-how-it-works"><b>How It Works</b></a> &nbsp;•&nbsp;
+  <a href="#-tech-stack"><b>Tech Stack</b></a> &nbsp;•&nbsp;
+  <a href="#-getting-started"><b>Getting Started</b></a> &nbsp;•&nbsp;
+  <a href="#-privacy"><b>Privacy</b></a>
 </p>
+
+<br/>
 
 <p align="center">
   <img src="mobile/assets/images/dashboard-preview.png" alt="Dashboard Preview" width="280">
@@ -245,8 +262,8 @@ Personalized Meal Suggestions
 
 **1. Clone & Install**
 ```bash
-git clone https://github.com/yourusername/MyFoodTracker.git
-cd MyFoodTracker
+git clone https://github.com/yenugah80/MFT.git
+cd MFT
 ```
 
 **2. Backend Setup**
