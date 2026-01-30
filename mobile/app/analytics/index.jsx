@@ -519,6 +519,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     textAlign: 'center',
     marginHorizontal: SPACING[3],
@@ -540,6 +541,7 @@ const styles = StyleSheet.create({
   periodText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   periodTextActive: {
@@ -568,6 +570,7 @@ const styles = StyleSheet.create({
   viewModeLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   viewModeLabelActive: {
@@ -592,10 +595,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   tabLabelActive: {
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   scrollView: {
     flex: 1,
@@ -637,6 +642,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statLabel: {
@@ -660,6 +666,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -676,6 +683,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -696,6 +704,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },
@@ -724,6 +733,7 @@ const styles = StyleSheet.create({
   milestoneLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   milestoneLabelAchieved: {
@@ -780,6 +790,7 @@ const styles = StyleSheet.create({
   tipLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING[2],
   },
@@ -797,6 +808,7 @@ const styles = StyleSheet.create({
   featureLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING[2],
   },
@@ -819,6 +831,7 @@ const styles = StyleSheet.create({
   exampleLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING[2],
   },

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { getMicroBarColor } from '../utils/microsCalculations';
-import { TEXT, SURFACES } from '../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../constants/premiumTheme';
 
 /**
  * Horizontal bar for individual micronutrient
@@ -44,11 +44,12 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   value: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   barContainer: {
@@ -67,7 +68,7 @@ const styles = StyleSheet.create({
   },
   percentage: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });
 

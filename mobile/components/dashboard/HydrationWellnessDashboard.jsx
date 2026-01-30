@@ -1284,6 +1284,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: 'rgba(255,255,255,0.95)',
   },
   goalIndicator: {
@@ -1329,6 +1330,7 @@ const styles = StyleSheet.create({
   heroIntakeUnit: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255,255,255,0.8)',
   },
   heroGoalText: {
@@ -1350,6 +1352,7 @@ const styles = StyleSheet.create({
   heroStatusText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255,255,255,0.9)',
     marginTop: SPACING[1],
   },
@@ -1367,6 +1370,7 @@ const styles = StyleSheet.create({
   heroStatusBadgeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255,255,255,0.95)',
   },
   heroLastLogText: {
@@ -1420,6 +1424,7 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   chartSubtitle: {
@@ -1435,6 +1440,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   paceProgressContainer: {
@@ -1491,6 +1497,7 @@ const styles = StyleSheet.create({
   waveLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
     marginTop: SPACING[1],
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
@@ -1554,6 +1561,7 @@ const styles = StyleSheet.create({
   wellnessLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255, 255, 255, 0.9)',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1561,6 +1569,7 @@ const styles = StyleSheet.create({
   wellnessStatus: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     marginTop: SPACING[1],
   },
@@ -1593,6 +1602,7 @@ const styles = StyleSheet.create({
   feedbackTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   feedbackSubtitle: {
@@ -1614,6 +1624,7 @@ const styles = StyleSheet.create({
   feedbackInlineLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   feedbackRow: {
@@ -1624,6 +1635,7 @@ const styles = StyleSheet.create({
     width: 48,
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1645,6 +1657,7 @@ const styles = StyleSheet.create({
   pacingLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.muted,
   },
   pacingValue: {
@@ -1671,6 +1684,7 @@ const styles = StyleSheet.create({
   smartAdviceText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   metricDeltaText: {
@@ -1711,6 +1725,7 @@ const styles = StyleSheet.create({
   streakLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#92400E',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1742,6 +1757,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -1774,6 +1790,7 @@ const styles = StyleSheet.create({
   segmentedText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   segmentedTextActive: {
@@ -1815,11 +1832,13 @@ const styles = StyleSheet.create({
   metricScore: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   metricLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     textAlign: 'center',
   },
 
@@ -1844,6 +1863,7 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
     textAlign: 'center',
@@ -1890,10 +1910,12 @@ const styles = StyleSheet.create({
   quickStatValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   quickStatLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[1],
   },
@@ -1930,6 +1952,7 @@ const styles = StyleSheet.create({
   beverageTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   beverageSubtitle: {
@@ -1955,11 +1978,13 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   beveragePercent: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   beverageNote: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -1998,6 +2023,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 1 },
@@ -2025,6 +2051,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
 
@@ -2040,6 +2067,7 @@ const styles = StyleSheet.create({
   hourlyChartTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   hourlyChartBars: {
@@ -2061,6 +2089,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: TEXT.muted,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   hourlyChartLegend: {
     flexDirection: 'row',

@@ -443,15 +443,18 @@ const styles = StyleSheet.create({
   valueText: {
     fontSize: TYPOGRAPHY.size['3xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -0.5,
   },
   unitText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   labelText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -476,6 +479,7 @@ const styles = StyleSheet.create({
   miniValue: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   miniLabel: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -508,10 +512,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   legendValue: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

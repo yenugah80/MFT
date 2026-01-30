@@ -174,12 +174,14 @@ const styles = StyleSheet.create({
   centerSecondary: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     // color applied inline for theme support
     marginTop: 2,
   },
   centerLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     // color applied inline for theme support
     marginTop: 4,
     textTransform: 'uppercase',

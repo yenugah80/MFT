@@ -330,6 +330,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   row: {
@@ -344,6 +345,7 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   rowSubtitle: {
@@ -385,6 +387,7 @@ const styles = StyleSheet.create({
   retryText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   dataRow: {

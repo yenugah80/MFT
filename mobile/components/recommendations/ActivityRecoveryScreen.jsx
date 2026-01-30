@@ -489,10 +489,12 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -511,18 +513,21 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.title1,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.lg,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
   },
   sectionSubtitle: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.secondary,
     marginBottom: SPACING.lg,
@@ -538,6 +543,7 @@ const styles = StyleSheet.create({
   },
   workoutType: {
     fontSize: TYPOGRAPHY.size.title2,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.activity.primary,
   },
@@ -560,6 +566,7 @@ const styles = StyleSheet.create({
   },
   workoutStatValue: {
     fontSize: TYPOGRAPHY.size.title2,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.activity.primary,
   },
@@ -573,6 +580,7 @@ const styles = StyleSheet.create({
   },
   recoveryMetricsTitle: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
@@ -582,6 +590,7 @@ const styles = StyleSheet.create({
   },
   metricGroupLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.sm,
@@ -612,11 +621,13 @@ const styles = StyleSheet.create({
   },
   nutritionLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
   nutritionTarget: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.activity.primary,
   },
@@ -646,6 +657,7 @@ const styles = StyleSheet.create({
   },
   avoidLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.mood.danger,
     marginBottom: SPACING.md,
@@ -667,6 +679,7 @@ const styles = StyleSheet.create({
   },
   timingTime: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.activity.primary,
     marginRight: SPACING.lg,
@@ -677,6 +690,7 @@ const styles = StyleSheet.create({
   },
   timingLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },
@@ -711,6 +725,7 @@ const styles = StyleSheet.create({
   },
   comparisonHeaderText: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -723,6 +738,7 @@ const styles = StyleSheet.create({
   },
   comparisonValue: {
     fontSize: TYPOGRAPHY.size.title2,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.activity.primary,
   },
@@ -761,6 +777,7 @@ const styles = StyleSheet.create({
   },
   patternDayText: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -770,6 +787,7 @@ const styles = StyleSheet.create({
   },
   patternActivityText: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: COLORS.text.primary,
   },
@@ -788,6 +806,7 @@ const styles = StyleSheet.create({
   },
   patternMetric: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.secondary,
   },
@@ -800,6 +819,7 @@ const styles = StyleSheet.create({
   },
   patternSummaryText: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
@@ -810,6 +830,7 @@ const styles = StyleSheet.create({
   patternStatItem: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.semantic.success,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   ctaSection: {
@@ -830,6 +851,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextPrimary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
   },
@@ -840,6 +862,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextSecondary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },

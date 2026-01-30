@@ -18,6 +18,7 @@
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.2",
     "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo-google-fonts/tenor-sans": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@lottiefiles/dotlottie-react": "^0.17.12",
     "@react-native-async-storage/async-storage": "2.2.0",

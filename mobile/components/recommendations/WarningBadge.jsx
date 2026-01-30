@@ -5,7 +5,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { SURFACES } from '../../constants/premiumTheme';
+import { SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,7 +61,7 @@ export default function WarningBadge({
       case 'small':
         return {
           container: styles.badgeSmall,
-          text: { fontSize: 11, fontWeight: '600' },
+          text: { fontSize: 11, fontFamily: TYPOGRAPHY.family.semibold },
           iconSize: 14,
           paddingHorizontal: 8,
           paddingVertical: 4,
@@ -69,7 +69,7 @@ export default function WarningBadge({
       case 'large':
         return {
           container: styles.badgeLarge,
-          text: { fontSize: 14, fontWeight: '600' },
+          text: { fontSize: 14, fontFamily: TYPOGRAPHY.family.semibold },
           iconSize: 18,
           paddingHorizontal: 12,
           paddingVertical: 8,
@@ -78,7 +78,7 @@ export default function WarningBadge({
       default:
         return {
           container: styles.badgeMedium,
-          text: { fontSize: 12, fontWeight: '600' },
+          text: { fontSize: 12, fontFamily: TYPOGRAPHY.family.semibold },
           iconSize: 16,
           paddingHorizontal: 10,
           paddingVertical: 6,
@@ -144,7 +144,7 @@ export function MultipleWarnings({ warnings = [], maxDisplay = 2 }) {
       ))}
       {remainingCount > 0 && (
         <View style={[styles.badgeSmall, styles.moreWarnings]}>
-          <Text style={{ fontSize: 11, fontWeight: '600', color: '#666' }}>
+          <Text style={{ fontSize: 11, fontFamily: TYPOGRAPHY.family.semibold, color: '#666' }}>
             +{remainingCount} more
           </Text>
         </View>
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   inlineBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 });

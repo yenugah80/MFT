@@ -565,6 +565,7 @@ const styles = StyleSheet.create({
   permissionTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   permissionSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -588,6 +589,7 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   section: {
@@ -596,6 +598,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -633,6 +636,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   cardSubtitle: {

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet, Text, Pressable } from 'react-native';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import { BRAND } from '../../constants/premiumTheme';
+import { BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export default function OnboardingIndex() {
   const { step, isLoading, resetOnboarding } = useOnboarding();
@@ -71,12 +71,13 @@ const styles = StyleSheet.create({
   },
   devTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1A1A2E',
     marginBottom: 8,
   },
   devSubtitle: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
     marginBottom: 32,
   },
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
   resumeButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   resetButton: {
     backgroundColor: '#F3F4F6',
@@ -105,6 +106,6 @@ const styles = StyleSheet.create({
   resetButtonText: {
     color: '#6B7280',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

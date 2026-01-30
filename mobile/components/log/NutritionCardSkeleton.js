@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity, Text } from 'react-native';
-import { SURFACES } from '../../constants/premiumTheme';
+import { SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export const NutritionCardSkeleton = ({ onCancel }) => {
   // Use a ref for the animated value to persist across renders
@@ -133,5 +133,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#EF4444',
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

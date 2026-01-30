@@ -54,7 +54,7 @@ import {
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient as ExpoGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { DAILY_VALUES } from '../../constants/dailyValues';
 // Import unified scoring function for consistency with MealSummaryScreen
 import { calculateMealScore as calculateUnifiedMealScore, getScoreLabel } from './MealSummary/MealScoreDial';
@@ -1355,12 +1355,14 @@ const styles = StyleSheet.create({
   donutCalories: {
     fontSize: 28,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -1,
   },
   donutCaloriesLabel: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     marginTop: -2,
   },
@@ -1383,6 +1385,7 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
 
@@ -1410,23 +1413,27 @@ const styles = StyleSheet.create({
   macroRingValue: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -0.5,
   },
   macroRingUnit: {
     fontSize: 9,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     marginTop: -2,
   },
   macroRingLabel: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 6,
   },
   macroRingPercent: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginTop: 2,
   },
 
@@ -1448,6 +1455,7 @@ const styles = StyleSheet.create({
   allergenTitle: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#DC2626',
   },
   allergenBadgesRow: {
@@ -1467,6 +1475,7 @@ const styles = StyleSheet.create({
   allergenBadgeText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Gauge Chart
@@ -1481,11 +1490,13 @@ const styles = StyleSheet.create({
   gaugeScore: {
     fontSize: 32,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -1,
   },
   gaugeLabel: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: -2,
   },
@@ -1497,6 +1508,7 @@ const styles = StyleSheet.create({
   },
   nutriScoreLabel: {
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     letterSpacing: 1,
     marginBottom: 4,
@@ -1547,21 +1559,25 @@ const styles = StyleSheet.create({
   statPillValue: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statPillUnit: {
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   statPillLabel: {
     fontSize: 10,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   statPillWarningBadge: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
     width: 16,
     textAlign: 'center',
@@ -1580,6 +1596,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1587,6 +1604,7 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   barChartContainer: {
@@ -1606,6 +1624,7 @@ const styles = StyleSheet.create({
   barLabel: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     flex: 1,
     textTransform: 'capitalize',
@@ -1624,6 +1643,7 @@ const styles = StyleSheet.create({
   barValue: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     width: 35,
     textAlign: 'right',
@@ -1684,6 +1704,7 @@ const styles = StyleSheet.create({
   foodItemIndexText: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   foodItemInfo: {
@@ -1692,6 +1713,7 @@ const styles = StyleSheet.create({
   foodItemName: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   foodItemMacros: {
@@ -1705,6 +1727,7 @@ const styles = StyleSheet.create({
   foodItemCaloriesValue: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   foodItemCaloriesUnit: {
@@ -1755,6 +1778,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   primaryButton: {
@@ -1775,6 +1799,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 
@@ -1788,6 +1813,7 @@ const styles = StyleSheet.create({
   ingredientsTitle: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: 4,
   },
@@ -1817,6 +1843,7 @@ const styles = StyleSheet.create({
   ingredientName: {
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   ingredientNameExcluded: {
@@ -1831,6 +1858,7 @@ const styles = StyleSheet.create({
   ingredientCalories: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   ingredientCaloriesExcluded: {
@@ -1883,5 +1911,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#EF4444',
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

@@ -240,6 +240,34 @@ export default function SleepAnalyticsScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Deep Analytics CTA */}
+        <TouchableOpacity
+          style={styles.deepAnalyticsCta}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/insights/sleep-deep');
+          }}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[VIBRANT_WELLNESS.sleep.solid, `${VIBRANT_WELLNESS.sleep.solid}CC`]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.deepAnalyticsGradient}
+          >
+            <View style={styles.deepAnalyticsContent}>
+              <View style={styles.deepAnalyticsIcon}>
+                <Ionicons name="analytics" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
+              </View>
+              <View style={styles.deepAnalyticsText}>
+                <Text style={styles.deepAnalyticsTitle}>Deep Analytics</Text>
+                <Text style={styles.deepAnalyticsSub}>Enhanced visualizations & detailed breakdowns</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -269,6 +297,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   headerSubtitle: {
@@ -292,6 +321,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
   },
@@ -313,6 +343,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statLabel: {
@@ -341,6 +372,7 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   statusDescription: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -374,6 +406,7 @@ const styles = StyleSheet.create({
   impactLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   impactValue: {
@@ -407,6 +440,7 @@ const styles = StyleSheet.create({
   logDuration: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   qualityBadge: {
@@ -420,6 +454,7 @@ const styles = StyleSheet.create({
   qualityText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Tips
@@ -437,5 +472,42 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     lineHeight: 20,
+  },
+
+  // Deep Analytics CTA
+  deepAnalyticsCta: {
+    marginBottom: SPACING[4],
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+  },
+  deepAnalyticsGradient: {
+    padding: SPACING[4],
+  },
+  deepAnalyticsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  deepAnalyticsIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deepAnalyticsText: {
+    flex: 1,
+  },
+  deepAnalyticsTitle: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#FFF',
+  },
+  deepAnalyticsSub: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
 });

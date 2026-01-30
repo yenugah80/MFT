@@ -19,7 +19,7 @@ import ActivitySummaryCard from './ActivitySummaryCard';
 import SleepSummaryCard from './SleepSummaryCard';
 import StressSummaryCard from './StressSummaryCard';
 import EnhancedMoodCard from './EnhancedMoodCard';
-import { TEXT, SPACING, RADIUS, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SPACING, RADIUS, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export default function DashboardWellnessSection({
   styles,
@@ -114,7 +114,7 @@ const localStyles = StyleSheet.create({
   insightsText: {
     flex: 1,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
 });

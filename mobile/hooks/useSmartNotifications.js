@@ -16,15 +16,10 @@ import { AppState } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNotification } from '../providers/NotificationProvider';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
+import { RATE_LIMITS } from '../constants/notificationTypes';
 
-// Minimum intervals between checks (in ms)
-const CHECK_INTERVALS = {
-  hydration: 2 * 60 * 60 * 1000,  // 2 hours
-  meal: 3 * 60 * 60 * 1000,       // 3 hours
-  activity: 4 * 60 * 60 * 1000,   // 4 hours
-  mood: 8 * 60 * 60 * 1000,       // 8 hours
-  reengagement: 24 * 60 * 60 * 1000, // 24 hours
-};
+// Use unified rate limits from constants (aliased for clarity)
+const CHECK_INTERVALS = RATE_LIMITS;
 
 export function useSmartNotifications() {
   const { isSignedIn } = useAuth();
@@ -70,6 +65,26 @@ export function useSmartNotifications() {
   }, [isSignedIn, notify]);
 
   /**
+   * Try to trigger an onboarding nudge for new users
+   */
+  const tryOnboardingNudge = useCallback(async () => {
+    if (!isSignedIn || !notify) return null;
+
+    try {
+      const nudge = await SmartNotificationEngine.generateOnboardingNudge();
+      if (nudge) {
+        notify.info(nudge.body, { title: nudge.title });
+        await SmartNotificationEngine.recordNotificationSent('onboarding');
+        console.log('[SmartNotifications] Onboarding nudge triggered');
+        return nudge;
+      }
+    } catch (error) {
+      console.warn('[SmartNotifications] Onboarding nudge error:', error?.message);
+    }
+    return null;
+  }, [isSignedIn, notify]);
+
+  /**
    * Run contextual checks based on current time and app state
    * Called when app becomes active or on periodic intervals
    */
@@ -78,6 +93,14 @@ export function useSmartNotifications() {
 
     const hour = new Date().getHours();
     const results = [];
+
+    // Try onboarding nudge first (for new users)
+    // This returns null for users with 7+ days active
+    const onboardingResult = await tryOnboardingNudge();
+    if (onboardingResult) {
+      // If we showed an onboarding nudge, don't overwhelm with more notifications
+      return [onboardingResult];
+    }
 
     // Morning checks (8-11am)
     if (hour >= 8 && hour < 11) {
@@ -121,7 +144,7 @@ export function useSmartNotifications() {
 
     // Filter out null results
     return results.filter(Boolean);
-  }, [isSignedIn, canCheck, tryTrigger]);
+  }, [isSignedIn, canCheck, tryTrigger, tryOnboardingNudge]);
 
   /**
    * Trigger celebration for specific achievements
@@ -215,12 +238,19 @@ export function useSmartNotifications() {
     triggerActivity: () => tryTrigger('activity'),
     triggerMood: () => tryTrigger('mood'),
     triggerReengagement: () => tryTrigger('reengagement'),
+    triggerOnboarding: tryOnboardingNudge,
 
     // Celebration triggers (for goal achievements)
     celebrateHydrationGoal: (streak) => celebrate('hydration_goal', { streak }),
     celebrateStreakMilestone: (days) => celebrate('streak_milestone', { days }),
     celebrateStepGoal: (steps) => celebrate('step_goal', { steps }),
     celebrateFirstLog: () => celebrate('first_log'),
+    celebrateFirstWater: () => celebrate('first_water'),
+    celebrateMealMilestone: (mealCount) => celebrate('meal_milestone', { mealCount }),
+    celebrateMoodStreak: (days) => celebrate('mood_streak', { days }),
+    celebrateCalorieGoal: (underOrOver) => celebrate('calorie_goal', { underOrOver }),
+    celebrateMacroBalance: () => celebrate('macro_balance'),
+    celebrateActivityGoal: (activeMinutes) => celebrate('activity_goal', { activeMinutes }),
 
     // Run all contextual checks
     runChecks: runContextualChecks,

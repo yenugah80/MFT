@@ -3,7 +3,7 @@
  * Individual food item with editable quantity for multi-item breakdowns
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,9 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { getProcessingLabel, getProcessingHealthMessage } from '../../utils/processingLabels';
+import EnhancedIngredientEditor from './EnhancedIngredientEditor';
 
 /**
  * Unit picker options
@@ -30,16 +31,47 @@ const KEY_MICRONUTRIENTS = ['calcium', 'iron', 'magnesium', 'potassium', 'sodium
 
 /**
  * FoodItemCard Component
+ *
+ * Enhanced with:
+ * - Swipe-to-delete ingredients (via EnhancedIngredientEditor)
+ * - Add ingredient modal
+ * - Real-time nutrition recalculation
  */
-export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredient }) {
+export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredient, onIngredientChange }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [editingQuantity, setEditingQuantity] = useState(false);
   const [amount, setAmount] = useState(item.portion?.amount?.toString() || '1');
   const [unit, setUnit] = useState(item.portion?.unit || 'g');
   const [unitPickerVisible, setUnitPickerVisible] = useState(false);
   const [showCollapsedItems, setShowCollapsedItems] = useState(false);
+  const [ingredientNutrition, setIngredientNutrition] = useState(null);
+
+  // Handle ingredient nutrition changes from EnhancedIngredientEditor
+  const handleIngredientNutritionChange = useCallback((updatedNutrition) => {
+    setIngredientNutrition(updatedNutrition);
+    // Notify parent component if callback provided
+    if (onIngredientChange && updatedNutrition.isModified) {
+      onIngredientChange(item.itemId, updatedNutrition);
+    }
+  }, [item?.itemId, onIngredientChange]);
 
   if (!item) return null;
+
+  // Determine which nutrition values to display (modified or original)
+  const displayMacros = ingredientNutrition?.isModified
+    ? {
+        calories_kcal: ingredientNutrition.calories,
+        protein_g: ingredientNutrition.protein,
+        carbs_g: ingredientNutrition.carbs,
+        fat_g: ingredientNutrition.fat,
+        fiber_g: ingredientNutrition.fiber || item.macros?.fiber_g,
+        sugar_g: item.macros?.sugar_g,
+        sodium_mg: item.macros?.sodium_mg,
+      }
+    : item.macros;
+
+  // Check if we have the new editable ingredients data structure
+  const hasEditableIngredients = item.editableIngredients?.ingredients?.length > 0;
 
   const handleApplyQuantity = () => {
     const numAmount = parseFloat(amount) || 1;
@@ -235,19 +267,40 @@ export function FoodItemCard({ item, onUpdateQuantity, onRemove, onRemoveIngredi
 
       {/* Quick Macros Summary */}
       <View style={styles.macrosRow}>
-        <View style={styles.caloriesBadge}>
-          <Text style={styles.caloriesText}>{Math.round(item.macros?.calories_kcal || 0)}</Text>
+        <View style={[styles.caloriesBadge, ingredientNutrition?.isModified && styles.caloriesBadgeModified]}>
+          <Text style={styles.caloriesText}>{Math.round(displayMacros?.calories_kcal || 0)}</Text>
           <Text style={styles.caloriesLabel}>cal</Text>
+          {ingredientNutrition?.isModified && (
+            <View style={styles.modifiedIndicator}>
+              <Ionicons name="pencil" size={10} color={BRAND.primary} />
+            </View>
+          )}
         </View>
         <View style={styles.macrosGrid}>
-          <Text style={styles.macroText}>P: {Math.round(item.macros?.protein_g || 0)}g</Text>
-          <Text style={styles.macroText}>C: {Math.round(item.macros?.carbs_g || 0)}g</Text>
-          <Text style={styles.macroText}>F: {Math.round(item.macros?.fat_g || 0)}g</Text>
+          <Text style={styles.macroText}>P: {Math.round(displayMacros?.protein_g || 0)}g</Text>
+          <Text style={styles.macroText}>C: {Math.round(displayMacros?.carbs_g || 0)}g</Text>
+          <Text style={styles.macroText}>F: {Math.round(displayMacros?.fat_g || 0)}g</Text>
         </View>
       </View>
 
-      {/* Component/Ingredients Breakdown - Show if components OR ingredients exist */}
-      {((item.isComplex && item.components && item.components.length > 0) ||
+      {/* Enhanced Ingredient Editor - New production-grade UI */}
+      {hasEditableIngredients && (
+        <EnhancedIngredientEditor
+          editableIngredients={item.editableIngredients}
+          originalNutrition={{
+            calories: item.macros?.calories_kcal || 0,
+            protein: item.macros?.protein_g || 0,
+            carbs: item.macros?.carbs_g || 0,
+            fat: item.macros?.fat_g || 0,
+          }}
+          onNutritionChange={handleIngredientNutritionChange}
+          isEditable={true}
+          foodName={item.display_name || item.name}
+        />
+      )}
+
+      {/* Component/Ingredients Breakdown - Show only if NOT using new editable ingredients */}
+      {!hasEditableIngredients && ((item.isComplex && item.components && item.components.length > 0) ||
         (item.ingredients && item.ingredients.length > 0)) && (
         <View style={styles.componentsSection}>
           <Text style={styles.componentsSectionTitle}>
@@ -508,7 +561,7 @@ const styles = StyleSheet.create({
   },
   foodName: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
     marginRight: 8,
@@ -540,6 +593,7 @@ const styles = StyleSheet.create({
   },
   portionText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -557,6 +611,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
   },
   unitButton: {
@@ -573,10 +628,11 @@ const styles = StyleSheet.create({
   unitButtonText: {
     fontSize: 16,
     color: TEXT.primary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   unitButtonArrow: {
     fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   applyButton: {
@@ -590,7 +646,7 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: 18,
     color: TEXT.white,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   cancelButton: {
     backgroundColor: SEMANTIC_ACTIONS.danger,
@@ -603,7 +659,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 18,
     color: TEXT.white,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   unitPicker: {
     flexDirection: 'row',
@@ -629,11 +685,12 @@ const styles = StyleSheet.create({
   },
   unitOptionText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   unitOptionTextSelected: {
     color: TEXT.white,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   macrosRow: {
     flexDirection: 'row',
@@ -647,14 +704,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    position: 'relative',
+  },
+  caloriesBadgeModified: {
+    borderWidth: 2,
+    borderColor: BRAND.primary,
+    borderStyle: 'dashed',
+  },
+  modifiedIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: BRAND.primary + '20',
+    borderRadius: 8,
+    padding: 2,
   },
   caloriesText: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   caloriesLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   macrosGrid: {
@@ -665,7 +737,7 @@ const styles = StyleSheet.create({
   macroText: {
     fontSize: 14,
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -689,6 +761,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   novaBadge: {
@@ -702,10 +775,11 @@ const styles = StyleSheet.create({
   },
   novaEmoji: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   novaText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   novaDetailCard: {
     padding: 12,
@@ -719,17 +793,19 @@ const styles = StyleSheet.create({
   },
   novaDetailEmoji: {
     fontSize: 28,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   novaDetailInfo: {
     flex: 1,
   },
   novaDetailLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: 2,
   },
   novaDetailDescription: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   novaHealthTip: {
@@ -738,7 +814,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.1)',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   expandButton: {
     paddingVertical: 8,
@@ -747,7 +823,7 @@ const styles = StyleSheet.create({
   expandButtonText: {
     fontSize: 14,
     color: BRAND.primary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   details: {
     marginTop: 8,
@@ -765,12 +841,13 @@ const styles = StyleSheet.create({
   },
   detailSectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 8,
   },
   detailSectionNote: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginBottom: 8,
   },
@@ -784,12 +861,13 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   detailValue: {
     fontSize: 14,
     color: TEXT.primary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   warning: {
     flexDirection: 'row',
@@ -802,10 +880,12 @@ const styles = StyleSheet.create({
   },
   warningIcon: {
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   warningText: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.warning.text,
   },
   infoNote: {
@@ -819,11 +899,13 @@ const styles = StyleSheet.create({
   },
   infoNoteIcon: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     marginTop: 1,
   },
   infoNoteText: {
     flex: 1,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.text,
     lineHeight: 16,
   },
@@ -836,6 +918,7 @@ const styles = StyleSheet.create({
   },
   componentsNoteText: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.warning.text,
     textAlign: 'center',
   },
@@ -856,12 +939,13 @@ const styles = StyleSheet.create({
   },
   componentName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 2,
   },
   componentPortion: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   componentMacros: {
@@ -869,12 +953,13 @@ const styles = StyleSheet.create({
   },
   componentCalories: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     marginBottom: 2,
   },
   componentMacroText: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   // Compact component display (always visible)
@@ -889,7 +974,7 @@ const styles = StyleSheet.create({
   },
   componentsSectionTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 8,
   },
@@ -901,16 +986,18 @@ const styles = StyleSheet.create({
   },
   componentNameCompact: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     flex: 1,
   },
   componentCaloriesCompact: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: SEMANTIC_ACTIONS.success,
   },
   showMoreComponents: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     fontStyle: 'italic',
     marginTop: 4,
@@ -940,7 +1027,7 @@ const styles = StyleSheet.create({
   },
   portionSourceText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   estimatedText: {
     color: SEMANTIC.warning.text,
@@ -965,11 +1052,13 @@ const styles = StyleSheet.create({
   },
   complexRecipeIcon: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     marginTop: 1,
   },
   complexRecipeText: {
     flex: 1,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.dark,
     lineHeight: 16,
   },
@@ -991,11 +1080,12 @@ const styles = StyleSheet.create({
   },
   collapsedGroupToggle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   collapsedGroupTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   collapsedItemsList: {
@@ -1010,12 +1100,13 @@ const styles = StyleSheet.create({
   },
   collapsedItemName: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     marginBottom: 2,
   },
   collapsedItemDetail: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   // Ingredient delete button styles - Premium UX

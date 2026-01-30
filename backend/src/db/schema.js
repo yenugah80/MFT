@@ -136,6 +136,8 @@ export const gamificationTable = pgTable(
     lastLogDate: timestamp("last_log_date"),
     lastXpAwardedAt: timestamp("last_xp_awarded_at"),
     badges: json("badges").default([]), // Array of unlocked achievement badges
+    // Snapchat-style streak management
+    streakSavedByFreeze: boolean("streak_saved_by_freeze").default(false), // True if freeze was auto-used overnight
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },

@@ -7,6 +7,7 @@ import {
   RecordingPresets,
 } from 'expo-audio';
 import apiClient from '../services/apiClient';
+import { getSpeechLocale } from '../constants/languages';
 
 // Stub Voice module for Expo Go compatibility
 // Voice recognition requires a development build
@@ -22,6 +23,9 @@ const TRANSCRIPTION_CACHE_KEY = 'voice_transcription_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 export const useServerVoice = (options = {}) => {
+  const { voiceLanguage = 'en' } = options;
+  const speechLocale = getSpeechLocale(voiceLanguage);
+
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -165,13 +169,18 @@ export const useServerVoice = (options = {}) => {
           await audioRecorder.prepareToRecordAsync();
           audioRecorder.record();
           console.log('[useServerVoice] Audio file recording started');
+        } else if (!permission.canAskAgain) {
+          // User permanently denied - show helpful message
+          console.warn('[useServerVoice] Microphone permission permanently denied');
+          // Continue without audio playback, but voice recognition may still work
         }
       } catch (audioErr) {
         // Audio file recording is optional - continue with voice recognition
         console.warn('[useServerVoice] Audio file recording failed to start:', audioErr);
       }
 
-      await Voice.start('en-US');
+      await Voice.start(speechLocale);
+      console.log(`[useServerVoice] Started voice recognition with locale: ${speechLocale}`);
     } catch (err) {
       console.error(err);
       setError('Failed to start recording');
@@ -183,7 +192,7 @@ export const useServerVoice = (options = {}) => {
         try { await audioRecorder.stop(); } catch {}
       }
     }
-  }, [audioRecorder]);
+  }, [audioRecorder, speechLocale]);
 
   /**
    * stopRecording - Step 1 of two-step flow
@@ -229,12 +238,27 @@ export const useServerVoice = (options = {}) => {
 
     // Return transcript with confidence for VoiceModal to display
     const finalTranscript = transcript || '';
-    const confidence = finalTranscript.length > 10 ? 0.9 : 0.7; // Simple heuristic
+
+    // Handle empty transcript case
+    if (!finalTranscript.trim()) {
+      setError('No speech detected. Please try again.');
+      return {
+        transcript: '',
+        confidence: 0,
+        recordingUri: capturedUri,
+        isEmpty: true,
+      };
+    }
+
+    // Calculate confidence based on transcript quality
+    const wordCount = finalTranscript.trim().split(/\s+/).length;
+    const confidence = wordCount > 3 ? 0.9 : wordCount > 1 ? 0.75 : 0.6;
 
     return {
       transcript: finalTranscript,
       confidence,
-      recordingUri: capturedUri, // Include URI for playback
+      recordingUri: capturedUri,
+      isEmpty: false,
     };
   }, [transcript, audioRecorder]);
 
@@ -261,6 +285,7 @@ export const useServerVoice = (options = {}) => {
         text: text.trim(),
         isPartial: false,
         mealType: options.mealType,
+        language: voiceLanguage, // Pass language for multi-language nutrition analysis
       };
 
       const response = await apiClient.post('/voice/process', payload);
@@ -305,7 +330,7 @@ export const useServerVoice = (options = {}) => {
       isActiveRef.current = false;
       setIsProcessing(false);
     }
-  }, [options.mealType]);
+  }, [options.mealType, voiceLanguage]);
 
   /**
    * clearError - Clears the error state
@@ -373,15 +398,25 @@ export const useServerVoice = (options = {}) => {
       }
 
       // OPTIMIZATION 2: Check for pending identical request (deduplication)
-      // BEFORE creating our own promise
-      if (pendingRequestsRef.current.has(cacheKey)) {
+      // Use single .get() call for atomic check-and-retrieve (cleaner than has+get)
+      const existingRequest = pendingRequestsRef.current.get(cacheKey);
+      if (existingRequest) {
         console.log('[VoiceLog] Duplicate request detected - waiting for existing request');
         setProcessingState({ step: 1, label: 'Waiting for duplicate request...' });
-        const result = await pendingRequestsRef.current.get(cacheKey);
-        if (isActiveRef.current) {
-          return result;
+        try {
+          const result = await existingRequest;
+          if (isActiveRef.current) {
+            return result;
+          }
+          return null;
+        } catch (pendingErr) {
+          // The original request failed - let this duplicate also fail gracefully
+          console.warn('[VoiceLog] Original request failed, duplicate also failing:', pendingErr.message);
+          if (isActiveRef.current) {
+            setError(pendingErr.response?.data?.error || 'Failed to process audio');
+          }
+          return null;
         }
-        return null;
       }
 
       // Create a promise for THIS request that other duplicates can wait on
@@ -406,7 +441,8 @@ export const useServerVoice = (options = {}) => {
           const payload = {
             text: textToProcess,
             isPartial: false,
-            mealType: options.mealType
+            mealType: options.mealType,
+            language: voiceLanguage, // Pass language for multi-language nutrition analysis
           };
 
           const response = await apiClient.post('/voice/process', payload);
@@ -478,7 +514,7 @@ export const useServerVoice = (options = {}) => {
       pendingRequestsRef.current.delete(cacheKey); // Remove from pending queue
       setIsProcessing(false);
     }
-  }, [transcript, options.mealType]);
+  }, [transcript, options.mealType, voiceLanguage]);
 
   const cancelRecording = useCallback(async () => {
     // 1. Kill liveness to prevent any pending uploads from updating state

@@ -30,6 +30,7 @@ import {
   Dimensions,
   TextInput,
   Platform,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,6 +39,7 @@ import * as Speech from 'expo-speech';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { useAudioPlayback } from '../../hooks/useAudioPlayback';
+import { getTTSCode } from '../../constants/languages';
 import {
   trackVoiceRecordingStarted,
   trackVoiceRecordingCompleted,
@@ -49,6 +51,7 @@ import {
   trackVoiceAnalysisFailed,
   trackVoicePlaybackStarted,
   trackVoiceRerecord,
+  trackVoiceSessionAbandoned,
   clearVoiceSession,
 } from '../../services/voiceAnalytics';
 
@@ -65,12 +68,13 @@ const MAX_RECORDING_DURATION_MS = 60000; // 60 seconds
 // AUDIO GUIDANCE (Elderly Mode)
 // ============================================================================
 
-async function speakInstruction(text, enabled) {
+async function speakInstruction(text, enabled, voiceLanguage = 'en') {
   if (!enabled) return;
   try {
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      const ttsLanguage = getTTSCode(voiceLanguage);
       await Speech.speak(text, {
-        language: 'en',
+        language: ttsLanguage,
         pitch: 1.0,
         rate: 0.9, // Slower for elderly
       });
@@ -188,6 +192,18 @@ async function triggerHaptic(type = 'light') {
   }
 }
 
+/**
+ * Announce state changes for screen readers
+ * Helps visually impaired users understand the current state
+ */
+function announceForAccessibility(message) {
+  try {
+    AccessibilityInfo.announceForAccessibility(message);
+  } catch {
+    // Accessibility announcement not available
+  }
+}
+
 // ============================================================================
 // MAIN VOICEMODAL COMPONENT
 // ============================================================================
@@ -198,6 +214,7 @@ export function VoiceModal({
   onComplete,
   voiceHook,
   accessibilityMode = 'standard', // 'standard' | 'elderly'
+  voiceLanguage = 'en', // Language for TTS guidance
 }) {
   const isElderly = accessibilityMode === 'elderly';
 
@@ -242,15 +259,15 @@ export function VoiceModal({
   // ─────────────────────────────────────────────
   useEffect(() => {
     if (isElderly && state === 'idle' && visible) {
-      speakInstruction('Tap the big microphone button to start speaking', true);
+      speakInstruction('Tap the big microphone button to start speaking', true, voiceLanguage);
     }
-  }, [state, visible, isElderly]);
+  }, [state, visible, isElderly, voiceLanguage]);
 
   useEffect(() => {
     if (isElderly && state === 'listening') {
-      speakInstruction('I am listening', true);
+      speakInstruction('I am listening', true, voiceLanguage);
     }
-  }, [state, isElderly]);
+  }, [state, isElderly, voiceLanguage]);
 
   // ─────────────────────────────────────────────
   // Handlers
@@ -259,12 +276,21 @@ export function VoiceModal({
   const handleClose = useCallback(() => {
     isCancelledRef.current = true;
 
-    // Cleanup audio playback
+    // Cleanup audio playback - pause FIRST before reset to ensure clean cleanup
+    if (audioPlayback.isPlaying) {
+      audioPlayback.pause();
+    }
     audioPlayback.reset();
     clearRecordingUri();
 
-    // Clear voice analytics session (without tracking - it's a cleanup)
-    clearVoiceSession();
+    // Track abandoned sessions (user closed without completing)
+    // Only track if they were in the middle of the flow (not idle or success)
+    if (state === 'listening' || state === 'processing' || state === 'transcribed' || state === 'analyzing') {
+      trackVoiceSessionAbandoned(state);
+    } else {
+      // Clear session without tracking (for idle/success/error states)
+      clearVoiceSession();
+    }
 
     clearError();
     setLocalError(null);
@@ -280,7 +306,7 @@ export function VoiceModal({
       clearTimeout(successTimeoutRef.current);
     }
     onClose();
-  }, [clearError, onClose, audioPlayback, clearRecordingUri]);
+  }, [clearError, onClose, audioPlayback, clearRecordingUri, state]);
 
   const handleStart = useCallback(async () => {
     isCancelledRef.current = false;
@@ -292,6 +318,7 @@ export function VoiceModal({
 
     clearError();
     await triggerHaptic(isElderly ? 'heavy' : 'light');
+    announceForAccessibility('Recording started. Speak your meal now.');
     await startRecording();
   }, [clearError, startRecording, isElderly]);
 
@@ -311,6 +338,20 @@ export function VoiceModal({
       trackVoiceRecordingCompleted(duration);
 
       if (isCancelledRef.current) {
+        return;
+      }
+
+      // Handle empty transcript (no speech detected)
+      if (result.isEmpty) {
+        trackVoiceAnalysisFailed('empty_transcript', 'No speech detected');
+        setLocalError('No speech detected. Please try again and speak clearly.');
+        setState('error');
+        await triggerHaptic('error');
+        announceForAccessibility('No speech detected. Please try again and speak clearly.');
+        if (isElderly) {
+          await speakInstruction('I could not hear you. Please try again and speak clearly.', true, voiceLanguage);
+        }
+        stopCalledRef.current = false;
         return;
       }
 
@@ -341,10 +382,12 @@ export function VoiceModal({
           trackVoiceAnalysisFailed('api_error', error || 'Unknown error');
 
           // Use error from hook if available, otherwise generic message
-          setLocalError(error || 'Failed to analyze nutrition. Please try again.');
+          const errorMsg = error || 'Failed to analyze nutrition. Please try again.';
+          setLocalError(errorMsg);
           setState('error');
           await triggerHaptic('error');
-          await speakInstruction('Sorry, something went wrong. Please try again.', true);
+          announceForAccessibility(`Error: ${errorMsg}`);
+          await speakInstruction('Sorry, something went wrong. Please try again.', true, voiceLanguage);
           stopCalledRef.current = false;
           return;
         }
@@ -356,7 +399,7 @@ export function VoiceModal({
 
         setState('success');
         await triggerHaptic('success');
-        await speakInstruction('Food logged successfully', true);
+        await speakInstruction('Food logged successfully', true, voiceLanguage);
 
         successTimeoutRef.current = setTimeout(() => {
           if (!isCancelledRef.current) {
@@ -371,21 +414,29 @@ export function VoiceModal({
 
         // Load audio for playback if available
         if (result.recordingUri) {
-          await audioPlayback.loadAudio(result.recordingUri);
+          try {
+            await audioPlayback.loadAudio(result.recordingUri);
+          } catch (audioErr) {
+            // Audio loading failed - continue without playback (non-critical)
+            console.warn('[VoiceModal] Failed to load audio for playback:', audioErr);
+          }
         }
 
+        announceForAccessibility(`Transcription ready: ${transcript}. Review and confirm to analyze.`);
         setState('transcribed');
       }
     } catch (err) {
       console.error('[VoiceModal] Stop failed:', err);
       if (!isCancelledRef.current) {
-        setLocalError(err.message || 'Failed to process recording');
+        const errorMsg = err.message || 'Failed to process recording';
+        setLocalError(errorMsg);
         setState('error');
         await triggerHaptic('error');
+        announceForAccessibility(`Error: ${errorMsg}. Tap Try Again to retry.`);
       }
       stopCalledRef.current = false;
     }
-  }, [stopRecording, analyzeTranscript, onComplete, handleClose, isElderly, error, audioPlayback]);
+  }, [stopRecording, analyzeTranscript, onComplete, handleClose, isElderly, error, audioPlayback, duration, voiceLanguage]);
 
   const handleCancel = useCallback(async () => {
     // Track recording cancelled
@@ -411,6 +462,7 @@ export function VoiceModal({
       setLocalError(null);
       setState('analyzing');
       await triggerHaptic();
+      announceForAccessibility('Analyzing nutrition. Please wait.');
 
       // Track analysis started
       trackVoiceAnalysisStarted();
@@ -441,6 +493,7 @@ export function VoiceModal({
 
       setState('success');
       await triggerHaptic('success');
+      announceForAccessibility('Success! Food logged successfully.');
 
       successTimeoutRef.current = setTimeout(() => {
         if (!isCancelledRef.current) {
@@ -454,8 +507,10 @@ export function VoiceModal({
       trackVoiceAnalysisFailed('exception', err.message);
 
       if (!isCancelledRef.current) {
-        setLocalError(err.message || 'Failed to analyze nutrition');
+        const errorMsg = err.message || 'Failed to analyze nutrition';
+        setLocalError(errorMsg);
         setState('error');
+        announceForAccessibility(`Error: ${errorMsg}. Tap Try Again to retry.`);
       }
       setIsSubmitting(false);
     }
@@ -1026,6 +1081,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
     textAlign: 'center',
@@ -1087,6 +1143,7 @@ const styles = StyleSheet.create({
   instructionElderly: {
     fontSize: 24,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textAlign: 'center',
     marginBottom: SPACING[8],
@@ -1188,11 +1245,13 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   recordingTextElderly: {
     fontSize: 24,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.danger.base,
   },
   waveformContainer: {
@@ -1224,6 +1283,7 @@ const styles = StyleSheet.create({
   durationText: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[6],
   },
@@ -1236,6 +1296,7 @@ const styles = StyleSheet.create({
   warningText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: SEMANTIC.danger.base,
     marginBottom: SPACING[4],
   },
@@ -1295,6 +1356,7 @@ const styles = StyleSheet.create({
   cancelRecButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   stopButton: {
@@ -1336,6 +1398,7 @@ const styles = StyleSheet.create({
   buttonTextElderly: {
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 
@@ -1369,6 +1432,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   // Playback controls
   playbackContainer: {
@@ -1422,6 +1486,7 @@ const styles = StyleSheet.create({
   reRecordButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   transcriptionContainer: {
@@ -1468,6 +1533,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   primaryButton: {
@@ -1487,6 +1553,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 
@@ -1553,6 +1620,7 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 });

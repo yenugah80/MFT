@@ -398,6 +398,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   // Goal Cards
@@ -440,6 +441,7 @@ const styles = StyleSheet.create({
   goalLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -466,6 +468,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   calorieDisplay: {
@@ -476,11 +479,13 @@ const styles = StyleSheet.create({
   calorieValue: {
     fontSize: TYPOGRAPHY.size['3xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.warning.base,
   },
   calorieUnit: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
   },
   // Macros
@@ -511,6 +516,7 @@ const styles = StyleSheet.create({
   macroLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   macroInputWrapper: {
@@ -521,6 +527,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     padding: 0,
   },
@@ -532,10 +539,12 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   macroUnit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
   },
   // Water
@@ -557,6 +566,7 @@ const styles = StyleSheet.create({
   waterLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   waterInputWrapper: {
@@ -573,11 +583,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   waterUnit: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
   },
   waterDisplay: {
@@ -597,6 +609,7 @@ const styles = StyleSheet.create({
   waterValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.info.base,
   },
 });

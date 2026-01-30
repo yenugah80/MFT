@@ -187,10 +187,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   subtitle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   chartContainer: {
     marginBottom: 16,
@@ -214,11 +215,11 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   statValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   errorContainer: {
     borderRadius: 16,
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     textAlign: 'center',
   },
   emptyContainer: {
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
     fontStyle: 'italic',
   },

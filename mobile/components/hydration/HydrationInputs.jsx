@@ -85,6 +85,7 @@ export function BeverageChip({ bevKey, bev, selected, onSelect, styles }) {
               selected && {
                 color: bev.color,
                 fontWeight: TYPOGRAPHY.weight.bold,
+                fontFamily: TYPOGRAPHY.family.bold,
               },
             ]}
           >

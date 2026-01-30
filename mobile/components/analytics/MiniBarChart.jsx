@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { TEXT, BRAND, SURFACES, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * MiniBarChart - Compact horizontal bar chart
@@ -94,6 +94,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     marginTop: 20,
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
   barLabel: {
     fontSize: 12,
     color: TEXT.secondary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     width: 60,
   },
   barContainer: {
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   barValue: {
     fontSize: 12,
     color: TEXT.primary,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     width: 50,
     textAlign: 'right',
   },

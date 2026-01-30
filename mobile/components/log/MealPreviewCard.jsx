@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export default function MealPreviewCard({
   analysisResult,
@@ -268,6 +268,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   infoSection: {
@@ -277,6 +278,7 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 8,
     lineHeight: 22,
@@ -293,6 +295,7 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   macroLabel: {
@@ -341,6 +344,7 @@ const styles = StyleSheet.create({
   detailsButtonText: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     marginRight: 4,
   },
@@ -374,6 +378,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   itemsPreview: {
@@ -403,6 +408,7 @@ const styles = StyleSheet.create({
   itemPreviewCal: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   moreItemsText: {

@@ -61,12 +61,14 @@ const styles = StyleSheet.create({
   value: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[0.5],
   },
   label: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -84,5 +86,6 @@ const styles = StyleSheet.create({
   trend: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

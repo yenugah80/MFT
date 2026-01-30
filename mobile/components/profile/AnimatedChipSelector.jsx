@@ -251,6 +251,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 });

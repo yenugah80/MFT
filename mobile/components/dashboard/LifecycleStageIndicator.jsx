@@ -327,6 +327,7 @@ const styles = StyleSheet.create({
   levelNumber: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   infoSection: {
@@ -341,6 +342,7 @@ const styles = StyleSheet.create({
   stageName: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   levelPill: {
@@ -351,6 +353,7 @@ const styles = StyleSheet.create({
   levelPillText: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   tagline: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -371,6 +374,7 @@ const styles = StyleSheet.create({
   },
   progressHighlight: {
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   miniProgress: {
@@ -392,6 +396,7 @@ const styles = StyleSheet.create({
   eliteText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   miniStages: {
     flexDirection: 'row',

@@ -1185,10 +1185,13 @@ router.get("/dashboard", async (req, res) => {
       nextLevelXp: levelInfo.nextLevelXp,
       currentLevelXp: levelInfo.currentLevelXP,
       progressPercent: levelInfo.progressPercent,
-      // Streak restoration info
+      // Streak restoration info (Snapchat-style)
       canRestoreStreak,
       previousStreak,
       streakResetAt,
+      // New fields for streak popups
+      streakSavedByFreeze: gamificationRow?.streakSavedByFreeze || gamificationRow?.streak_saved_by_freeze || false,
+      lastLogDate: gamificationRow?.lastLogDate || gamificationRow?.last_log_date || null,
     };
 
     // Aggregate yesterday's micronutrients for fallback
@@ -1308,6 +1311,188 @@ router.post("/backfill-xp", async (req, res) => {
       error: "Failed to backfill XP",
       details: err.message,
     });
+  }
+});
+
+/**
+ * GET /api/nutrition/history-stats
+ * Get historical meal statistics for comparison insights
+ * Returns: weekly averages, yesterday's same meal, monthly trend, meal type averages
+ */
+router.get("/history-stats", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { mealType } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const today = getLocalDateUTC(offsetMinutes);
+    const yesterday = addDaysUTC(today, -1);
+    const sevenDaysAgo = addDaysUTC(today, -7);
+    const thirtyDaysAgo = addDaysUTC(today, -30);
+
+    // Get today's date range for meals today count
+    const { start: todayStart, end: todayEnd } = getLocalDayRange(offsetMinutes);
+
+    // PERFORMANCE OPTIMIZATION: Fetch 30-day logs once, filter 7-day in memory
+    // Also select only needed columns to reduce payload size
+    const [
+      monthLogs,
+      yesterdaySameMealLogs,
+      todayMeals,
+      lastMealResult,
+    ] = await Promise.all([
+      // Last 30 days of food logs (includes 7-day subset)
+      // Select only columns needed for calculations
+      db.select({
+        calories: foodLogTable.calories,
+        protein: foodLogTable.protein,
+        carbs: foodLogTable.carbs,
+        fats: foodLogTable.fats,
+        mealType: foodLogTable.mealType,
+        foodName: foodLogTable.foodName,
+        loggedDate: foodLogTable.loggedDate,
+      })
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.userId, userId),
+            gte(foodLogTable.loggedDate, thirtyDaysAgo)
+          )
+        ),
+
+      // Yesterday's logs of the same meal type (if mealType provided)
+      mealType ? db.select({
+        calories: foodLogTable.calories,
+        protein: foodLogTable.protein,
+      })
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.userId, userId),
+            eq(foodLogTable.mealType, mealType),
+            gte(foodLogTable.loggedDate, yesterday),
+            lte(foodLogTable.loggedDate, today)
+          )
+        ) : Promise.resolve([]),
+
+      // Today's meals count (for meal frequency insights) - only need count
+      db.select({ loggedDate: foodLogTable.loggedDate })
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.userId, userId),
+            gte(foodLogTable.loggedDate, todayStart),
+            lte(foodLogTable.loggedDate, todayEnd)
+          )
+        ),
+
+      // Last meal time (for fasting window insights)
+      db.select({ loggedDate: foodLogTable.loggedDate })
+        .from(foodLogTable)
+        .where(eq(foodLogTable.userId, userId))
+        .orderBy(desc(foodLogTable.loggedDate))
+        .limit(1),
+    ]);
+
+    // Filter 7-day logs from 30-day data (avoids redundant DB query)
+    const weekLogs = monthLogs.filter(log =>
+      new Date(log.loggedDate) >= sevenDaysAgo
+    );
+
+    // Calculate weekly averages - use ACTUAL days with data, not 7
+    // Count distinct days with logs
+    const daysWithLogs = new Set(
+      weekLogs.map(log => new Date(log.loggedDate).toDateString())
+    ).size;
+
+    const weeklyTotals = weekLogs.reduce((acc, log) => ({
+      calories: acc.calories + (log.calories || 0),
+      protein: acc.protein + (log.protein || 0),
+      carbs: acc.carbs + (log.carbs || 0),
+      fat: acc.fat + (log.fats || 0),
+      mealCount: acc.mealCount + 1,
+    }), { calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 });
+
+    // Use actual days with data for accurate averages
+    const actualDays = Math.max(1, daysWithLogs);
+    const weeklyAverage = {
+      calories: Math.round(weeklyTotals.calories / actualDays),
+      protein: Math.round(weeklyTotals.protein / actualDays),
+      carbs: Math.round(weeklyTotals.carbs / actualDays),
+      fat: Math.round(weeklyTotals.fat / actualDays),
+      daysOfData: daysWithLogs, // Include this so frontend knows data quality
+    };
+
+    // Calculate yesterday's same meal type totals
+    const yesterdaySameMeal = yesterdaySameMealLogs.length > 0
+      ? {
+          calories: yesterdaySameMealLogs.reduce((sum, log) => sum + (log.calories || 0), 0),
+          protein: yesterdaySameMealLogs.reduce((sum, log) => sum + (log.protein || 0), 0),
+        }
+      : null;
+
+    // Calculate meal type averages
+    const mealTypeData = {};
+    weekLogs.forEach(log => {
+      const type = (log.mealType || 'other').toLowerCase();
+      if (!mealTypeData[type]) {
+        mealTypeData[type] = { totalCalories: 0, count: 0 };
+      }
+      mealTypeData[type].totalCalories += log.calories || 0;
+      mealTypeData[type].count += 1;
+    });
+
+    const mealTypeAverage = {};
+    Object.entries(mealTypeData).forEach(([type, data]) => {
+      mealTypeAverage[type] = Math.round(data.totalCalories / data.count);
+    });
+
+    // Calculate monthly trend (compare first 15 days vs last 15 days)
+    const midMonth = addDaysUTC(thirtyDaysAgo, 15);
+    const firstHalf = monthLogs.filter(log => new Date(log.loggedDate) < midMonth);
+    const secondHalf = monthLogs.filter(log => new Date(log.loggedDate) >= midMonth);
+
+    const firstHalfAvg = firstHalf.length > 0
+      ? firstHalf.reduce((sum, log) => sum + (log.calories || 0), 0) / firstHalf.length
+      : 0;
+    const secondHalfAvg = secondHalf.length > 0
+      ? secondHalf.reduce((sum, log) => sum + (log.calories || 0), 0) / secondHalf.length
+      : 0;
+
+    let monthlyTrend = 'stable';
+    if (secondHalfAvg > firstHalfAvg * 1.1) {
+      monthlyTrend = 'increasing';
+    } else if (secondHalfAvg < firstHalfAvg * 0.9) {
+      monthlyTrend = 'decreasing';
+    }
+
+    // Find similar foods (same food logged before)
+    const similarFoods = [];
+    const foodNames = new Set(weekLogs.map(log => log.foodName?.toLowerCase()));
+
+    // Get last meal time for fasting window detection
+    const lastMealTime = lastMealResult.length > 0 ? lastMealResult[0].loggedDate : null;
+
+    // Get today's meal count for frequency insights
+    const mealsToday = todayMeals.length;
+
+    res.json({
+      weeklyAverage,
+      yesterdaySameMeal,
+      monthlyTrend,
+      mealTypeAverage,
+      similarFoods,
+      dataPoints: {
+        weekLogs: weekLogs.length,
+        monthLogs: monthLogs.length,
+      },
+      // New fields for timing insights
+      lastMealTime,
+      mealsToday,
+    });
+
+  } catch (error) {
+    console.error("[HistoryStats] Error:", error);
+    errors.internal(res, 'Failed to fetch history statistics');
   }
 });
 

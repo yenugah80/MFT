@@ -10,7 +10,7 @@ import { View, Image, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { MOOD_PALETTE, SPACING } from '../../constants/premiumTheme';
+import { MOOD_PALETTE, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // ============================================================================
 // MOOD CONFIGURATION
@@ -312,6 +312,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[1],
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#64748B',
     textAlign: 'center',
   },

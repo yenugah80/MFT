@@ -1304,11 +1304,13 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   heroStatus: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginTop: 2,
   },
   statusBadge: {
@@ -1355,11 +1357,13 @@ const styles = StyleSheet.create({
   periodText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   periodTextActive: {
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Section Headers
@@ -1370,6 +1374,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -1404,6 +1409,7 @@ const styles = StyleSheet.create({
   categoryLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
@@ -1453,6 +1459,7 @@ const styles = StyleSheet.create({
   recommendationTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 4,
   },
@@ -1474,6 +1481,7 @@ const styles = StyleSheet.create({
   recommendationActionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
   recommendationFeedback: {
@@ -1521,6 +1529,7 @@ const styles = StyleSheet.create({
   correlationLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 4,
   },
@@ -1564,6 +1573,7 @@ const styles = StyleSheet.create({
   quickActionLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
 
@@ -1603,6 +1613,7 @@ const styles = StyleSheet.create({
   aiBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -1642,6 +1653,7 @@ const styles = StyleSheet.create({
   statsMessage: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   statsSubtext: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -1661,6 +1673,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statLabel: {
@@ -1707,6 +1720,7 @@ const styles = StyleSheet.create({
   aiLoadingText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textAlign: 'center',
   },
@@ -1726,6 +1740,7 @@ const styles = StyleSheet.create({
   aiEmptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[3],
     marginBottom: SPACING[2],
@@ -1764,6 +1779,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: BRAND.primary,
   },
 
@@ -1797,6 +1813,7 @@ const styles = StyleSheet.create({
   aiCardTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 4,
   },
@@ -1816,6 +1833,7 @@ const styles = StyleSheet.create({
   prefBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   confidenceBadge: {
     flexDirection: 'row',
@@ -1826,6 +1844,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   highlightBadge: {
     width: 24,
@@ -1856,6 +1875,7 @@ const styles = StyleSheet.create({
   nutritionValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   nutritionLabel: {
@@ -1894,11 +1914,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   microValue: {
     fontSize: 10,
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   aiCardActions: {
     flexDirection: 'row',
@@ -1929,6 +1951,7 @@ const styles = StyleSheet.create({
   acceptText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 });

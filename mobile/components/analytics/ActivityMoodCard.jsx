@@ -195,6 +195,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitle: {
@@ -264,6 +265,7 @@ const styles = StyleSheet.create({
   titleExpanded: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitleExpanded: {
@@ -298,6 +300,7 @@ const styles = StyleSheet.create({
   benefitCardTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   benefitCardDesc: {

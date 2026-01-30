@@ -207,6 +207,14 @@ export const PREMIUM_COLORS = {
 // ============================================================================
 
 export const TYPOGRAPHY = {
+  // Font families - Tenor Sans for elegant premium feel
+  family: {
+    regular: 'TenorSans_400Regular',
+    medium: 'TenorSans_400Regular',
+    semibold: 'TenorSans_400Regular',
+    bold: 'TenorSans_400Regular',
+  },
+
   // Font weights
   weight: {
     regular: '400',
@@ -685,6 +693,7 @@ export function textStyle(variant = 'body', weight = 'regular', color = 'primary
   return {
     fontSize: TYPOGRAPHY.size[variant] || TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight[weight] || TYPOGRAPHY.weight.regular,
+    fontFamily: TYPOGRAPHY.family[weight] || TYPOGRAPHY.family.regular,
     color: PREMIUM_COLORS.text[color] || PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.lineHeight.normal * (TYPOGRAPHY.size[variant] || TYPOGRAPHY.size.body),
   };

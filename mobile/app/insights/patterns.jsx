@@ -1670,6 +1670,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   headerSubtitle: {
@@ -1700,6 +1701,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Scroll & Content
@@ -1812,6 +1814,7 @@ const styles = StyleSheet.create({
   aiLoaderTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
@@ -1850,6 +1853,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // ============================================================================
@@ -1874,6 +1878,7 @@ const styles = StyleSheet.create({
   confidenceRingValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // ============================================================================
@@ -1900,6 +1905,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -1918,6 +1924,7 @@ const styles = StyleSheet.create({
   sectionBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
@@ -1949,6 +1956,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   errorDescription: {
@@ -1966,6 +1974,7 @@ const styles = StyleSheet.create({
   retryText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -1987,6 +1996,7 @@ const styles = StyleSheet.create({
   insufficientTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
     textAlign: 'center',
@@ -2021,6 +2031,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   insufficientInfo: {
     flexDirection: 'row',
@@ -2035,6 +2046,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   logMealButton: {
     borderRadius: RADIUS.xl,
@@ -2050,6 +2062,7 @@ const styles = StyleSheet.create({
   logMealText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -2095,6 +2108,7 @@ const styles = StyleSheet.create({
   compactType: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
@@ -2102,6 +2116,7 @@ const styles = StyleSheet.create({
   compactHeadline: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     lineHeight: 18,
   },
@@ -2111,11 +2126,13 @@ const styles = StyleSheet.create({
   compactConfidenceNum: {
     fontSize: 20,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   compactConfidenceLabel: {
     fontSize: 10,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   // Expanded state
   expandedDetails: {
@@ -2153,6 +2170,7 @@ const styles = StyleSheet.create({
   predictionType: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -2160,6 +2178,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   predictionStatement: {
     fontSize: TYPOGRAPHY.size.md,
@@ -2234,12 +2253,14 @@ const styles = StyleSheet.create({
   patternTypeBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   correlationPattern: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     lineHeight: 22,
     marginBottom: SPACING[3],
@@ -2261,6 +2282,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   impactRow: {
     flexDirection: 'row',
@@ -2282,6 +2304,7 @@ const styles = StyleSheet.create({
   impactText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'capitalize',
   },
 
@@ -2322,6 +2345,7 @@ const styles = StyleSheet.create({
   narrativeTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   narrativeWeekLabel: {
@@ -2353,6 +2377,7 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   metricLabel: {
@@ -2408,12 +2433,14 @@ const styles = StyleSheet.create({
   changeBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   changeTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
@@ -2459,6 +2486,7 @@ const styles = StyleSheet.create({
   impactBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // Data Quality
@@ -2502,6 +2530,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   freshnessRefresh: {
     padding: SPACING[1],
@@ -2510,6 +2539,7 @@ const styles = StyleSheet.create({
   freshnessWarning: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     marginLeft: SPACING[4],
   },
 
@@ -2529,6 +2559,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   feedbackButtons: {
     flexDirection: 'row',
@@ -2552,6 +2583,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: WELLNESS_COLORS.fitness.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // ============================================================================
@@ -2579,6 +2611,7 @@ const styles = StyleSheet.create({
   sectionEmptyTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
     textAlign: 'center',
@@ -2601,6 +2634,7 @@ const styles = StyleSheet.create({
   sectionEmptyActionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 

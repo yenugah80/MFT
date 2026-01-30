@@ -174,6 +174,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -208,6 +209,7 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 4,
   },
@@ -231,6 +233,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFF',
   },
 });

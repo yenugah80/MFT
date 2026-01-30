@@ -30,7 +30,15 @@ const DEFAULT_PREFERENCES = {
   accessibility: {
     fontSize: 'medium', // 'small' | 'medium' | 'large'
     reduceMotion: false,
+    assistedVoiceMode: false, // Enables larger buttons, audio guidance, auto-confirm for voice logging
   },
+  // Top-level app preferences (synced with server)
+  autoAnalyze: true, // Instant nutrition insights as you type
+  hapticFeedback: true, // Subtle taps for key actions
+  metricUnits: true, // Use metric units (g, kg, ml, liters)
+  audioConfirmations: false, // Spoken feedback when logging food, mood, or water
+  assistedVoiceMode: false, // Larger buttons, audio guidance, simplified voice logging
+  voiceLanguage: 'en', // Language for voice recognition and TTS (en, hi, te, es, zh, fr, etc.)
   lastViewedScreen: null,
   onboardingCompleted: false,
   appVersion: null,

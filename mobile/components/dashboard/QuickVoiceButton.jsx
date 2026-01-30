@@ -24,6 +24,7 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
+  TYPOGRAPHY,
 } from '../../constants/premiumTheme';
 
 // Pulse animation for the recording indicator
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
   tooltipText: {
     color: TEXT.white,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   tooltipArrow: {
     width: 0,
@@ -274,6 +275,6 @@ const styles = StyleSheet.create({
   recordingText: {
     color: TEXT.white,
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

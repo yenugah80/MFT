@@ -19,6 +19,7 @@ import { db } from '../config/db.js';
 import { stressLogTable } from '../db/schema.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
+import { clearPatternCache } from '../services/patternMiningService.js';
 
 const router = express.Router();
 
@@ -177,6 +178,9 @@ router.post('/log', async (req, res) => {
     }
 
     const levelInfo = STRESS_LEVELS.find(l => l.value === level) || { label: 'Unknown' };
+
+    // Clear pattern cache for this user (new data invalidates cached patterns)
+    clearPatternCache(userId);
 
     res.json({
       success: true,

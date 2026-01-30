@@ -263,11 +263,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     marginTop: SPACING[0.5],
   },
@@ -281,6 +282,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     marginTop: SPACING[3],
   },
@@ -291,13 +293,14 @@ const styles = StyleSheet.create({
   },
   minDataText: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textAlign: 'center',
     marginTop: SPACING[3],
   },
   minDataSubtext: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     textAlign: 'center',
     marginTop: SPACING[2],
@@ -337,11 +340,12 @@ const styles = StyleSheet.create({
   },
   insightTitle: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   insightType: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     marginTop: SPACING[0.5],
   },
@@ -359,16 +363,18 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   confidenceLabel: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.white,
     opacity: 0.9,
   },
   insightMessage: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     lineHeight: 20,
     marginBottom: SPACING[2],
@@ -381,7 +387,7 @@ const styles = StyleSheet.create({
   },
   suggestionsTitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },
@@ -401,6 +407,7 @@ const styles = StyleSheet.create({
   suggestionText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     lineHeight: 18,
   },
@@ -411,12 +418,13 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.info.base,
     marginTop: SPACING[3],
   },
   emptySubtext: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     marginTop: SPACING[1],
     textAlign: 'center',
@@ -433,6 +441,7 @@ const styles = StyleSheet.create({
   disclaimerText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     lineHeight: 16,
   },

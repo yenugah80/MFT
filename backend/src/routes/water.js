@@ -8,6 +8,7 @@ import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from 
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
 import { nutritionGoalsTable } from "../db/schema.js";
+import { clearPatternCache } from "../services/patternMiningService.js";
 
 const router = express.Router();
 
@@ -183,6 +184,9 @@ router.post("/log", async (req, res) => {
       } catch (xpError) {
         console.error("[WaterLog] XP award failed (non-fatal):", xpError);
       }
+
+      // Clear pattern cache for this user (new data invalidates cached patterns)
+      clearPatternCache(userId);
     }
 
     res.json({ entry, wasDuplicate: !isNewEntry });

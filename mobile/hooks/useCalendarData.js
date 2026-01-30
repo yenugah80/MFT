@@ -28,7 +28,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from './useDashboard';
 import apiClient from '../services/apiClient';
-import { calculateFoodMoodScore, generateStoryLine } from '../utils/healthCalculations';
+import { calculateWellnessScore, generateStoryLine } from '../utils/healthCalculations';
 
 // ============================================================================
 // HELPERS - ALL USE DEVICE LOCAL TIMEZONE (never UTC)
@@ -225,7 +225,7 @@ export function useCalendarData(options = {}) {
       const goalReached = totalCals >= (calorieGoal * 0.9) && totalCals <= (calorieGoal * 1.1);
 
       // Calculate wellness score
-      const foodMoodScore = calculateFoodMoodScore({
+      const wellnessScore = calculateWellnessScore({
         calories: totalCals,
         calorieGoal,
         protein: totalProtein,
@@ -263,7 +263,7 @@ export function useCalendarData(options = {}) {
         foodCount: foodLogs?.length || 0,
         moodCount: moodLogs?.length || 0,
         water: waterIntake,
-        foodMoodScore,
+        wellnessScore,
         storyLine,
         isToday: true,
       };
@@ -300,7 +300,7 @@ export function useCalendarData(options = {}) {
         sum + (log.durationMinutes || log.duration || 0), 0);
 
       // Calculate COMPLETE wellness score with all 4 domains
-      const foodMoodScore = calculateFoodMoodScore({
+      const wellnessScore = calculateWellnessScore({
         calories: totalCals,
         calorieGoal,
         protein: totalProtein,
@@ -340,7 +340,7 @@ export function useCalendarData(options = {}) {
         water: waterIntake,
         activityMinutes,
         activityCount: dayActivityLogs.length,
-        foodMoodScore,
+        wellnessScore,
         storyLine,
         isToday: false,
       };
@@ -373,7 +373,7 @@ export function useCalendarData(options = {}) {
       const activityMinutes = dayActivityLogs.reduce((sum, log) =>
         sum + (log.durationMinutes || log.duration || 0), 0);
 
-      const foodMoodScore = calculateFoodMoodScore({
+      const wellnessScore = calculateWellnessScore({
         calories: 0,
         calorieGoal,
         protein: 0,
@@ -401,7 +401,7 @@ export function useCalendarData(options = {}) {
         water: waterIntake,
         activityMinutes,
         activityCount: dayActivityLogs.length,
-        foodMoodScore,
+        wellnessScore,
         storyLine: null,
         isToday: false,
       };
@@ -467,7 +467,7 @@ export function useCalendarData(options = {}) {
     const totalCalories = entries.reduce((sum, e) => sum + (e.calories || 0), 0);
     const totalProtein = entries.reduce((sum, e) => sum + (e.protein || 0), 0);
     const totalMeals = entries.reduce((sum, e) => sum + (e.meals || 0), 0);
-    const avgWellnessScore = entries.reduce((sum, e) => sum + (e.foodMoodScore || 0), 0) / entries.length;
+    const avgWellnessScore = entries.reduce((sum, e) => sum + (e.wellnessScore || 0), 0) / entries.length;
 
     return {
       totalCalories: Math.round(totalCalories),

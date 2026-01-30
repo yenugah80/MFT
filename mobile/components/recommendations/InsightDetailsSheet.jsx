@@ -707,6 +707,7 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.size.title3 * 1.2,
@@ -759,6 +760,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
@@ -789,6 +791,7 @@ const styles = StyleSheet.create({
   },
   stepNumberText: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: PREMIUM_COLORS.brand.primary,
   },
@@ -843,6 +846,7 @@ const styles = StyleSheet.create({
   },
   dataPointValue: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
@@ -873,6 +877,7 @@ const styles = StyleSheet.create({
   },
   confidenceValue: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: PREMIUM_COLORS.semantic.success.primary,
   },
@@ -893,6 +898,7 @@ const styles = StyleSheet.create({
   },
   chipGroupLabel: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: PREMIUM_COLORS.text.muted,
     textTransform: 'uppercase',
@@ -931,12 +937,14 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.size.footnote * 1.3,
   },
   chipTextAccent: {
     color: PREMIUM_COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
 
@@ -955,6 +963,7 @@ const styles = StyleSheet.create({
   copyReasoningText: {
     fontSize: TYPOGRAPHY.size.footnote,
     color: PREMIUM_COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 
@@ -980,6 +989,7 @@ const styles = StyleSheet.create({
   },
   nutritionAmount: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[2],
@@ -1031,6 +1041,7 @@ const styles = StyleSheet.create({
   },
   dismissButtonText: {
     fontSize: TYPOGRAPHY.size.subhead,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.secondary,
   },
@@ -1058,6 +1069,7 @@ const styles = StyleSheet.create({
   },
   completeButtonText: {
     fontSize: TYPOGRAPHY.size.subhead,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: '#FFFFFF',
   },

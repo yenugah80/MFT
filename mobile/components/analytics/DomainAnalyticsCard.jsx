@@ -10,7 +10,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 import MiniLineChart from './MiniLineChart';
 
 // Domain configurations with friendly, engaging messaging
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   timeframeBadge: {
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   timeframeText: {
     fontSize: 12,
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   valueSection: {
     flexDirection: 'row',
@@ -336,12 +336,12 @@ const styles = StyleSheet.create({
   },
   mainValue: {
     fontSize: 42,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   unit: {
     fontSize: 16,
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   trendBadge: {
     flexDirection: 'row',
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   goalSection: {
     marginBottom: 12,
@@ -366,11 +366,12 @@ const styles = StyleSheet.create({
   },
   goalLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   goalValue: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   goalBarBg: {
@@ -399,6 +400,7 @@ const styles = StyleSheet.create({
   insightText: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 18,
   },
@@ -408,12 +410,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: 12,
   },
   emptyMessage: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     marginTop: 4,
@@ -430,7 +433,7 @@ const styles = StyleSheet.create({
   },
   logButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   qualityIndicator: {
@@ -444,6 +447,7 @@ const styles = StyleSheet.create({
   },
   qualityText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   // Compact styles
@@ -472,20 +476,22 @@ const styles = StyleSheet.create({
   },
   compactLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   compactValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   compactUnit: {
     fontSize: 12,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   compactEmpty: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     fontStyle: 'italic',
   },

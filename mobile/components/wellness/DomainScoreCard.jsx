@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { SPACING, RADIUS } from '../../constants/designTokens';
 
 // Domain configurations with modern colors
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.tertiary,
     marginBottom: SPACING[3],
     letterSpacing: 1,
@@ -247,11 +247,11 @@ const styles = StyleSheet.create({
   },
   ringPercentage: {
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
@@ -262,11 +262,11 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   scoreMax: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginLeft: 2,
   },

@@ -442,6 +442,11 @@ export default function MoodInsightsScreen() {
     }
   }, [moodStats, notify]);
 
+  const handleDeepAnalytics = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/insights/mood-deep');
+  }, [router]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -777,6 +782,24 @@ export default function MoodInsightsScreen() {
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
+            DEEP ANALYTICS CTA - Navigate to mood-deep for detailed visualizations
+            ════════════════════════════════════════════════════════════════════ */}
+        <TouchableOpacity onPress={handleDeepAnalytics} style={styles.deepAnalyticsCta} activeOpacity={0.8}>
+          <View style={styles.deepAnalyticsContent}>
+            <View style={styles.deepAnalyticsLeft}>
+              <View style={styles.deepAnalyticsIconWrap}>
+                <Ionicons name="analytics" size={20} color={PREMIUM_COLORS.neutral.base} />
+              </View>
+              <View>
+                <Text style={styles.deepAnalyticsTitle}>Deep Analytics</Text>
+                <Text style={styles.deepAnalyticsSubtitle}>Time patterns, distributions & more</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+          </View>
+        </TouchableOpacity>
+
+        {/* ════════════════════════════════════════════════════════════════════
             FOOTER CTA
             ════════════════════════════════════════════════════════════════════ */}
         <TouchableOpacity onPress={handleLogMood} style={styles.footerCta} activeOpacity={0.8}>
@@ -843,6 +866,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   shareButton: {
@@ -890,6 +914,7 @@ const styles = StyleSheet.create({
   heroScoreValue: {
     fontSize: 32,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   heroScoreMax: {
@@ -916,6 +941,7 @@ const styles = StyleSheet.create({
   heroStatValue: {
     fontSize: 24,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   heroStatLabel: {
@@ -968,6 +994,7 @@ const styles = StyleSheet.create({
   miniStatValue: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   miniStatLabel: {
     fontSize: 11,
@@ -997,6 +1024,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   sectionBadge: {
@@ -1008,6 +1036,7 @@ const styles = StyleSheet.create({
   sectionBadgeText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.low.base,
   },
 
@@ -1035,6 +1064,7 @@ const styles = StyleSheet.create({
   journeyScore: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   journeyEmpty: {
     width: 8,
@@ -1093,6 +1123,7 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   insightDescription: {
     fontSize: 12,
@@ -1139,6 +1170,7 @@ const styles = StyleSheet.create({
   correlationStatement: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     lineHeight: 20,
   },
@@ -1185,6 +1217,7 @@ const styles = StyleSheet.create({
   ringLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginTop: SPACING[2],
   },
   ringSublabel: {
@@ -1235,6 +1268,7 @@ const styles = StyleSheet.create({
   moodTimelineLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   moodTimelineTime: {
     fontSize: 12,
@@ -1255,6 +1289,7 @@ const styles = StyleSheet.create({
   intensityPillText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   energyPill: {
     flexDirection: 'row',
@@ -1267,6 +1302,7 @@ const styles = StyleSheet.create({
   energyPillText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   noteBadge: {
     width: 22,
@@ -1275,6 +1311,50 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Deep Analytics CTA
+  deepAnalyticsCta: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: SPACING[4],
+    marginBottom: SPACING[3],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: PREMIUM_COLORS.neutral.light,
+  },
+  deepAnalyticsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deepAnalyticsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  deepAnalyticsIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: PREMIUM_COLORS.neutral.light,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deepAnalyticsTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  deepAnalyticsSubtitle: {
+    fontSize: 12,
+    color: TEXT.tertiary,
+    marginTop: 2,
   },
 
   // Footer CTA
@@ -1298,6 +1378,7 @@ const styles = StyleSheet.create({
   footerCtaText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 

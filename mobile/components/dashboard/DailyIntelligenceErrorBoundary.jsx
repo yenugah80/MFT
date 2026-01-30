@@ -10,7 +10,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SPACING } from '../../constants/designTokens';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export class DailyIntelligenceErrorBoundary extends React.Component {
   constructor(props) {
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
     textAlign: 'center',
@@ -104,6 +104,7 @@ const styles = StyleSheet.create({
 
   message: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 18,
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
 
   buttonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 });

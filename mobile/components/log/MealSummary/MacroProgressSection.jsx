@@ -193,6 +193,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: SPACING[3],
   },
   caloriesContainer: {
@@ -209,15 +210,18 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 40,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -1,
   },
   caloriesUnit: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   mealLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -249,6 +253,7 @@ const styles = StyleSheet.create({
   macroLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   macroValues: {
     flexDirection: 'row',
@@ -258,6 +263,7 @@ const styles = StyleSheet.create({
   macroCurrent: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   progressBarContainer: {
     height: 8,
@@ -274,6 +280,7 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -289,6 +296,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   summaryLabel: {
     fontSize: TYPOGRAPHY.size.xs,

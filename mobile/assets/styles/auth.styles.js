@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import { COLORS } from "../../constants/colors";
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Static layout styles used across auth screens
 export const authStyles = StyleSheet.create({
@@ -27,6 +28,7 @@ export const authStyles = StyleSheet.create({
   brandName: {
     fontSize: 28,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#7C3AED',
     textAlign: 'center',
     marginTop: 16,
@@ -73,6 +75,7 @@ export const authStyles = StyleSheet.create({
   link: {
     color: "#7B5DB8",
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   authButton: {
     height: 56,
@@ -88,12 +91,14 @@ export const authStyles = StyleSheet.create({
   buttonText: {
     color: "white",
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     fontSize: 16,
   },
   title: {
     fontSize: 42,
     lineHeight: 40,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: "#140b17ff",
     textAlign: "center",
     marginTop: 20,
@@ -107,6 +112,7 @@ export function createAuthStyles(colors = {}) {
       fontSize: 32,
       lineHeight: 40,
       fontWeight: "700",
+      fontFamily: TYPOGRAPHY.family.bold,
       color: colors.text || "#6a7b9fff",
       textAlign: "center",
       marginTop: 20,
@@ -136,11 +142,13 @@ export function createAuthStyles(colors = {}) {
     buttonText: {
       color: "#fff",
       fontWeight: "700",
+      fontFamily: TYPOGRAPHY.family.bold,
       fontSize: 16,
     },
     link: {
       color: colors.accent || "#7B5DB8",
       fontWeight: "600",
+      fontFamily: TYPOGRAPHY.family.semibold,
     },
     linkText: {
       color: colors.muted || "#6B7280",

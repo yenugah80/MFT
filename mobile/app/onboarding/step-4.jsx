@@ -24,15 +24,13 @@ import {
   ONBOARDING_COPY,
   A11Y_LABELS,
 } from '../../constants/onboardingConfig';
-import {
-  BRAND,
+import { BRAND,
   TEXT,
   SHADOWS,
   RADIUS,
   SPACING,
   SURFACES,
-  MACRO_COLORS,
-} from '../../constants/premiumTheme';
+  MACRO_COLORS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Compact Macro Card Component
 const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, delay = 0 }) => {
@@ -512,6 +510,7 @@ const styles = StyleSheet.create({
   loadingTitle: {
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },
@@ -574,6 +573,7 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   heroEditBadge: {
@@ -591,6 +591,7 @@ const styles = StyleSheet.create({
   heroValue: {
     fontSize: 64,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: -2,
     lineHeight: 72,
@@ -598,6 +599,7 @@ const styles = StyleSheet.create({
   heroUnit: {
     fontSize: 16,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: 'rgba(255,255,255,0.85)',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -619,6 +621,7 @@ const styles = StyleSheet.create({
   heroMetricLabel: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255,255,255,0.7)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -627,6 +630,7 @@ const styles = StyleSheet.create({
   heroMetricValue: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   heroMetricDivider: {
@@ -645,6 +649,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -681,6 +686,7 @@ const styles = StyleSheet.create({
   macroLabel: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -694,10 +700,12 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: 24,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   macroUnit: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
   },
   macroEditHint: {
@@ -745,6 +753,7 @@ const styles = StyleSheet.create({
   waterLabel: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#00838F',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -758,11 +767,13 @@ const styles = StyleSheet.create({
   waterValue: {
     fontSize: 28,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#006064',
   },
   waterUnit: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#00838F',
   },
 
@@ -800,6 +811,7 @@ const styles = StyleSheet.create({
   getStartedButtonText: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },

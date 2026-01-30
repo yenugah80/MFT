@@ -286,6 +286,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
     paddingHorizontal: SPACING[4],

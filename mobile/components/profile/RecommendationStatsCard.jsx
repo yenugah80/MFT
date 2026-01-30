@@ -273,10 +273,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   subtitle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   progressContainer: {
     alignItems: 'center',
@@ -292,11 +293,11 @@ const styles = StyleSheet.create({
   },
   progressValue: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   progressLabel: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   divider: {
     height: 1,
@@ -308,7 +309,7 @@ const styles = StyleSheet.create({
   },
   breakdownTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   breakdownContainer: {
     gap: 16,
@@ -324,12 +325,12 @@ const styles = StyleSheet.create({
   },
   typeName: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     textTransform: 'capitalize',
   },
   typeRate: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   progressBar: {
     height: 6,
@@ -343,9 +344,11 @@ const styles = StyleSheet.create({
   },
   typeCount: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   noDataText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     textAlign: 'center',
     fontStyle: 'italic',
     marginBottom: 16,
@@ -360,7 +363,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     flex: 1,
   },
   loadingContainer: {
@@ -371,7 +374,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   errorContainer: {
     borderRadius: RADIUS.xl,
@@ -383,7 +386,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     textAlign: 'center',
   },
   emptyContainer: {
@@ -394,7 +397,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
     fontStyle: 'italic',
   },

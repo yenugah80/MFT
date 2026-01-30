@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Polyline } from 'react-native-svg';
-import { TEXT, BRAND } from '../../constants/premiumTheme';
+import { TEXT, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Sparkline
@@ -102,7 +102,7 @@ export function Sparkline({
 const styles = StyleSheet.create({
   label: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 6,
   },
@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
   },
   averageLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 });

@@ -499,6 +499,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -511,6 +512,7 @@ const styles = StyleSheet.create({
   typeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   confidenceBadge: {
     backgroundColor: '#F59E0B20',
@@ -521,6 +523,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#F59E0B',
   },
   message: {
@@ -569,6 +572,7 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   trendIndicator: {
@@ -580,6 +584,7 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   evidenceContainer: {
     marginTop: SPACING[3],
@@ -590,6 +595,7 @@ const styles = StyleSheet.create({
   evidenceLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginBottom: SPACING[2],
   },
@@ -621,6 +627,7 @@ const styles = StyleSheet.create({
   deltaValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   comparisonContainer: {
     flexDirection: 'row',
@@ -648,6 +655,7 @@ const styles = StyleSheet.create({
   comparisonValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   // Row styles
   rowContainer: {
@@ -674,6 +682,7 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[0.5],
   },
@@ -694,6 +703,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
@@ -710,6 +720,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   // Prediction Link Badge styles
   predictionBadge: {
@@ -727,6 +738,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: '#F59E0B',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   // Micro Actions styles
   microActionsContainer: {
@@ -739,6 +751,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     marginBottom: SPACING[2],
   },
   microActionItem: {
@@ -793,10 +806,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   actionButtonTextPrimary: {
     fontSize: TYPOGRAPHY.size.sm,
     color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

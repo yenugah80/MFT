@@ -284,6 +284,7 @@ const styles = StyleSheet.create({
   discoveryText: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   dismissButton: {
     padding: SPACING[1],
@@ -308,6 +309,7 @@ const styles = StyleSheet.create({
   factorText: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     textAlign: 'center',
   },
@@ -333,6 +335,7 @@ const styles = StyleSheet.create({
   outcomeText: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textAlign: 'center',
   },
 
@@ -380,6 +383,7 @@ const styles = StyleSheet.create({
   strengthValue: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.brand.primary,
     marginLeft: SPACING[2],
   },
@@ -419,6 +423,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.secondary,
     lineHeight: TYPOGRAPHY.size.footnote * 1.4,
   },
@@ -447,11 +452,13 @@ const styles = StyleSheet.create({
   compactFactor: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: 2,
   },
   compactOutcome: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

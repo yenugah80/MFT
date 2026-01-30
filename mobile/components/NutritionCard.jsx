@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import { TYPOGRAPHY } from '../constants/premiumTheme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -166,17 +167,17 @@ const styles = StyleSheet.create({
   },
   foodName: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#333',
   },
   calories: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#333',
   },
   calLabel: {
     fontSize: 16,
-    fontWeight: 'normal',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#666',
   },
   scoreBadge: {
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   scoreText: {
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#333',
   },
   tabContainer: {
@@ -204,11 +205,12 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#999',
   },
   activeTabText: {
     color: '#333',
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   macrosContainer: {
     flexDirection: 'row',
@@ -221,7 +223,7 @@ const styles = StyleSheet.create({
   },
   macroValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: 4,
   },
   progressBarBg: {
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: 10,
     color: '#333',
   },
@@ -273,12 +275,13 @@ const styles = StyleSheet.create({
   },
   chartLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#999',
   },
   chartValue: {
     fontSize: 10,
     color: '#333',
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   saveButton: {
     backgroundColor: '#333',
@@ -290,6 +293,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 });

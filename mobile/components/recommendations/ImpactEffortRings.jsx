@@ -149,6 +149,7 @@ const styles = StyleSheet.create({
   },
   ringPercentage: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.insights.primary,
   },
@@ -157,6 +158,7 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
     marginTop: SPACING.md,
     textAlign: 'center',
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 });

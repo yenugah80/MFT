@@ -17,86 +17,25 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
+import {
+  NOTIFICATION_CONFIG,
+  SNOOZE_OPTIONS,
+  getNotificationConfig,
+} from '../../constants/notificationTypes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Reminder type configurations
-const REMINDER_CONFIG = {
-  hydration_morning: {
-    icon: 'water',
-    gradient: ['#3B82F6', '#60A5FA'],
-    accentColor: '#3B82F6',
-  },
-  hydration_midday: {
-    icon: 'water',
-    gradient: ['#0EA5E9', '#38BDF8'],
-    accentColor: '#0EA5E9',
-  },
-  hydration_afternoon: {
-    icon: 'water',
-    gradient: ['#06B6D4', '#22D3EE'],
-    accentColor: '#06B6D4',
-  },
-  food_breakfast: {
-    icon: 'sunny',
-    gradient: ['#F59E0B', '#FBBF24'],
-    accentColor: '#F59E0B',
-  },
-  food_lunch: {
-    icon: 'restaurant',
-    gradient: ['#10B981', '#34D399'],
-    accentColor: '#10B981',
-  },
-  food_dinner: {
-    icon: 'moon',
-    gradient: ['#8B5CF6', '#A78BFA'],
-    accentColor: '#8B5CF6',
-  },
-  mood_checkin_morning: {
-    icon: 'happy',
-    gradient: ['#EC4899', '#F472B6'],
-    accentColor: '#EC4899',
-  },
-  mood_checkin_evening: {
-    icon: 'bed',
-    gradient: ['#6366F1', '#818CF8'],
-    accentColor: '#6366F1',
-  },
-  activity_reminder: {
-    icon: 'fitness',
-    gradient: ['#EF4444', '#F87171'],
-    accentColor: '#EF4444',
-  },
-  streak_at_risk: {
-    icon: 'flame',
-    gradient: ['#F97316', '#FB923C'],
-    accentColor: '#F97316',
-  },
-  streak_celebration: {
-    icon: 'trophy',
-    gradient: ['#EAB308', '#FDE047'],
-    accentColor: '#EAB308',
-  },
-  weekly_review: {
-    icon: 'bar-chart',
-    gradient: ['#14B8A6', '#2DD4BF'],
-    accentColor: '#14B8A6',
-  },
-  default: {
-    icon: 'notifications',
-    gradient: [BRAND.primary, BRAND.secondary],
-    accentColor: BRAND.primary,
-  },
-};
-
-// Snooze duration options (in minutes)
-const SNOOZE_OPTIONS = [
-  { label: '15 min', value: 15 },
-  { label: '30 min', value: 30 },
-  { label: '1 hour', value: 60 },
-  { label: '2 hours', value: 120 },
-];
+// Build reminder config from unified NOTIFICATION_CONFIG
+// Adds gradient support for reminder cards
+const REMINDER_CONFIG = Object.entries(NOTIFICATION_CONFIG).reduce((acc, [key, config]) => {
+  acc[key] = {
+    icon: config.icon,
+    gradient: config.gradient || [config.color, config.color],
+    accentColor: config.color,
+  };
+  return acc;
+}, {});
 
 const ReminderNotification = ({
   reminder,
@@ -329,12 +268,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
     marginBottom: 4,
   },
   message: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.9)',
     lineHeight: 20,
   },
@@ -351,11 +291,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   statLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
   },
@@ -375,7 +316,7 @@ const styles = StyleSheet.create({
   },
   snoozeToggleText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255,255,255,0.9)',
   },
   actionButton: {
@@ -391,7 +332,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   snoozeOptions: {
@@ -402,7 +343,7 @@ const styles = StyleSheet.create({
   },
   snoozeTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
     marginBottom: 10,
   },
@@ -419,7 +360,7 @@ const styles = StyleSheet.create({
   },
   snoozeButtonText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
   },
   snoozeCancel: {
@@ -428,6 +369,7 @@ const styles = StyleSheet.create({
   },
   snoozeCancelText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.7)',
   },
   // List styles
@@ -440,6 +382,7 @@ const styles = StyleSheet.create({
   },
   hiddenText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   // Compact styles
@@ -470,11 +413,12 @@ const styles = StyleSheet.create({
   },
   compactTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   compactMessage: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },

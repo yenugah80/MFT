@@ -132,6 +132,14 @@ export const TYPOGRAPHY = {
     caption: 11,
   },
 
+  // Font families - Tenor Sans for elegant premium feel
+  family: {
+    regular: 'TenorSans_400Regular',
+    medium: 'TenorSans_400Regular',
+    semibold: 'TenorSans_400Regular',
+    bold: 'TenorSans_400Regular',
+  },
+
   weight: {
     regular: '400',
     medium: '500',

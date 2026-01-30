@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontSize: 42,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   levelBadge: {
@@ -168,12 +168,12 @@ const styles = StyleSheet.create({
   },
   levelBadgeText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   name: {
     fontSize: 26,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
     textAlign: 'center',
@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     marginBottom: SPACING[5],
@@ -216,13 +217,13 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 2,
   },
   statLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,

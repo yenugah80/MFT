@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Story type configurations
 const STORY_CONFIGS = {
@@ -249,20 +249,23 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 28,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     marginBottom: 8,
   },
   body: {
     fontSize: 15,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.9)',
     lineHeight: 22,
   },
   readMore: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 4,
     fontStyle: 'italic',
@@ -277,13 +280,14 @@ const styles = StyleSheet.create({
   },
   datesLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.7)',
     marginRight: 6,
   },
   dates: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
   },
   reactionsContainer: {
     flexDirection: 'row',
@@ -299,7 +303,7 @@ const styles = StyleSheet.create({
   },
   reactionButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   secondaryButton: {
@@ -308,6 +312,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.7)',
   },
   dismissIconButton: {

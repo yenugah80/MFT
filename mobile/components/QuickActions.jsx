@@ -1,5 +1,5 @@
 import React from 'react';
-import { TEXT } from '../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../constants/premiumTheme';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 /**
@@ -68,10 +68,11 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 28,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   label: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 });

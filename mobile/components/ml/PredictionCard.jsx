@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Task configuration for display
 const TASK_CONFIG = {
@@ -198,6 +198,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginLeft: 12,
   },
@@ -209,11 +210,13 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 32,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   unit: {
     fontSize: 16,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginLeft: 4,
   },
@@ -235,6 +238,7 @@ const styles = StyleSheet.create({
   interpretText: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   confidenceContainer: {
     marginTop: 4,

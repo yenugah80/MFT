@@ -231,11 +231,13 @@ const styles = StyleSheet.create({
   scoreValue: {
     fontSize: 48,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -2,
   },
   scoreLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginTop: 2,
@@ -243,6 +245,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     marginTop: SPACING[2],
     textTransform: 'uppercase',
     letterSpacing: 0.5,

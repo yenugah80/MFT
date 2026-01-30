@@ -17,14 +17,10 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useNotification } from '../providers/NotificationProvider';
 import { useDashboard } from '../hooks/useDashboard';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
+import { RATE_LIMITS } from '../constants/notificationTypes';
 
-// Minimum intervals between checks (in ms)
-const CHECK_INTERVALS = {
-  hydration: 2 * 60 * 60 * 1000,  // 2 hours
-  meal: 3 * 60 * 60 * 1000,       // 3 hours
-  activity: 4 * 60 * 60 * 1000,   // 4 hours
-  mood: 8 * 60 * 60 * 1000,       // 8 hours
-};
+// Use unified rate limits from constants (aliased for clarity)
+const CHECK_INTERVALS = RATE_LIMITS;
 
 export default function SmartNotificationInitializer({ children }) {
   const { isSignedIn } = useAuth();

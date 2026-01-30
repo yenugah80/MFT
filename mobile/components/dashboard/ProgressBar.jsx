@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * ProgressBar
@@ -104,7 +104,7 @@ export function ProgressBar({
 const styles = StyleSheet.create({
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 6,
   },
@@ -131,11 +131,12 @@ const styles = StyleSheet.create({
   },
   percentLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC_ACTIONS.success,  // Vibrant green
   },
   amountLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
 });

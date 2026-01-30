@@ -8,7 +8,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
-import { BRAND, TEXT, SHADOWS, RADIUS, SPACING, SURFACES } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SHADOWS, RADIUS, SPACING, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { getComplianceLevel } from '../../utils/complianceCalculations';
 
 const CIRCLE_RADIUS = 50;
@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.3
   },
@@ -147,11 +148,13 @@ const styles = StyleSheet.create({
   scoreValue: {
     fontSize: 32,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary
   },
   scoreLabel: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginTop: SPACING[1]
   },
@@ -169,11 +172,13 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary
   },
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginTop: SPACING[1]
   },
@@ -185,6 +190,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textAlign: 'center',
     lineHeight: 18
   }

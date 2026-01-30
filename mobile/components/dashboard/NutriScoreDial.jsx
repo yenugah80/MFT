@@ -356,6 +356,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     // color applied inline for theme support
     letterSpacing: TYPOGRAPHY.letterSpacing.wide,
     textTransform: 'uppercase',
@@ -363,11 +364,13 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     // color applied inline for theme support
   },
   numericScore: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     // color applied inline for theme support
   },
   trendBadge: {
@@ -382,6 +385,7 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     // color applied inline for theme support
   },
   gradeBar: {
@@ -442,6 +446,7 @@ const styles = StyleSheet.create({
   historicalLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     // color applied inline for theme support
   },
   historicalMini: {
@@ -456,6 +461,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     // color applied inline for theme support
     marginTop: SPACING[2],
     textAlign: 'center',
@@ -463,6 +469,7 @@ const styles = StyleSheet.create({
   compactFooter: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     marginTop: SPACING[1],
   },
 });

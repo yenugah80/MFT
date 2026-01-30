@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.3,
   },
@@ -288,12 +288,13 @@ const styles = StyleSheet.create({
   },
   menuItemTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 2,
   },
   menuItemSubtitle: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   menuItemArrow: {
@@ -335,7 +336,7 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.danger.base,
     letterSpacing: -0.3,
   },
@@ -346,11 +347,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   footerSubtext: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.muted,
   },
 });

@@ -14,7 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-// Surfaces not currently used but kept for potential styling
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const GoalCard = ({
   id,
@@ -159,14 +159,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     marginBottom: 6,
     letterSpacing: -0.5,
   },
   description: {
     fontSize: 13,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.82)',
     lineHeight: 19,
     flex: 1,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { TEXT, BRAND, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * PatternGauge
@@ -109,11 +109,12 @@ const styles = StyleSheet.create({
   centerLabel: {
     position: 'absolute',
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     top: '30%',
   },
   bottomLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 8,
   },

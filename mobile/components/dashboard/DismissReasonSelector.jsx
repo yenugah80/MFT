@@ -8,7 +8,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * DismissReasonSelector
@@ -209,6 +209,7 @@ const styles = StyleSheet.create({
   headline: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 6,
     textAlign: 'center',
@@ -270,6 +271,7 @@ const styles = StyleSheet.create({
   reasonLabel: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -297,6 +299,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   confirmButton: {
@@ -327,6 +330,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 });

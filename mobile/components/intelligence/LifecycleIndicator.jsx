@@ -272,6 +272,7 @@ const styles = StyleSheet.create({
   stageLabel: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   stageDescription: {
@@ -285,6 +286,7 @@ const styles = StyleSheet.create({
   daysValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   daysLabel: {
@@ -356,6 +358,7 @@ const styles = StyleSheet.create({
   qualityTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -372,6 +375,7 @@ const styles = StyleSheet.create({
   qualityValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   qualityLabel: {
@@ -411,6 +415,7 @@ const styles = StyleSheet.create({
   compactLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   compactDays: {

@@ -354,12 +354,14 @@ const styles = StyleSheet.create({
   headerLabel: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#8B5CF6',
     letterSpacing: 0.5,
   },
   headerDate: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
     marginTop: 2,
   },
@@ -387,6 +389,7 @@ const styles = StyleSheet.create({
   previewStatValue: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
   },
   previewStatLabel: {
@@ -415,6 +418,7 @@ const styles = StyleSheet.create({
   nutriScoreText: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   nutriScoreChange: {
@@ -449,6 +453,7 @@ const styles = StyleSheet.create({
   storySectionTitle: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.muted,
     letterSpacing: 0.5,
   },
@@ -485,6 +490,7 @@ const styles = StyleSheet.create({
   metricsSectionTitle: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.muted,
     letterSpacing: 0.5,
     marginBottom: SPACING[3],
@@ -525,6 +531,7 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
   trendIcon: {
@@ -561,6 +568,7 @@ const styles = StyleSheet.create({
   focusSectionTitle: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.brand.primary,
     letterSpacing: 0.5,
   },
@@ -585,6 +593,7 @@ const styles = StyleSheet.create({
   focusNumberText: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   focusText: {
     flex: 1,
@@ -611,6 +620,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.brand.primary,
   },
 });

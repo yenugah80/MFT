@@ -24,7 +24,7 @@ import {
   ONBOARDING_COPY,
   A11Y_LABELS,
 } from '../../constants/onboardingConfig';
-import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, SEMANTIC } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const Step2Screen = () => {
   const {
@@ -442,13 +442,13 @@ const styles = StyleSheet.create({
   },
   premiumSectionTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
   },
   sectionHint: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginBottom: SPACING[3],
     lineHeight: 18,
@@ -460,13 +460,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.3,
   },
   hint: {
     fontSize: 13,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 4,
     lineHeight: 18,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   ftInInput: {
     flex: 1,
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     textAlign: 'center',
     minHeight: 44,
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
   },
   ftInLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     marginLeft: SPACING[2],
   },
@@ -547,12 +547,12 @@ const styles = StyleSheet.create({
   },
   unitToggleText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   unitToggleTextActive: {
     color: '#e9acacff',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // ===== PREMIUM GENDER SELECTOR =====
@@ -583,12 +583,12 @@ const styles = StyleSheet.create({
   },
   genderButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   genderButtonTextSelected: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // ===== PREMIUM GENDER SELECTOR ICONS =====

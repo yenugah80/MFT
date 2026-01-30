@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SHADOWS, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const STRENGTH_LABELS = {
   1: 'Open to it',
@@ -169,12 +169,12 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     flex: 1
   },
   strengthValue: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
   strengthNumber: {
     fontSize: 12,
-    fontWeight: '700'
+    fontFamily: TYPOGRAPHY.family.bold
   },
   descriptionContainer: {
     marginTop: 12,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     textAlign: 'center'
   }
 });

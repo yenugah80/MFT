@@ -1,12 +1,7 @@
 import React from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, Modal, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const fonts = {
-  display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
-  strong: Platform.select({ ios: 'HelveticaNeue-Medium', android: 'Roboto-Medium', default: 'System' }),
-  regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
-};
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export const NutrientTrendsModal = ({ visible, onClose, nutrient, trends, goals }) => {
   if (!visible || !nutrient) return null;
@@ -83,7 +78,7 @@ export const NutrientTrendsModal = ({ visible, onClose, nutrient, trends, goals 
           <View style={styles.header}>
             <Text style={styles.title}>{label} Trends</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#6B7280" />
+              <Ionicons name="close" size={24} color={TEXT.tertiary} />
             </TouchableOpacity>
           </View>
 
@@ -127,11 +122,11 @@ export const NutrientTrendsModal = ({ visible, onClose, nutrient, trends, goals 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: SURFACES.card.overlay,
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACES.background.primary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -144,10 +139,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-    fontFamily: fonts.display,
+    fontSize: TYPOGRAPHY.size.xl,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
   },
   closeButton: {
     padding: 4,
@@ -156,10 +150,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
     marginBottom: 32,
-    fontFamily: fonts.regular,
   },
   chartContainer: {
     height: 240,
@@ -172,16 +166,16 @@ const styles = StyleSheet.create({
     right: 0,
     borderBottomWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#9CA3AF',
+    borderColor: TEXT.tertiary,
     opacity: 0.5,
     zIndex: 1,
   },
   goalLabel: {
     position: 'absolute',
     right: 0,
-    fontSize: 10,
-    color: '#6B7280',
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
     zIndex: 1,
   },
   barsContainer: {
@@ -207,13 +201,14 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     marginTop: 8,
-    fontSize: 12,
-    color: '#6B7280',
-    fontFamily: fonts.strong,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
   },
   valueLabel: {
-    fontSize: 10,
-    color: '#9CA3AF',
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
     marginTop: 2,
   },
 });

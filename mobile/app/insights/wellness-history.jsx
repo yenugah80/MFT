@@ -28,11 +28,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
-import {
-  TEXT,
+import { TEXT,
   SURFACES,
-  BRAND,
-} from '../../constants/premiumTheme';
+  BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { SPACING, RADIUS } from '../../constants/designTokens';
 
 import { useWellnessHistory } from '../../hooks/useWellnessHistory';
@@ -112,6 +110,7 @@ const bestsStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     marginBottom: SPACING[3],
     textTransform: 'uppercase',
@@ -146,11 +145,13 @@ const bestsStyles = StyleSheet.create({
   value: {
     fontSize: 24,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -1,
   },
   label: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -261,6 +262,7 @@ const weekStyles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -271,6 +273,7 @@ const weekStyles = StyleSheet.create({
   },
   avgValue: {
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   daysRow: {
@@ -292,10 +295,12 @@ const weekStyles = StyleSheet.create({
   scoreText: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   dayLabel: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   dayLabelToday: {

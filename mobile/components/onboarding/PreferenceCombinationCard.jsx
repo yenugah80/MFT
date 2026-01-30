@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export default function PreferenceCombinationCard({
   title = 'Your Preferences',
@@ -205,12 +205,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: 2
   },
   subtitle: {
     fontSize: 11,
-    fontWeight: '500'
+    fontFamily: TYPOGRAPHY.family.medium
   },
   descriptionContainer: {
     marginBottom: 16,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     lineHeight: 18
   },
   tagsContainer: {
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   tagGroupLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginLeft: 2
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'capitalize'
   },
   samplesContainer: {
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   },
   sampleTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: 10
   },
   samplesList: {
@@ -281,12 +281,12 @@ const styles = StyleSheet.create({
   },
   sampleName: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: 2
   },
   sampleProtein: {
     fontSize: 11,
-    fontWeight: '500'
+    fontFamily: TYPOGRAPHY.family.medium
   },
   bottomAccent: {
     height: 2,

@@ -6,7 +6,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
-import { TEXT } from '../../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -102,24 +102,24 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.5,
   },
   unit: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   goal: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginTop: 2,
   },
   label: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 4,
     textTransform: 'uppercase',

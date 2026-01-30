@@ -24,7 +24,7 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export function EvidenceTimeline({
   evidence = [],
@@ -181,12 +181,13 @@ const styles = StyleSheet.create({
   // Header
   timelineTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 4,
   },
   timelineSubtitle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginBottom: 12,
   },
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 
@@ -256,13 +257,14 @@ const styles = StyleSheet.create({
   },
   strengthText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
   // Context Text
   contextText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 16,
     marginBottom: 6,
@@ -285,7 +287,7 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 10,
     color: '#047857',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Empty State
@@ -296,6 +298,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     fontStyle: 'italic',
   },
@@ -303,6 +306,7 @@ const styles = StyleSheet.create({
   // More Text
   moreText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 8,
     fontStyle: 'italic',

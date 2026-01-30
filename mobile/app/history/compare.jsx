@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#111827',
   },
   headerSpacer: {
@@ -512,6 +512,7 @@ const styles = StyleSheet.create({
   loadingText: {
     color: TEXT.tertiary,
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
 
   // Winner Banner
@@ -539,19 +540,20 @@ const styles = StyleSheet.create({
   },
   winnerLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#92400E',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   winnerName: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
     marginBottom: 2,
   },
   winnerReason: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#B45309',
   },
 
@@ -570,7 +572,7 @@ const styles = StyleSheet.create({
   tieText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#4B5563',
     lineHeight: 20,
   },
@@ -597,7 +599,7 @@ const styles = StyleSheet.create({
   },
   scoreCardName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#374151',
     textAlign: 'center',
     marginBottom: 12,
@@ -615,11 +617,11 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   scoreLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -659,7 +661,7 @@ const styles = StyleSheet.create({
   },
   vsText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 
@@ -669,7 +671,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
     marginBottom: 12,
   },
@@ -697,12 +699,13 @@ const styles = StyleSheet.create({
   },
   insightTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1F2937',
     marginBottom: 2,
   },
   insightText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
     lineHeight: 17,
   },
@@ -731,22 +734,22 @@ const styles = StyleSheet.create({
   },
   nutritionVal: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#374151',
     minWidth: 70,
   },
   nutritionValBetter: {
     color: '#059669',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   nutritionUnit: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#9CA3AF',
   },
   nutritionLabel: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#6B7280',
     flex: 1,
     textAlign: 'center',
@@ -762,7 +765,7 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#312E81',
     marginBottom: 6,
   },

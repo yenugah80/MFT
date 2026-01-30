@@ -24,6 +24,7 @@ import {
   RADIUS,
   SPACING,
   SHADOWS,
+  TYPOGRAPHY,
 } from '../../constants/premiumTheme';
 
 // Pure JS Slider Component (no native module required)
@@ -473,13 +474,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 2,
   },
   headerContext: {
     fontSize: 13,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     maxWidth: 200,
   },
@@ -508,12 +509,12 @@ const styles = StyleSheet.create({
   },
   displayValue: {
     fontSize: 56,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -2,
   },
   displayUnit: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   progressContainer: {
     marginBottom: SPACING[3],
@@ -538,7 +539,7 @@ const styles = StyleSheet.create({
   },
   rangeLabel: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.muted,
   },
   quickAdjust: {
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
   },
   quickAdjustLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     marginBottom: SPACING[2],
   },
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
   },
   quickButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   quickButtonTextDisabled: {
@@ -596,7 +597,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   saveButton: {
@@ -612,7 +613,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   bottomSpacer: {

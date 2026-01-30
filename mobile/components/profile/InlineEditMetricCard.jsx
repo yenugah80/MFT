@@ -336,6 +336,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -348,11 +349,13 @@ const styles = StyleSheet.create({
   value: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   unit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginLeft: 4,
   },
@@ -371,6 +374,7 @@ const styles = StyleSheet.create({
     minWidth: 60,
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     borderBottomWidth: 2,
     borderBottomColor: BRAND.primary,
@@ -383,6 +387,7 @@ const styles = StyleSheet.create({
   unitEdit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginLeft: 6,
     marginRight: 8,
@@ -418,6 +423,7 @@ const styles = StyleSheet.create({
   selectOptionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   selectOptionTextActive: {

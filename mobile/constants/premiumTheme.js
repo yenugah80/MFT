@@ -250,12 +250,140 @@ export const TYPOGRAPHY = {
     normal: 1.5,
     relaxed: 1.75,
   },
-  // Font families - DM Sans for premium feel
+  // Font families - Tenor Sans for elegant premium feel
   family: {
-    regular: 'DMSans_400Regular',
-    medium: 'DMSans_500Medium',
-    semibold: 'DMSans_600SemiBold',
-    bold: 'DMSans_700Bold',
+    regular: 'TenorSans_400Regular',
+    medium: 'TenorSans_400Regular',    // Tenor Sans only has 400 weight
+    semibold: 'TenorSans_400Regular',  // Use fontWeight for visual variation
+    bold: 'TenorSans_400Regular',      // Use fontWeight for visual variation
+  },
+};
+
+// =============================================================================
+// TEXT STYLE UTILITIES - Centralized font system for consistent typography
+// =============================================================================
+// Use these instead of hardcoded fontFamily values throughout the app.
+// This ensures Tenor Sans is used everywhere and makes weight changes easy.
+// =============================================================================
+
+/**
+ * Create a text style object with proper Tenor Sans font family
+ * @param {string} size - Key from TYPOGRAPHY.size (xs, sm, base, md, lg, xl, 2xl, etc.)
+ * @param {string} weight - Key from TYPOGRAPHY.family (regular, medium, semibold, bold)
+ * @param {string} color - Color value (defaults to TEXT.primary)
+ * @returns {object} Style object with fontSize, fontFamily, and color
+ */
+export const createTextStyle = (size = 'base', weight = 'regular', color = TEXT.primary) => ({
+  fontSize: TYPOGRAPHY.size[size] || TYPOGRAPHY.size.base,
+  fontFamily: TYPOGRAPHY.family[weight] || TYPOGRAPHY.family.regular,
+  color,
+});
+
+/**
+ * Pre-defined text styles for common use cases
+ * Import and spread these in your StyleSheet for consistent typography
+ */
+export const TEXT_STYLES = {
+  // Display styles - for large headings and hero text
+  displayLarge: {
+    fontSize: TYPOGRAPHY.size['4xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+    letterSpacing: -0.5,
+  },
+  displayMedium: {
+    fontSize: TYPOGRAPHY.size['3xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+    letterSpacing: -0.3,
+  },
+  displaySmall: {
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+
+  // Heading styles - for section headers
+  headingLarge: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  headingMedium: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  headingSmall: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+
+  // Body styles - for paragraphs and general text
+  bodyLarge: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.md * TYPOGRAPHY.lineHeight.normal,
+  },
+  bodyMedium: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.base * TYPOGRAPHY.lineHeight.normal,
+  },
+  bodySmall: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    lineHeight: TYPOGRAPHY.size.sm * TYPOGRAPHY.lineHeight.normal,
+  },
+
+  // Label styles - for buttons, chips, and UI elements
+  labelLarge: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  labelMedium: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.primary,
+  },
+  labelSmall: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.secondary,
+  },
+
+  // Caption styles - for metadata and tertiary info
+  caption: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+  },
+  captionBold: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.tertiary,
+  },
+
+  // Numeric styles - for stats, values, and numbers
+  numericLarge: {
+    fontSize: TYPOGRAPHY.size['3xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  numericMedium: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  numericSmall: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
   },
 };
 
@@ -898,6 +1026,8 @@ export const PREMIUM_THEME = {
   SEMANTIC_ACTIONS,
   CELEBRATION,
   TYPOGRAPHY,
+  TEXT_STYLES,
+  createTextStyle,
   SPACING,
   RADIUS,
   SHADOWS,

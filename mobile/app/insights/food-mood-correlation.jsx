@@ -441,6 +441,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   timeRangeContainer: {
@@ -461,7 +462,7 @@ const styles = StyleSheet.create({
   },
   timeRangeText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   timeRangeTextActive: {
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   tabTextActive: {
@@ -498,17 +499,18 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionSubtitle: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: -8,
   },
   sectionLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: 8,
   },
@@ -538,11 +540,11 @@ const styles = StyleSheet.create({
   insightNumberText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   insightTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -556,10 +558,11 @@ const styles = StyleSheet.create({
   },
   effectText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   insightDescription: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 18,
   },
@@ -588,11 +591,12 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   scoreLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: -2,
   },
@@ -631,17 +635,18 @@ const styles = StyleSheet.create({
   },
   deficiencyName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
   deficiencyPercent: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.warning.base,
   },
   deficiencyFoods: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   adequateSection: {
@@ -660,7 +665,7 @@ const styles = StyleSheet.create({
   },
   adequateChipText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   nutrientCard: {
     backgroundColor: SURFACES.card.primary,
@@ -682,11 +687,12 @@ const styles = StyleSheet.create({
   },
   nutrientTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   nutrientDescription: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 18,
   },
@@ -704,12 +710,13 @@ const styles = StyleSheet.create({
   },
   patternTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
   },
   patternInsight: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 18,
   },
@@ -722,11 +729,12 @@ const styles = StyleSheet.create({
   },
   insufficientDataTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   insufficientDataText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
   },
@@ -739,11 +747,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
   },
@@ -756,7 +765,7 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 });

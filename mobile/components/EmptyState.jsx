@@ -93,6 +93,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
     textAlign: 'center',
@@ -129,6 +130,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
 });

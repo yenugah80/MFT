@@ -205,12 +205,14 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Typography
   headline: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     lineHeight: 26,
     letterSpacing: -0.3,
@@ -218,6 +220,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 20,
   },
@@ -240,6 +243,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -279,6 +283,7 @@ const styles = StyleSheet.create({
   quietTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   quietSubtitle: {

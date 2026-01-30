@@ -228,6 +228,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   badge: {
@@ -260,6 +261,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   statLabel: {
     fontSize: 10,
@@ -313,6 +315,7 @@ const styles = StyleSheet.create({
   dayLabelToday: {
     color: TEXT.primary,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   chartLegend: {
     flexDirection: 'row',

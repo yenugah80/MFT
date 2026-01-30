@@ -457,6 +457,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   headerSpacer: {
@@ -481,6 +482,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   moodScroll: {
@@ -504,6 +506,7 @@ const styles = StyleSheet.create({
   mealName: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     flex: 1,
     marginRight: SPACING[2],
@@ -511,6 +514,7 @@ const styles = StyleSheet.create({
   mealTime: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: SEMANTIC.warning.base,
   },
   collapsibleHeader: {
@@ -536,6 +540,7 @@ const styles = StyleSheet.create({
   tagCountText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   noteInput: {
@@ -573,6 +578,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 });

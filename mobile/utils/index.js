@@ -39,7 +39,7 @@ export { default as healthCalculations } from './healthCalculations';
 export { default as healthMetrics } from './healthMetrics';
 
 // Food & Mood Analysis
-export { default as foodMoodScore } from './foodMoodScore';
+export { default as wellnessScore } from './wellnessScore';
 export { default as moodNutrients } from './moodNutrients';
 export { default as moodAggregation } from './moodAggregation';
 export { default as allergenDetection } from './allergenDetection';

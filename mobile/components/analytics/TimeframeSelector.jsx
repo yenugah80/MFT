@@ -8,7 +8,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const TIMEFRAMES = [
   { key: 'daily', label: 'Day', icon: 'today-outline' },
@@ -89,12 +89,12 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   optionLabelSelected: {
     color: BRAND.primary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });
 

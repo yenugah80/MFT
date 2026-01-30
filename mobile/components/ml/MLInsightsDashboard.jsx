@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 import PredictionCard from './PredictionCard';
 import PersonalizationProgress from './PersonalizationProgress';
@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   errorContainer: {
@@ -297,12 +298,13 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: 12,
   },
   errorText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 4,
     textAlign: 'center',
@@ -316,7 +318,7 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   header: {
     flexDirection: 'row',
@@ -326,11 +328,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   headerSubtitle: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 4,
   },
@@ -349,12 +352,13 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginBottom: 4,
   },
   summaryTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   summaryScore: {
@@ -363,11 +367,12 @@ const styles = StyleSheet.create({
   },
   summaryScoreValue: {
     fontSize: 36,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   summaryScoreLabel: {
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginLeft: 2,
   },
@@ -382,7 +387,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   confidenceBadge: {
@@ -395,8 +400,8 @@ const styles = StyleSheet.create({
   },
   confidenceValue: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#10B981',
-    fontWeight: '600',
     marginLeft: 4,
   },
   insightsSection: {
@@ -418,11 +423,12 @@ const styles = StyleSheet.create({
   },
   insightLabel: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   insightValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   qualityIndicator: {
@@ -452,12 +458,13 @@ const styles = StyleSheet.create({
   },
   reliabilityTask: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginBottom: 4,
   },
   reliabilityValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   reliabilityHigh: {
     color: '#10B981',
@@ -479,6 +486,7 @@ const styles = StyleSheet.create({
   recommendationText: {
     flex: 1,
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: BRAND.primary,
     marginLeft: 12,
     lineHeight: 20,
@@ -489,6 +497,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 });

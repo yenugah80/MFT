@@ -770,7 +770,7 @@ export function useFoodLog() {
       totalCalories: filtered.reduce((sum, log) => sum + (log.calories || 0), 0),
       totalProtein: filtered.reduce((sum, log) => sum + (log.protein || 0), 0),
       totalCarbs: filtered.reduce((sum, log) => sum + (log.carbs || 0), 0),
-      totalFat: filtered.reduce((sum, log) => sum + (log.fat || 0), 0),
+      totalFats: filtered.reduce((sum, log) => sum + (log.fat || 0), 0),
       logs: filtered,
     };
   }, [logs]);

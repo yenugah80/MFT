@@ -529,6 +529,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   card: {
@@ -560,17 +561,20 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
   metricUnit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   metricLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -605,6 +609,7 @@ const styles = StyleSheet.create({
   genderLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -612,6 +617,7 @@ const styles = StyleSheet.create({
   genderValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: 2,
   },
@@ -623,6 +629,7 @@ const styles = StyleSheet.create({
   activitySectionLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -649,6 +656,7 @@ const styles = StyleSheet.create({
   activityLabel: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   activityDescription: {
@@ -704,6 +712,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   modalCloseBtn: {
@@ -725,6 +734,7 @@ const styles = StyleSheet.create({
   largeInput: {
     fontSize: 48,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     textAlign: 'center',
     minWidth: 100,
@@ -735,6 +745,7 @@ const styles = StyleSheet.create({
   inputUnit: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginLeft: SPACING[2],
   },
@@ -759,6 +770,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 
@@ -786,6 +798,7 @@ const styles = StyleSheet.create({
   genderOptionText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
@@ -821,6 +834,7 @@ const styles = StyleSheet.create({
   activityOptionLabel: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   activityOptionLabelActive: {

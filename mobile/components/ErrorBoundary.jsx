@@ -1,5 +1,5 @@
 import React from 'react';
-import { TEXT } from '../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../constants/premiumTheme';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { reportCrash } from '../services/crashReporting';
@@ -144,13 +144,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
     textAlign: 'center',
     marginBottom: 12,
   },
   message: {
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 24,
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#ef4444',
     marginBottom: 8,
   },
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
   },
   secondaryButton: {

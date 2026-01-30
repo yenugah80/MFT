@@ -160,6 +160,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     marginBottom: SPACING.sm,
   },
@@ -182,6 +183,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   chartContainer: {
@@ -237,6 +239,7 @@ const styles = StyleSheet.create({
   dayLabelToday: {
     color: COLORS.nutrition.primary,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   barValue: {
     fontSize: TYPOGRAPHY.size.caption,

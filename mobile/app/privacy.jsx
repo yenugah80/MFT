@@ -8,6 +8,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import SafeScreen from '@/components/SafeScreen';
+import { TYPOGRAPHY } from '../constants/premiumTheme';
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
@@ -236,6 +237,7 @@ const styles = StyleSheet.create({
   subSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#374151',
     marginBottom: 8,
   },

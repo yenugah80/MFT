@@ -12,7 +12,7 @@
  */
 
 import React, { useState } from 'react';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -180,13 +180,14 @@ const styles = StyleSheet.create({
 
   headerTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING.xs
   },
 
   headerSubtitle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary
   },
 
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
 
   ingredientName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     flex: 1,
     textTransform: 'capitalize'
@@ -218,6 +219,7 @@ const styles = StyleSheet.create({
 
   ingredientAmount: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginLeft: SPACING.sm
   },
@@ -230,6 +232,7 @@ const styles = StyleSheet.create({
 
   nutritionText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     lineHeight: 16
   },
@@ -254,7 +257,7 @@ const styles = StyleSheet.create({
 
   summaryTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING.xs,
     textTransform: 'uppercase',
@@ -269,7 +272,7 @@ const styles = StyleSheet.create({
 
   summaryText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: BRAND.primary
   }
 });

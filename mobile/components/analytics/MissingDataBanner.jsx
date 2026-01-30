@@ -9,7 +9,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Severity levels for missing data
 const SEVERITY = {
@@ -205,10 +205,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   message: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     lineHeight: 20,
     marginBottom: 8,
@@ -222,6 +223,7 @@ const styles = StyleSheet.create({
   suggestion: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 18,
   },
@@ -239,10 +241,12 @@ const styles = StyleSheet.create({
   },
   gapText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   moreGaps: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     fontStyle: 'italic',
     marginTop: 4,
@@ -259,7 +263,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   notice: {
@@ -273,6 +277,7 @@ const styles = StyleSheet.create({
   noticeText: {
     flex: 1,
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     lineHeight: 14,
   },
@@ -290,11 +295,11 @@ const styles = StyleSheet.create({
   compactText: {
     flex: 1,
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   compactAction: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 });

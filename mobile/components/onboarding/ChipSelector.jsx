@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, BRAND, SURFACES, RADIUS, SPACING, SHADOWS , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, RADIUS, SPACING, SHADOWS, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const ChipSelector = ({
   title,
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[4],
   },
@@ -194,13 +194,13 @@ const styles = StyleSheet.create({
   },
   chipLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textAlign: 'center',
     flexShrink: 1,
   },
   chipLabelSelected: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   checkmarkBadge: {
     width: 22,

@@ -178,6 +178,7 @@ const styles = StyleSheet.create({
   compactLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: SPACING[2],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -188,6 +189,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -256,5 +258,6 @@ const styles = StyleSheet.create({
   gradeLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

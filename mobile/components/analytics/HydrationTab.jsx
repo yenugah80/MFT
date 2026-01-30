@@ -249,6 +249,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: SPACING[4],
   },
@@ -273,6 +274,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
   },
@@ -302,6 +304,7 @@ const styles = StyleSheet.create({
   ringValue: {
     fontSize: TYPOGRAPHY.size['4xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: SPACING[1],
   },

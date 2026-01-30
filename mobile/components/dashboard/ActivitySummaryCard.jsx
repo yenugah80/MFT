@@ -65,7 +65,7 @@ export default function ActivitySummaryCard() {
   const progressColor = getProgressColor(weeklyProgressPercent);
 
   return (
-    <TouchableOpacity style={styles.container} onPress={handleViewInsights} activeOpacity={0.9}>
+    <View style={styles.container}>
       <LinearGradient
         colors={['#F5F3FF', '#EEE8FF']}
         start={{ x: 0, y: 0 }}
@@ -179,8 +179,33 @@ export default function ActivitySummaryCard() {
           )}
         </View>
 
+        {/* Action Buttons */}
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleViewInsights}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="analytics-outline" size={16} color={BRAND.primary} />
+            <Text style={styles.actionButtonText}>Insights</Text>
+            <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push('/insights/activity-insights');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="time-outline" size={16} color={BRAND.primary} />
+            <Text style={styles.actionButtonText}>History</Text>
+            <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
+          </TouchableOpacity>
+        </View>
+
       </LinearGradient>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -209,6 +234,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   insightsBadge: {
@@ -223,6 +249,7 @@ const styles = StyleSheet.create({
   insightsBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   todayStats: {
@@ -243,12 +270,14 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: 4,
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   divider: {
@@ -273,6 +302,7 @@ const styles = StyleSheet.create({
   weeklyTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   progressBadge: {
@@ -283,6 +313,7 @@ const styles = StyleSheet.create({
   progressPercentage: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   progressBarContainer: {
     marginBottom: SPACING[2],
@@ -301,6 +332,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -315,6 +347,7 @@ const styles = StyleSheet.create({
   insightText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     flex: 1,
   },
@@ -344,11 +377,37 @@ const styles = StyleSheet.create({
   earnedCaloriesTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#059669',
   },
   earnedCaloriesSubtitle: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     marginTop: 2,
+  },
+  // Action Buttons
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: `${BRAND.primary}20`,
+  },
+  actionButtonText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
   },
 });

@@ -53,6 +53,7 @@ import {
   SURFACES,
   BRAND,
 } from '../constants/premiumTheme';
+import { announceWaterLogged, announceHydrationGoalReached } from '../services/audioFeedback';
 
 // ============================================================================
 // CONSTANTS & CONFIG
@@ -1535,6 +1536,15 @@ export default function HydrationTracker({
 
       // Success haptic
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Audio confirmation for accessibility
+      const newIntake = currentIntake + (effectiveMl / 1000);
+      const newPercentage = (newIntake / dailyGoal) * 100;
+      if (newPercentage >= 100 && percentage < 100) {
+        announceHydrationGoalReached();
+      } else {
+        announceWaterLogged(ml, selectedBeverage);
+      }
     } catch (error) {
       console.error('[HydrationTracker] Error logging water:', error);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -1545,7 +1555,7 @@ export default function HydrationTracker({
         syncInFlightRef.current = false;
       }, 500);
     }
-  }, [selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater]);
+  }, [selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater, currentIntake, dailyGoal, percentage]);
 
   // Handle custom amount submission
   const handleCustomAdd = useCallback(async () => {
@@ -1601,6 +1611,15 @@ export default function HydrationTracker({
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Audio confirmation for accessibility
+      const newIntake = currentIntake + (effectiveMl / 1000);
+      const newPercentage = (newIntake / dailyGoal) * 100;
+      if (newPercentage >= 100 && percentage < 100) {
+        announceHydrationGoalReached();
+      } else {
+        announceWaterLogged(ml, selectedBeverage);
+      }
     } catch (error) {
       console.error('[HydrationTracker] Error logging custom water:', error);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -1610,7 +1629,7 @@ export default function HydrationTracker({
         syncInFlightRef.current = false;
       }, 500);
     }
-  }, [customAmount, selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater]);
+  }, [customAmount, selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater, currentIntake, dailyGoal, percentage]);
 
   const handleUndo = useCallback(async () => {
     if (syncInFlightRef.current) return;
@@ -1979,12 +1998,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: TYPOGRAPHY.weight.extrabold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: SPACING[1],
   },
@@ -2032,14 +2052,14 @@ const styles = StyleSheet.create({
   },
   progressPercentage: {
     fontSize: TYPOGRAPHY.size['4xl'],
-    fontWeight: TYPOGRAPHY.weight.black,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.info.base,
     letterSpacing: -1,
   },
   progressLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    color: '#64748B', // Slate blue - more vibrant than gray
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -2055,7 +2075,7 @@ const styles = StyleSheet.create({
   },
   nextMilestoneText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.info.base,
   },
   liquidInner: {
@@ -2083,7 +2103,7 @@ const styles = StyleSheet.create({
   },
   liquidPercentage: {
     fontSize: 36,
-    fontWeight: TYPOGRAPHY.weight.black,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
@@ -2091,8 +2111,8 @@ const styles = StyleSheet.create({
   },
   liquidLabel: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
-    fontWeight: TYPOGRAPHY.weight.semibold,
     marginTop: 2,
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
@@ -2109,13 +2129,13 @@ const styles = StyleSheet.create({
   },
   mainStatValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.info.base,
   },
   mainStatLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: '#7C93B2', // Soft blue-gray - matches hydration theme
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: '#7C93B2',
     marginTop: 4,
   },
   mainStatDivider: {
@@ -2148,8 +2168,8 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: '#475569', // Deeper slate - stands out more
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#475569',
     marginBottom: SPACING[3],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -2230,12 +2250,13 @@ const styles = StyleSheet.create({
   },
   quickAddTileLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     marginTop: SPACING[2],
   },
   quickAddTileSubtitle: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 2,
   },
@@ -2293,13 +2314,13 @@ const styles = StyleSheet.create({
   },
   stepperValue: {
     fontSize: 36,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -1,
   },
   stepperUnit: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#7C93B2',
     marginTop: -4,
   },
@@ -2322,7 +2343,7 @@ const styles = StyleSheet.create({
   },
   stepperAddButtonText: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 

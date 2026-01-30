@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { API_BASE_URL } from '../../constants/api';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export function ConnectionStatus() {
   const [status, setStatus] = useState('checking'); // 'checking' | 'connected' | 'disconnected'
@@ -121,12 +122,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#333',
     marginBottom: 4,
   },
   errorText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#666',
     lineHeight: 16,
   },
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
   },
   retryText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#333',
   },
 });

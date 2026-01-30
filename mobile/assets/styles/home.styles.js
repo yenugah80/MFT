@@ -1,5 +1,6 @@
 import { StyleSheet, Dimensions } from "react-native";
 import { COLORS } from "../../constants/colors";
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const { width } = Dimensions.get("window");
 const cardWidth = (width - 48) / 2;
@@ -35,6 +36,7 @@ export const homeStyles = StyleSheet.create({
   tabTitle: {
     fontSize: 24,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     letterSpacing: -0.4,
   },
@@ -80,6 +82,7 @@ export const homeStyles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textLight,
     fontWeight: "500",
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   welcomeSection: {
     paddingHorizontal: 20,
@@ -92,6 +95,7 @@ export const homeStyles = StyleSheet.create({
   welcomeText: {
     fontSize: 32,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     letterSpacing: -0.5,
   },
@@ -138,6 +142,7 @@ export const homeStyles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 12,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   featuredContent: {
     justifyContent: "flex-end",
@@ -145,6 +150,7 @@ export const homeStyles = StyleSheet.create({
   featuredTitle: {
     fontSize: 24,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.white,
     marginBottom: 12,
     textShadowColor: "rgba(0,0,0,0.3)",
@@ -164,6 +170,7 @@ export const homeStyles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.white,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   recipesSection: {
     paddingHorizontal: 20,
@@ -175,6 +182,7 @@ export const homeStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     letterSpacing: -0.5,
   },
@@ -193,6 +201,7 @@ export const homeStyles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     marginTop: 16,
     marginBottom: 8,
@@ -248,6 +257,7 @@ export const homeStyles = StyleSheet.create({
   categoryText: {
     fontSize: 12,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text,
     textAlign: "center",
   },
@@ -287,6 +297,7 @@ export const recipeCardStyles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     marginBottom: 4,
     lineHeight: 20,
@@ -311,6 +322,7 @@ export const recipeCardStyles = StyleSheet.create({
     color: COLORS.textLight,
     marginLeft: 4,
     fontWeight: "500",
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   servingsContainer: {
     flexDirection: "row",
@@ -321,5 +333,6 @@ export const recipeCardStyles = StyleSheet.create({
     color: COLORS.textLight,
     marginLeft: 4,
     fontWeight: "500",
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

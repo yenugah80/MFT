@@ -8,6 +8,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import SafeScreen from '@/components/SafeScreen';
+import { TYPOGRAPHY } from '../constants/premiumTheme';
 
 export default function TermsOfServiceScreen() {
   const router = useRouter();
@@ -288,5 +289,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

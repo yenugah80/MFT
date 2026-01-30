@@ -9,7 +9,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const WellnessScoreCard = ({
   wellness,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   qualityBadge: {
@@ -231,6 +231,7 @@ const styles = StyleSheet.create({
   },
   qualityText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   scoreSection: {
@@ -243,10 +244,11 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 64,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   scoreMax: {
     fontSize: 24,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginLeft: 4,
   },
@@ -258,10 +260,11 @@ const styles = StyleSheet.create({
   },
   interpretationEmoji: {
     fontSize: 24,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   interpretationLabel: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   trendContainer: {
     flexDirection: 'row',
@@ -275,7 +278,7 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   buildingSection: {
     alignItems: 'center',
@@ -283,12 +286,13 @@ const styles = StyleSheet.create({
   },
   buildingText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 12,
   },
   buildingSubtext: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 4,
   },
@@ -300,7 +304,7 @@ const styles = StyleSheet.create({
   },
   componentsTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: 12,
   },
@@ -319,11 +323,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: TEXT.primary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   componentScore: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   progressBar: {
     height: 6,
@@ -338,6 +342,7 @@ const styles = StyleSheet.create({
   },
   componentLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -353,6 +358,7 @@ const styles = StyleSheet.create({
   gapsText: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   insufficientContainer: {
@@ -362,12 +368,13 @@ const styles = StyleSheet.create({
   },
   insufficientTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: 16,
   },
   insufficientMessage: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     marginTop: 8,
@@ -381,7 +388,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 14,
     color: BRAND.primary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });
 

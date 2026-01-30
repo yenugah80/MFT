@@ -248,6 +248,7 @@ const styles = StyleSheet.create({
   centerLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.tertiary,
     marginTop: 4,
   },
@@ -278,11 +279,13 @@ const styles = StyleSheet.create({
   legendLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.secondary,
   },
   legendValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.text.tertiary,
   },
   // Empty state
@@ -298,6 +301,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.text.muted,
   },
 });

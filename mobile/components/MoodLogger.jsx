@@ -23,6 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useMoodLog } from '../hooks/useMoodLog';
 import MoodIcon3D from './MoodTracker/MoodIcon3D';
+import { announceMoodLogged } from '../services/audioFeedback';
 import {
   MOOD_PALETTE,
   SPACING,
@@ -42,10 +43,12 @@ const hexToRgba = (hex, alpha) => {
 };
 
 // Tag categories for mood context with vibrant colors
+// Enhanced social context based on wellbeing research - who you're with matters for mood
 const TAG_CATEGORIES = {
   sleep: { label: 'Sleep', icon: 'moon', options: ['Poor', 'Fair', 'Good', 'Excellent'], color: MOOD_PALETTE.focused.base },
   exercise: { label: 'Exercise', icon: 'barbell', options: ['None', 'Light', 'Moderate', 'Intense'], color: SEMANTIC_ACTIONS.success },
-  social: { label: 'Social', icon: 'people', options: ['Alone', 'Friends', 'Family', 'Crowded'], color: MOOD_PALETTE.calm.base },
+  social: { label: 'Who With', icon: 'people', options: ['Alone', 'Partner', 'Close Friends', 'Family', 'Coworkers'], color: MOOD_PALETTE.calm.base },
+  connection: { label: 'Connection', icon: 'heart', options: ['Disconnected', 'Neutral', 'Connected', 'Deep'], color: MOOD_PALETTE.happy.base },
 };
 
 /**
@@ -239,6 +242,8 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
         tags,
         note: trimmedNote,
       });
+      // Audio confirmation for accessibility
+      announceMoodLogged(selectedMood, trimmedNote);
       onSuccess?.(selectedMood);
       onClose();
     } catch (err) {
@@ -454,7 +459,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     textAlign: 'center',
   },
@@ -489,12 +494,12 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   sliderValue: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   sliderTrack: {
     height: 40,
@@ -522,7 +527,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   sliderThumbText: {
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontSize: TYPOGRAPHY.size.base,
   },
   sliderLabels: {
@@ -532,10 +537,11 @@ const styles = StyleSheet.create({
   },
   sliderLabelText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   sliderHelperText: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     textAlign: 'center',
     marginTop: SPACING[1],
   },
@@ -549,7 +555,7 @@ const styles = StyleSheet.create({
   },
   advancedToggleText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   tagsContainer: {
     marginTop: SPACING[3],
@@ -572,7 +578,7 @@ const styles = StyleSheet.create({
   },
   tagLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   tagOptions: {
     flexDirection: 'row',
@@ -587,11 +593,11 @@ const styles = StyleSheet.create({
   },
   tagOptionText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   noteLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: SPACING[2],
   },
   noteInput: {
@@ -600,12 +606,14 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     minHeight: 80,
     textAlignVertical: 'top',
   },
   charCount: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     textAlign: 'right',
     marginTop: SPACING[1],
   },
@@ -625,7 +633,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   saveButton: {
     flex: 1,
@@ -645,7 +653,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 });

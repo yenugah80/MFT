@@ -69,6 +69,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.inverse,
   },
   center: {
@@ -79,6 +80,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.callout,
     color: COLORS.text.inverse,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: SPACING.xs,
   },
   date: {

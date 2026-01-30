@@ -1,5 +1,29 @@
 /**
- * FoodMoodScoreCard - Personalized Wellness Hero
+ * WellnessScoreCard - Comprehensive Daily Wellness Score (Hero Card)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * WELLNESS COMPONENT ARCHITECTURE
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * This is the PRIMARY wellness visualization on the dashboard.
+ * It shows a COMPOSITE score from 4 equal domains (25 points each = 100 total):
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │  DOMAIN        │  MAX POINTS  │  DATA SOURCE                               │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │  Food/Nutrition│     25       │  today.nutrition (calories, protein, etc.) │
+ * │  Mood          │     25       │  moodLogs array                            │
+ * │  Hydration     │     25       │  today.waterIntakeLiters                   │
+ * │  Activity      │     25       │  activityData (minutes, intensity)         │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * RELATED COMPONENTS (no duplication):
+ * - WellnessNarrativeCard: Shows server-calculated apiWellnessScore + narrative
+ * - EnhancedMoodCard: Mood-only view (showWellnessScore={false} to avoid overlap)
+ * - NutritionDetailsSection: Detailed macro/calorie breakdown
+ *
+ * SCORE CALCULATION:
+ * Uses calculateWellnessScore() from utils/wellnessScore.js
  *
  * Design Principles:
  * 1. USER-SPECIFIC - Greets by name, knows their patterns
@@ -22,7 +46,7 @@ import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { BRAND, TEXT, SURFACES } from '../../constants/premiumTheme';
-import { calculateFoodMoodScore } from '../../utils/foodMoodScore';
+import { calculateWellnessScore } from '../../utils/wellnessScore';
 
 /**
  * Pie Chart Score Visual - 4 Wellness Domains
@@ -206,11 +230,13 @@ const pieStyles = StyleSheet.create({
   scoreValue: {
     fontSize: 28,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -1,
   },
   tierLabel: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     letterSpacing: 0.3,
     marginTop: -2,
   },
@@ -234,6 +260,7 @@ const pieStyles = StyleSheet.create({
     fontSize: 10,
     color: TEXT.secondary,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });
 
@@ -264,6 +291,7 @@ const achievementStyles = StyleSheet.create({
   text: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });
 
@@ -271,7 +299,7 @@ const achievementStyles = StyleSheet.create({
  * Main Wellness Score Card Component
  * Displays wellness score based on 4 domains: Food, Mood, Hydration, Activity
  */
-export default function FoodMoodScoreCard({
+export default function WellnessScoreCard({
   today = {},
   goals = {},
   moodLogs = [],
@@ -295,7 +323,7 @@ export default function FoodMoodScoreCard({
     const activityIntensity = activity?.intensity || 'moderate';
     const activityTypes = activity?.types || [];
 
-    return calculateFoodMoodScore({
+    return calculateWellnessScore({
       // Nutrition
       calories: nutrition.totalCalories || 0,
       calorieGoal: goals?.dailyCalories || 2000,
@@ -611,6 +639,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   headerSubtitle: {
@@ -618,6 +647,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -634,6 +664,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   content: {
     alignItems: 'center',
@@ -648,6 +679,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -669,5 +701,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

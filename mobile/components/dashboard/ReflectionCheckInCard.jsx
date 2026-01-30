@@ -139,6 +139,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
@@ -164,6 +165,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   body: {
     marginBottom: SPACING[4],
@@ -185,10 +187,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: 'rgba(255, 255, 255, 0.75)',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   statValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     marginTop: 4,
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
@@ -226,6 +230,7 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 });

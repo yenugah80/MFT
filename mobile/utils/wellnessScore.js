@@ -1,11 +1,23 @@
 /**
- * Wellness Score - Holistic Health Metric
+ * wellnessScore.js - Wellness Score Calculator
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * USAGE: This utility is used by WellnessScoreCard (components/dashboard/)
+ * to calculate the client-side composite wellness score.
+ *
+ * Main export: calculateWellnessScore()
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
  * A research-based composite score (0-100) from 4 core wellness domains:
- * - Food (Nutrition): 25 points - calorie adherence, macro balance, quality
- * - Mood: 25 points - emotional state, stability, trends
- * - Hydration: 25 points - water intake vs goal, timing
- * - Activity: 25 points - exercise minutes, intensity, variety
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │  DOMAIN      │  MAX POINTS  │  FACTORS                                     │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │  Nutrition   │     25       │  Calorie adherence, macro balance, quality   │
+ * │  Mood        │     25       │  Emotional state, stability, trends          │
+ * │  Hydration   │     25       │  Water intake vs goal, timing                │
+ * │  Activity    │     25       │  Exercise minutes, intensity, variety        │
+ * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * Research foundations:
  * - PMC11553003: Lifestyle Wellness Assessment methodology
@@ -19,7 +31,7 @@
  * @param {Object} params - Score calculation parameters
  * @returns {Object} - Score details with breakdown and recommendations
  */
-export function calculateFoodMoodScore({
+export function calculateWellnessScore({
   // Nutrition factors
   calories = 0,
   calorieGoal = 2000,
@@ -1223,7 +1235,7 @@ export function detectPatterns({
 }
 
 export default {
-  calculateFoodMoodScore,
+  calculateWellnessScore,
   calculateScoreTrend,
   predictTomorrowScore,
   detectPatterns,

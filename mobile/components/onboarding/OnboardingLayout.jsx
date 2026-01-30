@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BackButton from './BackButton';
-import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const OnboardingLayout = ({
   step = 1,
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   },
   brandName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
     letterSpacing: -0.5,
   },
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   stepIndicator: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   progressBarSection: {
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textAlign: 'right',
     writingDirection: 'ltr', // Ensure progress text always displays LTR
@@ -238,13 +238,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 14,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     lineHeight: 20,
   },

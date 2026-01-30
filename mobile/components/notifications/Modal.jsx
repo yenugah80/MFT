@@ -1,5 +1,5 @@
 import React from 'react';
-import { TEXT } from '../../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../../constants/premiumTheme';
 import {
   Modal as RNModal,
   View,
@@ -125,13 +125,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
     textAlign: 'center',
     marginBottom: 8,
   },
   message: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -154,7 +155,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   confirmButton: {
@@ -162,7 +163,7 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
   },
   destructiveButton: {

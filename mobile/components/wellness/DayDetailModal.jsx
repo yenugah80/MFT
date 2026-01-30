@@ -24,7 +24,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { SPACING, RADIUS } from '../../constants/designTokens';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -93,16 +93,16 @@ const barStyles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   score: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   maxScore: {
     fontSize: 12,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   track: {
@@ -163,11 +163,12 @@ const mealStyles = StyleSheet.create({
   },
   name: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   details: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -225,11 +226,12 @@ const moodStyles = StyleSheet.create({
   },
   mood: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   details: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -436,11 +438,12 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   dateLabel: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -472,12 +475,12 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 48,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -2,
   },
   scoreMax: {
     fontSize: 20,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginLeft: 4,
   },
@@ -491,7 +494,7 @@ const styles = StyleSheet.create({
   },
   tierLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Sections
@@ -500,7 +503,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -533,11 +536,12 @@ const styles = StyleSheet.create({
   },
   waterValue: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#3B82F6',
   },
   waterLabel: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 
@@ -550,12 +554,14 @@ const styles = StyleSheet.create({
   },
   activityText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
   },
 
   // More text
   moreText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     paddingTop: SPACING[2],
@@ -568,12 +574,13 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: SPACING[3],
   },
   emptySubtext: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: SPACING[1],
     textAlign: 'center',

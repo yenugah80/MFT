@@ -17,7 +17,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TEXT, BRAND, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * CircularProgress - Animated circular progress ring
@@ -96,6 +96,6 @@ const styles = StyleSheet.create({
   },
   percentageText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 });

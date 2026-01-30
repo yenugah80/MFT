@@ -28,7 +28,7 @@ import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -308,16 +308,18 @@ const styles = StyleSheet.create({
   },
   domainEmoji: {
     fontSize: 32,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 22,
@@ -346,12 +348,12 @@ const styles = StyleSheet.create({
   },
   responseButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textAlign: 'center',
   },
   selectedButtonText: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   loadingContainer: {
     paddingVertical: 20,
@@ -359,6 +361,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   detailLink: {
@@ -370,6 +373,7 @@ const styles = StyleSheet.create({
   },
   detailLinkText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   skipButton: {
@@ -378,6 +382,7 @@ const styles = StyleSheet.create({
   },
   skipButtonText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 });

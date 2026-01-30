@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { TEXT } from '../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../constants/premiumTheme';
 import {
   View,
   Text,
@@ -440,12 +440,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   waveContainer: {
@@ -486,7 +487,7 @@ const styles = StyleSheet.create({
   // Premium volume display - concrete numbers, not just %
   progressVolume: {
     fontSize: 40,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1e40af',
     textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 0 },
@@ -495,7 +496,7 @@ const styles = StyleSheet.create({
   progressGoal: {
     fontSize: 14,
     color: '#64748b',
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginTop: 2,
     textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 0 },
@@ -504,7 +505,7 @@ const styles = StyleSheet.create({
   progressPercent: {
     fontSize: 18,
     color: '#0ea5e9',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginTop: 4,
     textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 0, height: 0 },
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 12,
   },
@@ -539,14 +540,14 @@ const styles = StyleSheet.create({
   },
   presetLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
     marginBottom: 2,
   },
   presetAmount: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.9)',
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   customSection: {
     marginBottom: 20,
@@ -561,7 +562,7 @@ const styles = StyleSheet.create({
   quickIncrementLabel: {
     fontSize: 13,
     color: TEXT.secondary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   quickIncrementButton: {
     paddingHorizontal: 12,
@@ -574,7 +575,7 @@ const styles = StyleSheet.create({
   quickIncrementText: {
     fontSize: 12,
     color: '#3b82f6',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   customInputRow: {
     flexDirection: 'row',
@@ -589,6 +590,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#1f2937',
   },
   addButton: {
@@ -604,7 +606,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   closeButton: {
@@ -616,7 +618,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   // Success overlay - celebration moment
@@ -642,7 +644,7 @@ const styles = StyleSheet.create({
   },
   successText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#0ea5e9',
   },
   errorContainer: {
@@ -655,7 +657,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#ef4444', // Darker red text
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontSize: 14,
   },
 });

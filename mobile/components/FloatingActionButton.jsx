@@ -357,6 +357,7 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 

@@ -450,6 +450,11 @@ function SuggestionCard({ item, index, onSelect, onAccept, onTrack, isDark }) {
                 <Text style={styles.aiBadgeText}>AI</Text>
               </View>
             )}
+            {item.wellnessContext && (
+              <View style={styles.wellnessContextBadge}>
+                <Ionicons name="heart" size={9} color="#10B981" />
+              </View>
+            )}
           </View>
           <View style={styles.suggestionMeta}>
             <View style={styles.metaItem}>
@@ -462,7 +467,13 @@ function SuggestionCard({ item, index, onSelect, onAccept, onTrack, isDark }) {
               <Text style={styles.metaText}>{item.protein}g</Text>
             </View>
           </View>
-          {item.reason && (
+          {/* Wellness-aware reasoning - shows why this meal is good for your current state */}
+          {item.wellnessReasoning ? (
+            <View style={styles.wellnessReasonContainer}>
+              <Ionicons name="heart-outline" size={11} color="#10B981" />
+              <Text style={styles.wellnessReasonText} numberOfLines={1}>{item.wellnessReasoning}</Text>
+            </View>
+          ) : item.reason && (
             <Text style={styles.reasonText} numberOfLines={1}>{item.reason}</Text>
           )}
         </View>
@@ -581,6 +592,9 @@ export default function SmartMealSuggestionCard({
       icon: getCategoryIcon(rec.mealType || rec.category),
       category: mapMealTypeToCategory(rec.mealType),
       reason: rec.reason,
+      // Wellness intelligence reasoning - explains WHY this recommendation based on holistic wellness
+      wellnessReasoning: rec.wellnessReasoning,
+      wellnessContext: rec.wellnessContext, // e.g., "POST_WORKOUT", "LOW_RECOVERY", etc.
       isAIPowered: true,
       originalRec: rec, // Keep original for accept action
     }));
@@ -825,6 +839,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.base, // Consistent with other cards
     fontWeight: TYPOGRAPHY.weight.semibold, // Consistent with other cards
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   headerSubtitle: {
@@ -842,6 +857,7 @@ const styles = StyleSheet.create({
   viewMoreText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   textDark: {
@@ -870,6 +886,7 @@ const styles = StyleSheet.create({
   budgetLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -877,6 +894,7 @@ const styles = StyleSheet.create({
   budgetValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#10B981',
   },
   budgetValueLow: {
@@ -948,6 +966,7 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -963,14 +982,43 @@ const styles = StyleSheet.create({
   aiBadgeText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#8B5CF6',
     letterSpacing: 0.5,
+  },
+  // Wellness context badge - shows heart when recommendation is wellness-aware
+  wellnessContextBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   reasonText: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginTop: 2,
     fontStyle: 'italic',
+  },
+  // Wellness-aware reasoning styles
+  wellnessReasonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderRadius: RADIUS.sm,
+    alignSelf: 'flex-start',
+  },
+  wellnessReasonText: {
+    fontSize: 10,
+    color: '#059669',
+    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   suggestionMeta: {
     flexDirection: 'row',
@@ -985,6 +1033,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   metaDivider: {
     width: 1,
@@ -1031,6 +1080,7 @@ const styles = StyleSheet.create({
   quickActionText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -1052,6 +1102,7 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },

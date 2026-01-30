@@ -2,13 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Voice from '@react-native-voice/voice';
 import apiClient from '../services/apiClient';
 import { useBackendVoice } from './useBackendVoice';
+import { getSpeechLocale } from '../constants/languages';
 
 /**
  * Hook for Instant On-Device Voice Transcription
  * Uses native speech recognition for zero-latency text feedback.
  * Sends final text to backend for nutrition analysis.
  */
-export const useInstantVoice = () => {
+export const useInstantVoice = (options = {}) => {
+  const { voiceLanguage = 'en' } = options;
+  const speechLocale = getSpeechLocale(voiceLanguage);
   const [isNativeRecording, setIsNativeRecording] = useState(false);
   const [nativeTranscript, setNativeTranscript] = useState('');
   const [nativeError, setNativeError] = useState(null);
@@ -100,11 +103,12 @@ export const useInstantVoice = () => {
       manualOverridesRef.current = {}; // Reset overrides on new recording
       isRecordingRef.current = true;
       
-      // Try starting native voice
-      await Voice.start('en-US');
+      // Try starting native voice with configured language
+      await Voice.start(speechLocale);
+      console.log(`[useInstantVoice] Started voice recognition with locale: ${speechLocale}`);
     } catch (e) {
       console.warn('On-device voice failed, switching to backend fallback:', e);
-      
+
       // Fallback to backend voice
       setIsFallbackMode(true);
       try {
@@ -115,7 +119,7 @@ export const useInstantVoice = () => {
         setNativeError('Could not start recording (both modes failed)');
       }
     }
-  }, [backendVoice]);
+  }, [backendVoice, speechLocale]);
 
   const stopRecording = useCallback(async () => {
     isRecordingRef.current = false;

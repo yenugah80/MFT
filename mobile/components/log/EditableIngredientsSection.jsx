@@ -9,7 +9,7 @@ import {
   UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   badge: {
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   modifiedBadge: {
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   },
   modifiedBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   headerRight: {
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   calorieChange: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   content: {
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   },
   ingredientName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -447,10 +447,12 @@ const styles = StyleSheet.create({
   },
   ingredientCalories: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   ingredientPercentage: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   calorieBarContainer: {
@@ -476,7 +478,7 @@ const styles = StyleSheet.create({
   },
   addOnsTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -504,7 +506,7 @@ const styles = StyleSheet.create({
   },
   addOnText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   addOnTextActive: {
@@ -512,6 +514,7 @@ const styles = StyleSheet.create({
   },
   addOnCalories: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   addOnCaloriesActive: {
@@ -531,7 +534,7 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   summaryGrid: {
@@ -543,11 +546,12 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   summaryLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -563,6 +567,7 @@ const styles = StyleSheet.create({
   disclaimerText: {
     flex: 1,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     lineHeight: 16,
   },

@@ -9,6 +9,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -432,6 +433,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#111827',
   },
   titleBlock: {
@@ -450,6 +452,7 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B7280',
   },
   iconButton: {
@@ -484,11 +487,13 @@ const styles = StyleSheet.create({
   selectionHintText: {
     color: '#4F46E5',
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontSize: 13,
   },
   cancelText: {
     color: '#EF4444',
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontSize: 13,
   },
   filterBar: {
@@ -520,6 +525,7 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B7280',
   },
   filterChipTextActive: {
@@ -543,6 +549,7 @@ const styles = StyleSheet.create({
   scanChipText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   // Section list styles
@@ -558,11 +565,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#374151',
   },
   sectionCount: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#9CA3AF',
   },
   listContent: {
@@ -587,6 +596,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#374151',
     marginBottom: 6,
   },
@@ -616,6 +626,7 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
   },
   detailMeta: {
@@ -645,6 +656,7 @@ const styles = StyleSheet.create({
   primaryActionText: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   secondaryAction: {
     flex: 1,
@@ -657,6 +669,7 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     color: '#1F2937',
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   closeButton: {
     width: 32,

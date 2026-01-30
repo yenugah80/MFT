@@ -21,7 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   daysBadge: {
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   daysText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#8B5CF6',
   },
   progressContainer: {
@@ -269,11 +269,12 @@ const styles = StyleSheet.create({
   },
   percentText: {
     fontSize: 28,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   percentLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -305,11 +306,12 @@ const styles = StyleSheet.create({
   },
   stageLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   stageLabelActive: {
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   messageContainer: {
     alignItems: 'center',
@@ -317,6 +319,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     marginBottom: 8,

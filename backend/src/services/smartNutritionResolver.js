@@ -13,7 +13,22 @@
  */
 
 import { usdaClient } from './apiClients/USDAClient.js';
-import { buildNutritionEstimationPrompt, buildBatchNutritionEstimationPrompt } from './apiClients/prompts/nutritionEstimation.js';
+import {
+  buildNutritionEstimationPrompt,
+  buildBatchNutritionEstimationPrompt,
+  expandAbbreviations,
+  detectHomonyms,
+  parseNegationModifiers,
+  parseAdditionModifiers,
+  detectPreparationContext,
+  parseVagueQuantity,
+  detectBrandFood,
+  detectBoneInFood,
+  detectLeftoverFood,
+  detectSugarAlcohols,
+  PREPARATION_ADJUSTMENTS,
+  BRAND_FOODS,
+} from './apiClients/prompts/nutritionEstimation.js';
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
 import { cache as redisCache, isRedisAvailable, cacheKeys } from '../config/redis.js';
@@ -139,8 +154,13 @@ class SmartNutritionResolver {
    *
    * STRATEGY: Trust OpenAI for ingredient preservation (spinach stays spinach!)
    * Only use USDA for generic foods where exact nutrient data is critical
+   *
+   * @param {string} foodQuery - The food name/description
+   * @param {string} portion - Portion size (default: '1 serving')
+   * @param {string|null} userId - User ID for learned portions
+   * @param {object} context - Additional context (modifiers, preparation, etc.)
    */
-  async resolveFood(foodQuery, portion = '1 serving', userId = null) {
+  async resolveFood(foodQuery, portion = '1 serving', userId = null, context = {}) {
     this.stats.totalRequests++;
 
     // CRITICAL FIX #1: Canonicalize input FIRST - use same normalized form for cache + prompt
@@ -182,10 +202,29 @@ class SmartNutritionResolver {
     }
 
     try {
+      // Step 0: NEW - Check for known brand foods FIRST (skip AI for exact brand nutrition)
+      const brandOverride = this._checkBrandFoodOverride(canonicalQuery);
+      if (brandOverride.isBrandFood) {
+        const result = {
+          ...brandOverride.nutrition,
+          estimationTier: 'brand_database',
+          portion_source: portionSource,
+          portion_confidence: 'precise',
+          can_learn: userId !== null,
+          cacheKey,
+        };
+
+        // Cache brand food results (they're highly accurate)
+        await this._cacheSet(cacheKey, result);
+        this.stats.openaiEstimates++; // Count as resolved
+        return result;
+      }
+
       // Step 1: Get OpenAI estimation (fast, always available, preserves ingredients)
       // CRITICAL: Use CANONICAL form to ensure consistency between cache + prompt
       // If cache key uses "banana" (canonical) but prompt uses "BANANA" (raw), mismatch occurs
-      const openAIResult = await this._getOpenAIEstimation(canonicalQuery, portionToUse);
+      // ENHANCED: Pass context for modifier handling and preparation adjustments
+      const openAIResult = await this._getOpenAIEstimation(canonicalQuery, portionToUse, context);
 
       // Step 2: Check if this is an ingredient-specific food (protein/vegetable/grain)
       const hasSpecificIngredient = this._hasSpecificIngredient(canonicalQuery);
@@ -536,11 +575,27 @@ class SmartNutritionResolver {
   }
 
   /**
-   * Get OpenAI nutrition estimation
+   * Get OpenAI nutrition estimation with enhanced preprocessing and post-processing
    * @private
    */
-  async _getOpenAIEstimation(foodQuery, portion) {
-    const prompt = buildNutritionEstimationPrompt(foodQuery, portion);
+  async _getOpenAIEstimation(foodQuery, portion, context = {}) {
+    // Build prompt with full preprocessing (abbreviations, homonyms, modifiers, context)
+    const prompt = buildNutritionEstimationPrompt(foodQuery, portion, context);
+    const { metadata } = prompt;
+
+    // Log preprocessing results for debugging
+    if (metadata.wasAbbreviationExpanded) {
+      console.log(`[SmartResolver] 📝 Expanded abbreviation: "${metadata.abbreviation}" → "${metadata.expandedQuery}"`);
+    }
+    if (metadata.needsDisambiguation) {
+      console.log(`[SmartResolver] ⚠️ Ambiguous food detected: "${metadata.homonym}" - possible: ${metadata.possibleMeanings.join(', ')}`);
+    }
+    if (metadata.negations.hasNegation) {
+      console.log(`[SmartResolver] ➖ Negation modifiers: removed=[${metadata.negations.removedItems}], reduced=[${metadata.negations.reducedItems}]`);
+    }
+    if (metadata.additions.hasAdditions) {
+      console.log(`[SmartResolver] ➕ Addition modifiers: ${metadata.additions.additions.map(a => `${a.item}×${a.multiplier}`).join(', ')}`);
+    }
 
     // Use safe wrapper - validates and sanitizes JSON BEFORE returning
     const estimation = await safeJSONCompletion(
@@ -550,9 +605,9 @@ class SmartNutritionResolver {
       ],
       {
         model: 'gpt-4o-mini',
-        temperature: 0.0, // Zero temperature for deterministic, precise nutrition facts
-        maxTokens: 800,
-        maxRetries: 1, // Retry once with repair prompt if JSON is malformed
+        temperature: 0.0,
+        maxTokens: 1200, // Increased for new schema with confidence intervals
+        maxRetries: 1,
       }
     );
 
@@ -562,22 +617,216 @@ class SmartNutritionResolver {
     // FIXED P0: Backend macro validation using Atwater factors
     this._validateMacros(estimation);
 
-    // Return validated and structured response
+    // Post-processing: Apply preparation context adjustments if AI didn't already
+    const adjustedMacros = this._applyContextAdjustments(
+      estimation.macros,
+      metadata.preparationContext,
+      estimation.modifiersApplied
+    );
+
+    // Post-processing: Calculate confidence intervals if not provided
+    const confidenceIntervals = estimation.confidenceIntervals ||
+      this._calculateConfidenceIntervals(adjustedMacros, estimation.recognitionConfidence || estimation.confidence);
+
+    // Return validated and structured response with enhanced fields
     return {
       foodName: estimation.foodName,
       portionSize: estimation.portionSize || portion,
       servingGrams: estimation.servingGrams || 0,
-      confidence: estimation.confidence,
-      estimationTier: estimation.estimationTier || 'standard', // simple, standard, or complex
-      validationPassed: estimation.validationPassed ?? true, // Macro validation status
-      macros: estimation.macros,
+      confidence: estimation.recognitionConfidence || estimation.confidence,
+      recognitionStatus: estimation.recognitionStatus || 'identified',
+      estimationTier: estimation.estimationTier || 'standard',
+      validationPassed: estimation.validationPassed ?? true,
+
+      // Macros with potential context adjustments
+      macros: adjustedMacros,
+      macrosOriginal: estimation.macros, // Keep original for comparison
+
+      // Confidence intervals for uncertainty
+      confidenceIntervals,
+
+      // Micronutrients
       micros: estimation.micros || {},
-      components: estimation.components || [], // Component breakdown for complex foods
-      isComplex: estimation.isComplex || false, // Whether food has multiple components
-      estimationMethod: estimation.estimationMethod || 'OpenAI estimation',
+
+      // Components for complex foods
+      components: estimation.components || [],
+      isComplex: estimation.isComplex || false,
+
+      // Disambiguation info
+      disambiguationNeeded: estimation.disambiguationNeeded || metadata.needsDisambiguation,
+      possibleInterpretations: estimation.possibleInterpretations || (
+        metadata.needsDisambiguation ? metadata.possibleMeanings.map((m, i) => ({
+          interpretation: m,
+          likelihood: i === 0 ? 0.6 : 0.4 / (metadata.possibleMeanings.length - 1)
+        })) : []
+      ),
+
+      // Modifiers tracking
+      modifiersApplied: {
+        negations: metadata.negations.removedItems.concat(metadata.negations.reducedItems),
+        additions: metadata.additions.additions.map(a => a.item),
+        preparationContext: metadata.preparationContext.context,
+        vagueQuantity: metadata.vagueQuantity.detected ? metadata.vagueQuantity.vagueWord : null,
+        abbreviationExpanded: metadata.wasAbbreviationExpanded ? metadata.abbreviation : null,
+      },
+
+      // Validation and reasoning
+      validationStatus: estimation.validationStatus || {
+        atwaterValid: estimation.validationPassed ?? true,
+        calculatedCalories: this._calculateAtwaterCalories(adjustedMacros),
+        reportedCalories: adjustedMacros.calories_kcal,
+        discrepancyPercent: 0,
+      },
+      reasoning: estimation.reasoning || null,
+
+      // Metadata
+      estimationMethod: estimation.estimationMethod || 'OpenAI estimation (enhanced)',
+      assumptions: estimation.assumptions || [],
+      warnings: estimation.warnings || [],
+      potentialAllergens: estimation.potentialAllergens || [],
       needsVerification: estimation.needsVerification || false,
-      notes: estimation.notes || '', // Additional context or assumptions
+
+      // Preprocessing metadata for debugging
+      _preprocessing: {
+        originalQuery: metadata.originalQuery,
+        expandedQuery: metadata.expandedQuery,
+        wasExpanded: metadata.wasAbbreviationExpanded,
+        contextApplied: metadata.preparationContext.context !== 'unknown',
+        // NEW: Additional preprocessing flags
+        isBrandFood: metadata.brandFood?.isBrandFood || false,
+        brandName: metadata.brandFood?.brand || null,
+        hasBone: metadata.boneIn?.hasBone || false,
+        isLeftover: metadata.leftover?.isLeftover || false,
+        hasSugarAlcohols: metadata.sugarAlcohols?.hasSugarAlcohols || false,
+      },
     };
+  }
+
+  /**
+   * Check if food is a known brand and return exact nutrition
+   * This bypasses AI estimation for known fast food items
+   * @private
+   */
+  _checkBrandFoodOverride(foodQuery) {
+    const brandResult = detectBrandFood(foodQuery);
+
+    if (brandResult.isBrandFood && brandResult.brandData) {
+      const data = brandResult.brandData;
+      console.log(`[SmartResolver] 🏷️ Brand food detected: "${brandResult.brandFood}" from ${data.brand}`);
+
+      return {
+        isBrandFood: true,
+        nutrition: {
+          foodName: brandResult.brandFood,
+          portionSize: data.unit || '1 serving',
+          servingGrams: 0, // Brand foods don't typically specify grams
+          confidence: 98, // High confidence for brand data
+          recognitionStatus: 'identified',
+          macros: {
+            calories_kcal: data.calories,
+            protein_g: data.protein,
+            carbs_g: data.carbs,
+            fat_g: data.fat,
+            fiber_g: data.fiber || 2, // Estimate fiber if not provided
+            sugar_g: data.sugar || Math.round(data.carbs * 0.3), // Estimate sugar
+            sodium_mg: data.sodium,
+          },
+          micros: {},
+          components: [],
+          isComplex: false,
+          source: `brand_database_${data.brand.toLowerCase().replace(/[^a-z]/g, '_')}`,
+          sourceConfidence: 98,
+          validationPassed: true,
+          assumptions: [`Using ${data.brand} official nutrition data`],
+          warnings: [],
+          potentialAllergens: [],
+        },
+      };
+    }
+
+    return { isBrandFood: false, nutrition: null };
+  }
+
+  /**
+   * Apply preparation context adjustments to macros
+   * @private
+   */
+  _applyContextAdjustments(macros, prepContext, alreadyApplied = {}) {
+    // Skip if AI already applied modifiers
+    if (alreadyApplied?.preparationContext && alreadyApplied.preparationContext !== 'unknown') {
+      return macros;
+    }
+
+    const adjustments = prepContext?.adjustments;
+    if (!adjustments) {
+      return macros;
+    }
+
+    console.log(`[SmartResolver] 🍳 Applying ${prepContext.context} context adjustments`);
+
+    return {
+      ...macros,
+      fat_g: Math.round(macros.fat_g * adjustments.fatMultiplier * 10) / 10,
+      sodium_mg: Math.round(macros.sodium_mg * adjustments.sodiumMultiplier),
+      // Recalculate calories based on adjusted fat
+      calories_kcal: Math.round(
+        (macros.protein_g * 4) +
+        ((macros.carbs_g - (macros.fiber_g || 0)) * 4) +
+        ((macros.fiber_g || 0) * 2) +
+        (macros.fat_g * adjustments.fatMultiplier * 9)
+      ),
+    };
+  }
+
+  /**
+   * Calculate confidence intervals based on recognition confidence
+   * @private
+   */
+  _calculateConfidenceIntervals(macros, confidence) {
+    // Determine interval width based on confidence
+    let intervalPercent;
+    if (confidence >= 90) {
+      intervalPercent = 0.10; // ±10% for high confidence
+    } else if (confidence >= 75) {
+      intervalPercent = 0.20; // ±20% for medium confidence
+    } else if (confidence >= 60) {
+      intervalPercent = 0.30; // ±30% for low-medium confidence
+    } else {
+      intervalPercent = 0.40; // ±40% for low confidence
+    }
+
+    return {
+      calories: {
+        low: Math.round(macros.calories_kcal * (1 - intervalPercent)),
+        high: Math.round(macros.calories_kcal * (1 + intervalPercent)),
+      },
+      protein: {
+        low: Math.round(macros.protein_g * (1 - intervalPercent) * 10) / 10,
+        high: Math.round(macros.protein_g * (1 + intervalPercent) * 10) / 10,
+      },
+      carbs: {
+        low: Math.round(macros.carbs_g * (1 - intervalPercent) * 10) / 10,
+        high: Math.round(macros.carbs_g * (1 + intervalPercent) * 10) / 10,
+      },
+      fat: {
+        low: Math.round(macros.fat_g * (1 - intervalPercent) * 10) / 10,
+        high: Math.round(macros.fat_g * (1 + intervalPercent) * 10) / 10,
+      },
+    };
+  }
+
+  /**
+   * Calculate expected calories using Atwater factors
+   * @private
+   */
+  _calculateAtwaterCalories(macros) {
+    const digestibleCarbs = Math.max(0, (macros.carbs_g || 0) - (macros.fiber_g || 0));
+    return Math.round(
+      (macros.protein_g || 0) * 4 +
+      digestibleCarbs * 4 +
+      (macros.fiber_g || 0) * 2 +
+      (macros.fat_g || 0) * 9
+    );
   }
 
   /**
@@ -613,21 +862,32 @@ class SmartNutritionResolver {
   /**
    * FIXED P0: Deep schema validation
    * Validates structure and types, not just field existence
+   * ENHANCED: Validates new fields (confidenceIntervals, disambiguationNeeded, etc.)
    * @private
    */
   _validateNutritionSchema(estimation) {
     const errors = [];
+    const warnings = [];
 
-    // Required fields with type validation
+    // ═══════════════════════════════════════════════════════════════════
+    // REQUIRED FIELDS
+    // ═══════════════════════════════════════════════════════════════════
+
+    // foodName - CRITICAL
     if (!estimation.foodName || typeof estimation.foodName !== 'string' || estimation.foodName.trim().length === 0) {
       errors.push('foodName must be non-empty string');
     }
 
-    if (typeof estimation.confidence !== 'number' || estimation.confidence < 0 || estimation.confidence > 100) {
-      errors.push('confidence must be number 0-100');
+    // confidence/recognitionConfidence - accept either
+    const confidence = estimation.recognitionConfidence ?? estimation.confidence;
+    if (typeof confidence !== 'number' || confidence < 0 || confidence > 100) {
+      errors.push('confidence/recognitionConfidence must be number 0-100');
     }
 
-    // Macros object validation
+    // ═══════════════════════════════════════════════════════════════════
+    // MACROS VALIDATION
+    // ═══════════════════════════════════════════════════════════════════
+
     if (!estimation.macros || typeof estimation.macros !== 'object' || Array.isArray(estimation.macros)) {
       errors.push('macros must be object');
     } else {
@@ -637,23 +897,117 @@ class SmartNutritionResolver {
           errors.push(`macros.${field} must be non-negative number, got ${typeof estimation.macros[field]}`);
         }
       }
+
+      // Optional macro fields - validate if present
+      if (estimation.macros.fiber_g !== undefined && typeof estimation.macros.fiber_g !== 'number') {
+        errors.push(`macros.fiber_g must be number, got ${typeof estimation.macros.fiber_g}`);
+      }
+      if (estimation.macros.sugar_g !== undefined && typeof estimation.macros.sugar_g !== 'number') {
+        errors.push(`macros.sugar_g must be number, got ${typeof estimation.macros.sugar_g}`);
+      }
+      if (estimation.macros.sodium_mg !== undefined && typeof estimation.macros.sodium_mg !== 'number') {
+        errors.push(`macros.sodium_mg must be number, got ${typeof estimation.macros.sodium_mg}`);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // MACRO CONSTRAINT VALIDATION
+      // ═══════════════════════════════════════════════════════════════════
+
+      // sugar_g <= carbs_g (sugar is subset of carbs)
+      if (estimation.macros.sugar_g !== undefined && estimation.macros.carbs_g !== undefined) {
+        if (estimation.macros.sugar_g > estimation.macros.carbs_g) {
+          warnings.push(`sugar_g (${estimation.macros.sugar_g}) > carbs_g (${estimation.macros.carbs_g}) - constraint violation`);
+          // Auto-fix: cap sugar at carbs
+          estimation.macros.sugar_g = estimation.macros.carbs_g;
+        }
+      }
+
+      // fiber_g <= carbs_g (fiber is subset of carbs)
+      if (estimation.macros.fiber_g !== undefined && estimation.macros.carbs_g !== undefined) {
+        if (estimation.macros.fiber_g > estimation.macros.carbs_g) {
+          warnings.push(`fiber_g (${estimation.macros.fiber_g}) > carbs_g (${estimation.macros.carbs_g}) - constraint violation`);
+          // Auto-fix: cap fiber at carbs
+          estimation.macros.fiber_g = estimation.macros.carbs_g;
+        }
+      }
     }
 
-    // Optional but if present, must be correct type
-    // FIXED: Check the correct field location (macros.fiber_g, not estimation.fiber_g)
-    if (estimation.macros.fiber_g !== undefined && typeof estimation.macros.fiber_g !== 'number') {
-      errors.push(`macros.fiber_g must be number, got ${typeof estimation.macros.fiber_g}`);
-    }
+    // ═══════════════════════════════════════════════════════════════════
+    // COMPLEX FOOD VALIDATION
+    // ═══════════════════════════════════════════════════════════════════
 
-    // Components validation (if isComplex)
     if (estimation.isComplex && !Array.isArray(estimation.components)) {
       errors.push('components must be array when isComplex=true');
     }
 
+    // Validate component sum matches total (±10% tolerance)
+    if (estimation.isComplex && Array.isArray(estimation.components) && estimation.components.length > 0) {
+      const componentCalories = estimation.components.reduce((sum, c) => sum + (c.calories || 0), 0);
+      const totalCalories = estimation.macros?.calories_kcal || 0;
+
+      if (totalCalories > 0) {
+        const discrepancy = Math.abs(componentCalories - totalCalories) / totalCalories;
+        if (discrepancy > 0.15) { // 15% tolerance
+          warnings.push(
+            `Component calories (${componentCalories}) differ from total (${totalCalories}) by ${(discrepancy * 100).toFixed(1)}%`
+          );
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // NEW FIELDS VALIDATION (enhanced schema)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // recognitionStatus - optional but if present, must be valid
+    if (estimation.recognitionStatus !== undefined) {
+      const validStatuses = ['identified', 'uncertain', 'unknown'];
+      if (!validStatuses.includes(estimation.recognitionStatus)) {
+        warnings.push(`recognitionStatus "${estimation.recognitionStatus}" is not valid, expected: ${validStatuses.join('|')}`);
+      }
+    }
+
+    // confidenceIntervals - optional but if present, validate structure
+    if (estimation.confidenceIntervals) {
+      const intervalFields = ['calories', 'protein', 'carbs', 'fat'];
+      for (const field of intervalFields) {
+        const interval = estimation.confidenceIntervals[field];
+        if (interval) {
+          if (typeof interval.low !== 'number' || typeof interval.high !== 'number') {
+            warnings.push(`confidenceIntervals.${field} must have numeric low and high`);
+          } else if (interval.low > interval.high) {
+            warnings.push(`confidenceIntervals.${field}.low (${interval.low}) > high (${interval.high})`);
+          }
+        }
+      }
+    }
+
+    // disambiguationNeeded + possibleInterpretations
+    if (estimation.disambiguationNeeded === true) {
+      if (!Array.isArray(estimation.possibleInterpretations) || estimation.possibleInterpretations.length < 2) {
+        warnings.push('disambiguationNeeded=true but possibleInterpretations missing or has < 2 options');
+      }
+    }
+
+    // assumptions - should be array
+    if (estimation.assumptions !== undefined && !Array.isArray(estimation.assumptions)) {
+      warnings.push('assumptions should be array');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ERROR HANDLING
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Log warnings but don't fail
+    if (warnings.length > 0) {
+      console.warn(`[SmartResolver] Schema warnings for "${estimation.foodName}":`, warnings);
+      estimation._schemaWarnings = warnings;
+    }
+
+    // Fail on errors
     if (errors.length > 0) {
-      // FIXED P1: Track schema validation errors for metrics
       this.stats.schemaValidationErrors++;
-      throw new OpenAIValidationError('Schema validation failed', { errors, estimation });
+      throw new OpenAIValidationError('Schema validation failed', { errors, warnings, estimation });
     }
   }
 

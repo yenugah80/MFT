@@ -52,15 +52,22 @@ const TAG_CATEGORIES = {
     options: ['None', 'Light', 'Moderate', 'Intense'],
   },
   social: {
-    label: 'Social',
+    label: 'Who With',
     icon: 'people',
     color: MOOD_PALETTE.calm.base,        // Cyan
-    options: ['Alone', 'With Friends', 'With Family', 'Crowded'],
+    options: ['Alone', 'Partner', 'Close Friends', 'Family', 'Coworkers', 'Acquaintances'],
+  },
+  connection: {
+    label: 'Connection Quality',
+    icon: 'heart',
+    color: MOOD_PALETTE.happy.base,       // Warm color for connection
+    options: ['Disconnected', 'Neutral', 'Connected', 'Deeply Connected'],
+    helperText: 'How connected did you feel?',
   },
   weather: {
     label: 'Weather',
     icon: 'partly-sunny',
-    color: MOOD_PALETTE.happy.base,       // Amber
+    color: '#F59E0B',                     // Amber
     options: ['Sunny', 'Rainy', 'Cloudy', 'Snowy'],
   },
   stress: {
@@ -233,13 +240,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
   subtitle: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   categoriesContainer: {
     maxHeight: 400,
@@ -270,7 +277,7 @@ const styles = StyleSheet.create({
   },
   categoryLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   selectionBadge: {
     paddingVertical: SPACING[1],
@@ -279,7 +286,7 @@ const styles = StyleSheet.create({
   },
   selectionBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   optionsContainer: {
@@ -297,7 +304,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   clearButton: {
     flexDirection: 'row',
@@ -309,7 +316,7 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });
 

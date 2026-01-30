@@ -222,6 +222,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[1],
   },
@@ -256,6 +257,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
   divider: {
@@ -272,6 +274,7 @@ const styles = StyleSheet.create({
   trendLabel: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Micro text
@@ -296,5 +299,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.subhead,
     color: PREMIUM_COLORS.text.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

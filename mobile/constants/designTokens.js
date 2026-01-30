@@ -138,12 +138,12 @@ export const TYPOGRAPHY = {
     widest: 1.6,
   },
 
-  // Font families - DM Sans for premium feel
+  // Font families - Tenor Sans for elegant premium feel
   family: {
-    regular: 'DMSans_400Regular',
-    medium: 'DMSans_500Medium',
-    semibold: 'DMSans_600SemiBold',
-    bold: 'DMSans_700Bold',
+    regular: 'TenorSans_400Regular',
+    medium: 'TenorSans_400Regular',
+    semibold: 'TenorSans_400Regular',
+    bold: 'TenorSans_400Regular',
   },
 };
 

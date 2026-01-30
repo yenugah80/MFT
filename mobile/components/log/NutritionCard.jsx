@@ -13,7 +13,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { TEXT, SURFACES, SEMANTIC, SEMANTIC_ACTIONS, NUTRISCORE, HEALTH_SCORE } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SEMANTIC, SEMANTIC_ACTIONS, NUTRISCORE, HEALTH_SCORE, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { getConfidenceBadge, getConfidenceDescription } from '../../utils/confidenceUtils';
 
 /**
@@ -501,6 +501,7 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 24,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 4,
   },
@@ -520,6 +521,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 8,
   },
@@ -537,6 +539,7 @@ const styles = StyleSheet.create({
   healthScoreValue: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textAlign: 'right',
   },
   caloriesContainer: {
@@ -550,6 +553,7 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 48,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.info.base,
   },
   caloriesLabel: {
@@ -614,6 +618,7 @@ const styles = StyleSheet.create({
   legendValue: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   macroGrid: {
@@ -627,6 +632,7 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   macroLabel: {
@@ -652,6 +658,7 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   microsContainer: {
@@ -710,6 +717,7 @@ const styles = StyleSheet.create({
   ingredientName: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -717,6 +725,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT.secondary,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   ingredientDetails: {
     marginTop: 8,
@@ -737,6 +746,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT.primary,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   actions: {
     flexDirection: 'row',
@@ -755,6 +765,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   saveButton: {
@@ -771,6 +782,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
   // Enhanced UI Styles
@@ -789,6 +801,7 @@ const styles = StyleSheet.create({
   confidenceBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -818,6 +831,7 @@ const styles = StyleSheet.create({
   },
   infoBold: {
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   warningBox: {
     flexDirection: 'row',

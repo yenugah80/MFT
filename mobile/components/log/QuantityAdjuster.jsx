@@ -7,7 +7,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Quantity Adjuster Component
@@ -254,6 +254,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   caloriesLabel: {
@@ -263,6 +264,7 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   controlsRow: {
@@ -297,6 +299,7 @@ const styles = StyleSheet.create({
   quantityText: {
     fontSize: 28,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   unitText: {
@@ -325,6 +328,7 @@ const styles = StyleSheet.create({
   quickButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   quickButtonTextActive: {
@@ -377,6 +381,7 @@ const styles = StyleSheet.create({
   optionPillText: {
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   optionPillTextActive: {

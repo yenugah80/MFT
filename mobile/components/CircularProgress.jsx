@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { SEMANTIC_ACTIONS, TEXT, SURFACES, getMutedToVibrantSolid } from '../constants/premiumTheme';
+import { SEMANTIC_ACTIONS, TEXT, SURFACES, TYPOGRAPHY, getMutedToVibrantSolid } from '../constants/premiumTheme';
 
 const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
 
@@ -107,29 +107,30 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   unit: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   percent: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },
   label: {
     marginTop: 8,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   noGoalText: {
     fontSize: 14,
     color: TEXT.tertiary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });
 

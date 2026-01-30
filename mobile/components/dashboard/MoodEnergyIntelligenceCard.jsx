@@ -15,7 +15,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Get mood icon and color
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: 0.5,
   },
@@ -310,17 +310,18 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginTop: SPACING.xs,
   },
   statusValue: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: 2,
   },
   statusSubtext: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
   },
   patternTitle: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
     marginLeft: 6,
     letterSpacing: 0.5,
@@ -371,18 +372,19 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#D97706',
   },
   patternMessage: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     lineHeight: 20,
     marginBottom: SPACING.xs,
   },
   patternSample: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   trendSection: {
@@ -390,7 +392,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING.sm,
   },
@@ -404,11 +406,12 @@ const styles = StyleSheet.create({
   },
   trendValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   trendLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -427,7 +430,7 @@ const styles = StyleSheet.create({
   },
   trendChangeText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginLeft: 4,
   },
   actions: {
@@ -446,7 +449,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
     marginLeft: SPACING.xs,
   },
@@ -458,7 +461,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     marginRight: 6,
   },

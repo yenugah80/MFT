@@ -7,6 +7,7 @@
  * Purpose:
  * 1. Personalize faster - Learn what works for this specific user
  * 2. Prove value - Show tangible results from following recommendations
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
  * 3. Train future models - Build feedback loop for smarter suggestions
  * 4. Reactive → Adaptive - Transform from static to learning system
  *
@@ -634,6 +635,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
   },
   headerSubtitle: {
@@ -677,6 +679,7 @@ const styles = StyleSheet.create({
   ringPercentage: {
     fontSize: TYPOGRAPHY.size.largeTitle,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
   },
   ringLabel: {
@@ -692,6 +695,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   summaryLabel: {
     fontSize: TYPOGRAPHY.size.footnote,
@@ -718,12 +722,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
   seeAllLink: {
     fontSize: TYPOGRAPHY.size.subhead,
     color: PREMIUM_COLORS.brand.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Trend Badge
@@ -739,6 +745,7 @@ const styles = StyleSheet.create({
   trendBadgeText: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.semantic.success.dark,
   },
 
@@ -760,6 +767,7 @@ const styles = StyleSheet.create({
   xAxisLabelActive: {
     color: PREMIUM_COLORS.text.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Category Bars
@@ -777,6 +785,7 @@ const styles = StyleSheet.create({
   categoryBarLabel: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
   },
   categoryBarValue: {
@@ -806,6 +815,7 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Insights
@@ -835,6 +845,7 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
   insightDescription: {
@@ -863,6 +874,7 @@ const styles = StyleSheet.create({
   outcomeTitle: {
     fontSize: TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
   },
   outcomeImpact: {

@@ -585,11 +585,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold, // Consistent with other cards
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   viewAllText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -614,11 +616,13 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   tabTextActive: {
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Tab content
@@ -646,6 +650,7 @@ const styles = StyleSheet.create({
   periodText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     paddingHorizontal: SPACING[3],
     paddingVertical: SPACING[1] + 2,
@@ -656,6 +661,7 @@ const styles = StyleSheet.create({
   periodTextActive: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFF',
   },
 
@@ -676,6 +682,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   summaryLabel: {
@@ -733,6 +740,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginRight: SPACING[2],
   },
@@ -748,6 +756,7 @@ const styles = StyleSheet.create({
   calorieText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   proteinText: {
@@ -804,6 +813,7 @@ const styles = StyleSheet.create({
   historyStatValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   historyStatLabel: {
@@ -833,6 +843,7 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Insights

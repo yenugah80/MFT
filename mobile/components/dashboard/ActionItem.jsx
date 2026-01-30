@@ -205,6 +205,7 @@ const styles = StyleSheet.create({
   primaryText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -242,6 +243,7 @@ const styles = StyleSheet.create({
   secondaryText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
 
@@ -262,6 +264,7 @@ const styles = StyleSheet.create({
   ghostText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: BRAND.primary,
   },
 });

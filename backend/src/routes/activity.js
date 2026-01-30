@@ -32,6 +32,7 @@ import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
+import { clearPatternCache } from '../services/patternMiningService.js';
 
 const router = express.Router();
 
@@ -160,6 +161,9 @@ router.post('/log', async (req, res) => {
     } catch (xpError) {
       console.error('[Activity] XP award failed (non-fatal):', xpError);
     }
+
+    // Clear pattern cache for this user (new data invalidates cached patterns)
+    clearPatternCache(userId);
 
     res.json({
       success: true,

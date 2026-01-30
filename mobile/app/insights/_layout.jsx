@@ -18,6 +18,7 @@ export default function InsightsLayout() {
         headerTitleStyle: {
           fontSize: TYPOGRAPHY.size.lg,
           fontWeight: TYPOGRAPHY.weight.semibold,
+          fontFamily: TYPOGRAPHY.family.semibold,
           color: TEXT.primary,
         },
         headerTintColor: BRAND.primary,

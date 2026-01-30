@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.inverse,
     marginBottom: SPACING.xs,
   },

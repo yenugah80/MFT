@@ -30,6 +30,11 @@ import {
   activityMessages,
 } from '../utils/wittyMessages';
 import { pickFresh } from './intelligence/MessageFreshnessManager';
+import {
+  RATE_LIMITS,
+  DEFAULT_QUIET_HOURS,
+  isQuietHours,
+} from '../constants/notificationTypes';
 
 // ============================================================================
 // STORAGE KEYS
@@ -488,25 +493,24 @@ export const getOptimalNotificationTimes = async () => {
 };
 
 /**
- * Check if we should send a notification (rate limiting)
+ * Check if we should send a notification (rate limiting + quiet hours)
  */
-export const shouldSendNotification = async (type) => {
+export const shouldSendNotification = async (type, quietHours = null) => {
   try {
+    // Check quiet hours first
+    if (isQuietHours(quietHours || DEFAULT_QUIET_HOURS)) {
+      console.log(`[SmartNotificationEngine] Quiet hours active - skipping ${type}`);
+      return false;
+    }
+
     const history = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATION_HISTORY);
     const parsed = history ? JSON.parse(history) : {};
 
     const lastSent = parsed[type];
     if (!lastSent) return true;
 
-    // Minimum intervals (in ms)
-    const intervals = {
-      hydration: 2 * 60 * 60 * 1000,  // 2 hours
-      meal: 3 * 60 * 60 * 1000,       // 3 hours
-      activity: 4 * 60 * 60 * 1000,   // 4 hours
-      mood: 12 * 60 * 60 * 1000,      // 12 hours
-    };
-
-    const interval = intervals[type] || 3 * 60 * 60 * 1000;
+    // Use unified rate limits from constants
+    const interval = RATE_LIMITS[type] || RATE_LIMITS.meal;
     return Date.now() - lastSent > interval;
   } catch {
     return true;
@@ -521,10 +525,94 @@ export const recordNotificationSent = async (type) => {
     const history = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATION_HISTORY);
     const parsed = history ? JSON.parse(history) : {};
     parsed[type] = Date.now();
-    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATION_HISTORY, JSON.stringify(parsed));
+
+    // Clean up old entries (older than 7 days) to prevent storage bloat
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const cleaned = {};
+    for (const [key, timestamp] of Object.entries(parsed)) {
+      if (timestamp > sevenDaysAgo) {
+        cleaned[key] = timestamp;
+      }
+    }
+
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATION_HISTORY, JSON.stringify(cleaned));
   } catch {
     // Ignore errors
   }
+};
+
+/**
+ * Clear all notification history (useful for testing or reset)
+ */
+export const clearNotificationHistory = async () => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.NOTIFICATION_HISTORY);
+    await AsyncStorage.removeItem(STORAGE_KEYS.USER_PATTERNS);
+    console.log('[SmartNotificationEngine] Notification history cleared');
+  } catch {
+    // Ignore errors
+  }
+};
+
+// ============================================================================
+// ONBOARDING NUDGES - For new users (< 7 days)
+// ============================================================================
+
+/**
+ * Generate onboarding nudge for new users
+ * These are simpler, more welcoming messages for cold-start users
+ * Returns null for established users (7+ days active)
+ */
+export const generateOnboardingNudge = async () => {
+  const patterns = await analyzeUserPatterns();
+
+  // Only for newcomers (< 7 days active)
+  if (patterns && patterns.totalDaysActive >= 7) return null;
+
+  const hour = new Date().getHours();
+  const daysActive = patterns?.totalDaysActive || 0;
+
+  // Day 1-2: Focus on getting first logs
+  if (daysActive <= 2) {
+    if (hour >= 8 && hour < 12) {
+      return {
+        title: "Welcome to your wellness journey! 🌱",
+        body: "Log your first meal to start building healthy habits.",
+        data: { type: 'onboarding', action: 'open_log', reason: 'first_meal_prompt' },
+      };
+    }
+    if (hour >= 12 && hour < 18) {
+      return {
+        title: "Ready to track? 📱",
+        body: "Just take a photo or type what you ate. Super quick!",
+        data: { type: 'onboarding', action: 'open_log', reason: 'afternoon_intro' },
+      };
+    }
+  }
+
+  // Day 3-4: Encourage consistency
+  if (daysActive >= 3 && daysActive <= 4) {
+    if (hour >= 8 && hour < 10) {
+      return {
+        title: "Building momentum! 🚀",
+        body: "Day " + daysActive + "! Each log teaches the app about your habits.",
+        data: { type: 'onboarding', action: 'open_log', reason: 'consistency_prompt' },
+      };
+    }
+  }
+
+  // Day 5-6: Preview upcoming features
+  if (daysActive >= 5 && daysActive <= 6) {
+    if (hour >= 18 && hour < 21) {
+      return {
+        title: "Insights coming soon! 🔮",
+        body: "Keep logging! After 7 days, you'll unlock personalized insights.",
+        data: { type: 'onboarding', action: 'open_dashboard', reason: 'feature_preview' },
+      };
+    }
+  }
+
+  return null;
 };
 
 // ============================================================================
@@ -576,6 +664,17 @@ export const generateReengagementMessage = async () => {
 /**
  * Generate celebration message for achievements
  * Called when user completes goals, milestones, etc.
+ *
+ * Celebration types:
+ * - hydration_goal: Daily water goal reached
+ * - streak_milestone: Logging streak milestones (7, 14, 30, 50, 100 days)
+ * - step_goal: Activity step goal reached
+ * - first_log: User's very first food log
+ * - first_water: User's very first water log
+ * - meal_milestone: Meal logging milestones (10, 25, 50, 100, 250 meals)
+ * - mood_streak: Mood logging consistency milestones
+ * - calorie_goal: Daily calorie target hit
+ * - macro_balance: Balanced macro distribution achieved
  */
 export const generateCelebrationMessage = async (type, data = {}) => {
   switch (type) {
@@ -607,6 +706,70 @@ export const generateCelebrationMessage = async (type, data = {}) => {
         data: { type: 'celebration', action: 'celebrate', celebrationType: 'first_log' },
       };
 
+    case 'first_water':
+      return {
+        title: "Hydration started! 💧",
+        body: "First sip logged. Your hydration journey begins now!",
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'first_water' },
+      };
+
+    case 'meal_milestone': {
+      const mealMilestones = {
+        10: "10 meals logged! You're building a solid habit.",
+        25: "25 meals! Quarter-century of tracking excellence.",
+        50: "50 meals! Half a hundred and going strong.",
+        100: "100 meals! Triple digits. You're a logging legend now.",
+        250: "250 meals! A quarter thousand. Absolutely unstoppable.",
+        500: "500 MEALS! Half a thousand. You're in the hall of fame.",
+      };
+      const count = data.mealCount || 0;
+      const message = mealMilestones[count] || `${count} meals logged! Keep it up!`;
+      return {
+        title: `${count} Meals Logged! 🎉`,
+        body: message,
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'meal_milestone', mealCount: count },
+      };
+    }
+
+    case 'mood_streak': {
+      const days = data.days || 0;
+      const moodStreakMessages = {
+        3: "3 days of mood tracking! Self-awareness is a superpower.",
+        7: "Week-long mood streak! You're becoming a feelings pro.",
+        14: "2 weeks of vibes tracked! Pattern recognition unlocked.",
+        30: "30 days! A month of understanding yourself better.",
+      };
+      const message = moodStreakMessages[days] || `${days} days of mood tracking! Amazing commitment.`;
+      return {
+        title: `${days}-Day Mood Streak! 🌟`,
+        body: message,
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'mood_streak', days },
+      };
+    }
+
+    case 'calorie_goal':
+      return {
+        title: "Calorie Goal Hit! 🎯",
+        body: data.underOrOver === 'under'
+          ? "Right on target. Balanced eating for the win!"
+          : "You fueled your body well today. Nice work!",
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'calorie_goal' },
+      };
+
+    case 'macro_balance':
+      return {
+        title: "Macros Balanced! ⚖️",
+        body: "Protein, carbs, and fats in harmony. That's the triple threat!",
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'macro_balance' },
+      };
+
+    case 'activity_goal':
+      return {
+        title: "Activity Goal Crushed! 💪",
+        body: `${data.activeMinutes || 'Your'} active minutes today. Your body thanks you!`,
+        data: { type: 'celebration', action: 'celebrate', celebrationType: 'activity_goal' },
+      };
+
     default:
       return null;
   }
@@ -618,9 +781,11 @@ export default {
   generateMealMessage,
   generateActivityMessage,
   generateMoodMessage,
+  generateOnboardingNudge,
   generateReengagementMessage,
   generateCelebrationMessage,
   getOptimalNotificationTimes,
   shouldSendNotification,
   recordNotificationSent,
+  clearNotificationHistory,
 };

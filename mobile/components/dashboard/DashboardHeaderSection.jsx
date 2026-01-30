@@ -388,6 +388,7 @@ const localStyles = StyleSheet.create({
   brandIconLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
@@ -397,11 +398,13 @@ const localStyles = StyleSheet.create({
   brandName: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: 0.5,
   },
   brandTagline: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     letterSpacing: 0.3,
   },
   premiumBadge: {
@@ -416,6 +419,7 @@ const localStyles = StyleSheet.create({
   premiumText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#F59E0B',
     letterSpacing: 0.5,
   },
@@ -448,6 +452,7 @@ const localStyles = StyleSheet.create({
   avatarText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   onlineIndicator: {
@@ -470,6 +475,7 @@ const localStyles = StyleSheet.create({
   greeting: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   timeIcon: {
     marginLeft: SPACING[2],
@@ -491,6 +497,7 @@ const localStyles = StyleSheet.create({
   intelligenceText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     flex: 1,
     lineHeight: 20,
   },
@@ -520,6 +527,7 @@ const localStyles = StyleSheet.create({
   streakText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: 0.3,
   },
   iconButton: {
@@ -559,6 +567,7 @@ const localStyles = StyleSheet.create({
   quickStatTitle: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 2,
@@ -579,6 +588,7 @@ const localStyles = StyleSheet.create({
   quickStatValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   quickStatLabel: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -632,6 +642,7 @@ const localStyles = StyleSheet.create({
   syncText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   focusModeChip: {
     flexDirection: 'row',
@@ -645,6 +656,7 @@ const localStyles = StyleSheet.create({
   focusModeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Focus Mode Indicator
@@ -661,6 +673,7 @@ const localStyles = StyleSheet.create({
   focusModeIndicatorText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   focusModeIndicatorSubtext: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -684,5 +697,6 @@ const localStyles = StyleSheet.create({
   syncingText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

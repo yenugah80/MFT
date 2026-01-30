@@ -304,6 +304,7 @@ const styles = StyleSheet.create({
   decisionLabel: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   decisionDescription: {
@@ -320,6 +321,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   body: {
@@ -328,6 +330,7 @@ const styles = StyleSheet.create({
   headline: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     lineHeight: 28,
   },
@@ -340,6 +343,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -414,6 +418,7 @@ const styles = StyleSheet.create({
   contextLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: BRAND.primary,
   },
   contextDays: {
@@ -441,6 +446,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   primaryActionText: {
@@ -483,6 +489,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   feedbackThanks: {
     flexDirection: 'row',
@@ -498,5 +505,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

@@ -31,6 +31,8 @@ import { useFoodLog } from '../../hooks/useFoodLog';
 import { useDashboard } from '../../hooks/useDashboard';
 import { useNotification } from '../../providers/NotificationProvider';
 import { useWaterLog } from '../../hooks/useWaterLog';
+import { usePreferences } from '../../hooks/usePreferences';
+import { announceFoodLogged, announceMealLogged } from '../../services/audioFeedback';
 import { calculateCaffeine } from '../../constants/beverageConstants';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
@@ -39,6 +41,7 @@ import useProfileForm from '../../hooks/useProfileForm';
 import { useUser } from '@clerk/clerk-expo';
 import { calculateDailyTargets } from '../../utils/nutritionTargets';
 import { hydrationMessages, moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
+import { getAllergenSeverity } from '../../utils/allergenDetection';
 
 // Components
 import { NutritionCard } from '../../components/log/NutritionCard';
@@ -62,17 +65,14 @@ import { QuickActionsBar } from '../../components/log/QuickActionsBar';
 import { HealthAnalysisModal } from '../../components/log/HealthAnalysisModal';
 import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 
-// Platform-safe professional fonts for nutrition UI
-const fonts = {
-  display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
-  strong: Platform.select({ ios: 'HelveticaNeue-Medium', android: 'Roboto-Medium', default: 'System' }),
-  regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
-};
+// Import centralized typography from premium theme
+import { TYPOGRAPHY, TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 export default function LogScreen() {
   // Hooks - Get user profile for personalized nutrition targets
   const { user } = useUser();
   const { state: profileState } = useProfileForm(user);
+  const { preferences } = usePreferences();
 
   // Calculate personalized daily targets based on user's nutrition goals
   const DAILY_VALUES = useMemo(() => {
@@ -104,7 +104,7 @@ export default function LogScreen() {
   const router = useRouter();
   const { focus, mealType, prefill } = useLocalSearchParams();
   const foodAnalysis = useFoodAnalysis();
-  const voiceHook = useServerVoice({ mealType });
+  const voiceHook = useServerVoice({ mealType, voiceLanguage: preferences?.voiceLanguage || 'en' });
   const foodLog = useFoodLog();
   const { data: dashboardData } = useDashboard();
   const notify = useNotification();
@@ -511,6 +511,26 @@ export default function LogScreen() {
 
       await foodLog.addLog(foodDataWithId);
 
+      // Audio feedback for accessibility
+      const calories = foodData.macros?.calories_kcal || foodData.calories || 0;
+      const foodName = foodData.name || foodData.food || 'Food';
+      announceFoodLogged(foodName, calories, effectiveMealType);
+
+      // Check for allergens and warn user immediately
+      // Uses pattern matching on food name + allergens array for comprehensive detection
+      const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
+      const foodAllergens = foodData.allergens || [];
+      if (userAllergies.length > 0) {
+        const allergenCheck = getAllergenSeverity(foodAllergens, userAllergies, foodName);
+        if (allergenCheck?.hasAllergen) {
+          // Show urgent allergen warning toast
+          notify.warning(
+            `⚠️ This meal contains your allergen: ${allergenCheck.allergens.join(', ')}`,
+            { title: 'Allergen Detected', urgent: true }
+          );
+        }
+      }
+
       // Clear state first to reduce state complexity
       setAnalyzedFood(null);
       setSelectedImage(null);
@@ -596,6 +616,31 @@ export default function LogScreen() {
       });
 
       await Promise.all(savePromises);
+
+      // Audio feedback for accessibility
+      const itemCount = foodAnalysis.analysisResult.items.length;
+      announceMealLogged(itemCount, totalCalories, effectiveMealType);
+
+      // Check for allergens in any item and warn user immediately
+      // Uses pattern matching on item names + allergens array for comprehensive detection
+      const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
+      if (userAllergies.length > 0) {
+        const allAllergens = new Set();
+        foodAnalysis.analysisResult.items.forEach(item => {
+          const itemAllergens = item.allergens || [];
+          const itemName = item.name || item.food || '';
+          const allergenCheck = getAllergenSeverity(itemAllergens, userAllergies, itemName);
+          if (allergenCheck?.hasAllergen) {
+            allergenCheck.allergens.forEach(a => allAllergens.add(a));
+          }
+        });
+        if (allAllergens.size > 0) {
+          notify.warning(
+            `⚠️ This meal contains your allergens: ${Array.from(allAllergens).join(', ')}`,
+            { title: 'Allergen Detected', urgent: true }
+          );
+        }
+      }
 
       // Clear UI first to reduce state complexity
       foodAnalysis.setInputText('');
@@ -1199,6 +1244,8 @@ export default function LogScreen() {
         onClose={() => setShowVoiceModal(false)}
         onComplete={handleVoiceComplete}
         voiceHook={voiceHook}
+        accessibilityMode={preferences?.accessibility?.assistedVoiceMode ? 'elderly' : 'standard'}
+        voiceLanguage={preferences?.voiceLanguage || 'en'}
       />
 
       <CameraModal
@@ -1393,13 +1440,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   subtitle: {
     fontSize: 14,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.9)',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   historyButton: {
     width: 44,
@@ -1479,14 +1526,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textAlign: 'center',
   },
   modeTextActive: {
     fontSize: 14,
     fontWeight: '600', // match inactive for consistency
     color: '#FFFFFF',
-    fontFamily: fonts.strong, // use same font family for both
+    fontFamily: TYPOGRAPHY.family.semibold, // use same font family for both
     textAlign: 'center',
   },
 
@@ -1518,14 +1565,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   inputSubtitle: {
     fontSize: 13,
     fontWeight: '500',
     color: '#6B7280',
     marginTop: 2,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   textInputLarge: {
     backgroundColor: '#F3F4F6',
@@ -1543,7 +1590,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   textInputFocused: {
     borderColor: '#6B4EFF',
@@ -1571,7 +1618,7 @@ const styles = StyleSheet.create({
     color: '#6B4EFF',
     fontWeight: '500',
     lineHeight: 18,
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   /* Error State */
@@ -1593,7 +1640,7 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontWeight: '500',
     lineHeight: 18,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
 
   /* Analysis Status */
@@ -1610,7 +1657,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B4EFF',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   /* Clear Button */
@@ -1629,7 +1676,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#DC2626',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   analyzeButton: {
     marginTop: 12,
@@ -1650,14 +1697,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   analyzeHint: {
     fontSize: 12,
     color: '#6B7280',
     textAlign: 'center',
     marginTop: 8,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
 
   /* Photo Mode */
@@ -1702,7 +1749,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   photoEmptyCard: {
@@ -1730,7 +1777,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 10,
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   photoEmptySubtitle: {
     fontSize: 15,
@@ -1738,7 +1785,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 28,
     lineHeight: 22,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   photoActions: {
     width: '100%',
@@ -1762,7 +1809,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   photoButtonSub: {
     fontSize: 13,
@@ -1787,7 +1834,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#111827',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   photoSecondarySub: {
     fontSize: 13,
@@ -1820,7 +1867,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 10,
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   voiceEmptySubtitle: {
     fontSize: 15,
@@ -1828,7 +1875,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 22,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   voicePrimaryButton: {
     borderRadius: 50,
@@ -1854,7 +1901,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   voiceExamples: {
     flexDirection: 'row',
@@ -1866,7 +1913,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   voiceExamplesList: {
     gap: 8,
@@ -1876,7 +1923,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
     textAlign: 'center',
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
 
   /* Results Container */
@@ -1903,7 +1950,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#B45309',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   suggestionGroup: {
     marginBottom: 8,
@@ -1912,7 +1959,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#92400E',
     marginBottom: 8,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   suggestionChips: {
     gap: 8,
@@ -1929,7 +1976,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#D97706',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   /* Error Card */
@@ -1951,14 +1998,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#DC2626',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   errorMessage: {
     fontSize: 14,
     color: '#DC2626',
     marginBottom: 14,
     lineHeight: 21,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   errorActions: {
     flexDirection: 'row',
@@ -1976,7 +2023,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#DC2626',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   errorRetry: {
     flexDirection: 'row',
@@ -1991,7 +2038,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   /* Sync Card */
@@ -2019,13 +2066,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#4F46E5',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   syncSubtitle: {
     fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
-    fontFamily: fonts.regular,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   syncRetry: {
     flexDirection: 'row',
@@ -2040,7 +2087,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   /* View Details Button */
@@ -2067,7 +2114,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   /* Results Actions */
@@ -2099,7 +2146,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   
   /* Report Button */
@@ -2119,7 +2166,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#EF4444',
-    fontFamily: fonts.strong,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   /* Hydration Modal */
@@ -2155,7 +2202,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1F2937',
-    fontFamily: fonts.display,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   hydrationModalPlaceholder: {
     width: 44,

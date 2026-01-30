@@ -388,10 +388,12 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -410,11 +412,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.title1,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.lg,
@@ -427,6 +431,7 @@ const styles = StyleSheet.create({
   },
   matrixTitle: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
@@ -441,6 +446,7 @@ const styles = StyleSheet.create({
   },
   matrixHeaderLabel: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.tertiary,
     flex: 1,
@@ -465,6 +471,7 @@ const styles = StyleSheet.create({
   foodLabel: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.text.primary,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   impactDots: {
@@ -483,6 +490,7 @@ const styles = StyleSheet.create({
   },
   impactText: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
   },
   ratingStars: {
@@ -533,11 +541,13 @@ const styles = StyleSheet.create({
   },
   boosterTitle: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.inverse,
   },
   boosterFood: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
     marginTop: SPACING.xs,
@@ -551,6 +561,7 @@ const styles = StyleSheet.create({
   boosterLabel: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.text.inverse,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     marginBottom: SPACING.xs,
   },
@@ -585,6 +596,7 @@ const styles = StyleSheet.create({
   },
   declineTitle: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -593,6 +605,7 @@ const styles = StyleSheet.create({
   },
   declineFood: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.mood.danger,
   },
@@ -601,6 +614,7 @@ const styles = StyleSheet.create({
   },
   declineLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.xs,
@@ -608,6 +622,7 @@ const styles = StyleSheet.create({
   declineValue: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.mood.danger,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
   },
   declineExplanation: {
@@ -623,6 +638,7 @@ const styles = StyleSheet.create({
   },
   declineAltFood: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.mood.primary,
     marginTop: SPACING.xs,
@@ -644,6 +660,7 @@ const styles = StyleSheet.create({
   },
   timelineDay: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     width: 50,
@@ -660,6 +677,7 @@ const styles = StyleSheet.create({
   },
   timelineMoodScore: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
   },
   timelinePattern: {
@@ -671,6 +689,7 @@ const styles = StyleSheet.create({
   },
   patternText: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },
@@ -697,6 +716,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextPrimary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
   },
@@ -707,6 +727,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextSecondary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },

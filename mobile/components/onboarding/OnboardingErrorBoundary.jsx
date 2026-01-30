@@ -8,7 +8,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, SEMANTIC } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 class OnboardingErrorBoundary extends React.Component {
   constructor(props) {
@@ -203,14 +203,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     marginBottom: SPACING[2],
   },
   headerSubtitle: {
     fontSize: 15,
     color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     textAlign: 'center',
   },
   content: {
@@ -236,11 +236,12 @@ const styles = StyleSheet.create({
   },
   messageTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   messageText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 22,
   },
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
   },
   devErrorTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.danger.base,
     marginBottom: SPACING[2],
     textTransform: 'uppercase',
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   secondaryButton: {
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   linkButton: {
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
   },
   linkButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textDecorationLine: 'underline',
   },
@@ -337,6 +338,7 @@ const styles = StyleSheet.create({
   helpText: {
     flex: 1,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     lineHeight: 18,
   },

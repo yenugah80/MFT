@@ -20,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { SPACING, RADIUS } from '../../constants/designTokens';
 import { useRecommendationTracking, getDifficultyTierDisplay } from '../../hooks/useInsights';
 
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   emptyCard: {
     borderRadius: RADIUS['2xl'],
@@ -542,11 +542,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -590,19 +591,20 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.tertiary,
     letterSpacing: 1.2,
     marginBottom: 4,
   },
   cardTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     lineHeight: 26,
   },
   cardSubtitle: {
     fontSize: 15,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 22,
     marginBottom: SPACING[3],
@@ -621,6 +623,7 @@ const styles = StyleSheet.create({
   whyText: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 19,
   },
@@ -642,7 +645,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Action Buttons
@@ -665,7 +668,7 @@ const styles = StyleSheet.create({
   },
   completeText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#059669',
   },
   ctaButton: {
@@ -678,7 +681,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -688,7 +691,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.tertiary,
     letterSpacing: 1,
     marginBottom: SPACING[3],
@@ -721,7 +724,7 @@ const styles = StyleSheet.create({
   },
   patternText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     lineHeight: 20,
     marginBottom: 4,
@@ -733,10 +736,11 @@ const styles = StyleSheet.create({
   },
   confidenceTag: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   occurrenceText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 
@@ -752,12 +756,13 @@ const styles = StyleSheet.create({
   },
   discoveriesTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
   },
   discoveriesSubtitle: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginBottom: SPACING[3],
     fontStyle: 'italic',
@@ -770,7 +775,7 @@ const styles = StyleSheet.create({
   },
   countText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#6366F1',
   },
   emptyDiscoveries: {
@@ -781,6 +786,7 @@ const styles = StyleSheet.create({
   },
   emptyDiscoveriesText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -813,7 +819,7 @@ const styles = StyleSheet.create({
   },
   newBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
@@ -825,24 +831,26 @@ const styles = StyleSheet.create({
   },
   discoveryEmoji: {
     fontSize: 28,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   discoveryHeaderContent: {
     flex: 1,
   },
   discoveryHeadline: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     lineHeight: 21,
     marginBottom: 4,
   },
   discoveryStrength: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#10B981',
   },
   discoveryExplanation: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 19,
     marginBottom: SPACING[3],
@@ -859,6 +867,7 @@ const styles = StyleSheet.create({
   actionTipText: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#92400E',
     lineHeight: 18,
   },
@@ -871,6 +880,6 @@ const styles = StyleSheet.create({
   delayText: {
     fontSize: 12,
     color: '#6366F1',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

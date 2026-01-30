@@ -1,5 +1,6 @@
 import express from 'express';
-import { checkAndAwardStreakFreeze, restoreStreak } from '../services/gamificationService.js';
+import { checkAndAwardStreakFreeze, restoreStreak, getStreakRestorationInfo } from '../services/gamificationService.js';
+import { checkStreakBrokenPopup, clearStreakSavedFlag } from '../jobs/dailyStreakCheck.js';
 import { getUserAchievements } from '../services/achievementService.js';
 import { requireAuth } from '../middleware/auth.js';
 import { db } from '../config/db.js';
@@ -112,14 +113,51 @@ router.get('/user', requireAuth, async (req, res) => {
       currentLevelXp: levelInfo.currentLevelXP || 0,
       nextLevelXp: levelInfo.nextLevelXp || 100,
       progressPercent: levelInfo.progressPercent || 0,
-      // Streak restoration info
+      // Streak restoration info (Snapchat-style)
       canRestoreStreak,
       previousStreak,
       streakResetAt,
+      streakSavedByFreeze: gamification.streakSavedByFreeze || false,
+      lastLogDate: gamification.lastLogDate || null,
     });
   } catch (error) {
     console.error('[Gamification] Error fetching user data:', error);
     res.status(500).json({ error: 'Failed to fetch gamification data' });
+  }
+});
+
+// GET /api/gamification/streak-status
+// Get Snapchat-style streak status for popup display
+router.get('/streak-status', requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+
+    // Check if any popup should be shown
+    const popupData = await checkStreakBrokenPopup(userId);
+
+    // Get restoration info
+    const restorationInfo = await getStreakRestorationInfo(userId);
+
+    res.json({
+      popup: popupData,
+      restoration: restorationInfo,
+    });
+  } catch (error) {
+    console.error('[Gamification] Error fetching streak status:', error);
+    res.status(500).json({ error: 'Failed to fetch streak status' });
+  }
+});
+
+// POST /api/gamification/clear-streak-saved
+// Clear the "streak saved by freeze" flag after user acknowledges
+router.post('/clear-streak-saved', requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    await clearStreakSavedFlag(userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Gamification] Error clearing streak saved flag:', error);
+    res.status(500).json({ error: 'Failed to clear flag' });
   }
 });
 

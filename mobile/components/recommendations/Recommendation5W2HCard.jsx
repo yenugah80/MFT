@@ -487,6 +487,7 @@ const styles = StyleSheet.create({
   },
   typeLabel: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -503,6 +504,7 @@ const styles = StyleSheet.create({
   },
   urgencyText: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 
@@ -517,6 +519,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 
@@ -526,6 +529,7 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.size.title3 * 1.25,
@@ -575,6 +579,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: TYPOGRAPHY.size.subhead,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   actionButtonTextPrimary: {
@@ -603,6 +608,7 @@ const styles = StyleSheet.create({
   },
   compactAction: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: 2,

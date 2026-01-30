@@ -251,7 +251,7 @@ const MoodIcon3D = ({
           styles.label,
           selected && {
             color: moodColors.base,
-            fontWeight: TYPOGRAPHY.weight.bold,
+            fontFamily: TYPOGRAPHY.family.bold,
           },
         ]}>
           {label}
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   label: {
     marginTop: SPACING[1],
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   fallbackContainer: {

@@ -36,6 +36,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { getApiUrl } from '../../constants/api';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const TurnstileVerification = ({
   visible,
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1f2937',
   },
   placeholder: {
@@ -187,6 +188,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 15,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6b7280',
   },
   footer: {
@@ -201,6 +203,7 @@ const styles = StyleSheet.create({
   footerText: {
     marginLeft: 6,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#9ca3af',
   },
 });

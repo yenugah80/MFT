@@ -211,6 +211,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[1],
   },
@@ -234,11 +235,13 @@ const styles = StyleSheet.create({
   gaugeValue: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.secondary,
   },
   gaugePercent: {
     fontSize: TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
     marginTop: SPACING[1],
   },
@@ -287,5 +290,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.subhead,
     color: PREMIUM_COLORS.text.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

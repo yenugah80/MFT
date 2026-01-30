@@ -1,6 +1,11 @@
 /**
  * NutritionIntelligenceCard - Tier 5: Dedicated Deep Dive
  *
+ * STATUS: Available for future integration (not currently used in dashboard)
+ * Currently, NutritionDetailsSection provides similar functionality.
+ * This component offers additional AI-powered insights that could enhance
+ * the dashboard when more personalization features are needed.
+ *
  * Premium card showing:
  * - Today's nutrition progress (calories, macros)
  * - AI-powered insights (protein trends, macro balance)
@@ -15,7 +20,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const { width } = Dimensions.get('window');
 
@@ -25,7 +30,7 @@ const { width } = Dimensions.get('window');
 function calculateMacros(nutrition) {
   const protein = nutrition?.totalProtein || 0;
   const carbs = nutrition?.totalCarbs || 0;
-  const fat = nutrition?.totalFat || 0;
+  const fat = nutrition?.totalFats || 0;  // Fixed: was totalFat (singular)
 
   const totalGrams = protein + carbs + fat;
   if (totalGrams === 0) return { protein: 0, carbs: 0, fat: 0 };
@@ -43,7 +48,7 @@ function calculateMacros(nutrition) {
 function generateNutritionInsight({ today, goals, trends }) {
   const calories = today?.nutrition?.totalCalories || 0;
   const protein = today?.nutrition?.totalProtein || 0;
-  const proteinGoal = goals?.proteinGrams || 100;
+  const proteinGoal = goals?.proteinG || 100;  // Fixed: was proteinGrams
 
   // Check protein trend
   if (trends?.proteinTrend && trends.proteinTrend > 0.2) {
@@ -91,9 +96,9 @@ export default function NutritionIntelligenceCard({
   const calories = today?.nutrition?.totalCalories || 0;
   const calorieGoal = goals?.dailyCalories || 2000;
   const protein = today?.nutrition?.totalProtein || 0;
-  const proteinGoal = goals?.proteinGrams || 100;
+  const proteinGoal = goals?.proteinG || 100;  // Fixed: was proteinGrams
   const carbs = today?.nutrition?.totalCarbs || 0;
-  const fat = today?.nutrition?.totalFat || 0;
+  const fat = today?.nutrition?.totalFats || 0;  // Fixed: was totalFat (singular)
 
   const macros = calculateMacros(today?.nutrition);
   const insight = generateNutritionInsight({ today, goals, trends });
@@ -293,7 +298,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: 0.5,
   },
@@ -308,11 +313,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -331,7 +337,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginLeft: 4,
   },
   expandedContent: {
@@ -353,13 +359,14 @@ const styles = StyleSheet.create({
   },
   insightLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
     marginLeft: 6,
     letterSpacing: 0.5,
   },
   insightMessage: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 20,
   },
@@ -368,7 +375,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING.sm,
   },
@@ -398,7 +405,7 @@ const styles = StyleSheet.create({
   },
   macroText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   goalSection: {
@@ -410,7 +417,7 @@ const styles = StyleSheet.create({
   },
   goalText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginLeft: SPACING.xs,
   },
@@ -430,7 +437,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
     marginLeft: SPACING.xs,
   },
@@ -442,7 +449,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     marginRight: 6,
   },

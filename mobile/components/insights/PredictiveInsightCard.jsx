@@ -409,6 +409,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   subtitle: {
@@ -450,6 +451,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.footnote,
     color: '#D97706',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Correlation
@@ -472,6 +474,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.footnote,
     color: '#6D28D9',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Nutrient projection
@@ -490,11 +493,13 @@ const styles = StyleSheet.create({
   nutrientName: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
   nutrientProjected: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   progressBarContainer: {
     height: 8,
@@ -551,6 +556,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   dataPointsText: {
     fontSize: TYPOGRAPHY.size.caption,
@@ -592,6 +598,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 });

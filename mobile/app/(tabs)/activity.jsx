@@ -557,7 +557,7 @@ function ActivityScreen() {
                       >
                         <Text style={[
                           styles.intensityButtonText,
-                          intensity === key && { color: value.color, fontWeight: '700' }
+                          intensity === key && { color: value.color, fontFamily: TYPOGRAPHY.family.bold }
                         ]}>
                           {value.label}
                         </Text>
@@ -624,6 +624,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   headerGradient: {
@@ -638,11 +639,12 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   dateText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 4,
   },
@@ -660,6 +662,7 @@ const styles = StyleSheet.create({
   },
   weeklyBadgeLabel: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
   },
@@ -676,12 +679,13 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
     marginTop: 8,
   },
   statLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.9)',
     marginTop: 4,
   },
@@ -697,7 +701,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   activitiesList: {
@@ -732,11 +736,12 @@ const styles = StyleSheet.create({
   },
   activityName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   activityDetails: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -755,7 +760,7 @@ const styles = StyleSheet.create({
   },
   activityCalories: {
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.warning.base,
   },
   deleteButton: {
@@ -778,6 +783,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     padding: 0,
   },
@@ -786,7 +792,7 @@ const styles = StyleSheet.create({
   },
   filterTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 12,
     paddingHorizontal: 20,
@@ -806,7 +812,7 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   categoryTextSelected: {
@@ -840,11 +846,12 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   exerciseDescription: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -857,10 +864,11 @@ const styles = StyleSheet.create({
   exerciseCalories: {
     fontSize: 12,
     color: SEMANTIC.warning.base,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   exerciseDuration: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   emptyState: {
@@ -875,12 +883,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     lineHeight: 20,
@@ -894,7 +903,7 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
   },
   modalOverlay: {
@@ -924,11 +933,12 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   modalSubtitle: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 4,
     textAlign: 'center',
@@ -938,7 +948,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 8,
   },
@@ -947,6 +957,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
   },
   intensityButtons: {
@@ -964,7 +975,7 @@ const styles = StyleSheet.create({
   },
   intensityButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   caloriesPreview: {
@@ -979,7 +990,7 @@ const styles = StyleSheet.create({
   },
   caloriesPreviewText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.warning.base,
   },
   modalActions: {
@@ -995,7 +1006,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   logButton: {
@@ -1015,7 +1026,7 @@ const styles = StyleSheet.create({
   },
   logButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   // Mode Selector Styles
@@ -1044,7 +1055,7 @@ const styles = StyleSheet.create({
   },
   modePillText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   modePillTextActive: {

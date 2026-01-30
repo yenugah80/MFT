@@ -20,6 +20,7 @@ import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
 import { getSpellingSuggestions, findSimilarFoods } from "../utils/fuzzyMatch.js";
 import { buildDefaultPortion, getPortionAdjustmentOptions } from "../utils/portionDefaults.js";
 import { getIngredientBreakdown, hasIngredientData } from "../services/ingredientEstimator.js";
+import { ingredientBreakdownService } from "../services/ingredientBreakdownService.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -519,7 +520,7 @@ async function resolvePhotoMode(imageBase64, draftId, mealType) {
 
 /**
  * RESOLVE GENERIC FOOD (text/photo parsed item)
- * NEW: Uses Smart Nutrition Resolver (OpenAI-first with USDA verification)
+ * ENHANCED: Uses Smart Nutrition Resolver with disambiguation and modifier handling
  */
 async function resolveGenericFood(parsedFood) {
   const sourceEvidence = [];
@@ -527,7 +528,6 @@ async function resolveGenericFood(parsedFood) {
 
   try {
     // 🆕 Smart portion defaulting - distinguishes unit-based foods (roti, egg) from serving-based (dal, rice)
-    // Fixes: "roti" defaulting to "1 serving" (interpreted as 2-3 rotis = 299 cal) instead of "1 medium roti" (120 cal)
     const portionResult = buildDefaultPortion(
       parsedFood.name,
       parsedFood.quantity,
@@ -540,7 +540,16 @@ async function resolveGenericFood(parsedFood) {
     // Use Smart Nutrition Resolver (OpenAI first, USDA verification for low confidence)
     // Use canonicalName for nutrition lookup (simplified for API), display name is preserved in parsedFood.name
     const lookupName = parsedFood.canonicalName || parsedFood.name;
-    const nutrition = await smartNutritionResolver.resolveFood(lookupName, portionStr);
+
+    // 🆕 Pass parsed modifiers to resolver for better estimation
+    const resolverContext = {
+      negations: parsedFood.removed || parsedFood.negations || [],
+      additions: parsedFood.additions || [],
+      cookingMethod: parsedFood.cookingMethod,
+      preparationContext: parsedFood.preparationContext,
+    };
+
+    const nutrition = await smartNutritionResolver.resolveFood(lookupName, portionStr, null, resolverContext);
 
     // Build source evidence
     sourceEvidence.push({
@@ -591,6 +600,35 @@ async function resolveGenericFood(parsedFood) {
       ? ingredientBreakdown.ingredients
       : (nutrition.components || []);
 
+    // 🆕 PRODUCTION-GRADE: Get full editable ingredient breakdown from AI service
+    // This enables users to add/remove/modify ingredients and recalculate nutrition
+    let editableIngredientBreakdown = null;
+    try {
+      // Detect user region from headers or default to US
+      const userRegion = resolverContext.region || 'US';
+
+      // Call ingredient breakdown service for AI-powered breakdown
+      editableIngredientBreakdown = await ingredientBreakdownService.getIngredientBreakdown(
+        finalName,
+        {
+          brand: parsedFood.brand,
+          region: userRegion,
+          existingNutrition: {
+            calories: nutrition.macros?.calories_kcal || 0,
+            protein: nutrition.macros?.protein_g || 0,
+            carbs: nutrition.macros?.carbs_g || 0,
+            fat: nutrition.macros?.fat_g || 0,
+          },
+          userId: null, // Will be populated from request context
+        }
+      );
+
+      console.log(`[Resolve] ✅ Got editable ingredient breakdown for "${finalName}": ${editableIngredientBreakdown?.ingredients?.length || 0} ingredients`);
+    } catch (err) {
+      console.warn(`[Resolve] Ingredient breakdown service unavailable for "${finalName}":`, err.message);
+      // Continue without editable breakdown - not a critical failure
+    }
+
     return {
       itemId,
       name: finalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
@@ -608,20 +646,82 @@ async function resolveGenericFood(parsedFood) {
       },
       macros: nutrition.macros,
       micros: nutrition.micros || {},
-      ingredients, // 🆕 Curated ingredient breakdown or AI components
-      ingredientBreakdown, // 🆕 Full ingredient data with add-ons and edit capability
+
+      // 🆕 ENHANCED: Confidence intervals for uncertainty visualization
+      confidenceIntervals: nutrition.confidenceIntervals || null,
+
+      ingredients, // Curated ingredient breakdown or AI components
+      ingredientBreakdown, // Full ingredient data with add-ons and edit capability
       components: nutrition.components || [], // Component breakdown for complex foods
-      allergens: nutrition.potentialAllergens || nutrition.allergens || [], // 🆕 Allergen info from AI
-      isComplex: nutrition.isComplex || false, // Whether food has multiple ingredients
+
+      // 🆕 PRODUCTION-GRADE: Editable ingredient breakdown for UI
+      // This enables users to:
+      // - See all ingredients with their individual nutrition
+      // - Remove ingredients (e.g., "no pickles")
+      // - Add ingredients (e.g., "extra cheese")
+      // - Substitute ingredients (e.g., "turkey instead of beef")
+      // - Recalculate total nutrition after modifications
+      editableIngredients: editableIngredientBreakdown ? {
+        sessionId: editableIngredientBreakdown.sessionId,
+        foodName: editableIngredientBreakdown.foodName,
+        foodType: editableIngredientBreakdown.foodType,
+        isEditable: editableIngredientBreakdown.isEditable,
+        region: editableIngredientBreakdown.region,
+        ingredients: editableIngredientBreakdown.ingredients?.map(ing => ({
+          id: ing.id,
+          name: ing.name,
+          category: ing.category,
+          isRemovable: ing.isRemovable,
+          isOptional: ing.isOptional,
+          portion: ing.portion,
+          nutrition: ing.nutrition,
+          alternatives: ing.alternatives,
+        })) || [],
+        totalNutrition: editableIngredientBreakdown.totalNutrition,
+        suggestedAddOns: editableIngredientBreakdown.suggestedAddOns?.slice(0, 5) || [],
+        nutritionSource: editableIngredientBreakdown.nutritionSource,
+        modificationEndpoints: {
+          remove: '/api/ingredients/remove',
+          add: '/api/ingredients/add',
+          modify: '/api/ingredients/modify',
+          customize: '/api/ingredients/customize',
+        }
+      } : null,
+      allergens: nutrition.potentialAllergens || nutrition.allergens || [],
+      isComplex: nutrition.isComplex || false,
       scores: {},
       sourceEvidence,
       flags,
+
+      // 🆕 ENHANCED: Disambiguation support for UI
+      disambiguationNeeded: nutrition.disambiguationNeeded || false,
+      possibleInterpretations: nutrition.possibleInterpretations || [],
+
+      // 🆕 ENHANCED: Applied modifiers tracking
+      modifiersApplied: nutrition.modifiersApplied || {
+        negations: parsedFood.removed || [],
+        additions: (parsedFood.additions || []).map(a => a.item || a),
+        preparationContext: nutrition.modifiersApplied?.preparationContext || 'unknown',
+      },
+
+      // 🆕 ENHANCED: Recognition status for uncertain foods
+      recognitionStatus: nutrition.recognitionStatus || 'identified',
+
+      // 🆕 ENHANCED: Warnings from estimation
+      warnings: nutrition.warnings || [],
+
+      // 🆕 ENHANCED: Assumptions made during estimation
+      assumptions: nutrition.assumptions || [],
+
       _smartResolver: {
         confidence: nutrition.confidence,
+        recognitionStatus: nutrition.recognitionStatus,
         source: nutrition.source,
         cached: !!nutrition.cacheKey,
         reason: nutrition.reason,
-        limitation: nutrition.limitation
+        limitation: nutrition.limitation,
+        reasoning: nutrition.reasoning, // CoT reasoning for complex foods
+        validationStatus: nutrition.validationStatus,
       }
     };
 
@@ -1084,6 +1184,99 @@ function generateUIHints(items, dataQuality) {
     highlightChips.push({ text: 'Low carb', sentiment: 'neutral' });
   }
 
+  // 🆕 ENHANCED: Check for disambiguation needed
+  const ambiguousItems = items.filter(i => i.disambiguationNeeded);
+  if (ambiguousItems.length > 0) {
+    for (const item of ambiguousItems) {
+      const options = item.possibleInterpretations?.map(p => p.interpretation).join(', ') || 'multiple options';
+      gentleWarnings.push({
+        title: `Clarification needed: "${item.name}"`,
+        message: `This could mean: ${options}. Tap to select the correct option.`,
+        actionable: true,
+        ctaText: 'Clarify',
+        type: 'disambiguation',
+        itemId: item.itemId,
+        possibleInterpretations: item.possibleInterpretations
+      });
+    }
+  }
+
+  // 🆕 ENHANCED: Check for uncertain recognition
+  const uncertainItems = items.filter(i => i.recognitionStatus === 'uncertain' || i.recognitionStatus === 'unknown');
+  if (uncertainItems.length > 0) {
+    for (const item of uncertainItems) {
+      gentleWarnings.push({
+        title: item.recognitionStatus === 'unknown' ? `Unknown food: "${item.name}"` : `Uncertain: "${item.name}"`,
+        message: item.recognitionStatus === 'unknown'
+          ? `We couldn't identify this food. The estimate may be inaccurate.`
+          : `We're not 100% sure about this food. Please verify.`,
+        actionable: true,
+        ctaText: 'Edit',
+        type: 'recognition_uncertain',
+        itemId: item.itemId,
+        confidence: item._smartResolver?.confidence
+      });
+    }
+  }
+
+  // 🆕 ENHANCED: Check for applied modifiers
+  const modifiedItems = items.filter(i =>
+    i.modifiersApplied?.negations?.length > 0 ||
+    i.modifiersApplied?.additions?.length > 0
+  );
+  if (modifiedItems.length > 0) {
+    highlightChips.push({ text: 'Modifiers applied', sentiment: 'neutral' });
+  }
+
+  // 🆕 ENHANCED: Check for restaurant/fast food context
+  const restaurantItems = items.filter(i =>
+    i.modifiersApplied?.preparationContext === 'restaurant' ||
+    i.modifiersApplied?.preparationContext === 'fast_food'
+  );
+  if (restaurantItems.length > 0) {
+    const context = restaurantItems[0].modifiersApplied.preparationContext;
+    highlightChips.push({
+      text: context === 'fast_food' ? 'Fast food' : 'Restaurant',
+      sentiment: 'warning'
+    });
+    gentleWarnings.push({
+      title: context === 'fast_food' ? 'Fast food adjustment' : 'Restaurant adjustment',
+      message: 'Calories have been adjusted higher to account for typical restaurant cooking (more oil, butter, salt).',
+      actionable: false,
+      type: 'context_adjustment'
+    });
+  }
+
+  // 🆕 ENHANCED: Show confidence intervals for low-confidence items
+  const lowConfidenceItems = items.filter(i => (i._smartResolver?.confidence || 100) < 70);
+  if (lowConfidenceItems.length > 0) {
+    const item = lowConfidenceItems[0];
+    if (item.confidenceIntervals?.calories) {
+      gentleWarnings.push({
+        title: 'Calorie estimate range',
+        message: `Due to uncertainty, actual calories could be ${item.confidenceIntervals.calories.low}-${item.confidenceIntervals.calories.high} kcal.`,
+        actionable: false,
+        type: 'confidence_interval'
+      });
+    }
+  }
+
+  // 🆕 ENHANCED: Surface any warnings from estimation
+  for (const item of items) {
+    if (item.warnings && item.warnings.length > 0) {
+      for (const warning of item.warnings) {
+        if (!gentleWarnings.some(w => w.message === warning)) {
+          gentleWarnings.push({
+            title: 'Estimation note',
+            message: warning,
+            actionable: false,
+            type: 'estimation_warning'
+          });
+        }
+      }
+    }
+  }
+
   // Gentle warnings
   if (dataQuality.reasons.includes('portion_estimated')) {
     gentleWarnings.push({
@@ -1098,10 +1291,16 @@ function generateUIHints(items, dataQuality) {
     ? `${items[0].name}, ${Math.round(totalCals)} kcal`
     : `${items.length} items, ${Math.round(totalCals)} kcal`;
 
+  // 🆕 ENHANCED: Add confidence interval to summary for uncertain items
+  const avgConfidence = items.reduce((sum, i) => sum + (i._smartResolver?.confidence || 85), 0) / items.length;
+  const summaryWithConfidence = avgConfidence < 70 && items[0]?.confidenceIntervals?.calories
+    ? `${oneLineSummary} (${items[0].confidenceIntervals.calories.low}-${items[0].confidenceIntervals.calories.high})`
+    : oneLineSummary;
+
   return {
     highlightChips,
     gentleWarnings,
-    oneLineSummary
+    oneLineSummary: summaryWithConfidence
   };
 }
 

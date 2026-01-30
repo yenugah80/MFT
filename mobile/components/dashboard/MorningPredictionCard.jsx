@@ -124,12 +124,14 @@ const timelineStyles = StyleSheet.create({
   time: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   title: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: 2,
   },
   description: {
@@ -202,6 +204,7 @@ const tipStyles = StyleSheet.create({
   action: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -383,6 +386,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitle: {
@@ -399,6 +403,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6366F1',
   },
 
@@ -418,6 +423,7 @@ const styles = StyleSheet.create({
   allClearTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#16A34A',
     marginBottom: 4,
   },
@@ -442,6 +448,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8B5CF6',
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Tips section
@@ -453,6 +460,7 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: 4,
   },

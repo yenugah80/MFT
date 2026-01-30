@@ -438,6 +438,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -453,6 +454,7 @@ const styles = StyleSheet.create({
   rankText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#D97706',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -478,6 +480,7 @@ const styles = StyleSheet.create({
   levelLabel: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#D97706',
     marginBottom: -2,
   },
@@ -492,6 +495,7 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     marginTop: SPACING[2],
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   totalXpText: {
     fontSize: 10,
@@ -540,12 +544,14 @@ const styles = StyleSheet.create({
   streakValue: {
     fontSize: 24,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   streakLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'uppercase',
   },
   streakFreezeContainer: {
@@ -562,6 +568,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#3B82F6',
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   streakMessageContainer: {
     marginTop: SPACING[2],
@@ -574,6 +581,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: TEXT.secondary,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Modal Styles
@@ -629,6 +637,7 @@ const styles = StyleSheet.create({
   modalRank: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#D1D5DB',
     textTransform: 'uppercase',
     letterSpacing: 4,
@@ -663,6 +672,7 @@ const styles = StyleSheet.create({
   shareButtonText: {
     color: '#FFF',
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontSize: TYPOGRAPHY.size.md,
   },
   claimButton: {

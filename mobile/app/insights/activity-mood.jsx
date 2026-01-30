@@ -249,6 +249,7 @@ const styles = StyleSheet.create({
     color: TEXT.white,
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Time Range
@@ -271,6 +272,7 @@ const styles = StyleSheet.create({
   timeRangeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   timeRangeTextActive: {
@@ -297,6 +299,7 @@ const styles = StyleSheet.create({
   comingSoonTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     textAlign: 'center',
   },

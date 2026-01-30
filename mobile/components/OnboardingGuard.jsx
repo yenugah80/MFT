@@ -35,6 +35,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
 import { useProfileContext } from '@/providers/ProfileProvider';
+import { TYPOGRAPHY } from '../constants/premiumTheme';
 
 // ✅ CRITICAL: Module-level flag survives component unmount/remount cycles
 // This prevents infinite redirect loop when OnboardingGuard remounts
@@ -204,7 +205,7 @@ const OnboardingGuard = ({ children }) => {
   if (error && !isCheckingOnboarding) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: '#DC2626' }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', fontFamily: TYPOGRAPHY.family.bold, marginBottom: 10, color: '#DC2626' }}>
           ❌ Backend Connection Error
         </Text>
         <Text style={{ fontSize: 14, marginBottom: 15, textAlign: 'center', color: '#666' }}>
@@ -225,7 +226,7 @@ const OnboardingGuard = ({ children }) => {
             marginBottom: 10,
           }}
         >
-          <Text style={{ color: 'white', fontWeight: 'bold' }}>Retry</Text>
+          <Text style={{ color: 'white', fontWeight: '700', fontFamily: TYPOGRAPHY.family.bold }}>Retry</Text>
         </TouchableOpacity>
         <Text style={{ fontSize: 12, color: '#999', marginTop: 10 }}>
           Check your internet connection and try again

@@ -12,6 +12,10 @@
 
 import { Platform } from 'react-native';
 import apiClient from './apiClient';
+import { NOTIFICATION_CATEGORIES } from '../constants/notificationTypes';
+
+// Re-export for backward compatibility
+export { NOTIFICATION_CATEGORIES };
 
 // Lazy-load all native modules to prevent import-time crashes
 let Device = null;
@@ -66,20 +70,6 @@ async function loadNativeModules() {
 loadNativeModules().catch(err => {
   console.warn('[PushNotifications] Error loading native modules:', err.message);
 });
-
-/**
- * Notification categories for different reminder types
- */
-export const NOTIFICATION_CATEGORIES = {
-  DAILY_REMINDER: 'daily_reminder',
-  HYDRATION_NUDGE: 'hydration_nudge',
-  ACTIVITY_REMINDER: 'activity_reminder',
-  MOOD_CHECKIN: 'mood_checkin',
-  INSIGHT_DROP: 'insight_drop',
-  STREAK_CELEBRATION: 'streak_celebration',
-  STREAK_AT_RISK: 'streak_at_risk',
-  GOAL_ACHIEVED: 'goal_achieved',
-};
 
 /**
  * Check if push notifications are available on this device
@@ -198,11 +188,19 @@ export async function getExpoPushToken() {
   }
 }
 
+// Track pending retry for token registration
+let tokenRetryTimeout = null;
+let pendingToken = null;
+
 /**
  * Register push token with the backend
  * @param {string} token - The Expo push token
+ * @param {number} retryCount - Current retry attempt (internal use)
  */
-export async function registerPushTokenWithBackend(token) {
+export async function registerPushTokenWithBackend(token, retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [5000, 15000, 30000]; // 5s, 15s, 30s
+
   try {
     const response = await apiClient.post('/profile/push-token', {
       expoPushToken: token,
@@ -210,12 +208,28 @@ export async function registerPushTokenWithBackend(token) {
 
     if (response.success) {
       console.log('[PushNotifications] Token registered with backend');
+      pendingToken = null;
       return true;
     }
 
     // Handle 202 response (profile not ready yet)
     if (response.retryAfterProfileCreation) {
-      console.log('[PushNotifications] Profile not ready, will retry later');
+      console.log('[PushNotifications] Profile not ready, scheduling retry');
+      pendingToken = token;
+
+      if (retryCount < MAX_RETRIES) {
+        // Clear any existing retry
+        if (tokenRetryTimeout) {
+          clearTimeout(tokenRetryTimeout);
+        }
+
+        // Schedule retry
+        const delay = RETRY_DELAYS[retryCount] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+        tokenRetryTimeout = setTimeout(() => {
+          console.log(`[PushNotifications] Retrying token registration (attempt ${retryCount + 2})`);
+          registerPushTokenWithBackend(token, retryCount + 1);
+        }, delay);
+      }
       return false;
     }
 
@@ -224,8 +238,29 @@ export async function registerPushTokenWithBackend(token) {
     // Use console.warn to avoid red error screen in development
     // Push token registration failure is non-critical
     console.warn('[PushNotifications] Failed to register token (non-critical):', error?.message || error);
+
+    // Retry on network errors
+    if (retryCount < MAX_RETRIES && (error?.message?.includes('Network') || error?.message?.includes('timeout'))) {
+      pendingToken = token;
+      const delay = RETRY_DELAYS[retryCount] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+      tokenRetryTimeout = setTimeout(() => {
+        registerPushTokenWithBackend(token, retryCount + 1);
+      }, delay);
+    }
+
     return false;
   }
+}
+
+/**
+ * Manually trigger token registration retry (e.g., after profile creation)
+ */
+export async function retryPendingTokenRegistration() {
+  if (pendingToken) {
+    console.log('[PushNotifications] Manually retrying pending token registration');
+    return registerPushTokenWithBackend(pendingToken, 0);
+  }
+  return false;
 }
 
 /**

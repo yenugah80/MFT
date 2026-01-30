@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import { COLORS } from "../../constants/colors";
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 // Styles for the Profile screen (React Native)
 export const profileStyles = StyleSheet.create({
@@ -11,6 +12,7 @@ export const profileStyles = StyleSheet.create({
   headerText: {
     fontSize: 24,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     marginBottom: 12,
   },
@@ -36,6 +38,7 @@ export const profileStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
   },
   inputLabel: {
@@ -80,6 +83,7 @@ export const profileStyles = StyleSheet.create({
   chipText: {
     color: COLORS.text,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   chipTextSelected: {
     color: COLORS.white,
@@ -112,6 +116,7 @@ export const profileStyles = StyleSheet.create({
   activityText: {
     color: COLORS.text,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   metaText: {
     color: COLORS.textLight,
@@ -133,11 +138,13 @@ export const profileStyles = StyleSheet.create({
   metricLabel: {
     color: COLORS.textLight,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: 4,
   },
   metricValue: {
     fontSize: 18,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
   },
   inlineInputRow: {
@@ -171,6 +178,7 @@ export const profileStyles = StyleSheet.create({
   tagText: {
     color: COLORS.text,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   tagRemove: {
     color: COLORS.textLight,
@@ -186,6 +194,7 @@ export const profileStyles = StyleSheet.create({
   primaryButtonText: {
     color: COLORS.white,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   secondaryButton: {
     borderWidth: 1,
@@ -199,6 +208,7 @@ export const profileStyles = StyleSheet.create({
   secondaryButtonText: {
     color: COLORS.text,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   ghostButton: {
     paddingHorizontal: 10,
@@ -207,6 +217,7 @@ export const profileStyles = StyleSheet.create({
   ghostButtonText: {
     color: COLORS.textLight,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   addButton: {
     marginLeft: 6,
@@ -219,6 +230,7 @@ export const profileStyles = StyleSheet.create({
   subTitle: {
     fontSize: 14,
     fontWeight: "800",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     marginTop: 6,
     marginBottom: 6,
@@ -266,6 +278,7 @@ export const profileStyles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text,
     marginLeft: 12,
   },

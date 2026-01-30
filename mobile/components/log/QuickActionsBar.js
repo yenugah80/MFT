@@ -1,13 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
-
-const fonts = {
-  display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
-  strong: Platform.select({ ios: 'HelveticaNeue-Medium', android: 'Roboto-Medium', default: 'System' }),
-  regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
-};
+import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, logCount }) => {
   return (
@@ -69,20 +63,18 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   quickActionText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-    fontFamily: fonts.strong,
   },
   quickActionValue: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC_ACTIONS.primary,
-    fontFamily: fonts.display,
   },
   quickActionLabel: {
-    fontSize: 11,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
-    fontFamily: fonts.regular,
   },
 });

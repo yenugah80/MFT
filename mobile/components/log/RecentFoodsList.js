@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { NutriScorePill } from '../NutriScoreBadge';
-import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SEMANTIC } from '../../constants/premiumTheme';
+import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export const RecentFoodsList = ({ onSelectFood, onQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,6 +188,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   emptySubtext: {
@@ -235,6 +236,7 @@ const styles = StyleSheet.create({
   foodName: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
     marginRight: 8,
@@ -247,6 +249,7 @@ const styles = StyleSheet.create({
   foodMeta: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   foodServing: {
@@ -265,6 +268,7 @@ const styles = StyleSheet.create({
   healthScoreText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC_ACTIONS.success,
   },
   quickAddButton: {

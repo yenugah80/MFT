@@ -163,6 +163,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.sm,
   },
@@ -210,6 +211,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
   },
   cardStats: {
@@ -230,6 +232,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.title2,
     color: COLORS.brand.primary,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   infoCard: {
     backgroundColor: COLORS.surface.secondary,
@@ -247,6 +250,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
   },
   infoText: {

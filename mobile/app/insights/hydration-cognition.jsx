@@ -262,6 +262,7 @@ const styles = StyleSheet.create({
     color: TEXT.white,
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Status Card
@@ -283,6 +284,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   avgText: {
     fontSize: TYPOGRAPHY.size.base,
@@ -300,6 +302,7 @@ const styles = StyleSheet.create({
   targetValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
 

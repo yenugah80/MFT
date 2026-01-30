@@ -887,12 +887,14 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     letterSpacing: -0.3,
   },
   brandName: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -932,6 +934,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -952,6 +955,7 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#F97316',
   },
   settingsButton: {
@@ -970,6 +974,7 @@ const styles = StyleSheet.create({
   headline: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -0.5,
     marginBottom: SPACING[1],
   },
@@ -996,6 +1001,7 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -1010,6 +1016,7 @@ const styles = StyleSheet.create({
   celebrationText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Status Bar
@@ -1029,6 +1036,7 @@ const styles = StyleSheet.create({
   statusValue: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   statusLabel: {
     fontSize: TYPOGRAPHY.size.xs,

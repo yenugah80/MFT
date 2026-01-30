@@ -15,7 +15,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import apiClient from '../services/apiClient';
-import { calculateFoodMoodScore, detectPatterns } from '../utils/foodMoodScore';
+import { calculateWellnessScore, detectPatterns } from '../utils/wellnessScore';
 
 // Day names for display
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -146,7 +146,7 @@ function calculateDayScore(dayData, goals) {
     }
   });
 
-  return calculateFoodMoodScore({
+  return calculateWellnessScore({
     calories: totalCalories,
     calorieGoal: goals.dailyCalories || 2000,
     protein: totalProtein,

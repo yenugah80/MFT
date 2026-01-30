@@ -194,12 +194,13 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: SPACING[4],
   },
   emptySubtext: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: SPACING[2],
     textAlign: 'center',
@@ -216,6 +217,7 @@ const styles = StyleSheet.create({
   },
   hintText: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   scoreCard: {
@@ -232,7 +234,7 @@ const styles = StyleSheet.create({
   },
   scoreTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   scoreCircle: {
@@ -245,11 +247,12 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   scoreMessage: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 20,
     marginBottom: SPACING[4],
@@ -270,6 +273,7 @@ const styles = StyleSheet.create({
   },
   breakdownLabelText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   breakdownBarContainer: {
@@ -285,7 +289,7 @@ const styles = StyleSheet.create({
   },
   breakdownValue: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     width: 40,
     textAlign: 'right',
   },
@@ -294,7 +298,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
   },
@@ -311,11 +315,12 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   infoText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 20,
     marginBottom: SPACING[3],
@@ -325,6 +330,7 @@ const styles = StyleSheet.create({
   },
   infoExample: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     paddingLeft: SPACING[2],
     borderLeftWidth: 2,

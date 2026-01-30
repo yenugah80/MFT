@@ -497,6 +497,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   aiBadge: {
@@ -511,6 +512,7 @@ const styles = StyleSheet.create({
   aiText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   personalizedBadge: {
@@ -525,6 +527,7 @@ const styles = StyleSheet.create({
   personalizedText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC_ACTIONS.success,
   },
   subtitle: {
@@ -545,6 +548,7 @@ const styles = StyleSheet.create({
   predictionValue: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // Score Prediction Visual
@@ -564,9 +568,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   scoreLabelTomorrow: {
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   scoreBarContainer: {
@@ -597,6 +603,7 @@ const styles = StyleSheet.create({
     width: 40,
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     textAlign: 'right',
   },
@@ -618,6 +625,7 @@ const styles = StyleSheet.create({
   changeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     marginLeft: 4,
   },
   changeTextUp: {
@@ -672,10 +680,12 @@ const styles = StyleSheet.create({
   learningStatusPersonalized: {
     color: SEMANTIC_ACTIONS.success,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   factorsTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING[3],
     textTransform: 'uppercase',
@@ -710,6 +720,7 @@ const styles = StyleSheet.create({
   factorTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -721,6 +732,7 @@ const styles = StyleSheet.create({
   impactText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   factorSuggestion: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -767,6 +779,7 @@ const styles = StyleSheet.create({
   historyButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -809,6 +822,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },

@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
-import { TEXT, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * GaugeChart - Semi-circular gauge for score visualization
@@ -141,16 +141,17 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontSize: 32,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   zoneLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 4,
   },
   chartLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },

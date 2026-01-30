@@ -26,6 +26,7 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -822,6 +823,7 @@ const styles = StyleSheet.create({
   moodCaptureTitle: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
     marginBottom: 16,
   },
@@ -859,6 +861,7 @@ const styles = StyleSheet.create({
   influencerQuestion: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.text.secondary,
     marginBottom: 12,
   },
@@ -895,6 +898,7 @@ const styles = StyleSheet.create({
   },
   moodLoggedContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   moodLoggedText: { fontSize: 16, fontWeight: '600', color: COLORS.text.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   moodLoggedSubtext: { fontSize: 13, color: COLORS.text.secondary },
   logAnotherButton: {
     paddingVertical: 8,
@@ -903,6 +907,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
   logAnotherText: { fontSize: 13, fontWeight: '600', color: COLORS.text.secondary },
+  fontFamily: TYPOGRAPHY.family.semibold,
 
   // Insight Card
   insightCard: {
@@ -918,9 +923,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   insightLabel: { fontSize: 13, fontWeight: '700', color: '#F59E0B' },
+  fontFamily: TYPOGRAPHY.family.bold,
   insightText: { fontSize: 15, color: COLORS.text.primary, lineHeight: 22 },
   insightStat: { marginTop: 8 },
   insightStatValue: { fontSize: 13, fontWeight: '600', color: COLORS.mood.excellent },
+  fontFamily: TYPOGRAPHY.family.semibold,
 
   // Timeline
   timelineCard: {
@@ -935,10 +942,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   timelineTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   timelineSubtitle: { fontSize: 13, color: COLORS.text.tertiary, marginBottom: 16 },
   timelineGrid: { flexDirection: 'row', justifyContent: 'space-between' },
   timelineDay: { alignItems: 'center', flex: 1 },
   timelineDayLabel: { fontSize: 11, fontWeight: '600', color: COLORS.text.tertiary, marginBottom: 8 },
+  fontFamily: TYPOGRAPHY.family.semibold,
   moodDot: {
     width: 32,
     height: 32,
@@ -973,6 +982,7 @@ const styles = StyleSheet.create({
   // Correlations
   correlationSection: { marginBottom: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   sectionSubtitle: { fontSize: 13, color: COLORS.text.tertiary, marginBottom: 12 },
   correlationCard: {
     backgroundColor: COLORS.card,
@@ -998,6 +1008,7 @@ const styles = StyleSheet.create({
   correlationContent: { flex: 1 },
   correlationText: { fontSize: 14, color: COLORS.text.primary, lineHeight: 20 },
   correlationStat: { fontSize: 13, fontWeight: '700', marginTop: 4 },
+  fontFamily: TYPOGRAPHY.family.bold,
 
   // Recommendation
   recommendationCard: {
@@ -1020,6 +1031,7 @@ const styles = StyleSheet.create({
   },
   recommendationContent: { flex: 1 },
   recommendationTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text.primary, marginBottom: 4 },
+  fontFamily: TYPOGRAPHY.family.bold,
   recommendationDescription: { fontSize: 13, color: COLORS.text.secondary, lineHeight: 18 },
   recommendationAction: {
     paddingVertical: 8,
@@ -1047,6 +1059,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   summaryTitle: { fontSize: 16, fontWeight: '700', color: '#8B5CF6' },
+  fontFamily: TYPOGRAPHY.family.bold,
   summaryText: { fontSize: 14, color: COLORS.text.secondary, lineHeight: 22, marginBottom: 16 },
   summaryStats: {
     flexDirection: 'row',
@@ -1057,6 +1070,7 @@ const styles = StyleSheet.create({
   },
   summaryStatItem: { alignItems: 'center' },
   summaryStatValue: { fontSize: 24, fontWeight: '700', color: COLORS.text.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   summaryStatLabel: { fontSize: 12, color: COLORS.text.tertiary, marginTop: 4 },
   summaryStatDivider: { width: 1, backgroundColor: COLORS.border },
 });

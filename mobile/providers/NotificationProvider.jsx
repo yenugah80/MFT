@@ -19,6 +19,7 @@ import React, {
 } from 'react';
 import { View, StyleSheet, AppState } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import * as Haptics from 'expo-haptics';
 
 import Toast from '../components/notifications/Toast';
 import Modal from '../components/notifications/Modal';
@@ -34,12 +35,17 @@ import {
   scheduleStreakProtectionReminder,
   syncAllNotificationSchedules,
   cancelScheduledNotifications,
-  NOTIFICATION_CATEGORIES,
   getNotificationPermissionStatus,
   getScheduledNotifications,
   resetDailyNotifications,
   showLocalNotification,
 } from '../services/pushNotifications';
+import {
+  NOTIFICATION_CATEGORIES,
+  DEFAULT_PREFERENCES,
+  DISMISS_REASONS,
+  NOTIFICATION_LAYOUT,
+} from '../constants/notificationTypes';
 import { router } from 'expo-router';
 import apiClient from '../services/apiClient';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
@@ -71,12 +77,7 @@ export const NotificationProvider = ({ children }) => {
     token: null,
     error: null,
   });
-  const [preferences, setPreferences] = useState({
-    dailyReminder: true,
-    hydrationNudges: true,
-    insightDrops: true,
-    streakCelebrations: true,
-  });
+  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
 
   const notificationListener = useRef();
   const responseListener = useRef();
@@ -95,7 +96,34 @@ export const NotificationProvider = ({ children }) => {
 
     setToasts((prev) => [...prev, newToast]);
 
-    const duration = toast.duration ?? 7000; // 7 seconds for comfortable reading
+    // Haptic feedback based on notification type/urgency
+    // - Celebration: Medium impact (exciting feedback)
+    // - Error/Urgent: Heavy impact (attention-grabbing)
+    // - Warning: Medium impact
+    // - Success/Info: Light impact (subtle)
+    try {
+      if (toast.celebration) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (toast.type === 'error' || toast.urgent) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else if (toast.type === 'warning') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else if (toast.type === 'success') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      // Info notifications: no haptic (silent)
+    } catch (hapticError) {
+      // Haptics may not be available on all devices
+      console.warn('[NotificationProvider] Haptic feedback unavailable:', hapticError?.message);
+    }
+
+    // Use standardized durations from NOTIFICATION_LAYOUT
+    const defaultDuration = toast.celebration
+      ? NOTIFICATION_LAYOUT.toast.duration.celebration
+      : toast.type === 'error'
+        ? NOTIFICATION_LAYOUT.toast.duration.error
+        : NOTIFICATION_LAYOUT.toast.duration.default;
+    const duration = toast.duration ?? defaultDuration;
     if (duration > 0) {
       setTimeout(() => removeToast(id), duration);
     }
@@ -335,10 +363,11 @@ export const NotificationProvider = ({ children }) => {
 
       case 'DISMISS':
         // Dismiss and record for ML learning
+        // Use 'other' as default - backend validates: ['not_relevant', 'too_frequent', 'wrong_time', 'other']
         try {
           await apiClient.post('/reminders/dismiss', {
             reminderType: category,
-            reason: 'user_dismissed',
+            reason: DISMISS_REASONS.OTHER,
           });
         } catch (error) {
           console.warn('[NotificationProvider] Failed to dismiss:', error?.message || error);
@@ -559,7 +588,7 @@ export const NotificationProvider = ({ children }) => {
       addToast({
         type: 'error',
         message: message || 'An error occurred',
-        duration: options.duration ?? 6000, // 6 seconds for errors (important to read)
+        // Duration handled by addToast using NOTIFICATION_LAYOUT.toast.duration.error
         ...options,
       }),
 
@@ -582,7 +611,7 @@ export const NotificationProvider = ({ children }) => {
         message: finalMessage,
         celebration: true,
         lottieAnimation: options.lottieAnimation || 'celebration',
-        duration: options.duration ?? 7000, // Celebrations deserve more time
+        // Duration handled by addToast using NOTIFICATION_LAYOUT.toast.duration.celebration
         ...options,
       });
     },
@@ -604,7 +633,7 @@ export const NotificationProvider = ({ children }) => {
         domain: goalType,
         celebration: true,
         lottieAnimation: lottieMap[goalType] || 'celebration',
-        duration: 7000,
+        // Duration handled by addToast using NOTIFICATION_LAYOUT.toast.duration.celebration
         ...options,
       });
     },

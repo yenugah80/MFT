@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import { COLORS } from "../../constants/colors";
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export const dashboardStyles = StyleSheet.create({
   container: {
@@ -12,6 +13,7 @@ export const dashboardStyles = StyleSheet.create({
   header: {
     fontSize: 28,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: 20,
     color: COLORS.text,
   },
@@ -26,6 +28,7 @@ export const dashboardStyles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: 6,
     color: COLORS.text,
   },
@@ -60,6 +63,7 @@ export const dashboardStyles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.primary,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   emptyText: {
     fontSize: 13,

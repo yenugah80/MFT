@@ -276,6 +276,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   countBadge: {
@@ -287,11 +288,13 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   viewAllText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   summaryRow: {
@@ -310,6 +313,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   summaryLabel: {
@@ -392,6 +396,7 @@ const styles = StyleSheet.create({
   scoreBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   mealInfo: {
@@ -407,6 +412,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginRight: SPACING[2],
   },
@@ -423,6 +429,7 @@ const styles = StyleSheet.create({
   calorieText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   proteinText: {
@@ -441,6 +448,7 @@ const styles = StyleSheet.create({
   microTagText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   emptyContainer: {
     backgroundColor: SURFACES.card.primary,
@@ -462,6 +470,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },

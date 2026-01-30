@@ -241,6 +241,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   countBadge: {
     backgroundColor: BRAND.primary,
@@ -252,6 +253,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   ingredientsList: {
     marginTop: SPACING[4],
@@ -291,6 +293,7 @@ const styles = StyleSheet.create({
   indexNumber: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   ingredientContent: {
     flex: 1,
@@ -308,6 +311,7 @@ const styles = StyleSheet.create({
   ingredientName: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     lineHeight: 18,
   },
   ingredientPortion: {
@@ -325,6 +329,7 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 14,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   caloriesUnit: {
@@ -351,6 +356,7 @@ const styles = StyleSheet.create({
   macroText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   progressBarContainer: {
     height: 16,
@@ -370,5 +376,6 @@ const styles = StyleSheet.create({
     top: 2,
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

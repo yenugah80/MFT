@@ -142,6 +142,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.inverse,
     marginBottom: SPACING.lg,
   },
@@ -174,6 +175,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.body,
     color: 'rgba(255, 255, 255, 0.6)',
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   tabLabelActive: {
     color: '#FFFFFF',
@@ -212,6 +214,7 @@ const styles = StyleSheet.create({
   mealName: {
     fontSize: TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.inverse,
     marginBottom: SPACING.xs,
   },
@@ -231,6 +234,7 @@ const styles = StyleSheet.create({
   calorieValue: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   calorieUnit: {
@@ -248,11 +252,13 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255, 255, 255, 0.7)',
   },
   totalCalories: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.nutrition.primary,
   },
   emptyState: {
@@ -282,6 +288,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 });

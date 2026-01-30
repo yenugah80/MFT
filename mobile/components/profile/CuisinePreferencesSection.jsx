@@ -8,7 +8,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, SHADOWS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const CUISINE_EMOJI = {
   mediterranean: '🌍',
@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
   },
   cuisineEmoji: {
     fontSize: 28,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   cuisineInfo: {
     flex: 1,
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
   },
   cuisineName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'capitalize',
   },
   expandedContent: {
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
   },
   strengthLabel: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   strengthIndicator: {
     gap: 4,
@@ -232,6 +233,6 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

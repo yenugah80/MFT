@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export default function AllergenWarningCard({ warnings = [], onRemoveMeal }) {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
@@ -161,13 +161,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#DC2626',
     flex: 1
   },
   message: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#991B1B',
     marginBottom: SPACING[3],
     lineHeight: 18
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   },
   mealName: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1]
   },
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   },
   allergenTagText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF'
   },
   removeBtn: {
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   },
   actionNoteText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#DC2626',
     flex: 1,
     lineHeight: 16

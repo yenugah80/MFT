@@ -209,6 +209,27 @@ export const trackVoiceRerecord = () => {
 export const getVoiceSessionInfo = () => currentVoiceSession;
 
 /**
+ * Track session abandoned (user closes modal without completing)
+ * Different from cancelled - abandoned means they left mid-flow
+ * @param {string} lastState - The state when user abandoned ('recording', 'transcribed', 'analyzing')
+ */
+export const trackVoiceSessionAbandoned = (lastState) => {
+  if (!currentVoiceSession) return;
+
+  const sessionDuration = Date.now() - currentVoiceSession.startTime;
+
+  trackEvent(Events.VOICE_SESSION_ABANDONED, {
+    voice_session_id: currentVoiceSession.sessionId,
+    last_state: lastState,
+    session_duration_ms: sessionDuration,
+    mode: currentVoiceSession.mode,
+    had_transcription: !!currentVoiceSession.originalTranscript,
+  });
+
+  currentVoiceSession = null;
+};
+
+/**
  * Clear session without tracking (for cleanup on close)
  */
 export const clearVoiceSession = () => {
@@ -226,6 +247,7 @@ export default {
   trackVoiceAnalysisFailed,
   trackVoicePlaybackStarted,
   trackVoiceRerecord,
+  trackVoiceSessionAbandoned,
   getVoiceSessionInfo,
   clearVoiceSession,
 };

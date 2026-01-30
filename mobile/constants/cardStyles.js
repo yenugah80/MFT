@@ -5,6 +5,14 @@
  * Following 2025 design trends: glassmorphism, neumorphism, vibrant gradients
  */
 
+// Font family constants for Tenor Sans
+const TYPOGRAPHY_FAMILY = {
+  regular: 'TenorSans_400Regular',
+  medium: 'TenorSans_400Regular',
+  semibold: 'TenorSans_400Regular',
+  bold: 'TenorSans_400Regular',
+};
+
 /**
  * Premium Gradient Presets
  * Beautiful multi-color gradients for different card types
@@ -221,6 +229,7 @@ export const CARD_TYPOGRAPHY = {
   title: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY_FAMILY.bold,
     color: '#111827',
     letterSpacing: -0.2,
   },
@@ -229,6 +238,7 @@ export const CARD_TYPOGRAPHY = {
   subtitle: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY_FAMILY.semibold,
     color: '#6B7280',
     letterSpacing: 0,
   },
@@ -237,6 +247,7 @@ export const CARD_TYPOGRAPHY = {
   body: {
     fontSize: 14,
     fontWeight: '400',
+    fontFamily: TYPOGRAPHY_FAMILY.regular,
     color: '#374151',
     lineHeight: 20,
   },
@@ -245,6 +256,7 @@ export const CARD_TYPOGRAPHY = {
   caption: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY_FAMILY.medium,
     color: '#9CA3AF',
     lineHeight: 16,
   },
@@ -253,6 +265,7 @@ export const CARD_TYPOGRAPHY = {
   statValue: {
     fontSize: 32,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY_FAMILY.bold,
     color: '#111827',
     letterSpacing: -0.5,
   },
@@ -261,6 +274,7 @@ export const CARD_TYPOGRAPHY = {
   statLabel: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY_FAMILY.semibold,
     color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,

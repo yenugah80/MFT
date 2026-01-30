@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { TEXT, SURFACES, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -176,14 +176,14 @@ const styles = StyleSheet.create({
   },
   confidenceTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     marginBottom: 2,
   },
   confidenceSubtitle: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   confidenceScore: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   },
   confidencePercent: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   attributionTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginLeft: 6,
   },
@@ -227,6 +227,7 @@ const styles = StyleSheet.create({
   },
   attributionItemText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
     marginLeft: 8,
     flex: 1,
@@ -241,7 +242,7 @@ const styles = StyleSheet.create({
   },
   confidenceBadge: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B4EFF',
     backgroundColor: `${SEMANTIC_ACTIONS.success}1A`,
     paddingHorizontal: 8,
@@ -260,7 +261,7 @@ const styles = StyleSheet.create({
     color: '#6B4EFF',
     marginLeft: 6,
     flex: 1,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Edit Options
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
   },
   editTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 12,
   },
@@ -294,7 +295,7 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B4EFF',
     marginLeft: 6,
   },
@@ -314,6 +315,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#92400E',
     marginLeft: 8,
     flex: 1,

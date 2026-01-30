@@ -474,6 +474,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   aiBadge: {
@@ -488,6 +489,7 @@ const styles = StyleSheet.create({
   aiText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   subtitle: {
@@ -513,6 +515,7 @@ const styles = StyleSheet.create({
   needsDataTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
     textAlign: 'center',
@@ -580,6 +583,7 @@ const styles = StyleSheet.create({
   patternTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
     marginRight: SPACING[2],
@@ -610,6 +614,7 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   actionRow: {
     flexDirection: 'row',
@@ -620,6 +625,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   chevron: {
     marginLeft: SPACING[2],
@@ -653,6 +659,7 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },
@@ -684,6 +691,7 @@ const styles = StyleSheet.create({
   detailConfidenceValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     textAlign: 'right',
   },
@@ -701,6 +709,7 @@ const styles = StyleSheet.create({
   detailStatValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   detailStatLabel: {
@@ -722,6 +731,7 @@ const styles = StyleSheet.create({
   detailActionText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
 

@@ -406,6 +406,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
 
@@ -457,7 +458,7 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontSize: 32,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#7C3AED',
   },
   levelBadge: {
@@ -475,16 +476,17 @@ const styles = StyleSheet.create({
   },
   levelText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   userName: {
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   userEmail: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
     marginBottom: 16,
@@ -503,11 +505,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   statLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
   },
@@ -539,7 +542,7 @@ const styles = StyleSheet.create({
   },
   stageLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   stageDots: {
@@ -593,12 +596,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   sectionAction: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -620,11 +623,12 @@ const styles = StyleSheet.create({
   },
   chipValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   chipLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 2,
   },
@@ -653,11 +657,12 @@ const styles = StyleSheet.create({
   },
   goalChipValue: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   goalChipLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 
@@ -678,20 +683,22 @@ const styles = StyleSheet.create({
   },
   tagChipIcon: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   tagChipLabel: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   tagSectionLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     marginTop: 12,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     fontStyle: 'italic',
   },
@@ -720,11 +727,12 @@ const styles = StyleSheet.create({
   },
   settingsTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   settingsSubtitle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 1,
   },
@@ -742,7 +750,7 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#EF4444',
   },
 
@@ -754,11 +762,12 @@ const styles = StyleSheet.create({
   },
   footerBrand: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   footerVersion: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.muted,
     marginTop: 2,
   },
@@ -770,10 +779,12 @@ const styles = StyleSheet.create({
   },
   footerLink: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   footerDot: {
     color: TEXT.muted,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
 });

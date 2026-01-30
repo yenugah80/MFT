@@ -200,6 +200,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitle: {
@@ -231,6 +232,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   avgText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -261,6 +263,7 @@ const styles = StyleSheet.create({
   rangeLabelCenter: {
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Expanded View
@@ -283,6 +286,7 @@ const styles = StyleSheet.create({
   titleExpanded: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitleExpanded: {
@@ -310,6 +314,7 @@ const styles = StyleSheet.create({
   bigStatusTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   bigStatusValue: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -324,6 +329,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     marginBottom: SPACING[2],
     textTransform: 'uppercase',
@@ -344,6 +350,7 @@ const styles = StyleSheet.create({
   targetValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   targetLabel: {

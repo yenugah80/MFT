@@ -1587,6 +1587,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[4],
   },
@@ -1607,6 +1608,7 @@ const styles = StyleSheet.create({
     color: TEXT.white,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Hero Card
@@ -1614,21 +1616,26 @@ const styles = StyleSheet.create({
   heroGradient: { padding: SPACING[4] },
   heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   heroTitle: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   heroStatus: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, marginTop: 2 },
+  fontFamily: TYPOGRAPHY.family.semibold,
   statusBadge: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   gaugeContainer: { alignItems: 'center', marginVertical: SPACING[2] },
   calorieRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: SPACING[3], paddingTop: SPACING[3], borderTopWidth: 1, borderTopColor: SURFACES.divider },
   calorieItem: { alignItems: 'center' },
   calorieValue: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   calorieLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
   calorieDivider: { width: 1, height: 40, backgroundColor: SURFACES.divider },
 
   // Macro Card
   macroCard: { marginTop: SPACING[4] },
   cardTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: SPACING[3] },
+  fontFamily: TYPOGRAPHY.family.semibold,
   macroGauges: { flexDirection: 'row', justifyContent: 'space-around' },
   macroGaugeItem: { alignItems: 'center' },
   macroLabel: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[1] },
+  fontFamily: TYPOGRAPHY.family.semibold,
   macroValue: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary },
   macroUnit: { color: TEXT.tertiary },
 
@@ -1644,6 +1651,7 @@ const styles = StyleSheet.create({
   // Section Header
   sectionHeader: { marginTop: SPACING[6], marginBottom: SPACING[3] },
   sectionTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   sectionSubtitle: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.tertiary, marginTop: 2 },
 
   // Recommendation Card
@@ -1652,14 +1660,17 @@ const styles = StyleSheet.create({
   recommendationIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   recommendationText: { flex: 1 },
   recommendationTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: 2 },
+  fontFamily: TYPOGRAPHY.family.semibold,
   recommendationDescription: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, lineHeight: 20 },
   recommendationMacros: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 4 },
   actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING[2], paddingHorizontal: SPACING[4], borderRadius: RADIUS.md, gap: SPACING[1] },
   actionButtonText: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.white },
+  fontFamily: TYPOGRAPHY.family.semibold,
 
   // Empty State
   emptyState: { alignItems: 'center', paddingVertical: SPACING[10] },
   emptyStateTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[3] },
+  fontFamily: TYPOGRAPHY.family.semibold,
   emptyStateText: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, textAlign: 'center', marginTop: SPACING[2], paddingHorizontal: SPACING[4] },
 
   // ML Patterns Section
@@ -1667,6 +1678,7 @@ const styles = StyleSheet.create({
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
   mlBadge: { backgroundColor: BRAND.primaryLight, paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm },
   mlBadgeText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.bold, color: BRAND.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   patternRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[2], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
   patternIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   patternContent: { flex: 1 },
@@ -1680,6 +1692,7 @@ const styles = StyleSheet.create({
   correlationIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   correlationContent: { flex: 1 },
   correlationStatement: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary, lineHeight: 20 },
+  fontFamily: TYPOGRAPHY.family.medium,
   correlationMeta: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING[1] },
   correlationConfidence: { fontSize: 11, color: TEXT.tertiary },
   suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[1], marginTop: SPACING[2], paddingTop: SPACING[2], borderTopWidth: 1, borderTopColor: SURFACES.divider },
@@ -1712,6 +1725,7 @@ const styles = StyleSheet.create({
   compareButtonText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   compareButtonTextActive: {
@@ -1731,6 +1745,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   recentMealsList: {
     gap: SPACING[2],
@@ -1772,6 +1787,7 @@ const styles = StyleSheet.create({
   mealItemName: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   mealItemTime: {
@@ -1785,6 +1801,7 @@ const styles = StyleSheet.create({
   mealItemCalories: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   mealItemMacros: {
@@ -1803,6 +1820,7 @@ const styles = StyleSheet.create({
   viewAllMealsText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -1819,6 +1837,7 @@ const styles = StyleSheet.create({
   },
   trendsAvgItem: { alignItems: 'center', paddingHorizontal: SPACING[4] },
   trendsAvgValue: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   trendsAvgLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
   trendsAvgDivider: { width: 1, height: 30, backgroundColor: SURFACES.divider },
   trendsChart: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: SPACING[2] },
@@ -1849,6 +1868,7 @@ const styles = StyleSheet.create({
   trendsDayDetailTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   trendsDayDetailStats: {
@@ -1861,6 +1881,7 @@ const styles = StyleSheet.create({
   trendsDayDetailValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   trendsDayDetailLabel: {
@@ -1922,6 +1943,7 @@ const styles = StyleSheet.create({
   topFoodRankText: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.bold },
   topFoodInfo: { flex: 1 },
   topFoodName: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   topFoodMeta: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
   topFoodAction: { padding: SPACING[2] },
 
@@ -1933,6 +1955,7 @@ const styles = StyleSheet.create({
   timingIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   timingInfo: { flex: 1 },
   timingLabel: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   timingTime: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
   timingCount: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary },
 
@@ -1943,6 +1966,7 @@ const styles = StyleSheet.create({
   gapItem: { paddingBottom: SPACING[3], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
   gapHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING[1] },
   gapName: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   gapPercent: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.bold },
   gapProgress: { height: 6, backgroundColor: SURFACES.background.secondary, borderRadius: 3, overflow: 'hidden', marginBottom: SPACING[2] },
   gapProgressFill: { height: '100%', borderRadius: 3 },
@@ -1974,6 +1998,7 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 });

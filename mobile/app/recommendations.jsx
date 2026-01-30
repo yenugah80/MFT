@@ -367,6 +367,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[1],
   },
@@ -382,6 +383,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[4],
   },
@@ -414,6 +416,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginTop: SPACING[4],
     marginBottom: SPACING[2],
@@ -432,6 +435,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginTop: SPACING[4],
     marginBottom: SPACING[2],
@@ -467,6 +471,7 @@ const styles = StyleSheet.create({
   upgradeTitle: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: SPACING[3],

@@ -349,6 +349,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitle: {
@@ -370,6 +371,7 @@ const styles = StyleSheet.create({
   dataQualityText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Top insight
@@ -390,6 +392,7 @@ const styles = StyleSheet.create({
   topInsightLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#B45309',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -397,6 +400,7 @@ const styles = StyleSheet.create({
   topInsightText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     lineHeight: 20,
   },
@@ -430,6 +434,7 @@ const styles = StyleSheet.create({
   patternStatement: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     lineHeight: 20,
   },
@@ -446,6 +451,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'capitalize',
   },
   categoryLabel: {
@@ -473,6 +479,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -509,6 +516,7 @@ const styles = StyleSheet.create({
   retryText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 
@@ -521,6 +529,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   emptyText: {

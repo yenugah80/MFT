@@ -16,7 +16,7 @@
  * - Tertiary: Source confidence and edit options
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,14 @@ import { useRouter } from 'expo-router';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, MACRO_COLORS, NUTRISCORE, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { NutriScoreGlow, HealthScoreBadge } from '../NutriScoreBadge';
+
+// Smart Insights Components
+import SmartMealInsights from './SmartMealInsights';
+import MealComparisonCard from './MealComparisonCard';
+// NutrientDensityCard removed - redundant with Health Metrics section
+
+// Data Hooks
+import { useHistoricalMealData, formatHistoricalDataForComparison } from '../../hooks/useHistoricalMealData';
 
 // ============================================================================
 // HELPER FUNCTIONS - Tufte-inspired Data Formatting
@@ -367,6 +375,18 @@ export default function MealLoggedCard({
   const [showAllMicros, setShowAllMicros] = useState(false);
   const interactionRef = useRef(null);
 
+  // Fetch real historical data for meal comparisons
+  const { data: historyStats, isError: historyError, isLoading: historyLoading } = useHistoricalMealData({
+    mealType: meal?.mealType,
+    enabled: !!meal,
+  });
+
+  // Memoize historical data transformation to prevent re-computation on every render
+  const historicalData = useMemo(
+    () => formatHistoricalDataForComparison(historyStats),
+    [historyStats]
+  );
+
   // Navigate to meal detail screen
   const handleViewDetails = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -519,6 +539,56 @@ export default function MealLoggedCard({
             )}
           </View>
         )}
+
+        {/* ──────────────────────────────────────────── */}
+        {/* SMART INSIGHTS - AI-Powered Analysis */}
+        {/* ──────────────────────────────────────────── */}
+        <SmartMealInsights
+          meal={{
+            macros: {
+              calories_kcal: meal.calories,
+              protein_g: meal.protein,
+              carbs_g: meal.carbs,
+              fat_g: meal.fat,
+              fiber_g: meal.fiber,
+              sugar_g: meal.sugar,
+              sodium_mg: meal.sodium,
+            },
+            name: meal.foodName || meal.name,
+            healthScore: meal.healthScore,
+            nutriScore: meal.nutriScore,
+            micros: meal.micros,
+          }}
+          userGoals={dailyGoals}
+          historicalData={historicalData}
+          dailyTotals={dailyTotals}
+          showScoreBreakdown={false}
+          showImprovements={true}
+          showDailyProgress={!!dailyGoals?.dailyCalories}
+          showPairings={true}
+          isLoading={historyLoading}
+        />
+
+        {/* NOTE: NutrientDensityCard removed - redundant with Health Metrics above */}
+
+        {/* ──────────────────────────────────────────── */}
+        {/* MEAL COMPARISON - Historical Context */}
+        {/* ──────────────────────────────────────────── */}
+        <MealComparisonCard
+          meal={{
+            macros: {
+              calories_kcal: meal.calories,
+              protein_g: meal.protein,
+              carbs_g: meal.carbs,
+              fat_g: meal.fat,
+              fiber_g: meal.fiber,
+            },
+          }}
+          mealType={meal.mealType}
+          historicalData={historicalData}
+          showTrend={true}
+          isLoading={historyLoading}
+        />
 
         {/* ──────────────────────────────────────────── */}
         {/* SECONDARY DATA - Macronutrients */}
@@ -867,12 +937,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -889,6 +961,7 @@ const styles = StyleSheet.create({
   portionBadgeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   countableIndicator: {
@@ -912,6 +985,7 @@ const styles = StyleSheet.create({
   caloriesLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255, 255, 255, 0.8)',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -926,6 +1000,7 @@ const styles = StyleSheet.create({
   caloriesUnit: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: SPACING[1],
   },
@@ -962,12 +1037,14 @@ const styles = StyleSheet.create({
   nutriScoreLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginBottom: SPACING[1],
   },
   nutriScoreGrade: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   healthScoreSection: {
     flexDirection: 'row',
@@ -981,12 +1058,14 @@ const styles = StyleSheet.create({
   healthScoreLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginBottom: SPACING[1],
   },
   healthScoreValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   healthAnalysis: {
@@ -1014,6 +1093,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[4],
     textTransform: 'uppercase',
@@ -1046,6 +1126,7 @@ const styles = StyleSheet.create({
   macroLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   macroValueContainer: {
@@ -1056,11 +1137,13 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   macroUnit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   macroGoal: {
@@ -1099,15 +1182,18 @@ const styles = StyleSheet.create({
   comparisonLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   comparisonValueText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   comparisonUnit: {
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   comparisonTrack: {
@@ -1148,11 +1234,13 @@ const styles = StyleSheet.create({
   netCarbsLabel: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   netCarbsValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   netCarbsFormula: {
@@ -1181,6 +1269,7 @@ const styles = StyleSheet.create({
   microName: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   microRight: {
@@ -1191,11 +1280,13 @@ const styles = StyleSheet.create({
   microValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   microPercent: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     minWidth: 40,
     textAlign: 'right',
   },
@@ -1212,6 +1303,7 @@ const styles = StyleSheet.create({
   viewMoreText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -1238,6 +1330,7 @@ const styles = StyleSheet.create({
   metadataValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 
@@ -1268,6 +1361,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   primaryButton: {
@@ -1284,6 +1378,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 });

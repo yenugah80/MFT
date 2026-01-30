@@ -970,6 +970,846 @@ const InsightsSection = ({ logs, mlPatterns, periodLabel }) => {
   );
 };
 
+// CONSOLIDATED: Circadian Insights Card - When you feel best/worst
+const CircadianInsightsCard = ({ logs }) => {
+  const patterns = useMemo(() => {
+    if (!logs?.length || logs.length < 5) return null;
+
+    const timeSlots = {
+      earlyMorning: { label: 'Early Morning', range: '5-8 AM', hours: [5, 6, 7], logs: [], icon: 'sunny-outline' },
+      morning: { label: 'Morning', range: '8-12 PM', hours: [8, 9, 10, 11], logs: [], icon: 'sunny' },
+      afternoon: { label: 'Afternoon', range: '12-5 PM', hours: [12, 13, 14, 15, 16], logs: [], icon: 'partly-sunny' },
+      evening: { label: 'Evening', range: '5-9 PM', hours: [17, 18, 19, 20], logs: [], icon: 'moon-outline' },
+      night: { label: 'Night', range: '9 PM-5 AM', hours: [21, 22, 23, 0, 1, 2, 3, 4], logs: [], icon: 'moon' },
+    };
+
+    // Categorize logs by time of day
+    logs.forEach((log) => {
+      const hour = new Date(log.loggedDate).getHours();
+      for (const [key, slot] of Object.entries(timeSlots)) {
+        if (slot.hours.includes(hour)) {
+          timeSlots[key].logs.push(log);
+          break;
+        }
+      }
+    });
+
+    // Calculate metrics for each slot
+    const positiveMoods = ['happy', 'calm', 'focused', 'energized'];
+    const calculated = Object.entries(timeSlots).map(([key, slot]) => {
+      const count = slot.logs.length;
+      if (count === 0) return { ...slot, key, count: 0, avgMood: 0, positiveRate: 0 };
+
+      const withIntensity = slot.logs.filter((l) => l.intensity);
+      const avgMood = withIntensity.length
+        ? withIntensity.reduce((sum, l) => sum + l.intensity, 0) / withIntensity.length
+        : 5;
+      const positiveCount = slot.logs.filter((l) => positiveMoods.includes(l.mood)).length;
+      const positiveRate = (positiveCount / count) * 100;
+
+      return { ...slot, key, count, avgMood, positiveRate };
+    }).filter((s) => s.count > 0);
+
+    if (calculated.length < 2) return null;
+
+    // Find best and worst times
+    const sorted = [...calculated].sort((a, b) => b.avgMood - a.avgMood);
+    const best = sorted[0];
+    const worst = sorted[sorted.length - 1];
+
+    return {
+      slots: calculated,
+      best,
+      worst,
+      hasMeaningfulDiff: best.avgMood - worst.avgMood > 0.5,
+    };
+  }, [logs]);
+
+  if (!patterns) return null;
+
+  return (
+    <View style={styles.timePatternCard}>
+      <View style={styles.timePatternHeader}>
+        <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+        <Text style={styles.timePatternTitle}>Time-of-Day Patterns</Text>
+        <View style={styles.researchBadge}>
+          <Ionicons name="flask-outline" size={10} color="#6366F1" />
+          <Text style={styles.researchBadgeText}>Research-backed</Text>
+        </View>
+      </View>
+
+      {/* Best/Worst Time Summary */}
+      {patterns.hasMeaningfulDiff && (
+        <View style={styles.timePatternSummary}>
+          <View style={[styles.timePatternHighlight, { backgroundColor: COLORS.successLight }]}>
+            <Ionicons name={patterns.best.icon} size={16} color={COLORS.success} />
+            <View>
+              <Text style={[styles.timePatternHighlightLabel, { color: COLORS.success }]}>Best Time</Text>
+              <Text style={styles.timePatternHighlightValue}>{patterns.best.label}</Text>
+              <Text style={styles.timePatternHighlightSub}>{patterns.best.avgMood.toFixed(1)} avg mood</Text>
+            </View>
+          </View>
+          <View style={[styles.timePatternHighlight, { backgroundColor: '#FEE2E2' }]}>
+            <Ionicons name={patterns.worst.icon} size={16} color={COLORS.danger} />
+            <View>
+              <Text style={[styles.timePatternHighlightLabel, { color: COLORS.danger }]}>Challenging Time</Text>
+              <Text style={styles.timePatternHighlightValue}>{patterns.worst.label}</Text>
+              <Text style={styles.timePatternHighlightSub}>{patterns.worst.avgMood.toFixed(1)} avg mood</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Time Slots Breakdown */}
+      <View style={styles.timeSlotsGrid}>
+        {patterns.slots.map((slot) => {
+          const isBest = slot.key === patterns.best.key;
+          const isWorst = slot.key === patterns.worst.key && patterns.hasMeaningfulDiff;
+          const barColor = slot.avgMood >= 7 ? COLORS.success
+            : slot.avgMood >= 5 ? COLORS.warning
+            : COLORS.danger;
+
+          return (
+            <View key={slot.key} style={styles.timeSlotItem}>
+              <View style={styles.timeSlotHeader}>
+                <Ionicons
+                  name={slot.icon}
+                  size={14}
+                  color={isBest ? COLORS.success : isWorst ? COLORS.danger : COLORS.text.secondary}
+                />
+                <Text style={[
+                  styles.timeSlotLabel,
+                  isBest && { color: COLORS.success, fontWeight: '700' },
+                  isWorst && { color: COLORS.danger },
+                ]}>
+                  {slot.label}
+                </Text>
+              </View>
+              <View style={styles.timeSlotBarContainer}>
+                <View
+                  style={[
+                    styles.timeSlotBar,
+                    { width: `${(slot.avgMood / 10) * 100}%`, backgroundColor: barColor },
+                  ]}
+                />
+              </View>
+              <View style={styles.timeSlotStats}>
+                <Text style={styles.timeSlotMood}>{slot.avgMood.toFixed(1)}</Text>
+                <Text style={styles.timeSlotCount}>{slot.count} logs</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Circadian Insight */}
+      <View style={styles.circadianInsight}>
+        <Ionicons name="information-circle-outline" size={14} color={COLORS.text.tertiary} />
+        <Text style={styles.circadianInsightText}>
+          Your circadian rhythm shows mood variation throughout the day. Schedule important tasks during your peak hours.
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+// Circadian Rhythm Heatmap - Hour-by-hour mood visualization
+const CircadianHeatmap = ({ logs }) => {
+  const heatmapData = useMemo(() => {
+    if (!logs?.length || logs.length < 7) return null;
+
+    // Initialize 24-hour grid
+    const hours = Array.from({ length: 24 }, (_, i) => ({
+      hour: i,
+      label: i === 0 ? '12a' : i === 12 ? '12p' : i < 12 ? `${i}a` : `${i - 12}p`,
+      logs: [],
+      avgMood: 0,
+      count: 0,
+    }));
+
+    // Categorize logs by hour
+    logs.forEach((log) => {
+      const hour = new Date(log.loggedDate).getHours();
+      hours[hour].logs.push(log);
+    });
+
+    // Calculate average mood for each hour
+    hours.forEach((h) => {
+      if (h.logs.length > 0) {
+        const withIntensity = h.logs.filter((l) => l.intensity);
+        h.avgMood = withIntensity.length
+          ? withIntensity.reduce((sum, l) => sum + l.intensity, 0) / withIntensity.length
+          : 5;
+        h.count = h.logs.length;
+      }
+    });
+
+    // Find peak and low hours
+    const activeHours = hours.filter((h) => h.count > 0);
+    if (activeHours.length < 3) return null;
+
+    const sorted = [...activeHours].sort((a, b) => b.avgMood - a.avgMood);
+    const peakHour = sorted[0];
+    const lowHour = sorted[sorted.length - 1];
+
+    return {
+      hours,
+      peakHour,
+      lowHour,
+      totalLogs: logs.length,
+    };
+  }, [logs]);
+
+  if (!heatmapData) return null;
+
+  const getHeatColor = (avgMood, count) => {
+    if (count === 0) return COLORS.border;
+    if (avgMood >= 7.5) return '#10B981';
+    if (avgMood >= 6.5) return '#34D399';
+    if (avgMood >= 5.5) return '#FBBF24';
+    if (avgMood >= 4.5) return '#F59E0B';
+    return '#EF4444';
+  };
+
+  // Show only active hours (6 AM - 11 PM typical)
+  const displayHours = heatmapData.hours.filter((h) => h.hour >= 6 && h.hour <= 23);
+
+  return (
+    <View style={styles.heatmapCard}>
+      <View style={styles.heatmapHeader}>
+        <Ionicons name="grid-outline" size={18} color={COLORS.primary} />
+        <Text style={styles.heatmapTitle}>Circadian Rhythm Map</Text>
+      </View>
+
+      {/* Peak/Low Summary */}
+      <View style={styles.heatmapSummary}>
+        <View style={styles.heatmapPeakItem}>
+          <View style={[styles.heatmapPeakDot, { backgroundColor: COLORS.success }]} />
+          <Text style={styles.heatmapPeakLabel}>Peak:</Text>
+          <Text style={styles.heatmapPeakValue}>
+            {heatmapData.peakHour.hour === 0 ? '12 AM'
+              : heatmapData.peakHour.hour === 12 ? '12 PM'
+              : heatmapData.peakHour.hour < 12 ? `${heatmapData.peakHour.hour} AM`
+              : `${heatmapData.peakHour.hour - 12} PM`}
+          </Text>
+          <Text style={styles.heatmapPeakMood}>({heatmapData.peakHour.avgMood.toFixed(1)})</Text>
+        </View>
+        <View style={styles.heatmapPeakItem}>
+          <View style={[styles.heatmapPeakDot, { backgroundColor: COLORS.danger }]} />
+          <Text style={styles.heatmapPeakLabel}>Low:</Text>
+          <Text style={styles.heatmapPeakValue}>
+            {heatmapData.lowHour.hour === 0 ? '12 AM'
+              : heatmapData.lowHour.hour === 12 ? '12 PM'
+              : heatmapData.lowHour.hour < 12 ? `${heatmapData.lowHour.hour} AM`
+              : `${heatmapData.lowHour.hour - 12} PM`}
+          </Text>
+          <Text style={styles.heatmapPeakMood}>({heatmapData.lowHour.avgMood.toFixed(1)})</Text>
+        </View>
+      </View>
+
+      {/* Heatmap Grid */}
+      <View style={styles.heatmapGrid}>
+        {displayHours.map((h) => (
+          <View key={h.hour} style={styles.heatmapCell}>
+            <View
+              style={[
+                styles.heatmapDot,
+                {
+                  backgroundColor: getHeatColor(h.avgMood, h.count),
+                  opacity: h.count > 0 ? Math.min(0.4 + h.count * 0.15, 1) : 0.3,
+                },
+              ]}
+            />
+            <Text style={styles.heatmapHourLabel}>{h.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Legend */}
+      <View style={styles.heatmapLegend}>
+        <Text style={styles.heatmapLegendLabel}>Low</Text>
+        <View style={styles.heatmapLegendGradient}>
+          <View style={[styles.heatmapLegendDot, { backgroundColor: '#EF4444' }]} />
+          <View style={[styles.heatmapLegendDot, { backgroundColor: '#F59E0B' }]} />
+          <View style={[styles.heatmapLegendDot, { backgroundColor: '#FBBF24' }]} />
+          <View style={[styles.heatmapLegendDot, { backgroundColor: '#34D399' }]} />
+          <View style={[styles.heatmapLegendDot, { backgroundColor: '#10B981' }]} />
+        </View>
+        <Text style={styles.heatmapLegendLabel}>High</Text>
+      </View>
+    </View>
+  );
+};
+
+// Physiology Correlation Card - Sleep/Exercise/Social impact on mood
+const PhysiologyCorrelationCard = ({ logs }) => {
+  const correlations = useMemo(() => {
+    if (!logs?.length) return null;
+
+    // Filter logs that have tags
+    const logsWithTags = logs.filter((l) => l.tags && Object.keys(l.tags).length > 0 && l.intensity);
+    if (logsWithTags.length < 5) return null;
+
+    const results = [];
+
+    // 1. Sleep-Mood Correlation
+    const sleepLevels = { Poor: 1, Fair: 2, Good: 3, Excellent: 4 };
+    const sleepLogs = logsWithTags.filter((l) => l.tags.sleep && sleepLevels[l.tags.sleep]);
+    if (sleepLogs.length >= 3) {
+      const sleepGroups = {
+        low: sleepLogs.filter((l) => sleepLevels[l.tags.sleep] <= 2),
+        high: sleepLogs.filter((l) => sleepLevels[l.tags.sleep] >= 3),
+      };
+
+      if (sleepGroups.low.length >= 2 && sleepGroups.high.length >= 2) {
+        const lowSleepMood = sleepGroups.low.reduce((s, l) => s + l.intensity, 0) / sleepGroups.low.length;
+        const highSleepMood = sleepGroups.high.reduce((s, l) => s + l.intensity, 0) / sleepGroups.high.length;
+        const diff = highSleepMood - lowSleepMood;
+
+        if (Math.abs(diff) > 0.5) {
+          results.push({
+            type: 'sleep',
+            icon: 'moon',
+            label: 'Sleep Quality',
+            color: '#6366F1',
+            impact: diff,
+            direction: diff > 0 ? 'positive' : 'negative',
+            insight: diff > 0
+              ? `Good sleep boosts your mood by ${diff.toFixed(1)} points`
+              : `Poor sleep affects your mood significantly`,
+            sampleSize: sleepLogs.length,
+            highAvg: highSleepMood,
+            lowAvg: lowSleepMood,
+          });
+        }
+      }
+    }
+
+    // 2. Exercise-Mood Correlation
+    const exerciseLevels = { None: 0, Light: 1, Moderate: 2, Intense: 3 };
+    const exerciseLogs = logsWithTags.filter((l) => l.tags.exercise && exerciseLevels[l.tags.exercise] !== undefined);
+    if (exerciseLogs.length >= 3) {
+      const exerciseGroups = {
+        none: exerciseLogs.filter((l) => exerciseLevels[l.tags.exercise] === 0),
+        active: exerciseLogs.filter((l) => exerciseLevels[l.tags.exercise] >= 1),
+      };
+
+      if (exerciseGroups.none.length >= 2 && exerciseGroups.active.length >= 2) {
+        const noExerciseMood = exerciseGroups.none.reduce((s, l) => s + l.intensity, 0) / exerciseGroups.none.length;
+        const activeMood = exerciseGroups.active.reduce((s, l) => s + l.intensity, 0) / exerciseGroups.active.length;
+        const diff = activeMood - noExerciseMood;
+
+        if (Math.abs(diff) > 0.5) {
+          results.push({
+            type: 'exercise',
+            icon: 'barbell',
+            label: 'Exercise',
+            color: '#10B981',
+            impact: diff,
+            direction: diff > 0 ? 'positive' : 'negative',
+            insight: diff > 0
+              ? `Exercise lifts your mood by ${diff.toFixed(1)} points`
+              : `Exercise patterns show mixed mood effects`,
+            sampleSize: exerciseLogs.length,
+            highAvg: activeMood,
+            lowAvg: noExerciseMood,
+          });
+        }
+      }
+    }
+
+    // 3. Social-Mood Correlation (NEW - research-backed)
+    const socialLogs = logsWithTags.filter((l) => l.tags.social);
+    if (socialLogs.length >= 3) {
+      const socialGroups = {
+        alone: socialLogs.filter((l) => l.tags.social === 'Alone'),
+        withOthers: socialLogs.filter((l) => l.tags.social !== 'Alone'),
+      };
+
+      if (socialGroups.alone.length >= 2 && socialGroups.withOthers.length >= 2) {
+        const aloneMood = socialGroups.alone.reduce((s, l) => s + l.intensity, 0) / socialGroups.alone.length;
+        const socialMood = socialGroups.withOthers.reduce((s, l) => s + l.intensity, 0) / socialGroups.withOthers.length;
+        const diff = socialMood - aloneMood;
+
+        if (Math.abs(diff) > 0.3) {
+          results.push({
+            type: 'social',
+            icon: 'people',
+            label: 'Social Contact',
+            color: '#3B82F6',
+            impact: diff,
+            direction: diff > 0 ? 'positive' : 'negative',
+            insight: diff > 0
+              ? `Being with others boosts mood by ${diff.toFixed(1)} points`
+              : `You feel better when alone (+${Math.abs(diff).toFixed(1)} pts)`,
+            sampleSize: socialLogs.length,
+            highAvg: diff > 0 ? socialMood : aloneMood,
+            lowAvg: diff > 0 ? aloneMood : socialMood,
+          });
+        }
+      }
+    }
+
+    // 4. Connection Quality Correlation (NEW - research-backed)
+    const connectionLevels = { Disconnected: 1, Neutral: 2, Connected: 3, 'Deeply Connected': 4, Deep: 4 };
+    const connectionLogs = logsWithTags.filter((l) => l.tags.connection && connectionLevels[l.tags.connection]);
+    if (connectionLogs.length >= 3) {
+      const connectionGroups = {
+        low: connectionLogs.filter((l) => connectionLevels[l.tags.connection] <= 2),
+        high: connectionLogs.filter((l) => connectionLevels[l.tags.connection] >= 3),
+      };
+
+      if (connectionGroups.low.length >= 2 && connectionGroups.high.length >= 2) {
+        const lowConnMood = connectionGroups.low.reduce((s, l) => s + l.intensity, 0) / connectionGroups.low.length;
+        const highConnMood = connectionGroups.high.reduce((s, l) => s + l.intensity, 0) / connectionGroups.high.length;
+        const diff = highConnMood - lowConnMood;
+
+        if (Math.abs(diff) > 0.5) {
+          results.push({
+            type: 'connection',
+            icon: 'heart',
+            label: 'Feeling Connected',
+            color: '#EC4899',
+            impact: diff,
+            direction: diff > 0 ? 'positive' : 'negative',
+            insight: diff > 0
+              ? `Feeling connected boosts mood by ${diff.toFixed(1)} points`
+              : `Connection quality significantly impacts your mood`,
+            sampleSize: connectionLogs.length,
+            highAvg: highConnMood,
+            lowAvg: lowConnMood,
+          });
+        }
+      }
+    }
+
+    return results.length > 0 ? results.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)) : null;
+  }, [logs]);
+
+  if (!correlations) return null;
+
+  return (
+    <View style={styles.physiologyCard}>
+      <View style={styles.physiologyHeader}>
+        <Ionicons name="fitness" size={18} color={COLORS.primary} />
+        <Text style={styles.physiologyTitle}>What Affects Your Mood</Text>
+        <View style={styles.dataQualityBadge}>
+          <Text style={styles.dataQualityText}>From your tags</Text>
+        </View>
+      </View>
+
+      <Text style={styles.physiologySubtitle}>
+        Based on context you&apos;ve logged with your mood entries
+      </Text>
+
+      {correlations.map((corr, index) => (
+        <View key={corr.type} style={styles.correlationItem}>
+          <View style={[styles.correlationIcon, { backgroundColor: `${corr.color}20` }]}>
+            <Ionicons name={corr.icon} size={20} color={corr.color} />
+          </View>
+          <View style={styles.correlationContent}>
+            <View style={styles.correlationHeader}>
+              <Text style={styles.correlationLabel}>{corr.label}</Text>
+              <View style={[
+                styles.impactBadge,
+                { backgroundColor: corr.direction === 'positive' ? '#D1FAE5' : '#FEE2E2' }
+              ]}>
+                <Ionicons
+                  name={corr.direction === 'positive' ? 'arrow-up' : 'arrow-down'}
+                  size={12}
+                  color={corr.direction === 'positive' ? COLORS.success : COLORS.danger}
+                />
+                <Text style={[
+                  styles.impactText,
+                  { color: corr.direction === 'positive' ? COLORS.success : COLORS.danger }
+                ]}>
+                  {Math.abs(corr.impact).toFixed(1)} pts
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.correlationInsight}>{corr.insight}</Text>
+            <View style={styles.correlationMeter}>
+              <View style={styles.meterLabels}>
+                <Text style={styles.meterLabel}>Low: {corr.lowAvg.toFixed(1)}</Text>
+                <Text style={styles.meterLabel}>High: {corr.highAvg.toFixed(1)}</Text>
+              </View>
+              <View style={styles.meterTrack}>
+                <View style={[styles.meterFill, { width: `${(corr.highAvg / 10) * 100}%`, backgroundColor: corr.color }]} />
+                <View style={[styles.meterMarker, { left: `${(corr.lowAvg / 10) * 100}%` }]} />
+              </View>
+            </View>
+            <Text style={styles.correlationSampleSize}>{corr.sampleSize} entries analyzed</Text>
+          </View>
+        </View>
+      ))}
+
+      <View style={styles.physiologyTip}>
+        <Ionicons name="bulb-outline" size={14} color={COLORS.warning} />
+        <Text style={styles.physiologyTipText}>
+          Log more context tags to improve these insights
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+// Mood Momentum Card - Rolling weighted average showing "how things have been going"
+const MoodMomentumCard = ({ logs }) => {
+  const momentum = useMemo(() => {
+    if (!logs?.length || logs.length < 5) return null;
+
+    // Sort logs by date (newest first)
+    const sortedLogs = [...logs]
+      .filter((l) => l.intensity)
+      .sort((a, b) => new Date(b.loggedDate) - new Date(a.loggedDate));
+
+    if (sortedLogs.length < 5) return null;
+
+    // Calculate weighted rolling average (recent entries weighted more heavily)
+    // Weight: exponential decay - most recent = 1.0, older entries decay
+    const decayFactor = 0.85;
+    let weightedSum = 0;
+    let weightSum = 0;
+
+    sortedLogs.slice(0, 20).forEach((log, index) => {
+      const weight = Math.pow(decayFactor, index);
+      weightedSum += log.intensity * weight;
+      weightSum += weight;
+    });
+
+    const currentMomentum = weightedSum / weightSum;
+
+    // Calculate momentum from a week ago for comparison
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const olderLogs = sortedLogs.filter((l) => new Date(l.loggedDate) < oneWeekAgo);
+
+    let pastMomentum = currentMomentum;
+    if (olderLogs.length >= 3) {
+      let pastWeightedSum = 0;
+      let pastWeightSum = 0;
+      olderLogs.slice(0, 10).forEach((log, index) => {
+        const weight = Math.pow(decayFactor, index);
+        pastWeightedSum += log.intensity * weight;
+        pastWeightSum += weight;
+      });
+      pastMomentum = pastWeightedSum / pastWeightSum;
+    }
+
+    const change = currentMomentum - pastMomentum;
+    const trend = change > 0.3 ? 'rising' : change < -0.3 ? 'falling' : 'stable';
+
+    // Calculate "streak" direction - consecutive days of improving/declining
+    const last5 = sortedLogs.slice(0, 5);
+    let improvingStreak = 0;
+    let decliningStreak = 0;
+    for (let i = 0; i < last5.length - 1; i++) {
+      if (last5[i].intensity > last5[i + 1].intensity) improvingStreak++;
+      else if (last5[i].intensity < last5[i + 1].intensity) decliningStreak++;
+    }
+
+    return {
+      current: currentMomentum,
+      past: pastMomentum,
+      change,
+      trend,
+      improvingStreak,
+      decliningStreak,
+      recentCount: Math.min(sortedLogs.length, 20),
+    };
+  }, [logs]);
+
+  if (!momentum) return null;
+
+  const trendConfig = {
+    rising: { icon: 'trending-up', color: COLORS.success, label: 'Rising', bg: '#D1FAE5' },
+    falling: { icon: 'trending-down', color: COLORS.danger, label: 'Falling', bg: '#FEE2E2' },
+    stable: { icon: 'remove', color: COLORS.text.secondary, label: 'Stable', bg: '#F1F5F9' },
+  };
+
+  const config = trendConfig[momentum.trend];
+
+  return (
+    <View style={styles.momentumCard}>
+      <View style={styles.momentumHeader}>
+        <Ionicons name="pulse" size={18} color={COLORS.primary} />
+        <Text style={styles.momentumTitle}>Mood Momentum</Text>
+        <View style={styles.researchBadge}>
+          <Ionicons name="analytics" size={10} color="#6366F1" />
+          <Text style={styles.researchBadgeText}>Weighted avg</Text>
+        </View>
+      </View>
+
+      <Text style={styles.momentumSubtitle}>
+        How things have been going overall (not just today)
+      </Text>
+
+      <View style={styles.momentumMain}>
+        <View style={styles.momentumScore}>
+          <Text style={styles.momentumValue}>{momentum.current.toFixed(1)}</Text>
+          <Text style={styles.momentumLabel}>Current Momentum</Text>
+        </View>
+
+        <View style={[styles.momentumTrend, { backgroundColor: config.bg }]}>
+          <Ionicons name={config.icon} size={24} color={config.color} />
+          <Text style={[styles.momentumTrendLabel, { color: config.color }]}>{config.label}</Text>
+          {momentum.change !== 0 && (
+            <Text style={[styles.momentumChange, { color: config.color }]}>
+              {momentum.change > 0 ? '+' : ''}{momentum.change.toFixed(1)}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* Visual momentum meter */}
+      <View style={styles.momentumMeter}>
+        <View style={styles.momentumMeterTrack}>
+          <View
+            style={[
+              styles.momentumMeterFill,
+              {
+                width: `${(momentum.current / 10) * 100}%`,
+                backgroundColor: momentum.current >= 6 ? COLORS.success
+                  : momentum.current >= 4 ? COLORS.warning
+                  : COLORS.danger,
+              }
+            ]}
+          />
+          {/* Past momentum marker */}
+          <View
+            style={[
+              styles.momentumMarker,
+              { left: `${(momentum.past / 10) * 100}%` }
+            ]}
+          />
+        </View>
+        <View style={styles.momentumMeterLabels}>
+          <Text style={styles.momentumMeterLabel}>1</Text>
+          <Text style={styles.momentumMeterLabel}>5</Text>
+          <Text style={styles.momentumMeterLabel}>10</Text>
+        </View>
+      </View>
+
+      <View style={styles.momentumInsight}>
+        <Ionicons name="information-circle-outline" size={14} color={COLORS.text.tertiary} />
+        <Text style={styles.momentumInsightText}>
+          {momentum.trend === 'rising'
+            ? 'Your mood trajectory is improving. Keep doing what\'s working!'
+            : momentum.trend === 'falling'
+              ? 'Your mood has been trending down. Consider what might be contributing.'
+              : 'Your mood has been consistent. Small positive changes can shift momentum.'}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+// Actionable Suggestions - Personalized recommendations based on user's patterns
+const ActionableSuggestions = ({ logs }) => {
+  const suggestions = useMemo(() => {
+    if (!logs?.length || logs.length < 7) return [];
+
+    const computed = [];
+    const positiveMoods = ['happy', 'calm', 'focused', 'energized'];
+    const negativeMoods = ['stressed', 'sad', 'tired'];
+
+    // 1. Best day of week suggestion
+    const dayStats = {};
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    logs.forEach((log) => {
+      const day = new Date(log.loggedDate).getDay();
+      if (!dayStats[day]) dayStats[day] = { positive: 0, total: 0, intensitySum: 0, intensityCount: 0 };
+      dayStats[day].total++;
+      if (positiveMoods.includes(log.mood)) dayStats[day].positive++;
+      if (log.intensity) {
+        dayStats[day].intensitySum += log.intensity;
+        dayStats[day].intensityCount++;
+      }
+    });
+
+    const daysWithData = Object.entries(dayStats)
+      .filter(([_, stats]) => stats.total >= 2)
+      .map(([day, stats]) => ({
+        day: parseInt(day),
+        name: dayNames[parseInt(day)],
+        positiveRate: stats.positive / stats.total,
+        avgMood: stats.intensityCount > 0 ? stats.intensitySum / stats.intensityCount : 5,
+      }));
+
+    if (daysWithData.length >= 3) {
+      const bestDay = daysWithData.sort((a, b) => b.avgMood - a.avgMood)[0];
+      if (bestDay.avgMood >= 6) {
+        computed.push({
+          icon: 'calendar-outline',
+          color: COLORS.success,
+          title: `${bestDay.name}s are your best days`,
+          action: 'Schedule important meetings or challenging tasks on this day when your mood is typically highest.',
+          confidence: Math.min(0.7 + (daysWithData.length * 0.05), 0.95),
+        });
+      }
+    }
+
+    // 2. Time-based suggestion
+    const timeStats = { morning: [], afternoon: [], evening: [] };
+    logs.forEach((log) => {
+      const hour = new Date(log.loggedDate).getHours();
+      if (hour >= 6 && hour < 12) timeStats.morning.push(log);
+      else if (hour >= 12 && hour < 18) timeStats.afternoon.push(log);
+      else if (hour >= 18 && hour < 22) timeStats.evening.push(log);
+    });
+
+    const getAvgMood = (arr) => {
+      const withIntensity = arr.filter((l) => l.intensity);
+      return withIntensity.length ? withIntensity.reduce((s, l) => s + l.intensity, 0) / withIntensity.length : 0;
+    };
+
+    const timePeriods = [
+      { name: 'morning', avg: getAvgMood(timeStats.morning), count: timeStats.morning.length },
+      { name: 'afternoon', avg: getAvgMood(timeStats.afternoon), count: timeStats.afternoon.length },
+      { name: 'evening', avg: getAvgMood(timeStats.evening), count: timeStats.evening.length },
+    ].filter((t) => t.count >= 3);
+
+    if (timePeriods.length >= 2) {
+      const sorted = timePeriods.sort((a, b) => b.avg - a.avg);
+      const best = sorted[0];
+      const worst = sorted[sorted.length - 1];
+
+      if (best.avg - worst.avg > 1) {
+        computed.push({
+          icon: 'time-outline',
+          color: COLORS.primary,
+          title: `Your ${best.name} moods are stronger`,
+          action: `Consider doing creative or demanding work in the ${best.name}. Save routine tasks for ${worst.name} when energy is lower.`,
+          confidence: 0.8,
+        });
+      }
+    }
+
+    // 3. Energy-mood correlation suggestion
+    const withBothMetrics = logs.filter((l) => l.intensity && l.energyLevel);
+    if (withBothMetrics.length >= 5) {
+      const highEnergy = withBothMetrics.filter((l) => l.energyLevel >= 7);
+      const lowEnergy = withBothMetrics.filter((l) => l.energyLevel <= 4);
+
+      if (highEnergy.length >= 2 && lowEnergy.length >= 2) {
+        const highEnergyMood = highEnergy.reduce((s, l) => s + l.intensity, 0) / highEnergy.length;
+        const lowEnergyMood = lowEnergy.reduce((s, l) => s + l.intensity, 0) / lowEnergy.length;
+
+        if (highEnergyMood - lowEnergyMood > 2) {
+          computed.push({
+            icon: 'flash-outline',
+            color: COLORS.warning,
+            title: 'Energy strongly affects your mood',
+            action: 'Prioritize sleep, exercise, and nutrition to maintain high energy. Even a short walk can boost both energy and mood.',
+            confidence: 0.85,
+          });
+        }
+      }
+    }
+
+    // 4. Stress pattern detection
+    const stressLogs = logs.filter((l) => l.mood === 'stressed');
+    if (stressLogs.length >= 3) {
+      // Check if stress clusters on specific days
+      const stressDays = {};
+      stressLogs.forEach((l) => {
+        const day = new Date(l.loggedDate).getDay();
+        stressDays[day] = (stressDays[day] || 0) + 1;
+      });
+
+      const topStressDay = Object.entries(stressDays)
+        .sort((a, b) => b[1] - a[1])[0];
+
+      if (topStressDay && topStressDay[1] >= 2) {
+        computed.push({
+          icon: 'heart-outline',
+          color: COLORS.danger,
+          title: `${dayNames[topStressDay[0]]}s tend to be stressful`,
+          action: 'Prepare relaxation strategies for this day: breathing exercises, short breaks, or lighter scheduling.',
+          confidence: 0.7,
+        });
+      }
+    }
+
+    // 5. Consistency reward
+    const uniqueDays = new Set(logs.map((l) => getLocalDateKey(l.loggedDate)));
+    if (uniqueDays.size >= 7) {
+      const avgLogsPerDay = logs.length / uniqueDays.size;
+      if (avgLogsPerDay >= 1.5) {
+        computed.push({
+          icon: 'trophy-outline',
+          color: '#10B981',
+          title: 'Great tracking consistency!',
+          action: 'Your regular logging builds valuable pattern data. Keep it up to unlock deeper insights over time.',
+          confidence: 0.95,
+        });
+      }
+    }
+
+    // 6. Mood variety suggestion
+    const moodCounts = {};
+    logs.forEach((l) => { moodCounts[l.mood] = (moodCounts[l.mood] || 0) + 1; });
+    const uniqueMoods = Object.keys(moodCounts).length;
+
+    if (uniqueMoods <= 2 && logs.length >= 10) {
+      computed.push({
+        icon: 'color-palette-outline',
+        color: '#6366F1',
+        title: 'Limited mood range detected',
+        action: 'Try to notice more subtle emotional states. Awareness of nuanced feelings can improve emotional intelligence.',
+        confidence: 0.75,
+      });
+    }
+
+    return computed.slice(0, 4);
+  }, [logs]);
+
+  if (!suggestions.length) return null;
+
+  return (
+    <View style={styles.suggestionsCard}>
+      <View style={styles.suggestionsHeader}>
+        <Ionicons name="bulb" size={18} color="#F59E0B" />
+        <Text style={styles.suggestionsTitle}>Personalized Actions</Text>
+        <View style={styles.aiPoweredBadge}>
+          <Text style={styles.aiPoweredText}>Pattern-based</Text>
+        </View>
+      </View>
+
+      <Text style={styles.suggestionsIntro}>
+        Based on your unique mood patterns, here are actionable suggestions:
+      </Text>
+
+      {suggestions.map((suggestion, index) => (
+        <View key={index} style={styles.suggestionItem}>
+          <View style={[styles.suggestionIcon, { backgroundColor: `${suggestion.color}15` }]}>
+            <Ionicons name={suggestion.icon} size={18} color={suggestion.color} />
+          </View>
+          <View style={styles.suggestionContent}>
+            <Text style={[styles.suggestionTitle, { color: suggestion.color }]}>
+              {suggestion.title}
+            </Text>
+            <Text style={styles.suggestionAction}>{suggestion.action}</Text>
+            <View style={styles.suggestionConfidence}>
+              <View style={styles.suggestionConfidenceBar}>
+                <View
+                  style={[
+                    styles.suggestionConfidenceFill,
+                    { width: `${suggestion.confidence * 100}%`, backgroundColor: suggestion.color },
+                  ]}
+                />
+              </View>
+              <Text style={styles.suggestionConfidenceText}>
+                {Math.round(suggestion.confidence * 100)}% confidence
+              </Text>
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
 // Weekly Mini Timeline - 7-day mood visualization
 const WeeklyMiniTimeline = ({ logs }) => {
   const weekData = useMemo(() => {
@@ -1271,7 +2111,7 @@ export default function MoodHistoryScreen() {
 
   const handleViewInsights = useCallback(() => {
     Haptics.selectionAsync();
-    router.push('/insights/mood');
+    router.push('/insights/mood-deep');
   }, [router]);
 
   // Render section header
@@ -1364,14 +2204,36 @@ export default function MoodHistoryScreen() {
           }
           ListHeaderComponent={
             <>
-              {/* Hero Card with Streak */}
+              {/* Premium Hero Card */}
               <HeroCard stats={stats} latestMood={latestMood} />
 
-              {/* Streak Badge */}
-              {streak >= 2 && (
-                <View style={styles.streakContainer}>
-                  <StreakBadge streak={streak} />
-                </View>
+              {/* Deep Insights Card - Premium Style */}
+              {(moodInsights?.logs?.length || 0) >= 5 && (
+                <TouchableOpacity
+                  style={styles.deepInsightsCard}
+                  onPress={handleViewInsights}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={['#F3E8FF', '#EDE9FE', '#DDD6FE']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.deepInsightsGradient}
+                  >
+                    <View style={styles.deepInsightsIconContainer}>
+                      <Ionicons name="analytics" size={24} color={COLORS.primary} />
+                    </View>
+                    <View style={styles.deepInsightsContent}>
+                      <Text style={styles.deepInsightsTitle}>Deep Analysis</Text>
+                      <Text style={styles.deepInsightsSubtext}>
+                        Patterns, correlations & recommendations
+                      </Text>
+                    </View>
+                    <View style={styles.deepInsightsArrow}>
+                      <Ionicons name="arrow-forward-circle" size={28} color={COLORS.primary} />
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
               )}
 
               {/* Time Period Selector */}
@@ -1387,30 +2249,18 @@ export default function MoodHistoryScreen() {
                 logs={moodInsights?.logs}
               />
 
-              {/* Week Comparison Card */}
-              <WeekComparisonCard logs={moodInsights?.logs} />
-
-              {/* Weekly Mini Timeline */}
+              {/* Mini Week View */}
               <WeeklyMiniTimeline logs={moodInsights?.logs} />
-
-              {/* Quick Stats Row */}
-              <QuickStatsRow logs={moodInsights?.logs} stats={stats} />
-
-              {/* Mood Distribution */}
-              <MoodDistributionCard logs={moodInsights?.logs} />
-
-              {/* Patterns & Insights Section - Always shows */}
-              <InsightsSection logs={moodInsights?.logs} mlPatterns={patterns} periodLabel={selectedPeriod} />
 
               {/* History Header */}
               <View style={styles.historyHeader}>
                 <View style={styles.historyHeaderRow}>
                   <View>
-                    <Text style={styles.historyTitle}>Your Mood Log</Text>
+                    <Text style={styles.historyTitle}>Mood Log</Text>
                     <Text style={styles.historySubtitle}>
                       {selectedMoods.length > 0
                         ? `${filteredSections.reduce((acc, s) => acc + s.data.length, 0)} filtered entries`
-                        : `${moodInsights?.logs?.length || 0} entries in ${selectedPeriod}`}
+                        : `${moodInsights?.logs?.length || 0} entries`}
                     </Text>
                   </View>
                   {selectedMoods.length > 0 && (
@@ -1480,6 +2330,53 @@ const styles = StyleSheet.create({
     gap: SPACING[1],
   },
 
+  // Compact Header (kept for backwards compatibility but not primary)
+
+  // Deep Insights Card (Premium style)
+  deepInsightsCard: {
+    marginBottom: SPACING[4],
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  deepInsightsGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING[4],
+    paddingHorizontal: SPACING[4],
+  },
+  deepInsightsIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING[3],
+  },
+  deepInsightsContent: {
+    flex: 1,
+  },
+  deepInsightsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  deepInsightsSubtext: {
+    fontSize: 13,
+    color: '#7C3AED',
+    opacity: 0.8,
+  },
+  deepInsightsArrow: {
+    marginLeft: SPACING[2],
+  },
+
   // Streak Badge
   streakContainer: {
     alignItems: 'center',
@@ -1503,6 +2400,7 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#92400E',
   },
 
@@ -1535,6 +2433,7 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.secondary,
   },
   filterChipTextActive: {
@@ -1549,6 +2448,7 @@ const styles = StyleSheet.create({
   filterChipCountText: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.tertiary,
   },
 
@@ -1574,6 +2474,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.primary,
   },
   comparisonTrend: {
@@ -1587,6 +2488,7 @@ const styles = StyleSheet.create({
   comparisonTrendText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   comparisonGrid: {
     flexDirection: 'row',
@@ -1599,12 +2501,14 @@ const styles = StyleSheet.create({
   comparisonColumnLabel: {
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.text.tertiary,
     marginBottom: SPACING[1],
   },
   comparisonValue: {
     fontSize: 28,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
   },
   comparisonSubtext: {
@@ -1618,6 +2522,7 @@ const styles = StyleSheet.create({
   comparisonStatValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.success,
   },
   comparisonStatLabel: {
@@ -1636,6 +2541,7 @@ const styles = StyleSheet.create({
   comparisonChangeValue: {
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   comparisonChangeLabel: {
     fontSize: 10,
@@ -1662,6 +2568,7 @@ const styles = StyleSheet.create({
   clearFilterText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.primary,
   },
 
@@ -1684,6 +2591,7 @@ const styles = StyleSheet.create({
   clearFilterTextLarge: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.primary,
   },
   loadingContainer: {
@@ -1728,6 +2636,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   currentMoodBadge: {
@@ -1743,6 +2652,7 @@ const styles = StyleSheet.create({
   currentMoodLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   heroStats: {
@@ -1759,6 +2669,7 @@ const styles = StyleSheet.create({
   heroStatValue: {
     fontSize: 24,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   heroStatLabel: {
@@ -1819,6 +2730,7 @@ const styles = StyleSheet.create({
   periodButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.secondary,
   },
   periodButtonTextActive: {
@@ -1846,6 +2758,7 @@ const styles = StyleSheet.create({
   weeklyTimelineTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.secondary,
   },
   weeklyTimelineDays: {
@@ -1881,11 +2794,13 @@ const styles = StyleSheet.create({
   weeklyTimelineDayLabel: {
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.text.tertiary,
   },
   weeklyTimelineDayLabelToday: {
     color: COLORS.primary,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   weeklyTimelineCount: {
     marginTop: 2,
@@ -1897,6 +2812,7 @@ const styles = StyleSheet.create({
   weeklyTimelineCountText: {
     fontSize: 9,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.primary,
   },
 
@@ -1929,6 +2845,7 @@ const styles = StyleSheet.create({
   quickStatValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
     textAlign: 'center',
   },
@@ -1959,6 +2876,7 @@ const styles = StyleSheet.create({
   distributionTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.primary,
   },
   distributionBars: {
@@ -1978,6 +2896,7 @@ const styles = StyleSheet.create({
   distributionMoodLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.text.secondary,
   },
   distributionBarContainer: {
@@ -1995,6 +2914,7 @@ const styles = StyleSheet.create({
     width: 36,
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     textAlign: 'right',
   },
 
@@ -2020,6 +2940,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.primary,
   },
   periodBadge: {
@@ -2031,6 +2952,7 @@ const styles = StyleSheet.create({
   periodBadgeText: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.secondary,
   },
   insightCard: {
@@ -2060,6 +2982,7 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   insightMLChip: {
     paddingHorizontal: 6,
@@ -2069,6 +2992,7 @@ const styles = StyleSheet.create({
   insightMLChipText: {
     fontSize: 9,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   insightDescription: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -2117,6 +3041,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.primary,
   },
   mlBadge: {
@@ -2128,6 +3053,7 @@ const styles = StyleSheet.create({
   mlBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.primary,
   },
   patternCard: {
@@ -2151,6 +3077,7 @@ const styles = StyleSheet.create({
   patternTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   patternDescription: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -2172,6 +3099,7 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.primary,
   },
   historySubtitle: {
@@ -2191,6 +3119,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.secondary,
   },
   sectionCountBadge: {
@@ -2238,6 +3167,7 @@ const styles = StyleSheet.create({
   entryMood: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   entryTime: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -2256,6 +3186,7 @@ const styles = StyleSheet.create({
   intensityText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   energyBadge: {
     flexDirection: 'row',
@@ -2268,6 +3199,7 @@ const styles = StyleSheet.create({
   energyText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   tagsBadge: {
     flexDirection: 'row',
@@ -2300,6 +3232,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING[2],
   },
@@ -2322,6 +3255,7 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -2346,6 +3280,596 @@ const styles = StyleSheet.create({
   logMoodText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
+  },
+
+  // Time-of-Day Patterns Card
+  timePatternCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  timePatternHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  timePatternTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  researchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0E7FF',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+    gap: 3,
+  },
+  researchBadgeText: {
+    fontSize: 9,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#6366F1',
+  },
+  timePatternSummary: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
+  },
+  timePatternHighlight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING[3],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[2],
+  },
+  timePatternHighlightLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  timePatternHighlightValue: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: COLORS.text.primary,
+  },
+  timePatternHighlightSub: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+  timeSlotsGrid: {
+    gap: SPACING[2],
+  },
+  timeSlotItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  timeSlotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 100,
+    gap: SPACING[1],
+  },
+  timeSlotLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.secondary,
+  },
+  timeSlotBarContainer: {
+    flex: 1,
+    height: 6,
+    backgroundColor: COLORS.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  timeSlotBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  timeSlotStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 70,
+    gap: SPACING[1],
+  },
+  timeSlotMood: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: COLORS.text.primary,
+    width: 24,
+  },
+  timeSlotCount: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+  circadianInsight: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.background,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    marginTop: SPACING[3],
+    gap: SPACING[2],
+  },
+  circadianInsightText: {
+    flex: 1,
+    fontSize: 11,
+    color: COLORS.text.secondary,
+    lineHeight: 16,
+  },
+
+  // Circadian Heatmap
+  heatmapCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  heatmapHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  heatmapTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  heatmapSummary: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: SPACING[4],
+    marginBottom: SPACING[3],
+    paddingBottom: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  heatmapPeakItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1],
+  },
+  heatmapPeakDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  heatmapPeakLabel: {
+    fontSize: 11,
+    color: COLORS.text.tertiary,
+  },
+  heatmapPeakValue: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  heatmapPeakMood: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+  heatmapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: SPACING[1],
+  },
+  heatmapCell: {
+    alignItems: 'center',
+    width: (SCREEN_WIDTH - SPACING[8] - SPACING[4] * 2) / 9,
+  },
+  heatmapDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  heatmapHourLabel: {
+    fontSize: 8,
+    color: COLORS.text.tertiary,
+  },
+  heatmapLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING[3],
+    gap: SPACING[2],
+  },
+  heatmapLegendLabel: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+  },
+  heatmapLegendGradient: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  heatmapLegendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+  },
+
+  // Actionable Suggestions
+  suggestionsCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+  },
+  suggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[2],
+  },
+  suggestionsTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  aiPoweredBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  aiPoweredText: {
+    fontSize: 9,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#92400E',
+  },
+  suggestionsIntro: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING[3],
+    lineHeight: 18,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: SPACING[3],
+  },
+  suggestionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  suggestionContent: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    marginBottom: 4,
+  },
+  suggestionAction: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.secondary,
+    lineHeight: 18,
+    marginBottom: SPACING[2],
+  },
+  suggestionConfidence: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  suggestionConfidenceBar: {
+    flex: 1,
+    height: 3,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+    maxWidth: 80,
+  },
+  suggestionConfidenceFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  suggestionConfidenceText: {
+    fontSize: 9,
+    color: COLORS.text.tertiary,
+  },
+
+  // Physiology Correlation Card
+  physiologyCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  physiologyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[1],
+  },
+  physiologyTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  dataQualityBadge: {
+    backgroundColor: '#E0E7FF',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  dataQualityText: {
+    fontSize: 9,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#6366F1',
+  },
+  physiologySubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.tertiary,
+    marginBottom: SPACING[3],
+  },
+  correlationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: SPACING[3],
+  },
+  correlationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  correlationContent: {
+    flex: 1,
+  },
+  correlationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  correlationLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  impactBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+    gap: 2,
+  },
+  impactText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  correlationInsight: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING[2],
+    lineHeight: 18,
+  },
+  correlationMeter: {
+    marginBottom: SPACING[1],
+  },
+  meterLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  meterLabel: {
+    fontSize: 9,
+    color: COLORS.text.tertiary,
+  },
+  meterTrack: {
+    height: 6,
+    backgroundColor: COLORS.border,
+    borderRadius: 3,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  meterFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  meterMarker: {
+    position: 'absolute',
+    top: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.text.tertiary,
+    borderWidth: 2,
+    borderColor: COLORS.card,
+    marginLeft: -5,
+  },
+  correlationSampleSize: {
+    fontSize: 9,
+    color: COLORS.text.tertiary,
+    fontStyle: 'italic',
+  },
+  physiologyTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    marginTop: SPACING[3],
+    gap: SPACING[2],
+  },
+  physiologyTipText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#92400E',
+  },
+
+  // Mood Momentum Card
+  momentumCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    marginBottom: SPACING[4],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  momentumHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[1],
+  },
+  momentumTitle: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: COLORS.text.primary,
+  },
+  momentumSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: COLORS.text.tertiary,
+    marginBottom: SPACING[3],
+  },
+  momentumMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING[3],
+  },
+  momentumScore: {
+    alignItems: 'center',
+  },
+  momentumValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: COLORS.text.primary,
+  },
+  momentumLabel: {
+    fontSize: 11,
+    color: COLORS.text.tertiary,
+  },
+  momentumTrend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.lg,
+    gap: SPACING[2],
+  },
+  momentumTrendLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  momentumChange: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  momentumMeter: {
+    marginBottom: SPACING[3],
+  },
+  momentumMeterTrack: {
+    height: 10,
+    backgroundColor: COLORS.border,
+    borderRadius: 5,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  momentumMeterFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  momentumMarker: {
+    position: 'absolute',
+    top: -3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.text.tertiary,
+    borderWidth: 3,
+    borderColor: COLORS.card,
+    marginLeft: -8,
+  },
+  momentumMeterLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  momentumMeterLabel: {
+    fontSize: 9,
+    color: COLORS.text.tertiary,
+  },
+  momentumInsight: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.background,
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    gap: SPACING[2],
+  },
+  momentumInsightText: {
+    flex: 1,
+    fontSize: 11,
+    color: COLORS.text.secondary,
+    lineHeight: 16,
   },
 });

@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import { COLORS } from "../../constants/colors";
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export const foodLoggingStyles = StyleSheet.create({
   container: {
@@ -24,6 +25,7 @@ export const foodLoggingStyles = StyleSheet.create({
     textAlign: "center",
     fontSize: 18,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
   },
   iconButton: {
@@ -65,6 +67,7 @@ export const foodLoggingStyles = StyleSheet.create({
   loggingCardTitle: {
     fontSize: 16,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     marginBottom: 4,
   },
@@ -78,6 +81,7 @@ export const foodLoggingStyles = StyleSheet.create({
     paddingTop: 8,
     fontSize: 13,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.textLight,
   },
   quickActionsGrid: {
@@ -115,6 +119,7 @@ export const foodLoggingStyles = StyleSheet.create({
   quickActionText: {
     fontSize: 12,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text,
     textAlign: "center",
   },
@@ -132,6 +137,7 @@ export const foodLoggingStyles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 16,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
   },
   bottomNav: {
@@ -169,11 +175,13 @@ export const foodLoggingStyles = StyleSheet.create({
   navLabel: {
     fontSize: 10,
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.textLight,
   },
   navLabelActive: {
     color: COLORS.primary,
     fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -196,6 +204,7 @@ export const foodLoggingStyles = StyleSheet.create({
     fontSize: 13,
     color: "#10B981",
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   errorMessage: {
     paddingHorizontal: 16,
@@ -211,5 +220,6 @@ export const foodLoggingStyles = StyleSheet.create({
     fontSize: 13,
     color: "#EF4444",
     fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

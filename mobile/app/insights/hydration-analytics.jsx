@@ -608,6 +608,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[4],
   },
@@ -628,6 +629,7 @@ const styles = StyleSheet.create({
     color: TEXT.white,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Hero Card
@@ -635,12 +637,15 @@ const styles = StyleSheet.create({
   heroGradient: { padding: SPACING[4] },
   heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   heroTitle: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   heroStatus: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, marginTop: 2 },
+  fontFamily: TYPOGRAPHY.family.semibold,
   statusBadge: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   gaugeContainer: { alignItems: 'center', marginVertical: SPACING[2] },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: SPACING[3], paddingTop: SPACING[3], borderTopWidth: 1, borderTopColor: SURFACES.divider },
   statItem: { alignItems: 'center' },
   statValue: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   statLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
   statDivider: { width: 1, height: 40, backgroundColor: SURFACES.divider },
 
@@ -650,6 +655,7 @@ const styles = StyleSheet.create({
   personaIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   personaContent: { flex: 1 },
   personaTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary, marginBottom: 4 },
+  fontFamily: TYPOGRAPHY.family.bold,
   personaDescription: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, lineHeight: 20 },
   personaRecommendation: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: SURFACES.background.tertiary, padding: SPACING[2], borderRadius: RADIUS.sm, marginTop: SPACING[3], gap: SPACING[1] },
   personaRecommendationText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: BRAND.primary, fontWeight: TYPOGRAPHY.weight.medium },
@@ -659,6 +665,7 @@ const styles = StyleSheet.create({
   predictionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING[2] },
   predictionIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: `${VIBRANT_WELLNESS.hydration.solid}15`, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[2] },
   predictionTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   predictionStatement: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, lineHeight: 20, marginBottom: SPACING[2] },
   predictionFactors: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[1] },
   factorTag: { backgroundColor: SURFACES.background.tertiary, paddingVertical: SPACING[1], paddingHorizontal: SPACING[2], borderRadius: RADIUS.sm },
@@ -667,6 +674,7 @@ const styles = StyleSheet.create({
   // Section Header
   sectionHeader: { marginTop: SPACING[6], marginBottom: SPACING[3] },
   sectionTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   sectionSubtitle: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.tertiary, marginTop: 2 },
 
   // Tips Card
@@ -676,23 +684,28 @@ const styles = StyleSheet.create({
   tipIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   tipContent: { flex: 1 },
   tipTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: 2 },
+  fontFamily: TYPOGRAPHY.family.semibold,
   tipDescription: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, lineHeight: 18 },
 
   // Quick Log Button
   quickLogButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: SPACING[4], borderRadius: RADIUS.lg, marginTop: SPACING[4], gap: SPACING[2] },
   quickLogText: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.white },
+  fontFamily: TYPOGRAPHY.family.semibold,
 
   // Empty State
   emptyState: { alignItems: 'center', paddingVertical: SPACING[10] },
   emptyStateTitle: { fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginTop: SPACING[3] },
+  fontFamily: TYPOGRAPHY.family.semibold,
   emptyStateText: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, textAlign: 'center', marginTop: SPACING[2], paddingHorizontal: SPACING[4] },
 
   // ML Patterns Section
   patternsCard: { marginTop: SPACING[4] },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
   sectionCardTitle: { flex: 1, fontSize: TYPOGRAPHY.size.lg, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   mlBadge: { backgroundColor: BRAND.primaryLight, paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm },
   mlBadgeText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.bold, color: BRAND.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   patternRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[2], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
   patternIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   patternContent: { flex: 1 },
@@ -706,6 +719,7 @@ const styles = StyleSheet.create({
   correlationIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   correlationContent: { flex: 1 },
   correlationStatement: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary, lineHeight: 20 },
+  fontFamily: TYPOGRAPHY.family.medium,
   correlationMeta: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING[1] },
   correlationConfidence: { fontSize: 11, color: TEXT.tertiary },
   suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[1], marginTop: SPACING[2], paddingTop: SPACING[2], borderTopWidth: 1, borderTopColor: SURFACES.divider },
@@ -719,6 +733,7 @@ const styles = StyleSheet.create({
   recommendationIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   recommendationContent: { flex: 1 },
   recommendationTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   recommendationDescription: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
   priorityBadge: { alignSelf: 'flex-start', paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm, marginTop: SPACING[1] },
   priorityText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.semibold },

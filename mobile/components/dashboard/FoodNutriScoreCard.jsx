@@ -295,6 +295,7 @@ const styles = StyleSheet.create({
   compactTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   compactSubtitle: {
@@ -325,6 +326,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   scanButton: {
@@ -361,6 +363,7 @@ const styles = StyleSheet.create({
   scoreLabel: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   scoreSubtext: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -395,9 +398,11 @@ const styles = StyleSheet.create({
   scaleLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   scaleLabelActive: {
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // Recent Items
@@ -407,6 +412,7 @@ const styles = StyleSheet.create({
   recentTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -429,6 +435,7 @@ const styles = StyleSheet.create({
   miniBadgeText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
   recentItemName: {
@@ -451,6 +458,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 });

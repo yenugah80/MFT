@@ -6,11 +6,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { View } from "react-native";
 import {
   useFonts,
-  DMSans_400Regular,
-  DMSans_500Medium,
-  DMSans_600SemiBold,
-  DMSans_700Bold,
-} from "@expo-google-fonts/dm-sans";
+  TenorSans_400Regular,
+} from "@expo-google-fonts/tenor-sans";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { ProfileProvider } from "@/providers/ProfileProvider";
@@ -89,12 +86,9 @@ if (!publishableKey) {
 export default function RootLayout() {
   const router = useRouter();
 
-  // Load DM Sans fonts - premium typography
+  // Load Tenor Sans fonts - elegant premium typography
   const [fontsLoaded, fontError] = useFonts({
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
-    DMSans_700Bold,
+    TenorSans_400Regular,
   });
 
   // Hide splash screen when fonts are ready

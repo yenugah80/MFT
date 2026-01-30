@@ -536,6 +536,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   percentBadge: {
@@ -547,6 +548,7 @@ const styles = StyleSheet.create({
   percentBadgeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.heart.filled,
   },
 
@@ -586,12 +588,14 @@ const styles = StyleSheet.create({
   intakeValue: {
     fontSize: 30,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.5,
   },
   intakeUnit: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   goalText: {
@@ -634,11 +638,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.mountain.climber,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   progressLabelRight: {
     fontSize: 11,
     color: COLORS.heart.filled,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   progressTrack: {
     height: 5,
@@ -657,6 +663,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[2],
     textAlign: 'center',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Action Buttons
@@ -685,6 +692,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   secondaryButton: {
@@ -702,6 +710,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 });

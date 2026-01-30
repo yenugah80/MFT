@@ -284,6 +284,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -310,6 +311,7 @@ const styles = StyleSheet.create({
   pieChartLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   qualityBadgeContainer: {
@@ -325,6 +327,7 @@ const styles = StyleSheet.create({
   qualityLabel: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
     marginTop: SPACING[2],
   },
@@ -348,6 +351,7 @@ const styles = StyleSheet.create({
   macroLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   macroValueContainer: {
@@ -358,6 +362,7 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   macroTrack: {
     height: 8,

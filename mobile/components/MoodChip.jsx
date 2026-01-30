@@ -1,5 +1,5 @@
 import React from 'react';
-import { TEXT } from '../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../constants/premiumTheme';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 /**
@@ -73,12 +73,13 @@ const styles = StyleSheet.create({
   },
   mood: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1f2937',
     textTransform: 'capitalize',
   },
   note: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -102,11 +103,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#92400e',
   },
   emptyCta: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#b45309',
     marginTop: 2,
   },

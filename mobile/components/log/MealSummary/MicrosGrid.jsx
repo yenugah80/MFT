@@ -378,6 +378,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   estimatedBadge: {
     backgroundColor: 'rgba(107, 114, 128, 0.15)',
@@ -389,6 +390,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -433,6 +435,7 @@ const styles = StyleSheet.create({
   microLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     flex: 1,
   },
   limitBadge: {
@@ -445,6 +448,7 @@ const styles = StyleSheet.create({
     color: '#D97706',
     fontSize: 8,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
   },
   valueRow: {
@@ -459,6 +463,7 @@ const styles = StyleSheet.create({
   dvPercentage: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   microBarContainer: {
     height: 4,
@@ -485,6 +490,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#D97706',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   footerNote: {
     fontSize: 10,

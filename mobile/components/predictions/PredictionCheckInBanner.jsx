@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -267,6 +267,7 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 20,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   textContainer: {
     flex: 1,
@@ -274,12 +275,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 2,
   },
   body: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   buttonsContainer: {
@@ -296,7 +298,7 @@ const styles = StyleSheet.create({
   },
   quickButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   dismissButton: {
     padding: 4,
@@ -308,6 +310,7 @@ const styles = StyleSheet.create({
   },
   swipeText: {
     fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 });

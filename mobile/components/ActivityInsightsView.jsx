@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES } from '../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../constants/premiumTheme';
 import {
   calculateWeeklyGoalProgress,
   getActivityBreakdown,
@@ -186,7 +186,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
                 </View>
                 <Text style={[
                   styles.chartBarLabel,
-                  day.isToday && { color: '#3B82F6', fontWeight: '800' }
+                  day.isToday && { color: '#3B82F6', fontFamily: TYPOGRAPHY.family.bold }
                 ]}>
                   {day.dayName}
                 </Text>
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
     marginBottom: 20,
   },
@@ -333,12 +333,12 @@ const styles = StyleSheet.create({
   },
   progressPercentage: {
     fontSize: 36,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
   },
   progressLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 4,
   },
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
   },
   summaryStatText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   motivationBadge: {
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   },
   motivationText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
   },
   card: {
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
   },
   streakContent: {
@@ -411,12 +411,12 @@ const styles = StyleSheet.create({
   },
   streakNumber: {
     fontSize: 40,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
   },
   streakLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 4,
   },
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   streakCongrats: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#10B981',
     textAlign: 'center',
     backgroundColor: '#10B98110',
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   },
   breakdownCategory: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1E293B',
   },
   breakdownRight: {
@@ -465,12 +465,12 @@ const styles = StyleSheet.create({
   },
   breakdownCalories: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
   },
   breakdownPercentage: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     width: 40,
     textAlign: 'right',
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   chartContainer: {
     flexDirection: 'row',
@@ -513,17 +513,17 @@ const styles = StyleSheet.create({
   },
   chartBarLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   chartBarValue: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.tertiary,
   },
   trendComparison: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textAlign: 'center',
     backgroundColor: '#F8FAFC',
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   },
   exerciseRankText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#6366F1',
   },
   exerciseIconContainer: {
@@ -565,12 +565,12 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
   },
   exerciseStats: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -591,12 +591,12 @@ const styles = StyleSheet.create({
   },
   recommendationTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
   },
   recommendationMessage: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     lineHeight: 20,
     marginBottom: 12,
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   },
   recommendationButtonText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#6366F1',
   },
   emptyState: {
@@ -621,14 +621,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textAlign: 'center',
     lineHeight: 20,
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   bottomPadding: {

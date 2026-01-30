@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   // Count Text
   countText: {
     fontSize: 28,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text,
     letterSpacing: -1,
   },
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   // Label Text
   labelText: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: COLORS.labelText,
   },
 });

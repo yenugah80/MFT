@@ -185,6 +185,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   optionsContainer: {
     gap: SPACING[3],
@@ -209,6 +210,7 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginBottom: SPACING[1],
   },
   optionDescription: {

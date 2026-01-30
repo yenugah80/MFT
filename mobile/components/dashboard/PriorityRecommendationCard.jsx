@@ -373,6 +373,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
 
@@ -408,6 +409,7 @@ const styles = StyleSheet.create({
   ringValue: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
 
@@ -447,6 +449,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.subhead,
     color: PREMIUM_COLORS.text.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Modal
@@ -466,6 +469,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
   },
   modalContent: {
@@ -481,6 +485,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[3],
   },
@@ -515,6 +520,7 @@ const styles = StyleSheet.create({
   scheduleDay: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     minWidth: 50,
   },
@@ -553,6 +559,7 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
 
@@ -590,6 +597,7 @@ const styles = StyleSheet.create({
   buttonPrimaryText: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   buttonSecondary: {
@@ -599,6 +607,7 @@ const styles = StyleSheet.create({
   buttonSecondaryText: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
 });

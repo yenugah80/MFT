@@ -15,7 +15,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Get level title based on progress
@@ -202,13 +202,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#F59E0B',
     marginTop: 2,
   },
@@ -223,12 +223,12 @@ const styles = StyleSheet.create({
   },
   levelText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   xpText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   progressBar: {
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   },
   streakValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
     marginLeft: 4,
   },
@@ -277,12 +277,13 @@ const styles = StyleSheet.create({
   },
   freezeValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#3B82F6',
     marginLeft: 4,
   },
   statLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 4,
   },
@@ -304,19 +305,20 @@ const styles = StyleSheet.create({
   },
   unlockTitle: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
     marginLeft: 6,
     letterSpacing: 0.5,
   },
   unlockName: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 4,
   },
   unlockRequirement: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   viewAllButton: {
@@ -327,7 +329,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     marginRight: 4,
   },

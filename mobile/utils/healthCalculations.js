@@ -1,10 +1,13 @@
 /**
  * Health Calculations Utility
- * Centralized logic for food-mood scoring, insights, and recommendations
+ * Centralized logic for wellness scoring, insights, and recommendations
+ *
+ * NOTE: This is a SIMPLIFIED wellness score used by useCalendarData.
+ * For the full 4-domain score (Food+Mood+Water+Activity), see wellnessScore.js
  */
 
 /**
- * Calculate Food-Mood Correlation Score (0-100)
+ * Calculate Wellness Score (0-100) - Simplified Version
  *
  * Factors:
  * - Calorie goal adherence (30%)
@@ -16,7 +19,7 @@
  * @param {Object} params - Calculation parameters
  * @returns {number} Score from 0-100
  */
-export const calculateFoodMoodScore = ({
+export const calculateWellnessScore = ({
   calories = 0,
   calorieGoal = 2000,
   protein = 0,

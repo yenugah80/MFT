@@ -19,8 +19,14 @@ const VALID_DIETARY_PREFERENCES = [
   'balanced', 'vegan', 'keto', 'vegetarian', 'pescatarian', 'paleo', 'low_carb', 'gluten_free'
 ];
 
+// Expanded allergen list following FDA Top 9 + EU regulations
 const VALID_ALLERGIES = [
-  'nuts', 'dairy', 'eggs', 'shellfish', 'soy', 'wheat', 'fish', 'peanuts'
+  // FDA Top 9
+  'nuts', 'dairy', 'eggs', 'shellfish', 'soy', 'wheat', 'fish', 'peanuts', 'sesame',
+  // Additional common allergens (EU regulations)
+  'gluten', 'mustard', 'celery', 'sulfites', 'lupin', 'mollusks',
+  // Specific nut types for granular tracking
+  'tree_nuts', 'almonds', 'cashews', 'walnuts', 'pecans', 'pistachios', 'hazelnuts', 'macadamia',
 ];
 
 const VALID_CUISINE_PREFERENCES = [

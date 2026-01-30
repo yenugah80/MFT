@@ -389,6 +389,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.subhead,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.secondary,
   },
@@ -406,12 +407,14 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
 
   // Summary
   summary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.size.body * 1.4,
@@ -444,6 +447,7 @@ const styles = StyleSheet.create({
   },
   chipGroupLabel: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: PREMIUM_COLORS.text.muted,
     textTransform: 'uppercase',
@@ -483,12 +487,14 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.size.footnote * 1.3,
   },
   chipTextAccent: {
     color: PREMIUM_COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
 

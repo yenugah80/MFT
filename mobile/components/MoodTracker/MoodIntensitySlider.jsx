@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   valueBadge: {
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   sliderContainer: {
     height: 60,
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   thumbValue: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.black,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   labelsContainer: {
@@ -241,14 +241,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   description: {
     marginTop: SPACING[2],
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textAlign: 'center',
   },
 });

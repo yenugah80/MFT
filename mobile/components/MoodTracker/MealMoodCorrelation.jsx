@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   mealCard: {
@@ -287,11 +287,12 @@ const styles = StyleSheet.create({
   },
   mealName: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   mealTime: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.warning.base,
     marginTop: SPACING[0.5],
   },
@@ -307,7 +308,7 @@ const styles = StyleSheet.create({
   },
   novaText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   macrosContainer: {
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
   },
   macroLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     width: 12,
   },
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
   },
   macroValue: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     width: 32,
     textAlign: 'right',
@@ -356,11 +357,12 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.warning.base,
   },
   detailValue: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   emptyState: {
@@ -369,11 +371,12 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: SEMANTIC.warning.base,
   },
   emptySubtext: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.warning.base,
     marginTop: SPACING[1],
     textAlign: 'center',

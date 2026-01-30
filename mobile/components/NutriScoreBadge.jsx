@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   pillText: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     letterSpacing: 0.5,
   },
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   glowText: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   glowLabel: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   tagGrade: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   tagContent: {
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   compactGrade: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     textAlign: 'center',
   },
 
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   healthScore: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   healthLabel: {

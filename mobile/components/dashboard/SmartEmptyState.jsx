@@ -294,6 +294,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   message: {
@@ -331,6 +332,7 @@ const styles = StyleSheet.create({
   historyValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   historyUnit: {
@@ -350,6 +352,7 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#92400E',
   },
   suggestionsSection: {
@@ -394,6 +397,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#fff',
   },
   tipContainer: {
@@ -428,6 +432,7 @@ const styles = StyleSheet.create({
   compactGreeting: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   compactMessage: {
@@ -442,5 +447,6 @@ const styles = StyleSheet.create({
   compactActionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

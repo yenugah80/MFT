@@ -313,6 +313,7 @@ const styles = StyleSheet.create({
   strengthLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   windowLabel: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -327,10 +328,12 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   statement: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     lineHeight: 22,
     padding: SPACING[4],
@@ -345,6 +348,7 @@ const styles = StyleSheet.create({
   evidenceTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -372,6 +376,7 @@ const styles = StyleSheet.create({
   comparisonValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   comparisonDivider: {
@@ -398,6 +403,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   exampleContent: {
     flex: 1,
@@ -417,6 +423,7 @@ const styles = StyleSheet.create({
   exampleOutcomeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   domainsContainer: {},
   domainTags: {
@@ -461,6 +468,7 @@ const styles = StyleSheet.create({
   footerConfidence: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   // Compact styles
   compactCard: {
@@ -498,6 +506,7 @@ const styles = StyleSheet.create({
   strengthBadge: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   occurrences: {
     fontSize: TYPOGRAPHY.size.xs,

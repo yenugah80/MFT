@@ -102,12 +102,9 @@ export default function SleepSummaryCard({ compact = true }) {
   if (compact) {
     return (
       <>
-        <TouchableOpacity
+        <View
           style={styles.card}
-          onPress={handlePress}
-          activeOpacity={0.7}
           accessibilityLabel="Sleep summary"
-          accessibilityRole="button"
         >
           <View style={styles.header}>
             <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
@@ -145,7 +142,31 @@ export default function SleepSummaryCard({ compact = true }) {
             <Ionicons name={sleepStatus.icon} size={16} color={sleepStatus.color} />
             <Text style={[styles.statusText, { color: sleepStatus.color }]}>{sleepStatus.text}</Text>
           </View>
-        </TouchableOpacity>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/insights/sleep-analytics');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="analytics-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
+              <Text style={styles.actionButtonText}>Insights</Text>
+              <Ionicons name="chevron-forward" size={12} color={TEXT.tertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleLogSleep}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
+              <Text style={styles.actionButtonText}>Log</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         <SleepLogger visible={showLogger} onClose={() => setShowLogger(false)} />
       </>
     );
@@ -180,6 +201,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   subtitle: {
@@ -219,6 +241,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statLabel: {
@@ -234,6 +257,7 @@ const styles = StyleSheet.create({
   qualityText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // Status Badge
@@ -249,5 +273,32 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  // Action Buttons
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[1],
+    backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}10`,
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[2],
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: `${VIBRANT_WELLNESS.sleep.solid}20`,
+  },
+  actionButtonText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
   },
 });

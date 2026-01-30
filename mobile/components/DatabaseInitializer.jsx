@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { TYPOGRAPHY } from '../constants/premiumTheme';
 import { initDatabase, getDatabaseStats } from '../services/database';
 
 export default function DatabaseInitializer({ children }) {
@@ -87,22 +88,24 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6B7280',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   errorText: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
     marginBottom: 12,
   },
   errorDetails: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
     textAlign: 'center',
     marginBottom: 8,
   },
   errorHint: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#9CA3AF',
     textAlign: 'center',
     marginTop: 16,

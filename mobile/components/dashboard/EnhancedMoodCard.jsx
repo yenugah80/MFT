@@ -1,9 +1,25 @@
 /**
- * EnhancedMoodCard - Premium Mood & Wellness Dashboard Card
+ * EnhancedMoodCard - Premium Mood Dashboard Card
  *
- * Unified mood and wellness tracking with:
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * WELLNESS COMPONENT ARCHITECTURE
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * This component is MOOD-FOCUSED. Wellness score display is DISABLED by default
+ * to avoid duplication with other wellness components.
+ *
+ * IMPORTANT: Parent passes showWellnessScore={false} to prevent duplicate display.
+ *
+ * RELATED COMPONENTS:
+ * - WellnessScoreCard: Primary wellness display (Food+Mood+Water+Activity)
+ * - WellnessNarrativeCard: Server-calculated wellness + narrative
+ * - This component: Mood-only visualization (wellness score disabled)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Features:
  * - Current mood display with 3D icon
- * - Integrated Wellness Score ring
+ * - Integrated Wellness Score ring (when showWellnessScore={true})
  * - 7-day mini sparkline trend
  * - Quick stats (avg mood, best day, patterns)
  * - Empty state for first-time users
@@ -110,6 +126,7 @@ const wellnessStyles = StyleSheet.create({
   scoreValue: {
     fontSize: 16,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 });
 
@@ -394,6 +411,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   moodSummary: {
@@ -433,6 +451,7 @@ const styles = StyleSheet.create({
   wellnessScore: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   wellnessTier: {
@@ -444,6 +463,7 @@ const styles = StyleSheet.create({
   wellnessTierText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   wellnessDescription: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -478,6 +498,7 @@ const styles = StyleSheet.create({
   insightsButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   insightsButtonRight: {
     flexDirection: 'row',
@@ -516,6 +537,7 @@ const styles = StyleSheet.create({
   currentMoodValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: SPACING[0.5],
   },
@@ -545,6 +567,7 @@ const styles = StyleSheet.create({
   intensityValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     width: 36,
     textAlign: 'right',
@@ -570,6 +593,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: '#92400E',
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   recommendationSection: {
     marginHorizontal: SPACING[4],
@@ -589,6 +613,7 @@ const styles = StyleSheet.create({
   recommendationTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   recommendationHint: {
@@ -610,6 +635,7 @@ const styles = StyleSheet.create({
   trendLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   trendBadge: {
@@ -626,6 +652,7 @@ const styles = StyleSheet.create({
   trendBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -655,6 +682,7 @@ const styles = StyleSheet.create({
   statsLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   confidencePill: {
@@ -666,6 +694,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -688,6 +717,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statLabel: {
@@ -716,6 +746,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
@@ -737,6 +768,7 @@ const styles = StyleSheet.create({
   emptyHintText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   loadingContainer: {

@@ -148,11 +148,13 @@ const ringStyles = StyleSheet.create({
   percentage: {
     fontSize: 36,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   current: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: HYDRATION_ACCENT.primary,
     marginTop: SPACING[1],
   },
@@ -213,6 +215,7 @@ const scienceStyles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -295,6 +298,7 @@ const recItemStyles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   description: {
@@ -649,6 +653,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   headerSubtitle: {
@@ -681,6 +686,7 @@ const styles = StyleSheet.create({
   progressTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[4],
   },
@@ -701,6 +707,7 @@ const styles = StyleSheet.create({
   quickStatValue: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   quickStatLabel: {
@@ -722,6 +729,7 @@ const styles = StyleSheet.create({
   scienceHighlight: {
     color: HYDRATION_ACCENT.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   effectRow: {
     flexDirection: 'row',
@@ -751,6 +759,7 @@ const styles = StyleSheet.create({
   timingLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   timingDesc: {
@@ -779,6 +788,7 @@ const styles = StyleSheet.create({
   exerciseStepNumberText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
   exerciseStepContent: {
@@ -787,6 +797,7 @@ const styles = StyleSheet.create({
   exerciseStepTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   exerciseStepDesc: {
@@ -815,6 +826,7 @@ const styles = StyleSheet.create({
   requirementRange: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: HYDRATION_ACCENT.primary,
   },
 
@@ -828,6 +840,7 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
   },

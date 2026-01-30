@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.text.inverse,
   },
   content: {
@@ -204,6 +205,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: TYPOGRAPHY.size.body,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.text.inverse,
     marginBottom: SPACING.xs,
   },

@@ -412,6 +412,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
   },
   headerSubtitle: {
@@ -440,6 +441,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
     letterSpacing: 1,
   },
@@ -464,6 +466,7 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -495,6 +498,7 @@ const styles = StyleSheet.create({
   discountValue: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.semantic.success.dark,
   },
   discountDuration: {
@@ -521,6 +525,7 @@ const styles = StyleSheet.create({
   redeemButtonText: {
     fontSize: TYPOGRAPHY.size.callout,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
 
@@ -535,6 +540,7 @@ const styles = StyleSheet.create({
   redeemedTitle: {
     fontSize: TYPOGRAPHY.size.title3,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[1],
   },

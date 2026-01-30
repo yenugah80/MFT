@@ -17,6 +17,8 @@ import { getProfile } from '../controllers/profileController.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
 import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
 import { errors } from '../utils/errorResponse.js';
+import { getUnifiedIntelligence, formatIntelligenceForPrompt } from '../services/unifiedIntelligenceService.js';
+import { generateRecommendationContext } from '../services/personalizedNarrativeEngine.js';
 
 const router = express.Router();
 
@@ -121,17 +123,28 @@ router.get('/', requireAuth(), async (req, res) => {
         // Analyze recommendation history for personalization
         const history = await analyzeRecommendationHistory(db, userId);
 
-        // Determine recommendation type based on budget AND history
-        const recType = determineRecommendationType(remainingBudget, profile, history);
+        // 🧠 Fetch unified wellness intelligence (mood, activity, hydration, sleep, stress)
+        // 🎯 NEW: Fetch personalized pattern context (food correlations, timing patterns, user-specific insights)
+        const [holisticIntelligence, personalizedContext] = await Promise.all([
+          getUnifiedIntelligence(userId, { lookbackDays: 7 }),
+          generateRecommendationContext(userId)
+        ]);
+        logDebug(`Wellness Score: ${holisticIntelligence.wellnessScore}, Recovery: ${holisticIntelligence.recoveryScore}`);
+        logDebug(`Personalized Patterns: ${personalizedContext.hasPatterns ? 'Available' : 'Building'} (${personalizedContext.goodFoods?.length || 0} good foods, ${personalizedContext.avoidFoods?.length || 0} watch foods)`);
 
-        // Generate recommendations with enhanced AI
+        // Determine recommendation type based on budget, history, AND wellness state
+        const recType = determineRecommendationType(remainingBudget, profile, history, holisticIntelligence);
+
+        // Generate recommendations with enhanced AI + holistic context + personalized patterns
         const recommendations = await generateEnhancedRecommendations(
           recType,
           mealType,
           remainingBudget,
           profile,
           history,
-          parseInt(limit)
+          parseInt(limit),
+          holisticIntelligence,  // Wellness intelligence
+          personalizedContext    // 🎯 NEW: Personalized pattern context
         );
 
         // Enrich with micronutrients
@@ -149,7 +162,18 @@ router.get('/', requireAuth(), async (req, res) => {
           recommendations: enrichedRecommendations,
           remainingBudget,
           recommendationType: recType,
-          mealType
+          mealType,
+          // 🎯 NEW: Include personalized pattern context for frontend display
+          personalizedPatterns: personalizedContext?.hasPatterns ? {
+            used: true,
+            goodFoods: personalizedContext.goodFoods || [],
+            watchFoods: personalizedContext.avoidFoods || [],
+            timingTips: personalizedContext.timingTips || [],
+            topPattern: personalizedContext.topPattern || null
+          } : {
+            used: false,
+            message: 'Building your personalized patterns - keep logging!'
+          }
         };
       }
     );
@@ -482,9 +506,40 @@ async function analyzeRecommendationHistory(db, userId) {
 }
 
 /**
- * Determine recommendation type with history awareness
+ * Determine recommendation type with history awareness AND wellness state
+ * Uses holistic intelligence to adapt recommendations to user's current state
  */
-function determineRecommendationType(remainingBudget, profile, history) {
+function determineRecommendationType(remainingBudget, profile, history, holisticIntelligence = null) {
+  // 🧠 NEW: Wellness-state overrides (highest priority)
+  if (holisticIntelligence?.currentState?.needsSpecialAttention) {
+    const primaryConcern = holisticIntelligence.currentState.primaryConcern;
+
+    // Low recovery → prioritize light, digestible foods
+    if (primaryConcern === 'LOW_RECOVERY') {
+      return 'RECOVERY_MEAL';
+    }
+
+    // Dehydration → prioritize hydrating foods
+    if (primaryConcern === 'DEHYDRATED') {
+      return 'HYDRATION';
+    }
+
+    // High stress → comfort foods with stress-reducing nutrients
+    if (primaryConcern === 'HIGH_STRESS') {
+      return 'STRESS_RELIEF';
+    }
+
+    // Post-workout → protein + carbs for recovery
+    if (primaryConcern === 'POST_WORKOUT') {
+      return 'POST_WORKOUT';
+    }
+
+    // Low mood/energy → mood-boosting foods
+    if (primaryConcern === 'LOW_MOOD' || primaryConcern === 'LOW_ENERGY') {
+      return 'ENERGY_BOOST';
+    }
+  }
+
   // If user has strong preference based on history, respect it
   if (history.preferredTypes?.length > 0) {
     return history.preferredTypes[0];
@@ -553,7 +608,23 @@ function improvedAllergenCheck(foodName, allergies) {
       pattern: /\b(mustard)\b/i
     },
     'celery': {
-      pattern: /\b(celery)\b/i
+      pattern: /\b(celery|celeriac)\b/i
+    },
+    'dairy': {
+      pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose|whey|casein)\b/i
+    },
+    'gluten': {
+      pattern: /\b(wheat|barley|rye|gluten|seitan)\b/i,
+      exceptions: ['buckwheat', 'gluten-free', 'gluten free']
+    },
+    'sulfites': {
+      pattern: /\b(sulfite|sulfites|sulphite|sulphites|wine|dried fruit)\b/i
+    },
+    'lupin': {
+      pattern: /\b(lupin|lupine|lupini)\b/i
+    },
+    'mollusks': {
+      pattern: /\b(squid|octopus|calamari|snail|escargot)\b/i
     }
   };
 
@@ -749,7 +820,12 @@ function getConstraintsByType(recType, mealType) {
     LIGHT_SNACK: { maxCalories: 250, minProtein: 0 },
     HYDRATION: { maxCalories: 50, minProtein: 0 },
     BALANCED_MEAL: { maxCalories: 600, minProtein: 10 },
-    REGIONAL_PICK: { maxCalories: 700, minProtein: 8 }
+    REGIONAL_PICK: { maxCalories: 700, minProtein: 8 },
+    // NEW: Wellness-aware recommendation types
+    RECOVERY_MEAL: { maxCalories: 400, minProtein: 10 },  // Light, digestible
+    STRESS_RELIEF: { maxCalories: 350, minProtein: 5 },   // Comfort foods, not heavy
+    POST_WORKOUT: { maxCalories: 500, minProtein: 25 },   // High protein + carbs
+    ENERGY_BOOST: { maxCalories: 450, minProtein: 15 }    // Sustained energy
   };
 
   const base = baseByMeal[mealType] || baseByMeal.snack;
@@ -766,6 +842,8 @@ function getConstraintsByType(recType, mealType) {
 /**
  * FLAW FIX #3: Smart regeneration when filtering removes too many
  * Ensures user always gets requested number of recommendations (or tries)
+ * NOW INCLUDES: Holistic wellness intelligence for cross-domain personalization
+ * 🎯 NEW: Personalized pattern context for food-mood correlations
  */
 async function generateWithRegeneration(
   recType,
@@ -774,7 +852,9 @@ async function generateWithRegeneration(
   profile,
   history,
   limit,
-  attempt = 1
+  attempt = 1,
+  holisticIntelligence = null,  // Wellness intelligence
+  personalizedContext = null    // 🎯 NEW: Personalized patterns
 ) {
   const MAX_ATTEMPTS = 2;
   const FILTER_THRESHOLD = limit * 0.67; // If we keep 2/3 or less, regenerate
@@ -791,21 +871,25 @@ async function generateWithRegeneration(
     profile,
     history,
     limit + (attempt - 1) * 2, // Request more on retry
-    attempt > 1 // Add regeneration hint
+    attempt > 1, // Add regeneration hint
+    holisticIntelligence,  // Wellness intelligence
+    personalizedContext    // 🎯 NEW: Personalized patterns
   );
 
   if (!recommendations || recommendations.length < FILTER_THRESHOLD) {
     logDebug(`Insufficient after filtering (${recommendations?.length || 0}/${limit}), regenerating...`);
-    return generateWithRegeneration(recType, mealType, remainingBudget, profile, history, limit, attempt + 1);
+    return generateWithRegeneration(recType, mealType, remainingBudget, profile, history, limit, attempt + 1, holisticIntelligence, personalizedContext);
   }
 
   return recommendations.slice(0, limit);
 }
 
 /**
- * CORE: Build prompt with UNIVERSAL constraints and DIVERSITY
+ * CORE: Build prompt with UNIVERSAL constraints, DIVERSITY, and HOLISTIC WELLNESS
  * FLAW FIX #4: Diversity enforcement in prompt
  * FLAW FIX #5: Per-item constraints enforced
+ * NEW: Chain-of-thought reasoning with cross-domain wellness intelligence
+ * 🎯 NEW: Personalized pattern context for food-mood correlations and timing patterns
  */
 async function generateEnhancedRecommendationsCore(
   recType,
@@ -814,7 +898,9 @@ async function generateEnhancedRecommendationsCore(
   profile,
   history,
   limit,
-  isRegeneration = false
+  isRegeneration = false,
+  holisticIntelligence = null,  // Wellness intelligence
+  personalizedContext = null    // 🎯 NEW: Personalized patterns from user's actual data
 ) {
   // Extract cuisine preference (support both string and object format)
   let cuisinePreference = 'General';
@@ -878,9 +964,39 @@ PORTION & MACRO CONSTRAINTS (STRICT - APPLY TO EACH ITEM):
   const regenerationNote = isRegeneration ?
     `\n⚠️ REGENERATION REQUEST: Previous recommendations were filtered. Generate MORE DIVERSE options without any repetition.` : '';
 
-  const prompt = `You are a production-grade nutrition recommendation system. Generate exactly ${limit} specific food recommendations.
+  // 🧠 Build holistic wellness context for prompt injection
+  const wellnessContext = holisticIntelligence
+    ? formatIntelligenceForPrompt(holisticIntelligence)
+    : '';
 
-USER STATE
+  // 🎯 NEW: Build personalized pattern context from user's actual data
+  const personalizedPatternContext = personalizedContext?.hasPatterns
+    ? personalizedContext.context
+    : '';
+
+  // 🧠 NEW: Build wellness-aware recommendation type descriptions
+  const recTypeDescriptions = {
+    PROTEIN_BOOST: 'High-protein foods to help meet daily protein goals',
+    BALANCED_MEAL: 'Well-balanced meals with good macro distribution',
+    LIGHT_SNACK: 'Light, satisfying snacks under 250 calories',
+    HYDRATION: 'Hydrating foods and beverages to improve fluid intake',
+    REGIONAL_PICK: 'Regional/cultural favorites matching cuisine preferences',
+    // NEW wellness-aware types:
+    RECOVERY_MEAL: 'Light, easily digestible meals to support physical recovery (soups, smoothies, simple proteins)',
+    STRESS_RELIEF: 'Magnesium-rich and B-vitamin foods to reduce stress (dark chocolate, leafy greens, nuts, avocado)',
+    POST_WORKOUT: 'Protein + fast carbs for muscle recovery within the anabolic window',
+    ENERGY_BOOST: 'Sustained energy foods with complex carbs, iron, and mood-supporting nutrients'
+  };
+
+  const recTypeDescription = recTypeDescriptions[recType] || recTypeDescriptions.BALANCED_MEAL;
+
+  const prompt = `You are an expert nutritionist and culinary advisor creating highly personalized meal recommendations. Generate exactly ${limit} SPECIFIC, DETAILED food recommendations.
+
+═══════════════════════════════════════════════════════════════════════════════
+🍽️ NUTRITIONAL STATE
+═══════════════════════════════════════════════════════════════════════════════
+
+USER PROFILE & CURRENT STATE
 - Remaining Calories: ${remainingBudget.calories} kcal
 - Remaining Protein: ${remainingBudget.protein}g
 - Remaining Carbohydrates: ${remainingBudget.carbs}g
@@ -889,14 +1005,154 @@ USER STATE
 - Regional Preference: ${region}
 - Meal Type: ${mealType}
 ${personalizationContext}${allergenExclusion}${dietaryGuidance}${regenerationNote}
-
+${wellnessContext}
+${personalizedPatternContext}
 RECOMMENDATION OBJECTIVE
-Goal: ${recType}
+Goal: ${recType} - ${recTypeDescription}
 - Prioritize nutritional fit based on recommendation type
 - Each recommendation must feel personalized and distinct
+- CRITICALLY: Consider the user's wellness state above when making recommendations
 
 ${diversityGuidance}
 ${constraintGuidance}
+
+═══════════════════════════════════════════════════════════════════════════════
+⚡ SPECIFICITY REQUIREMENTS (CRITICAL - THIS IS WHAT MAKES RECOMMENDATIONS GREAT)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. FOOD NAMES - Be descriptive and specific, NOT generic:
+   ❌ BAD: "Grilled Chicken", "Salad", "Smoothie", "Rice Bowl"
+   ✅ GOOD: "Herb-Crusted Chicken Breast with Lemon & Thyme"
+   ✅ GOOD: "Mediterranean Quinoa Salad with Feta, Cucumber & Kalamata Olives"
+   ✅ GOOD: "Mango-Spinach Protein Smoothie with Chia Seeds"
+   ✅ GOOD: "Korean Bibimbap Bowl with Gochujang Sauce"
+
+   Include: cooking method + main ingredient + 2-3 key flavors/ingredients
+
+2. REASON - Explain WHY this specific food fits THIS USER's current needs:
+   ❌ BAD: "High protein, low fat" (generic nutritional statement)
+   ❌ BAD: "Good for muscle building" (vague benefit)
+   ✅ GOOD: "With ${remainingBudget.protein}g protein remaining, this delivers 28g to hit 75% of your daily goal. The slow-digesting casein keeps you full until dinner."
+   ✅ GOOD: "You have ${remainingBudget.calories} kcal left - this satisfying 380-cal meal leaves room for an evening snack while providing complete amino acids from quinoa + chickpeas."
+
+   Include: Reference their SPECIFIC remaining budget, explain the nutritional strategy
+
+3. TIPS - Give ACTIONABLE cooking instructions with sensory cues:
+   ❌ BAD: "Grill for 6-8 minutes" (no context)
+   ❌ BAD: "Season and cook" (too vague)
+   ✅ GOOD: "Pat chicken dry, season with smoked paprika + garlic powder. Sear in cast iron 4 min/side until internal temp hits 165°F. Rest 5 min before slicing against the grain."
+   ✅ GOOD: "Toast quinoa in dry pan until fragrant (~2 min). Add 2:1 water ratio, simmer 15 min. Fluff with fork, fold in diced cucumber, crumbled feta, and a drizzle of olive oil + lemon."
+
+   Include: Specific temperatures, timing cues, sensory indicators (fragrant, golden, sizzling)
+
+4. FLAVOR PROFILE - Match cuisine preference (${cuisinePreference}):
+   - If Indian: Include specific spices (garam masala, turmeric, cumin, coriander)
+   - If Mediterranean: Olive oil, lemon, herbs, feta, olives
+   - If Asian: Soy, ginger, sesame, rice vinegar, fresh herbs
+   - If Mexican: Lime, cilantro, cumin, chili, avocado
+   - If American: Comfort classics with healthier twists
+
+5. PERSONALIZATION HOOK - Connect to user's context:
+   - Reference time of day: "${mealType}" meal suggestions should match energy needs
+   - Reference their history if available: "${history.preferredFoods?.join(', ') || 'no history yet'}"
+   - Suggest variations: "Swap chicken for tofu if you want plant-based"
+
+═══════════════════════════════════════════════════════════════════════════════
+🧠 CHAIN-OF-THOUGHT: CROSS-DOMAIN REASONING (USE THIS MENTAL MODEL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Before generating each recommendation, mentally work through this reasoning chain:
+
+STEP 1: Check Wellness State (consider ALL that apply, combine creatively)
+→ Recovery low? → Light, digestible: broths, congee, steamed fish, soft-cooked eggs, smoothies
+→ Dehydrated? → Water-rich: cucumbers, watermelon, soups, gazpacho, coconut water, citrus
+→ Stress high? → Magnesium + adaptogens: leafy greens, nuts, seeds, dark chocolate, chamomile, turmeric
+→ Post-workout? → Protein + glycogen: lean proteins with rice, yogurt parfaits, recovery bowls
+→ Low mood/energy? → Omega-3 + B vitamins: fatty fish, eggs, fortified grains, fermented foods
+→ Sleep-deprived? → Tryptophan + complex carbs: turkey, warm milk, oats, bananas, tart cherry
+→ Digestive issues? → Probiotics + fiber: kimchi, kefir, whole grains, gentle vegetables
+→ Inflammation? → Anti-inflammatory: turmeric, ginger, berries, leafy greens, fatty fish
+
+STEP 2: Check Macro Alignment
+→ High protein remaining? → Prioritize protein-dense options
+→ Low calories remaining? → Lighter portions, vegetable-heavy
+→ Balanced needs? → Complete meals with all macros
+
+STEP 3: Check Personalized Patterns (from THIS user's actual data - CRITICAL for personalization)
+→ Good foods → Recommend these OR similar foods (same category, flavor profile, or nutrient profile)
+   Example: If "salmon" is good → also consider other fatty fish, omega-3 rich foods
+→ Watch foods → Avoid these OR suggest better alternatives/timing
+   Example: If "pasta" is watch → suggest zucchini noodles, quinoa pasta, or lighter grains
+→ Timing insights → Align recommendations with user's optimal eating windows
+   Example: If early breakfast helps → suggest quick, nutritious breakfast options
+→ Pattern combinations → Layer multiple patterns for maximum personalization
+   Example: Good food + optimal timing + wellness need = highly personalized recommendation
+
+STEP 4: Check Preferences & Constraints
+→ Cuisine preference (${cuisinePreference}) → Draw from authentic dishes, spices, and techniques:
+   • Indian: dal, curries, biryanis, chutneys, raita, dosas, idlis
+   • Mediterranean: mezze, grilled proteins, olive oil, herbs, legumes, seafood
+   • Asian: stir-fries, rice bowls, noodle soups, dumplings, sushi, congee
+   • Mexican: tacos, bowls, salsas, beans, grilled meats, fresh vegetables
+   • American: comfort classics with healthy twists, grain bowls, salads
+   • Middle Eastern: hummus, falafel, shawarma, tabbouleh, grilled kebabs
+   • Japanese: miso, sashimi, donburi, edamame, steamed dishes
+→ Dietary restrictions → Strict compliance (vegetarian, vegan, keto, etc.)
+→ Allergens → Zero tolerance - never include, suggest safe alternatives
+
+STEP 5: Synthesize
+→ Find foods that satisfy ALL conditions simultaneously
+→ If conflicts exist, prioritize: Safety > Wellness State > Macros > Preferences
+
+ILLUSTRATIVE EXAMPLES (apply reasoning to ANY situation, not just these):
+
+These examples demonstrate HOW to reason - apply the same framework to the ACTUAL user state provided above.
+Generate creative, diverse recommendations that fit THIS user's unique combination of wellness state, patterns, and preferences.
+
+Example 1: LOW RECOVERY + DEHYDRATED
+User State: Recovery 35/100, Hydration 40%, Stressed
+✅ CORRECT: "Ginger-Turmeric Bone Broth with Soft-Cooked Vegetables"
+   Reason: "Your recovery score is low and you're dehydrated. This warm, hydrating broth delivers 500ml fluid, anti-inflammatory compounds, and easy-to-digest nutrients without taxing your digestive system."
+❌ WRONG: "Loaded Beef Burrito with Extra Cheese"
+   Why wrong: Heavy, difficult to digest, won't help recovery
+
+Example 2: POST-WORKOUT + HIGH PROTEIN NEED
+User State: Within 2h of strength training, 45g protein remaining
+✅ CORRECT: "Greek Yogurt Power Bowl with Berries, Honey & Granola"
+   Reason: "You just finished a workout - this delivers 23g fast-absorbing protein + 35g carbs to maximize muscle protein synthesis during your anabolic window. The berries add antioxidants for recovery."
+❌ WRONG: "Garden Salad with Light Vinaigrette"
+   Why wrong: Low protein, won't support post-workout recovery
+
+Example 3: HIGH STRESS + LOW MOOD
+User State: Stress 8/10, Mood declining, Low energy
+✅ CORRECT: "Dark Chocolate Almond Butter Banana Smoothie"
+   Reason: "With stress at 8/10 and declining mood, your body needs magnesium and mood-boosting nutrients. Dark chocolate provides theobromine + magnesium, banana offers tryptophan (serotonin precursor), and almond butter adds B vitamins."
+❌ WRONG: "Large Coffee with Sugar"
+   Why wrong: Caffeine + sugar will spike then crash, worsening mood and stress
+
+Example 4: USER HAS PERSONALIZED PATTERN DATA
+User Patterns: Oatmeal correlates with +15% energy, Pasta correlates with -12% energy, Early breakfast = better days
+✅ CORRECT: "Steel-Cut Oatmeal with Fresh Berries and Honey"
+   Reason: "Based on YOUR data: oatmeal consistently gives you a 15% energy boost. We've seen this pattern 8 times in your logs. Perfect for breakfast to start your day strong."
+   wellnessReasoning: "Your personal patterns show oatmeal is YOUR energy food - not just general nutrition advice, but discovered from YOUR actual logged meals and mood check-ins."
+❌ WRONG: "Creamy Carbonara Pasta"
+   Why wrong: User's data shows pasta correlates with lower energy for THEM specifically
+
+═══════════════════════════════════════════════════════════════════════════════
+🎨 CREATIVITY MANDATE - DO NOT COPY EXAMPLES VERBATIM
+═══════════════════════════════════════════════════════════════════════════════
+
+The examples above are ILLUSTRATIVE ONLY. For each recommendation:
+1. SYNTHESIZE the user's ACTUAL wellness state, patterns, and preferences (shown above)
+2. GENERATE novel food ideas that address their SPECIFIC situation
+3. DRAW FROM global cuisines, seasonal ingredients, and creative preparations
+4. AVOID recommending the same foods from examples unless they genuinely fit
+5. VARY protein sources, cooking methods, and flavor profiles across recommendations
+6. CONSIDER the user's cuisine preference (${cuisinePreference}) for authentic flavor suggestions
+
+Your recommendations should feel FRESH and PERSONALIZED, not templated.
+
+═══════════════════════════════════════════════════════════════════════════════
 
 CRITICAL SAFETY RULES
 1. NEVER recommend foods containing allergens: ${allergies.join(', ') || 'none'}
@@ -906,21 +1162,24 @@ CRITICAL SAFETY RULES
 OUTPUT SCHEMA (REQUIRED - RETURN AS JSON ARRAY, NOT WRAPPED):
 [
   {
-    "foodName": "exact food name",
-    "portion": "e.g., '150g', '1 cup', '2 pieces'",
+    "foodName": "Descriptive name with cooking method + key ingredients (e.g., 'Pan-Seared Salmon with Dill-Yogurt Sauce & Roasted Asparagus')",
+    "portion": "e.g., '150g salmon + 100g asparagus', '1 cup (240ml)', '2 medium pieces (80g each)'",
     "calories": number (0-${constraints.maxCalories}),
     "protein": number,
     "carbs": number,
     "fats": number,
     "fiber": number,
     "sugar": number,
-    "reason": "why this fits ${recType}",
-    "tips": "how to prepare (≤${constraints.maxPrepTime} min)",
+    "reason": "Personalized explanation referencing user's specific remaining budget and nutritional strategy - NOT generic statements",
+    "wellnessReasoning": "How this food addresses the user's current wellness state (recovery, stress, mood, hydration) - reference specific metrics from the wellness context",
+    "tips": "Step-by-step cooking instructions with temperatures, timing, and sensory cues",
     "prepTimeMinutes": number,
     "allergenFree": true,
     "dietCompliant": boolean,
     "preferenceStrengthMatch": 1-5,
-    "warningBadge": null or {"text": "reason", "type": "dietary|dislike|low-priority"}
+    "warningBadge": null or {"text": "reason", "type": "dietary|dislike|low-priority"},
+    "flavorProfile": "Brief description: e.g., 'Savory-tangy with fresh herbs' or 'Warm spices with creamy finish'",
+    "keyIngredients": ["ingredient1", "ingredient2", "ingredient3"]
   }
 ]
 
@@ -928,10 +1187,13 @@ VALIDATION CHECKLIST
 ✓ Exactly ${limit} unique recommendations (no duplicate foods)
 ✓ Each item ≤ ${constraints.maxCalories} calories
 ✓ All nutrition fields are numbers (not strings, not null)
-✓ Portion sizes in standard units (grams, cups, pieces, oz, tbsp)
+✓ Portion sizes in standard units with weight (grams, cups, pieces, oz, tbsp)
 ✓ Diverse protein sources (mix of animal, plant, dairy)
 ✓ NO foods containing: ${allergies.join(', ') || 'none'}
-✓ Returned as JSON array (not wrapped in object)`;
+✓ Returned as JSON array (not wrapped in object)
+✓ Food names are SPECIFIC (include cooking method + 2-3 key ingredients/flavors)
+✓ Reasons reference USER'S SPECIFIC remaining budget numbers
+✓ Tips include specific temperatures, times, and sensory cues`;
 
   try {
     const response = await openaiClient.chatCompletionJSON(
@@ -1104,7 +1366,14 @@ VALIDATION CHECKLIST
         // Additional context (for display)
         reason: rec.reason,
         mealType: mealType,
-        recType: recType
+        recType: recType,
+
+        // NEW: Enhanced specificity fields
+        flavorProfile: rec.flavorProfile || null,
+        keyIngredients: rec.keyIngredients || [],
+
+        // NEW: Wellness-aware reasoning (cross-domain intelligence)
+        wellnessReasoning: rec.wellnessReasoning || null
       };
     });
 
@@ -1119,6 +1388,8 @@ VALIDATION CHECKLIST
 /**
  * Main entry point: Orchestrate generation with regeneration logic
  * FLAW FIX #3: Handles incomplete recommendations gracefully
+ * NOW INCLUDES: Holistic wellness intelligence for cross-domain personalization
+ * 🎯 NEW: Personalized pattern context for food-mood correlations and timing patterns
  */
 async function generateEnhancedRecommendations(
   recType,
@@ -1126,7 +1397,9 @@ async function generateEnhancedRecommendations(
   remainingBudget,
   profile,
   history,
-  limit
+  limit,
+  holisticIntelligence = null,  // Wellness intelligence
+  personalizedContext = null    // 🎯 NEW: Personalized patterns from user's actual data
 ) {
   const allergies = profile?.dietary?.allergies || [];
 
@@ -1137,7 +1410,10 @@ async function generateEnhancedRecommendations(
     remainingBudget,
     profile,
     history,
-    limit
+    limit,
+    1,  // attempt
+    holisticIntelligence,  // Wellness intelligence
+    personalizedContext    // 🎯 NEW: Personalized patterns
   );
 
   // If regeneration completely fails, fall back to curated list
@@ -1417,6 +1693,103 @@ function getFallbackRecommendations(recType, mealType, remainingBudget, limit) {
         tips: 'Add turmeric and cumin to dal',
       },
     ],
+    // NEW: Wellness-aware fallback recommendations
+    RECOVERY_MEAL: [
+      {
+        foodName: 'Ginger-Turmeric Bone Broth',
+        portion: '500ml',
+        calories: 45,
+        protein: 6,
+        carbs: 3,
+        fats: 1,
+        reason: 'Anti-inflammatory, easy to digest, hydrating',
+        wellnessReasoning: 'Supports recovery with anti-inflammatory compounds and gentle nutrition',
+        tips: 'Sip warm throughout the day for best absorption',
+      },
+      {
+        foodName: 'Banana Oatmeal with Honey',
+        portion: '1 bowl (250g)',
+        calories: 280,
+        protein: 8,
+        carbs: 52,
+        fats: 5,
+        reason: 'Gentle on stomach, sustained energy',
+        wellnessReasoning: 'Easily digestible carbs support recovery without taxing your system',
+        tips: 'Cook oats with water or milk, top with sliced banana and drizzle of honey',
+      },
+    ],
+    STRESS_RELIEF: [
+      {
+        foodName: 'Dark Chocolate Almond Trail Mix',
+        portion: '40g (1/4 cup)',
+        calories: 210,
+        protein: 5,
+        carbs: 18,
+        fats: 14,
+        reason: 'Magnesium-rich for stress reduction',
+        wellnessReasoning: 'Dark chocolate provides magnesium and theobromine to reduce cortisol levels',
+        tips: 'Portion into small containers to avoid overeating',
+      },
+      {
+        foodName: 'Avocado Toast with Pumpkin Seeds',
+        portion: '1 slice with 1/2 avocado',
+        calories: 320,
+        protein: 8,
+        carbs: 28,
+        fats: 20,
+        reason: 'B vitamins and healthy fats for mood stability',
+        wellnessReasoning: 'Avocado provides B6 for serotonin production, pumpkin seeds add zinc for stress resilience',
+        tips: 'Use whole grain bread, sprinkle with pumpkin seeds and a pinch of sea salt',
+      },
+    ],
+    POST_WORKOUT: [
+      {
+        foodName: 'Greek Yogurt Power Bowl',
+        portion: '200g yogurt + toppings',
+        calories: 320,
+        protein: 28,
+        carbs: 35,
+        fats: 6,
+        reason: 'Fast protein + carbs for muscle recovery',
+        wellnessReasoning: 'Within the anabolic window, this delivers fast-absorbing protein and glycogen-replenishing carbs',
+        tips: 'Top with berries, granola, and a drizzle of honey for optimal recovery',
+      },
+      {
+        foodName: 'Chicken Rice Bowl',
+        portion: '150g chicken + 1 cup rice',
+        calories: 450,
+        protein: 35,
+        carbs: 45,
+        fats: 10,
+        reason: 'Complete post-workout meal',
+        wellnessReasoning: 'High-quality protein for muscle synthesis, rice for glycogen replenishment',
+        tips: 'Season chicken with garlic and herbs, serve over jasmine rice with vegetables',
+      },
+    ],
+    ENERGY_BOOST: [
+      {
+        foodName: 'Spinach and Berry Smoothie',
+        portion: '400ml',
+        calories: 280,
+        protein: 10,
+        carbs: 45,
+        fats: 6,
+        reason: 'Iron + B vitamins for sustained energy',
+        wellnessReasoning: 'Spinach provides iron for oxygen transport, berries offer natural sugars without the crash',
+        tips: 'Blend spinach, mixed berries, banana, and almond milk until smooth',
+      },
+      {
+        foodName: 'Eggs with Whole Grain Toast',
+        portion: '2 eggs + 2 slices',
+        calories: 340,
+        protein: 18,
+        carbs: 30,
+        fats: 16,
+        reason: 'B12 and complex carbs for energy',
+        wellnessReasoning: 'Eggs provide B12 and choline for brain energy, whole grains offer sustained glucose release',
+        tips: 'Scramble or poach eggs, serve on toasted whole grain with a side of fruit',
+      },
+    ],
   };
 
   return (fallbacks[recType] || fallbacks.BALANCED_MEAL).slice(0, limit);
@@ -1432,6 +1805,11 @@ function getTitleForType(type) {
     LIGHT_SNACK: '🍎 Light Snack',
     HYDRATION: '💧 Hydration',
     REGIONAL_PICK: '🌍 Regional Pick',
+    // NEW: Wellness-aware titles
+    RECOVERY_MEAL: '🛌 Recovery Meal',
+    STRESS_RELIEF: '🧘 Stress Relief',
+    POST_WORKOUT: '🏋️ Post-Workout',
+    ENERGY_BOOST: '⚡ Energy Boost',
   };
   return titles[type] || titles.BALANCED_MEAL;
 }
@@ -1444,6 +1822,11 @@ function getColorForType(type) {
     PROTEIN_BOOST: ['#FBBF24', '#F59E0B'],
     BALANCED_MEAL: ['#86EFAC', '#22C55E'],
     LIGHT_SNACK: ['#A7F3D0', '#10B981'],
+    // NEW: Wellness-aware colors
+    RECOVERY_MEAL: ['#DDD6FE', '#8B5CF6'],   // Purple - calming
+    STRESS_RELIEF: ['#FED7AA', '#F97316'],   // Orange - warm, comforting
+    POST_WORKOUT: ['#FCA5A5', '#EF4444'],    // Red - energy, action
+    ENERGY_BOOST: ['#FDE68A', '#F59E0B'],    // Yellow - bright, energizing
     HYDRATION: ['#BFDBFE', '#3B82F6'],
     REGIONAL_PICK: ['#E9D5FF', '#8B5CF6'],
   };

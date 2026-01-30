@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useNotification } from '../providers/NotificationProvider';
-import { SURFACES, TEXT, SEMANTIC_ACTIONS, BRAND } from '../constants/premiumTheme';
+import { SURFACES, TEXT, SEMANTIC_ACTIONS, BRAND, TYPOGRAPHY } from '../constants/premiumTheme';
 
 /**
  * BarcodeScannerModal - Scans barcodes and analyzes products
@@ -618,8 +618,8 @@ const styles = StyleSheet.create({
   },
   header: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   closeButton: { position: 'absolute', left: 20, padding: 5 },
-  closeButtonText: { color: BRAND.primary, fontSize: 16, fontWeight: 'bold' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: TEXT.white },
+  closeButtonText: { color: BRAND.primary, fontSize: 16, fontFamily: TYPOGRAPHY.family.bold },
+  headerTitle: { fontSize: 24, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.white },
   scannerFrame: {
     width: 260,
     height: 260,
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   analysisOverlay: { alignItems: 'center', justifyContent: 'center' },
-  analysisText: { color: TEXT.white, fontSize: 16, fontWeight: '600' },
+  analysisText: { color: TEXT.white, fontSize: 16, fontFamily: TYPOGRAPHY.family.semibold },
   corner: {
     position: 'absolute',
     width: 30,
@@ -647,11 +647,11 @@ const styles = StyleSheet.create({
   scanStatusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   rescanButton: { marginTop: 20, borderRadius: 12, overflow: 'hidden' },
   rescanButtonGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
-  rescanButtonText: { color: TEXT.white, fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  rescanButtonText: { color: TEXT.white, fontSize: 16, fontFamily: TYPOGRAPHY.family.semibold, marginLeft: 8 },
   // Photo upload button (in camera view)
   photoUploadButton: { marginTop: 12, borderRadius: 12, overflow: 'hidden' },
   photoUploadGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
-  photoUploadText: { color: TEXT.white, fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  photoUploadText: { color: TEXT.white, fontSize: 16, fontFamily: TYPOGRAPHY.family.semibold, marginLeft: 8 },
 
   // ============ PHOTO PREVIEW STYLES (LIGHT THEME) ============
   photoContainer: {
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
   },
   photoHeaderTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   photoPreviewContainer: {
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 18,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     textAlign: 'center',
     letterSpacing: 2,
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
   },
   photoButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
   },
   photoOptionPrimaryText: {
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
   photoOptionSubtext: {
@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
   },
   photoDividerText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     paddingHorizontal: 12,
   },
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     textAlign: 'center',
     letterSpacing: 1.5,
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
   },
   changePhotoText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
   },
   fallbackTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 8,
   },
@@ -911,9 +911,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   fallbackBarcodeText: {
-    fontWeight: '600',
-    color: TEXT.primary,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: TEXT.primary,
   },
   fallbackInputSection: {
     paddingHorizontal: 20,
@@ -931,7 +930,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 16,
     fontSize: 17,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     borderWidth: 1.5,
     borderColor: BRAND.primary + '30',
@@ -960,7 +959,7 @@ const styles = StyleSheet.create({
   },
   fallbackPrimaryButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
   fallbackSecondaryButton: {
@@ -975,7 +974,7 @@ const styles = StyleSheet.create({
   },
   fallbackSecondaryButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   fallbackTip: {

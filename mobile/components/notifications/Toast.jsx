@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
+import { NOTIFICATION_COLORS } from '../../constants/notificationTypes';
 
 // Lottie animation assets for celebrations
 const LOTTIE_ANIMATIONS = {
@@ -113,62 +115,63 @@ const Toast = ({ type = 'info', domain, title, message, onDismiss, style, celebr
   };
 
   // Domain-themed toast configurations (premium wellness theming)
+  // Uses unified colors from notificationTypes.js for consistency
   const domainConfig = {
     food: {
       icon: 'restaurant',
-      color: '#f97316',
+      color: NOTIFICATION_COLORS.food,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(249, 115, 22, 0.15)',
-      gradient: ['#f97316', '#ea580c'],
-      iconBg: 'rgba(249, 115, 22, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.food}26`, // 15% opacity
+      gradient: [NOTIFICATION_COLORS.food, '#ea580c'],
+      iconBg: `${NOTIFICATION_COLORS.food}1F`, // 12% opacity
     },
     hydration: {
       icon: 'water',
-      color: '#0ea5e9',
+      color: NOTIFICATION_COLORS.hydration,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(14, 165, 233, 0.15)',
-      gradient: ['#0ea5e9', '#0284c7'],
-      iconBg: 'rgba(14, 165, 233, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.hydration}26`,
+      gradient: [NOTIFICATION_COLORS.hydration, '#60A5FA'],
+      iconBg: `${NOTIFICATION_COLORS.hydration}1F`,
     },
     mood: {
       icon: 'happy',
-      color: '#a855f7',
+      color: NOTIFICATION_COLORS.mood,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(168, 85, 247, 0.15)',
-      gradient: ['#a855f7', '#9333ea'],
-      iconBg: 'rgba(168, 85, 247, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.mood}26`,
+      gradient: [NOTIFICATION_COLORS.mood, '#A78BFA'],
+      iconBg: `${NOTIFICATION_COLORS.mood}1F`,
     },
     activity: {
       icon: 'fitness',
-      color: '#22c55e',
+      color: NOTIFICATION_COLORS.activity,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(34, 197, 94, 0.15)',
-      gradient: ['#22c55e', '#16a34a'],
-      iconBg: 'rgba(34, 197, 94, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.activity}26`,
+      gradient: [NOTIFICATION_COLORS.activity, '#34D399'],
+      iconBg: `${NOTIFICATION_COLORS.activity}1F`,
     },
     prediction: {
       icon: 'sparkles',
-      color: '#6366f1',
+      color: NOTIFICATION_COLORS.prediction,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(99, 102, 241, 0.15)',
-      gradient: ['#6366f1', '#4f46e5'],
-      iconBg: 'rgba(99, 102, 241, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.prediction}26`,
+      gradient: [NOTIFICATION_COLORS.prediction, '#4f46e5'],
+      iconBg: `${NOTIFICATION_COLORS.prediction}1F`,
     },
     streak: {
       icon: 'flame',
-      color: '#f59e0b',
+      color: NOTIFICATION_COLORS.streak,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(245, 158, 11, 0.15)',
-      gradient: ['#f59e0b', '#d97706'],
-      iconBg: 'rgba(245, 158, 11, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.streak}26`,
+      gradient: [NOTIFICATION_COLORS.streak, '#d97706'],
+      iconBg: `${NOTIFICATION_COLORS.streak}1F`,
     },
     insight: {
       icon: 'bulb',
-      color: '#06b6d4',
+      color: NOTIFICATION_COLORS.insight,
       backgroundColor: '#ffffff',
-      borderColor: 'rgba(6, 182, 212, 0.15)',
-      gradient: ['#06b6d4', '#0891b2'],
-      iconBg: 'rgba(6, 182, 212, 0.12)',
+      borderColor: `${NOTIFICATION_COLORS.insight}26`,
+      gradient: [NOTIFICATION_COLORS.insight, '#0891b2'],
+      iconBg: `${NOTIFICATION_COLORS.insight}1F`,
     },
   };
 
@@ -333,14 +336,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
     marginBottom: 2,
     letterSpacing: -0.2,
   },
   message: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     lineHeight: 20,
   },
   closeButton: {

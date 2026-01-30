@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const GoalPresentationCard = ({
   label,
@@ -171,14 +172,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: 'rgba(255, 255, 255, 0.92)',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   context: {
     fontSize: 12,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.78)',
     lineHeight: 17,
   },
@@ -203,14 +204,14 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 56,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     lineHeight: 64,
     letterSpacing: -1.5,
   },
   unit: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255, 255, 255, 0.88)',
     letterSpacing: 0.5,
   },
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
   },
   note: {
     fontSize: 11,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255, 255, 255, 0.72)',
     fontStyle: 'italic',
     letterSpacing: 0.2,
@@ -241,7 +242,7 @@ const styles = StyleSheet.create({
   },
   editText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },

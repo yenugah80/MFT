@@ -124,11 +124,13 @@ const styles = StyleSheet.create({
   },
   percentage: {
     fontSize: TYPOGRAPHY.size.title1,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.insights.primary,
   },
   label: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: COLORS.text.tertiary,
     marginTop: SPACING.xs,
@@ -141,6 +143,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.footnote,
     color: COLORS.text.tertiary,
     textAlign: 'center',
+    fontFamily: TYPOGRAPHY.family.regular,
     fontWeight: TYPOGRAPHY.weight.regular,
   },
 });

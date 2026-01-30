@@ -732,6 +732,31 @@ export default function ActivityAnalyticsScreen() {
               </View>
             )}
 
+            {/* ========== DEEP ANALYTICS ========== */}
+            <TouchableOpacity
+              style={styles.deepAnalyticsCta}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/insights/activity-deep'); }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={ACTIVITY_COLORS.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.deepAnalyticsGradient}
+              >
+                <View style={styles.deepAnalyticsContent}>
+                  <View style={styles.deepAnalyticsIcon}>
+                    <Ionicons name="analytics" size={24} color={ACTIVITY_COLORS.primary} />
+                  </View>
+                  <View style={styles.deepAnalyticsText}>
+                    <Text style={styles.deepAnalyticsTitle}>Deep Analytics</Text>
+                    <Text style={styles.deepAnalyticsSub}>Enhanced visualizations & detailed breakdowns</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
             {/* ========== RELATED INSIGHTS ========== */}
             <View style={styles.relatedCard}>
               <Text style={styles.relatedTitle}>Related Insights</Text>
@@ -788,6 +813,7 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: SPACING[2], fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary },
   errorWrap: { alignItems: 'center', paddingVertical: SPACING[10] },
   errorTitle: { marginTop: SPACING[3], fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   retryBtn: { marginTop: SPACING[3], backgroundColor: ACTIVITY_COLORS.primary, paddingHorizontal: SPACING[5], paddingVertical: SPACING[2], borderRadius: RADIUS.md },
   retryText: { color: TEXT.white, fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold },
 
@@ -795,6 +821,7 @@ const styles = StyleSheet.create({
   heroCard: { marginTop: SPACING[4], borderRadius: RADIUS.xl, overflow: 'hidden', ...SHADOWS.lg },
   heroGradient: { padding: SPACING[5] },
   heroHeadline: { fontSize: TYPOGRAPHY.size['2xl'], fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.white, marginBottom: SPACING[1] },
+  fontFamily: TYPOGRAPHY.family.bold,
   heroSubhead: { fontSize: TYPOGRAPHY.size.base, color: 'rgba(255,255,255,0.9)', marginBottom: SPACING[2] },
   heroMessage: { fontSize: TYPOGRAPHY.size.sm, color: 'rgba(255,255,255,0.8)', lineHeight: 20, marginBottom: SPACING[4] },
   heroCTA: {
@@ -809,6 +836,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   heroCTAText: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.bold, color: ACTIVITY_COLORS.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   heroSecondary: { fontSize: TYPOGRAPHY.size.xs, color: 'rgba(255,255,255,0.7)', marginTop: SPACING[3], textAlign: 'center' },
 
   // Stats
@@ -823,6 +851,7 @@ const styles = StyleSheet.create({
   },
   statBlock: { alignItems: 'center', gap: SPACING[1] },
   statVal: { fontSize: TYPOGRAPHY.size.xl, fontWeight: TYPOGRAPHY.weight.bold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   statLabel: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary },
 
   // Progress
@@ -835,7 +864,9 @@ const styles = StyleSheet.create({
   },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   progressPct: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.bold, color: ACTIVITY_COLORS.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
   progressBarWrap: { marginTop: SPACING[3] },
   progressBarBg: { height: 8, backgroundColor: ACTIVITY_COLORS.surfaceLight, borderRadius: 4, overflow: 'hidden' },
   progressBarFill: { height: '100%', borderRadius: 4 },
@@ -852,6 +883,7 @@ const styles = StyleSheet.create({
   },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING[2] },
   chartTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   chartLegend: { flexDirection: 'row', alignItems: 'center', gap: SPACING[1] },
   legendDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: ACTIVITY_COLORS.primary },
   legendText: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginRight: SPACING[2] },
@@ -880,6 +912,7 @@ const styles = StyleSheet.create({
   },
   tipContent: { flex: 1 },
   tipTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: ACTIVITY_COLORS.text },
+  fontFamily: TYPOGRAPHY.family.semibold,
   tipSub: { fontSize: TYPOGRAPHY.size.xs, color: ACTIVITY_COLORS.accent, marginTop: 2 },
 
   // Persona
@@ -903,6 +936,7 @@ const styles = StyleSheet.create({
   },
   personaContent: { flex: 1 },
   personaTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   personaDesc: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
 
   // Related
@@ -914,6 +948,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   relatedTitle: { fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary, marginBottom: SPACING[2] },
+  fontFamily: TYPOGRAPHY.family.semibold,
   relatedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -931,6 +966,7 @@ const styles = StyleSheet.create({
   },
   relatedText: { flex: 1 },
   relatedRowTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.medium,
   relatedRowSub: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary, marginTop: 2 },
 
   // ML Card (shared styles for patterns, correlations, recommendations)
@@ -943,8 +979,10 @@ const styles = StyleSheet.create({
   },
   mlCardHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
   mlCardTitle: { flex: 1, fontSize: TYPOGRAPHY.size.md, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   mlBadge: { backgroundColor: BRAND.primaryLight, paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm },
   mlBadgeText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.bold, color: BRAND.primary },
+  fontFamily: TYPOGRAPHY.family.bold,
 
   // Pattern styles
   patternRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING[2], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
@@ -959,6 +997,7 @@ const styles = StyleSheet.create({
   correlationIcon: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   correlationContent: { flex: 1 },
   correlationStatement: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.medium, color: TEXT.primary, lineHeight: 20 },
+  fontFamily: TYPOGRAPHY.family.medium,
   correlationConfidence: { fontSize: 11, color: TEXT.tertiary, marginTop: SPACING[1] },
   suggestionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[1], marginTop: SPACING[2], paddingTop: SPACING[2], borderTopWidth: 1, borderTopColor: SURFACES.divider },
   suggestionText: { flex: 1, fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, lineHeight: 16 },
@@ -970,7 +1009,46 @@ const styles = StyleSheet.create({
   recommendationIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: SPACING[3] },
   recommendationContent: { flex: 1 },
   recommendationTitle: { fontSize: TYPOGRAPHY.size.sm, fontWeight: TYPOGRAPHY.weight.semibold, color: TEXT.primary },
+  fontFamily: TYPOGRAPHY.family.semibold,
   recommendationDesc: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.secondary, marginTop: 2, lineHeight: 16 },
   priorityBadge: { alignSelf: 'flex-start', paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm, marginTop: SPACING[1] },
   priorityText: { fontSize: 10, fontWeight: TYPOGRAPHY.weight.semibold },
+
+  // Deep Analytics CTA
+  deepAnalyticsCta: {
+    marginTop: SPACING[4],
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    ...SHADOWS.md,
+  },
+  deepAnalyticsGradient: {
+    padding: SPACING[4],
+  },
+  deepAnalyticsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  deepAnalyticsIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: TEXT.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deepAnalyticsText: {
+    flex: 1,
+  },
+  deepAnalyticsTitle: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.white,
+  },
+  deepAnalyticsSub: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
 });

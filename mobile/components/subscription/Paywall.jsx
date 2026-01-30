@@ -16,7 +16,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT } from '../../constants/premiumTheme';
+import { TEXT, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { useSubscription, PRODUCTS, PRICING } from '../../contexts/SubscriptionContext';
 import { trackEvent, Events } from '../../services/analytics';
 
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1f2937',
   },
   content: {
@@ -354,13 +354,14 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
     textAlign: 'center',
     marginBottom: 8,
   },
   heroSubtitle: {
     fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     paddingHorizontal: 20,
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   toggleTextActive: {
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
   },
   popularText: {
     fontSize: 9,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   priceCards: {
@@ -439,16 +440,17 @@ const styles = StyleSheet.create({
   },
   priceCardTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   priceCardPrice: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
   },
   priceCardPeriod: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   savingsBadge: {
@@ -462,7 +464,7 @@ const styles = StyleSheet.create({
   },
   savingsText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   featuresSection: {
@@ -470,7 +472,7 @@ const styles = StyleSheet.create({
   },
   featuresTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1f2937',
     marginBottom: 16,
   },
@@ -490,6 +492,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 15,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     flex: 1,
   },
@@ -504,6 +507,7 @@ const styles = StyleSheet.create({
   },
   testimonialText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#713f12',
     fontStyle: 'italic',
     marginTop: 8,
@@ -531,11 +535,12 @@ const styles = StyleSheet.create({
   },
   purchaseButtonText: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   purchaseButtonSubtext: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
   },
@@ -545,11 +550,13 @@ const styles = StyleSheet.create({
   },
   restoreText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textDecorationLine: 'underline',
   },
   termsText: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     lineHeight: 16,

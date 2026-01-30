@@ -26,7 +26,6 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,55 +37,13 @@ import {
   SURFACES,
   BRAND,
 } from '../../constants/premiumTheme';
+import {
+  PRIORITY,
+  NOTIFICATION_CONFIG,
+  getNotificationConfig,
+} from '../../constants/notificationTypes';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Priority levels for notifications
-const PRIORITY = {
-  URGENT: 'urgent',      // Streak at risk, allergen warning
-  HIGH: 'high',          // Low intake, anomalies
-  NORMAL: 'normal',      // Suggestions, nudges
-  INFO: 'info',          // Welcome, tips
-};
-
-// Notification type configurations
-const NOTIFICATION_CONFIG = {
-  streak_risk: {
-    icon: 'flame',
-    color: '#EF4444',
-    priority: PRIORITY.URGENT,
-  },
-  low_protein: {
-    icon: 'fitness',
-    color: '#8B5CF6',
-    priority: PRIORITY.HIGH,
-  },
-  low_calories: {
-    icon: 'alert-circle',
-    color: '#F59E0B',
-    priority: PRIORITY.HIGH,
-  },
-  hydration: {
-    icon: 'water',
-    color: '#3B82F6',
-    priority: PRIORITY.NORMAL,
-  },
-  meal_reminder: {
-    icon: 'restaurant',
-    color: '#10B981',
-    priority: PRIORITY.NORMAL,
-  },
-  insight: {
-    icon: 'bulb',
-    color: '#6366F1',
-    priority: PRIORITY.INFO,
-  },
-  achievement: {
-    icon: 'trophy',
-    color: '#F59E0B',
-    priority: PRIORITY.INFO,
-  },
-};
 
 /**
  * Single Notification Item
@@ -95,7 +52,7 @@ const NotificationItem = ({ notification, onAction, onDismiss, isLast }) => {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
 
-  const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.insight;
+  const config = getNotificationConfig(notification.type);
 
   const handleDismiss = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -237,13 +194,13 @@ export default function NotificationCenter({
 
   // Group notifications by priority
   const urgentNotifications = notifications.filter(n =>
-    NOTIFICATION_CONFIG[n.type]?.priority === PRIORITY.URGENT
+    getNotificationConfig(n.type).priority === PRIORITY.URGENT
   );
   const actionableNotifications = notifications.filter(n =>
-    [PRIORITY.HIGH, PRIORITY.NORMAL].includes(NOTIFICATION_CONFIG[n.type]?.priority)
+    [PRIORITY.HIGH, PRIORITY.NORMAL].includes(getNotificationConfig(n.type).priority)
   );
   const infoNotifications = notifications.filter(n =>
-    NOTIFICATION_CONFIG[n.type]?.priority === PRIORITY.INFO
+    getNotificationConfig(n.type).priority === PRIORITY.INFO
   );
 
   const hasNotifications = notifications.length > 0;
@@ -412,7 +369,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   headerBadge: {
@@ -423,7 +380,7 @@ const styles = StyleSheet.create({
   },
   headerBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   headerActions: {
@@ -437,7 +394,7 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: BRAND.primary,
   },
   closeButton: {
@@ -465,7 +422,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -478,14 +435,14 @@ const styles = StyleSheet.create({
   },
   sectionBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
 
   // Notification List
   notificationList: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: SPACING[3],
+    marginHorizontal: SPACING[4], // 16px - consistent with Toast and ReminderNotification
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -519,12 +476,13 @@ const styles = StyleSheet.create({
   },
   notificationTitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 2,
   },
   notificationMessage: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 18,
   },
@@ -536,10 +494,11 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   timestamp: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: SPACING[1],
   },
@@ -568,12 +527,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },
   emptyMessage: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
     lineHeight: 20,

@@ -4,6 +4,7 @@
  * Features:
  * - Tab-based navigation (Energy, Mood, Nutrients)
  * - Only shows real data from API
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
  * - Proper "awaiting data" state when no predictions available
  * - Horizontal carousel for discovered patterns
  */
@@ -576,6 +577,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title2,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
   },
   headerMeta: {
@@ -635,11 +637,13 @@ const styles = StyleSheet.create({
   pillLabel: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.secondary,
   },
   pillConfidence: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   pillNoData: {
     fontSize: TYPOGRAPHY.size.caption,
@@ -674,6 +678,7 @@ const styles = StyleSheet.create({
   detailHeaderTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   detailHeaderBadge: {
@@ -715,6 +720,7 @@ const styles = StyleSheet.create({
   noDataTitle: {
     fontSize: TYPOGRAPHY.size.headline,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[2],
   },
@@ -756,6 +762,7 @@ const styles = StyleSheet.create({
   chartLabelHighlight: {
     color: '#EF4444',
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   miniChart: {
     flexDirection: 'row',
@@ -794,6 +801,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.footnote,
     color: '#D97706',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   correlationDot: {
     width: 8,
@@ -833,11 +841,13 @@ const styles = StyleSheet.create({
   nutrientName: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
   },
   nutrientValue: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   nutrientBar: {
     height: 6,
@@ -857,6 +867,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.subhead,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[3],
   },
@@ -877,10 +888,12 @@ const styles = StyleSheet.create({
   correlationChipConfidence: {
     fontSize: TYPOGRAPHY.size.caption,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   correlationChipPattern: {
     fontSize: TYPOGRAPHY.size.footnote,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[1],
   },

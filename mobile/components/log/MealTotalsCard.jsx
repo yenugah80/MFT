@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import {
   View,
   Text,
@@ -169,6 +169,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
   },
   itemCountBadge: {
@@ -180,6 +181,7 @@ const styles = StyleSheet.create({
   itemCountText: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B4EFF',
   },
   caloriesContainer: {
@@ -189,6 +191,7 @@ const styles = StyleSheet.create({
   totalCalories: {
     fontSize: 56,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#6B4EFF',
     lineHeight: 64,
   },
@@ -237,11 +240,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   legendValue: {
     fontSize: 13,
     color: TEXT.primary,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   macroGrid: {
     flexDirection: 'row',
@@ -271,6 +276,7 @@ const styles = StyleSheet.create({
   macroBoxValue: {
     fontSize: 24,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   macroBoxUnit: {
     fontSize: 14,
@@ -294,6 +300,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 });

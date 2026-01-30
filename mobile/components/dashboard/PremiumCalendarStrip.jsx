@@ -46,12 +46,12 @@ import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, CARD_SYSTEM, SEMANT
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAY_WIDTH = (SCREEN_WIDTH - 48) / 7;
 
-// Helper to extract score value from foodMoodScore (can be object with .score or a number)
-function getScoreValue(foodMoodScore) {
-  if (foodMoodScore && typeof foodMoodScore === 'object' && 'score' in foodMoodScore) {
-    return foodMoodScore.score || 0;
+// Helper to extract score value from wellnessScore (can be object with .score or a number)
+function getScoreValue(wellnessScore) {
+  if (wellnessScore && typeof wellnessScore === 'object' && 'score' in wellnessScore) {
+    return wellnessScore.score || 0;
   }
-  return typeof foodMoodScore === 'number' ? foodMoodScore : 0;
+  return typeof wellnessScore === 'number' ? wellnessScore : 0;
 }
 
 // Get color based on wellness score (0-100)
@@ -416,7 +416,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
           stats.totalActivityMinutes += data.activityMinutes;
           stats.activityDays++;
         }
-        const scoreVal = getScoreValue(data.foodMoodScore);
+        const scoreVal = getScoreValue(data.wellnessScore);
         if (scoreVal > 0) { wellnessSum += scoreVal; wellnessCount++; }
         if (!stats.bestDay || scoreVal > (stats.bestDay.score || 0)) {
           stats.bestDay = { date: key, score: scoreVal };
@@ -448,7 +448,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
       if (selectedPeriod === 'day') {
         const dateStr = formatDate(dateKey);
         const story = dayData?.storyLine || generateStoryLine(dayData) || 'Fresh start';
-        message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${getScoreValue(dayData?.foodMoodScore) || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.avgMood?.toFixed(1) || '-'}/5`;
+        message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${getScoreValue(dayData?.wellnessScore) || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.avgMood?.toFixed(1) || '-'}/5`;
       } else {
         message = `📊 My ${periodDays}-Day Wellness Summary\n\n🏆 Avg Score: ${periodStats.avgWellnessScore}/100\n🍽️ Avg Calories: ${periodStats.avgCalories}\n💧 Avg Hydration: ${periodStats.avgHydration}%\n😊 Avg Mood: ${periodStats.avgMood}/5\n📈 ${periodStats.daysLogged}/${periodStats.totalDays} days logged`;
       }
@@ -496,7 +496,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
             <>
               {/* Wellness Score Hero - Color coded */}
               {(() => {
-                const score = selectedPeriod === 'day' ? getScoreValue(dayData?.foodMoodScore) : periodStats.avgWellnessScore;
+                const score = selectedPeriod === 'day' ? getScoreValue(dayData?.wellnessScore) : periodStats.avgWellnessScore;
                 const colors = getScoreColor(score);
                 const label = getScoreLabel(score);
                 return (
@@ -513,6 +513,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
                       <View style={dayDetailStyles.periodSummary}>
                         <Text style={dayDetailStyles.periodSummaryText}>
                           <Text style={{ fontWeight: '700', color: colors.text }}>{periodStats.daysLogged}</Text> of {periodStats.totalDays} days logged
+                          fontFamily: TYPOGRAPHY.family.bold,
                         </Text>
                       </View>
                     )}
@@ -778,6 +779,7 @@ const dayDetailStyles = StyleSheet.create({
   title: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.5,
   },
@@ -815,11 +817,13 @@ const dayDetailStyles = StyleSheet.create({
   periodTabText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   periodTabTextActive: {
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // Score hero section
@@ -841,12 +845,14 @@ const dayDetailStyles = StyleSheet.create({
   scoreValue: {
     fontSize: 40,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -1,
   },
   scoreLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -892,6 +898,7 @@ const dayDetailStyles = StyleSheet.create({
   statCardTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   statCardBody: {
@@ -905,6 +912,7 @@ const dayDetailStyles = StyleSheet.create({
   statCardValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -939,6 +947,7 @@ const dayDetailStyles = StyleSheet.create({
   scoreLabelBadge: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 2,
@@ -977,6 +986,7 @@ const dayDetailStyles = StyleSheet.create({
   statCardTitleCompact: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -984,11 +994,13 @@ const dayDetailStyles = StyleSheet.create({
   statCardValueLarge: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   statCardUnit: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   statCardSubtext: {
@@ -1008,6 +1020,7 @@ const dayDetailStyles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   macroDot: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -1063,6 +1076,7 @@ const dayDetailStyles = StyleSheet.create({
   storyLabel: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1074,6 +1088,7 @@ const dayDetailStyles = StyleSheet.create({
     color: TEXT.primary,
     lineHeight: 20,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Best day card (for period view)
@@ -1090,6 +1105,7 @@ const dayDetailStyles = StyleSheet.create({
   bestDayTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#D97706',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1117,6 +1133,7 @@ const dayDetailStyles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
@@ -1145,6 +1162,7 @@ const dayDetailStyles = StyleSheet.create({
   quickLogText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginTop: SPACING[1],
   },
 
@@ -1163,6 +1181,7 @@ const dayDetailStyles = StyleSheet.create({
   shareBtnText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -1186,6 +1205,7 @@ const dayDetailStyles = StyleSheet.create({
   backfillBtnText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 
@@ -1212,6 +1232,7 @@ const dayDetailStyles = StyleSheet.create({
   streakInfoTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1219,6 +1240,7 @@ const dayDetailStyles = StyleSheet.create({
   streakInfoValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
     marginTop: 2,
   },
@@ -1231,6 +1253,7 @@ const dayDetailStyles = StyleSheet.create({
   streakWarningBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
   },
 });
@@ -1413,6 +1436,7 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   streakBadge: {
@@ -1429,6 +1453,7 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
   },
   viewAllButton: {
@@ -1449,6 +1474,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
   weekStrip: {
@@ -1486,6 +1512,7 @@ const styles = StyleSheet.create({
   dayNumber: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   dayNumberCompact: {
@@ -1573,6 +1600,7 @@ const styles = StyleSheet.create({
   streakWarningTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#B45309',
   },
   streakWarningSubtitle: {
@@ -1588,6 +1616,7 @@ const styles = StyleSheet.create({
   streakWarningActionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
@@ -1629,6 +1658,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   dayLabels: {
@@ -1641,6 +1671,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   monthGrid: {
@@ -1680,6 +1711,7 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 });

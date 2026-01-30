@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   periodSelector: {
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   },
   periodText: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: SEMANTIC.info.base,
   },
   periodTextActive: {
@@ -368,17 +368,19 @@ const styles = StyleSheet.create({
   },
   tooltipMood: {
     fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   tooltipIntensity: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
     marginBottom: SPACING[0.5],
   },
   tooltipDate: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
   },
   legend: {
@@ -400,6 +402,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: SEMANTIC.info.base,
   },
   emptyState: {
@@ -409,7 +412,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.info.base,
     marginTop: SPACING[3],
   },

@@ -20,7 +20,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import {
   Modal,
   View,
@@ -655,20 +655,21 @@ const styles = StyleSheet.create({
   },
   emojiText: {
     fontSize: 24,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   headerText: {
     flex: 1,
   },
   foodName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.neutral900,
     marginBottom: 2,
   },
   recommendation: {
     fontSize: 13,
     color: COLORS.neutral600,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   closeButton: {
     padding: SPACING.sm,
@@ -680,7 +681,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.neutral900,
     marginBottom: SPACING.md,
   },
@@ -697,7 +698,7 @@ const styles = StyleSheet.create({
   reasonText: {
     fontSize: 13,
     color: COLORS.primary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     flex: 1,
   },
   warningSection: {
@@ -709,6 +710,7 @@ const styles = StyleSheet.create({
   },
   portionValue: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: COLORS.neutral600,
     marginBottom: SPACING.md,
   },
@@ -731,7 +733,7 @@ const styles = StyleSheet.create({
   },
   portionButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.neutral600,
   },
   portionButtonTextActive: {
@@ -770,15 +772,16 @@ const styles = StyleSheet.create({
   },
   macroValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.neutral900,
   },
   macroUnit: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   macroLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: COLORS.neutral600,
     marginTop: 2,
   },
@@ -791,10 +794,11 @@ const styles = StyleSheet.create({
   },
   secondaryMacroText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: COLORS.neutral600,
   },
   bold: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.neutral900,
   },
   microSection: {
@@ -820,7 +824,7 @@ const styles = StyleSheet.create({
   microName: {
     fontSize: 13,
     color: COLORS.neutral900,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     flex: 1,
   },
   microRight: {
@@ -830,18 +834,19 @@ const styles = StyleSheet.create({
   },
   microValue: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.neutral900,
   },
   microPercent: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: COLORS.neutral600,
     minWidth: 50,
     textAlign: 'right',
   },
   microPercentSignificant: {
     color: COLORS.primary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   recipeSection: {
     marginBottom: SPACING.xl,
@@ -863,11 +868,12 @@ const styles = StyleSheet.create({
   },
   prepTimeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.primary,
   },
   recipeText: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     lineHeight: 20,
     color: COLORS.neutral600,
     backgroundColor: COLORS.neutral100,
@@ -876,12 +882,13 @@ const styles = StyleSheet.create({
   },
   recipeStep: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     lineHeight: 20,
     color: COLORS.neutral600,
     marginBottom: SPACING.sm,
   },
   recipeStepNumber: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.primary,
   },
   tipsSection: {
@@ -897,6 +904,7 @@ const styles = StyleSheet.create({
   tipsText: {
     flex: 1,
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     lineHeight: 20,
     color: COLORS.neutral600,
   },
@@ -924,7 +932,7 @@ const styles = StyleSheet.create({
   },
   rejectButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: COLORS.neutral600,
   },
   saveButton: {
@@ -951,7 +959,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.white,
   },
   rejectSheet: {
@@ -976,7 +984,7 @@ const styles = StyleSheet.create({
   },
   rejectSheetTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: COLORS.neutral900,
   },
   rejectOptions: {
@@ -999,6 +1007,6 @@ const styles = StyleSheet.create({
   rejectOptionText: {
     fontSize: 14,
     color: COLORS.neutral900,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

@@ -11,7 +11,7 @@ import {
   StyleSheet,
   Pressable,
 } from 'react-native';
-import { TEXT, SURFACES, BRAND , SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const MetricInput = ({
   label,
@@ -119,13 +119,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 6,
   },
   hint: {
     fontSize: 12,
-    fontWeight: '400',
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginBottom: 8,
     fontStyle: 'italic',
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     paddingVertical: 4,
     minHeight: 28,
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
   unitText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
   },
   unitTextActive: {
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#EF4444',
     marginTop: 6,
   },

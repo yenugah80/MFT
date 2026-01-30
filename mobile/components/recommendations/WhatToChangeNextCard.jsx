@@ -334,6 +334,7 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.brand.primary,
     textTransform: 'uppercase',
@@ -342,6 +343,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: PREMIUM_COLORS.text.primary,
     lineHeight: TYPOGRAPHY.size.title3 * 1.2,
@@ -367,6 +369,7 @@ const styles = StyleSheet.create({
   },
   difficultyText: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   impactBadge: {
@@ -376,6 +379,7 @@ const styles = StyleSheet.create({
   },
   impactText: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   timeBadge: {
@@ -409,6 +413,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.muted,
     textTransform: 'uppercase',
@@ -454,6 +459,7 @@ const styles = StyleSheet.create({
   },
   scheduleLabelText: {
     fontSize: TYPOGRAPHY.size.subhead,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
     color: PREMIUM_COLORS.text.secondary,
   },
@@ -470,6 +476,7 @@ const styles = StyleSheet.create({
   },
   scheduleDay: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.brand.primary,
     width: 40,
@@ -509,6 +516,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     fontSize: TYPOGRAPHY.size.callout,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: '#FFFFFF',
   },
@@ -530,6 +538,7 @@ const styles = StyleSheet.create({
   },
   alternativesLabel: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.muted,
     textTransform: 'uppercase',
@@ -554,6 +563,7 @@ const styles = StyleSheet.create({
   },
   alternativeNumberText: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: PREMIUM_COLORS.text.tertiary,
   },

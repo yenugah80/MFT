@@ -39,7 +39,7 @@ import { CorrelationCard } from './CorrelationCard';
 import MomentumCard from './MomentumCard';
 
 // Design tokens
-import { SPACING, TEXT } from '../../constants/premiumTheme';
+import { SPACING, TEXT, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Main render component - CORRECTED ARCHITECTURE
@@ -250,7 +250,7 @@ const componentStyles = StyleSheet.create({
 
   correlationsTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 
@@ -266,7 +266,7 @@ const componentStyles = StyleSheet.create({
 
   viewAllText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#8B5CF6',
   },
 
@@ -290,6 +290,7 @@ const componentStyles = StyleSheet.create({
 
   hintText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#047857',
   },
 });

@@ -53,6 +53,9 @@ import unifiedAnalyticsRouter from "./routes/unifiedAnalytics.js";
 import remindersRouter from "./routes/reminders.js";
 import predictionsRouter from "./routes/predictions.js";
 import intelligenceRouter from "./routes/intelligence.js";
+import wellnessRouter from "./routes/wellness.js";
+import personalizedInsightsRouter from "./routes/personalizedInsights.js";
+import ingredientsRouter from "./routes/ingredients.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartReminderJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
@@ -710,6 +713,21 @@ app.use("/api/decision-brain", decisionBrainRouter);
 // Note: Single entry point for all intelligence - correlations, predictions, recommendations
 // Replaces fragmented analytics endpoints with coordinated, prediction-aware intelligence
 app.use("/api/intelligence", intelligenceRouter);
+
+// Mount Wellness Router (Unified Wellness Intelligence)
+// Note: Cross-domain wellness scores, recovery tracking, personalized narratives
+// Integrates mood, activity, hydration, sleep, stress into holistic recommendations
+app.use("/api/wellness", wellnessRouter);
+
+// Mount Personalized Insights Router (Deep Pattern Mining & Narrative Generation)
+// Note: Analyzes THIS USER's actual data to find food-mood correlations,
+// timing patterns, and generates personalized stories - not generic advice
+app.use("/api/insights/personalized", personalizedInsightsRouter);
+
+// Mount Ingredients Router (Ingredient Breakdown & Modification)
+// Note: Production-grade ingredient breakdown with add/delete UI support,
+// regional variations (US, India, UK, Japan, Middle East), and real-time nutrition recalculation
+app.use("/api/ingredients", ingredientsRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { TEXT, SURFACES, BRAND, SEMANTIC, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, SEMANTIC, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   trustText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.success.dark,
     marginLeft: 6,
   },
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   },
   progressPercent: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
     marginLeft: 12,
     minWidth: 40,
@@ -274,11 +274,11 @@ const styles = StyleSheet.create({
   stepText: {
     fontSize: 14,
     color: TEXT.secondary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   stepTextActive: {
     color: TEXT.primary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   stepTextComplete: {
     color: TEXT.tertiary,
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   },
   sourcesTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: 8,
   },
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   sourceBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     marginLeft: 4,
   },
 
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
     marginLeft: 6,
   },
@@ -359,6 +359,7 @@ const styles = StyleSheet.create({
   // Help Text
   helpText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     fontStyle: 'italic',

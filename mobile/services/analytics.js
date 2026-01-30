@@ -275,6 +275,7 @@ export const Events = {
   VOICE_ANALYSIS_FAILED: 'voice_analysis_failed',
   VOICE_PLAYBACK_STARTED: 'voice_playback_started',
   VOICE_RERECORD: 'voice_rerecord',
+  VOICE_SESSION_ABANDONED: 'voice_session_abandoned',
 
   // Mood
   MOOD_LOGGED: 'mood_logged',

@@ -27,6 +27,7 @@ import { useFoodLog } from "../hooks/useFoodLog";
 import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
+import { useWellnessIntelligence } from "../hooks/useWellnessIntelligence";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -40,18 +41,26 @@ import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import StreakRestoreModal from "./dashboard/StreakRestoreModal";
+// Snapchat-style streak components (floating banner)
+import { StreakManager } from "./streak";
 import DashboardHeaderSection from "./dashboard/DashboardHeaderSection";
 import MinimalDashboardHeader from "./dashboard/MinimalDashboardHeader";
 import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
-// DashboardPrimaryCard removed - redundant with FoodMoodScoreCard hero + CompactDashboardTiles
+// DashboardPrimaryCard removed - redundant with WellnessScoreCard hero
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
 // DashboardNutritionSection removed - replaced with comprehensive NutritionDetailsSection
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
 import DashboardProgressSection from "./dashboard/DashboardProgressSection";
 // RemainingBudgetCard removed - redundant with InsightNudge system
 
-// NEW KILLER FEATURES - Differentiators
-import FoodMoodScoreCard from "./dashboard/FoodMoodScoreCard";
+// ═══════════════════════════════════════════════════════════════════════════════
+// WELLNESS SCORE ARCHITECTURE
+// ═══════════════════════════════════════════════════════════════════════════════
+// WellnessScoreCard: Composite score (Food + Mood + Water + Activity = 100 pts)
+// WellnessNarrativeCard: Server-calculated wellness + narrative story
+// EnhancedMoodCard: Mood-only (showWellnessScore={false} to avoid duplication)
+// ═══════════════════════════════════════════════════════════════════════════════
+import WellnessScoreCard from "./dashboard/WellnessScoreCard";
 import SmartMealSuggestionCard from "./dashboard/SmartMealSuggestionCard";
 import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
 // MorningPredictionCard moved to Insights screen - less dashboard clutter
@@ -61,9 +70,6 @@ import PremiumCalendarStrip from "./dashboard/PremiumCalendarStrip";
 import AllergenWarningCard from "./dashboard/AllergenWarningCard";
 import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 
-// Premium dashboard enhancements - compact tiles
-import CompactDashboardTiles from "./dashboard/CompactDashboardTiles";
-
 // NEW: Comprehensive nutrition details component with integrated progress rings and macro breakdown
 import NutritionDetailsSection from "./dashboard/NutritionDetailsSection";
 
@@ -72,6 +78,9 @@ import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehav
 import { LifecycleStageFooter } from "./dashboard/LifecycleStageFooter";
 import { DismissReasonSelector } from "./dashboard/DismissReasonSelector";
 import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErrorBoundary";
+
+// Wellness Intelligence - Holistic wellness storytelling
+import WellnessNarrativeCard from "./wellness/WellnessNarrativeCard";
 
 // Notification Center - Centralized notification hub
 import NotificationCenter from "./notifications/NotificationCenter";
@@ -83,7 +92,7 @@ import { BOLD_GRADIENTS, WELLNESS_COLORS, DEPTH_SHADOWS } from "../constants/mod
 
 // Utility functions
 import { generateStoryLine, generateInsights, assessMacroBalance } from "../utils/healthCalculations";
-import { calculateFoodMoodScore } from "../utils/foodMoodScore";
+import { calculateWellnessScore } from "../utils/wellnessScore";
 import { calculatePersonalizedWellnessScore } from "../utils/smartWellnessEngine";
 import { parseDecimal, parseLiters, parseGoal, parseCalories, parseMacro, calculatePercentage } from "../utils/safeNumbers";
 import { formatDateLocal, getTodayKey } from "../utils/dateHelpers";
@@ -199,7 +208,7 @@ function getErrorDetails(error) {
 
 export default function DashboardContent() {
   const { data, isLoading, error, refetch } = useDashboard();
-  const { logs: localFoodLogs } = useFoodLog(); // Get local SQLite logs
+  const { logs: localFoodLogs, deleteLog } = useFoodLog(); // Get local SQLite logs + delete function
   const { profile: contextProfile } = useProfileContext(); // Get profile from context (eliminates duplicate /profile/me fetch)
   const [refreshing, setRefreshing] = useState(false);
 
@@ -304,6 +313,22 @@ export default function DashboardContent() {
   // Behavioral Health Intelligence - single fetch point
   const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestrator();
   const { mutate: sendCorrelationFeedback } = useCorrelationFeedback();
+
+  // Wellness Intelligence - Holistic wellness storytelling (uses summary for quick load)
+  const {
+    wellness: wellnessIntelligence,
+    wellnessScore: apiWellnessScore,
+    recoveryScore,
+    emoji: wellnessEmoji,
+    headline: wellnessHeadline,
+    flags: wellnessFlags,
+    narrative: wellnessNarrative,
+    guidance: wellnessGuidance,
+    correlations: wellnessCorrelations,
+    hasData: hasWellnessData,
+    isLoading: wellnessIntelligenceLoading,
+    prefetchFull: prefetchWellnessDetails,
+  } = useWellnessIntelligence({ enabled: true, includeSummary: true });
 
   useEffect(() => {
     let isActive = true;
@@ -475,6 +500,38 @@ export default function DashboardContent() {
       notify?.error(error?.response?.data?.error || generalMessages.error());
     }
   }, [refetch, notify]);
+
+  // ============================================================================
+  // ALLERGEN WARNING ACTIONS
+  // ============================================================================
+
+  /**
+   * Handle removing a meal flagged with allergens
+   * Deletes from local DB, shows confirmation, and updates the warning list
+   */
+  const handleRemoveAllergenMeal = useCallback(async (mealId) => {
+    if (!mealId) return;
+
+    try {
+      // Haptic feedback for destructive action
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      // Delete from local database
+      await deleteLog(mealId);
+
+      // Remove from allergen warnings immediately (optimistic update)
+      setAllergenWarnings(prev => prev.filter(w => w.mealId !== mealId));
+
+      // Show success notification
+      notify?.success('Meal removed from your log');
+
+      // Refresh dashboard data to sync
+      await refetch();
+    } catch (error) {
+      console.error('[Dashboard] Failed to remove allergen meal:', error);
+      notify?.error('Failed to remove meal. Please try again.');
+    }
+  }, [deleteLog, notify, refetch]);
 
   // ============================================================================
   // GAMIFICATION LOGIC
@@ -688,7 +745,7 @@ export default function DashboardContent() {
       const totalProtein = parseMacro(data.today?.nutrition?.totalProtein);
       const proteinGoalValue = parseGoal(data.goals?.proteinG, 150, 20, 500);
 
-      const foodMoodScore = calculateFoodMoodScore({
+      const wellnessScore = calculateWellnessScore({
         calories: totalCals,
         calorieGoal: goal,
         protein: totalProtein,
@@ -707,7 +764,7 @@ export default function DashboardContent() {
         logged: uniqueFoodLogs.length > 0,
         moodAvg: currentMood,
         hydrationPercent,
-        foodMoodScore,
+        wellnessScore,
         protein: totalProtein,
         proteinGoal: proteinGoalValue,
         storyLine: generateStoryLine({
@@ -751,8 +808,8 @@ export default function DashboardContent() {
           logged: totalCals > 0,
           protein: totalProtein,
           proteinGoal: proteinGoalValue,
-          // Calculate food mood score if we have the data
-          foodMoodScore: calculateFoodMoodScore({
+          // Calculate wellness score if we have the data
+          wellnessScore: calculateWellnessScore({
             calories: totalCals,
             calorieGoal: goal,
             protein: totalProtein,
@@ -786,7 +843,7 @@ export default function DashboardContent() {
         if (!calData[key]) {
           calData[key] = {
             calories: 0, meals: 0, goalReached: false, logged: true,
-            moodAvg: 0, hydrationPercent: 0, foodMoodScore: 0
+            moodAvg: 0, hydrationPercent: 0, wellnessScore: 0
           };
         }
 
@@ -798,7 +855,7 @@ export default function DashboardContent() {
 
     // Ensure today exists even if empty
     if (!calData[todayKey]) {
-      calData[todayKey] = { calories: 0, meals: 0, goalReached: false, logged: false, moodAvg: null, hydrationPercent: null, foodMoodScore: null };
+      calData[todayKey] = { calories: 0, meals: 0, goalReached: false, logged: false, moodAvg: null, hydrationPercent: null, wellnessScore: null };
     }
 
     return calData;
@@ -1455,11 +1512,12 @@ export default function DashboardContent() {
         )}
 
         {/* ============================================ */}
-        {/* HERO CARD - ONE unified wellness + mood display */}
+        {/* HERO CARD - Comprehensive Wellness Score */}
+        {/* Shows composite score: Food (25) + Mood (25) + Water (25) + Activity (25) = 100 */}
         {/* Only show after first log - Day 0 sees clean EmptyState only */}
         {/* ============================================ */}
         {hasAnyData && (
-          <FoodMoodScoreCard
+          <WellnessScoreCard
             today={today}
             goals={goals}
             moodLogs={today?.moodLogs || []}
@@ -1569,7 +1627,10 @@ export default function DashboardContent() {
 
         {/* Allergen Warning Card - Urgent alerts stay on Dashboard */}
         {allergenWarnings.length > 0 && (
-          <AllergenWarningCard warnings={allergenWarnings} />
+          <AllergenWarningCard
+            warnings={allergenWarnings}
+            onRemoveMeal={handleRemoveAllergenMeal}
+          />
         )}
 
         {/* RemainingBudgetCard & DashboardPrimaryCard removed - redundant with hero + compact tiles */}
@@ -1631,6 +1692,62 @@ export default function DashboardContent() {
         {/* OLD NUTRITION SECTION - REMOVED */}
         {/* Now integrated into comprehensive NutritionDetailsSection above */}
         {/* ============================================ */}
+
+        {/* ============================================ */}
+        {/* ============================================ */}
+        {/* WELLNESS INTELLIGENCE - Personalized Wellness Story */}
+        {/* Shows: wellness score, recovery score, flags, narrative, guidance */}
+        {/* "The story behind the numbers" - not just metrics */}
+        {/*
+         * Wellness Score Priority:
+         * 1. apiWellnessScore - server-calculated, authoritative
+         * 2. wellnessScore?.score - client-calculated fallback
+         * 3. 50 - default neutral value
+         */}
+        {/* ============================================ */}
+        {hasAnyData && hasWellnessData && !wellnessIntelligenceLoading && (
+          <WellnessNarrativeCard
+            wellnessScore={apiWellnessScore || wellnessScore?.score || 50}
+            recoveryScore={recoveryScore || 50}
+            headline={wellnessHeadline || 'Balanced'}
+            emoji={wellnessEmoji || '💚'}
+            narrative={wellnessNarrative}
+            flags={wellnessFlags || []}
+            guidance={wellnessGuidance || []}
+            correlations={wellnessCorrelations || []}
+            conflictResolution={wellnessIntelligence?.conflictResolution}
+            onFlagPress={(flag) => {
+              // Navigate to relevant section based on flag
+              if (flag.flag === 'DEHYDRATED') {
+                router.push('/(tabs)/log?focus=hydration');
+              } else if (flag.flag === 'LOW_MOOD' || flag.flag === 'HIGH_STRESS') {
+                router.push('/insights/mood');
+              } else if (flag.flag === 'LOW_ENERGY' || flag.flag === 'POST_WORKOUT') {
+                router.push('/(tabs)/log?focus=activity');
+              } else if (flag.flag === 'POOR_SLEEP') {
+                router.push('/insights/sleep');
+              } else {
+                router.push('/insights');
+              }
+            }}
+            onActionPress={(flag) => {
+              // Navigate to log screen with context
+              router.push({
+                pathname: '/(tabs)/log',
+                params: {
+                  focus: 'meal',
+                  wellness: flag.flag
+                }
+              });
+            }}
+            onLearnMore={() => {
+              // Prefetch full wellness data and navigate to wellness insights
+              prefetchWellnessDetails?.();
+              router.push('/insights/wellness');
+            }}
+            style={{ marginHorizontal: SPACING[4], marginBottom: SPACING[3] }}
+          />
+        )}
 
         {/* ============================================ */}
         {/* WELLNESS SECTION - Collapsible */}
@@ -1924,6 +2041,9 @@ export default function DashboardContent() {
         styles={styles}
       />
 
+      {/* Snapchat-style Streak Manager - Floating Banner for at-risk streaks */}
+      <StreakManager onNavigateToLog={() => router.push('/(tabs)/log')} />
+
       <ThemeSettingsModal
         visible={themeModalVisible}
         onClose={() => setThemeModalVisible(false)}
@@ -2046,6 +2166,7 @@ const styles = StyleSheet.create({
   yesterdayBannerTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   yesterdayBannerSubtitle: {
@@ -2105,6 +2226,7 @@ const styles = StyleSheet.create({
   analyticsLinkTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   analyticsLinkSubtitle: {
@@ -2130,6 +2252,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary, // Dark text for light background
     marginBottom: SPACING[2],
     textAlign: 'center',
@@ -2156,6 +2279,7 @@ const styles = StyleSheet.create({
   retryText: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
 
@@ -2179,6 +2303,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary, // Medium text for light background
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   headerRight: {
     flexDirection: 'row',
@@ -2214,6 +2339,7 @@ const styles = StyleSheet.create({
   focusModeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   focusModeSubtext: {
@@ -2238,6 +2364,7 @@ const styles = StyleSheet.create({
   moodInsightsText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   syncStatus: {
@@ -2263,6 +2390,7 @@ const styles = StyleSheet.create({
   syncText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary, // Dark text for light background
   },
 
@@ -2297,6 +2425,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.warning.dark,
   },
   percentageBadge: {
@@ -2308,6 +2437,7 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   infoMessage: {
@@ -2334,6 +2464,7 @@ const styles = StyleSheet.create({
   anomalyActionText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.warning.base,
   },
   anomalyActionTextWarning: {
@@ -2373,6 +2504,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Sections
@@ -2382,6 +2514,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[4],
   },
@@ -2429,6 +2562,7 @@ const styles = StyleSheet.create({
   collapsibleTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -2441,6 +2575,7 @@ const styles = StyleSheet.create({
   collapsibleBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   collapsibleContent: {
@@ -2470,12 +2605,14 @@ const styles = StyleSheet.create({
   waterTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
   waterValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.info.base,
     marginBottom: SPACING[1],
   },
@@ -2500,6 +2637,7 @@ const styles = StyleSheet.create({
   quickAddText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 
@@ -2524,6 +2662,7 @@ const styles = StyleSheet.create({
   mealName: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
@@ -2586,6 +2725,7 @@ const styles = StyleSheet.create({
   weightValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[1],
   },
@@ -2616,6 +2756,7 @@ const styles = StyleSheet.create({
   hydrationValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC.info.base,
     marginBottom: SPACING[1],
   },
@@ -2635,6 +2776,7 @@ const styles = StyleSheet.create({
     color: BRAND.primary,
     textAlign: 'center',
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Insights & Protein Modals
@@ -2675,6 +2817,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   modalSubtitle: {
@@ -2716,6 +2859,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     paddingVertical: SPACING[1],
     paddingHorizontal: SPACING[3],
   },
@@ -2742,6 +2886,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   summaryMeta: {
@@ -2762,6 +2907,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   coverageValue: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -2785,6 +2931,7 @@ const styles = StyleSheet.create({
   summarySectionTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginTop: SPACING[2],
   },
@@ -2841,11 +2988,13 @@ const styles = StyleSheet.create({
   insightsCtaText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
   insightsCtaTextSecondary: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
   modalEmptyText: {
@@ -2878,6 +3027,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.info.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   proteinHistoryButton: {
     marginTop: SPACING[3],
@@ -2895,6 +3045,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Streak Saved Modal
@@ -2949,6 +3100,7 @@ const styles = StyleSheet.create({
   freezeCountText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#2563EB',
   },
   savedButton: {

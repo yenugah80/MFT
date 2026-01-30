@@ -3,6 +3,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { View, ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import { COLORS } from "../../constants/colors";
+import { TYPOGRAPHY } from "../../constants/premiumTheme";
 import { useProfileContext } from "../../providers/ProfileProvider";
 
 const TabsLayout = () => {
@@ -40,17 +41,17 @@ const TabsLayout = () => {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 24 }}>
         <Ionicons name="cloud-offline-outline" size={48} color={COLORS.textLight} />
-        <Text style={{ fontSize: 18, fontWeight: '600', color: COLORS.text, marginTop: 16, textAlign: 'center' }}>
+        <Text style={{ fontSize: 18, fontFamily: TYPOGRAPHY.family.semibold, color: COLORS.text, marginTop: 16, textAlign: 'center' }}>
           Connection Issue
         </Text>
-        <Text style={{ fontSize: 14, color: COLORS.textLight, marginTop: 8, textAlign: 'center' }}>
+        <Text style={{ fontSize: 14, fontFamily: TYPOGRAPHY.family.regular, color: COLORS.textLight, marginTop: 8, textAlign: 'center' }}>
           Unable to load your profile. Please check your connection and try again.
         </Text>
         <TouchableOpacity
           onPress={() => refetchProfile()}
           style={{ marginTop: 24, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Retry</Text>
+          <Text style={{ color: '#FFFFFF', fontFamily: TYPOGRAPHY.family.semibold }}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -79,7 +80,7 @@ const TabsLayout = () => {
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: "600",
+          fontFamily: TYPOGRAPHY.family.semibold,
         },
       }}
     >

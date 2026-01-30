@@ -343,6 +343,7 @@ const styles = StyleSheet.create({
   headerLabel: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
     letterSpacing: 1,
   },
@@ -363,6 +364,7 @@ const styles = StyleSheet.create({
   heroValue: {
     fontSize: 48,
     fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     lineHeight: 56,
   },
@@ -370,6 +372,7 @@ const styles = StyleSheet.create({
   heroMaxValue: {
     fontSize: 20,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
     marginTop: -8,
   },
@@ -377,6 +380,7 @@ const styles = StyleSheet.create({
   heroLabel: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginTop: 4,
   },
@@ -384,6 +388,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 15,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     textAlign: 'center',
     lineHeight: 22,
@@ -412,11 +417,13 @@ const styles = StyleSheet.create({
   chipValue: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   chipLabel: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
 
@@ -434,12 +441,14 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
   },
 
   dismissHint: {
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     textAlign: 'center',
     marginTop: SPACING[3],

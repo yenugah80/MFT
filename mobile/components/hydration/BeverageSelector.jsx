@@ -131,6 +131,7 @@ function BeverageChip({ bevKey, bev, selected, onSelect, totalCaffeine = 0 }) {
                 selected && {
                   color: bev.color,
                   fontWeight: TYPOGRAPHY.weight.bold,
+                  fontFamily: TYPOGRAPHY.family.bold,
                 },
               ]}
             >
@@ -484,6 +485,7 @@ const styles = StyleSheet.create({
   beverageChipLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
   hydrationText: {
@@ -513,6 +515,7 @@ const styles = StyleSheet.create({
   caffeineBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#78350F',
   },
   caffeineBadgeTextWarning: {
@@ -557,6 +560,7 @@ const styles = StyleSheet.create({
   caffeineValue: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   caffeineProgressBg: {
     height: 6,
@@ -572,6 +576,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     marginTop: SPACING[2],
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Dynamic Note
@@ -591,17 +596,20 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.warning.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   noteTextSuccess: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   noteTextInfo: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.info.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

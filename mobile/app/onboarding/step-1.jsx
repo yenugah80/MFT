@@ -15,7 +15,7 @@ import OnboardingLayout from '../../components/onboarding/OnboardingLayout';
 import GoalCard from '../../components/onboarding/GoalCard';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { GOALS, ONBOARDING_COPY, A11Y_LABELS } from '../../constants/onboardingConfig';
-import { BRAND } from '../../constants/premiumTheme';
+import { BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const Step1Screen = () => {
   const { step1Data, updateStepData, goToNextStep } = useOnboarding();
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
 });

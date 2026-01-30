@@ -15,7 +15,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
-import { TEXT, BRAND, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * MiniLineChart - Compact line chart for trends
@@ -149,6 +149,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     marginTop: 20,
@@ -163,11 +164,11 @@ const styles = StyleSheet.create({
   maxLabel: {
     fontSize: 10,
     color: TEXT.tertiary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   minLabel: {
     fontSize: 10,
     color: TEXT.tertiary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

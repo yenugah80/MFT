@@ -15,7 +15,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Format timestamp to readable date
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
   },
   drawerTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
   },
   closeButton: {
@@ -595,6 +595,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 20,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
   },
   compareToggle: {
@@ -614,7 +615,7 @@ const styles = StyleSheet.create({
   },
   compareToggleText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B7280',
   },
   compareToggleTextActive: {
@@ -630,7 +631,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B4EFF',
     textAlign: 'center',
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   loadingState: {
     alignItems: 'center',
@@ -639,6 +640,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
   },
   historyList: {
@@ -680,7 +682,7 @@ const styles = StyleSheet.create({
   },
   foodName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1F2937',
     marginBottom: 6,
   },
@@ -700,12 +702,12 @@ const styles = StyleSheet.create({
   },
   caloriesText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#374151',
   },
   caloriesUnit: {
     fontSize: 10,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#6B7280',
     marginLeft: 2,
   },
@@ -725,11 +727,12 @@ const styles = StyleSheet.create({
   },
   macroValue: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#6B7280',
   },
   timeStamp: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#9CA3AF',
   },
   rightSection: {
@@ -752,7 +755,7 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   emptyState: {
     alignItems: 'center',
@@ -760,12 +763,13 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B7280',
     marginBottom: 8,
   },
   emptyStateHint: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#9CA3AF',
   },
   comparisonOverlay: {
@@ -791,7 +795,7 @@ const styles = StyleSheet.create({
   },
   comparisonTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
   },
   comparisonContent: {
@@ -827,13 +831,13 @@ const styles = StyleSheet.create({
   },
   healthierText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#059669',
     textAlign: 'center',
   },
   neutralText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -847,7 +851,7 @@ const styles = StyleSheet.create({
   },
   comparisonFoodName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
     textAlign: 'center',
   },
@@ -861,7 +865,7 @@ const styles = StyleSheet.create({
   },
   comparisonLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: 8,
   },
@@ -874,7 +878,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1F2937',
     textAlign: 'center',
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   detailSheet: {
     backgroundColor: '#fff',
@@ -892,11 +896,12 @@ const styles = StyleSheet.create({
   },
   detailTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
   },
   detailMeta: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
     marginTop: 4,
   },
@@ -906,6 +911,7 @@ const styles = StyleSheet.create({
   },
   detailStat: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
   },
   detailActions: {
@@ -921,7 +927,7 @@ const styles = StyleSheet.create({
   },
   primaryActionText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   secondaryAction: {
     flex: 1,
@@ -933,7 +939,7 @@ const styles = StyleSheet.create({
   },
   secondaryActionText: {
     color: '#1F2937',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // ===== New Comparison Modal Styles =====
@@ -963,7 +969,7 @@ const styles = StyleSheet.create({
   },
   winnerTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#92400E',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -971,12 +977,13 @@ const styles = StyleSheet.create({
   },
   winnerName: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#1F2937',
     marginBottom: 2,
   },
   winnerReason: {
     fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#B45309',
   },
 
@@ -995,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   tieText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#6B7280',
   },
 
@@ -1021,14 +1028,14 @@ const styles = StyleSheet.create({
   },
   scoreCardName: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#6B7280',
     marginBottom: 8,
     textAlign: 'center',
   },
   scoreCardScore: {
     fontSize: 36,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#374151',
   },
   scoreCardScoreWinner: {
@@ -1036,7 +1043,7 @@ const styles = StyleSheet.create({
   },
   scoreCardLabel: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#9CA3AF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1055,7 +1062,7 @@ const styles = StyleSheet.create({
   },
   vsText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#6B7280',
   },
 
@@ -1065,7 +1072,7 @@ const styles = StyleSheet.create({
   },
   recsSectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#374151',
     marginBottom: 12,
     textTransform: 'uppercase',
@@ -1100,12 +1107,13 @@ const styles = StyleSheet.create({
   },
   recTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#1F2937',
     marginBottom: 2,
   },
   recText: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#6B7280',
     lineHeight: 16,
   },
@@ -1130,17 +1138,17 @@ const styles = StyleSheet.create({
   },
   quickStatVal: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#374151',
     minWidth: 70,
   },
   quickStatValBetter: {
     color: '#059669',
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   quickStatLabel: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#6B7280',
     flex: 1,
     textAlign: 'center',

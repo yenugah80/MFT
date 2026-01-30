@@ -1,14 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { FoodItemCard } from './FoodItemCard'; // 🆕 Use rich item card
-import { SURFACES, TEXT } from '../../constants/premiumTheme';
-
-// Assuming fonts are defined globally or passed as props
-const fonts = {
-  display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
-  strong: Platform.select({ ios: 'HelveticaNeue-Medium', android: 'Roboto-Medium', default: 'System' }),
-  regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
-};
+import { View, Text, StyleSheet } from 'react-native';
+import { FoodItemCard } from './FoodItemCard';
+import { SURFACES, TEXT, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 export function FoodItemsList({ items, onUpdateQuantity, onRemove, onRemoveIngredient }) {
 
@@ -75,11 +68,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   listTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.xl,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 15,
-    fontFamily: fonts.display,
   },
   itemCard: {
     backgroundColor: SURFACES.card.primary,
@@ -102,12 +94,11 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   itemName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.lg,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     flex: 1,
     marginRight: 10,
-    fontFamily: fonts.strong,
   },
   sourceIcon: {
     marginLeft: 8,
@@ -128,18 +119,17 @@ const styles = StyleSheet.create({
     borderColor: SURFACES.divider,
   },
   portionLabel: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginRight: 8,
-    fontFamily: fonts.regular,
   },
   portionInput: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-    paddingVertical: 0, // Override default TextInput padding
-    fontFamily: fonts.display,
+    paddingVertical: 0,
   },
   portionUnitButton: {
     flexDirection: 'row',
@@ -151,10 +141,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   portionUnitText: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginRight: 4,
-    fontFamily: fonts.regular,
   },
   modalOverlay: {
     flex: 1,
@@ -180,9 +170,9 @@ const styles = StyleSheet.create({
     borderBottomColor: SURFACES.divider,
   },
   unitPickerItemText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
-    fontFamily: fonts.regular,
   },
   nutritionGrid: {
     flexDirection: 'row',
@@ -191,7 +181,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   nutritionItem: {
-    width: '48%', // Two columns
+    width: '48%',
     marginBottom: 10,
     backgroundColor: SURFACES.background.secondary,
     borderRadius: 8,
@@ -200,16 +190,15 @@ const styles = StyleSheet.create({
     borderColor: SURFACES.divider,
   },
   nutritionLabel: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginBottom: 4,
-    fontFamily: fonts.regular,
   },
   nutritionValue: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-    fontFamily: fonts.strong,
   },
   micronutrientsSection: {
     marginTop: 15,
@@ -224,15 +213,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   micronutrientsTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
-    fontFamily: fonts.strong,
   },
   micronutrientsNote: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
-    fontFamily: fonts.regular,
   },
   micronutrientsGrid: {
     flexDirection: 'row',
@@ -240,7 +228,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   microItem: {
-    width: '48%', // Two columns
+    width: '48%',
     marginBottom: 8,
     backgroundColor: SURFACES.background.secondary,
     borderRadius: 6,
@@ -249,10 +237,10 @@ const styles = StyleSheet.create({
     borderColor: SURFACES.divider,
   },
   microName: {
-    fontSize: 11,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginBottom: 2,
-    fontFamily: fonts.regular,
   },
   microValueContainer: {
     flexDirection: 'row',
@@ -260,19 +248,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   microValue: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-    fontFamily: fonts.strong,
     marginRight: 4,
   },
   microPercentage: {
-    fontSize: 10,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
-    fontFamily: fonts.regular,
   },
 
-  // 🆕 INGREDIENTS SECTION
+  // INGREDIENTS SECTION
   ingredientsSection: {
     marginTop: 15,
     paddingTop: 15,

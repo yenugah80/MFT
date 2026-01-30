@@ -11,7 +11,7 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 import SafeScreen from "../../components/SafeScreen";
-import { TEXT, BRAND } from "../../constants/premiumTheme";
+import { TEXT, BRAND, TYPOGRAPHY } from "../../constants/premiumTheme";
 
 // Info Row Component
 const InfoRow = ({ icon, label, value, isLast }) => (
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.3,
   },
@@ -252,17 +252,18 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontSize: 28,
-    fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: "#7C3AED",
   },
   profileName: {
     fontSize: 20,
-    fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 4,
   },
   profileEmail: {
     fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
 
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 16,
     letterSpacing: -0.3,
@@ -312,12 +313,13 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginBottom: 2,
   },
   infoValue: {
     fontSize: 15,
-    fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 
@@ -343,7 +345,7 @@ const styles = StyleSheet.create({
   actionText: {
     flex: 1,
     fontSize: 15,
-    fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 

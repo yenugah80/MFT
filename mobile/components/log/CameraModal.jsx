@@ -691,6 +691,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[5],
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textAlign: 'center',
     color: TEXT.primary,
   },
@@ -713,6 +714,7 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 
@@ -837,6 +839,7 @@ const styles = StyleSheet.create({
   zoomText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
     flex: 1,
     textAlign: 'center',
@@ -912,6 +915,7 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
@@ -930,6 +934,7 @@ const styles = StyleSheet.create({
   errorBannerText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.white,
     flex: 1,
   },
@@ -965,6 +970,7 @@ const styles = StyleSheet.create({
   previewButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
 
@@ -987,6 +993,7 @@ const styles = StyleSheet.create({
   voiceButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
   voiceHint: {
@@ -1014,6 +1021,7 @@ const styles = StyleSheet.create({
   voiceAddedLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.success.base,
     marginBottom: SPACING[1],
   },

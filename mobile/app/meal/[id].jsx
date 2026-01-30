@@ -576,6 +576,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Header
@@ -598,6 +599,7 @@ const styles = StyleSheet.create({
   mealName: {
     fontSize: TYPOGRAPHY.size['2xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     lineHeight: 32,
   },
@@ -618,6 +620,7 @@ const styles = StyleSheet.create({
   mealTypeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: '#FFFFFF',
   },
   sourceBadge: {
@@ -631,6 +634,7 @@ const styles = StyleSheet.create({
   sourceText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#FFFFFF',
   },
   sourceIndicator: {
@@ -680,6 +684,7 @@ const styles = StyleSheet.create({
   calorieValue: {
     fontSize: 36,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   calorieLabel: {
@@ -714,6 +719,7 @@ const styles = StyleSheet.create({
   quickMacroValue: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
 
@@ -727,6 +733,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[4],
   },
@@ -761,6 +768,7 @@ const styles = StyleSheet.create({
   macroCardValue: {
     fontSize: TYPOGRAPHY.size.xl,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   macroCardPercent: {
@@ -797,6 +805,7 @@ const styles = StyleSheet.create({
   microLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
     marginBottom: 2,
   },
@@ -823,6 +832,7 @@ const styles = StyleSheet.create({
   microPercent: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     width: 36,
     textAlign: 'right',
   },
@@ -849,6 +859,7 @@ const styles = StyleSheet.create({
   microValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
 
@@ -868,6 +879,7 @@ const styles = StyleSheet.create({
   ingredientName: {
     fontSize: TYPOGRAPHY.size.base,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     flex: 1,
   },
@@ -875,6 +887,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   ingredientMacros: {
     flexDirection: 'row',
@@ -921,16 +934,19 @@ const styles = StyleSheet.create({
   scoreValue: {
     fontSize: 22,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   scoreCardTitle: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
     marginBottom: SPACING[1],
   },
   scoreCardLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   gradeCircle: {
     width: 64,
@@ -943,6 +959,7 @@ const styles = StyleSheet.create({
   gradeValue: {
     fontSize: 28,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   caloriesCircle: {
     width: 64,
@@ -956,6 +973,7 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 18,
     fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#F59E0B',
   },
   macroGrid: {
@@ -978,5 +996,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

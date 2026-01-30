@@ -1,5 +1,6 @@
 import { foodLogTable, waterLogTable, moodLogTable } from "../db/schema.js";
 import errors from "../utils/errorResponse.js";
+import { clearPatternCache } from "../services/patternMiningService.js";
 
 export async function logMeal(req, res) {
   try {
@@ -64,6 +65,9 @@ export async function logMeal(req, res) {
       return errors.database(res, "insert meal log");
     }
 
+    // Clear pattern cache for this user (new data invalidates cached patterns)
+    clearPatternCache(userId);
+
     res.status(201).json(result[0]);
   } catch (err) {
     console.error("[LoggingController] Error logging meal:", err);
@@ -92,6 +96,9 @@ export async function logWater(req, res) {
     if (!result || result.length === 0) {
       return errors.database(res, "insert water log");
     }
+
+    // Clear pattern cache for this user (new data invalidates cached patterns)
+    clearPatternCache(userId);
 
     res.status(201).json(result[0]);
   } catch (err) {
@@ -122,6 +129,9 @@ export async function logMood(req, res) {
     if (!result || result.length === 0) {
       return errors.database(res, "insert mood log");
     }
+
+    // Clear pattern cache for this user (new data invalidates cached patterns)
+    clearPatternCache(userId);
 
     res.status(201).json(result[0]);
   } catch (err) {

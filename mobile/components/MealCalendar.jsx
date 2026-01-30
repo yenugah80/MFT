@@ -163,11 +163,11 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: 10,
     color: TEXT.tertiary,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   todayText: {
     color: BRAND.primary,
-    fontWeight: 'bold',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   heatBox: {
     width: 32,
@@ -182,6 +182,7 @@ const styles = StyleSheet.create({
   },
   dayNumber: {
     fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   legend: {
@@ -205,6 +206,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
 });

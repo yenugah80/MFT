@@ -16,7 +16,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import CircularProgress from './CircularProgress';
-import { TEXT, BRAND, SURFACES, SEMANTIC } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Confidence Badge
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   },
   badgeTextSmall: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   badgeLarge: {
     flexDirection: 'row',
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   badgeTextLarge: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 
   // Meter Styles
@@ -272,12 +272,12 @@ const styles = StyleSheet.create({
   },
   meterLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   meterValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   progressBarContainer: {
@@ -301,11 +301,11 @@ const styles = StyleSheet.create({
   marker: {
     fontSize: 10,
     color: TEXT.tertiary,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   markerActive: {
     color: TEXT.primary,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   explanationContainer: {
     flexDirection: 'row',
@@ -318,6 +318,7 @@ const styles = StyleSheet.create({
   explanationText: {
     flex: 1,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 16,
   },
@@ -328,12 +329,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   circleValue: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   circleLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
 
@@ -361,11 +362,12 @@ const styles = StyleSheet.create({
   },
   learningTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   learningSubtitle: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginTop: 2,
   },
@@ -381,11 +383,12 @@ const styles = StyleSheet.create({
   },
   learningStatValue: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   learningStatLabel: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 4,
   },
@@ -404,7 +407,7 @@ const styles = StyleSheet.create({
   nextMilestoneText: {
     flex: 1,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.accent,
   },
   learningTip: {
@@ -418,6 +421,7 @@ const styles = StyleSheet.create({
   learningTipText: {
     flex: 1,
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: '#92400E',
     lineHeight: 16,
   },

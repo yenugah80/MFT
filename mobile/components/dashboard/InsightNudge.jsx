@@ -198,6 +198,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   actionButton: {
     paddingHorizontal: SPACING[2],
@@ -206,6 +207,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   dismissButton: {
     padding: SPACING[1],

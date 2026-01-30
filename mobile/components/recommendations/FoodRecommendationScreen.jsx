@@ -350,10 +350,12 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -373,6 +375,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.title1,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
@@ -380,6 +383,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: TYPOGRAPHY.size.subhead,
     color: COLORS.text.secondary,
+    fontFamily: TYPOGRAPHY.family.medium,
     fontWeight: TYPOGRAPHY.weight.medium,
   },
   card: {
@@ -405,6 +409,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.lg,
@@ -442,6 +447,7 @@ const styles = StyleSheet.create({
   },
   foodName: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },
@@ -460,6 +466,7 @@ const styles = StyleSheet.create({
   },
   nutriBadgeText: {
     fontSize: TYPOGRAPHY.size.footnote,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
   },
@@ -481,6 +488,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.nutrition.primary,
   },
@@ -500,6 +508,7 @@ const styles = StyleSheet.create({
   },
   macroName: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },
@@ -540,6 +549,7 @@ const styles = StyleSheet.create({
   },
   predictionLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.inverse,
   },
@@ -558,6 +568,7 @@ const styles = StyleSheet.create({
   },
   predictionBefore: {
     fontSize: TYPOGRAPHY.size.title2,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.inverse,
     opacity: 0.7,
@@ -568,6 +579,7 @@ const styles = StyleSheet.create({
   },
   predictionAfter: {
     fontSize: TYPOGRAPHY.size.title2,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
   },
@@ -592,6 +604,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextPrimary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
   },
@@ -602,6 +615,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextSecondary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },

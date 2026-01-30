@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SHADOWS, RADIUS, SPACING, SURFACES } from '../../constants/premiumTheme';
+import { TEXT, SHADOWS, RADIUS, SPACING, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { getCuisineColor } from '../../utils/cuisineDiversity';
 
 export default function CuisineDiversityCard({ diversity = {} }) {
@@ -160,20 +160,21 @@ const styles = StyleSheet.create({
     gap: SPACING[2]
   },
   emoji: {
-    fontSize: 24
+    fontSize: 24,
+    fontFamily: TYPOGRAPHY.family.regular,
   },
   headerText: {
     flex: 1
   },
   title: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     letterSpacing: -0.3
   },
   subtitle: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginTop: SPACING[1]
   },
@@ -192,12 +193,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#F97316'
   },
   statLabel: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     marginTop: SPACING[1]
   },
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
   },
   breakdownTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2]
   },
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
   },
   cuisineName: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[1]
   },
@@ -242,12 +243,12 @@ const styles = StyleSheet.create({
   },
   cuisinePercentage: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary
   },
   cuisineCount: {
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary
   },
   emptyState: {
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
     textAlign: 'center'
   },
@@ -273,7 +274,7 @@ const styles = StyleSheet.create({
   },
   insightText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     color: '#F59E0B',
     flex: 1
   }

@@ -359,6 +359,7 @@ const styles = StyleSheet.create({
   impactLabel: {
     ...TYPOGRAPHY.h4,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   crashBadge: {
     paddingHorizontal: SPACING.xs,
@@ -369,6 +370,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   headerRight: {
     padding: SPACING.xs,
@@ -473,6 +475,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: TEXT.primary,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   timelineChange: {
     flexDirection: 'row',
@@ -484,6 +487,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     fontSize: 10,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Insights

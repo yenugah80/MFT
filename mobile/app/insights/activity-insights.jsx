@@ -584,6 +584,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   errorContainer: {
@@ -595,6 +596,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: TYPOGRAPHY.size.lg,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     textAlign: 'center',
   },
@@ -606,7 +608,7 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: '#fff',
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   errorHeader: {
     flexDirection: 'row',
@@ -617,11 +619,12 @@ const styles = StyleSheet.create({
   },
   errorHeaderTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   errorSubtext: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     textAlign: 'center',
     marginTop: -SPACING[2],
@@ -649,11 +652,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   headerSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   headerRight: {},
@@ -665,7 +669,7 @@ const styles = StyleSheet.create({
   },
   contextText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: BRAND.primary,
     textTransform: 'capitalize',
   },
@@ -677,12 +681,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[2],
   },
   sectionSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     marginBottom: SPACING[4],
   },
@@ -708,11 +713,11 @@ const styles = StyleSheet.create({
   },
   gaugeScore: {
     fontSize: 42,
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   gaugeLabel: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginTop: -4,
   },
@@ -737,12 +742,13 @@ const styles = StyleSheet.create({
   },
   factorName: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     textTransform: 'capitalize',
   },
   factorDetail: {
     fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   factorValue: {
@@ -752,7 +758,7 @@ const styles = StyleSheet.create({
   },
   factorValueText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   // Strain Card
@@ -781,13 +787,13 @@ const styles = StyleSheet.create({
   },
   strainTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   strainZone: {
     fontSize: TYPOGRAPHY.size.sm,
     color: BRAND.primary,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   strainNumbers: {
     marginBottom: SPACING[4],
@@ -800,10 +806,12 @@ const styles = StyleSheet.create({
   },
   strainMin: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   strainMax: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
   strainTargetCircle: {
@@ -817,7 +825,7 @@ const styles = StyleSheet.create({
   },
   strainTargetValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   strainBar: {
@@ -843,6 +851,7 @@ const styles = StyleSheet.create({
   },
   strainRecommendation: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 20,
   },
@@ -874,7 +883,7 @@ const styles = StyleSheet.create({
   },
   primaryBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
   recommendationHeader: {
@@ -895,7 +904,7 @@ const styles = StyleSheet.create({
   },
   recommendationName: {
     fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 4,
   },
@@ -911,6 +920,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   intensityBadge: {
@@ -920,7 +930,7 @@ const styles = StyleSheet.create({
   },
   intensityText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'capitalize',
   },
   scoreCircle: {
@@ -933,7 +943,7 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
 
@@ -949,7 +959,7 @@ const styles = StyleSheet.create({
   },
   reasonsTitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     marginBottom: SPACING[2],
   },
@@ -970,6 +980,7 @@ const styles = StyleSheet.create({
   reasonText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.primary,
     lineHeight: 20,
   },
@@ -984,15 +995,16 @@ const styles = StyleSheet.create({
   },
   timingText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
   },
   timingHighlight: {
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   timingNow: {
     color: SEMANTIC.success.base,
-    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   startButton: {
     borderRadius: RADIUS.lg,
@@ -1007,7 +1019,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#fff',
   },
 
@@ -1035,12 +1047,13 @@ const styles = StyleSheet.create({
   },
   insightTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 4,
   },
   insightMessage: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 20,
   },
@@ -1054,7 +1067,7 @@ const styles = StyleSheet.create({
   },
   statsTitle: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[4],
     textAlign: 'center',
@@ -1068,11 +1081,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: TYPOGRAPHY.size['2xl'],
-    fontWeight: '800',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: BRAND.primary,
   },
   statLabel: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
     marginTop: 4,
   },

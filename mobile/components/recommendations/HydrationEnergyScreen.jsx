@@ -406,10 +406,12 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.brand.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -428,11 +430,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.title1,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.lg,
@@ -445,6 +449,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
     marginBottom: SPACING.lg,
@@ -467,6 +472,7 @@ const styles = StyleSheet.create({
   },
   discoveryTitle: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
     marginBottom: SPACING.md,
@@ -486,6 +492,7 @@ const styles = StyleSheet.create({
   discoveryLabel: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.text.inverse,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   discoveryValue: {
@@ -510,11 +517,13 @@ const styles = StyleSheet.create({
   },
   scheduleTimeText: {
     fontSize: TYPOGRAPHY.size.title3,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.hydration.primary,
   },
   scheduleCritical: {
     fontSize: TYPOGRAPHY.size.caption,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.semantic.danger,
     marginTop: SPACING.xs,
@@ -530,6 +539,7 @@ const styles = StyleSheet.create({
   },
   scheduleVolume: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.hydration.primary,
   },
@@ -539,6 +549,7 @@ const styles = StyleSheet.create({
   },
   scheduleBenefit: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.xs,
@@ -556,6 +567,7 @@ const styles = StyleSheet.create({
   },
   scheduleSummaryText: {
     fontSize: TYPOGRAPHY.size.headline,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.primary,
   },
@@ -569,6 +581,7 @@ const styles = StyleSheet.create({
   },
   patternLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
@@ -582,6 +595,7 @@ const styles = StyleSheet.create({
   },
   patternValue: {
     fontSize: TYPOGRAPHY.size.title2,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.hydration.primary,
   },
@@ -603,6 +617,7 @@ const styles = StyleSheet.create({
   },
   patternDifferenceLabel: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
     marginBottom: SPACING.md,
@@ -613,6 +628,7 @@ const styles = StyleSheet.create({
   patternDifferenceValue: {
     fontSize: TYPOGRAPHY.size.body,
     color: COLORS.semantic.success,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
   },
   patternConfidence: {
@@ -638,6 +654,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextPrimary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.bold,
     fontWeight: TYPOGRAPHY.weight.bold,
     color: COLORS.text.inverse,
   },
@@ -648,6 +665,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonTextSecondary: {
     fontSize: TYPOGRAPHY.size.body,
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: COLORS.text.primary,
   },

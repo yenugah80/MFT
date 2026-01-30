@@ -8,6 +8,7 @@ import { generateMoodInsights, generateBasicMoodInsights, analyzeMoodMealCorrela
 import { getMoodIntelligence } from "../services/moodRecommendationEngine.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
+import { clearPatternCache } from "../services/patternMiningService.js";
 
 const router = express.Router();
 
@@ -160,6 +161,9 @@ router.post("/log", async (req, res) => {
       analyzeMoodMealCorrelation(userId, entry).catch(err => {
         console.error("[MoodLog] Correlation analysis failed:", err);
       });
+
+      // Clear pattern cache for this user (new data invalidates cached patterns)
+      clearPatternCache(userId);
     }
 
     // For API response, enrich with meal details

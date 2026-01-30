@@ -360,6 +360,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   feedbackRow: {
     flexDirection: 'row',
@@ -370,6 +371,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
   buttonGroup: {
     flexDirection: 'row',
@@ -392,6 +394,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   dismissToggle: {
     marginLeft: SPACING[2],
@@ -430,6 +433,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   // Compact styles
@@ -460,5 +464,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: SEMANTIC.success.base,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 });

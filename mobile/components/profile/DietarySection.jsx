@@ -401,6 +401,7 @@ const styles = StyleSheet.create({
   subsectionTitle: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
     flex: 1,
   },
@@ -413,6 +414,7 @@ const styles = StyleSheet.create({
   dangerBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.danger.dark,
   },
   chipRow: {
@@ -444,6 +446,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
   chipTextSelected: {
@@ -471,6 +474,7 @@ const styles = StyleSheet.create({
   allergyText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.danger.dark,
   },
   dislikePill: {
@@ -487,6 +491,7 @@ const styles = StyleSheet.create({
   dislikeText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.secondary,
   },
   emptyText: {

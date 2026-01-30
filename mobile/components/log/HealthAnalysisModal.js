@@ -1,13 +1,7 @@
 import React from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, ScrollView, Platform, Share } from 'react-native';
+import { View, Text, Modal, StyleSheet, TouchableOpacity, ScrollView, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SURFACES, TEXT, BRAND, SEMANTIC_ACTIONS, SPACING, TYPOGRAPHY, NUTRISCORE, SEMANTIC } from '../../constants/premiumTheme';
-
-const fonts = {
-  display: Platform.select({ ios: 'HelveticaNeue-Bold', android: 'Roboto-Bold', default: 'System' }),
-  strong: Platform.select({ ios: 'HelveticaNeue-Medium', android: 'Roboto-Medium', default: 'System' }),
-  regular: Platform.select({ ios: 'Helvetica Neue', android: 'Roboto', default: 'System' }),
-};
+import { SURFACES, TEXT, SEMANTIC_ACTIONS, TYPOGRAPHY, NUTRISCORE } from '../../constants/premiumTheme';
 
 export const HealthAnalysisModal = ({ visible, onClose, data }) => {
   if (!data) return null;
@@ -181,10 +175,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.xl,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
-    fontFamily: fonts.display,
   },
   headerActions: {
     flexDirection: 'row',
@@ -197,12 +190,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   foodName: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: 24,
     textAlign: 'center',
-    fontFamily: fonts.display,
   },
   scoresRow: {
     flexDirection: 'row',
@@ -214,10 +206,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   scoreLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
-    fontFamily: fonts.strong,
   },
   scoreCircle: {
     width: 80,
@@ -228,9 +219,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scoreValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    fontFamily: fonts.display,
+    fontSize: TYPOGRAPHY.size['3xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   nutriBadge: {
     width: 80,
@@ -240,10 +230,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nutriValue: {
-    fontSize: 40,
-    fontWeight: '800',
+    fontSize: TYPOGRAPHY.size['5xl'],
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,
-    fontFamily: fonts.display,
   },
   section: {
     backgroundColor: SURFACES.card.background,
@@ -258,25 +247,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
-    fontFamily: fonts.strong,
   },
   sectionText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
-    fontFamily: fonts.regular,
   },
   highlight: {
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: SEMANTIC_ACTIONS.primary,
   },
   analysisText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
     lineHeight: 24,
-    fontFamily: fonts.regular,
   },
   chartContainer: {
     marginTop: 8,
@@ -307,8 +295,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   legendText: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.tertiary,
-    fontFamily: fonts.strong,
   },
 });

@@ -45,7 +45,7 @@ import {
   ONBOARDING_COPY,
   A11Y_LABELS,
 } from '../../constants/onboardingConfig';
-import { TEXT, SEMANTIC, SHADOWS, RADIUS, SPACING } from '../../constants/premiumTheme';
+import { TEXT, SEMANTIC, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * Utility Functions - Data Normalization
@@ -652,11 +652,13 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     textAlign: 'center',
   },
 
   tabLabelActive: {
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   tabLabelInactive: {
@@ -666,6 +668,7 @@ const styles = StyleSheet.create({
   tabSubtitle: {
     fontSize: 10,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     textAlign: 'center',
     color: TEXT.primary,
     opacity: 0.7,
@@ -692,6 +695,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: 'white',
   },
 
@@ -721,11 +725,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   sectionDescription: {
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     marginTop: SPACING[1],
   },
 
@@ -753,6 +759,7 @@ const styles = StyleSheet.create({
   suggestionsTitle: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 
   suggestionsDesc: {
@@ -778,6 +785,7 @@ const styles = StyleSheet.create({
   suggestionChipText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
     textTransform: 'capitalize',
   },
 
@@ -798,6 +806,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     lineHeight: 16,
   },
 
@@ -814,6 +823,7 @@ const styles = StyleSheet.create({
   strengthTitle: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     marginBottom: SPACING[1],
   },
 
@@ -831,6 +841,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
     fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
     marginVertical: SPACING[3],
   },
 
@@ -871,6 +882,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: '#374151',
   },
 
@@ -887,6 +899,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: 'white',
   },
 });

@@ -68,7 +68,11 @@ function generateItemId(name, normalizedQuery, index) {
 
 router.post('/process', requireAuth, async (req, res) => {
   try {
-    const { text, isPartial, mealType } = req.body;
+    const { text, isPartial, mealType, language } = req.body;
+
+    // Validate language parameter (defaults to English)
+    const VALID_LANGUAGES = new Set(['en', 'hi', 'te', 'ta', 'es', 'zh', 'fr', 'kn', 'mr', 'de']);
+    const validLanguage = VALID_LANGUAGES.has(language) ? language : 'en';
 
     if (!text) {
       return res.status(400).json({ error: "No text provided" });
@@ -125,7 +129,7 @@ router.post('/process', requireAuth, async (req, res) => {
           }];
         } else {
           // 2. If not in DB, call OpenAI
-          const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+          const aiResults = await openaiClient.estimateNutritionForText(text, { mealType, language: validLanguage });
           console.log(`[VoiceLog] OpenAI raw result:`, JSON.stringify(aiResults?.slice?.(0, 2), null, 2));
           if (aiResults.length > 0) {
             detectedIngredients = aiResults;
@@ -178,7 +182,7 @@ router.post('/process', requireAuth, async (req, res) => {
       } catch (dbError) {
         console.error("[VoiceLog] DB lookup failed, calling OpenAI directly:", dbError.message);
         // Fallback to OpenAI if DB fails
-        const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+        const aiResults = await openaiClient.estimateNutritionForText(text, { mealType, language: validLanguage });
         if (aiResults.length > 0) {
           detectedIngredients = aiResults;
         }
@@ -204,7 +208,25 @@ router.post('/process', requireAuth, async (req, res) => {
     res.json({ success: true, data: unifiedResponse });
   } catch (error) {
     console.error("Voice processing error:", error);
-    res.status(500).json({ error: "Internal server error" });
+
+    // Differentiate error types for better client handling
+    if (error.name === 'ValidationError' || error.message?.includes('validation')) {
+      return res.status(400).json({ error: "Invalid input data", code: 'VALIDATION_ERROR' });
+    }
+
+    if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+      return res.status(503).json({ error: "AI service temporarily unavailable", code: 'AI_SERVICE_UNAVAILABLE' });
+    }
+
+    if (error.response?.status === 429 || error.message?.includes('rate limit')) {
+      return res.status(429).json({ error: "Too many requests. Please wait a moment.", code: 'RATE_LIMITED' });
+    }
+
+    if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT') {
+      return res.status(504).json({ error: "Request timed out. Please try again.", code: 'TIMEOUT' });
+    }
+
+    res.status(500).json({ error: "Failed to process voice input", code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -219,17 +241,25 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
     const rawMealType = req.body.mealType || 'general';
     const mealType = VALID_MEAL_TYPES.has(rawMealType) ? rawMealType : 'general';
 
+    // VALIDATION: Whitelist supported languages for transcription
+    const VALID_LANGUAGES = new Set(['en', 'hi', 'te', 'ta', 'es', 'zh', 'fr', 'kn', 'mr', 'de']);
+    const rawLanguage = req.body.language || 'en';
+    const language = VALID_LANGUAGES.has(rawLanguage) ? rawLanguage : 'en';
+
     if (!req.file) {
       return res.status(400).json({ error: "No audio file provided. Ensure field name is 'audio'." });
     }
 
     // 1. Transcribe Audio (OpenAI Whisper)
     // Pass original filename/mimetype to help Whisper decode correctly (The 1% fix for format compatibility)
+    // Pass language for multi-language transcription support
     const transcription = await openaiClient.transcribeAudio(req.file.buffer, {
       filename: req.file.originalname,
-      mimeType: req.file.mimetype
+      mimeType: req.file.mimetype,
+      language,
     });
     const text = transcription.text;
+    console.log(`[VoiceLog] Transcribed audio (lang: ${language}): "${text}"`);
 
     if (!text) {
       return res.json({ success: true, data: [], text: "" });
@@ -266,7 +296,7 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
           }];
         } else {
           // CALL AI
-          const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+          const aiResults = await openaiClient.estimateNutritionForText(text, { mealType, language });
           if (aiResults.length > 0) {
             detectedIngredients = aiResults;
 
@@ -309,7 +339,7 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
       } catch (dbError) {
         console.error("[VoiceLog] DB lookup failed:", dbError.message);
         // Fallback to OpenAI if DB fails
-        const aiResults = await openaiClient.estimateNutritionForText(text, { mealType });
+        const aiResults = await openaiClient.estimateNutritionForText(text, { mealType, language });
         if (aiResults.length > 0) {
           detectedIngredients = aiResults;
         }
@@ -335,7 +365,29 @@ router.post('/transcribe', requireAuth, uploadMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error("[VoiceLog] Transcription error:", error);
-    res.status(500).json({ error: "Unable to process voice log. Please try again." });
+
+    // Differentiate error types for better client handling
+    if (error.name === 'ValidationError' || error.message?.includes('validation')) {
+      return res.status(400).json({ error: "Invalid audio data", code: 'VALIDATION_ERROR' });
+    }
+
+    if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+      return res.status(503).json({ error: "Transcription service temporarily unavailable", code: 'TRANSCRIPTION_SERVICE_UNAVAILABLE' });
+    }
+
+    if (error.response?.status === 429 || error.message?.includes('rate limit')) {
+      return res.status(429).json({ error: "Too many requests. Please wait a moment.", code: 'RATE_LIMITED' });
+    }
+
+    if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT') {
+      return res.status(504).json({ error: "Transcription timed out. Please try again.", code: 'TIMEOUT' });
+    }
+
+    if (error.message?.includes('audio') || error.message?.includes('format')) {
+      return res.status(422).json({ error: "Audio format not supported. Please try a different recording.", code: 'UNSUPPORTED_FORMAT' });
+    }
+
+    res.status(500).json({ error: "Unable to process voice log. Please try again.", code: 'INTERNAL_ERROR' });
   }
 });
 
