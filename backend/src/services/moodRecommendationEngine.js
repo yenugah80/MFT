@@ -653,6 +653,9 @@ function getTimeBasedRecommendations(timeWindow, profile) {
 function getMoodPatternRecommendations(patterns) {
   const recs = [];
 
+  // PRODUCTION FIX: Handle null/undefined patterns
+  if (!patterns) return recs;
+
   if (patterns.recentTrend === 'declining') {
     recs.push({
       type: RECOMMENDATION_TYPES.MINDFULNESS,

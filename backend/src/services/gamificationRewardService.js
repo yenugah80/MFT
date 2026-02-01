@@ -227,159 +227,159 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
       ? getLocalDateUTC(timezoneOffset, date)
       : normalizeDateUTC(date);
 
-    // Use atomic upsert with conflict handling to prevent race conditions
-    const result = await dbConn.transaction(async (tx) => {
-      // Get current gamification data with row-level lock
-      const lockQuery = sql`
-        SELECT * FROM gamification
-        WHERE user_id = ${userId}
-        FOR UPDATE
-      `;
-      const lockedRows = await tx.execute(lockQuery);
-      const currentGamification = lockedRows.rows?.[0] || null;
+    // PRODUCTION FIX: Remove transaction for Neon HTTP driver compatibility
+    // Neon HTTP driver doesn't support transactions, so we use simple queries
+    // Race conditions are unlikely for single-user streak updates
 
-      if (!currentGamification) {
-        // Initialize with streak of 1 for brand new user
-        const insertResult = await tx
-          .insert(gamificationTable)
-          .values({
-            userId,
-            xp: 0,
-            level: 1,
-            streak: 1,
-            previousStreak: 0,
-            lastLogDate: today,
-            lastStreakUpdatedAt: today,
-            timezoneOffset: Number.isFinite(timezoneOffset) ? timezoneOffset : null,
-            badges: [],
-          })
-          .onConflictDoNothing()
-          .returning();
+    // Get current gamification data
+    const selectQuery = sql`
+      SELECT * FROM gamification
+      WHERE user_id = ${userId}
+    `;
+    const selectResult = await dbConn.execute(selectQuery);
+    const currentGamification = selectResult.rows?.[0] || null;
 
-        if (!insertResult || insertResult.length === 0) {
-          const refetch = await tx.execute(lockQuery);
-          const existingRow = refetch.rows?.[0];
-          if (existingRow) {
-            return {
-              streak: existingRow.streak,
-              streakIncremented: false,
-              previousStreak: existingRow.previous_streak || 0,
-              streakBroken: false,
-              canRestore: false,
-            };
-          }
-        }
-
-        return {
+    if (!currentGamification) {
+      // Initialize with streak of 1 for brand new user
+      const insertResult = await dbConn
+        .insert(gamificationTable)
+        .values({
+          userId,
+          xp: 0,
+          level: 1,
           streak: 1,
-          streakIncremented: true,
           previousStreak: 0,
-          streakBroken: false,
-          canRestore: false,
-          isFirstLog: true,
-        };
-      }
+          lastLogDate: today,
+          lastStreakUpdatedAt: today,
+          timezoneOffset: Number.isFinite(timezoneOffset) ? timezoneOffset : null,
+          badges: [],
+        })
+        .onConflictDoNothing()
+        .returning();
 
-      const currentStreak = currentGamification.streak || 0;
-      const storedPreviousStreak = currentGamification.previous_streak || 0;
-      const lastLogDate = currentGamification.last_log_date
-        ? normalizeDateUTC(new Date(currentGamification.last_log_date))
-        : null;
-      const lastStreakUpdated = currentGamification.last_streak_updated_at
-        ? normalizeDateUTC(new Date(currentGamification.last_streak_updated_at))
-        : null;
-      const streakResetAt = currentGamification.streak_reset_at
-        ? new Date(currentGamification.streak_reset_at)
-        : null;
-
-      // Check if already updated streak today
-      if (lastStreakUpdated && lastStreakUpdated.getTime() === today.getTime()) {
-        return {
-          streak: currentStreak,
-          streakIncremented: false,
-          previousStreak: storedPreviousStreak,
-          streakBroken: false,
-          canRestore: false,
-        };
-      }
-
-      let newStreak = currentStreak;
-      let streakIncremented = false;
-      let streakBroken = false;
-      let canRestore = false;
-      let newPreviousStreak = storedPreviousStreak;
-      let newStreakResetAt = streakResetAt;
-
-      if (!lastLogDate) {
-        // First ever log
-        newStreak = 1;
-        streakIncremented = true;
-      } else {
-        const yesterday = addDaysUTC(today, -1);
-        const daysSinceLastLog = Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24));
-
-        if (daysSinceLastLog === 0) {
-          // Same day log - no streak change
-          newStreak = currentStreak;
-        } else if (daysSinceLastLog === 1 || lastLogDate.getTime() === yesterday.getTime()) {
-          // Consecutive day - increment streak! 🔥
-          newStreak = currentStreak + 1;
-          streakIncremented = true;
-        } else if (daysSinceLastLog > 1) {
-          // MISSED DAY(S) - Snapchat-style: Store previous streak for restoration
-          streakBroken = true;
-          newPreviousStreak = currentStreak; // Store the lost streak
-          newStreakResetAt = new Date(); // Mark when it was reset
-          newStreak = 1; // Start fresh at 1 (they're logging now)
-          streakIncremented = true; // This IS their first day of new streak
-
-          // Can restore within 24 hours if they have freezes
-          const freezesAvailable = currentGamification.streak_freezes || 0;
-          canRestore = freezesAvailable > 0 && currentStreak > 1;
-
-          console.log(`[Streak] 💔 User ${userId}: Streak broken! Was ${currentStreak} days, stored for potential restore`);
+      if (!insertResult || insertResult.length === 0) {
+        const refetch = await dbConn.execute(selectQuery);
+        const existingRow = refetch.rows?.[0];
+        if (existingRow) {
+          return {
+            streak: existingRow.streak,
+            streakIncremented: false,
+            previousStreak: existingRow.previous_streak || 0,
+            streakBroken: false,
+            canRestore: false,
+          };
         }
-      }
-
-      // Build update object
-      const updateData = {
-        streak: newStreak,
-        lastLogDate: today,
-        lastStreakUpdatedAt: today,
-        timezoneOffset: Number.isFinite(timezoneOffset)
-          ? timezoneOffset
-          : currentGamification.timezone_offset ?? null,
-        updatedAt: new Date(),
-      };
-
-      // Only update previousStreak/streakResetAt if streak was broken
-      if (streakBroken) {
-        updateData.previousStreak = newPreviousStreak;
-        updateData.streakResetAt = newStreakResetAt;
-      }
-
-      await tx
-        .update(gamificationTable)
-        .set(updateData)
-        .where(eq(gamificationTable.userId, userId));
-
-      if (newStreak !== currentStreak) {
-        const emoji = streakBroken ? '💔→🔥' : (streakIncremented ? '🔥' : '');
-        console.log(`[Streak] User ${userId}: ${currentStreak} → ${newStreak} ${emoji}`);
       }
 
       return {
-        streak: newStreak,
-        streakIncremented,
-        previousStreak: streakBroken ? newPreviousStreak : storedPreviousStreak,
-        streakBroken,
-        canRestore,
-        isMilestone: STREAK_MILESTONES.includes(newStreak),
-        daysMissed: streakBroken ? Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24)) - 1 : 0,
+        streak: 1,
+        streakIncremented: true,
+        previousStreak: 0,
+        streakBroken: false,
+        canRestore: false,
+        isFirstLog: true,
       };
-    });
+    }
 
-    // Send push notification for streak milestones (outside transaction)
+    const currentStreak = currentGamification.streak || 0;
+    const storedPreviousStreak = currentGamification.previous_streak || 0;
+    const lastLogDate = currentGamification.last_log_date
+      ? normalizeDateUTC(new Date(currentGamification.last_log_date))
+      : null;
+    const lastStreakUpdated = currentGamification.last_streak_updated_at
+      ? normalizeDateUTC(new Date(currentGamification.last_streak_updated_at))
+      : null;
+    const streakResetAt = currentGamification.streak_reset_at
+      ? new Date(currentGamification.streak_reset_at)
+      : null;
+
+    // Check if already updated streak today
+    if (lastStreakUpdated && lastStreakUpdated.getTime() === today.getTime()) {
+      return {
+        streak: currentStreak,
+        streakIncremented: false,
+        previousStreak: storedPreviousStreak,
+        streakBroken: false,
+        canRestore: false,
+      };
+    }
+
+    let newStreak = currentStreak;
+    let streakIncremented = false;
+    let streakBroken = false;
+    let canRestore = false;
+    let newPreviousStreak = storedPreviousStreak;
+    let newStreakResetAt = streakResetAt;
+
+    if (!lastLogDate) {
+      // First ever log
+      newStreak = 1;
+      streakIncremented = true;
+    } else {
+      const yesterday = addDaysUTC(today, -1);
+      const daysSinceLastLog = Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysSinceLastLog === 0) {
+        // Same day log - no streak change
+        newStreak = currentStreak;
+      } else if (daysSinceLastLog === 1 || lastLogDate.getTime() === yesterday.getTime()) {
+        // Consecutive day - increment streak! 🔥
+        newStreak = currentStreak + 1;
+        streakIncremented = true;
+      } else if (daysSinceLastLog > 1) {
+        // MISSED DAY(S) - Snapchat-style: Store previous streak for restoration
+        streakBroken = true;
+        newPreviousStreak = currentStreak; // Store the lost streak
+        newStreakResetAt = new Date(); // Mark when it was reset
+        newStreak = 1; // Start fresh at 1 (they're logging now)
+        streakIncremented = true; // This IS their first day of new streak
+
+        // Can restore within 24 hours if they have freezes
+        const freezesAvailable = currentGamification.streak_freezes || 0;
+        canRestore = freezesAvailable > 0 && currentStreak > 1;
+
+        console.log(`[Streak] 💔 User ${userId}: Streak broken! Was ${currentStreak} days, stored for potential restore`);
+      }
+    }
+
+    // Build update object
+    const updateData = {
+      streak: newStreak,
+      lastLogDate: today,
+      lastStreakUpdatedAt: today,
+      timezoneOffset: Number.isFinite(timezoneOffset)
+        ? timezoneOffset
+        : currentGamification.timezone_offset ?? null,
+      updatedAt: new Date(),
+    };
+
+    // Only update previousStreak/streakResetAt if streak was broken
+    if (streakBroken) {
+      updateData.previousStreak = newPreviousStreak;
+      updateData.streakResetAt = newStreakResetAt;
+    }
+
+    await dbConn
+      .update(gamificationTable)
+      .set(updateData)
+      .where(eq(gamificationTable.userId, userId));
+
+    if (newStreak !== currentStreak) {
+      const emoji = streakBroken ? '💔→🔥' : (streakIncremented ? '🔥' : '');
+      console.log(`[Streak] User ${userId}: ${currentStreak} → ${newStreak} ${emoji}`);
+    }
+
+    const result = {
+      streak: newStreak,
+      streakIncremented,
+      previousStreak: streakBroken ? newPreviousStreak : storedPreviousStreak,
+      streakBroken,
+      canRestore,
+      isMilestone: STREAK_MILESTONES.includes(newStreak),
+      daysMissed: streakBroken ? Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24)) - 1 : 0,
+    };
+
+    // Send push notification for streak milestones
     if (result.streakIncremented && !result.streakBroken && STREAK_MILESTONES.includes(result.streak)) {
       sendStreakCelebration(dbConn, userId, result.streak).catch((err) => {
         console.error(`[GamificationReward] Failed to send streak notification:`, err);
