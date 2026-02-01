@@ -935,7 +935,7 @@ router.get("/dashboard", async (req, res) => {
       (async () => {
         try {
           return await db.execute(sql`
-            SELECT * FROM activity_logs
+            SELECT * FROM activity_log
             WHERE user_id = ${userId}
             AND logged_at >= ${todayStart}
             AND logged_at <= ${todayEnd}

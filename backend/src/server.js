@@ -130,6 +130,54 @@ export async function ensureAccountSettingsPushTokenColumns() {
   }
 }
 
+// Ensure gamification table has all required columns
+let gamificationColumnsEnsured = false;
+async function ensureGamificationColumns() {
+  if (gamificationColumnsEnsured) return;
+  try {
+    await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "streak_saved_by_freeze" BOOLEAN DEFAULT FALSE;`);
+    await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "previous_streak" INTEGER DEFAULT 0;`);
+    await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "streak_reset_at" TIMESTAMP;`);
+    gamificationColumnsEnsured = true;
+    console.log('✅ Gamification columns verified');
+  } catch (err) {
+    console.error('❌ Failed to ensure gamification columns:', err);
+  }
+}
+
+// Ensure activity_log table exists
+let activityLogTableEnsured = false;
+async function ensureActivityLogTable() {
+  if (activityLogTableEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "activity_log" (
+        "id" serial PRIMARY KEY,
+        "user_id" text NOT NULL,
+        "type" text NOT NULL DEFAULT 'general',
+        "duration_minutes" integer NOT NULL,
+        "intensity" text NOT NULL DEFAULT 'moderate',
+        "met_value" decimal(4,2),
+        "calories_burned" integer,
+        "heart_rate_avg" integer,
+        "distance_km" decimal(6,2),
+        "steps" integer,
+        "notes" text,
+        "client_event_id" text,
+        "day_key" text,
+        "timezone_offset" integer,
+        "logged_at" timestamp DEFAULT now(),
+        "created_at" timestamp DEFAULT now(),
+        "updated_at" timestamp DEFAULT now()
+      );
+    `);
+    activityLogTableEnsured = true;
+    console.log('✅ Activity log table verified');
+  } catch (err) {
+    console.error('❌ Failed to ensure activity_log table:', err);
+  }
+}
+
 // Ensure the recommendations_history table exists
 let recommendationsTableEnsured = false;
 export async function ensureRecommendationsHistoryTable() {
@@ -903,6 +951,8 @@ app.listen(PORT, "0.0.0.0", async () => {
     await ensureSleepStressTables();
     // Ensure account_settings has push token columns
     await ensureAccountSettingsPushTokenColumns();
+    await ensureGamificationColumns();
+    await ensureActivityLogTable();
     console.log('[Database] Schema initialization complete');
   } catch (err) {
     console.error('[Database] Initialization warning:', err.message);

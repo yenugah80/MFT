@@ -88,6 +88,15 @@ async function main() {
     await runMigration('0027_add_unique_constraints_user_tables.sql');
     await runMigration('0028_hydration_intelligence.sql');
     await runMigration('0029_add_gamification_timezone_offset.sql');
+    await runMigration('0030_add_fiber_sugar_sodium_to_food_log.sql');
+    await runMigration('0031_add_activity_log_table.sql');
+    await runMigration('0032_add_sleep_log_table.sql');
+    await runMigration('0033_add_stress_log_table.sql');
+    await runMigration('0034_prediction_learning_system.sql');
+    await runMigration('0035_insight_actions_table.sql');
+    await runMigration('0036_notification_delivery_tracking.sql');
+    await runMigration('0037_add_satisfaction_tracking.sql');
+    await runMigration('0038_add_streak_saved_by_freeze.sql');
     await runMigration('0039_add_push_token_columns.sql');
     console.log('\n All migrations completed successfully!');
     process.exit(0);
