@@ -310,9 +310,9 @@ async function fetchMoodLogs(userId, cutoffDate) {
       .from(moodLogTable)
       .where(and(
         eq(moodLogTable.userId, userId),
-        gte(moodLogTable.loggedAt, cutoffDate)
+        gte(moodLogTable.loggedDate, cutoffDate)
       ))
-      .orderBy(desc(moodLogTable.loggedAt));
+      .orderBy(desc(moodLogTable.loggedDate));
   } catch {
     return [];
   }
@@ -324,9 +324,9 @@ async function fetchWaterLogs(userId, cutoffDate) {
       .from(waterLogTable)
       .where(and(
         eq(waterLogTable.userId, userId),
-        gte(waterLogTable.loggedAt, cutoffDate)
+        gte(waterLogTable.loggedDate, cutoffDate)
       ))
-      .orderBy(desc(waterLogTable.loggedAt));
+      .orderBy(desc(waterLogTable.loggedDate));
   } catch {
     return [];
   }

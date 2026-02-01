@@ -154,10 +154,10 @@ async function buildMoodProfile(userId) {
         .where(
           and(
             eq(moodLogTable.userId, userId),
-            gte(moodLogTable.loggedAt, thirtyDaysAgo)
+            gte(moodLogTable.loggedDate, thirtyDaysAgo)
           )
         )
-        .orderBy(desc(moodLogTable.loggedAt));
+        .orderBy(desc(moodLogTable.loggedDate));
     } catch (e) {
       console.log('[MoodEngine] Mood data not available:', e.message);
     }

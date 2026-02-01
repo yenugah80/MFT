@@ -449,15 +449,15 @@ export async function encodeUserDay(userId, date, options = {}) {
       db.select().from(moodLogTable).where(
         and(
           eq(moodLogTable.userId, userId),
-          gte(moodLogTable.loggedAt, targetDate),
-          lte(moodLogTable.loggedAt, nextDate)
+          gte(moodLogTable.loggedDate, targetDate),
+          lte(moodLogTable.loggedDate, nextDate)
         )
       ),
       db.select().from(waterLogTable).where(
         and(
           eq(waterLogTable.userId, userId),
-          gte(waterLogTable.loggedAt, targetDate),
-          lte(waterLogTable.loggedAt, nextDate)
+          gte(waterLogTable.loggedDate, targetDate),
+          lte(waterLogTable.loggedDate, nextDate)
         )
       ),
       db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),

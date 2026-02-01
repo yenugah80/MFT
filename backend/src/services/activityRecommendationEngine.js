@@ -468,7 +468,7 @@ async function getCurrentHealthSignals(userId) {
       .select()
       .from(moodLogTable)
       .where(eq(moodLogTable.userId, userId))
-      .orderBy(desc(moodLogTable.loggedAt))
+      .orderBy(desc(moodLogTable.loggedDate))
       .limit(1);
     mood = moodResults[0] || null;
   } catch (e) {

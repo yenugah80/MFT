@@ -341,10 +341,10 @@ async function getRecentUserData(userId, days) {
       .where(
         and(
           eq(moodLogTable.userId, userId),
-          gte(moodLogTable.loggedAt, startDate)
+          gte(moodLogTable.loggedDate, startDate)
         )
       )
-      .orderBy(desc(moodLogTable.loggedAt));
+      .orderBy(desc(moodLogTable.loggedDate));
 
     // Group by date and calculate averages
     const byDate = {};
