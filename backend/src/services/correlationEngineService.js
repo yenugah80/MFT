@@ -1396,7 +1396,10 @@ function detectConsistentExerciseMoodStability(weekActivityLogs, weekMoodLogs) {
  * Pattern: Good morning hydration (6-11am) leads to better focus/energy (10am-4pm)
  */
 function detectMorningHydrationDaytimeFocus(morningWater, dayMoods, hydrationGoal, dayKey) {
-  if (!morningWater || morningWater.length === 0 || !dayMoods || dayMoods.length === 0) return null;
+  // PRODUCTION FIX: Handle case where morningWater is a number (daily total) instead of array
+  // This happens when dayGroups[date].water stores dailyWaterTotals instead of log array
+  if (!Array.isArray(morningWater)) return null;
+  if (morningWater.length === 0 || !dayMoods || dayMoods.length === 0) return null;
 
   // Calculate morning hydration (6-11am)
   const morningHydration = morningWater
@@ -1770,7 +1773,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
     (async () => {
       try {
         const result = await db.execute(sql`
-          SELECT * FROM activity_logs
+          SELECT * FROM activity_log
           WHERE user_id = ${userId}
             AND logged_at >= ${windowStart.toISOString()}
             AND logged_at <= ${now.toISOString()}
@@ -1779,7 +1782,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
         return result.rows || [];
       } catch (err) {
         // Table may not exist - return empty array
-        console.log('[Correlation Engine] activity_logs not available:', err.message);
+        console.log('[Correlation Engine] activity_log not available:', err.message);
         return [];
       }
     })(),
