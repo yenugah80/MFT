@@ -513,10 +513,11 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
   },
   greeting: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   date: {
     fontSize: TYPOGRAPHY.size.sm,

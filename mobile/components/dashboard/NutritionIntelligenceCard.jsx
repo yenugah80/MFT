@@ -374,9 +374,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
     marginBottom: SPACING.sm,
   },
   macroBar: {

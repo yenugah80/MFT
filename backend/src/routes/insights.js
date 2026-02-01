@@ -481,7 +481,22 @@ router.get('/patterns/personalized', async (req, res) => {
     });
   } catch (error) {
     console.error('[Insights] Personalized patterns error:', error);
-    errors.internal(res, 'Failed to compute personalized patterns');
+    // PRODUCTION FIX: Return graceful fallback instead of 500
+    res.json({
+      success: false,
+      hasEnoughData: false,
+      message: 'Personalized patterns temporarily unavailable. Keep logging to build your pattern history.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      patterns: [],
+      categories: {
+        mealTiming: [],
+        nextDayCarryover: [],
+        hydration: [],
+        activity: [],
+        general: [],
+      },
+      topInsight: null,
+    });
   }
 });
 

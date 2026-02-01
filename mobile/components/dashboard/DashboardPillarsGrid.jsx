@@ -81,9 +81,9 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
     letterSpacing: 0.2,
   },
   value: {

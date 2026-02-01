@@ -221,8 +221,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: TYPOGRAPHY.size.headline,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.family.bold,
     color: PREMIUM_COLORS.text.primary,
     marginBottom: SPACING[1],
   },

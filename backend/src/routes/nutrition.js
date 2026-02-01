@@ -1179,8 +1179,21 @@ router.get("/dashboard", async (req, res) => {
       canRestoreStreak = hoursSinceReset <= 24;
     }
 
+    // PRODUCTION FIX: Use calculated currentStreak as source of truth
+    // This ensures streak reflects actual logged activity, not stale DB value
+    // Sync DB in background if they differ (don't block response)
+    if (currentStreak !== storedStreak && gamificationRow?.id) {
+      // Async update - don't await to keep response fast
+      db.update(gamificationTable)
+        .set({ streak: currentStreak })
+        .where(eq(gamificationTable.userId, userId))
+        .then(() => console.log(`[Dashboard] Synced streak: ${storedStreak} → ${currentStreak}`))
+        .catch(err => console.error('[Dashboard] Failed to sync streak:', err));
+    }
+
     const gamificationWithLevel = {
       ...gamificationRow,
+      streak: currentStreak,            // CRITICAL: Use calculated streak, not stale DB value
       level: levelInfo.level,           // Override DB level with calculated level
       nextLevelXp: levelInfo.nextLevelXp,
       currentLevelXp: levelInfo.currentLevelXP,

@@ -102,7 +102,21 @@ router.get('/mood-insights', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('[API] Error in GET /decision-brain/mood-insights:', error);
-    errors.internal(res, 'Failed to generate mood insights');
+    // PRODUCTION FIX: Return graceful fallback instead of 500
+    // This prevents frontend crashes when backend services are temporarily unavailable
+    res.json({
+      success: false,
+      hasEnoughData: false,
+      message: 'Mood insights temporarily unavailable',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      stats: { avgMood: 0, avgEnergy: 0, moodVariance: 0, isConsistent: false, trend: 'stable' },
+      trendData: [],
+      patterns: [],
+      correlations: [],
+      recommendations: [],
+      todaysMoods: [],
+      profile: null,
+    });
   }
 });
 
