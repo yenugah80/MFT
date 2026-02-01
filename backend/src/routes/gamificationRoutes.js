@@ -111,7 +111,7 @@ router.get('/user', requireAuth, async (req, res) => {
       totalMealsLogged: gamification.totalMealsLogged || 0,
       badges: gamification.badges || [],
       currentLevelXp: levelInfo.currentLevelXP || 0,
-      nextLevelXp: levelInfo.nextLevelXp || 100,
+      nextLevelXp: levelInfo.nextLevelXP || 100,
       progressPercent: levelInfo.progressPercent || 0,
       // Streak restoration info (Snapchat-style)
       canRestoreStreak,
