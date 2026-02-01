@@ -942,7 +942,7 @@ router.get("/dashboard", async (req, res) => {
             ORDER BY logged_at DESC
           `);
         } catch (err) {
-          console.warn('[Dashboard] activity_logs query failed (table may not exist):', err.message);
+          console.warn('[Dashboard] activity_log query failed (table may not exist):', err.message);
           return { rows: [] };
         }
       })(),

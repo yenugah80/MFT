@@ -519,7 +519,7 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
     // Count activity logs (10 XP base + duration bonus)
     const activityLogsResult = await dbConn.execute(sql`
       SELECT COALESCE(SUM(duration_minutes), 0) as total_minutes, COUNT(*) as count
-      FROM activity_logs
+      FROM activity_log
       WHERE user_id = ${userId}
     `);
     const activityCount = parseInt(activityLogsResult.rows?.[0]?.count) || 0;
