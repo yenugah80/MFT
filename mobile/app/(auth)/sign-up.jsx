@@ -13,9 +13,14 @@ import { useSignUp } from "@clerk/clerk-expo";
 import { useState } from "react";
 import { authStyles } from "../../assets/styles/auth.styles";
 import { Image } from "expo-image";
-import { COLORS } from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { parseClerkError } from "../../utils/errors";
+
+// Minimal theme colors for inputs
+const INPUT_COLORS = {
+  placeholder: '#9CA3AF',
+  icon: '#6B7280',
+};
 import VerifyEmail from "./verify-email";
 
 const SignUpScreen = () => {
@@ -100,7 +105,7 @@ const SignUpScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="First Name"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={firstName}
                 onChangeText={setFirstName}
               />
@@ -110,7 +115,7 @@ const SignUpScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="Last Name"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={lastName}
                 onChangeText={setLastName}
               />
@@ -120,7 +125,7 @@ const SignUpScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="Enter email"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -132,7 +137,7 @@ const SignUpScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="Enter password"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -145,7 +150,7 @@ const SignUpScreen = () => {
                 <Ionicons
                   name={showPassword ? "eye-outline" : "eye-off-outline"}
                   size={20}
-                  color={COLORS.textLight}
+                  color={INPUT_COLORS.icon}
                 />
               </TouchableOpacity>
             </View>
@@ -154,7 +159,7 @@ const SignUpScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="Confirm password"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showPassword}

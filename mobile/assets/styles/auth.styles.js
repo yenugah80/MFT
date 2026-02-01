@@ -1,107 +1,113 @@
 import { StyleSheet } from "react-native";
-import { COLORS } from "../../constants/colors";
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
+
+// Clean minimal white theme
+const MINIMAL_COLORS = {
+  background: '#FFFFFF',
+  card: '#FFFFFF',
+  primary: '#1F2937', // Charcoal for button
+  text: '#111827',
+  textSecondary: '#6B7280',
+  textMuted: '#9CA3AF',
+  border: '#E5E7EB',
+  inputBg: '#F9FAFB',
+};
 
 // Static layout styles used across auth screens
 export const authStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "transparent",
+    backgroundColor: MINIMAL_COLORS.background,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     paddingBottom: 40,
+    paddingHorizontal: 24,
   },
   imageContainer: {
     width: "100%",
     alignItems: "center",
     overflow: "hidden",
-    paddingTop: 60,
+    paddingTop: 80,
   },
   image: {
-    width: 120,
-    height: 120,
-    borderRadius: 24,
+    width: 80,
+    height: 80,
+    borderRadius: 20,
   },
   brandName: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
-    color: '#7C3AED',
+    color: MINIMAL_COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 16,
-    letterSpacing: -0.5,
+    letterSpacing: 0.5,
   },
   formContainer: {
-    marginTop: 20,
-    marginHorizontal: 18,
-    backgroundColor: "rgba(254, 248, 253, 0.98)",
-    borderRadius: 18,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    marginTop: 32,
   },
   inputContainer: {
-    marginBottom: 14,
+    marginBottom: 16,
     position: "relative",
   },
   textInput: {
-    height: 50,
+    height: 56,
     borderRadius: 12,
     paddingHorizontal: 16,
-    backgroundColor: "transparent",
+    backgroundColor: MINIMAL_COLORS.inputBg,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
+    borderColor: MINIMAL_COLORS.border,
+    fontSize: 16,
+    color: MINIMAL_COLORS.text,
   },
   eyeButton: {
     position: "absolute",
-    right: 12,
-    top: 12,
-    padding: 8,
+    right: 16,
+    top: 16,
+    padding: 4,
   },
   linkContainer: {
-    marginTop: 16,
+    marginTop: 24,
     alignItems: "center",
   },
   linkText: {
-    color: "#6B7280",
+    color: MINIMAL_COLORS.textSecondary,
     fontSize: 15,
   },
   link: {
-    color: "#7B5DB8",
+    color: MINIMAL_COLORS.primary,
     fontWeight: "600",
     fontFamily: TYPOGRAPHY.family.semibold,
   },
   authButton: {
     height: 56,
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: COLORS.primary,
-    marginTop: 12,
+    backgroundColor: MINIMAL_COLORS.primary,
+    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   buttonText: {
-    color: "white",
-    fontWeight: "700",
-    fontFamily: TYPOGRAPHY.family.bold,
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontFamily: TYPOGRAPHY.family.semibold,
     fontSize: 16,
+    letterSpacing: 0.3,
   },
   title: {
-    fontSize: 42,
+    fontSize: 32,
     lineHeight: 40,
-    fontWeight: "700",
+    fontWeight: "800",
     fontFamily: TYPOGRAPHY.family.bold,
-    color: "#140b17ff",
+    color: MINIMAL_COLORS.text,
     textAlign: "center",
-    marginTop: 20,
+    marginTop: 8,
   },
 });
 

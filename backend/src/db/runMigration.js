@@ -88,6 +88,7 @@ async function main() {
     await runMigration('0027_add_unique_constraints_user_tables.sql');
     await runMigration('0028_hydration_intelligence.sql');
     await runMigration('0029_add_gamification_timezone_offset.sql');
+    await runMigration('0039_add_push_token_columns.sql');
     console.log('\n All migrations completed successfully!');
     process.exit(0);
   } catch (error) {

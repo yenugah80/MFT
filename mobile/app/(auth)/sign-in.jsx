@@ -15,8 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 
 import { authStyles } from "../../assets/styles/auth.styles";
-import { COLORS } from "../../constants/colors";
-import { parseClerkError } from "../../utils/errors"; // ← ADD THIS FILE
+import { parseClerkError } from "../../utils/errors";
+
+// Minimal theme colors for inputs
+const INPUT_COLORS = {
+  placeholder: '#9CA3AF',
+  icon: '#6B7280',
+};
 
 const SignInScreen = () => {
   const router = useRouter();
@@ -80,7 +85,7 @@ const SignInScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="Enter email"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -92,7 +97,7 @@ const SignInScreen = () => {
               <TextInput
                 style={authStyles.textInput}
                 placeholder="Enter password"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={INPUT_COLORS.placeholder}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -105,7 +110,7 @@ const SignInScreen = () => {
                 <Ionicons
                   name={showPassword ? "eye-outline" : "eye-off-outline"}
                   size={20}
-                  color={COLORS.textLight}
+                  color={INPUT_COLORS.icon}
                 />
               </TouchableOpacity>
             </View>

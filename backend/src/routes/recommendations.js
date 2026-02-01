@@ -1526,7 +1526,8 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
         personalizationScore: rec.personalization?.score || calculatePersonalizationScore({calories, protein, carbs, fats}, remainingBudget),
         // NEW: Preference strength tracking fields
         // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
-        preferenceStrengthMatch: rec.preference?.score || rec.preferenceStrengthMatch || 3,
+        // Round to integer since DB column is integer type
+        preferenceStrengthMatch: Math.round(rec.preference?.score || rec.preferenceStrengthMatch || 3),
         dietCompliant: rec.dietCompliance?.compliant === true,
         allergenFree: rec.allergenSafety?.safe === true,
         warningBadge: rec.warning || null,
