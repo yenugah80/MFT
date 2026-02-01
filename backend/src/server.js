@@ -103,6 +103,33 @@ export async function ensureProfilesTableShape() {
   }
 }
 
+// Ensure account_settings has push token columns
+let accountSettingsPushTokenEnsured = false;
+export async function ensureAccountSettingsPushTokenColumns() {
+  if (accountSettingsPushTokenEnsured) return;
+  try {
+    await db.execute(
+      sql`ALTER TABLE "account_settings" ADD COLUMN IF NOT EXISTS "expo_push_token" text;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "account_settings" ADD COLUMN IF NOT EXISTS "push_token_updated_at" timestamp;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "account_settings" ADD COLUMN IF NOT EXISTS "fcm_token" text;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "account_settings" ADD COLUMN IF NOT EXISTS "fcm_token_updated_at" timestamp;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "account_settings" ADD COLUMN IF NOT EXISTS "fcm_token_platform" text;`
+    );
+    accountSettingsPushTokenEnsured = true;
+    console.log('✅ Account settings push token columns verified');
+  } catch (err) {
+    console.error('❌ Failed to ensure account_settings push token columns:', err);
+  }
+}
+
 // Ensure the recommendations_history table exists
 let recommendationsTableEnsured = false;
 export async function ensureRecommendationsHistoryTable() {
@@ -874,6 +901,8 @@ app.listen(PORT, "0.0.0.0", async () => {
     await ensureRecommendationsHistoryTable();
     await ensureMLTables();
     await ensureSleepStressTables();
+    // Ensure account_settings has push token columns
+    await ensureAccountSettingsPushTokenColumns();
     console.log('[Database] Schema initialization complete');
   } catch (err) {
     console.error('[Database] Initialization warning:', err.message);
