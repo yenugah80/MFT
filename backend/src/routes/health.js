@@ -7,7 +7,7 @@
 import express from 'express';
 import { requireAuth } from '@clerk/express';
 import healthPlatformService from '../services/healthPlatformService.js';
-import { analyticsEventPipeline } from '../services/analyticsEventPipeline.js';
+import analyticsEventPipeline from '../services/analyticsEventPipeline.js';
 
 const router = express.Router();
 
