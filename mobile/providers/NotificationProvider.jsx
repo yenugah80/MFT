@@ -275,8 +275,8 @@ export const NotificationProvider = ({ children }) => {
       dashboard: '/(tabs)/dashboard',
       profile: '/(tabs)/profile',
       activity: '/activity/today',
-      mood: '/insights/patterns',
-      insights: '/insights/patterns',
+      mood: '/insights',
+      insights: '/insights',
     };
 
     // Category-based fallback routes
@@ -284,11 +284,11 @@ export const NotificationProvider = ({ children }) => {
       [NOTIFICATION_CATEGORIES.DAILY_REMINDER]: '/(tabs)/log',
       [NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]: '/(tabs)/log',
       [NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]: '/activity/today',
-      [NOTIFICATION_CATEGORIES.MOOD_CHECKIN]: '/insights/patterns',
+      [NOTIFICATION_CATEGORIES.MOOD_CHECKIN]: '/insights',
       [NOTIFICATION_CATEGORIES.STREAK_AT_RISK]: '/(tabs)/log',
       [NOTIFICATION_CATEGORIES.STREAK_CELEBRATION]: '/(tabs)/profile',
       [NOTIFICATION_CATEGORIES.GOAL_ACHIEVED]: '/(tabs)/dashboard',
-      [NOTIFICATION_CATEGORIES.INSIGHT_DROP]: '/insights/patterns',
+      [NOTIFICATION_CATEGORIES.INSIGHT_DROP]: '/insights',
     };
 
     try {

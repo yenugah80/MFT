@@ -46,7 +46,7 @@ export default function FoodMoodCorrelationCard({
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/food-mood-correlation');
+    router.push('/insights');
   };
 
   // Not enough data

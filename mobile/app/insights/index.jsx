@@ -1,24 +1,23 @@
 /**
- * Insights Index - Clean Analytics Navigation
+ * Insights Index - Simplified Weekly/Monthly Summary
  *
- * Simple, focused navigation to analytics screens
- * NO duplicate wellness scores - that's on the dashboard
- *
- * Design: Clean, minimal, Apple Health inspired
+ * Clean, Apple Health-inspired summary screen
+ * Shows 4 metrics: Nutrition, Mood, Hydration, Activity
+ * With weekly/monthly toggle and trend charts
  */
 
-import React, { useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -27,131 +26,69 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  VIBRANT_WELLNESS,
   BRAND,
-  SHADOWS,
 } from '../../constants/premiumTheme';
 
-// Analytics components
-import PersonalizedPatternsCard from '../../components/analytics/PersonalizedPatternsCard';
-import MorningPredictionCard from '../../components/dashboard/MorningPredictionCard';
-import { NovelDiscoveriesSection } from '../../components/wellness/WellnessRecommendation';
-import { useNovelCorrelations } from '../../hooks/useInsights';
+import { useInsightsSummary } from '../../hooks/useInsightsSummary';
+import InsightSummaryCard from '../../components/insights/InsightSummaryCard';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ============================================================================
-// INSIGHT SECTIONS - Full structure (no duplicate wellness dashboard)
-// ============================================================================
-
-const INSIGHT_SECTIONS = [
-  {
-    title: 'Health Analytics',
-    subtitle: 'Deep dive into each category',
-    items: [
-      {
-        id: 'nutrition',
-        title: 'Nutrition Analytics',
-        description: 'Calorie & macro tracking with goal progress',
-        icon: 'nutrition',
-        route: '/insights/food-analytics',
-        gradient: VIBRANT_WELLNESS.nutrition.gradient,
-      },
-      {
-        id: 'activity',
-        title: 'Activity Analytics',
-        description: 'CDC guidelines progress and movement patterns',
-        icon: 'fitness',
-        route: '/insights/activity-analytics',
-        gradient: VIBRANT_WELLNESS.activity.gradient,
-      },
-      {
-        id: 'hydration',
-        title: 'Hydration Analytics',
-        description: 'Daily water intake and hydration patterns',
-        icon: 'water',
-        route: '/insights/hydration-analytics',
-        gradient: VIBRANT_WELLNESS.hydration.gradient,
-      },
-      {
-        id: 'mood',
-        title: 'Mood Analytics',
-        description: 'Emotional patterns and mood trends',
-        icon: 'happy',
-        route: '/insights/mood',
-        gradient: VIBRANT_WELLNESS.mood.gradient,
-      },
-    ],
-  },
-  {
-    title: 'Correlations',
-    subtitle: 'How your habits connect',
-    items: [
-      {
-        id: 'mood-hydration',
-        title: 'Mood & Hydration',
-        description: 'How hydration affects how you feel',
-        icon: 'water',
-        route: '/insights/mood-hydration',
-        gradient: ['#0EA5E9', '#38BDF8'],
-        isNew: true,
-      },
-      {
-        id: 'multi-factor',
-        title: 'Multi-Factor Analysis',
-        description: 'Advanced correlations across all metrics',
-        icon: 'git-network',
-        route: '/insights/multi-factor-analytics',
-        gradient: ['#3B82F6', '#60A5FA'],
-      },
-      {
-        id: 'activity-mood',
-        title: 'Activity & Mood',
-        description: 'How exercise affects your emotions',
-        icon: 'trending-up',
-        route: '/insights/activity-mood',
-        gradient: ['#10B981', '#34D399'],
-      },
-      {
-        id: 'food-mood',
-        title: 'Food & Mood',
-        description: 'Diet-emotion connections',
-        icon: 'restaurant',
-        route: '/insights/food-mood-correlation',
-        gradient: ['#F59E0B', '#FBBF24'],
-      },
-    ],
-  },
-  {
-    title: 'Predictions',
-    subtitle: 'Tomorrow\'s forecast',
-    items: [
-      {
-        id: 'predictive',
-        title: 'Predictive Insights',
-        description: 'Energy and mood predictions based on your data',
-        icon: 'sunny',
-        route: '/insights/predictive',
-        gradient: ['#FBBF24', '#FDE68A'],
-      },
-    ],
-  },
+// Period options
+const PERIODS = [
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
 ];
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
+/**
+ * Period Toggle Component
+ */
+function PeriodToggle({ selected, onSelect }) {
+  const handleSelect = (period) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onSelect(period);
+  };
 
+  return (
+    <View style={styles.toggleContainer}>
+      {PERIODS.map((period) => {
+        const isActive = selected === period.key;
+        return (
+          <TouchableOpacity
+            key={period.key}
+            style={[styles.togglePill, isActive && styles.togglePillActive]}
+            onPress={() => handleSelect(period.key)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleLabel, isActive && styles.toggleLabelActive]}>
+              {period.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Loading Skeleton
+ */
+function LoadingSkeleton() {
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={BRAND.primary} />
+      <Text style={styles.loadingText}>Loading insights...</Text>
+    </View>
+  );
+}
+
+/**
+ * Main Insights Screen
+ */
 export default function InsightsIndex() {
   const router = useRouter();
+  const [period, setPeriod] = useState('week');
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Novel correlations - AI-discovered patterns unique to this user
-  const {
-    patterns: novelPatterns,
-    isLoading: novelLoading,
-    emptyStateMessage,
-    hasEnoughData,
-  } = useNovelCorrelations({ lookbackDays: 30, limit: 3 });
+  const { nutrition, mood, hydration, activity, isLoading, refetch } = useInsightsSummary(period);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -162,10 +99,19 @@ export default function InsightsIndex() {
     }
   }, [router]);
 
-  const handleItemPress = useCallback((route) => {
-    Haptics.selectionAsync();
-    router.push(route);
-  }, [router]);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  const handlePeriodChange = useCallback((newPeriod) => {
+    setPeriod(newPeriod);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -175,6 +121,10 @@ export default function InsightsIndex() {
           title: 'Insights',
           headerStyle: { backgroundColor: SURFACES.background.primary },
           headerTintColor: TEXT.primary,
+          headerTitleStyle: {
+            fontFamily: TYPOGRAPHY.family.semibold,
+            fontSize: TYPOGRAPHY.size.lg,
+          },
           headerLeft: () => (
             <TouchableOpacity
               onPress={handleBack}
@@ -192,109 +142,70 @@ export default function InsightsIndex() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={BRAND.primary}
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Your Health Insights</Text>
+          <Text style={styles.headerTitle}>Your Summary</Text>
           <Text style={styles.headerSubtitle}>
-            Discover patterns, correlations, and personalized recommendations
+            {period === 'week' ? 'Last 7 days' : 'Last 30 days'} overview
           </Text>
         </View>
 
-        {/* What's Ahead - Day Forecast */}
-        <View style={styles.forecastSection}>
-          <MorningPredictionCard
-            onTipPress={(tip) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (tip.icon === 'water') {
-                router.push('/(tabs)/log?focus=hydration');
-              } else if (tip.icon === 'nutrition' || tip.icon === 'egg' || tip.icon === 'sunny') {
-                router.push('/(tabs)/log');
-              }
-            }}
-            onExpandPress={() => {
-              router.push('/insights/wellness-history');
-            }}
-          />
+        {/* Period Toggle */}
+        <View style={styles.toggleWrapper}>
+          <PeriodToggle selected={period} onSelect={handlePeriodChange} />
         </View>
 
-        {/* Personalized Patterns Card - Deep behavioral insights */}
-        <View style={styles.patternsSection}>
-          <PersonalizedPatternsCard
-            compact={true}
-            limit={3}
-            onPatternPress={(pattern) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              const routes = {
-                'meal-timing': '/insights/food-mood-correlation',
-                'next-day-carryover': '/insights/food-mood-correlation',
-                'hydration': '/insights/hydration-analytics',
-                'activity': '/insights/activity-mood',
-              };
-              const route = routes[pattern.category] || '/insights/multi-factor-analytics';
-              router.push(route);
-            }}
-            onViewAll={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push('/insights/multi-factor-analytics');
-            }}
-          />
-        </View>
+        {/* Content */}
+        {isLoading && !refreshing ? (
+          <LoadingSkeleton />
+        ) : (
+          <View style={styles.cardsContainer}>
+            {/* Nutrition Card */}
+            <InsightSummaryCard
+              metric="nutrition"
+              data={nutrition}
+              period={period}
+            />
 
-        {/* AI Discoveries - Novel patterns unique to this user */}
-        <View style={styles.discoveriesSection}>
-          <NovelDiscoveriesSection
-            patterns={novelPatterns}
-            isLoading={novelLoading}
-            emptyMessage={emptyStateMessage}
-            onPatternPress={(discovery) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              // Navigate based on the factors involved
-              const factors = discovery.technical?.factorA || '';
-              if (factors.includes('water') || factors.includes('hydration')) {
-                router.push('/insights/hydration-analytics');
-              } else if (factors.includes('activity') || factors.includes('exercise')) {
-                router.push('/insights/activity-mood');
-              } else if (factors.includes('mood') || factors.includes('energy')) {
-                router.push('/insights/mood');
-              } else {
-                router.push('/insights/multi-factor-analytics');
-              }
-            }}
-          />
-        </View>
+            {/* Mood Card */}
+            <InsightSummaryCard
+              metric="mood"
+              data={mood}
+              period={period}
+            />
 
-        {/* All Sections */}
-        {INSIGHT_SECTIONS.map((section) => (
-          <View key={section.title} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
-            </View>
+            {/* Hydration Card */}
+            <InsightSummaryCard
+              metric="hydration"
+              data={hydration}
+              period={period}
+            />
 
-            <View style={styles.itemsContainer}>
-              {section.items.map((item, index) => (
-                <InsightItem
-                  key={item.id}
-                  item={item}
-                  onPress={() => handleItemPress(item.route)}
-                  isLast={index === section.items.length - 1}
-                />
-              ))}
-            </View>
+            {/* Activity Card */}
+            <InsightSummaryCard
+              metric="activity"
+              data={activity}
+              period={period}
+            />
           </View>
-        ))}
+        )}
 
-        {/* Footer with Legal Disclaimer */}
+        {/* Footer Disclaimer */}
         <View style={styles.footer}>
           <View style={styles.disclaimerContainer}>
-            <Ionicons name="shield-checkmark-outline" size={16} color={TEXT.muted} />
+            <Ionicons name="information-circle-outline" size={16} color={TEXT.muted} />
             <Text style={styles.disclaimerText}>
-              MyFoodTracker is a wellness tool, not a medical device. The insights, predictions,
-              and recommendations provided are for informational purposes only and do not
-              constitute medical advice, diagnosis, or treatment. Always consult a qualified
-              healthcare professional before making dietary changes or health decisions.
-              Not intended to diagnose, treat, cure, or prevent any disease.
+              MyFoodTracker provides wellness insights for informational purposes only.
+              Not intended as medical advice. Consult a healthcare professional for
+              health decisions.
             </Text>
           </View>
           <Text style={styles.footerText}>
@@ -305,46 +216,6 @@ export default function InsightsIndex() {
     </View>
   );
 }
-
-// ============================================================================
-// INSIGHT ITEM COMPONENT
-// ============================================================================
-
-function InsightItem({ item, onPress, isLast }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.item, !isLast && styles.itemBorder]}
-      activeOpacity={0.7}
-      accessibilityLabel={item.title}
-      accessibilityHint={item.description}
-    >
-      <View style={[styles.itemIcon, { backgroundColor: `${item.gradient[0]}15` }]}>
-        <Ionicons name={item.icon} size={22} color={item.gradient[0]} />
-      </View>
-
-      <View style={styles.itemContent}>
-        <View style={styles.itemTitleRow}>
-          <Text style={styles.itemTitle}>{item.title}</Text>
-          {item.isNew && (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>NEW</Text>
-            </View>
-          )}
-        </View>
-        <Text style={styles.itemDescription} numberOfLines={1}>
-          {item.description}
-        </Text>
-      </View>
-
-      <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
-    </TouchableOpacity>
-  );
-}
-
-// ============================================================================
-// STYLES
-// ============================================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -377,114 +248,72 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
-    lineHeight: 22,
   },
 
-  // Forecast Section (What's Ahead)
-  forecastSection: {
-    marginTop: SPACING[3],
-  },
-
-  // Personalized Patterns Section
-  patternsSection: {
-    marginHorizontal: SPACING[4],
-    marginTop: SPACING[3],
-  },
-
-  // AI Discoveries Section
-  discoveriesSection: {
-    marginHorizontal: SPACING[4],
-    marginTop: SPACING[4],
-  },
-
-  // Section
-  section: {
-    marginTop: SPACING[5],
-  },
-  sectionHeader: {
+  // Toggle
+  toggleWrapper: {
     paddingHorizontal: SPACING[4],
-    marginBottom: SPACING[3],
+    paddingVertical: SPACING[3],
   },
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginTop: 2,
-  },
-
-  // Items Container
-  itemsContainer: {
-    marginHorizontal: SPACING[4],
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    ...SHADOWS.sm,
-  },
-
-  // Regular Item
-  item: {
+  toggleContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING[3],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[1],
+    gap: SPACING[1],
   },
-  itemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACES.divider,
-  },
-  itemIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING[3],
-  },
-  itemContent: {
+  togglePill: {
     flex: 1,
-  },
-  itemTitleRow: {
-    flexDirection: 'row',
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.md,
     alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: 2,
   },
-  itemTitle: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
+  togglePillActive: {
+    backgroundColor: SURFACES.card.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  newBadge: {
-    backgroundColor: '#0EA5E9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  newBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFF',
-    letterSpacing: 0.5,
-  },
-  itemDescription: {
+  toggleLabel: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.tertiary,
+  },
+  toggleLabelActive: {
+    color: TEXT.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+
+  // Cards
+  cardsContainer: {
+    paddingTop: SPACING[2],
+  },
+
+  // Loading
+  loadingContainer: {
+    paddingVertical: SPACING[10],
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  loadingText: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
 
   // Footer
   footer: {
     alignItems: 'center',
-    marginTop: SPACING[6],
+    marginTop: SPACING[4],
     paddingHorizontal: SPACING[4],
   },
   disclaimerContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: SURFACES.background.secondary,
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: RADIUS.lg,
     padding: SPACING[3],
     marginBottom: SPACING[3],
@@ -493,11 +322,13 @@ const styles = StyleSheet.create({
   disclaimerText: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.muted,
     lineHeight: 16,
   },
   footerText: {
     fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.muted,
     textAlign: 'center',
   },

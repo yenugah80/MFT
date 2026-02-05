@@ -178,7 +178,7 @@ export default function DailyIntelligenceBehaviorSection({
               style={componentStyles.viewAllButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/insights/patterns');
+                router.push('/insights');
               }}
               accessibilityRole="button"
               accessibilityLabel="View all pattern insights"

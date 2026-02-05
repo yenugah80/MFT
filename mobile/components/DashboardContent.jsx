@@ -1160,12 +1160,12 @@ export default function DashboardContent() {
   // eslint-disable-next-line no-unused-vars
   const handlePreviewInsights = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/insights/mood', params: { days: String(insightsDays) } });
+    router.push('/insights');
   };
 
   const handleViewInsights = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/insights/mood', params: { days: String(insightsDays) } });
+    router.push('/insights');
   };
 
   const handleInsightsDaysChange = (days) => {
@@ -1548,7 +1548,7 @@ export default function DashboardContent() {
             yesterdayMeals: data?.trends?.yesterdayMeals || 0,
             avgCalories: data?.trends?.avgCalories || 0,
           }}
-          onViewFoodHistory={() => router.push('/insights/food-analytics')}
+          onViewFoodHistory={() => router.push('/insights')}
         />
 
         {/* ============================================ */}
@@ -1721,11 +1721,11 @@ export default function DashboardContent() {
               if (flag.flag === 'DEHYDRATED') {
                 router.push('/(tabs)/log?focus=hydration');
               } else if (flag.flag === 'LOW_MOOD' || flag.flag === 'HIGH_STRESS') {
-                router.push('/insights/mood');
+                router.push('/insights');
               } else if (flag.flag === 'LOW_ENERGY' || flag.flag === 'POST_WORKOUT') {
                 router.push('/(tabs)/log?focus=activity');
               } else if (flag.flag === 'POOR_SLEEP') {
-                router.push('/insights/sleep');
+                router.push('/insights');
               } else {
                 router.push('/insights');
               }
@@ -1764,10 +1764,10 @@ export default function DashboardContent() {
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
-          onOpenMoodInsights={() => router.push('/insights/mood')}
-          onViewMoodHistory={() => router.push('/insights/mood-history')}
+          onOpenMoodInsights={() => router.push('/insights')}
+          onViewMoodHistory={() => router.push('/insights')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
-          onViewHydrationHistory={() => router.push('/insights/hydration-history')}
+          onViewHydrationHistory={() => router.push('/insights')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}
