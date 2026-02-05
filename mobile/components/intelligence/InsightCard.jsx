@@ -22,8 +22,44 @@ import {
   BRAND,
   SEMANTIC,
 } from '../../constants/premiumTheme';
-import { InlineFeedback } from '../insights/InsightFeedback';
 import { useInsightFeedback } from '../../hooks/useInsightFeedback';
+
+/**
+ * Simple inline feedback buttons
+ */
+function InlineFeedback({ onHelpful, onNotHelpful, size = 'sm' }) {
+  const iconSize = size === 'sm' ? 18 : 22;
+  return (
+    <View style={inlineFeedbackStyles.container}>
+      <TouchableOpacity
+        style={inlineFeedbackStyles.button}
+        onPress={onHelpful}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="thumbs-up-outline" size={iconSize} color={SEMANTIC.success.base} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={inlineFeedbackStyles.button}
+        onPress={onNotHelpful}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="thumbs-down-outline" size={iconSize} color={TEXT.tertiary} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const inlineFeedbackStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+  },
+  button: {
+    padding: SPACING[2],
+    borderRadius: RADIUS.md,
+    backgroundColor: SURFACES.background.tertiary,
+  },
+});
 
 const DECISION_TYPES = {
   SPEAK: {
