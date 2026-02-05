@@ -104,12 +104,12 @@ const BEVERAGE_TYPES = {
   },
 };
 
-// Personality-driven quick-add sizes (Zomato-style naming)
+// Clear, intuitive quick-add sizes
 const QUICK_ADD_SIZES = [
-  { ml: 150, label: 'Quick Sip', subtitle: '150ml', icon: 'water-outline', wittyNote: 'Espresso-sized hydration' },
-  { ml: 250, label: 'The Classic', subtitle: '250ml', icon: 'water', wittyNote: 'Standard issue refresh' },
-  { ml: 500, label: 'Half Liter Hero', subtitle: '500ml', icon: 'water', wittyNote: 'Serious hydration intent' },
-  { ml: 750, label: 'Overachiever', subtitle: '750ml', icon: 'water', wittyNote: 'Someone\'s committed' },
+  { ml: 150, label: 'Small', subtitle: '150ml', icon: 'water-outline', wittyNote: 'A quick sip' },
+  { ml: 250, label: 'Medium', subtitle: '250ml', icon: 'water', wittyNote: 'One glass' },
+  { ml: 500, label: 'Large', subtitle: '500ml', icon: 'water', wittyNote: 'Half a liter' },
+  { ml: 750, label: 'Extra', subtitle: '750ml', icon: 'water', wittyNote: 'Big bottle' },
 ];
 
 const MILESTONES = [25, 50, 75, 100];
@@ -450,12 +450,12 @@ const ProgressRing = ({ percentage, size = 200, strokeWidth = 14, reduceMotion =
           </SvgGradient>
         </Defs>
 
-        {/* Background Circle */}
+        {/* Background Circle - visible track */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={`${progressColors.start}20`}
+          stroke="#E5E7EB"
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -1013,10 +1013,58 @@ const MilestoneToast = ({ milestone, visible, onDismiss, message, isFirstLog, is
 };
 
 // ============================================================================
-// EMPTY STATE - First time experience
+// EMPTY STATE - Smart recommendations for returning users, onboarding for new
 // ============================================================================
 
-const EmptyState = () => {
+const SMART_RECOMMENDATIONS = [
+  { icon: 'sunny', message: 'Start your day with a glass of water', time: 'morning' },
+  { icon: 'cafe', message: 'Time for your morning hydration boost', time: 'morning' },
+  { icon: 'flash', message: 'Afternoon energy dip? Water helps!', time: 'afternoon' },
+  { icon: 'fitness', message: 'Stay hydrated for better focus', time: 'afternoon' },
+  { icon: 'moon', message: 'Light hydration before bed aids recovery', time: 'evening' },
+  { icon: 'sparkles', message: 'A glass now helps tomorrow\'s energy', time: 'evening' },
+];
+
+const EmptyState = ({ streak = 0, dailyGoal = 2000 }) => {
+  const isReturningUser = streak > 0;
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+
+  // Get time-appropriate recommendation
+  const recommendation = useMemo(() => {
+    const timeRecs = SMART_RECOMMENDATIONS.filter(r => r.time === timeOfDay);
+    return timeRecs[Math.floor(Math.random() * timeRecs.length)] || SMART_RECOMMENDATIONS[0];
+  }, [timeOfDay]);
+
+  if (isReturningUser) {
+    // Returning user - show smart recommendations
+    return (
+      <View style={styles.emptyState}>
+        <View style={[styles.emptyIconContainer, { backgroundColor: '#DBEAFE' }]}>
+          <Ionicons name={recommendation.icon} size={48} color="#3B82F6" />
+        </View>
+        <Text style={styles.emptyTitle}>Welcome Back!</Text>
+        <Text style={styles.emptySubtitle}>{recommendation.message}</Text>
+
+        <View style={styles.returningUserStats}>
+          <View style={styles.statBadge}>
+            <Ionicons name="flame" size={16} color="#F59E0B" />
+            <Text style={styles.statBadgeText}>{streak} day streak</Text>
+          </View>
+          <View style={styles.statBadge}>
+            <Ionicons name="flag" size={16} color="#3B82F6" />
+            <Text style={styles.statBadgeText}>{dailyGoal}ml goal</Text>
+          </View>
+        </View>
+
+        <Text style={styles.emptyHint}>
+          Tap a quick-add button to start today's hydration
+        </Text>
+      </View>
+    );
+  }
+
+  // New user - show onboarding
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconContainer}>
@@ -1064,7 +1112,6 @@ const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Pulse animation
     Animated.sequence([
       Animated.spring(scaleAnim, {
         toValue: 0.94,
@@ -1100,6 +1147,9 @@ const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
         ]}
         onPress={handlePress}
         activeOpacity={1}
+        accessibilityLabel={bev.label}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
       >
         <Animated.View
           style={[
@@ -1121,13 +1171,6 @@ const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
           >
             {bev.label}
           </Text>
-          {bev.hydrationFactor !== 1 && (
-            <View style={styles.multiplierBadge}>
-              <Text style={styles.beverageMultiplier}>
-                {Math.round(bev.hydrationFactor * 100)}%
-              </Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -1391,7 +1434,14 @@ const PremiumQuickAddButton = ({ size, onPress, isLoading = false, accessible, a
           ) : (
             <>
               <Ionicons name={size.icon} size={32} color="#FFF" />
-              <Text style={styles.quickAddTileLabel}>{size.label}</Text>
+              <Text
+                style={styles.quickAddTileLabel}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {size.label}
+              </Text>
               <Text style={styles.quickAddTileSubtitle}>{size.subtitle}</Text>
             </>
           )}
@@ -1920,7 +1970,7 @@ export default function HydrationTracker({
 
         {/* Empty State or Timeline */}
         {isEmpty ? (
-          <EmptyState />
+          <EmptyState streak={streak} dailyGoal={Math.round(dailyGoal * 1000)} />
         ) : (
           <Timeline beverageHistory={beverageHistory} onDelete={handleSwipeDelete} onViewHistory={onViewHistory} />
         )}
@@ -2570,6 +2620,32 @@ const styles = StyleSheet.create({
   emptyTipText: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
+  },
+  returningUserStats: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+    marginTop: SPACING[4],
+    marginBottom: SPACING[2],
+  },
+  statBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1.5],
+    backgroundColor: SURFACES.background.secondary,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+  },
+  statBadgeText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    color: TEXT.secondary,
+  },
+  emptyHint: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.muted,
+    marginTop: SPACING[2],
+    textAlign: 'center',
   },
 
   // Premium Success Toast

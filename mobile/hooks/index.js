@@ -79,3 +79,39 @@ export { default as useTurnstile } from './useTurnstile';
 
 // Feedback
 export { default as useInsightFeedback } from './useInsightFeedback';
+
+// Enhanced Gamification (badges, leaderboards, challenges)
+export {
+  useBadges,
+  useCheckBadges,
+  useLeaderboard,
+  useChallenges,
+  useUpdateChallengeProgress,
+  useXPHistory,
+  useGamificationSummary,
+  GAMIFICATION_KEYS,
+} from './useGamification';
+
+// Health Platform (HealthKit/Google Fit)
+export {
+  default as useHealthPlatform,
+  useHealthPermissions,
+  useTodayActivity,
+  useActivityHistory,
+  useSleepData,
+  useHeartRate,
+  useBodyMeasurements,
+  useHealthInsights,
+  useWriteNutrition,
+  useWriteWater,
+  useSyncHealth,
+  HEALTH_KEYS,
+} from './useHealthPlatform';
+
+// Context-Aware Insights
+export {
+  default as useContextInsights,
+  useWeather,
+  useContextualInsights,
+  CONTEXT_KEYS,
+} from './useContextInsights';

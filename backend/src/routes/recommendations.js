@@ -19,6 +19,7 @@ import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
 import { errors } from '../utils/errorResponse.js';
 import { getUnifiedIntelligence, formatIntelligenceForPrompt } from '../services/unifiedIntelligenceService.js';
 import { generateRecommendationContext } from '../services/personalizedNarrativeEngine.js';
+import { getSmartRecommendations } from '../services/smartRecommendationEngine.js';
 
 const router = express.Router();
 
@@ -74,6 +75,48 @@ async function generateRecommendationsWithDedup(userId, mealType, limit, generat
 
   return promise;
 }
+
+/**
+ * GET /api/recommendations/smart
+ *
+ * World-class smart recommendations with:
+ * - Real-time nutritional gap detection
+ * - Time-contextual meal suggestions
+ * - Personal history-based learning
+ * - Rich explanations with actual data
+ * - Quick-log ready recommendations
+ *
+ * Query params:
+ * - limit: number of recommendations (default: 5, max: 10)
+ * - mealType: force specific meal type (optional, auto-detected by time)
+ */
+router.get('/smart', requireAuth(), async (req, res) => {
+  try {
+    const { userId } = req.auth;
+    const { limit = 5, mealType } = req.query;
+
+    // Validate limit
+    const parsedLimit = Math.min(Math.max(parseInt(limit) || 5, 1), 10);
+
+    // Validate mealType if provided
+    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
+    const parsedMealType = mealType && validMealTypes.includes(mealType)
+      ? mealType
+      : undefined;
+
+    logDebug(`Smart recommendations request: userId=${userId}, limit=${parsedLimit}, mealType=${parsedMealType || 'auto'}`);
+
+    const result = await getSmartRecommendations(userId, {
+      limit: parsedLimit,
+      mealType: parsedMealType,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Recommendations] Smart recommendation error:', error);
+    errors.externalService(res, 'Smart recommendation generation');
+  }
+});
 
 /**
  * GET /api/recommendations

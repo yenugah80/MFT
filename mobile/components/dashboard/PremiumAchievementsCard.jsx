@@ -6,6 +6,8 @@
  * - Performance: Memoized rank calculations, optimized SVG paths
  * - Safety: Clamped progress values to prevent render artifacts
  * - UX: Added "Rank Titles" to give semantic meaning to levels
+ * - Journey stages visualization
+ * - Link to full achievements screen
  */
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
@@ -14,6 +16,8 @@ import ViewShot, { captureRef } from 'react-native-view-shot';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
 import {
   TYPOGRAPHY,
@@ -24,6 +28,24 @@ import {
   TEXT,
 } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
+
+// Journey islands configuration (Treasure Quest theme)
+const JOURNEY_ISLANDS = [
+  { key: 'DISCOVERER', name: 'Starter Cove', emoji: '⛵', minDays: 0, color: '#6366F1' },
+  { key: 'BUILDER', name: 'Builder Bay', emoji: '🔨', minDays: 5, color: '#D97706' },
+  { key: 'TRACKER', name: 'Tracker Isle', emoji: '🗺️', minDays: 14, color: '#EA580C' },
+  { key: 'OPTIMIZER', name: 'Optimizer Atoll', emoji: '⚡', minDays: 30, color: '#DB2777' },
+  { key: 'MASTER', name: 'Master Reef', emoji: '🎯', minDays: 60, color: '#65A30D' },
+  { key: 'CHAMPION', name: 'Champion Harbor', emoji: '🏆', minDays: 120, color: '#059669' },
+  { key: 'ELITE', name: 'Treasure Island', emoji: '💎', minDays: 365, color: '#2563EB' },
+];
+
+const getIslandIndex = (daysWithData) => {
+  for (let i = JOURNEY_ISLANDS.length - 1; i >= 0; i--) {
+    if (daysWithData >= JOURNEY_ISLANDS[i].minDays) return i;
+  }
+  return 0;
+};
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const { width } = Dimensions.get('window');
@@ -190,8 +212,23 @@ export default function PremiumAchievementsCard({
   nextLevelXp, // Can be passed from backend or calculated
   streakFreezes = 0,
   isReturningUser = false, // True if user has previous data (not brand new)
+  daysWithData = 0, // For journey stage calculation
+  totalMealsLogged = 0, // For stats display
 }) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
+
+  // Journey island calculation (Treasure Quest theme)
+  const islandIndex = useMemo(() => getIslandIndex(daysWithData), [daysWithData]);
+  const currentIsland = JOURNEY_ISLANDS[islandIndex];
+  const nextIsland = JOURNEY_ISLANDS[islandIndex + 1];
+  const daysToNextIsland = nextIsland ? Math.max(0, nextIsland.minDays - daysWithData) : 0;
+
+  // Handle navigation to achievements screen
+  const handleViewAll = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/achievements');
+  };
 
   // Theme-aware colors
   const textPrimary = colors.text.primary;
@@ -420,6 +457,41 @@ export default function PremiumAchievementsCard({
           </View>
         </View>
       </View>
+
+      {/* Treasure Quest Journey Section */}
+      <View style={[styles.journeySection, { borderTopColor: dividerBg }]}>
+        <View style={styles.journeyHeader}>
+          <View style={styles.journeyStageInfo}>
+            <Text style={styles.journeyEmoji}>{currentIsland.emoji}</Text>
+            <View>
+              <Text style={[styles.journeyStageName, { color: textPrimary }]}>{currentIsland.name}</Text>
+              {nextIsland && (
+                <Text style={[styles.journeyProgress, { color: textMuted }]}>
+                  {daysToNextIsland}d to {nextIsland.name}
+                </Text>
+              )}
+            </View>
+          </View>
+          <TouchableOpacity onPress={handleViewAll} style={styles.viewAllButton} activeOpacity={0.7}>
+            <Text style={styles.viewAllText}>View Quest</Text>
+            <Ionicons name="compass" size={14} color={currentIsland.color} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Island Progress Dots (Treasure Map) */}
+        <View style={styles.journeyDots}>
+          {JOURNEY_ISLANDS.map((island, index) => (
+            <View
+              key={island.key}
+              style={[
+                styles.journeyDot,
+                index < islandIndex && styles.journeyDotCompleted,
+                index === islandIndex && [styles.journeyDotCurrent, { backgroundColor: currentIsland.color }],
+              ]}
+            />
+          ))}
+        </View>
+      </View>
     </GlassCard>
     </>
   );
@@ -582,6 +654,71 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     fontWeight: '500',
     fontFamily: TYPOGRAPHY.family.medium,
+  },
+
+  // Journey Section Styles
+  journeySection: {
+    marginTop: SPACING[3],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+  },
+  journeyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING[2],
+  },
+  journeyStageInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  journeyEmoji: {
+    fontSize: 24,
+  },
+  journeyStageName: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  journeyProgress: {
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: TYPOGRAPHY.family.medium,
+    marginTop: 1,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#6366F1',
+  },
+  journeyDots: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[1],
+  },
+  journeyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  journeyDotCompleted: {
+    backgroundColor: '#10B981',
+  },
+  journeyDotCurrent: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
 
   // Modal Styles

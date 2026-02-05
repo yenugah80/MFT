@@ -479,7 +479,7 @@ export default LUXURY_THEME;
   paddingVertical: 16,
   paddingHorizontal: 32,
 }}>
-  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontFamily: 'TenorSans_400Regular' }}>
+  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontFamily: 'Inter_700Bold' }}>
     Upgrade to Premium
   </Text>
 </TouchableOpacity>

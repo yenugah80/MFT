@@ -102,38 +102,58 @@ const SettingsRow = ({ icon, iconColor, title, subtitle, onPress, isLast, isDang
   </TouchableOpacity>
 );
 
-// Stage Progress Component
-const StageProgress = ({ currentStage, daysLogged }) => {
+// Achievements Card Component - Links to full achievements screen
+const AchievementsCard = ({ level, streak, daysLogged, onPress }) => {
   const stageIndex = getStageIndex(daysLogged);
+  const currentStage = STAGES[stageIndex];
 
   return (
-    <View style={styles.stageContainer}>
-      <View style={styles.stageHeader}>
-        <Ionicons name="analytics" size={16} color={BRAND.primary} />
-        <Text style={styles.stageLabel}>{STAGES[stageIndex]?.label || 'Start'}</Text>
-      </View>
-      <View style={styles.stageDots}>
-        {STAGES.map((stage, index) => (
-          <View key={stage.key} style={styles.stageDotWrapper}>
-            <View style={[
-              styles.stageDot,
-              index < stageIndex && styles.stageDotCompleted,
-              index === stageIndex && styles.stageDotCurrent,
-            ]}>
-              {index < stageIndex && (
-                <Ionicons name="checkmark" size={10} color="#FFF" />
-              )}
+    <TouchableOpacity
+      style={styles.achievementsCard}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress?.(); }}
+      activeOpacity={0.8}
+    >
+      <LinearGradient
+        colors={['#7C3AED', '#A78BFA']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.achievementsGradient}
+      >
+        <View style={styles.achievementsContent}>
+          <View style={styles.achievementsLeft}>
+            <View style={styles.achievementsIcon}>
+              <Ionicons name="trophy" size={24} color="#FFF" />
             </View>
-            {index < STAGES.length - 1 && (
-              <View style={[
-                styles.stageLine,
-                index < stageIndex && styles.stageLineCompleted,
-              ]} />
-            )}
+            <View>
+              <Text style={styles.achievementsTitle}>Achievements</Text>
+              <Text style={styles.achievementsSubtitle}>
+                {currentStage?.label || 'Start'} Stage
+              </Text>
+            </View>
           </View>
-        ))}
-      </View>
-    </View>
+          <View style={styles.achievementsRight}>
+            <View style={styles.achievementsBadge}>
+              <Text style={styles.achievementsBadgeText}>Lv.{level}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+          </View>
+        </View>
+
+        {/* Progress dots */}
+        <View style={styles.achievementsDots}>
+          {STAGES.map((stage, index) => (
+            <View
+              key={stage.key}
+              style={[
+                styles.achievementsDot,
+                index < stageIndex && styles.achievementsDotCompleted,
+                index === stageIndex && styles.achievementsDotCurrent,
+              ]}
+            />
+          ))}
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
   );
 };
 
@@ -155,10 +175,11 @@ export default function ProfileScreen() {
 
   // Get stats from dashboard
   const gamification = dashboardData?.gamification;
+  const userLifecycle = dashboardData?.userLifecycle;
   const level = gamification?.level || 1;
   const totalMeals = gamification?.totalMealsLogged || 0;
   const streak = gamification?.streak || 0;
-  const daysLogged = gamification?.daysWithData || Math.floor(totalMeals / 3) || 0;
+  const daysLogged = userLifecycle?.totalDaysWithLogs || Math.floor(totalMeals / 3) || 0;
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -272,8 +293,13 @@ export default function ProfileScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Stage Progress */}
-          <StageProgress daysLogged={daysLogged} />
+          {/* Achievements Card - Links to full achievements screen */}
+          <AchievementsCard
+            level={level}
+            streak={streak}
+            daysLogged={daysLogged}
+            onPress={() => router.push('/achievements')}
+          />
 
           {/* Body Metrics */}
           <View style={styles.card}>
@@ -526,50 +552,87 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
 
-  // Stage Progress
-  stageContainer: {
-    backgroundColor: '#FFF',
+  // Achievements Card
+  achievementsCard: {
+    marginBottom: 12,
     borderRadius: 16,
+    overflow: 'hidden',
+    ...SHADOWS.md,
+  },
+  achievementsGradient: {
     padding: 16,
-    marginBottom: 12,
-    ...SHADOWS.sm,
   },
-  stageHeader: {
+  achievementsContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  stageLabel: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: BRAND.primary,
-  },
-  stageDots: {
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  stageDotWrapper: {
+  achievementsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 12,
   },
-  stageDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#E5E7EB',
+  achievementsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stageDotCompleted: {
+  achievementsTitle: {
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#FFF',
+  },
+  achievementsSubtitle: {
+    fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  achievementsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  achievementsBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  achievementsBadgeText: {
+    fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#FFF',
+  },
+  achievementsDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+  },
+  achievementsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  achievementsDotCompleted: {
     backgroundColor: '#10B981',
   },
-  stageDotCurrent: {
-    backgroundColor: BRAND.primary,
-    borderWidth: 3,
-    borderColor: `${BRAND.primary}30`,
+  achievementsDotCurrent: {
+    backgroundColor: '#FFF',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
+
+  // Legacy stage styles (kept for compatibility)
   stageLine: {
     flex: 1,
     height: 3,

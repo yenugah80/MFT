@@ -138,12 +138,12 @@ export const TYPOGRAPHY = {
     widest: 1.6,
   },
 
-  // Font families - Tenor Sans for elegant premium feel
+  // Font families - Inter for professional, highly legible typography
   family: {
-    regular: 'TenorSans_400Regular',
-    medium: 'TenorSans_400Regular',
-    semibold: 'TenorSans_400Regular',
-    bold: 'TenorSans_400Regular',
+    regular: 'Inter_400Regular',
+    medium: 'Inter_500Medium',
+    semibold: 'Inter_600SemiBold',
+    bold: 'Inter_700Bold',
   },
 };
 

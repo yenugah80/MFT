@@ -6,6 +6,7 @@
  * - Computes XP progress and level info
  * - Generates witty messages for gamification events
  * - Handles streak lifecycle (continued, at risk, lost, saved)
+ * - Badges, Leaderboards, and Challenges API integration
  *
  * Usage:
  * ```jsx
@@ -23,12 +24,18 @@
  *   getLevelUpMessage,
  *   getStreakMessage,
  *   getAchievementMessage,
+ *   // Enhanced features
+ *   badges,
+ *   leaderboard,
+ *   challenges,
  * } = useGamification();
  * ```
  */
 
 import { useMemo, useCallback, useRef, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDashboard } from './useDashboard';
+import apiClient from '../services/apiClient';
 import { gamificationMessages, streakMessages } from '../utils/wittyMessages';
 
 // ============================================================================
@@ -300,6 +307,145 @@ export function useGamification() {
     // Level name helper
     getLevelName,
   };
+}
+
+// ============================================================================
+// ENHANCED GAMIFICATION HOOKS (API-based)
+// ============================================================================
+
+/**
+ * Query keys for gamification API
+ */
+export const GAMIFICATION_KEYS = {
+  badges: ['gamification', 'badges'],
+  leaderboard: (type) => ['gamification', 'leaderboard', type],
+  challenges: ['gamification', 'challenges'],
+  xpHistory: (days) => ['gamification', 'xp', days],
+  summary: ['gamification', 'summary'],
+};
+
+/**
+ * Get all badges with user's progress
+ */
+export function useBadges(options = {}) {
+  return useQuery({
+    queryKey: GAMIFICATION_KEYS.badges,
+    queryFn: async () => {
+      const response = await apiClient.get('/gamification/badges');
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Check and award new badges
+ */
+export function useCheckBadges() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post('/gamification/badges/check');
+      return response.data;
+    },
+    onSuccess: (data) => {
+      if (data.awarded?.length > 0) {
+        queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.badges });
+        queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.summary });
+      }
+    },
+  });
+}
+
+/**
+ * Get leaderboard data
+ */
+export function useLeaderboard(type = 'global', limit = 50, options = {}) {
+  return useQuery({
+    queryKey: GAMIFICATION_KEYS.leaderboard(type),
+    queryFn: async () => {
+      const response = await apiClient.get('/gamification/leaderboard', {
+        params: { type, limit },
+      });
+      return response.data;
+    },
+    staleTime: 2 * 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Get daily and weekly challenges
+ */
+export function useChallenges(options = {}) {
+  return useQuery({
+    queryKey: GAMIFICATION_KEYS.challenges,
+    queryFn: async () => {
+      const response = await apiClient.get('/gamification/challenges');
+      return response.data;
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Update challenge progress
+ */
+export function useUpdateChallengeProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ challengeId, progress, type = 'daily' }) => {
+      const response = await apiClient.post(`/gamification/challenges/${challengeId}/progress`, {
+        progress,
+        type,
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.challenges });
+      if (data.completed) {
+        queryClient.invalidateQueries({ queryKey: ['gamification', 'xp'] });
+        queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.summary });
+      }
+    },
+  });
+}
+
+/**
+ * Get XP breakdown and history
+ */
+export function useXPHistory(days = 7, options = {}) {
+  return useQuery({
+    queryKey: GAMIFICATION_KEYS.xpHistory(days),
+    queryFn: async () => {
+      const response = await apiClient.get('/gamification/xp', {
+        params: { days },
+      });
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Get complete gamification summary
+ */
+export function useGamificationSummary(options = {}) {
+  return useQuery({
+    queryKey: GAMIFICATION_KEYS.summary,
+    queryFn: async () => {
+      const response = await apiClient.get('/gamification/summary');
+      return response.data;
+    },
+    staleTime: 2 * 60 * 1000,
+    ...options,
+  });
 }
 
 export default useGamification;

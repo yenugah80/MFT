@@ -12,7 +12,7 @@
 
 import express from 'express';
 import { requireAuth } from '@clerk/express';
-import { getUnifiedIntelligence } from '../services/intelligenceOrchestratorService.js';
+import { getUnifiedIntelligence } from '../services/unifiedIntelligenceService.js';
 import {
   trackRecommendationAction,
   recordRecommendationSatisfaction,

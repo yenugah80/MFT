@@ -223,6 +223,8 @@ export const HEALTH_SCORE = {
 };
 
 // TYPOGRAPHY
+// Inter font family - Professional, highly legible, excellent for data-heavy UIs
+// Each weight maps to its proper font file for crisp rendering
 export const TYPOGRAPHY = {
   size: {
     xs: 11,
@@ -242,20 +244,20 @@ export const TYPOGRAPHY = {
     medium: '500',
     semibold: '600',
     bold: '700',
-    extrabold: '800',
-    black: '900',
   },
   lineHeight: {
     tight: 1.2,
+    snug: 1.35,
     normal: 1.5,
     relaxed: 1.75,
   },
-  // Font families - Tenor Sans for elegant premium feel
+  // Font families - Inter with proper weight variants
+  // Each weight has its own font file for crisp, professional rendering
   family: {
-    regular: 'TenorSans_400Regular',
-    medium: 'TenorSans_400Regular',    // Tenor Sans only has 400 weight
-    semibold: 'TenorSans_400Regular',  // Use fontWeight for visual variation
-    bold: 'TenorSans_400Regular',      // Use fontWeight for visual variation
+    regular: 'Inter_400Regular',
+    medium: 'Inter_500Medium',
+    semibold: 'Inter_600SemiBold',
+    bold: 'Inter_700Bold',
   },
 };
 
@@ -282,108 +284,271 @@ export const createTextStyle = (size = 'base', weight = 'regular', color = TEXT.
 /**
  * Pre-defined text styles for common use cases
  * Import and spread these in your StyleSheet for consistent typography
+ *
+ * TYPOGRAPHY HIERARCHY (use consistently):
+ * ─────────────────────────────────────────
+ * DISPLAY    → Hero sections, main screen titles (Bold, 32-48px)
+ * HEADING    → Section headers, card titles (Bold/SemiBold, 18-24px)
+ * SUBHEADING → Subsection titles, secondary headers (SemiBold/Medium, 15-16px)
+ * BODY       → Paragraphs, descriptions (Regular, 13-16px)
+ * LABEL      → Buttons, chips, tags (Medium/SemiBold, 11-16px)
+ * CAPTION    → Metadata, timestamps, hints (Regular, 11px)
+ * NUMERIC    → Stats, values, metrics (Bold, various sizes)
  */
 export const TEXT_STYLES = {
-  // Display styles - for large headings and hero text
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DISPLAY STYLES - Hero text, main screen titles, prominent headings
+  // Use for: Dashboard greeting, screen titles, hero metrics
+  // ═══════════════════════════════════════════════════════════════════════════
   displayLarge: {
-    fontSize: TYPOGRAPHY.size['4xl'],
+    fontSize: TYPOGRAPHY.size['5xl'],  // 40px
     fontFamily: TYPOGRAPHY.family.bold,
+    fontWeight: '700',
     color: TEXT.primary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
+    lineHeight: TYPOGRAPHY.size['5xl'] * TYPOGRAPHY.lineHeight.tight,
   },
   displayMedium: {
-    fontSize: TYPOGRAPHY.size['3xl'],
+    fontSize: TYPOGRAPHY.size['4xl'],  // 32px
     fontFamily: TYPOGRAPHY.family.bold,
+    fontWeight: '700',
     color: TEXT.primary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+    lineHeight: TYPOGRAPHY.size['4xl'] * TYPOGRAPHY.lineHeight.tight,
   },
   displaySmall: {
-    fontSize: TYPOGRAPHY.size['2xl'],
+    fontSize: TYPOGRAPHY.size['3xl'],  // 28px
     fontFamily: TYPOGRAPHY.family.bold,
+    fontWeight: '700',
     color: TEXT.primary,
+    letterSpacing: -0.3,
+    lineHeight: TYPOGRAPHY.size['3xl'] * TYPOGRAPHY.lineHeight.tight,
   },
 
-  // Heading styles - for section headers
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HEADING STYLES - Section titles, card headers
+  // Use for: Card titles, section headers, modal titles
+  // ═══════════════════════════════════════════════════════════════════════════
   headingLarge: {
-    fontSize: TYPOGRAPHY.size.xl,
+    fontSize: TYPOGRAPHY.size['2xl'],  // 24px
     fontFamily: TYPOGRAPHY.family.bold,
+    fontWeight: '700',
     color: TEXT.primary,
+    letterSpacing: -0.2,
+    lineHeight: TYPOGRAPHY.size['2xl'] * TYPOGRAPHY.lineHeight.snug,
   },
   headingMedium: {
-    fontSize: TYPOGRAPHY.size.lg,
+    fontSize: TYPOGRAPHY.size.xl,      // 20px
     fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
     color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.xl * TYPOGRAPHY.lineHeight.snug,
   },
   headingSmall: {
-    fontSize: TYPOGRAPHY.size.md,
+    fontSize: TYPOGRAPHY.size.lg,      // 18px
     fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
     color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.lg * TYPOGRAPHY.lineHeight.snug,
   },
 
-  // Body styles - for paragraphs and general text
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUBHEADING STYLES - Secondary headers, subsection titles
+  // Use for: Subsections within cards, list group headers, field labels
+  // ═══════════════════════════════════════════════════════════════════════════
+  subheadingLarge: {
+    fontSize: TYPOGRAPHY.size.md,      // 16px
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
+    color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.md * TYPOGRAPHY.lineHeight.snug,
+  },
+  subheadingMedium: {
+    fontSize: TYPOGRAPHY.size.base,    // 15px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
+    color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.base * TYPOGRAPHY.lineHeight.snug,
+  },
+  subheadingSmall: {
+    fontSize: TYPOGRAPHY.size.sm,      // 13px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
+    color: TEXT.secondary,
+    lineHeight: TYPOGRAPHY.size.sm * TYPOGRAPHY.lineHeight.snug,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BODY STYLES - Paragraphs, descriptions, general content
+  // Use for: Descriptions, explanations, long-form text
+  // ═══════════════════════════════════════════════════════════════════════════
   bodyLarge: {
-    fontSize: TYPOGRAPHY.size.md,
+    fontSize: TYPOGRAPHY.size.md,      // 16px
     fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
     color: TEXT.primary,
     lineHeight: TYPOGRAPHY.size.md * TYPOGRAPHY.lineHeight.normal,
   },
   bodyMedium: {
-    fontSize: TYPOGRAPHY.size.base,
+    fontSize: TYPOGRAPHY.size.base,    // 15px
     fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
     color: TEXT.primary,
     lineHeight: TYPOGRAPHY.size.base * TYPOGRAPHY.lineHeight.normal,
   },
   bodySmall: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.sm,      // 13px
     fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
     color: TEXT.secondary,
     lineHeight: TYPOGRAPHY.size.sm * TYPOGRAPHY.lineHeight.normal,
   },
 
-  // Label styles - for buttons, chips, and UI elements
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LABEL STYLES - Buttons, chips, tags, interactive elements
+  // Use for: Button text, chip labels, tab labels, navigation items
+  // ═══════════════════════════════════════════════════════════════════════════
   labelLarge: {
-    fontSize: TYPOGRAPHY.size.md,
+    fontSize: TYPOGRAPHY.size.md,      // 16px
     fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
     color: TEXT.primary,
+    letterSpacing: 0.1,
   },
   labelMedium: {
-    fontSize: TYPOGRAPHY.size.sm,
+    fontSize: TYPOGRAPHY.size.base,    // 15px
     fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
     color: TEXT.primary,
   },
   labelSmall: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.sm,      // 13px
     fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
     color: TEXT.secondary,
   },
+  labelTiny: {
+    fontSize: TYPOGRAPHY.size.xs,      // 11px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
+    color: TEXT.tertiary,
+    letterSpacing: 0.2,
+  },
 
-  // Caption styles - for metadata and tertiary info
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CAPTION STYLES - Metadata, timestamps, hints, tertiary info
+  // Use for: Timestamps, helper text, footnotes, attribution
+  // ═══════════════════════════════════════════════════════════════════════════
   caption: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.xs,      // 11px
     fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
+    color: TEXT.tertiary,
+    lineHeight: TYPOGRAPHY.size.xs * TYPOGRAPHY.lineHeight.normal,
+  },
+  captionMedium: {
+    fontSize: TYPOGRAPHY.size.xs,      // 11px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
     color: TEXT.tertiary,
   },
   captionBold: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.xs,      // 11px
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.tertiary,
+    fontWeight: '600',
+    color: TEXT.secondary,
   },
 
-  // Numeric styles - for stats, values, and numbers
-  numericLarge: {
-    fontSize: TYPOGRAPHY.size['3xl'],
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NUMERIC STYLES - Stats, values, metrics, data display
+  // Use for: Calorie counts, percentages, scores, measurements
+  // ═══════════════════════════════════════════════════════════════════════════
+  numericHero: {
+    fontSize: TYPOGRAPHY.size['5xl'],  // 40px - Main dashboard stat
     fontFamily: TYPOGRAPHY.family.bold,
+    fontWeight: '700',
     color: TEXT.primary,
+    letterSpacing: -1,
+  },
+  numericLarge: {
+    fontSize: TYPOGRAPHY.size['3xl'],  // 28px
+    fontFamily: TYPOGRAPHY.family.bold,
+    fontWeight: '700',
+    color: TEXT.primary,
+    letterSpacing: -0.5,
   },
   numericMedium: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontSize: TYPOGRAPHY.size.xl,      // 20px
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
     color: TEXT.primary,
   },
   numericSmall: {
-    fontSize: TYPOGRAPHY.size.md,
+    fontSize: TYPOGRAPHY.size.md,      // 16px
     fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
     color: TEXT.primary,
+  },
+  numericTiny: {
+    fontSize: TYPOGRAPHY.size.sm,      // 13px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
+    color: TEXT.secondary,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SPECIAL STYLES - Specific use cases
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Card title - Use for all card headers consistently
+  cardTitle: {
+    fontSize: TYPOGRAPHY.size.lg,      // 18px
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
+    color: TEXT.primary,
+    lineHeight: TYPOGRAPHY.size.lg * TYPOGRAPHY.lineHeight.snug,
+  },
+  // Card subtitle - Secondary info below card title
+  cardSubtitle: {
+    fontSize: TYPOGRAPHY.size.sm,      // 13px
+    fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
+    color: TEXT.tertiary,
+    lineHeight: TYPOGRAPHY.size.sm * TYPOGRAPHY.lineHeight.normal,
+  },
+  // Button text - Primary buttons
+  buttonPrimary: {
+    fontSize: TYPOGRAPHY.size.md,      // 16px
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: '600',
+    color: TEXT.white,
+    letterSpacing: 0.2,
+  },
+  // Button text - Secondary buttons
+  buttonSecondary: {
+    fontSize: TYPOGRAPHY.size.base,    // 15px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
+    color: BRAND.primary,
+  },
+  // Tab bar label
+  tabLabel: {
+    fontSize: TYPOGRAPHY.size.xs,      // 11px
+    fontFamily: TYPOGRAPHY.family.medium,
+    fontWeight: '500',
+  },
+  // Input field text
+  inputText: {
+    fontSize: TYPOGRAPHY.size.md,      // 16px
+    fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
+    color: TEXT.primary,
+  },
+  // Input placeholder
+  inputPlaceholder: {
+    fontSize: TYPOGRAPHY.size.md,      // 16px
+    fontFamily: TYPOGRAPHY.family.regular,
+    fontWeight: '400',
+    color: TEXT.muted,
   },
 };
 

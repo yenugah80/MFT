@@ -298,6 +298,160 @@ export function useRecommendationHistory() {
 }
 
 /**
+ * useSmartRecommendations - Hook for the new smart recommendation engine
+ *
+ * Features:
+ * - Real-time nutritional gap detection
+ * - Time-contextual meal suggestions
+ * - Personal history-based learning
+ * - Rich explanations with actual data
+ * - Quick-log ready recommendations
+ *
+ * @param {Object} options
+ * @param {boolean} options.enabled - Whether to auto-fetch (default: false)
+ * @param {number} options.limit - Number of recommendations (default: 5)
+ * @param {string} options.mealType - Force specific meal type (optional)
+ */
+export function useSmartRecommendations({ enabled = false, limit = 5, mealType } = {}) {
+  const queryClient = useQueryClient();
+
+  const {
+    data,
+    isLoading: loading,
+    error,
+    refetch: fetchRecommendations,
+    isFetching,
+  } = useQuery({
+    queryKey: ['smartRecommendations', limit, mealType],
+    queryFn: async () => {
+      try {
+        if (__DEV__) console.log('[useSmartRecommendations] Fetching smart recommendations...');
+
+        const params = { limit };
+        if (mealType) params.mealType = mealType;
+
+        const response = await apiClient.get('/recommendations/smart', {
+          params,
+          timeout: 15000, // 15s timeout
+        });
+
+        if (__DEV__) console.log('[useSmartRecommendations] Fetch successful:', response?.recommendations?.length || 0, 'items');
+        return response;
+      } catch (err) {
+        const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+        const errorMessage = isTimeout
+          ? 'Request took too long - try again later'
+          : err?.response?.data?.error || 'Failed to load smart recommendations';
+
+        if (__DEV__) console.error('[useSmartRecommendations] Fetch error:', errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000,   // 15 minutes
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+  });
+
+  // Quick log a recommendation
+  const quickLogMutation = useMutation({
+    mutationFn: async (recommendation) => {
+      const quickLogData = recommendation.quickLog || {
+        foodName: recommendation.name,
+        calories: recommendation.nutrition?.calories,
+        protein: recommendation.nutrition?.protein,
+        carbs: recommendation.nutrition?.carbs,
+        fat: recommendation.nutrition?.fat,
+        fiber: recommendation.nutrition?.fiber,
+        mealType: recommendation.mealType,
+      };
+
+      const response = await apiClient.post('/log/food', {
+        foodName: quickLogData.foodName,
+        calories: quickLogData.calories,
+        protein: quickLogData.protein,
+        carbs: quickLogData.carbs,
+        fat: quickLogData.fat || quickLogData.fats,
+        fiber: quickLogData.fiber,
+        mealType: quickLogData.mealType,
+        servingSize: recommendation.portion || '1 serving',
+        sourceMeta: {
+          source: 'smart_recommendation',
+          recommendationId: recommendation.id,
+        },
+      });
+
+      return response;
+    },
+    onSuccess: () => {
+      if (__DEV__) console.log('[useSmartRecommendations] Quick log successful');
+      // Invalidate both dashboard and recommendations
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['smartRecommendations'] });
+    },
+    onError: (err) => {
+      if (__DEV__) console.error('[useSmartRecommendations] Quick log error:', err);
+    },
+  });
+
+  const quickLog = useCallback(async (recommendation) => {
+    try {
+      const result = await quickLogMutation.mutateAsync(recommendation);
+      return {
+        success: true,
+        foodLog: result?.foodLog,
+        message: `${recommendation.name} added to your log!`,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.response?.data?.error || 'Failed to log food',
+      };
+    }
+  }, [quickLogMutation]);
+
+  // Clear cache
+  const clearCache = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['smartRecommendations'] });
+  }, [queryClient]);
+
+  return {
+    // Full response
+    data,
+
+    // Recommendations list
+    recommendations: data?.recommendations || [],
+
+    // Summary info
+    summary: data?.summary || null,
+    nutritionalStatus: data?.nutritionalStatus || null,
+    userContext: data?.userContext || null,
+
+    // Current meal type (auto-detected or forced)
+    mealType: data?.mealType || mealType,
+
+    // Loading states
+    loading,
+    isFetching,
+    error,
+
+    // Actions
+    fetchRecommendations,
+    quickLog,
+    isQuickLogging: quickLogMutation.isPending,
+    clearCache,
+
+    // Derived
+    hasRecommendations: (data?.recommendations?.length || 0) > 0,
+    isEmpty: !loading && (data?.recommendations?.length || 0) === 0,
+    topPriorities: data?.nutritionalStatus?.priorities || [],
+  };
+}
+
+/**
  * Format recommendation for display
  */
 export function formatRecommendationForModal(recommendation) {

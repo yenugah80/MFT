@@ -56,6 +56,8 @@ import intelligenceRouter from "./routes/intelligence.js";
 import wellnessRouter from "./routes/wellness.js";
 import personalizedInsightsRouter from "./routes/personalizedInsights.js";
 import ingredientsRouter from "./routes/ingredients.js";
+import enhancedGamificationRouter from "./routes/gamification.js";
+import healthPlatformRouter from "./routes/health.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartReminderJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
@@ -803,6 +805,16 @@ app.use("/api/insights/personalized", personalizedInsightsRouter);
 // Note: Production-grade ingredient breakdown with add/delete UI support,
 // regional variations (US, India, UK, Japan, Middle East), and real-time nutrition recalculation
 app.use("/api/ingredients", ingredientsRouter);
+
+// Mount Enhanced Gamification Router (Badges, Leaderboards, Challenges)
+// Note: Production-grade gamification with badge tiers, global/weekly leaderboards,
+// daily/weekly challenges with XP rewards, and Thompson Sampling optimization
+app.use("/api/gamification", enhancedGamificationRouter);
+
+// Mount Health Platform Router (HealthKit/Google Fit Integration)
+// Note: Bi-directional sync with health platforms, activity/sleep/heart rate data,
+// nutrition export, privacy-preserving data handling
+app.use("/api/health", healthPlatformRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES

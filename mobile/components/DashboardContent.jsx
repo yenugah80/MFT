@@ -28,6 +28,7 @@ import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
 import { useWellnessIntelligence } from "../hooks/useWellnessIntelligence";
+import { useContextInsights } from "../hooks/useContextInsights";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -50,7 +51,7 @@ import DashboardInsightsSection from "./dashboard/DashboardInsightsSection";
 import RecommendationDetailModal from "./dashboard/RecommendationDetailModal";
 // DashboardNutritionSection removed - replaced with comprehensive NutritionDetailsSection
 import DashboardWellnessSection from "./dashboard/DashboardWellnessSection";
-import DashboardProgressSection from "./dashboard/DashboardProgressSection";
+// DashboardProgressSection removed - consolidated into Achievements screen
 // RemainingBudgetCard removed - redundant with InsightNudge system
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -73,17 +74,14 @@ import PremiumAchievementsCard from "./dashboard/PremiumAchievementsCard";
 // NEW: Comprehensive nutrition details component with integrated progress rings and macro breakdown
 import NutritionDetailsSection from "./dashboard/NutritionDetailsSection";
 
-// Behavioral Health Intelligence System - Phase 6
-import DailyIntelligenceBehaviorSection from "./dashboard/DailyIntelligenceBehaviorSection";
-import { LifecycleStageFooter } from "./dashboard/LifecycleStageFooter";
-import { DismissReasonSelector } from "./dashboard/DismissReasonSelector";
-import { DailyIntelligenceErrorBoundary } from "./dashboard/DailyIntelligenceErrorBoundary";
-
-// Wellness Intelligence - Holistic wellness storytelling
-import WellnessNarrativeCard from "./wellness/WellnessNarrativeCard";
+// Note: DailyIntelligenceBehaviorSection, LifecycleStageFooter, WellnessNarrativeCard
+// removed - consolidated into Analytics screen for cleaner dashboard
 
 // Notification Center - Centralized notification hub
 import NotificationCenter from "./notifications/NotificationCenter";
+
+// Context-aware insights - time, weather, and personalized suggestions
+import ContextInsightsCard from "./insights/ContextInsightsCard";
 
 // Design tokens - using unified premium theme
 import { detectDataState } from "../constants/designTokens";
@@ -262,7 +260,7 @@ export default function DashboardContent() {
   // Collapsible section states
   const [nutritionExpanded, setNutritionExpanded] = useState(true);
   const [wellnessExpanded, setWellnessExpanded] = useState(true);
-  const [progressExpanded, setProgressExpanded] = useState(false);
+  // progressExpanded removed - Progress section consolidated into Achievements screen
 
   // Focus mode state - simplifies view to reduce cognitive load
   const [focusMode, setFocusMode] = useState(false);
@@ -329,6 +327,15 @@ export default function DashboardContent() {
     isLoading: wellnessIntelligenceLoading,
     prefetchFull: prefetchWellnessDetails,
   } = useWellnessIntelligence({ enabled: true, includeSummary: true });
+
+  // Context-aware insights - time of day, weather, personalized suggestions
+  const {
+    timeOfDay: contextTimeOfDay,
+    weather: contextWeather,
+    waterIntake: contextWaterIntake,
+    waterGoal: contextWaterGoal,
+    isLoading: contextLoading,
+  } = useContextInsights();
 
   useEffect(() => {
     let isActive = true;
@@ -1157,15 +1164,10 @@ export default function DashboardContent() {
     }
   }, [insightsDays]);
 
-  // eslint-disable-next-line no-unused-vars
-  const handlePreviewInsights = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights');
-  };
-
+  // Navigate to detailed analytics screen
   const handleViewInsights = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights');
+    router.push('/analytics');
   };
 
   const handleInsightsDaysChange = (days) => {
@@ -1456,6 +1458,24 @@ export default function DashboardContent() {
           onSettingsPress={() => router.push('/(tabs)/profile')}
         />
 
+        {/* CONTEXT-AWARE INSIGHTS - Time, weather, personalized suggestions */}
+        {hasAnyData && !contextLoading && (
+          <View style={styles.section}>
+            <ContextInsightsCard
+              weather={contextWeather?.condition || 'sunny'}
+              temperature={contextWeather?.temperature || 72}
+              timeOfDay={contextTimeOfDay}
+              waterIntake={contextWaterIntake || 0}
+              waterGoal={contextWaterGoal || 2000}
+              hideGreeting={true}
+              onMealSuggestionPress={() => router.push('/(tabs)/log')}
+              onHydrationPress={() => router.push('/(tabs)/log?focus=hydration')}
+              onWeatherTipPress={() => {}}
+              onMoodCheckPress={() => router.push('/(tabs)/log?focus=mood')}
+            />
+          </View>
+        )}
+
         {/* YESTERDAY'S DATA BANNER - Shows when today is empty */}
         {showYesterdayFallback && (
           <TouchableOpacity
@@ -1468,7 +1488,7 @@ export default function DashboardContent() {
                 <Ionicons name="time-outline" size={20} color={BRAND.primary} />
               </View>
               <View style={styles.yesterdayBannerText}>
-                <Text style={styles.yesterdayBannerTitle}>Showing yesterday's snapshot</Text>
+                <Text style={styles.yesterdayBannerTitle}>Showing yesterday&apos;s snapshot</Text>
                 <Text style={styles.yesterdayBannerSubtitle}>Tap to start logging today</Text>
               </View>
               <Ionicons name="add-circle" size={28} color={BRAND.primary} />
@@ -1528,7 +1548,7 @@ export default function DashboardContent() {
             }}
             userName={user?.firstName || user?.fullName || ''}
             historicalScores={[]}
-            onViewDetails={() => router.push('/insights')}
+            onViewDetails={() => router.push('/analytics')}
           />
         )}
 
@@ -1548,60 +1568,39 @@ export default function DashboardContent() {
             yesterdayMeals: data?.trends?.yesterdayMeals || 0,
             avgCalories: data?.trends?.avgCalories || 0,
           }}
-          onViewFoodHistory={() => router.push('/insights')}
+          onViewFoodHistory={() => router.push('/analytics')}
         />
 
         {/* ============================================ */}
-        {/* ANALYTICS - Link to unified analytics screen */}
+        {/* VIEW YOUR PROGRESS - Link to detailed analytics */}
         {/* ============================================ */}
         {hasAnyData && (
           <TouchableOpacity
-            style={styles.analyticsLinkCard}
+            style={styles.progressLinkCard}
             onPress={() => router.push('/analytics')}
             activeOpacity={0.7}
           >
-            <View style={styles.analyticsLinkContent}>
-              <View style={[styles.analyticsIconContainer, { backgroundColor: '#6B4EFF15' }]}>
-                <Ionicons name="stats-chart" size={24} color="#6B4EFF" />
+            <LinearGradient
+              colors={['#6B4EFF', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.progressLinkGradient}
+            >
+              <View style={styles.progressLinkContent}>
+                <View style={styles.progressLinkIcon}>
+                  <Ionicons name="trending-up" size={28} color="#FFFFFF" />
+                </View>
+                <View style={styles.progressLinkText}>
+                  <Text style={styles.progressLinkTitle}>View Your Progress</Text>
+                  <Text style={styles.progressLinkSubtitle}>Detailed analytics for nutrition, mood, activity & hydration</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
               </View>
-              <View style={styles.analyticsLinkText}>
-                <Text style={styles.analyticsLinkTitle}>View Analytics</Text>
-                <Text style={styles.analyticsLinkSubtitle}>Nutrition, Mood, Activity & Hydration</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#8A7F78" />
+            </LinearGradient>
           </TouchableOpacity>
         )}
 
-        {/* ============================================ */}
-        {/* BEHAVIORAL HEALTH INTELLIGENCE - Daily insights */}
-        {/* Shows decision cards, pattern insights, lifecycle stage */}
-        {/* ============================================ */}
-        {hasAnyData && !isOnboarding && (
-          <DailyIntelligenceErrorBoundary>
-            {orchestratorLoading ? (
-              // Show placeholder while loading
-              <View style={[styles.card, { paddingVertical: 16 }]}>
-                <View style={{ paddingHorizontal: 16 }}>
-                  <View style={{ height: 16, backgroundColor: '#E5E1DB', borderRadius: 4, marginBottom: 12 }} />
-                  <View style={{ height: 12, backgroundColor: '#F0ECEA', borderRadius: 4, width: '70%' }} />
-                </View>
-              </View>
-            ) : correctedOrchestratorData ? (
-              <DailyIntelligenceBehaviorSection
-                orchestratorData={correctedOrchestratorData}
-                gamification={data?.gamification}
-                goals={data?.goals}
-                todayData={displayData}
-                weeklyComplianceDays={data?.trends?.weekSummaries?.filter(d => d.totalCalories > 0)?.length || 0}
-                uniqueFoodsThisWeek={uniqueFoodLogs?.length || 0}
-                onRequestDismiss={handleDismissRequest}
-                onAction={handleIntelligenceAction}
-                onViewProgress={() => router.push('/insights')}
-              />
-            ) : null}
-          </DailyIntelligenceErrorBoundary>
-        )}
+        {/* BEHAVIORAL HEALTH INTELLIGENCE section removed - consolidated into Analytics screen */}
 
         {/* ============================================ */}
         {/* ACHIEVEMENTS & ENGAGEMENT - Gamification Card */}
@@ -1616,6 +1615,8 @@ export default function DashboardContent() {
             nextLevelXp={parseDecimal(gamification?.nextLevelXp, 0)}
             streakFreezes={parseDecimal(gamification?.streakFreezes, 0)}
             isReturningUser={isReturning || hasAnyData}
+            daysWithData={parseDecimal(userLifecycle?.totalDaysWithLogs, 0)}
+            totalMealsLogged={parseDecimal(gamification?.totalMealsLogged, 0)}
           />
         )}
 
@@ -1693,61 +1694,7 @@ export default function DashboardContent() {
         {/* Now integrated into comprehensive NutritionDetailsSection above */}
         {/* ============================================ */}
 
-        {/* ============================================ */}
-        {/* ============================================ */}
-        {/* WELLNESS INTELLIGENCE - Personalized Wellness Story */}
-        {/* Shows: wellness score, recovery score, flags, narrative, guidance */}
-        {/* "The story behind the numbers" - not just metrics */}
-        {/*
-         * Wellness Score Priority:
-         * 1. apiWellnessScore - server-calculated, authoritative
-         * 2. wellnessScore?.score - client-calculated fallback
-         * 3. 50 - default neutral value
-         */}
-        {/* ============================================ */}
-        {hasAnyData && hasWellnessData && !wellnessIntelligenceLoading && (
-          <WellnessNarrativeCard
-            wellnessScore={apiWellnessScore || wellnessScore?.score || 50}
-            recoveryScore={recoveryScore || 50}
-            headline={wellnessHeadline || 'Balanced'}
-            emoji={wellnessEmoji || '💚'}
-            narrative={wellnessNarrative}
-            flags={wellnessFlags || []}
-            guidance={wellnessGuidance || []}
-            correlations={wellnessCorrelations || []}
-            conflictResolution={wellnessIntelligence?.conflictResolution}
-            onFlagPress={(flag) => {
-              // Navigate to relevant section based on flag
-              if (flag.flag === 'DEHYDRATED') {
-                router.push('/(tabs)/log?focus=hydration');
-              } else if (flag.flag === 'LOW_MOOD' || flag.flag === 'HIGH_STRESS') {
-                router.push('/insights');
-              } else if (flag.flag === 'LOW_ENERGY' || flag.flag === 'POST_WORKOUT') {
-                router.push('/(tabs)/log?focus=activity');
-              } else if (flag.flag === 'POOR_SLEEP') {
-                router.push('/insights');
-              } else {
-                router.push('/insights');
-              }
-            }}
-            onActionPress={(flag) => {
-              // Navigate to log screen with context
-              router.push({
-                pathname: '/(tabs)/log',
-                params: {
-                  focus: 'meal',
-                  wellness: flag.flag
-                }
-              });
-            }}
-            onLearnMore={() => {
-              // Prefetch full wellness data and navigate to wellness insights
-              prefetchWellnessDetails?.();
-              router.push('/insights/wellness');
-            }}
-            style={{ marginHorizontal: SPACING[4], marginBottom: SPACING[3] }}
-          />
-        )}
+        {/* WELLNESS NARRATIVE CARD removed - consolidated into WellnessScoreCard hero and Analytics screen */}
 
         {/* ============================================ */}
         {/* WELLNESS SECTION - Collapsible */}
@@ -1764,36 +1711,16 @@ export default function DashboardContent() {
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
-          onOpenMoodInsights={() => router.push('/insights')}
-          onViewMoodHistory={() => router.push('/insights')}
+          onOpenMoodInsights={() => router.push('/analytics')}
+          onViewMoodHistory={() => router.push('/analytics')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
-          onViewHydrationHistory={() => router.push('/insights')}
+          onViewHydrationHistory={() => router.push('/analytics')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}
         />
 
-        {/* ============================================ */}
-        {/* PROGRESS SECTION - Collapsible (Calendar moved to top) */}
-        {/* ============================================ */}
-        <DashboardProgressSection
-          styles={styles}
-          expanded={progressExpanded}
-          onToggle={() => setProgressExpanded(!progressExpanded)}
-          trends={trends}
-          goals={goals}
-          recentWeight={recentWeight}
-        />
-
-        {/* ============================================ */}
-        {/* LIFECYCLE STAGE FOOTER - User progression */}
-        {/* Shows current stage and progress to next milestone */}
-        {/* ============================================ */}
-        {hasAnyData && !isOnboarding && !orchestratorLoading && correctedOrchestratorData && (
-          <LifecycleStageFooter
-            orchestratorData={correctedOrchestratorData}
-          />
-        )}
+        {/* Progress & Tracking section removed - consolidated into Achievements screen */}
           </ScrollView>
         </ThemeTransition>
       </LinearGradient>
@@ -1959,13 +1886,7 @@ export default function DashboardContent() {
         </View>
       </Modal>
 
-      {/* Behavioral Health Intelligence - Dismiss Reason Modal */}
-      <DismissReasonSelector
-        visible={dismissingCorrelationId !== null}
-        headline="Pattern Feedback"
-        onDismiss={handleCorrelationDismiss}
-        onCancel={handleCorrelationCancel}
-      />
+      {/* Behavioral Health Intelligence modal removed - consolidated into Analytics */}
 
       <Modal
         visible={proteinModalVisible}
@@ -2189,50 +2110,47 @@ const styles = StyleSheet.create({
     padding: SPACING[5],
     paddingBottom: SPACING[16],
   },
-  // Analytics Section - Explore buttons
-  analyticsLinkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[4],
+  // View Your Progress - Prominent link to Analytics
+  progressLinkCard: {
     marginTop: SPACING[3],
     marginBottom: SPACING[4],
-    borderWidth: 1,
-    borderColor: SURFACES.card.border,
-    shadowColor: '#3D3633',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    shadowColor: '#6B4EFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  analyticsLinkContent: {
+  progressLinkGradient: {
+    padding: SPACING[4],
+  },
+  progressLinkContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
-  analyticsIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  progressLinkIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  analyticsLinkText: {
+  progressLinkText: {
     marginLeft: SPACING[3],
     flex: 1,
   },
-  analyticsLinkTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
+  progressLinkTitle: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#FFFFFF',
   },
-  analyticsLinkSubtitle: {
+  progressLinkSubtitle: {
     fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    marginTop: SPACING[0.5],
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: SPACING[1],
   },
   centerContainer: {
     flex: 1,

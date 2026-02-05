@@ -6,8 +6,11 @@ import * as SplashScreen from "expo-splash-screen";
 import { View } from "react-native";
 import {
   useFonts,
-  TenorSans_400Regular,
-} from "@expo-google-fonts/tenor-sans";
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { ProfileProvider } from "@/providers/ProfileProvider";
@@ -86,9 +89,12 @@ if (!publishableKey) {
 export default function RootLayout() {
   const router = useRouter();
 
-  // Load Tenor Sans fonts - elegant premium typography
+  // Load Inter fonts - professional, highly legible typography with proper weight hierarchy
   const [fontsLoaded, fontError] = useFonts({
-    TenorSans_400Regular,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
 
   // Hide splash screen when fonts are ready

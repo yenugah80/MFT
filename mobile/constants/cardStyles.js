@@ -5,12 +5,12 @@
  * Following 2025 design trends: glassmorphism, neumorphism, vibrant gradients
  */
 
-// Font family constants for Tenor Sans
+// Font family constants for Inter
 const TYPOGRAPHY_FAMILY = {
-  regular: 'TenorSans_400Regular',
-  medium: 'TenorSans_400Regular',
-  semibold: 'TenorSans_400Regular',
-  bold: 'TenorSans_400Regular',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
 };
 
 /**
