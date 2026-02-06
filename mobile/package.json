@@ -3,6 +3,26 @@
   "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@react-native-voice/voice",
+          "expo-mlkit-ocr",
+          "@solana-mobile/mobile-wallet-adapter-protocol"
+        ],
+        "listUnknownPackages": false
+      }
+    },
+    "install": {
+      "exclude": [
+        "react-native-reanimated",
+        "jest",
+        "@react-native-community/datetimepicker",
+        "react-native-svg"
+      ]
+    }
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -34,7 +54,7 @@
     "@tanstack/query-async-storage-persister": "^5.90.14",
     "@tanstack/react-query": "^5.90.12",
     "@tanstack/react-query-persist-client": "^5.90.14",
-    "expo": "~54.0.31",
+    "expo": "~54.0.33",
     "expo-asset": "~12.0.12",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "~7.0.10",
@@ -54,9 +74,8 @@
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-localization": "~17.0.8",
-    "expo-mlkit-ocr": "^2.0.1",
     "expo-notifications": "^0.32.16",
-    "expo-router": "~6.0.21",
+    "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",
     "expo-speech": "~14.0.8",
