@@ -28,7 +28,6 @@ import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
 import { useWellnessIntelligence } from "../hooks/useWellnessIntelligence";
-import { useContextInsights } from "../hooks/useContextInsights";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -79,9 +78,6 @@ import NutritionDetailsSection from "./dashboard/NutritionDetailsSection";
 
 // Notification Center - Centralized notification hub
 import NotificationCenter from "./notifications/NotificationCenter";
-
-// Context-aware insights - time, weather, and personalized suggestions
-import ContextInsightsCard from "./insights/ContextInsightsCard";
 
 // Design tokens - using unified premium theme
 import { detectDataState } from "../constants/designTokens";
@@ -327,15 +323,6 @@ export default function DashboardContent() {
     isLoading: wellnessIntelligenceLoading,
     prefetchFull: prefetchWellnessDetails,
   } = useWellnessIntelligence({ enabled: true, includeSummary: true });
-
-  // Context-aware insights - time of day, weather, personalized suggestions
-  const {
-    timeOfDay: contextTimeOfDay,
-    weather: contextWeather,
-    waterIntake: contextWaterIntake,
-    waterGoal: contextWaterGoal,
-    isLoading: contextLoading,
-  } = useContextInsights();
 
   useEffect(() => {
     let isActive = true;
@@ -1458,24 +1445,6 @@ export default function DashboardContent() {
           onSettingsPress={() => router.push('/(tabs)/profile')}
         />
 
-        {/* CONTEXT-AWARE INSIGHTS - Time, weather, personalized suggestions */}
-        {hasAnyData && !contextLoading && (
-          <View style={styles.section}>
-            <ContextInsightsCard
-              weather={contextWeather?.condition || 'sunny'}
-              temperature={contextWeather?.temperature || 72}
-              timeOfDay={contextTimeOfDay}
-              waterIntake={contextWaterIntake || 0}
-              waterGoal={contextWaterGoal || 2000}
-              hideGreeting={true}
-              onMealSuggestionPress={() => router.push('/(tabs)/log')}
-              onHydrationPress={() => router.push('/(tabs)/log?focus=hydration')}
-              onWeatherTipPress={() => {}}
-              onMoodCheckPress={() => router.push('/(tabs)/log?focus=mood')}
-            />
-          </View>
-        )}
-
         {/* YESTERDAY'S DATA BANNER - Shows when today is empty */}
         {showYesterdayFallback && (
           <TouchableOpacity
@@ -1538,9 +1507,9 @@ export default function DashboardContent() {
         {/* ============================================ */}
         {hasAnyData && (
           <WellnessScoreCard
-            today={today}
+            today={data.today}
             goals={goals}
-            moodLogs={today?.moodLogs || []}
+            moodLogs={data.today?.moodLogs || []}
             activityData={{
               minutes: activityTodayData?.totalMinutes || 0,
               intensity: activityTodayData?.primaryIntensity || 'moderate',
@@ -1548,6 +1517,7 @@ export default function DashboardContent() {
             }}
             userName={user?.firstName || user?.fullName || ''}
             historicalScores={[]}
+            isYesterdayFallback={showYesterdayFallback}
             onViewDetails={() => router.push('/analytics')}
           />
         )}

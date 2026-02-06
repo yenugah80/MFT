@@ -150,12 +150,13 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
       <View style={pieStyles.chartWrapper}>
         <Svg width={size} height={size}>
           <G>
-            {/* 4 domain segments - single color with opacity based on fill */}
+            {/* 4 domain segments - always visible with clear boundaries */}
             {segments.map((seg) => {
               const path = getWedgePath(seg.startAngle, seg.endAngle, outerRadius - 2, innerRadius);
               if (!path) return null;
-              // Use opacity to show fill level: min 30% opacity, max 100%
-              const opacity = 0.30 + (seg.fillPercent * 0.70);
+              // FIXED: Higher minimum opacity (50%) so empty segments are always visible
+              // Fill level: 50% base + up to 50% more based on fill
+              const opacity = 0.50 + (seg.fillPercent * 0.50);
               return (
                 <Path
                   key={`seg-${seg.key}`}
@@ -163,15 +164,16 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
                   fill={seg.color}
                   fillOpacity={opacity}
                   stroke="#FFFFFF"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                 />
               );
             })}
-            {/* Percentage labels inside each segment - always show */}
+            {/* Percentage labels inside each segment - always show with better contrast */}
             {segments.map((seg) => {
               if (!isFinite(seg.labelX) || !isFinite(seg.labelY)) return null;
-              // Text color: white if segment is bright enough, otherwise use dark color
-              const textColor = seg.fillPercent >= 0.4 ? '#FFFFFF' : seg.colorDark;
+              // FIXED: Always use dark color for text to ensure readability
+              // Dark text is readable on both light (low fill) and saturated (high fill) backgrounds
+              const textColor = seg.colorDark;
               return (
                 <SvgText
                   key={`label-${seg.key}`}
@@ -307,8 +309,18 @@ export default function WellnessScoreCard({
   yesterday = {},
   userName = '',
   historicalScores = [],
+  isYesterdayFallback = false, // NEW: True when showing yesterday's fallback data elsewhere
   onViewDetails,
 }) {
+  // Check if today has any actual data logged
+  const hasTodayData = useMemo(() => {
+    const hasMeals = (today?.foodLogs || []).length > 0;
+    const hasWater = (today?.waterIntakeLiters || 0) > 0;
+    const hasMood = (moodLogs || []).length > 0;
+    const hasActivity = (activityData?.minutes || today?.activity?.totalMinutes || 0) > 0;
+    const hasNutrition = (today?.nutrition?.totalCalories || 0) > 0;
+    return hasMeals || hasWater || hasMood || hasActivity || hasNutrition;
+  }, [today, moodLogs, activityData]);
   const cardAnim = useRef(new Animated.Value(0)).current;
 
   // Calculate the wellness score from 4 domains
@@ -532,6 +544,9 @@ export default function WellnessScoreCard({
 
   const { score } = scoreData;
 
+  // Show empty state when no data logged today (prevents showing stale/yesterday's data)
+  const showEmptyState = !hasTodayData || isYesterdayFallback;
+
   return (
     <Animated.View
       style={[
@@ -555,11 +570,13 @@ export default function WellnessScoreCard({
               <Ionicons name="sparkles" size={16} color={BRAND.primaryDark} />
             </View>
             <View>
-              <Text style={styles.headerTitle}>{headerContent.title}</Text>
-              <Text style={styles.headerSubtitle}>{headerContent.subtitle}</Text>
+              <Text style={styles.headerTitle}>{"Today's Wellness"}</Text>
+              <Text style={styles.headerSubtitle}>
+                {showEmptyState ? 'Log meals to build your score' : headerContent.subtitle}
+              </Text>
             </View>
           </View>
-          {statusIndicator && (
+          {!showEmptyState && statusIndicator && (
             <View style={styles.headerRight}>
               <View style={[styles.statusPill, { borderColor: `${statusIndicator.color}30`, backgroundColor: `${statusIndicator.color}12` }]}>
                 <Ionicons name={statusIndicator.icon} size={14} color={statusIndicator.color} />
@@ -569,18 +586,30 @@ export default function WellnessScoreCard({
           )}
         </View>
 
-        {/* Main content - Pie chart visual */}
+        {/* Main content - Show empty state or pie chart */}
         <View style={styles.content}>
-          <PieChartScore
-            score={score}
-            tier={scoreData.tier}
-            breakdown={scoreData.breakdown}
-            maxBreakdown={scoreData.maxBreakdown}
-          />
+          {showEmptyState ? (
+            <View style={styles.emptyStateContainer}>
+              <View style={styles.emptyRingPlaceholder}>
+                <Ionicons name="nutrition-outline" size={40} color={TEXT.tertiary} />
+              </View>
+              <Text style={styles.emptyStateTitle}>No activity yet today</Text>
+              <Text style={styles.emptyStateText}>
+                Log your first meal, water, or mood to see your wellness score
+              </Text>
+            </View>
+          ) : (
+            <PieChartScore
+              score={score}
+              tier={scoreData.tier}
+              breakdown={scoreData.breakdown}
+              maxBreakdown={scoreData.maxBreakdown}
+            />
+          )}
         </View>
 
-        {/* Achievement & personalized message */}
-        {(achievement || personalizedMessage) && (
+        {/* Achievement & personalized message - only show when we have data */}
+        {!showEmptyState && (achievement || personalizedMessage) && (
           <View style={styles.messageSection}>
             {achievement && <AchievementBadge achievement={achievement} />}
             {personalizedMessage && (
@@ -702,5 +731,37 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     fontWeight: TYPOGRAPHY.weight.medium,
     fontFamily: TYPOGRAPHY.family.medium,
+  },
+  // Empty state styles
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING[4],
+    paddingHorizontal: SPACING[4],
+  },
+  emptyRingPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(143, 163, 199, 0.1)',
+    borderWidth: 3,
+    borderColor: 'rgba(143, 163, 199, 0.2)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING[3],
+  },
+  emptyStateTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
+    marginBottom: SPACING[1],
+  },
+  emptyStateText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 220,
   },
 });
