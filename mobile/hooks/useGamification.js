@@ -331,8 +331,9 @@ export function useBadges(options = {}) {
   return useQuery({
     queryKey: GAMIFICATION_KEYS.badges,
     queryFn: async () => {
-      const response = await apiClient.get('/gamification/badges');
-      return response.data;
+      // apiClient returns data directly, not wrapped in response
+      const data = await apiClient.get('/gamification/badges');
+      return data;
     },
     staleTime: 5 * 60 * 1000,
     ...options,
@@ -347,8 +348,9 @@ export function useCheckBadges() {
 
   return useMutation({
     mutationFn: async () => {
-      const response = await apiClient.post('/gamification/badges/check');
-      return response.data;
+      // apiClient returns data directly
+      const data = await apiClient.post('/gamification/badges/check');
+      return data;
     },
     onSuccess: (data) => {
       if (data.awarded?.length > 0) {
@@ -366,10 +368,11 @@ export function useLeaderboard(type = 'global', limit = 50, options = {}) {
   return useQuery({
     queryKey: GAMIFICATION_KEYS.leaderboard(type),
     queryFn: async () => {
-      const response = await apiClient.get('/gamification/leaderboard', {
+      // apiClient returns data directly
+      const data = await apiClient.get('/gamification/leaderboard', {
         params: { type, limit },
       });
-      return response.data;
+      return data;
     },
     staleTime: 2 * 60 * 1000,
     ...options,
@@ -383,8 +386,9 @@ export function useChallenges(options = {}) {
   return useQuery({
     queryKey: GAMIFICATION_KEYS.challenges,
     queryFn: async () => {
-      const response = await apiClient.get('/gamification/challenges');
-      return response.data;
+      // apiClient returns data directly
+      const data = await apiClient.get('/gamification/challenges');
+      return data;
     },
     staleTime: 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
@@ -400,11 +404,12 @@ export function useUpdateChallengeProgress() {
 
   return useMutation({
     mutationFn: async ({ challengeId, progress, type = 'daily' }) => {
-      const response = await apiClient.post(`/gamification/challenges/${challengeId}/progress`, {
+      // apiClient returns data directly
+      const data = await apiClient.post(`/gamification/challenges/${challengeId}/progress`, {
         progress,
         type,
       });
-      return response.data;
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.challenges });
@@ -423,10 +428,11 @@ export function useXPHistory(days = 7, options = {}) {
   return useQuery({
     queryKey: GAMIFICATION_KEYS.xpHistory(days),
     queryFn: async () => {
-      const response = await apiClient.get('/gamification/xp', {
+      // apiClient returns data directly
+      const data = await apiClient.get('/gamification/xp', {
         params: { days },
       });
-      return response.data;
+      return data;
     },
     staleTime: 5 * 60 * 1000,
     ...options,
@@ -440,8 +446,9 @@ export function useGamificationSummary(options = {}) {
   return useQuery({
     queryKey: GAMIFICATION_KEYS.summary,
     queryFn: async () => {
-      const response = await apiClient.get('/gamification/summary');
-      return response.data;
+      // apiClient returns data directly
+      const data = await apiClient.get('/gamification/summary');
+      return data;
     },
     staleTime: 2 * 60 * 1000,
     ...options,

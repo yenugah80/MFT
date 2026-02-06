@@ -22,11 +22,13 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 're
 import SafeScreen from '../components/SafeScreen';
 import { useDashboard } from '../hooks/useDashboard';
 import { useSmartRecommendations } from '../hooks/useRecommendations';
+import { useLeaderboard, useBadges, useChallenges } from '../hooks/useGamification';
+import LeaderboardCard from '../components/gamification/LeaderboardCard';
+import { InlineFeedback } from '../components/feedback/RecommendationFeedback';
 import {
   BRAND,
   TYPOGRAPHY,
   TEXT,
-  SEMANTIC,
   RADIUS,
   SHADOWS,
 } from '../constants/premiumTheme';
@@ -199,15 +201,25 @@ const XPRing = ({ progress, level }) => {
   );
 };
 
-// Treasure Chest - solid colors
-const TreasureChest = ({ chest, onOpen }) => {
+// Treasure Chest - solid colors with feedback
+const TreasureChest = ({ chest, onOpen, onLike, onDismiss }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
   const rarity = CHEST_RARITY[chest.rarity] || CHEST_RARITY.common;
 
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsOpen(!isOpen);
     if (!isOpen && onOpen) onOpen(chest);
+  };
+
+  const handleLike = () => {
+    setIsLiked(!isLiked);
+    onLike?.(chest);
+  };
+
+  const handleDismiss = () => {
+    onDismiss?.(chest);
   };
 
   return (
@@ -227,6 +239,13 @@ const TreasureChest = ({ chest, onOpen }) => {
               <View style={styles.benefitRow}>
                 <Ionicons name="sparkles" size={11} color={BRAND.primary} />
                 <Text style={styles.benefitText}>{chest.benefit}</Text>
+              </View>
+              <View style={styles.chestFeedback}>
+                <InlineFeedback
+                  onLike={handleLike}
+                  onDismiss={handleDismiss}
+                  isLiked={isLiked}
+                />
               </View>
             </>
           ) : (
@@ -267,6 +286,92 @@ const QuestCard = ({ quest, isCompleted, onPress }) => {
   );
 };
 
+// Badge Card - displays earned badges
+const BadgeCard = ({ badge }) => {
+  const currentTier = badge.currentTier;
+  const progressPercent = badge.progressPercent || 0;
+  const isEarned = !!currentTier;
+
+  // Tier colors
+  const tierColors = {
+    bronze: { bg: '#CD7F32', text: '#FFF' },
+    silver: { bg: '#C0C0C0', text: '#1F2937' },
+    gold: { bg: '#FFD700', text: '#1F2937' },
+    platinum: { bg: '#E5E4E2', text: '#1F2937' },
+    diamond: { bg: '#B9F2FF', text: '#1F2937' },
+  };
+
+  const tierStyle = currentTier ? tierColors[currentTier] || tierColors.bronze : { bg: '#E5E7EB', text: '#6B7280' };
+
+  return (
+    <View style={[styles.badgeCard, isEarned && { borderColor: tierStyle.bg, borderWidth: 2 }]}>
+      <View style={[styles.badgeIconWrap, { backgroundColor: isEarned ? tierStyle.bg : '#F3F4F6' }]}>
+        <Text style={styles.badgeEmoji}>{badge.icon || '🏅'}</Text>
+      </View>
+      <Text style={[styles.badgeName, !isEarned && { color: TEXT.tertiary }]} numberOfLines={1}>{badge.name}</Text>
+      {isEarned ? (
+        <View style={[styles.tierTag, { backgroundColor: tierStyle.bg }]}>
+          <Text style={[styles.tierTagText, { color: tierStyle.text }]}>{currentTier}</Text>
+        </View>
+      ) : (
+        <View style={styles.badgeProgressWrap}>
+          <View style={styles.badgeProgressTrack}>
+            <View style={[styles.badgeProgressFill, { width: `${progressPercent}%` }]} />
+          </View>
+          <Text style={styles.badgeProgressText}>{Math.round(progressPercent)}%</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// Challenge Card - displays daily/weekly challenges from API
+const ChallengeCard = ({ challenge, type = 'daily', onPress }) => {
+  const isCompleted = challenge.completed;
+  const progress = challenge.progress || 0;
+  const target = challenge.target || 1;
+  const progressPercent = Math.min((progress / target) * 100, 100);
+
+  const typeColors = {
+    daily: BRAND.secondary,
+    weekly: BRAND.primary,
+  };
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+      <View style={[styles.questCard, isCompleted && styles.questCardCompleted]}>
+        <View style={[styles.questIconWrap, { backgroundColor: isCompleted ? '#D1FAE5' : `${typeColors[type]}20` }]}>
+          <Text style={styles.questEmoji}>{challenge.icon || (type === 'daily' ? '⚔️' : '🌟')}</Text>
+        </View>
+        <View style={styles.questContent}>
+          <Text style={[styles.questTitle, isCompleted && styles.questTitleDone]}>{challenge.title || challenge.name}</Text>
+          <Text style={styles.questDesc}>{challenge.description}</Text>
+          {!isCompleted && (
+            <View style={styles.challengeProgressWrap}>
+              <View style={styles.challengeProgressTrack}>
+                <View style={[styles.challengeProgressFill, { width: `${progressPercent}%`, backgroundColor: typeColors[type] }]} />
+              </View>
+              <Text style={styles.challengeProgressText}>{progress}/{target}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.questReward}>
+          {isCompleted ? (
+            <View style={styles.questCheck}>
+              <Ionicons name="checkmark" size={16} color="#FFF" />
+            </View>
+          ) : (
+            <View style={styles.xpChip}>
+              <Text style={styles.xpValue}>+{challenge.xpReward || 25}</Text>
+              <Text style={styles.xpLabel}>XP</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 // ============================================================================
 // MAIN SCREEN
 // ============================================================================
@@ -280,17 +385,31 @@ export default function AchievementsScreen() {
     fetchRecommendations,
   } = useSmartRecommendations({ enabled: false });
 
+  // Leaderboard data
+  const { data: globalLeaderboard, isLoading: leaderboardLoading, refetch: refetchLeaderboard } = useLeaderboard('global', 10);
+
+  // Badges data
+  const { data: badgesData, isLoading: badgesLoading } = useBadges();
+  const badges = badgesData?.badges || [];
+
+  // Challenges data
+  const { data: challengesData, isLoading: challengesLoading } = useChallenges();
+  const dailyChallenges = challengesData?.daily?.challenges || [];
+  const weeklyChallenges = challengesData?.weekly?.challenges || [];
+
+  // Fetch recommendations on mount
   useEffect(() => {
     fetchRecommendations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sample treasures
-  const SAMPLE_TREASURES = [
+  // Sample treasures (fallback when API is loading)
+  const SAMPLE_TREASURES = useMemo(() => [
     { id: 'sample-1', name: 'Greek Yogurt Bowl', food: 'High protein breakfast', rarity: 'epic', emoji: '🌅', benefit: 'Great for muscle recovery' },
     { id: 'sample-2', name: 'Grilled Salmon', food: 'Omega-3 rich dinner', rarity: 'legendary', emoji: '🍽️', benefit: 'Heart-healthy fats' },
     { id: 'sample-3', name: 'Mixed Nuts', food: 'Healthy snack', rarity: 'rare', emoji: '🍎', benefit: 'Sustained energy' },
     { id: 'sample-4', name: 'Quinoa Salad', food: 'Balanced lunch', rarity: 'epic', emoji: '🥗', benefit: 'Complete protein source' },
-  ];
+  ], []);
 
   const treasureChests = useMemo(() => {
     if (smartRecs && smartRecs.length > 0) {
@@ -308,7 +427,7 @@ export default function AchievementsScreen() {
       return [{ id: 'loading-1', name: 'Loading...', food: 'Finding treasures', rarity: 'common', emoji: '🔮', benefit: 'Personalized for you', isLoading: true }];
     }
     return SAMPLE_TREASURES;
-  }, [smartRecs, recsLoading]);
+  }, [smartRecs, recsLoading, SAMPLE_TREASURES]);
 
   // Data
   const gamification = dashboardData?.gamification || {};
@@ -383,37 +502,113 @@ export default function AchievementsScreen() {
           <CaptainCoach streak={streak} tip={captainTip} />
         </View>
 
-        {/* Daily Quests */}
+        {/* Daily Quests - Uses API challenges when available */}
         <View style={styles.section}>
           <View style={styles.sectionHead}>
             <Text style={styles.sectionIcon}>⚔️</Text>
             <View>
               <Text style={styles.sectionTitle}>Daily Quests</Text>
-              <Text style={styles.sectionSub}>Complete for XP rewards</Text>
+              <Text style={styles.sectionSub}>
+                {challengesData?.daily ? `${challengesData.daily.completed}/${challengesData.daily.total} complete` : 'Complete for XP rewards'}
+              </Text>
             </View>
           </View>
           <View style={styles.questsCol}>
-            {DAILY_QUESTS.map((q) => (
-              <QuestCard key={q.id} quest={q} isCompleted={false} onPress={handleQuestPress} />
-            ))}
+            {challengesLoading ? (
+              <View style={styles.loadingWrap}>
+                <Text style={styles.loadingText}>Loading challenges...</Text>
+              </View>
+            ) : dailyChallenges.length > 0 ? (
+              dailyChallenges.map((challenge) => (
+                <ChallengeCard key={challenge.id} challenge={challenge} type="daily" onPress={handleQuestPress} />
+              ))
+            ) : (
+              DAILY_QUESTS.map((q) => (
+                <QuestCard key={q.id} quest={q} isCompleted={false} onPress={handleQuestPress} />
+              ))
+            )}
           </View>
         </View>
 
-        {/* Weekly Challenge */}
+        {/* Weekly Challenge - Uses API challenges when available */}
         <View style={styles.section}>
-          <LinearGradient colors={THEME.headerBg} style={styles.weeklyCard}>
-            <View style={styles.weeklyHead}>
-              <Text style={styles.weeklyEmoji}>{WEEKLY_CHALLENGE.emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.weeklyTitle}>{WEEKLY_CHALLENGE.title}</Text>
-                <Text style={styles.weeklyDesc}>{WEEKLY_CHALLENGE.description}</Text>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionIcon}>🌟</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Weekly Challenges</Text>
+              <Text style={styles.sectionSub}>
+                {challengesData?.weekly ? `${challengesData.weekly.completed}/${challengesData.weekly.total} complete` : 'Bigger rewards'}
+              </Text>
+            </View>
+          </View>
+          {weeklyChallenges.length > 0 ? (
+            <View style={styles.questsCol}>
+              {weeklyChallenges.map((challenge) => (
+                <ChallengeCard key={challenge.id} challenge={challenge} type="weekly" onPress={handleQuestPress} />
+              ))}
+            </View>
+          ) : (
+            <LinearGradient colors={THEME.headerBg} style={styles.weeklyCard}>
+              <View style={styles.weeklyHead}>
+                <Text style={styles.weeklyEmoji}>{WEEKLY_CHALLENGE.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.weeklyTitle}>{WEEKLY_CHALLENGE.title}</Text>
+                  <Text style={styles.weeklyDesc}>{WEEKLY_CHALLENGE.description}</Text>
+                </View>
               </View>
+              <View style={styles.weeklyReward}>
+                <Ionicons name="gift" size={14} color="#FFF" />
+                <Text style={styles.weeklyRewardText}>{WEEKLY_CHALLENGE.reward}</Text>
+              </View>
+            </LinearGradient>
+          )}
+        </View>
+
+        {/* Leaderboard */}
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionIcon}>🏆</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Leaderboard</Text>
+              <Text style={styles.sectionSub}>Compete with other sailors</Text>
             </View>
-            <View style={styles.weeklyReward}>
-              <Ionicons name="gift" size={14} color="#FFF" />
-              <Text style={styles.weeklyRewardText}>{WEEKLY_CHALLENGE.reward}</Text>
+          </View>
+          <LeaderboardCard
+            globalData={globalLeaderboard?.leaderboard || []}
+            weeklyData={[]}
+            streakData={[]}
+            userRank={globalLeaderboard?.userRank}
+            userInTop={globalLeaderboard?.userRank && globalLeaderboard.userRank <= 10}
+            isLoading={leaderboardLoading}
+            onRefresh={refetchLeaderboard}
+          />
+        </View>
+
+        {/* Badges */}
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionIcon}>🏅</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <Text style={styles.sectionSub}>Collect achievements as you progress</Text>
             </View>
-          </LinearGradient>
+          </View>
+          {badgesLoading ? (
+            <View style={styles.loadingWrap}>
+              <Text style={styles.loadingText}>Loading badges...</Text>
+            </View>
+          ) : badges.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgesRow}>
+              {badges.map((badge) => (
+                <BadgeCard key={badge.id || badge.name} badge={badge} />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyEmoji}>🎖️</Text>
+              <Text style={styles.emptyText}>Start logging to earn badges!</Text>
+            </View>
+          )}
         </View>
 
         {/* Journey Map */}
@@ -480,6 +675,12 @@ export default function AchievementsScreen() {
                   if (chest.originalRec && !chest.isLoading && chest.rarity === 'legendary') {
                     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   }
+                }}
+                onLike={(chest) => {
+                  console.log('Liked recommendation:', chest.name);
+                }}
+                onDismiss={(chest) => {
+                  console.log('Dismissed recommendation:', chest.name);
                 }}
               />
             ))}
@@ -605,6 +806,34 @@ const styles = StyleSheet.create({
   chestHint: { fontSize: 10, fontFamily: TYPOGRAPHY.family.medium, color: TEXT.muted, fontStyle: 'italic', marginTop: 3 },
   benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
   benefitText: { fontSize: 10, fontFamily: TYPOGRAPHY.family.medium, color: BRAND.primary },
+  chestFeedback: { marginTop: 8, alignItems: 'center' },
+
+  // Badges
+  badgesRow: { paddingRight: 16, gap: 12 },
+  badgeCard: { width: 90, backgroundColor: '#FFFFFF', borderRadius: RADIUS.lg, padding: 12, alignItems: 'center', ...SHADOWS.sm },
+  badgeIconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  badgeEmoji: { fontSize: 22 },
+  badgeName: { fontSize: 11, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.primary, textAlign: 'center' },
+  tierTag: { marginTop: 6, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  tierTagText: { fontSize: 9, fontFamily: TYPOGRAPHY.family.bold, textTransform: 'capitalize' },
+  badgeProgressWrap: { marginTop: 6, width: '100%', alignItems: 'center' },
+  badgeProgressTrack: { width: '100%', height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, overflow: 'hidden' },
+  badgeProgressFill: { height: '100%', backgroundColor: BRAND.primary, borderRadius: 2 },
+  badgeProgressText: { fontSize: 9, fontFamily: TYPOGRAPHY.family.medium, color: TEXT.muted, marginTop: 2 },
+
+  // Challenge progress
+  challengeProgressWrap: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  challengeProgressTrack: { flex: 1, height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, overflow: 'hidden' },
+  challengeProgressFill: { height: '100%', borderRadius: 2 },
+  challengeProgressText: { fontSize: 10, fontFamily: TYPOGRAPHY.family.medium, color: TEXT.tertiary },
+
+  // Empty state
+  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: RADIUS.lg, padding: 24, alignItems: 'center', ...SHADOWS.sm },
+  emptyEmoji: { fontSize: 32, marginBottom: 8 },
+  emptyText: { fontSize: 13, fontFamily: TYPOGRAPHY.family.medium, color: TEXT.tertiary, textAlign: 'center' },
+
+  // Loading wrapper
+  loadingWrap: { padding: 16, alignItems: 'center' },
 
   // Footer
   footer: { marginTop: 24, marginHorizontal: 16, marginBottom: 16 },
