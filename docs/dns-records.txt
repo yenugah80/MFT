@@ -1,0 +1,49 @@
+;;
+;; Domain:     my-food-tracker.com.
+;; Exported:   2026-01-18 04:31:40
+;;
+;; This file is intended for use for informational and archival
+;; purposes ONLY and MUST be edited before use on a production
+;; DNS server.  In particular, you must:
+;;   -- update the SOA record with the correct authoritative name server
+;;   -- update the SOA record with the contact e-mail address information
+;;   -- update the NS record(s) with the authoritative name servers for this domain.
+;;
+;; For further information, please consult the BIND documentation
+;; located on the following website:
+;;
+;; http://www.isc.org/
+;;
+;; And RFC 1035:
+;;
+;; http://www.ietf.org/rfc/rfc1035.txt
+;;
+;; Please note that we do NOT offer technical support for any use
+;; of this zone data, the BIND name server, or any other third-party
+;; DNS software.
+;;
+;; Use at your own risk.
+;; SOA Record
+my-food-tracker.com	3600	IN	SOA	arvind.ns.cloudflare.com. dns.cloudflare.com. 2052037730 10000 2400 604800 3600
+
+;; NS Records
+my-food-tracker.com.	86400	IN	NS	arvind.ns.cloudflare.com.
+my-food-tracker.com.	86400	IN	NS	courtney.ns.cloudflare.com.
+
+;; CNAME Records
+accounts.my-food-tracker.com.	1	IN	CNAME	accounts.clerk.services. ; cf_tags=cf-proxied:false
+clerk.my-food-tracker.com.	1	IN	CNAME	frontend-api.clerk.services. ; cf_tags=cf-proxied:false
+clk2._domainkey.my-food-tracker.com.	1	IN	CNAME	dkim2.3yk4cgw9l11.clerk.services. ; cf_tags=cf-proxied:false
+clk._domainkey.my-food-tracker.com.	1	IN	CNAME	dkim1.3yk4cgw9l11.clerk.services. ; cf_tags=cf-proxied:false
+clkmail.my-food-tracker.com.	1	IN	CNAME	mail.3yk4cgw9l11.clerk.services. ; cf_tags=cf-proxied:false
+my-food-tracker.com.	1	IN	CNAME	mft-web.pages.dev. ; cf_tags=cf-proxied:true
+zb11115059.my-food-tracker.com.	600	IN	CNAME	zmverify.zoho.com. ; cf_tags=cf-proxied:false
+
+;; MX Records
+my-food-tracker.com.	600	IN	MX	10 mx.zoho.com.
+my-food-tracker.com.	600	IN	MX	50 mx3.zoho.com.
+my-food-tracker.com.	600	IN	MX	20 mx2.zoho.com.
+
+;; TXT Records
+mft._domainkey.my-food-tracker.com.	600	IN	TXT	"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDbN1ltYwvzDi8JOFq0RBBBKSYp+0zVwp1dqFujvcDHsFuWwc0E0hOLnyTlmwmXYdwoR1YMJcRmjfcQeaJOchjwrdOS7N5SXPIy5+0d2YmKNNPs/xaC5+nfO1YrjVQeJQYT+c5G1YtzF/GS8sJcwx9AfbjXuBIVrgKaNNTkKvuOQwIDAQAB"
+my-food-tracker.com.	3600	IN	TXT	"v=spf1 include:zohomail.com ~all"
