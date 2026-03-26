@@ -40,14 +40,11 @@ const EditableIngredientsSection = ({
   const [removedIngredients, setRemovedIngredients] = useState(new Set());
   const [addedAddOns, setAddedAddOns] = useState(new Set());
 
-  // Don't render if no ingredient data
-  if (!ingredientBreakdown?.ingredients?.length) {
-    return null;
-  }
+  // Extract safely for hook dependencies
+  const ingredients = ingredientBreakdown?.ingredients || [];
+  const optionalAddOns = ingredientBreakdown?.optionalAddOns || [];
 
-  const { ingredients, optionalAddOns } = ingredientBreakdown;
-
-  // Calculate current nutrition based on active ingredients
+  // Calculate current nutrition based on active ingredients (must be before early return)
   const currentNutrition = useMemo(() => {
     let calories = 0;
     let protein = 0;
@@ -141,6 +138,11 @@ const EditableIngredientsSection = ({
       });
     }
   }, [currentNutrition, isModified, onNutritionChange, removedIngredients, addedAddOns]);
+
+  // Early return after all hooks
+  if (!ingredients.length) {
+    return null;
+  }
 
   const toggleExpanded = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

@@ -100,10 +100,21 @@ export default function InsightCard({
 }) {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
+  // Extract values safely for hook dependencies
+  const decision = recommendation?.decision;
+  const decisionType = decision?.type || 'SPEAK';
+  const insightId = recommendation?.id || `${decisionType}-${Date.now()}`;
+
+  // Use the feedback hook unconditionally (before any returns)
+  const { handleHelpful, isSubmitting } = useInsightFeedback(
+    insightId,
+    'recommendation'
+  );
+
+  // Early return after all hooks
   if (!recommendation) return null;
 
   const {
-    decision,
     headline,
     subtitle,
     actions = [],
@@ -112,18 +123,8 @@ export default function InsightCard({
     modelHealth,
   } = recommendation;
 
-  const decisionType = decision?.type || 'SPEAK';
   const typeConfig = DECISION_TYPES[decisionType] || DECISION_TYPES.SPEAK;
   const shouldSpeak = decision?.shouldSpeak !== false;
-
-  // Generate a unique ID for feedback tracking
-  const insightId = recommendation.id || `${decisionType}-${Date.now()}`;
-
-  // Use the feedback hook
-  const { handleHelpful, isSubmitting } = useInsightFeedback(
-    insightId,
-    'recommendation'
-  );
 
   // Don't render if SILENT and shouldn't speak
   if (decisionType === 'SILENT' && !shouldSpeak) {

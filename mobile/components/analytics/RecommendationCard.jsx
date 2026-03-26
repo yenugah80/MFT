@@ -82,27 +82,16 @@ export default function RecommendationCard({
   const [completedSteps, setCompletedSteps] = useState([]);
   const [trackingId, setTrackingId] = useState(null);
 
-  if (!recommendation) return null;
-
-  const {
-    id,
-    type = 'insight',
-    domain,
-    title,
-    message,
-    icon,
-    color,
-    metric,
-    evidence,
-    action,
-    correlation,
-    microActions = [],
-    predictionLink,
-  } = recommendation;
+  // Extract values safely for hooks (before any early returns)
+  const id = recommendation?.id;
+  const type = recommendation?.type || 'insight';
+  const title = recommendation?.title;
+  const action = recommendation?.action;
+  const microActions = recommendation?.microActions || [];
 
   const typeStyle = TYPE_STYLES[type] || TYPE_STYLES.insight;
-  const iconName = icon || typeStyle.icon;
-  const iconColor = color || typeStyle.gradient[0];
+  const iconName = recommendation?.icon || typeStyle.icon;
+  const iconColor = recommendation?.color || typeStyle.gradient[0];
 
   // Track when card is shown (on mount)
   useEffect(() => {
@@ -112,6 +101,7 @@ export default function RecommendationCard({
   }, [id, onTrackShown]);
 
   const handlePress = useCallback(() => {
+    if (!recommendation) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (microActions.length > 0) {
@@ -121,7 +111,7 @@ export default function RecommendationCard({
     } else if (onAction) {
       onAction(recommendation);
     }
-  }, [microActions, isExpanded, action, router, onAction, recommendation]);
+  }, [recommendation, microActions, isExpanded, action, router, onAction]);
 
   const handleStepComplete = useCallback((stepIndex) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -132,7 +122,7 @@ export default function RecommendationCard({
     if (newCompleted.length >= microActions.length) {
       handleActionComplete();
     }
-  }, [completedSteps, microActions.length]);
+  }, [completedSteps, microActions.length, handleActionComplete]);
 
   const handleActionComplete = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -148,7 +138,7 @@ export default function RecommendationCard({
     setTimeout(() => {
       showSatisfactionPrompt();
     }, 1500);
-  }, [id, onComplete, recommendation]);
+  }, [id, onComplete, recommendation, showSatisfactionPrompt]);
 
   const showSatisfactionPrompt = useCallback(() => {
     Alert.alert(
@@ -195,6 +185,19 @@ export default function RecommendationCard({
       onDismiss(id, { recommendation });
     }
   }, [id, onDismiss, recommendation]);
+
+  // Early return after all hooks
+  if (!recommendation) return null;
+
+  // Now safe to destructure remaining values
+  const {
+    domain,
+    message,
+    metric,
+    evidence,
+    correlation,
+    predictionLink,
+  } = recommendation;
 
   return (
     <Pressable
