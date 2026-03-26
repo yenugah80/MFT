@@ -1,26 +1,28 @@
 {
-  "name": "MyFoodTracker-main",
+  "name": "myfoodtracker",
   "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "@react-native-voice/voice": "^3.2.4",
-    "expo-haptics": "^15.0.8",
-    "expo-localization": "^17.0.8",
-    "i18next": "^25.7.3",
-    "react-i18next": "^16.5.0",
-    "expo": "~54.0.30",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
+  "workspaces": [
+    "mobile",
+    "backend",
+    "worker",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev:backend",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:mobile": "npm --prefix mobile start -- --clear",
+    "dev:worker": "npm --prefix worker run dev",
+    "build:mobile:android": "npm --prefix mobile run android",
+    "build:mobile:ios": "npm --prefix mobile run ios",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
     "typescript": "~5.9.2"
   },
-  "scripts": {
-    "dev:backend": "npm --prefix backend run dev",
-    "dev:mobile": "npm --prefix mobile start -- --clear",
-    "dev": "npm run dev:backend",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -23,14 +23,24 @@ MyFoodTracker is a comprehensive nutrition and wellness tracking mobile applicat
 - **Authentication**: Clerk middleware (@clerk/express)
 - **Caching**: node-cache, Redis (optional)
 
+### Worker (`/worker`)
+- **Runtime**: Cloudflare Workers
+- **Purpose**: Edge functions for background tasks
+
 ### Deployment
 - **Backend**: Render.com (auto-deploys from main branch)
 - **API URL**: https://myfoodtracker.onrender.com/api
+- **Worker**: Cloudflare Workers
 
 ## Directory Structure
 
 ```
-MyFoodTracker-main/
+MFT/
+├── .claude/                   # Claude Code configuration
+│   ├── settings.json
+│   └── memory/
+├── .github/                   # GitHub workflows & templates
+│   └── workflows/
 ├── mobile/                    # React Native Expo app
 │   ├── app/                   # Expo Router screens
 │   │   ├── (auth)/           # Auth screens (sign-in, sign-up)
@@ -40,25 +50,37 @@ MyFoodTracker-main/
 │   │   ├── onboarding/       # Onboarding flow
 │   │   └── profile/          # Profile sub-screens
 │   ├── components/           # Reusable UI components
-│   │   ├── dashboard/        # Dashboard-specific components
-│   │   ├── log/              # Food logging components
-│   │   ├── MoodTracker/      # Mood tracking components
-│   │   ├── hydration/        # Water tracking components
-│   │   └── onboarding/       # Onboarding components
 │   ├── hooks/                # Custom React hooks
 │   ├── providers/            # Context providers
 │   ├── services/             # API clients and services
 │   ├── constants/            # Design tokens, theme, daily values
-│   └── utils/                # Utility functions
+│   └── utils/                # App-specific utilities
 ├── backend/                   # Node.js Express API
 │   └── src/
 │       ├── routes/           # API route handlers
 │       ├── services/         # Business logic services
 │       ├── models/           # Drizzle ORM models
 │       ├── middleware/       # Express middleware
-│       ├── utils/            # Utility functions
+│       ├── utils/            # Backend utilities
 │       └── config/           # Configuration (db, etc.)
-└── ios/                      # iOS native project (prebuild)
+├── worker/                    # Cloudflare Worker
+│   └── src/
+├── shared/                    # Shared code (npm workspace)
+│   ├── utils/                # Shared utilities (animations, toast)
+│   ├── types/                # Shared TypeScript types
+│   └── i18n/                 # Internationalization files
+├── agents/                    # AI agents & automation
+│   └── skills/               # Claude Code custom skills
+├── docs/                      # Documentation
+│   ├── architecture/         # Architecture docs
+│   ├── api/                  # API documentation
+│   └── proposals/            # Feature proposals
+├── scripts/                   # Build & deployment scripts
+├── CLAUDE.md                  # This file
+├── .mcp.json                  # MCP server configuration
+├── package.json               # Root workspace config
+├── wrangler.toml              # Cloudflare config
+└── README.md
 ```
 
 ## Key Files
@@ -78,6 +100,11 @@ MyFoodTracker-main/
 - `backend/src/routes/food.js` - Food logging endpoints
 - `backend/src/routes/nutrition.js` - Dashboard data endpoint
 - `backend/src/services/smartNutritionResolver.js` - AI nutrition lookup
+
+### Shared
+- `shared/utils/` - Reusable utilities across apps
+- `shared/types/` - TypeScript type definitions
+- `shared/i18n/` - Translation files (es, fr, hi, zh)
 
 ## Theme System
 
@@ -123,6 +150,15 @@ router.replace('/(tabs)/dashboard');
 
 ## Development Commands
 
+### Root (npm workspaces)
+```bash
+npm run dev              # Start backend
+npm run dev:mobile       # Start mobile Metro bundler
+npm run dev:worker       # Start worker dev server
+npm run lint             # Lint all workspaces
+npm run test             # Test all workspaces
+```
+
 ### Mobile
 ```bash
 cd mobile
@@ -137,6 +173,13 @@ cd backend
 npm run dev            # Start with nodemon (hot reload)
 npm start              # Production start
 npm run drizzle:migrate # Run database migrations
+```
+
+### Worker
+```bash
+cd worker
+npm run dev            # Start local dev server
+npm run deploy         # Deploy to Cloudflare
 ```
 
 ## Common Issues & Solutions
@@ -185,8 +228,6 @@ When testing food analysis with complex meals like "rice with chicken curry":
 
 ```bash
 git commit -m "fix: Description of fix
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ```

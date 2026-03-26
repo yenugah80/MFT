@@ -1,0 +1,13 @@
+{
+  "name": "@mft/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "exports": {
+    "./utils": "./utils/index.js",
+    "./utils/*": "./utils/*.js",
+    "./i18n": "./i18n/index.js",
+    "./i18n/*": "./i18n/*.json",
+    "./types": "./types/index.js"
+  }
+}
