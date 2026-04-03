@@ -62,14 +62,23 @@ const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const tokenCache = {
   async getToken(key) {
     try {
-      return SecureStore.getItemAsync(key);
+      const item = await SecureStore.getItemAsync(key);
+      return item;
     } catch (_err) {
+      await SecureStore.deleteItemAsync(key).catch(() => {});
       return null;
     }
   },
   async saveToken(key, value) {
     try {
       return SecureStore.setItemAsync(key, value);
+    } catch (_err) {
+      return;
+    }
+  },
+  async deleteToken(key) {
+    try {
+      return SecureStore.deleteItemAsync(key);
     } catch (_err) {
       return;
     }

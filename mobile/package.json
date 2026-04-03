@@ -24,10 +24,10 @@
     }
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
+    "start": "expo start --port 8082 -c",
+    "android": "expo run:android --port 8082",
+    "ios": "expo run:ios --port 8082",
+    "web": "expo start --web --port 8082 -c",
     "lint": "expo lint",
     "test": "jest",
     "test:unit": "jest --config jest.unit.config.js",
@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.2",
+    "@clerk/clerk-js": "^5.125.7",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/tenor-sans": "^0.4.1",
@@ -96,7 +97,7 @@
     "react-native-chart-kit": "^6.12.0",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-paper": "^5.14.5",
-    "react-native-reanimated": "~3.16.7",
+    "react-native-reanimated": "~3.19.3",
     "react-native-safe-area-context": "5.6.0",
     "react-native-screens": "4.16.0",
     "react-native-svg": "^15.12.1",

@@ -503,17 +503,7 @@ const ALLOWED_ORIGINS = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl requests)
-      if (!origin) return callback(null, true);
-
-      if (ALLOWED_ORIGINS.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: true, // Allow all origins for mobile app backend
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,  // Allow cookies/credentials
@@ -528,7 +518,8 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
 
 // Block obvious bot traffic (except health checks)
-app.use(blockBots({ allowedPaths: ['/health', '/api/health'] }));
+// DISABLED: Blocking mobile app requests - re-enable with proper user-agent whitelist
+// app.use(blockBots({ allowedPaths: ['/health', '/api/health'] }));
 
 // Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
 app.use(clerkMiddleware());

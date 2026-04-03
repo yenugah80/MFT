@@ -28,8 +28,10 @@ MyFoodTracker is a comprehensive nutrition and wellness tracking mobile applicat
 - **Purpose**: Edge functions for background tasks
 
 ### Deployment
-- **Backend**: Render.com (auto-deploys from main branch)
-- **API URL**: https://myfoodtracker.onrender.com/api
+- **Backend**: Hetzner VPS via Cloudflare
+- **API URL**: https://api.my-food-tracker.com/api
+- **Database**: Neon PostgreSQL (serverless)
+- **Domain**: my-food-tracker.com (Cloudflare)
 - **Worker**: Cloudflare Workers
 
 ## Directory Structure
@@ -222,7 +224,7 @@ When testing food analysis with complex meals like "rice with chicken curry":
 
 ## Git Workflow
 
-- Main branch auto-deploys to Render
+- Backend runs on Hetzner VPS (manual deployment)
 - Commit messages should follow conventional commits format
 - Always include the Claude Code co-author attribution
 

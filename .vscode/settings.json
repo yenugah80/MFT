@@ -1,14 +1,20 @@
 {
     "claudeCode.useTerminal": true,
-
-    "stylelint.validate": ["css", "scss", "less"],
+    "stylelint.validate": [
+        "css",
+        "scss",
+        "less"
+    ],
     "stylelint.ignoreDisables": false,
-    "stylelint.snippet": ["css", "scss", "less"],
+    "stylelint.snippet": [
+        "css",
+        "scss",
+        "less"
+    ],
     "stylelint.enable": true,
     "css.validate": false,
     "scss.validate": false,
     "less.validate": false,
-
     "eslint.workingDirectories": [
         {
             "directory": "mobile",
@@ -19,11 +25,14 @@
             "changeProcessCWD": true
         },
         {
-            "directory": "my-worker",
+            "directory": "worker",
+            "changeProcessCWD": true
+        },
+        {
+            "directory": "shared",
             "changeProcessCWD": true
         }
     ],
-
     "[javascript]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
@@ -36,5 +45,6 @@
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
     },
-    "github.copilot.chat.virtualTools.threshold": 0
+    "github.copilot.chat.virtualTools.threshold": 0,
+    "java.configuration.updateBuildConfiguration": "automatic"
 }

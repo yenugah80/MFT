@@ -4,8 +4,7 @@ import Constants from 'expo-constants';
 /**
  * Get the correct API URL based on environment
  * - Always prefer custom EXPO_PUBLIC_API_BASE_URL if set
- * - In production: use Render backend
- * - In development: use Render backend (NOT localhost)
+ * - Default: Hetzner backend
  */
 function getApiUrl() {
   // If user provided custom URL, use it (highest priority)
@@ -14,12 +13,12 @@ function getApiUrl() {
     return process.env.EXPO_PUBLIC_API_BASE_URL;
   }
 
-  // Production: Use Render backend (primary deployment)
-  return 'https://myfoodtracker.onrender.com/api';
+  // Default: Production backend (Cloudflare → Hetzner)
+  return 'https://api.my-food-tracker.com/api';
 }
 
 // Base API URL
-// Use Render backend in both development and production for consistency
+// Use Hetzner backend in both development and production
 export const API_URL = getApiUrl();
 
 // Legacy export for backwards compatibility (profileAPI uses this without /api)
