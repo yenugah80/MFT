@@ -7,7 +7,7 @@
     "enabled": true
   },
   "vars": {
-    "BACKEND_URL": "https://myfoodtracker.onrender.com/health"
+    "BACKEND_URL": "https://api.my-food-tracker.com/api/health"
   },
   "triggers": {
     "crons": ["*/10 * * * *"]
