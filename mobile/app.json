@@ -128,7 +128,7 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
       "apiUrl": "https://api.my-food-tracker.com/api",

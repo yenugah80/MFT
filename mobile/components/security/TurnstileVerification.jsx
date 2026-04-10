@@ -35,7 +35,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
-import { getApiUrl } from '../../constants/api';
+import { API_BASE_URL } from '../../constants/api';
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const TurnstileVerification = ({
@@ -47,7 +47,7 @@ const TurnstileVerification = ({
 }) => {
   const [isLoading, setIsLoading] = useState(true);
 
-  const verificationUrl = `${getApiUrl().replace('/api', '')}/api/verify/turnstile?action=${action}`;
+  const verificationUrl = `${API_BASE_URL}/api/verify/turnstile?action=${action}`;
 
   const handleMessage = useCallback(
     (event) => {
