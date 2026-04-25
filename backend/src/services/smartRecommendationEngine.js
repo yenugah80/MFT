@@ -21,6 +21,7 @@ import {
   recommendationsHistoryTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, inArray } from 'drizzle-orm';
+import { getUserSignals } from './userSignalCacheService.js';
 
 // ============================================
 // NUTRITIONAL KNOWLEDGE BASE
@@ -413,7 +414,7 @@ async function calculateNutritionalGaps(userId, goals) {
     .where(
       and(
         eq(foodLogTable.userId, userId),
-        gte(foodLogTable.loggedAt, today)
+        gte(foodLogTable.loggedDate, today)
       )
     );
 
@@ -430,7 +431,7 @@ async function calculateNutritionalGaps(userId, goals) {
     consumed.calories += parseFloat(log.calories) || 0;
     consumed.protein += parseFloat(log.protein) || 0;
     consumed.carbs += parseFloat(log.carbs) || 0;
-    consumed.fat += parseFloat(log.fat) || 0;
+    consumed.fat += parseFloat(log.fats) || 0;
     consumed.fiber += parseFloat(log.fiber) || 0;
   });
 
@@ -488,17 +489,17 @@ async function getUserFoodHistory(userId, days = 14) {
       foodName: foodLogTable.foodName,
       calories: foodLogTable.calories,
       protein: foodLogTable.protein,
-      loggedAt: foodLogTable.loggedAt,
+      loggedAt: foodLogTable.loggedDate,
       mealType: foodLogTable.mealType,
     })
     .from(foodLogTable)
     .where(
       and(
         eq(foodLogTable.userId, userId),
-        gte(foodLogTable.loggedAt, startDate)
+        gte(foodLogTable.loggedDate, startDate)
       )
     )
-    .orderBy(desc(foodLogTable.loggedAt))
+    .orderBy(desc(foodLogTable.loggedDate))
     .limit(100);
 
   // Count food frequencies
@@ -537,39 +538,23 @@ async function getMoodFoodCorrelations(userId) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Get mood logs with dates
-  const moodLogs = await db
-    .select()
-    .from(moodLogTable)
-    .where(
-      and(
-        eq(moodLogTable.userId, userId),
-        gte(moodLogTable.loggedAt, thirtyDaysAgo)
-      )
-    );
-
-  // Get food logs with dates
-  const foodLogs = await db
-    .select()
-    .from(foodLogTable)
-    .where(
-      and(
-        eq(foodLogTable.userId, userId),
-        gte(foodLogTable.loggedAt, thirtyDaysAgo)
-      )
-    );
+  // Parallelize mood and food log fetches
+  const [moodLogs, foodLogs] = await Promise.all([
+    db.select().from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, thirtyDaysAgo))),
+    db.select().from(foodLogTable).where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, thirtyDaysAgo))),
+  ]);
 
   // Simple correlation: group by day and find patterns
   const dayData = {};
 
   foodLogs.forEach(log => {
-    const day = new Date(log.loggedAt).toISOString().split('T')[0];
+    const day = new Date(log.loggedDate).toISOString().split('T')[0];
     if (!dayData[day]) dayData[day] = { foods: [], avgMood: null };
     dayData[day].foods.push(log.foodName?.toLowerCase());
   });
 
   moodLogs.forEach(log => {
-    const day = new Date(log.loggedAt).toISOString().split('T')[0];
+    const day = new Date(log.loggedDate).toISOString().split('T')[0];
     if (!dayData[day]) dayData[day] = { foods: [], avgMood: null };
     const intensity = parseFloat(log.intensity) || 5;
     dayData[day].avgMood = dayData[day].avgMood
@@ -609,7 +594,7 @@ function scoreFood(food, context) {
   let score = 50; // Base score
   const reasons = [];
 
-  const { gaps, mealType, history, goals, currentMood, activityLevel } = context;
+  const { gaps, mealType, history, goals, currentMood, activityLevel, signals = {} } = context;
 
   // 1. Nutritional gap filling (most important)
   if (gaps.protein.status === 'low' && food.nutrition.protein >= 15) {
@@ -674,11 +659,36 @@ function scoreFood(food, context) {
   }
 
   // 6. Mood-appropriate
-  if (currentMood && currentMood <= 5 && food.moodBoost) {
-    score += 15;
+  if ((signals.moodUrgency ?? 0) > 0.3 && food.moodBoost) {
+    score += Math.round((signals.moodUrgency ?? 0) * 18);
     reasons.push({
       type: 'mood',
-      impact: 'Known mood booster',
+      impact: signals.explainability?.mood?.reason || 'Recent mood logs suggest a balanced mood-supportive option.',
+      priority: 'medium',
+    });
+  } else if (currentMood && currentMood <= 5 && food.moodBoost) {
+    score += 10;
+    reasons.push({
+      type: 'mood',
+      impact: 'Recent mood logs are on the lower side.',
+      priority: 'medium',
+    });
+  }
+
+  if ((signals.energyUrgency ?? 0) > 0.3 && food.tags.includes('energy-boost')) {
+    score += Math.round((signals.energyUrgency ?? 0) * 12);
+    reasons.push({
+      type: 'energy',
+      impact: 'Recent energy logs suggest prioritizing steady energy.',
+      priority: 'medium',
+    });
+  }
+
+  if ((signals.hydrationUrgency ?? 0) > 0.3 && (food.tags.includes('hydrating') || food.hydrating)) {
+    score += Math.round((signals.hydrationUrgency ?? 0) * 12);
+    reasons.push({
+      type: 'hydration',
+      impact: 'Hydration signal favors water-rich foods.',
       priority: 'medium',
     });
   }
@@ -716,7 +726,7 @@ function scoreFood(food, context) {
  * Generate smart recommendations
  */
 export async function getSmartRecommendations(userId, options = {}) {
-  const { limit = 5, mealType: forcedMealType } = options;
+  const { limit = 5, mealType: forcedMealType, timezoneOffset } = options;
 
   // 1. Get user profile and goals
   const [profile] = await db
@@ -732,34 +742,22 @@ export async function getSmartRecommendations(userId, options = {}) {
     fatG: profile?.fatGoal || 65,
   };
 
-  // 2. Calculate nutritional gaps
-  const gapsData = await calculateNutritionalGaps(userId, goals);
+  // 2-6. Parallelize all independent data fetches
+  const [gapsData, history, correlations, moodResults, activityResults, signals] = await Promise.all([
+    calculateNutritionalGaps(userId, goals),
+    getUserFoodHistory(userId),
+    getMoodFoodCorrelations(userId),
+    db.select().from(moodLogTable).where(eq(moodLogTable.userId, userId)).orderBy(desc(moodLogTable.loggedDate)).limit(1),
+    db.select().from(activityLogTable).where(eq(activityLogTable.userId, userId)).orderBy(desc(activityLogTable.loggedAt)).limit(1),
+    getUserSignals(userId, { timezoneOffset }),
+  ]);
 
-  // 3. Get user history
-  const history = await getUserFoodHistory(userId);
-
-  // 4. Get mood-food correlations
-  const correlations = await getMoodFoodCorrelations(userId);
+  const recentMood = moodResults[0];
+  const recentActivity = activityResults[0];
 
   // 5. Determine current context
   const currentHour = new Date().getHours();
   const mealType = forcedMealType || getCurrentMealType(currentHour);
-
-  // Get recent mood if available
-  const [recentMood] = await db
-    .select()
-    .from(moodLogTable)
-    .where(eq(moodLogTable.userId, userId))
-    .orderBy(desc(moodLogTable.loggedAt))
-    .limit(1);
-
-  // Get recent activity
-  const [recentActivity] = await db
-    .select()
-    .from(activityLogTable)
-    .where(eq(activityLogTable.userId, userId))
-    .orderBy(desc(activityLogTable.loggedAt))
-    .limit(1);
 
   const context = {
     gaps: gapsData.gaps,
@@ -769,6 +767,7 @@ export async function getSmartRecommendations(userId, options = {}) {
     currentMood: recentMood?.intensity ? parseFloat(recentMood.intensity) : null,
     activityLevel: recentActivity?.intensity || 'moderate',
     correlations,
+    signals,
   };
 
   // 6. Score all foods
@@ -808,6 +807,10 @@ export async function getSmartRecommendations(userId, options = {}) {
       explanation,
       primaryReason: primaryReason?.impact || 'Great choice for you',
       allReasons: food.reasons,
+      wellnessReasoning: primaryReason?.type === 'mood'
+        ? primaryReason.impact
+        : signals.insights?.mood || null,
+      wellnessContext: primaryReason?.type === 'mood' ? 'MOOD_SIGNAL' : null,
 
       // Quick-log ready data
       quickLog: {
@@ -837,6 +840,13 @@ export async function getSmartRecommendations(userId, options = {}) {
       caloriesConsumed: gapsData.totalCaloriesConsumed,
       caloriesRemaining: gapsData.gaps.calories.remaining,
       topPriorities: gapsData.priorities.slice(0, 2),
+      moodSignal: {
+        hasData: signals.moodConfidenceLabel !== 'insufficient',
+        confidence: signals.moodConfidence,
+        confidenceLabel: signals.moodConfidenceLabel,
+        insight: signals.insights?.mood || '',
+        reason: signals.explainability?.mood?.reason || null,
+      },
     },
     meta: {
       generatedAt: new Date().toISOString(),

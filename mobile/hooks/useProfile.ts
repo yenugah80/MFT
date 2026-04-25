@@ -4,6 +4,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@clerk/clerk-expo';
 import apiClient from '@/services/apiClient';
 import type { Profile } from '@/types/api';
 
@@ -19,9 +20,12 @@ const fetchProfile = async (): Promise<Profile> => {
  * Used by ProfileProvider and other components needing profile info
  */
 export const useProfile = () => {
+  const { isLoaded, isSignedIn } = useAuth();
+
   return useQuery({
     queryKey: ['profile'],
     queryFn: fetchProfile,
+    enabled: isLoaded && isSignedIn,
     // Cache profile for 5 minutes (profile changes are rare)
     staleTime: 5 * 60 * 1000,
     // Keep data in memory for 10 minutes

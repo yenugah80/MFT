@@ -3,7 +3,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { View, ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import { COLORS } from "../../constants/colors";
-import { TYPOGRAPHY } from "../../constants/premiumTheme";
+import { TYPOGRAPHY, BRAND, TEXT, SURFACES } from "../../constants/premiumTheme";
 import { useProfileContext } from "../../providers/ProfileProvider";
 
 const TabsLayout = () => {
@@ -13,8 +13,8 @@ const TabsLayout = () => {
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
-  // Show loading while profile is being fetched
-  if (profileLoading) {
+  // Show loading while profile is being fetched or onboarding status is unknown
+  if (profileLoading || onboardingComplete === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -68,11 +68,11 @@ const TabsLayout = () => {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.textLight,
+        tabBarActiveTintColor: BRAND.primary,
+        tabBarInactiveTintColor: TEXT.tertiary,
         tabBarStyle: {
-          backgroundColor: COLORS.white,
-          borderTopColor: COLORS.border,
+          backgroundColor: '#FFFFFF',
+          borderTopColor: SURFACES.divider,
           borderTopWidth: 1,
           paddingBottom: 8,
           paddingTop: 8,

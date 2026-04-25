@@ -34,6 +34,20 @@ yarn-error.log*
 *.swp
 *.swo
 
+# Local agent/browser state
+.clawhub/
+.playwright-mcp/
+.claude/projects/
+.claude/worktrees/
+skills/
+
+# Local QA screenshots
+mobile/*preview*.png
+mobile/root-*.png
+mobile/reset-password*.png
+mobile/sign-in-*.png
+mobile/sign-up-*.png
+
 # Credentials (never commit)
 *.pem
 *.p8

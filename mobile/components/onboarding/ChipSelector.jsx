@@ -1,6 +1,12 @@
 /**
- * ChipSelector
- * Multi-select chip component with emoji icons and semantic colors
+ * ChipSelector — "The Organic Editorial" Design System
+ *
+ * Chip spec (DESIGN.md):
+ *   - surface-container-highest (#beeec8) background — unselected
+ *   - tertiary-container (#feb64c) background — selected (warm sun-kissed)
+ *   - Zero borders — tonal background shift is the only selection signal
+ *   - Spring animation: stiffness 300, damping 20
+ *   - Ambient shadow on selected: 6% on-surface opacity
  */
 
 import React from 'react';
@@ -9,11 +15,17 @@ import {
   Pressable,
   Text,
   StyleSheet,
-  FlatList,
   Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { TEXT, BRAND, SURFACES, RADIUS, SPACING, SHADOWS, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
+
+const DS = {
+  surfContainerHi: '#beeec8',    // unselected chip background
+  tertiary:        '#feb64c',    // selected chip background (tertiary-container)
+  onSurface:       '#0e3a20',    // unselected text
+  onTertiary:      '#3d2200',    // selected text (warm dark amber)
+  ambientShadow:   'rgba(14, 58, 32, 0.06)',
+};
 
 const ChipSelector = ({
   title,
@@ -23,18 +35,14 @@ const ChipSelector = ({
   multiSelect = true,
   renderLabel,
 }) => {
-  // Helper to extract ID from string or object format
   const getItemId = (item) => {
     if (!item) return '';
     return typeof item === 'string' ? item : (item.id || '');
   };
 
-  // Helper to check if an item is selected (handles both string and object formats)
-  const isItemSelected = (itemId) => {
-    return selectedItems.some(selected => getItemId(selected) === itemId);
-  };
+  const isItemSelected = (itemId) =>
+    selectedItems.some(s => getItemId(s) === itemId);
 
-  // Use useState to ensure animScales updates when items change
   const [animScales] = React.useState(() =>
     items.reduce((acc, item) => {
       acc[item.id] = new Animated.Value(1);
@@ -42,7 +50,6 @@ const ChipSelector = ({
     }, {}),
   );
 
-  // Sync animScales with items when they change
   React.useEffect(() => {
     items.forEach((item) => {
       if (!animScales[item.id]) {
@@ -53,27 +60,22 @@ const ChipSelector = ({
 
   const toggleItem = (itemId) => {
     let newSelection;
-
     if (multiSelect) {
-      // Multi-select mode - filter by ID comparison
-      if (isItemSelected(itemId)) {
-        newSelection = selectedItems.filter((item) => getItemId(item) !== itemId);
-      } else {
-        newSelection = [...selectedItems, itemId];
-      }
+      newSelection = isItemSelected(itemId)
+        ? selectedItems.filter(item => getItemId(item) !== itemId)
+        : [...selectedItems, itemId];
     } else {
-      // Single-select mode
       newSelection = isItemSelected(itemId) ? [] : [itemId];
     }
-
     onSelectionChange(newSelection);
   };
 
   const handlePressIn = (itemId) => {
     Animated.spring(animScales[itemId], {
-      toValue: 0.92,
+      toValue: 0.93,
       useNativeDriver: true,
-      speed: 15,
+      stiffness: 300,
+      damping: 20,
     }).start();
   };
 
@@ -81,133 +83,111 @@ const ChipSelector = ({
     Animated.spring(animScales[itemId], {
       toValue: 1,
       useNativeDriver: true,
-      speed: 15,
+      stiffness: 300,
+      damping: 20,
     }).start();
-  };
-
-  const renderChip = ({ item }) => {
-    const isSelected = isItemSelected(item.id);
-    const scale = animScales[item.id] || new Animated.Value(1);
-    const itemColor = item.color || BRAND.primary;
-
-    return (
-      <Animated.View
-        style={{
-          transform: [{ scale }],
-        }}
-      >
-        <Pressable
-          onPress={() => toggleItem(item.id)}
-          onPressIn={() => handlePressIn(item.id)}
-          onPressOut={() => handlePressOut(item.id)}
-          style={[
-            styles.chip,
-            isSelected && [
-              styles.chipSelected,
-              {
-                borderColor: itemColor,
-                backgroundColor: itemColor,
-              },
-            ],
-          ]}
-        >
-          <View style={styles.chipContent}>
-            {item.emoji && (
-              <Text style={styles.chipEmoji}>{item.emoji}</Text>
-            )}
-            <Text
-              style={[
-                styles.chipLabel,
-                isSelected && [styles.chipLabelSelected, { color: '#FFFFFF' }],
-              ]}
-            >
-              {renderLabel ? renderLabel(item) : item.label}
-            </Text>
-            {isSelected && (
-              <View style={styles.checkmarkBadge}>
-                <Ionicons name="checkmark" size={14} color="white" />
-              </View>
-            )}
-          </View>
-        </Pressable>
-      </Animated.View>
-    );
   };
 
   return (
     <View style={styles.container}>
-      {title && <Text style={styles.title}>{title}</Text>}
-      <FlatList
-        data={items}
-        renderItem={renderChip}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.listContent}
-      />
+      {title ? <Text style={styles.title}>{title}</Text> : null}
+
+      <View style={styles.grid}>
+        {items.map((item) => {
+          const isSelected = isItemSelected(item.id);
+          const scale = animScales[item.id] || new Animated.Value(1);
+
+          return (
+            <Animated.View
+              key={item.id}
+              style={[styles.chipWrap, { transform: [{ scale }] }]}
+            >
+              <Pressable
+                onPress={() => toggleItem(item.id)}
+                onPressIn={() => handlePressIn(item.id)}
+                onPressOut={() => handlePressOut(item.id)}
+                style={[
+                  styles.chip,
+                  isSelected ? styles.chipSelected : styles.chipUnselected,
+                ]}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isSelected }}
+                accessibilityLabel={item.label}
+              >
+                {item.emoji ? (
+                  <Text style={styles.emoji}>{item.emoji}</Text>
+                ) : null}
+                <Text style={[
+                  styles.label,
+                  isSelected ? styles.labelSelected : styles.labelUnselected,
+                ]}>
+                  {renderLabel ? renderLabel(item) : item.label}
+                </Text>
+              </Pressable>
+            </Animated.View>
+          );
+        })}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING[5],
+    gap: 8,
   },
   title: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginBottom: SPACING[4],
-  },
-  row: {
-    gap: SPACING[2],
-  },
-  listContent: {
-    gap: SPACING[2],
-  },
-  chip: {
-    flex: 1,
-    backgroundColor: SURFACES.background.secondary,
-    borderRadius: RADIUS.xl,
-    borderWidth: 2,
-    borderColor: `${SEMANTIC_ACTIONS.success}33`,
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[4],
-    minHeight: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.sm,
-  },
-  chipSelected: {
-    borderWidth: 2,
-    ...SHADOWS.md,
-  },
-  chipContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    justifyContent: 'center',
-  },
-  chipEmoji: {
-    fontSize: 18,
-  },
-  chipLabel: {
     fontSize: 14,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    textAlign: 'center',
-    flexShrink: 1,
+    color: DS.onSurface,
+    letterSpacing: -0.1,
+    marginBottom: 4,
   },
-  chipLabelSelected: {
-    fontFamily: TYPOGRAPHY.family.bold,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  checkmarkBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
+  chipWrap: {
+    /* sizing managed by chip itself */
+  },
+  chip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  chipUnselected: {
+    backgroundColor: DS.surfContainerHi,
+    shadowColor: DS.ambientShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  chipSelected: {
+    backgroundColor: DS.tertiary,
+    shadowColor: DS.onSurface,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  emoji: {
+    fontSize: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  labelUnselected: {
+    color: DS.onSurface,
+  },
+  labelSelected: {
+    color: DS.onTertiary,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
 });
 

@@ -1,17 +1,36 @@
 /**
- * MetricInput
- * Input field with optional unit toggle and validation
+ * MetricInput — "The Organic Editorial" Design System
+ *
+ * Input spec (DESIGN.md):
+ *   - surface-container-lowest (#ffffff) background — inner-glow against green surfaces
+ *   - No explicit border; ghost border at 15% opacity for focus/error
+ *   - Label sits ABOVE the field, never inside as a placeholder
+ *   - Error: #aa371c text + 5% error-container tint on background
+ *   - Unit toggle: pill group, background-only switching, zero borders
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
-  TextInput,
   Text,
-  StyleSheet,
+  TextInput,
   Pressable,
+  Animated,
+  StyleSheet,
 } from 'react-native';
-import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
+
+const DS = {
+  surfLow:       '#ffffff',
+  surfHigh:      '#beeec8',
+  primary:       '#1c6d25',
+  onSurface:     '#0e3a20',
+  onSurfaceVar:  'rgba(14, 58, 32, 0.50)',
+  outlineFocus:  'rgba(28, 109, 37, 0.30)',
+  error:         '#aa371c',
+  errorTint:     'rgba(170, 55, 28, 0.05)',
+  ambientShadow: 'rgba(14, 58, 32, 0.06)',
+};
 
 const MetricInput = ({
   label,
@@ -19,7 +38,7 @@ const MetricInput = ({
   value,
   onChangeValue,
   placeholder,
-  keyboardType = 'decimal-pad',
+  keyboardType = 'numeric',
   units,
   selectedUnit,
   onUnitChange,
@@ -27,170 +46,179 @@ const MetricInput = ({
   min,
   max,
 }) => {
-  const [isFocused, setIsFocused] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const borderOpacity = useRef(new Animated.Value(0)).current;
+
+  const animateBorder = (to) =>
+    Animated.spring(borderOpacity, {
+      toValue: to,
+      useNativeDriver: false,
+      stiffness: 300,
+      damping: 20,
+    }).start();
 
   const handleChangeText = (text) => {
-    // Only allow numbers and decimal point
-    const cleanText = text.replace(/[^0-9.]/g, '');
-
-    // Prevent multiple decimal points
-    const parts = cleanText.split('.');
-    if (parts.length > 2) return;
-
-    onChangeValue(cleanText);
+    const cleaned = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+    onChangeValue(cleaned);
   };
 
   const isValid = () => {
-    if (!value) return false;
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return false;
-    if (min !== undefined && numValue < min) return false;
-    if (max !== undefined && numValue > max) return false;
+    if (!value) return true;
+    const n = parseFloat(value);
+    if (min !== undefined && n < min) return false;
+    if (max !== undefined && n > max) return false;
     return true;
   };
 
-  const showError = error && !isValid();
+  const hasError = !!error && !isValid();
+
+  const borderColor = borderOpacity.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', hasError ? DS.error : DS.outlineFocus],
+  });
 
   return (
-    <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      {hint && <Text style={styles.hint}>{hint}</Text>}
+    <View style={styles.wrapper}>
+      {/* Label — always above */}
+      <Text style={styles.label}>{label}</Text>
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
 
-      <View style={styles.inputRow}>
-        <View
+      <View style={styles.row}>
+        {/* White inner-glow input surface */}
+        <Animated.View
           style={[
-            styles.inputContainer,
-            isFocused && styles.inputContainerFocused,
-            showError && styles.inputContainerError,
+            styles.fieldSurface,
+            hasError && styles.fieldSurfaceError,
+            { borderColor },
           ]}
         >
           <TextInput
             style={styles.input}
             value={value}
             onChangeText={handleChangeText}
+            onFocus={() => { animateBorder(1); }}
+            onBlur={() => { animateBorder(0); }}
             placeholder={placeholder}
-            placeholderTextColor={TEXT.muted}
+            placeholderTextColor={DS.onSurfaceVar}
             keyboardType={keyboardType}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            maxLength={10}
-            autoCorrect={false}
-            autoCapitalize="none"
             returnKeyType="done"
             selectTextOnFocus
           />
-        </View>
+        </Animated.View>
 
-        {units && selectedUnit && (
-          <View style={styles.unitContainer}>
-            {units.map((unit) => (
-              <Pressable
-                key={unit}
-                onPress={() => onUnitChange?.(unit)}
-                style={[
-                  styles.unitButton,
-                  selectedUnit === unit && styles.unitButtonActive,
-                ]}
-              >
-                <Text
+        {/* Unit pill — no borders, background-only switching */}
+        {units && units.length > 0 && (
+          <View style={styles.unitGroup}>
+            {units.map((unit, idx) => {
+              const isActive = selectedUnit === unit;
+              return (
+                <Pressable
+                  key={unit}
+                  onPress={() => onUnitChange?.(unit)}
                   style={[
-                    styles.unitText,
-                    selectedUnit === unit && styles.unitTextActive,
+                    styles.unitBtn,
+                    isActive && styles.unitBtnActive,
+                    idx === 0 && styles.unitBtnLeft,
+                    idx === units.length - 1 && styles.unitBtnRight,
                   ]}
                 >
-                  {unit}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text style={[styles.unitLabel, isActive && styles.unitLabelActive]}>
+                    {unit}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         )}
       </View>
 
-      {showError && (
-        <Text style={styles.errorText}>{error}</Text>
-      )}
+      {hasError && <Text style={styles.errorMsg}>{error}</Text>}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
+  wrapper: {
+    gap: 6,
   },
   label: {
     fontSize: 14,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    marginBottom: 6,
+    color: DS.onSurface,
+    letterSpacing: -0.1,
   },
   hint: {
     fontSize: 12,
     fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    marginBottom: 8,
-    fontStyle: 'italic',
+    color: DS.onSurfaceVar,
+    lineHeight: 17,
+    marginTop: -2,
   },
-  inputRow: {
+  row: {
     flexDirection: 'row',
-    gap: 8,
     alignItems: 'center',
+    gap: 10,
   },
-  inputContainer: {
+  /* White inner-glow surface */
+  fieldSurface: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: SURFACES.background.secondary,
-    borderRadius: 12,
+    backgroundColor: DS.surfLow,
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: SURFACES.card.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: 'transparent',
+    shadowColor: DS.ambientShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  inputContainerFocused: {
-    borderColor: BRAND.primary,
-    backgroundColor: `${SEMANTIC_ACTIONS.success}05`,
-  },
-  inputContainerError: {
-    borderColor: '#EF4444',
-    backgroundColor: 'rgba(239, 68, 68, 0.02)',
+  fieldSurfaceError: {
+    backgroundColor: DS.errorTint,
   },
   input: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.primary,
-    paddingVertical: 4,
-    minHeight: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 22,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: DS.onSurface,
+    minHeight: 54,
   },
-  unitContainer: {
+  /* Unit group — contained pill, no borders */
+  unitGroup: {
     flexDirection: 'row',
-    gap: 4,
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: 8,
-    padding: 4,
+    backgroundColor: DS.surfHigh,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
-  unitButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: 'transparent',
+  unitBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  unitButtonActive: {
-    backgroundColor: SURFACES.background.secondary,
+  unitBtnActive: {
+    backgroundColor: DS.primary,
   },
-  unitText: {
-    fontSize: 11,
+  unitBtnLeft: {
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+  },
+  unitBtnRight: {
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+  },
+  unitLabel: {
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.tertiary,
+    color: DS.onSurface,
   },
-  unitTextActive: {
-    color: BRAND.primary,
+  unitLabelActive: {
+    color: '#ffffff',
   },
-  errorText: {
+  errorMsg: {
     fontSize: 12,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: '#EF4444',
-    marginTop: 6,
+    color: DS.error,
   },
 });
 

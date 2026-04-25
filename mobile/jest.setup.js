@@ -21,6 +21,14 @@ jest.mock('expo-constants', () => ({
 }));
 
 // Mock Platform
+jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+    Version: '15.0',
+    select: jest.fn((obj) => obj.ios || obj.default),
+  },
+}));
+
 jest.mock('react-native/Libraries/Utilities/Platform', () => ({
   OS: 'ios',
   Version: '15.0',

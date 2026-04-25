@@ -413,7 +413,7 @@ export default function NotificationsScreen() {
           style={styles.backButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.replace('/(tabs)/profile');
+            router.back();
           }}
           accessibilityLabel="Back to Profile"
         >

@@ -44,7 +44,9 @@ export const ProfileProvider = ({ children }) => {
    * 2. Profile has full setup (age, weight, height, activityLevel) - existing users
    */
   const onboardingComplete = useMemo(() => {
-    if (!profile) return false;
+    // Return null (unknown) while loading or when there's no data yet.
+    // Callers must treat null as "still loading" to avoid premature redirects.
+    if (isLoading || !profile) return null;
 
     const hasCompletedAtTimestamp = !!profile.onboardingCompletedAt;
     const hasFullProfile = !!(
@@ -55,15 +57,15 @@ export const ProfileProvider = ({ children }) => {
     );
 
     return hasCompletedAtTimestamp || hasFullProfile;
-  }, [profile]);
+  }, [profile, isLoading]);
 
   /**
    * Check if user is in onboarding flow but hasn't completed
    */
   const isOnboarding = useMemo(() => {
-    if (!profile) return true; // Assume onboarding if no profile yet
+    if (onboardingComplete === null) return null; // still loading
     return !onboardingComplete;
-  }, [profile, onboardingComplete]);
+  }, [onboardingComplete]);
 
   /**
    * Context value exposed to consuming components

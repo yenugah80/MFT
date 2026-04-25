@@ -471,7 +471,7 @@ export default function BodyMetricsScreen() {
         {/* Header */}
         <LinearGradient colors={["#8B5CF6", "#7C3AED"]} style={styles.header}>
           <View style={styles.headerTop}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.replace("/(tabs)/profile")}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color="#FFF" />
             </TouchableOpacity>
             <View style={[styles.lifecycleBadge, { backgroundColor: `${lifecycle.color}30` }]}>

@@ -160,7 +160,7 @@ export default function PrivacyScreen() {
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.replace("/(tabs)/profile")}
+          onPress={() => router.back()}
           accessibilityLabel="Back to Profile"
         >
           <Ionicons name="chevron-back" size={22} color="#FFFFFF" />

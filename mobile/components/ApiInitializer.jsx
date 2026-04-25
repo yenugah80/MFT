@@ -5,10 +5,12 @@
 
 import { useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
+import { useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/services/apiClient';
 
 const ApiInitializer = ({ children }) => {
   const { getToken, isLoaded, isSignedIn } = useAuth();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     // Only set token provider once Clerk is fully loaded
@@ -46,6 +48,13 @@ const ApiInitializer = ({ children }) => {
     });
 
     console.log('[ApiInitializer] API client initialized with Clerk token provider');
+
+    // Invalidate auth-dependent queries so they refetch with the new token.
+    // This fixes the case where profile/dashboard cached a 401 before the token was ready.
+    if (isSignedIn) {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, isSignedIn]); // ✅ Remove getToken from dependencies - it's a reference that changes on every render
 

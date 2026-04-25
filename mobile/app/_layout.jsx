@@ -3,7 +3,12 @@ import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
-import { View } from "react-native";
+import { LogBox, View } from "react-native";
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_700Bold,
+} from "@expo-google-fonts/dm-sans";
 import {
   useFonts,
   Inter_400Regular,
@@ -11,6 +16,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import { TenorSans_400Regular } from "@expo-google-fonts/tenor-sans";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { ProfileProvider } from "@/providers/ProfileProvider";
@@ -22,21 +28,14 @@ import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
 import OnboardingGuard from "@/components/OnboardingGuard";
 import SmartNotificationInitializer from "@/components/SmartNotificationInitializer";
+import InitializationGuard from "@/components/InitializationGuard";
+import { cleanupAnalytics } from "@/services/analytics";
+import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
 import Toast from "react-native-toast-message";
 import "@/i18n/config"; // Initialize i18n
-import { LogBox } from 'react-native';
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
-
-// Analytics & Crash Reporting (FREE - uses your backend)
-import { cleanupAnalytics } from "@/services/analytics";
-
-// Production startup utilities
-import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
-
-// Initialization guard (prevents premature renders)
-import InitializationGuard from "@/components/InitializationGuard";
 
 // ✅ Module-level flag: persists across component remounts
 // This survives even if RootLayout unmounts/remounts
@@ -100,10 +99,14 @@ export default function RootLayout() {
 
   // Load Inter fonts - professional, highly legible typography with proper weight hierarchy
   const [fontsLoaded, fontError] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_700Bold,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    TenorSans_400Regular,
   });
 
   // Hide splash screen when fonts are ready

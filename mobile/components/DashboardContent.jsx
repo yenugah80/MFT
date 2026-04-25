@@ -2078,7 +2078,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING[5],
-    paddingBottom: SPACING[16],
+    paddingBottom: SPACING[28],
   },
   // View Your Progress - Prominent link to Analytics
   progressLinkCard: {

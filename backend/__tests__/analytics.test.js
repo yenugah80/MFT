@@ -6,6 +6,8 @@
  * - Fallback suggestions on error
  */
 
+import { jest } from '@jest/globals';
+
 // Mock the database
 jest.mock('../src/config/db.js', () => ({
   db: {
@@ -21,25 +23,25 @@ describe('Food Suggestions Endpoint Logic', () => {
   describe('Input validation', () => {
     it('validates gaps array is required', () => {
       const gaps = null;
-      const isValid = gaps && Array.isArray(gaps) && gaps.length > 0;
+      const isValid = Boolean(gaps && Array.isArray(gaps) && gaps.length > 0);
       expect(isValid).toBe(false);
     });
 
     it('validates gaps must be an array', () => {
       const gaps = 'not an array';
-      const isValid = gaps && Array.isArray(gaps) && gaps.length > 0;
+      const isValid = Boolean(gaps && Array.isArray(gaps) && gaps.length > 0);
       expect(isValid).toBe(false);
     });
 
     it('validates gaps array must not be empty', () => {
       const gaps = [];
-      const isValid = gaps && Array.isArray(gaps) && gaps.length > 0;
+      const isValid = Boolean(gaps && Array.isArray(gaps) && gaps.length > 0);
       expect(isValid).toBe(false);
     });
 
     it('accepts valid gaps array', () => {
       const gaps = [{ key: 'iron', label: 'Iron', percentage: 25 }];
-      const isValid = gaps && Array.isArray(gaps) && gaps.length > 0;
+      const isValid = Boolean(gaps && Array.isArray(gaps) && gaps.length > 0);
       expect(isValid).toBe(true);
     });
   });

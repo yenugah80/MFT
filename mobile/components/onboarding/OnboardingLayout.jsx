@@ -1,6 +1,12 @@
 /**
- * OnboardingLayout
- * Wrapper component for onboarding screens with progress bar and navigation
+ * OnboardingLayout — "The Organic Editorial" Design System
+ *
+ * Surface hierarchy: surface (#eaffeb) canvas → surface-container (#d2f7d8) header band
+ * Rules enforced:
+ *   - Zero 1px borders — separation via tonal shift only
+ *   - Progress: 6px thick pill track
+ *   - Title: editorial 28px with tight tracking
+ *   - Ambient shadow on logo (6% on-surface, not black)
  */
 
 import React, { useMemo } from 'react';
@@ -15,7 +21,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BackButton from './BackButton';
-import { BRAND, TEXT, SURFACES, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
+
+const DS = {
+  surface:          '#eaffeb',
+  surfaceContainer: '#d2f7d8',
+  surfContainerHi:  '#beeec8',
+  primary:          '#1c6d25',
+  onSurface:        '#0e3a20',
+  onSurfaceVar:     'rgba(14, 58, 32, 0.52)',
+  ambientShadow:    'rgba(14, 58, 32, 0.06)',
+};
 
 const OnboardingLayout = ({
   step = 1,
@@ -28,125 +44,96 @@ const OnboardingLayout = ({
   scrollEnabled = true,
   keyboardAvoidingEnabled = true,
 }) => {
-  // Progress bar animation
-  const progressValue = useMemo(() => (step / totalSteps) * 100, [step, totalSteps]);
+  const handleBack = () => { if (canGoBack && onBack) onBack(); };
 
-  const handleBack = () => {
-    if (canGoBack && onBack) {
-      onBack();
-    }
-  };
+  const inner = (
+    <OnboardingContent
+      step={step}
+      totalSteps={totalSteps}
+      title={title}
+      subtitle={subtitle}
+      onBack={handleBack}
+      canGoBack={canGoBack}
+      scrollEnabled={scrollEnabled}
+    >
+      {children}
+    </OnboardingContent>
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.root}>
       {keyboardAvoidingEnabled ? (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.flex}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 100}
         >
-          <OnboardingContent
-            step={step}
-            totalSteps={totalSteps}
-            title={title}
-            subtitle={subtitle}
-            onBack={handleBack}
-            canGoBack={canGoBack}
-            scrollEnabled={scrollEnabled}
-            progressValue={progressValue}
-          >
-            {children}
-          </OnboardingContent>
+          {inner}
         </KeyboardAvoidingView>
-      ) : (
-        <OnboardingContent
-          step={step}
-          totalSteps={totalSteps}
-          title={title}
-          subtitle={subtitle}
-          onBack={handleBack}
-          canGoBack={canGoBack}
-          scrollEnabled={scrollEnabled}
-          progressValue={progressValue}
-        >
-          {children}
-        </OnboardingContent>
-      )}
+      ) : inner}
     </SafeAreaView>
   );
 };
 
 const OnboardingContent = ({
-  step,
-  totalSteps,
-  title,
-  subtitle,
-  children,
-  onBack,
-  canGoBack,
-  scrollEnabled,
-  progressValue,
+  step, totalSteps, title, subtitle, children, onBack, canGoBack, scrollEnabled,
 }) => {
+  const progressPct = useMemo(() => step / totalSteps, [step, totalSteps]);
+
   return (
     <View style={styles.flex}>
-      {/* Header with back button and progress */}
+      {/* ── Header band: surface-container tonal lift, zero borders ── */}
       <View style={styles.header}>
-        {/* Logo and Brand - shown on first step */}
+
+        {/* Brand — step 1 only, asymmetric hero */}
         {step === 1 && (
-          <View style={styles.brandSection}>
+          <View style={styles.brandHero}>
             <Image
               source={require('../../assets/images/app-logo.png')}
-              style={styles.logoImage}
+              style={styles.logo}
             />
             <Text style={styles.brandName}>MyFoodTracker</Text>
+            <Text style={styles.brandTagline}>Your personal nutrition companion</Text>
           </View>
         )}
 
-        <View style={styles.headerTop}>
-          {canGoBack ? (
-            <BackButton onPress={onBack} enabled={canGoBack} />
-          ) : (
-            <View style={styles.backButtonPlaceholder} />
-          )}
-
-          <Text style={styles.stepIndicator}>
-            {step}
-            {' '}
-            of
-            {' '}
-            {totalSteps}
-          </Text>
+        {/* Nav row */}
+        <View style={styles.navRow}>
+          {canGoBack
+            ? <BackButton onPress={onBack} enabled={canGoBack} />
+            : <View style={styles.navGhost} />
+          }
+          <Text style={styles.stepCounter}>{step} of {totalSteps}</Text>
         </View>
 
-        {/* Premium Progress Bar */}
-        <View style={styles.progressBarSection}>
-          <View style={styles.progressBarContainer}>
+        {/* Progress track — 6px thick, pill caps, tonal fill */}
+        <View style={styles.progressRow}>
+          {Array.from({ length: totalSteps }, (_, i) => (
             <View
+              key={i}
               style={[
-                styles.progressBar,
-                {
-                  width: `${progressValue}%`,
-                },
+                styles.progressSeg,
+                { backgroundColor: i < step ? DS.primary : DS.surfContainerHi },
+                i < totalSteps - 1 && { marginRight: 6 },
               ]}
             />
-          </View>
-          <Text style={styles.progressText}>{Math.round(progressValue)}% complete</Text>
+          ))}
         </View>
 
-        {/* Title and subtitle */}
+        {/* Editorial title block */}
         {title && (
-          <View style={styles.titleContainer}>
+          <View style={styles.titleBlock}>
             <Text style={styles.title}>{title}</Text>
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
           </View>
         )}
       </View>
 
-      {/* Content */}
+      {/* ── Content canvas: base surface ── */}
       {scrollEnabled ? (
         <ScrollView
-          style={styles.contentScroll}
-          contentContainerStyle={styles.contentContainer}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           bounces={false}
           keyboardShouldPersistTaps="handled"
@@ -155,107 +142,104 @@ const OnboardingContent = ({
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.contentContainer, styles.flex]}>
-          {children}
-        </View>
+        <View style={[styles.scrollContent, styles.flex]}>{children}</View>
       )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: SURFACES.background.primary,
-  },
-  flex: {
-    flex: 1,
-  },
+  root:  { flex: 1, backgroundColor: DS.surface },
+  flex:  { flex: 1 },
+
+  /* Header */
   header: {
-    paddingHorizontal: SPACING[4],
-    paddingTop: SPACING[3],
-    paddingBottom: SPACING[4],
-    backgroundColor: SURFACES.background.secondary,
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACES.card.border,
-    ...SHADOWS.sm,
+    backgroundColor: DS.surfaceContainer,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
-  brandSection: {
+
+  /* Brand hero — step 1 asymmetric block */
+  brandHero: {
     alignItems: 'center',
-    marginBottom: SPACING[4],
+    paddingVertical: 12,
+    marginBottom: 8,
   },
-  logoImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    marginBottom: SPACING[2],
+  logo: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    marginBottom: 12,
+    /* Ambient shadow — 6% on-surface, diffused */
+    shadowColor: DS.onSurface,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 6,
   },
   brandName: {
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: TYPOGRAPHY.family.bold,
-    color: BRAND.primary,
-    letterSpacing: -0.5,
+    color: DS.primary,
+    letterSpacing: -0.8,
+    marginBottom: 2,
   },
-  headerTop: {
+  brandTagline: {
+    fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: DS.onSurfaceVar,
+  },
+
+  /* Nav */
+  navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING[3],
+    marginBottom: 14,
   },
-  backButtonPlaceholder: {
-    width: 40,
-    height: 40,
-  },
-  stepIndicator: {
-    fontSize: 14,
+  navGhost: { width: 40, height: 40 },
+  stepCounter: {
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.tertiary,
+    color: DS.onSurfaceVar,
   },
-  progressBarSection: {
-    marginBottom: SPACING[4],
+
+  /* Progress */
+  progressRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
   },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: '#EDEAFF', // Solid color for shadow efficiency
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-    marginBottom: SPACING[2],
+  progressSeg: {
+    flex: 1,
+    height: 6,
+    borderRadius: 999,
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: BRAND.primary,
-    borderRadius: RADIUS.full,
-  },
-  progressText: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.tertiary,
-    textAlign: 'right',
-    writingDirection: 'ltr', // Ensure progress text always displays LTR
-  },
-  titleContainer: {
-    gap: SPACING[1],
-  },
+
+  /* Title */
+  titleBlock: { gap: 5 },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    letterSpacing: -0.5,
+    color: DS.onSurface,
+    letterSpacing: -0.8,
+    lineHeight: 34,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    lineHeight: 20,
+    color: DS.onSurfaceVar,
+    lineHeight: 22,
   },
-  contentScroll: {
-    flex: 1,
-  },
-  contentContainer: {
+
+  /* Content */
+  scroll: { flex: 1 },
+  scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[6],
-    gap: SPACING[4],
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 48,
+    gap: 20,
   },
 });
 

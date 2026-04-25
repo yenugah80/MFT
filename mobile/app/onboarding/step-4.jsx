@@ -1,6 +1,16 @@
 /**
- * Onboarding Step 4: Review Calculated Goals
- * Premium refined design with compact macro cards and elegant animations
+ * Onboarding Step 4 — "The Organic Editorial" Design System
+ *
+ * Rules enforced:
+ *   - Zero 1px borders — macro cards use ambient shadow + tonal bg only
+ *   - Macro cards: #ffffff inner-glow surface, no borderColor
+ *   - Water card: tonal surface-container gradient (design system greens)
+ *   - Loading state: #beeec8 icon container, no borders
+ *   - Info note: #d2f7d8 background, no borders
+ *   - Hero: decorative circles bleed off edges
+ *   - Get Started: pill borderRadius 999, gradient #1c6d25→#9df197
+ *   - Spring animations: stiffness 300, damping 20
+ *   - Ambient shadows: rgba(14, 58, 32, 0.06)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -20,52 +30,43 @@ import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '../../components/onboarding/OnboardingLayout';
 import GoalEditSheet from '../../components/onboarding/GoalEditSheet';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import {
-  ONBOARDING_COPY,
-  A11Y_LABELS,
-} from '../../constants/onboardingConfig';
-import { BRAND,
-  TEXT,
-  SHADOWS,
-  RADIUS,
-  SPACING,
-  SURFACES,
-  MACRO_COLORS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { ONBOARDING_COPY, A11Y_LABELS } from '../../constants/onboardingConfig';
+import { MACRO_COLORS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
-// Compact Macro Card Component
+const DS = {
+  surface:          '#eaffeb',
+  surfContainer:    '#d2f7d8',
+  surfContainerHi:  '#beeec8',
+  surfLow:          '#ffffff',
+  primary:          '#1c6d25',
+  primaryLight:     '#9df197',
+  onSurface:        '#0e3a20',
+  onSurfaceVar:     'rgba(14, 58, 32, 0.50)',
+  onPrimary:        '#ffffff',
+  ambientShadow:    'rgba(14, 58, 32, 0.06)',
+};
+
+/* ─── Macro Card ─── */
 const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, delay = 0 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        delay,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, delay, useNativeDriver: true }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         delay,
         useNativeDriver: true,
-        tension: 50,
-        friction: 8,
+        stiffness: 300,
+        damping: 20,
       }),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delay]);
 
   return (
-    <Animated.View
-      style={[
-        styles.macroCard,
-        {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
+    <Animated.View style={[styles.macroCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -73,11 +74,10 @@ const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, de
         }}
         style={({ pressed }) => [
           styles.macroCardInner,
-          { borderColor: color },
-          pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] },
+          pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
         ]}
       >
-        <View style={[styles.macroIconContainer, { backgroundColor: lightColor }]}>
+        <View style={[styles.macroIconBg, { backgroundColor: lightColor }]}>
           <Ionicons name={iconName} size={20} color={color} />
         </View>
         <Text style={styles.macroLabel}>{label}</Text>
@@ -86,7 +86,7 @@ const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, de
           <Text style={styles.macroUnit}>{unit}</Text>
         </View>
         <View style={styles.macroEditHint}>
-          <Ionicons name="pencil-outline" size={10} color={TEXT.muted} />
+          <Ionicons name="pencil-outline" size={10} color={DS.onSurfaceVar} />
           <Text style={styles.macroEditText}>tap to edit</Text>
         </View>
       </Pressable>
@@ -94,17 +94,11 @@ const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, de
   );
 };
 
-// Water Card Component
+/* ─── Water Card ─── */
 const WaterCard = ({ value, onEdit, delay = 0 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      delay,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 350, delay, useNativeDriver: true }).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delay]);
 
@@ -115,36 +109,32 @@ const WaterCard = ({ value, onEdit, delay = 0 }) => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onEdit?.();
         }}
-        style={({ pressed }) => [
-          styles.waterCardInner,
-          pressed && { opacity: 0.9 },
-        ]}
+        style={({ pressed }) => pressed && { opacity: 0.9 }}
       >
         <LinearGradient
-          colors={['#E0F7FA', '#B2EBF2']}
+          colors={['#d2f7d8', '#beeec8']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 1, y: 0 }}
           style={styles.waterGradient}
         >
-          <View style={styles.waterContent}>
-            <View style={styles.waterIconContainer}>
-              <Ionicons name="water" size={24} color="#00ACC1" />
-            </View>
-            <View style={styles.waterInfo}>
-              <Text style={styles.waterLabel}>Daily Hydration</Text>
-              <View style={styles.waterValueRow}>
-                <Text style={styles.waterValue}>{value ?? '--'}</Text>
-                <Text style={styles.waterUnit}>liters</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#00ACC1" />
+          <View style={styles.waterIconBg}>
+            <Ionicons name="water" size={24} color="#0e6b8c" />
           </View>
+          <View style={styles.waterInfo}>
+            <Text style={styles.waterLabel}>Daily Hydration</Text>
+            <View style={styles.waterValueRow}>
+              <Text style={styles.waterValue}>{value ?? '--'}</Text>
+              <Text style={styles.waterUnit}>liters</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={DS.primary} />
         </LinearGradient>
       </Pressable>
     </Animated.View>
   );
 };
 
+/* ─── Main screen ─── */
 const Step4Screen = () => {
   const {
     step1Data,
@@ -160,47 +150,28 @@ const Step4Screen = () => {
 
   const [editingGoal, setEditingGoal] = useState(null);
 
-  // Animations
-  const heroFadeAnim = useRef(new Animated.Value(0)).current;
+  const heroFadeAnim  = useRef(new Animated.Value(0)).current;
   const heroScaleAnim = useRef(new Animated.Value(0.95)).current;
-  const buttonSlideAnim = useRef(new Animated.Value(50)).current;
+  const btnSlideAnim  = useRef(new Animated.Value(50)).current;
+  const btnScale      = useRef(new Animated.Value(1)).current;
 
-  // Calculate goals when component mounts
   useEffect(() => {
-    if (!calculatedGoals) {
-      calculateGoals();
-    }
+    if (!calculatedGoals) calculateGoals();
   }, [calculatedGoals, calculateGoals]);
 
-  // Animate in when goals are ready
   useEffect(() => {
     if (calculatedGoals) {
       Animated.parallel([
-        Animated.timing(heroFadeAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.spring(heroScaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 50,
-          friction: 8,
-        }),
-        Animated.timing(buttonSlideAnim, {
-          toValue: 0,
-          duration: 600,
-          delay: 400,
-          useNativeDriver: true,
-        }),
+        Animated.timing(heroFadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(heroScaleAnim, { toValue: 1, useNativeDriver: true, stiffness: 300, damping: 20 }),
+        Animated.timing(btnSlideAnim, { toValue: 0, duration: 600, delay: 400, useNativeDriver: true }),
       ]).start();
     }
-  }, [calculatedGoals, heroFadeAnim, heroScaleAnim, buttonSlideAnim]);
+  }, [calculatedGoals, heroFadeAnim, heroScaleAnim, btnSlideAnim]);
 
-  // Show error if calculation fails
   useEffect(() => {
     if (error && editingGoal !== 'saving') {
-      Alert.alert('Error', error, [{ text: 'OK', onPress: () => {} }]);
+      Alert.alert('Error', error, [{ text: 'OK' }]);
     }
   }, [error, editingGoal]);
 
@@ -208,13 +179,8 @@ const Step4Screen = () => {
     AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step4);
   }, []);
 
-  const handleEditGoal = (goalType) => {
-    setEditingGoal(goalType);
-  };
-
   const handleSaveGoalEdit = (newValue) => {
-    const updatedGoals = { ...step4Data, [editingGoal]: newValue };
-    updateGoals(updatedGoals);
+    updateGoals({ ...step4Data, [editingGoal]: newValue });
     setEditingGoal(null);
   };
 
@@ -227,6 +193,10 @@ const Step4Screen = () => {
     }
   };
 
+  const springBtn = (to) =>
+    Animated.spring(btnScale, { toValue: to, useNativeDriver: true, stiffness: 300, damping: 20 }).start();
+
+  /* Loading state */
   if (!calculatedGoals) {
     return (
       <OnboardingLayout
@@ -238,13 +208,11 @@ const Step4Screen = () => {
         canGoBack={true}
       >
         <View style={styles.loadingContainer}>
-          <View style={styles.loadingIconContainer}>
-            <ActivityIndicator size="large" color={BRAND.primary} />
+          <View style={styles.loadingIconBg}>
+            <ActivityIndicator size="large" color={DS.primary} />
           </View>
           <Text style={styles.loadingTitle}>Calculating Your Plan</Text>
-          <Text style={styles.loadingSubtitle}>
-            Personalizing your nutrition targets...
-          </Text>
+          <Text style={styles.loadingSubtitle}>Personalizing your nutrition targets…</Text>
         </View>
       </OnboardingLayout>
     );
@@ -260,37 +228,35 @@ const Step4Screen = () => {
       canGoBack={true}
       scrollEnabled={true}
     >
-      {/* Hero Calorie Card */}
+      {/* ── Hero calorie card ── */}
       <Animated.View
         style={[
           styles.heroCard,
-          {
-            opacity: heroFadeAnim,
-            transform: [{ scale: heroScaleAnim }],
-          },
+          { opacity: heroFadeAnim, transform: [{ scale: heroScaleAnim }] },
         ]}
       >
         <Pressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            handleEditGoal('dailyCalories');
+            setEditingGoal('dailyCalories');
           }}
           style={({ pressed }) => pressed && { opacity: 0.95 }}
         >
           <LinearGradient
-            colors={[BRAND.primary, BRAND.primaryLight]}
+            colors={['#1c6d25', '#9df197']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
           >
-            {/* Decorative circles */}
+            {/* Decorative circles bleed off edges */}
             <View style={styles.heroDecor1} />
             <View style={styles.heroDecor2} />
+            <View style={styles.heroDecor3} />
 
             <View style={styles.heroContent}>
               <View style={styles.heroHeader}>
                 <View style={styles.heroBadge}>
-                  <Ionicons name="sparkles" size={14} color={BRAND.primary} />
+                  <Ionicons name="sparkles" size={13} color={DS.primary} />
                   <Text style={styles.heroBadgeText}>Your Daily Target</Text>
                 </View>
                 <View style={styles.heroEditBadge}>
@@ -304,36 +270,36 @@ const Step4Screen = () => {
               </View>
 
               <View style={styles.heroFooter}>
-                <View style={styles.heroMetric}>
-                  <Text style={styles.heroMetricLabel}>BMR</Text>
-                  <Text style={styles.heroMetricValue}>{calculatedGoals?.bmr ?? '--'}</Text>
-                </View>
-                <View style={styles.heroMetricDivider} />
-                <View style={styles.heroMetric}>
-                  <Text style={styles.heroMetricLabel}>TDEE</Text>
-                  <Text style={styles.heroMetricValue}>{calculatedGoals?.tdee ?? '--'}</Text>
-                </View>
-                <View style={styles.heroMetricDivider} />
-                <View style={styles.heroMetric}>
-                  <Text style={styles.heroMetricLabel}>Goal</Text>
-                  <Text style={styles.heroMetricValue}>
-                    {step1Data.primaryGoal === 'lose' ? 'Deficit' :
-                     step1Data.primaryGoal === 'gain' ? 'Surplus' : 'Maintain'}
-                  </Text>
-                </View>
+                {[
+                  { label: 'BMR', value: calculatedGoals?.bmr ?? '--' },
+                  { label: 'TDEE', value: calculatedGoals?.tdee ?? '--' },
+                  {
+                    label: 'Goal',
+                    value: step1Data.primaryGoal === 'lose' ? 'Deficit'
+                           : step1Data.primaryGoal === 'gain' ? 'Surplus' : 'Maintain',
+                  },
+                ].map(({ label, value }, i, arr) => (
+                  <React.Fragment key={label}>
+                    <View style={styles.heroMetric}>
+                      <Text style={styles.heroMetricLabel}>{label}</Text>
+                      <Text style={styles.heroMetricValue}>{value}</Text>
+                    </View>
+                    {i < arr.length - 1 && <View style={styles.heroMetricDivider} />}
+                  </React.Fragment>
+                ))}
               </View>
             </View>
           </LinearGradient>
         </Pressable>
       </Animated.View>
 
-      {/* Section Label */}
+      {/* Section header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Daily Macros</Text>
         <Text style={styles.sectionSubtitle}>Tap any card to adjust</Text>
       </View>
 
-      {/* Macro Cards Grid */}
+      {/* ── Macro cards grid ── */}
       <View style={styles.macroGrid}>
         <MacroCard
           label="Protein"
@@ -342,7 +308,7 @@ const Step4Screen = () => {
           iconName="barbell"
           color={MACRO_COLORS.protein.base}
           lightColor="#F3E8FF"
-          onEdit={() => handleEditGoal('proteinG')}
+          onEdit={() => setEditingGoal('proteinG')}
           delay={100}
         />
         <MacroCard
@@ -352,7 +318,7 @@ const Step4Screen = () => {
           iconName="flash"
           color={MACRO_COLORS.carbs.base}
           lightColor="#DBEAFE"
-          onEdit={() => handleEditGoal('carbsG')}
+          onEdit={() => setEditingGoal('carbsG')}
           delay={200}
         />
         <MacroCard
@@ -362,194 +328,194 @@ const Step4Screen = () => {
           iconName="water-outline"
           color={MACRO_COLORS.fat.base}
           lightColor="#FEF3C7"
-          onEdit={() => handleEditGoal('fatsG')}
+          onEdit={() => setEditingGoal('fatsG')}
           delay={300}
         />
       </View>
 
-      {/* Water Goal */}
+      {/* ── Water card ── */}
       <WaterCard
         value={step4Data.waterLiters}
-        onEdit={() => handleEditGoal('waterLiters')}
+        onEdit={() => setEditingGoal('waterLiters')}
         delay={400}
       />
 
-      {/* Info Note */}
+      {/* ── Info note ── */}
       <View style={styles.infoNote}>
-        <Ionicons name="information-circle-outline" size={16} color={TEXT.tertiary} />
+        <Ionicons name="information-circle-outline" size={16} color={DS.onSurfaceVar} />
         <Text style={styles.infoNoteText}>
           These targets are calculated based on your profile. You can adjust them anytime in Settings.
         </Text>
       </View>
 
-      {/* Get Started Button */}
-      <Animated.View
-        style={[
-          styles.buttonContainer,
-          { transform: [{ translateY: buttonSlideAnim }] },
-        ]}
-      >
+      {/* ── Get Started pill ── */}
+      <Animated.View style={[styles.btnContainer, { transform: [{ translateY: btnSlideAnim }, { scale: btnScale }] }]}>
         <Pressable
           onPress={handleGetStarted}
+          onPressIn={() => springBtn(0.96)}
+          onPressOut={() => springBtn(1)}
           disabled={isSaving}
-          style={({ pressed }) => [
-            pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Complete onboarding and get started"
         >
           <LinearGradient
-            colors={isSaving ? ['#9CA3AF', '#9CA3AF'] : ['#10B981', '#059669']}
+            colors={isSaving ? [DS.surfContainerHi, DS.surfContainerHi] : ['#1c6d25', '#9df197']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={styles.getStartedButton}
+            style={styles.getStartedBtn}
           >
-            <Text style={styles.getStartedButtonText}>
-              {isSaving ? 'Setting up...' : "Let&apos;s Go!"}
-            </Text>
             {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <>
+                <Text style={styles.getStartedText}>Setting up…</Text>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              </>
             ) : (
-              <View style={styles.buttonIconContainer}>
-                <Ionicons name="rocket" size={18} color="white" />
-              </View>
+              <>
+                <Text style={styles.getStartedText}>Let's Go!</Text>
+                <View style={styles.rocketBg}>
+                  <Ionicons name="rocket" size={18} color="white" />
+                </View>
+              </>
             )}
           </LinearGradient>
         </Pressable>
       </Animated.View>
 
-      {/* Edit sheets for each goal */}
+      {/* Goal edit sheets */}
       <GoalEditSheet
         visible={editingGoal === 'dailyCalories'}
         onClose={() => setEditingGoal(null)}
-        onSave={(value) => handleSaveGoalEdit(value)}
+        onSave={handleSaveGoalEdit}
         label="Daily Calories"
         currentValue={step4Data.dailyCalories}
-        min={500}
-        max={10000}
-        step={50}
-        unit="kcal"
+        min={500} max={10000} step={50} unit="kcal"
         context="Your total daily energy intake target"
-        color={BRAND.primary}
+        color={DS.primary}
       />
-
       <GoalEditSheet
         visible={editingGoal === 'proteinG'}
         onClose={() => setEditingGoal(null)}
-        onSave={(value) => handleSaveGoalEdit(value)}
+        onSave={handleSaveGoalEdit}
         label="Protein"
         currentValue={step4Data.proteinG}
-        min={0}
-        max={500}
-        step={5}
-        unit="g"
+        min={0} max={500} step={5} unit="g"
         context="Essential for muscle repair and growth"
         color={MACRO_COLORS.protein.base}
       />
-
       <GoalEditSheet
         visible={editingGoal === 'carbsG'}
         onClose={() => setEditingGoal(null)}
-        onSave={(value) => handleSaveGoalEdit(value)}
+        onSave={handleSaveGoalEdit}
         label="Carbohydrates"
         currentValue={step4Data.carbsG}
-        min={0}
-        max={1000}
-        step={5}
-        unit="g"
+        min={0} max={1000} step={5} unit="g"
         context="Your body's primary energy source"
         color={MACRO_COLORS.carbs.base}
       />
-
       <GoalEditSheet
         visible={editingGoal === 'fatsG'}
         onClose={() => setEditingGoal(null)}
-        onSave={(value) => handleSaveGoalEdit(value)}
+        onSave={handleSaveGoalEdit}
         label="Fats"
         currentValue={step4Data.fatsG}
-        min={0}
-        max={300}
-        step={5}
-        unit="g"
+        min={0} max={300} step={5} unit="g"
         context="Important for hormones and brain health"
         color={MACRO_COLORS.fat.base}
       />
-
       <GoalEditSheet
         visible={editingGoal === 'waterLiters'}
         onClose={() => setEditingGoal(null)}
-        onSave={(value) => handleSaveGoalEdit(value)}
+        onSave={handleSaveGoalEdit}
         label="Water Intake"
         currentValue={step4Data.waterLiters}
-        min={0.5}
-        max={10}
-        step={0.5}
-        unit="L"
+        min={0.5} max={10} step={0.5} unit="L"
         context="Stay hydrated throughout the day"
-        color="#00ACC1"
+        color="#0e6b8c"
       />
     </OnboardingLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  // Loading State
+  /* Loading */
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING[6],
+    paddingHorizontal: 32,
+    gap: 12,
   },
-  loadingIconContainer: {
+  loadingIconBg: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: SURFACES.gradient.softPurple[0],
+    backgroundColor: DS.surfContainerHi,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING[4],
+    marginBottom: 4,
+    shadowColor: DS.ambientShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 2,
   },
   loadingTitle: {
     fontSize: 20,
-    fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginBottom: SPACING[2],
+    color: DS.onSurface,
+    letterSpacing: -0.4,
   },
   loadingSubtitle: {
     fontSize: 14,
-    color: TEXT.secondary,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: DS.onSurfaceVar,
     textAlign: 'center',
   },
 
-  // Hero Card
+  /* Hero card */
   heroCard: {
-    marginBottom: SPACING[5],
-    borderRadius: RADIUS['2xl'],
+    marginBottom: 20,
+    borderRadius: 28,
     overflow: 'hidden',
-    ...SHADOWS.lg,
+    shadowColor: '#1c6d25',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 28,
+    elevation: 10,
   },
   heroGradient: {
-    padding: SPACING[5],
-    borderRadius: RADIUS['2xl'],
+    padding: 24,
+    borderRadius: 28,
     overflow: 'hidden',
     position: 'relative',
   },
+  /* Decorative circles bleed off edges */
   heroDecor1: {
     position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    top: -40,
+    right: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   heroDecor2: {
     position: 'absolute',
-    bottom: -20,
-    left: -20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    bottom: -30,
+    left: -30,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  heroDecor3: {
+    position: 'absolute',
+    top: 30,
+    right: 60,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   heroContent: {
     position: 'relative',
@@ -559,60 +525,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING[4],
+    marginBottom: 16,
   },
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[1],
+    gap: 5,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[1] + 2,
-    borderRadius: RADIUS.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   heroBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: BRAND.primary,
+    color: DS.primary,
   },
   heroEditBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   heroValueSection: {
     alignItems: 'center',
-    marginBottom: SPACING[4],
+    marginBottom: 16,
   },
   heroValue: {
     fontSize: 64,
-    fontWeight: '800',
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
-    letterSpacing: -2,
-    lineHeight: 72,
+    letterSpacing: -3,
+    lineHeight: 70,
   },
   heroUnit: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 14,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: 'rgba(255,255,255,0.85)',
-    letterSpacing: 1,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    marginTop: SPACING[1],
+    marginTop: 2,
   },
   heroFooter: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: RADIUS.lg,
-    paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[4],
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   heroMetric: {
     alignItems: 'center',
@@ -620,77 +583,76 @@ const styles = StyleSheet.create({
   },
   heroMetricLabel: {
     fontSize: 10,
-    fontWeight: '600',
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.65)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   heroMetricValue: {
     fontSize: 14,
-    fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
   },
   heroMetricDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
 
-  // Section Header
+  /* Section header */
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    marginBottom: SPACING[3],
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
+    color: DS.onSurface,
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: TEXT.tertiary,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: DS.onSurfaceVar,
   },
 
-  // Macro Grid
+  /* Macro grid */
   macroGrid: {
     flexDirection: 'row',
-    gap: SPACING[3],
-    marginBottom: SPACING[4],
+    gap: 10,
+    marginBottom: 12,
   },
   macroCard: {
     flex: 1,
   },
   macroCardInner: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.lg,
-    padding: SPACING[3],
+    backgroundColor: DS.surfLow,
+    borderRadius: 18,
+    padding: 12,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    ...SHADOWS.sm,
+    gap: 4,
+    shadowColor: DS.ambientShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    elevation: 3,
   },
-  macroIconContainer: {
-    width: 44,
-    height: 44,
+  macroIconBg: {
+    width: 42,
+    height: 42,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING[2],
+    marginBottom: 2,
   },
   macroLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.tertiary,
+    color: DS.onSurfaceVar,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: SPACING[1],
+    letterSpacing: 0.6,
   },
   macroValueRow: {
     flexDirection: 'row',
@@ -698,65 +660,63 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   macroValue: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 22,
     fontFamily: TYPOGRAPHY.family.bold,
+    letterSpacing: -0.5,
   },
   macroUnit: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.muted,
+    color: DS.onSurfaceVar,
   },
   macroEditHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    marginTop: SPACING[2],
-    opacity: 0.6,
+    marginTop: 2,
+    opacity: 0.55,
   },
   macroEditText: {
     fontSize: 9,
-    color: TEXT.muted,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: DS.onSurfaceVar,
   },
 
-  // Water Card
+  /* Water card */
   waterCard: {
-    marginBottom: SPACING[4],
-    borderRadius: RADIUS.lg,
+    marginBottom: 14,
+    borderRadius: 20,
     overflow: 'hidden',
-    ...SHADOWS.sm,
-  },
-  waterCardInner: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
+    shadowColor: DS.ambientShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 2,
   },
   waterGradient: {
-    padding: SPACING[4],
-  },
-  waterContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    gap: 14,
+    borderRadius: 20,
   },
-  waterIconContainer: {
+  waterIconBg: {
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING[3],
   },
   waterInfo: {
     flex: 1,
   },
   waterLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#00838F',
+    color: DS.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: 2,
   },
   waterValueRow: {
@@ -766,59 +726,69 @@ const styles = StyleSheet.create({
   },
   waterValue: {
     fontSize: 28,
-    fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
-    color: '#006064',
+    color: DS.onSurface,
+    letterSpacing: -1,
   },
   waterUnit: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: '#00838F',
+    color: DS.onSurfaceVar,
   },
 
-  // Info Note
+  /* Info note */
   infoNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: SPACING[2],
-    backgroundColor: SURFACES.background.tertiary,
-    padding: SPACING[3],
-    borderRadius: RADIUS.md,
-    marginBottom: SPACING[4],
+    gap: 8,
+    backgroundColor: DS.surfContainer,
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: DS.ambientShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 1,
   },
   infoNoteText: {
     flex: 1,
     fontSize: 12,
-    color: TEXT.tertiary,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: DS.onSurfaceVar,
     lineHeight: 18,
   },
 
-  // Button
-  buttonContainer: {
-    marginBottom: SPACING[2],
+  /* Get Started pill */
+  btnContainer: {
+    marginBottom: 8,
+    borderRadius: 999,
+    shadowColor: '#1c6d25',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  getStartedButton: {
+  getStartedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING[4],
-    paddingHorizontal: SPACING[6],
-    borderRadius: RADIUS.xl,
-    gap: SPACING[3],
-    ...SHADOWS.lg,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 999,
+    gap: 12,
+    overflow: 'hidden',
   },
-  getStartedButtonText: {
+  getStartedText: {
     fontSize: 18,
-    fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
-  buttonIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  rocketBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',

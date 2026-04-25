@@ -291,7 +291,6 @@ export default function NutritionDetailsSection({
 const styles = StyleSheet.create({
   container: {
     ...CARD_SYSTEM.standard,
-    marginHorizontal: SPACING[4],
   },
   header: {
     flexDirection: 'row',

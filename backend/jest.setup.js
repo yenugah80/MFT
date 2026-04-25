@@ -1,4 +1,7 @@
+import { beforeEach, jest } from '@jest/globals';
+
 // Jest setup file for MyFoodTracker backend
+globalThis.jest = jest;
 
 // Mock environment variables
 process.env.OPENAI_API_KEY = 'test-api-key';

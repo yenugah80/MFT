@@ -34,7 +34,7 @@ export function useRecommendations({ enabled = false } = {}) {
   // FETCH RECOMMENDATIONS (useQuery handles deduplication + caching automatically)
   // ============================================================================
   const {
-    data: recommendations = [],
+    data: recommendationsResponse = {},
     isLoading: loading,
     error,
     refetch: fetchRecommendations,
@@ -50,7 +50,13 @@ export function useRecommendations({ enabled = false } = {}) {
           timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
         });
         if (__DEV__) console.log('[useRecommendations] Fetch successful');
-        return data?.recommendations || [];
+        return {
+          recommendations: data?.recommendations || [],
+          moodSignal: data?.moodSignal || null,
+          remainingBudget: data?.remainingBudget || null,
+          recommendationType: data?.recommendationType || null,
+          mealType: data?.mealType || null,
+        };
       } catch (err) {
         // Distinguish timeout from other errors
         const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
@@ -234,7 +240,11 @@ export function useRecommendations({ enabled = false } = {}) {
 
   return {
     // State
-    recommendations,
+    recommendations: recommendationsResponse?.recommendations || [],
+    moodSignal: recommendationsResponse?.moodSignal || null,
+    remainingBudget: recommendationsResponse?.remainingBudget || null,
+    recommendationType: recommendationsResponse?.recommendationType || null,
+    mealType: recommendationsResponse?.mealType || null,
     loading,
     error,
     isFetching,
@@ -249,8 +259,8 @@ export function useRecommendations({ enabled = false } = {}) {
     clearCache,
 
     // Derived
-    hasRecommendations: recommendations.length > 0,
-    isEmpty: !loading && recommendations.length === 0
+    hasRecommendations: (recommendationsResponse?.recommendations || []).length > 0,
+    isEmpty: !loading && (recommendationsResponse?.recommendations || []).length === 0
   };
 }
 
@@ -429,6 +439,7 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
     summary: data?.summary || null,
     nutritionalStatus: data?.nutritionalStatus || null,
     userContext: data?.userContext || null,
+    moodSignal: data?.userContext?.moodSignal || null,
 
     // Current meal type (auto-detected or forced)
     mealType: data?.mealType || mealType,

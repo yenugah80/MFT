@@ -121,6 +121,12 @@ const OnboardingGuard = ({ children }) => {
           return;
         }
 
+        // Profile still loading (null = unknown state) - wait for it
+        if (onboardingComplete === null) {
+          isCheckingRef.current = false;
+          return;
+        }
+
         // Profile loaded successfully - check onboarding status
         if (onboardingComplete === false) {
           // ✅ User needs to complete onboarding - they are a new user
@@ -189,9 +195,9 @@ const OnboardingGuard = ({ children }) => {
         redirectTimeoutRef.current = null;
       }
     };
-    // ✅ Only depend on auth state, not profile values - profile updates are handled by the async function
+  // Re-run when auth state, onboarding status, or profile error changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, onboardingComplete, profileError]);
 
   // Retry handler - refetch profile from context
   const handleRetry = () => {

@@ -16,7 +16,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient } from '@tanstack/react-query';
-import { API_URL } from '../constants/api';
+import { API_URL, getTimezoneOffsetHeaders } from '../constants/api';
 import { validateFoodLog, transformFoodLogToBackend, transformBackendToFoodLog } from '../types/foodLog';
 import { db, runInTransaction } from '../services/database';
 import { generateClientEventId } from '../utils/idGenerator';
@@ -217,7 +217,7 @@ export function useFoodLog() {
         // Safe JSON parsing with corruption recovery
         try {
           parsedLogs = JSON.parse(storedLogs);
-        } catch (parseError) {
+        } catch (_parseError) {
           console.error('[useFoodLog] ⚠️ Corrupted AsyncStorage data, attempting recovery...');
 
           // Attempt to salvage partial data by removing trailing corruption
@@ -413,7 +413,7 @@ export function useFoodLog() {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
-              'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
+              ...getTimezoneOffsetHeaders(),
             },
             body: JSON.stringify(payload),
           });
@@ -491,7 +491,7 @@ export function useFoodLog() {
       syncInFlightRef.current = false;
       setIsSyncing(false);
     }
-  }, [getToken, loadLocalLogs, removeFromSyncQueue, queryClient]);
+  }, [getToken, loadLocalLogs, removeFromSyncQueue, queryClient, userId]);
 
   // Update ref on every render for stable callback reference
   processSyncQueueRef.current = processSyncQueue;
@@ -609,7 +609,7 @@ export function useFoodLog() {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
-            'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
+            ...getTimezoneOffsetHeaders(),
           },
         }).catch(err => {
           console.warn('[useFoodLog] Backend delete failed:', err);
@@ -662,7 +662,7 @@ export function useFoodLog() {
           const response = await fetch(`${API_URL}/nutrition/history?${params}`, {
             headers: {
               'Authorization': `Bearer ${token}`,
-              'X-Timezone-Offset': String(new Date().getTimezoneOffset()),
+              ...getTimezoneOffsetHeaders(),
             },
           });
 

@@ -13,13 +13,15 @@ import { requireAuth } from '@clerk/express';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
-import { getProfile } from '../controllers/profileController.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
-import { recommendationsHistoryTable, foodLogTable } from '../db/schema.js';
+import { recommendationsHistoryTable, foodLogTable, profilesTable, dietaryPreferencesTable } from '../db/schema.js';
 import { errors } from '../utils/errorResponse.js';
 import { getUnifiedIntelligence, formatIntelligenceForPrompt } from '../services/unifiedIntelligenceService.js';
 import { generateRecommendationContext } from '../services/personalizedNarrativeEngine.js';
 import { getSmartRecommendations } from '../services/smartRecommendationEngine.js';
+import { getDashboardData } from '../services/dashboardService.js';
+import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
+import { getUserSignals } from '../services/userSignalCacheService.js';
 
 const router = express.Router();
 
@@ -103,12 +105,14 @@ router.get('/smart', requireAuth(), async (req, res) => {
     const parsedMealType = mealType && validMealTypes.includes(mealType)
       ? mealType
       : undefined;
+    const timezoneOffset = parseTimezoneOffsetMinutes(req);
 
     logDebug(`Smart recommendations request: userId=${userId}, limit=${parsedLimit}, mealType=${parsedMealType || 'auto'}`);
 
     const result = await getSmartRecommendations(userId, {
       limit: parsedLimit,
       mealType: parsedMealType,
+      timezoneOffset,
     });
 
     res.json(result);
@@ -138,21 +142,34 @@ router.get('/', requireAuth(), async (req, res) => {
       mealType,
       parseInt(limit),
       async () => {
-        // Fetch user profile for personalization
-        const profileRes = await fetch(`${process.env.API_URL}/profiles/me`, {
-          headers: { Authorization: req.headers.authorization },
-        });
-        const profile = profileRes.ok ? await profileRes.json() : null;
+        // Parallelize all independent data fetches — direct DB/service calls (no loopback HTTP)
+        const timezoneOffset = parseTimezoneOffsetMinutes(req);
+        const [dashboardResult, [profileRow], [dietaryRow], history, holisticIntelligence, personalizedContext, userSignals] = await Promise.all([
+          getDashboardData(db, userId),
+          db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
+          db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).limit(1),
+          analyzeRecommendationHistory(db, userId),
+          getUnifiedIntelligence(userId, { lookbackDays: 7 }),
+          generateRecommendationContext(userId),
+          getUserSignals(userId, { timezoneOffset }),
+        ]);
 
-        // Fetch today's nutrition data
-        const dashboardRes = await fetch(`${process.env.API_URL}/nutrition/dashboard`, {
-          headers: { Authorization: req.headers.authorization },
-        });
-        const dashboard = dashboardRes.ok ? await dashboardRes.json() : null;
+        // Shape profile data to match expected structure for generateEnhancedRecommendations
+        const profile = {
+          dietary: {
+            cuisinePreference: Array.isArray(profileRow?.cuisinePreference) ? profileRow.cuisinePreference : [],
+            region: profileRow?.region || null,
+            cookingStyle: profileRow?.cookingStyle || null,
+            allergies: Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [],
+            preferences: Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [],
+            dislikes: Array.isArray(dietaryRow?.dislikes) ? dietaryRow.dislikes : [],
+          },
+          goals: dashboardResult.goals || {},
+        };
 
         // Calculate remaining budget
-        const goals = profile?.goals || {};
-        const today = dashboard?.today || {};
+        const goals = profile.goals;
+        const today = dashboardResult.today || {};
         const nutrition = today?.nutrition || {};
 
         const remainingBudget = {
@@ -162,21 +179,14 @@ router.get('/', requireAuth(), async (req, res) => {
           fats: Math.max(0, (goals.fatsG || 65) - (nutrition.totalFats || 0)),
           water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
         };
-
-        // Analyze recommendation history for personalization
-        const history = await analyzeRecommendationHistory(db, userId);
-
-        // 🧠 Fetch unified wellness intelligence (mood, activity, hydration, sleep, stress)
-        // 🎯 NEW: Fetch personalized pattern context (food correlations, timing patterns, user-specific insights)
-        const [holisticIntelligence, personalizedContext] = await Promise.all([
-          getUnifiedIntelligence(userId, { lookbackDays: 7 }),
-          generateRecommendationContext(userId)
-        ]);
         logDebug(`Wellness Score: ${holisticIntelligence.wellnessScore}, Recovery: ${holisticIntelligence.recoveryScore}`);
         logDebug(`Personalized Patterns: ${personalizedContext.hasPatterns ? 'Available' : 'Building'} (${personalizedContext.goodFoods?.length || 0} good foods, ${personalizedContext.avoidFoods?.length || 0} watch foods)`);
 
         // Determine recommendation type based on budget, history, AND wellness state
         const recType = determineRecommendationType(remainingBudget, profile, history, holisticIntelligence);
+        if (holisticIntelligence && typeof holisticIntelligence === 'object') {
+          holisticIntelligence.userSignals = userSignals;
+        }
 
         // Generate recommendations with enhanced AI + holistic context + personalized patterns
         const recommendations = await generateEnhancedRecommendations(
@@ -186,7 +196,7 @@ router.get('/', requireAuth(), async (req, res) => {
           profile,
           history,
           parseInt(limit),
-          holisticIntelligence,  // Wellness intelligence
+          holisticIntelligence,
           personalizedContext    // 🎯 NEW: Personalized pattern context
         );
 
@@ -216,6 +226,13 @@ router.get('/', requireAuth(), async (req, res) => {
           } : {
             used: false,
             message: 'Building your personalized patterns - keep logging!'
+          },
+          moodSignal: {
+            hasData: userSignals.moodConfidenceLabel !== 'insufficient',
+            confidence: userSignals.moodConfidence,
+            confidenceLabel: userSignals.moodConfidenceLabel,
+            insight: userSignals.insights?.mood || '',
+            reason: userSignals.explainability?.mood?.reason || null
           }
         };
       }
@@ -927,6 +944,48 @@ async function generateWithRegeneration(
   return recommendations.slice(0, limit);
 }
 
+function formatSignalContextForPrompt(signals) {
+  if (!signals || signals.moodConfidenceLabel === 'insufficient') {
+    return '';
+  }
+
+  const lines = [
+    '',
+    'CURRENT USER SIGNALS',
+    `- Mood confidence: ${signals.moodConfidenceLabel} (${signals.moodConfidence ?? 0})`,
+  ];
+
+  const moodReason = signals.explainability?.mood?.reason;
+  if (moodReason) {
+    lines.push(`- Mood signal reason: ${moodReason}`);
+  }
+
+  if ((signals.moodUrgency ?? 0) > 0.3) {
+    lines.push('- Recommendation guidance: favor balanced mood-supportive foods when they also fit nutrition goals.');
+  }
+
+  if ((signals.energyUrgency ?? 0) > 0.3) {
+    lines.push('- Recommendation guidance: favor steady-energy foods such as protein plus complex carbs.');
+  }
+
+  lines.push('- Language guidance: describe this as based on recent logs; do not claim a food will fix mood or energy.');
+  return `${lines.join('\n')}\n`;
+}
+
+function getMoodSignalDisplayReason(signals) {
+  if (!signals || signals.moodConfidenceLabel === 'insufficient') {
+    return null;
+  }
+
+  if ((signals.moodUrgency ?? 0) <= 0.3 && (signals.energyUrgency ?? 0) <= 0.3) {
+    return null;
+  }
+
+  return signals.explainability?.mood?.reason
+    || signals.insights?.mood
+    || null;
+}
+
 /**
  * CORE: Build prompt with UNIVERSAL constraints, DIVERSITY, and HOLISTIC WELLNESS
  * FLAW FIX #4: Diversity enforcement in prompt
@@ -1016,6 +1075,7 @@ PORTION & MACRO CONSTRAINTS (STRICT - APPLY TO EACH ITEM):
   const personalizedPatternContext = personalizedContext?.hasPatterns
     ? personalizedContext.context
     : '';
+  const signalContext = formatSignalContextForPrompt(holisticIntelligence?.userSignals);
 
   // 🧠 NEW: Build wellness-aware recommendation type descriptions
   const recTypeDescriptions = {
@@ -1050,6 +1110,7 @@ USER PROFILE & CURRENT STATE
 ${personalizationContext}${allergenExclusion}${dietaryGuidance}${regenerationNote}
 ${wellnessContext}
 ${personalizedPatternContext}
+${signalContext}
 RECOMMENDATION OBJECTIVE
 Goal: ${recType} - ${recTypeDescription}
 - Prioritize nutritional fit based on recommendation type
@@ -1320,6 +1381,7 @@ VALIDATION CHECKLIST
       const confidence = getConfidenceContext(rec);
       const comparison = getComparisonContext(rec, rankedByScore, idx);
       const reasoning = getPersonalizationReasoning({calories, protein, carbs, fats}, remainingBudget, mealType);
+      const moodSignalReason = getMoodSignalDisplayReason(holisticIntelligence?.userSignals);
 
       return {
         // Core identity
@@ -1416,7 +1478,8 @@ VALIDATION CHECKLIST
         keyIngredients: rec.keyIngredients || [],
 
         // NEW: Wellness-aware reasoning (cross-domain intelligence)
-        wellnessReasoning: rec.wellnessReasoning || null
+        wellnessReasoning: rec.wellnessReasoning || moodSignalReason,
+        wellnessContext: moodSignalReason ? 'MOOD_SIGNAL' : null
       };
     });
 

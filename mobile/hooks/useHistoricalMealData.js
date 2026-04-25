@@ -21,7 +21,7 @@ import apiClient from '../services/apiClient';
 const fetchHistoricalStats = async (mealType) => {
   const params = mealType ? { mealType } : {};
   const response = await apiClient.get('/nutrition/history-stats', { params });
-  return response.data;
+  return response;
 };
 
 /**

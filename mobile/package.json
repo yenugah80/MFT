@@ -24,12 +24,14 @@
     }
   },
   "scripts": {
-    "start": "expo start --port 8082 -c",
-    "android": "expo run:android --port 8082",
-    "ios": "expo run:ios --port 8082",
+    "prestart": "npx kill-port 8082 2>/dev/null || true",
+    "start": "expo start --port 8082",
+    "start:clean": "expo start --port 8082 -c",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web --port 8082 -c",
     "lint": "expo lint",
-    "test": "jest",
+    "test": "jest --config jest.unit.config.js",
     "test:unit": "jest --config jest.unit.config.js",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

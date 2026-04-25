@@ -8,9 +8,36 @@
  * - Better error handling
  */
 
-import { API_URL, API_BASE_URL } from '@/constants/api';
+import { API_URL, API_BASE_URL, getTimezoneOffsetHeaders } from '@/constants/api';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const buildUrlWithParams = (url, params) => {
+  if (!params || typeof params !== 'object') {
+    return url;
+  }
+
+  const resolvedUrl = new URL(url);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== undefined && item !== null) {
+          resolvedUrl.searchParams.append(key, String(item));
+        }
+      });
+      return;
+    }
+
+    resolvedUrl.searchParams.set(key, String(value));
+  });
+
+  return resolvedUrl.toString();
+};
 
 /**
  * Production-optimized retry config
@@ -115,7 +142,7 @@ class ApiClient {
     };
 
     if (!('X-Timezone-Offset' in headers) && !('x-timezone-offset' in headers)) {
-      headers['X-Timezone-Offset'] = String(new Date().getTimezoneOffset());
+      Object.assign(headers, getTimezoneOffsetHeaders());
     }
 
     const token = await this.getToken();
@@ -129,15 +156,15 @@ class ApiClient {
    */
   async fetchWithRetry(url, options = {}, attempt = 0) {
     try {
-      const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
+      const { params, _timeout, ...fetchOptions } = options;
+      const requestUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
+      const fullUrl = buildUrlWithParams(requestUrl, params);
 
       if (__DEV__) {
-        console.log(`[API] ${options.method || 'GET'} ${fullUrl}`);
+        console.log(`[API] ${fetchOptions.method || 'GET'} ${fullUrl}`);
       }
 
-      // Extract custom timeout from options
-      const timeout = options._timeout;
-      const response = await fetchWithTimeout(fullUrl, options, timeout);
+      const response = await fetchWithTimeout(fullUrl, fetchOptions, _timeout);
 
       if (__DEV__) {
         console.log(`[API] ${response.status} ${fullUrl}`);

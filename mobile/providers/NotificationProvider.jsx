@@ -170,6 +170,40 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [isSignedIn]);
 
+  // Navigate from notification tap
+  const navigateFromNotification = useCallback((screen, category) => {
+    // Define route mappings
+    const screenRoutes = {
+      log: '/(tabs)/log',
+      water: '/(tabs)/log',
+      dashboard: '/(tabs)/dashboard',
+      profile: '/(tabs)/profile',
+      activity: '/activity/today',
+      mood: '/insights',
+      insights: '/insights',
+    };
+
+    const categoryRoutes = {
+      [NOTIFICATION_CATEGORIES.DAILY_REMINDER]: '/(tabs)/log',
+      [NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]: '/(tabs)/log',
+      [NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]: '/activity/today',
+      [NOTIFICATION_CATEGORIES.MOOD_CHECKIN]: '/insights',
+      [NOTIFICATION_CATEGORIES.STREAK_AT_RISK]: '/(tabs)/log',
+      [NOTIFICATION_CATEGORIES.STREAK_CELEBRATION]: '/(tabs)/profile',
+      [NOTIFICATION_CATEGORIES.GOAL_ACHIEVED]: '/(tabs)/dashboard',
+      [NOTIFICATION_CATEGORIES.INSIGHT_DROP]: '/insights',
+    };
+
+    try {
+      const route = screenRoutes[screen] || categoryRoutes[category] || '/(tabs)/dashboard';
+      console.log(`[NotificationProvider] Navigating to: ${route}`);
+      setTimeout(() => { router.push(route); }, 100);
+    } catch (error) {
+      console.warn('[NotificationProvider] Navigation error:', error?.message || error);
+      router.push('/(tabs)/dashboard');
+    }
+  }, []);
+
   // ============== FCM Setup (Server-triggered notifications) ==============
   const initializeFCM = useCallback(async () => {
     if (!isSignedIn) return;
@@ -262,49 +296,6 @@ export const NotificationProvider = ({ children }) => {
     } catch (error) {
       // Use console.warn to avoid red error screen in development
       console.warn('[NotificationProvider] Failed to sync schedules (non-critical):', error?.message || error);
-    }
-  }, []);
-
-  // Navigate from notification tap
-  const navigateFromNotification = useCallback((screen, category) => {
-    // Define route mappings
-    const screenRoutes = {
-      // Direct screen routes
-      log: '/(tabs)/log',
-      water: '/(tabs)/log', // Water is part of log tab
-      dashboard: '/(tabs)/dashboard',
-      profile: '/(tabs)/profile',
-      activity: '/activity/today',
-      mood: '/insights',
-      insights: '/insights',
-    };
-
-    // Category-based fallback routes
-    const categoryRoutes = {
-      [NOTIFICATION_CATEGORIES.DAILY_REMINDER]: '/(tabs)/log',
-      [NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]: '/(tabs)/log',
-      [NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]: '/activity/today',
-      [NOTIFICATION_CATEGORIES.MOOD_CHECKIN]: '/insights',
-      [NOTIFICATION_CATEGORIES.STREAK_AT_RISK]: '/(tabs)/log',
-      [NOTIFICATION_CATEGORIES.STREAK_CELEBRATION]: '/(tabs)/profile',
-      [NOTIFICATION_CATEGORIES.GOAL_ACHIEVED]: '/(tabs)/dashboard',
-      [NOTIFICATION_CATEGORIES.INSIGHT_DROP]: '/insights',
-    };
-
-    try {
-      // Use screen if provided, otherwise fall back to category
-      const route = screenRoutes[screen] || categoryRoutes[category] || '/(tabs)/dashboard';
-
-      console.log(`[NotificationProvider] Navigating to: ${route}`);
-
-      // Use setTimeout to ensure navigation happens after any pending renders
-      setTimeout(() => {
-        router.push(route);
-      }, 100);
-    } catch (error) {
-      console.warn('[NotificationProvider] Navigation error:', error?.message || error);
-      // Fallback to dashboard
-      router.push('/(tabs)/dashboard');
     }
   }, []);
 
