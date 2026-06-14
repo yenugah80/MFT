@@ -47,7 +47,7 @@ const PREMIUM_FEATURES = [
 ];
 
 export default function Paywall({ visible, onClose, highlightTier = 'premium' }) {
-  const { offerings, purchase, isPurchasing, restorePurchases } = useSubscription();
+  const { offerings, purchase, isPurchasing, restorePurchases, isComingSoon } = useSubscription();
   const [selectedPlan, setSelectedPlan] = useState(
     highlightTier === 'basic' ? PRODUCTS.BASIC_YEARLY : PRODUCTS.PREMIUM_YEARLY
   );
@@ -262,45 +262,62 @@ export default function Paywall({ visible, onClose, highlightTier = 'premium' })
 
         {/* Bottom CTA */}
         <View style={styles.bottomCTA}>
-          <TouchableOpacity
-            style={[
-              styles.purchaseButton,
-              isPremiumPlan && styles.purchaseButtonPremium,
-              (isPurchasing || isRestoring) && styles.purchaseButtonDisabled,
-            ]}
-            onPress={handlePurchase}
-            disabled={isPurchasing || isRestoring}
-          >
-            {isPurchasing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Text style={styles.purchaseButtonText}>
-                  Start {isPremiumPlan ? 'Premium' : 'Basic'} Plan
-                </Text>
-                <Text style={styles.purchaseButtonSubtext}>
-                  {isYearlyPlan ? 'Billed annually' : 'Cancel anytime'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {isComingSoon ? (
+            <View style={styles.comingSoonContainer}>
+              <View style={styles.comingSoonIconWrap}>
+                <Ionicons name="time-outline" size={32} color="#8b5cf6" />
+              </View>
+              <Text style={styles.comingSoonTitle}>Subscriptions Coming Soon</Text>
+              <Text style={styles.comingSoonBody}>
+                Premium features are free to explore right now. Paid plans launch soon — keep tracking in the meantime.
+              </Text>
+              <TouchableOpacity style={styles.comingSoonButton} onPress={onClose}>
+                <Text style={styles.comingSoonButtonText}>Continue for Free</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.purchaseButton,
+                  isPremiumPlan && styles.purchaseButtonPremium,
+                  (isPurchasing || isRestoring) && styles.purchaseButtonDisabled,
+                ]}
+                onPress={handlePurchase}
+                disabled={isPurchasing || isRestoring}
+              >
+                {isPurchasing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.purchaseButtonText}>
+                      Start {isPremiumPlan ? 'Premium' : 'Basic'} Plan
+                    </Text>
+                    <Text style={styles.purchaseButtonSubtext}>
+                      {isYearlyPlan ? 'Billed annually' : 'Cancel anytime'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.restoreButton}
-            onPress={handleRestore}
-            disabled={isRestoring}
-          >
-            {isRestoring ? (
-              <ActivityIndicator color={TEXT.secondary} size="small" />
-            ) : (
-              <Text style={styles.restoreText}>Restore Purchases</Text>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.restoreButton}
+                onPress={handleRestore}
+                disabled={isRestoring}
+              >
+                {isRestoring ? (
+                  <ActivityIndicator color={TEXT.secondary} size="small" />
+                ) : (
+                  <Text style={styles.restoreText}>Restore Purchases</Text>
+                )}
+              </TouchableOpacity>
 
-          <Text style={styles.termsText}>
-            By subscribing, you agree to our Terms of Service and Privacy Policy.
-            Subscription auto-renews unless cancelled.
-          </Text>
+              <Text style={styles.termsText}>
+                By subscribing, you agree to our Terms of Service and Privacy Policy.
+                Subscription auto-renews unless cancelled.
+              </Text>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -560,5 +577,47 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  comingSoonContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  comingSoonIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#f5f3ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  comingSoonTitle: {
+    fontSize: 17,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#1f2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  comingSoonBody: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 8,
+    marginBottom: 20,
+  },
+  comingSoonButton: {
+    backgroundColor: '#8b5cf6',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    width: '100%',
+  },
+  comingSoonButtonText: {
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#fff',
   },
 });

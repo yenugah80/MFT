@@ -264,17 +264,11 @@ export function SubscriptionProvider({ children }) {
 
     try {
       if (!isRevenueCatReady) {
-        // Mock purchase for development
-        Alert.alert(
-          'Subscription System Not Ready',
-          'In-app purchases will be available once the app is published to the App Store.',
-          [{ text: 'OK' }]
-        );
         trackEvent(Events.SUBSCRIPTION_FAILED, {
           product_id: packageToPurchase.identifier,
-          reason: 'revenuecat_not_configured',
+          reason: 'coming_soon',
         });
-        return { success: false, error: 'RevenueCat not configured' };
+        return { success: false, comingSoon: true };
       }
 
       // Uncomment when RevenueCat is set up:
@@ -312,12 +306,7 @@ export function SubscriptionProvider({ children }) {
    */
   const restorePurchases = useCallback(async () => {
     if (!isRevenueCatReady) {
-      Alert.alert(
-        'Cannot Restore',
-        'Restore purchases will be available once the app is published.',
-        [{ text: 'OK' }]
-      );
-      return { success: false };
+      return { success: false, comingSoon: true };
     }
 
     try {
@@ -412,6 +401,7 @@ export function SubscriptionProvider({ children }) {
     isLoading,
     isPurchasing,
     isRevenueCatReady,
+    isComingSoon: !isRevenueCatReady,
 
     // Computed
     tier: subscription.tier,

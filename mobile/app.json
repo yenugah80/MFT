@@ -4,10 +4,10 @@
     "slug": "my-food-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/styles/images/adaptive-icon.png",
+    "icon": "./assets/styles/images/icon.png",
     "scheme": "my-food-tracker",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.silverhorn.myfoodtracker",
@@ -20,22 +20,11 @@
         "NSPhotoLibraryUsageDescription": "My-Food-Tracker needs photo library access to select food photos for analysis.",
         "NSPhotoLibraryAddUsageDescription": "My-Food-Tracker needs permission to save meal photos to your library.",
         "CFBundleAllowMixedLocalizations": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "My-Food-Tracker uses speech recognition to transcribe your voice meal logs."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
-          {
-            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "CA92.1"
-            ]
-          },
-          {
-            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
-            "NSPrivacyAccessedAPITypeReasons": [
-              "C617.1"
-            ]
-          },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
             "NSPrivacyAccessedAPITypeReasons": [
