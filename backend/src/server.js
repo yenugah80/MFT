@@ -58,8 +58,10 @@ import personalizedInsightsRouter from "./routes/personalizedInsights.js";
 import ingredientsRouter from "./routes/ingredients.js";
 import enhancedGamificationRouter from "./routes/gamification.js";
 import healthPlatformRouter from "./routes/health.js";
+import mealPlanRouter from "./routes/mealPlan.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartReminderJob.js";
+import { initNutrientDeficitJob } from "./jobs/nutrientDeficitJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 import { initializeFirebase, isFirebaseReady } from "./config/firebase.js";
 import { globalLimiter, aiLimiter, imageLimiter, burstLimiter } from "./middleware/rateLimiter.js";
@@ -71,6 +73,25 @@ const PORT = ENV.PORT || process.env.PORT || 5001;
 // This guards against older databases that were created before we added
 // fields like `gender`, `activity_level`, `notifications`, or changed `weight_kg` to numeric.
 let profilesTableEnsured = false;
+// Ensure dietary_preferences has allergen severity + intolerance type columns
+let dietaryHealthColumnsEnsured = false;
+export async function ensureDietaryHealthColumns() {
+  if (dietaryHealthColumnsEnsured) return;
+  try {
+    await db.execute(
+      sql`ALTER TABLE "dietary_preferences" ADD COLUMN IF NOT EXISTS "allergen_severity" jsonb DEFAULT '{}'::jsonb;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "dietary_preferences" ADD COLUMN IF NOT EXISTS "intolerance_type" jsonb DEFAULT '{}'::jsonb;`
+    );
+    dietaryHealthColumnsEnsured = true;
+    console.log('✅ Dietary health columns (allergen_severity, intolerance_type) verified');
+  } catch (err) {
+    console.error('❌ Failed to ensure dietary health columns:', err.message);
+    throw err;
+  }
+}
+
 export async function ensureProfilesTableShape() {
   if (profilesTableEnsured) return;
   try {
@@ -420,6 +441,30 @@ export async function ensureMLTables() {
   }
 }
 
+// Ensure saved_meal_plans table exists
+let savedMealPlansTableEnsured = false;
+async function ensureSavedMealPlansTable() {
+  if (savedMealPlansTableEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "saved_meal_plans" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "user_id" text NOT NULL REFERENCES "profiles"("user_id") ON DELETE cascade,
+        "plan_data" jsonb NOT NULL DEFAULT '[]'::jsonb,
+        "saved_at" timestamp DEFAULT now(),
+        CONSTRAINT "saved_meal_plans_user_id_unique" UNIQUE ("user_id")
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS "saved_meal_plans_user_id_idx" ON "saved_meal_plans" ("user_id")
+    `);
+    savedMealPlansTableEnsured = true;
+    console.log('[Database] saved_meal_plans table verified');
+  } catch (err) {
+    console.warn('[Database] ensureSavedMealPlansTable:', err.message);
+  }
+}
+
 // Ensure Sleep and Stress tracking tables exist
 let sleepStressTablesEnsured = false;
 export async function ensureSleepStressTables() {
@@ -486,8 +531,7 @@ export async function ensureSleepStressTables() {
 const ALLOWED_ORIGINS = [
   // Production frontend (if any web interface exists)
   ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
-  // MyFoodTracker production domains
-  'https://myfoodtracker.onrender.com',
+  // MyFoodTracker production domain
   'https://api.my-food-tracker.com',
   // Development/Testing (only in development mode)
   ...(process.env.NODE_ENV === 'development' ? [
@@ -503,11 +547,19 @@ const ALLOWED_ORIGINS = [
 
 app.use(
   cors({
-    origin: true, // Allow all origins for mobile app backend
+    // Mobile apps (iOS/Android) don't send Origin headers so they bypass CORS entirely.
+    // This whitelist protects web-based clients and admin tools only.
+    origin: (origin, callback) => {
+      // Allow requests with no origin (native mobile, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      console.warn(`[CORS] Blocked request from disallowed origin: ${origin}`);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,  // Allow cookies/credentials
-    maxAge: 3600,       // Cache CORS preflight for 1 hour
+    credentials: true,
+    maxAge: 3600,
   })
 );
 app.use(express.json({ limit: "50mb" }));
@@ -806,6 +858,7 @@ app.use("/api/gamification", enhancedGamificationRouter);
 // Note: Bi-directional sync with health platforms, activity/sleep/heart rate data,
 // nutrition export, privacy-preserving data handling
 app.use("/api/health", healthPlatformRouter);
+app.use("/api/meal-plan", mealPlanRouter);
 
 /* -------------------------------------------
    EXISTING ROUTES
@@ -949,21 +1002,29 @@ app.listen(PORT, "0.0.0.0", async () => {
   console.log('[Database] Initializing schema...');
   try {
     await ensureProfilesTableShape();
+    await ensureDietaryHealthColumns();
     await ensureRecommendationsHistoryTable();
     await ensureMLTables();
     await ensureSleepStressTables();
-    // Ensure account_settings has push token columns
     await ensureAccountSettingsPushTokenColumns();
     await ensureGamificationColumns();
     await ensureActivityLogTable();
+    await ensureSavedMealPlansTable();
     console.log('[Database] Schema initialization complete');
   } catch (err) {
-    console.error('[Database] Initialization warning:', err.message);
-    // Continue running even if init fails - tables might already exist
+    console.error('[Database] ❌ Schema initialization failed:', err.message);
+    if (ENV.IS_PRODUCTION) {
+      console.error('[Database] Aborting startup in production — schema must be correct before serving traffic');
+      process.exit(1);
+    }
+    console.warn('[Database] Continuing in development — some features may be unavailable');
   }
 
   // Initialize daily streak check cron job
   initStreakCronJob();
+
+  // Initialize proactive nutrient deficit push notification job
+  initNutrientDeficitJob();
 
   // Initialize smart reminder push notification cron job
   // Only start if Firebase is configured (FCM available)
@@ -977,14 +1038,22 @@ app.listen(PORT, "0.0.0.0", async () => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error("Global Error:", err.stack);
-  
-  if (err.message === "Unauthenticated") {
-    return res.status(401).json({ error: "Unauthenticated" });
+  // Always log the full error server-side
+  console.error('[GlobalError]', err.stack || err.message);
+
+  if (err.message === 'Unauthenticated') {
+    return res.status(401).json({ error: 'Unauthenticated' });
   }
 
-  res.status(500).json({ 
-    error: "Internal Server Error", 
-    message: process.env.NODE_ENV === "development" ? err.message : undefined 
+  // CORS rejection arrives as an Error from our origin callback
+  if (err.message?.startsWith('CORS:')) {
+    return res.status(403).json({ error: 'Forbidden: CORS policy' });
+  }
+
+  // Never expose internal details in production
+  const isDev = ENV.NODE_ENV !== 'production';
+  res.status(err.status || 500).json({
+    error: 'Internal Server Error',
+    ...(isDev && { message: err.message, stack: err.stack }),
   });
 });

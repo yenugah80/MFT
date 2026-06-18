@@ -13,12 +13,12 @@ function getApiUrl() {
     return process.env.EXPO_PUBLIC_API_BASE_URL;
   }
 
-  // Default: Production backend (Cloudflare → Hetzner)
+  // Default: Production backend (Railway)
   return 'https://api.my-food-tracker.com/api';
 }
 
 // Base API URL
-// Use Hetzner backend in both development and production
+// Use Railway backend in both development and production
 export const API_URL = getApiUrl();
 
 // Legacy export for backwards compatibility (profileAPI uses this without /api)
@@ -44,7 +44,7 @@ export const isPhysicalDevice = Constants.isDevice;
 
 // Log API configuration in development for debugging
 if (__DEV__) {
-  const mode = process.env.EXPO_PUBLIC_API_BASE_URL ? 'Custom' : 'Render Backend';
+  const mode = process.env.EXPO_PUBLIC_API_BASE_URL ? 'Custom' : 'Railway Backend';
   console.log(`[API Config] 🚀 Mode: ${mode} | Platform: ${Platform.OS}`);
   console.log(`[API Config] 📡 Using API URL: ${API_URL}`);
   console.log(`[API Config] 📱 Physical device: ${isPhysicalDevice}`);

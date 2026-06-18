@@ -200,8 +200,8 @@ class ApiClient {
 
       return data;
     } catch (error) {
-      // Network error - fast retry
-      if (!error.response && attempt < RETRY_CONFIG.maxRetries) {
+      // Network error - fast retry (but not timeouts or non-retryable errors)
+      if (!error.response && isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
         const delay = RETRY_CONFIG.delays[attempt];
         if (__DEV__) console.log(`[API] Network error, retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
         await sleep(delay);
@@ -296,8 +296,8 @@ const apiClient = new ApiClient();
 
 /**
  * Backend Warmup - fires immediately on module load
- * Wakes up Render.com backend while user is still seeing splash screen
- * This dramatically reduces perceived latency on cold starts
+ * Wakes up Railway backend while user is still seeing splash screen.
+ * Dramatically reduces perceived latency on cold starts.
  */
 let warmupPromise = null;
 export function warmupBackend() {
