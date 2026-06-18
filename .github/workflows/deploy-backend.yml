@@ -25,3 +25,5 @@ jobs:
         run: railway up --service caring-emotion --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 3deeefd3-91c8-4034-b82d-6e30d3287bf3
+          RAILWAY_ENVIRONMENT_ID: 3ded8cb6-bcc7-4edb-a81c-4de520f792a9
