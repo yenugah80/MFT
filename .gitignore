@@ -1,3 +1,6 @@
+# Separate repos nested inside this directory
+gesture-rush/
+
 # Dependencies
 node_modules/
 
