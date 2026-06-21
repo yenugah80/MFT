@@ -455,6 +455,11 @@ function SuggestionCard({ item, index, onSelect, onAccept, onTrack, isDark }) {
                 <Ionicons name="heart" size={9} color="#10B981" />
               </View>
             )}
+            {item.warningBadge && (
+              <View style={[styles.allergenWarnBadge, { backgroundColor: item.warningBadge.color || '#ea580c' }]}>
+                <Ionicons name="alert-circle" size={9} color="#FFF" />
+              </View>
+            )}
           </View>
           <View style={styles.suggestionMeta}>
             <View style={styles.metaItem}>
@@ -596,6 +601,7 @@ export default function SmartMealSuggestionCard({
       wellnessReasoning: rec.wellnessReasoning,
       wellnessContext: rec.wellnessContext, // e.g., "POST_WORKOUT", "LOW_RECOVERY", etc.
       isAIPowered: true,
+      warningBadge: rec.warningBadge || null,
       originalRec: rec, // Keep original for accept action
     }));
   }, [backendRecommendations]);
@@ -632,22 +638,14 @@ export default function SmartMealSuggestionCard({
       useNativeDriver: true,
     }).start();
 
-    // Shimmer effect
-    Animated.loop(
+    const shimmerLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
+        Animated.timing(shimmerAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(shimmerAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    shimmerLoop.start();
+    return () => shimmerLoop.stop();
   }, [cardAnim, shimmerAnim]);
 
   // Show encouraging empty state instead of hiding completely
@@ -992,6 +990,14 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  allergenWarnBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 4,

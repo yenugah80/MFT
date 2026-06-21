@@ -9,69 +9,26 @@ import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
 import { nutritionGoalsTable } from "../db/schema.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
+import { invalidateUserSignals } from "../services/userSignalCacheService.js";
+import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
+import {
+  BEVERAGE_FACTORS as _BEV_FACTORS,
+  CAFFEINE_PER_250ML as _CAFF,
+  CAFFEINE_DAILY_LIMIT_MG,
+  getHydrationSignal,
+  invalidateSignalCache,
+} from "../services/hydrationSignalService.js";
 
 const router = express.Router();
 
-router.use(requireAuth);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * BEVERAGE HYDRATION FACTORS (Research-backed)
- * Keep in sync with mobile/constants/beverageConstants.js
- *
- * Source: Beverage Hydration Index study
- * https://ajcn.nutrition.org/article/S0002-9165(22)06556-X/fulltext
- *
- * Key findings that differ from common beliefs:
- * - Coffee: ~1.0 (NO significant diuretic effect - myth debunked!)
- * - Tea: ~1.0 (same as water)
- * - Milk: 1.50-1.58 (BETTER than water - fat/protein slow emptying)
- * - Orange juice: 1.39 (sugar + potassium aid retention)
- * - Alcohol: 0.70-0.85 (actual diuretic effect)
- */
-const BEVERAGE_FACTORS = {
-  water: 1.0,
-  sparkling: 1.0,
-  herbal: 1.0,
-  tea: 1.0,           // Updated: Research shows same as water
-  coffee: 1.0,        // Updated: No significant diuretic effect
-  milk: 1.50,         // Updated: Best hydrator (was 0.87)
-  milkSkim: 1.58,     // New: Skim milk is best
-  juice: 1.39,        // Updated: Better than water (BHI study)
-  smoothie: 1.1,      // Updated: Similar to milk-based drinks
-  soda: 1.0,          // Updated: Same as water (but avoid for sugar)
-  electrolyte: 1.1,
-  coconut: 1.05,
-  sports: 1.05,
-  energy: 1.0,        // New: Energy drinks
-  alcohol_beer: 0.85,   // New: Alcohol is actually diuretic
-  alcohol_wine: 0.80,   // New: Higher alcohol = more diuretic
-  alcohol_spirits: 0.70, // New: Spirits are most diuretic
-};
+router.use(requireAuth());
 
-/**
- * CAFFEINE CONTENT (mg per 250ml serving)
- * Used for daily caffeine tracking
- * FDA recommendation: max 400mg/day
- */
-const CAFFEINE_CONTENT = {
-  water: 0,
-  sparkling: 0,
-  herbal: 0,
-  milk: 0,
-  milkSkim: 0,
-  juice: 0,
-  coconut: 0,
-  smoothie: 0,
-  coffee: 95,
-  tea: 47,
-  soda: 35,
-  energy: 80,
-  sports: 0,
-  electrolyte: 0,
-  alcohol_beer: 0,
-  alcohol_wine: 0,
-  alcohol_spirits: 0,
-};
+// Single source of truth: constants imported from hydrationSignalService
+const BEVERAGE_FACTORS = _BEV_FACTORS;
+const CAFFEINE_CONTENT = _CAFF;
+const CAFFEINE_LIMIT = CAFFEINE_DAILY_LIMIT_MG;
 
 /**
  * POST /api/water/log
@@ -95,6 +52,10 @@ router.post("/log", async (req, res) => {
     // Validate clientEventId for idempotency
     if (!clientEventId) {
       return errors.missingField(res, 'clientEventId');
+    }
+
+    if (clientEventId && !UUID_RE.test(clientEventId)) {
+      return errors.badRequest(res, 'clientEventId must be a valid UUID v4');
     }
 
     const normalizedType = typeof beverageType === "string"
@@ -122,6 +83,10 @@ router.post("/log", async (req, res) => {
       .returning();
 
     const isNewEntry = result.length > 0;
+
+    if (isNewEntry) {
+      invalidateUserSignals(userId);
+    }
 
     // If duplicate, fetch the existing entry
     let entry;
@@ -185,11 +150,17 @@ router.post("/log", async (req, res) => {
         console.error("[WaterLog] XP award failed (non-fatal):", xpError);
       }
 
-      // Clear pattern cache for this user (new data invalidates cached patterns)
+      // Clear pattern cache and hydration signal cache (new data invalidates both)
       clearPatternCache(userId);
+      invalidateSignalCache(userId);
     }
 
     res.json({ entry, wasDuplicate: !isNewEntry });
+
+    // Background: refresh lagged correlations after a new water log.
+    // Throttled to once per 24h per user so frequent logging doesn't hammer the DB.
+    if (isNewEntry) triggerBackgroundAnalysis(userId);
+
   } catch (error) {
     console.error("[WaterLog] Error:", error);
     errors.internal(res, 'Failed to log water');
@@ -234,8 +205,6 @@ router.get("/today", async (req, res) => {
       return sum + Math.round(amount * caffeinePer250ml * 4);
     }, 0);
 
-    // Caffeine status based on FDA 400mg limit
-    const CAFFEINE_LIMIT = 400;
     let caffeineStatus = 'low';
     let caffeineWarning = null;
     if (totalCaffeine > CAFFEINE_LIMIT) {

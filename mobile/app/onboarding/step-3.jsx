@@ -95,6 +95,58 @@ const PillButton = ({ onPress, colors, children, wrapperStyle }) => {
   );
 };
 
+const SEVERITY_OPTIONS = [
+  { id: 'mild',        label: 'Mild',        color: '#d97706' },
+  { id: 'moderate',   label: 'Moderate',    color: '#ea580c' },
+  { id: 'severe',     label: 'Severe',      color: '#dc2626' },
+  { id: 'anaphylaxis', label: 'Anaphylaxis', color: '#7f1d1d' },
+];
+const TYPE_OPTIONS = [
+  { id: 'allergy',     label: 'Allergy' },
+  { id: 'intolerance', label: 'Intolerance' },
+  { id: 'preference',  label: 'Preference' },
+];
+
+const AllergenDetailRow = ({ allergen, severity, type, onSeverityChange, onTypeChange }) => (
+  <View style={styles.allergenDetailRow}>
+    <Text style={styles.allergenDetailName}>{allergen}</Text>
+    <View style={styles.allergenDetailPickers}>
+      <View style={styles.allergenPickerGroup}>
+        {SEVERITY_OPTIONS.map((opt) => (
+          <Pressable
+            key={opt.id}
+            onPress={() => onSeverityChange(allergen, opt.id)}
+            style={[
+              styles.allergenChip,
+              severity === opt.id && { backgroundColor: opt.color, borderColor: opt.color },
+            ]}
+          >
+            <Text style={[styles.allergenChipText, severity === opt.id && { color: '#fff' }]}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.allergenPickerGroup}>
+        {TYPE_OPTIONS.map((opt) => (
+          <Pressable
+            key={opt.id}
+            onPress={() => onTypeChange(allergen, opt.id)}
+            style={[
+              styles.allergenChip,
+              type === opt.id && { backgroundColor: DS.primary, borderColor: DS.primary },
+            ]}
+          >
+            <Text style={[styles.allergenChipText, type === opt.id && { color: '#fff' }]}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  </View>
+);
+
 const Step3Screen = () => {
   const { step3Data, updateStepData, goToNextStep, goToPreviousStep } = useOnboarding();
 
@@ -198,6 +250,20 @@ const Step3Screen = () => {
       });
     }
   }, [currentSection.id, step3Data, updateStepData]);
+
+  const handleAllergenSeverityChange = useCallback((allergen, severity) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateStepData('step3', {
+      allergenSeverity: { ...(step3Data.allergenSeverity || {}), [allergen]: severity },
+    });
+  }, [step3Data.allergenSeverity, updateStepData]);
+
+  const handleAllergenTypeChange = useCallback((allergen, type) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateStepData('step3', {
+      intoleranceType: { ...(step3Data.intoleranceType || {}), [allergen]: type },
+    });
+  }, [step3Data.intoleranceType, updateStepData]);
 
   const handleSectionChange = useCallback((index) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -323,6 +389,29 @@ const Step3Screen = () => {
             <Text style={styles.allergyNoteText}>
               Selected items will be excluded from all recommendations
             </Text>
+          </View>
+        )}
+
+        {/* Severity & type detail panel — shown when allergies are selected */}
+        {currentSection.id === 'allergies' && (step3Data.allergies || []).length > 0 && (
+          <View style={styles.severityPanel}>
+            <View style={styles.severityPanelHeader}>
+              <Ionicons name="medical-outline" size={15} color={DS.primary} />
+              <Text style={styles.severityPanelTitle}>Severity & Type</Text>
+            </View>
+            <Text style={styles.severityPanelHint}>
+              Help us personalise your experience — tap to set each allergen's severity and whether it's an allergy or intolerance.
+            </Text>
+            {(step3Data.allergies || []).map((allergen) => (
+              <AllergenDetailRow
+                key={allergen}
+                allergen={allergen}
+                severity={(step3Data.allergenSeverity || {})[allergen] || 'moderate'}
+                type={(step3Data.intoleranceType || {})[allergen] || 'allergy'}
+                onSeverityChange={handleAllergenSeverityChange}
+                onTypeChange={handleAllergenTypeChange}
+              />
+            ))}
           </View>
         )}
       </Animated.View>
@@ -647,5 +736,63 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.2,
+  },
+
+  /* Severity panel */
+  severityPanel: {
+    backgroundColor: DS.surfContainerHi,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+    marginTop: 4,
+  },
+  severityPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  severityPanelTitle: {
+    fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: DS.primary,
+  },
+  severityPanelHint: {
+    fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: DS.onSurfaceVar,
+    lineHeight: 16,
+  },
+  allergenDetailRow: {
+    gap: 6,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(14,58,32,0.08)',
+  },
+  allergenDetailName: {
+    fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: DS.onSurface,
+    textTransform: 'capitalize',
+  },
+  allergenDetailPickers: {
+    gap: 6,
+  },
+  allergenPickerGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  allergenChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(14,58,32,0.20)',
+    backgroundColor: DS.surfContainer,
+  },
+  allergenChipText: {
+    fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: DS.onSurface,
   },
 });

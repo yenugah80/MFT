@@ -15,6 +15,20 @@ import { accountSettingsTable } from '../db/schema.js';
 // Expo Push Notification API endpoint
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
+// Build request headers, adding Authorization when EXPO_ACCESS_TOKEN is set.
+// Without a token Expo rate-limits to 600 notifications/hour per IP.
+function getExpoHeaders() {
+  const headers = {
+    Accept: 'application/json',
+    'Accept-encoding': 'gzip, deflate',
+    'Content-Type': 'application/json',
+  };
+  if (process.env.EXPO_ACCESS_TOKEN) {
+    headers['Authorization'] = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
+  }
+  return headers;
+}
+
 /**
  * Notification types that map to user preferences
  */
@@ -58,11 +72,7 @@ export async function sendPushNotification(expoPushToken, notification) {
   try {
     const response = await fetch(EXPO_PUSH_URL, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
+      headers: getExpoHeaders(),
       body: JSON.stringify(message),
     });
 
@@ -113,11 +123,7 @@ export async function sendBatchPushNotifications(messages) {
     try {
       const response = await fetch(EXPO_PUSH_URL, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
+        headers: getExpoHeaders(),
         body: JSON.stringify(formattedMessages),
       });
 

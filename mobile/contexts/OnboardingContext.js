@@ -54,6 +54,8 @@ const initialState = {
     step3: {
       dietaryPreferences: [],
       allergies: [],
+      allergenSeverity: {},  // { peanuts: 'anaphylaxis', dairy: 'mild' }
+      intoleranceType: {},   // { dairy: 'intolerance', wheat: 'allergy' }
       cuisinePreferences: [],
     },
     step4: {
@@ -405,6 +407,8 @@ export function OnboardingProvider({ children }) {
               ? draft.step3.dietaryPreferences
               : ['balanced'],
             allergies: draft.step3.allergies,
+            allergenSeverity: draft.step3.allergenSeverity || {},
+            intoleranceType: draft.step3.intoleranceType || {},
             dislikes: [],
             cuisinePreference: draft.step3.cuisinePreferences.length > 0
               ? draft.step3.cuisinePreferences

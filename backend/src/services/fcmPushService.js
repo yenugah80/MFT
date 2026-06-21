@@ -20,14 +20,15 @@ import WittyMessageEngine from './wittyMessageEngine.js';
  * Maps to user preference keys in accountSettingsTable.notifications JSON
  */
 export const FCM_NOTIFICATION_TYPES = {
-  DAILY_REMINDER: 'dailyReminder',
-  HYDRATION_NUDGE: 'hydrationNudges',
-  INSIGHT_DROP: 'insightDrops',
-  STREAK_CELEBRATION: 'streakCelebrations',
-  GOAL_ACHIEVED: 'goalAchieved',
-  CORRELATION_DISCOVERED: 'correlationDiscovered',
-  WEEKLY_SUMMARY: 'weeklySummary',
-  REAL_TIME_ALERT: 'realTimeAlert',
+  DAILY_REMINDER: 'food',
+  HYDRATION_NUDGE: 'hydration',
+  INSIGHT_DROP: 'insightDrops',          // granular preference key
+  STREAK_CELEBRATION: 'streakCelebrations', // granular preference key
+  STREAK_AT_RISK: 'streakProtection',    // granular preference key
+  GOAL_ACHIEVED: 'insightDrops',
+  CORRELATION_DISCOVERED: 'insightDrops',
+  WEEKLY_SUMMARY: 'insightDrops',
+  REAL_TIME_ALERT: 'enabled',
 };
 
 /**
@@ -427,7 +428,7 @@ export async function sendWeeklySummaryNotification(db, userId, summary) {
  * Send hydration nudge with witty, contextual copy
  */
 export async function sendHydrationNudgeNotification(db, userId, currentMl, goalMl, context = {}) {
-  const percentage = Math.round((currentMl / goalMl) * 100);
+  const percentage = goalMl > 0 ? Math.round((currentMl / goalMl) * 100) : 0;
 
   // Get witty message from engine with full context
   const message = WittyMessageEngine.getHydrationMessage({

@@ -9,7 +9,8 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
+import { aiLimiter } from '../middleware/rateLimiter.js';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
@@ -21,7 +22,12 @@ import { generateRecommendationContext } from '../services/personalizedNarrative
 import { getSmartRecommendations } from '../services/smartRecommendationEngine.js';
 import { getDashboardData } from '../services/dashboardService.js';
 import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
-import { getUserSignals } from '../services/userSignalCacheService.js';
+import { getUserSignals, invalidateUserSignals } from '../services/userSignalCacheService.js';
+import { selectArm, updateArm, generateArmKey, getTimeBucket } from '../services/thompsonSamplingService.js';
+import { generateCandidates } from '../services/candidateGenerationService.js';
+import { getUserLaggedCorrelations } from '../services/laggedCorrelationService.js';
+import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens } from '../services/foodKnowledgeGraphService.js';
+import { invalidateCFCache } from '../services/collaborativeFilteringService.js';
 
 const router = express.Router();
 
@@ -92,7 +98,7 @@ async function generateRecommendationsWithDedup(userId, mealType, limit, generat
  * - limit: number of recommendations (default: 5, max: 10)
  * - mealType: force specific meal type (optional, auto-detected by time)
  */
-router.get('/smart', requireAuth(), async (req, res) => {
+router.get('/smart', requireAuth(), aiLimiter, async (req, res) => {
   try {
     const { userId } = req.auth;
     const { limit = 5, mealType } = req.query;
@@ -127,24 +133,28 @@ router.get('/smart', requireAuth(), async (req, res) => {
  * Get personalized food recommendations with history awareness
  * Uses request deduplication to prevent duplicate concurrent API calls
  */
-router.get('/', requireAuth(), async (req, res) => {
+router.get('/', requireAuth(), aiLimiter, async (req, res) => {
   try {
     const { userId } = req.auth;
     const { limit = 5 } = req.query;
+    const parsedLimit = Math.min(Math.max(parseInt(limit) || 5, 1), 10);
 
-    // Get meal type early to use as dedup key
-    const hour = new Date().getHours();
+    // Parse timezone offset from device header before anything else.
+    // This must happen outside the dedup closure so the local hour is used
+    // for both the dedup key and the meal-type derivation.
+    const timezoneOffset = parseTimezoneOffsetMinutes(req);
+    const hour = getLocalHour(timezoneOffset);
     const mealType = getMealType(hour);
 
     // Generate or coalesce request with deduplication
     const result = await generateRecommendationsWithDedup(
       userId,
       mealType,
-      parseInt(limit),
+      parsedLimit,
       async () => {
         // Parallelize all independent data fetches — direct DB/service calls (no loopback HTTP)
-        const timezoneOffset = parseTimezoneOffsetMinutes(req);
-        const [dashboardResult, [profileRow], [dietaryRow], history, holisticIntelligence, personalizedContext, userSignals] = await Promise.all([
+        // timezoneOffset is captured from the outer scope (already parsed above).
+        const [dashboardResult, [profileRow], [dietaryRow], history, holisticIntelligence, personalizedContext, userSignals, laggedCorrelations] = await Promise.all([
           getDashboardData(db, userId),
           db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
           db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).limit(1),
@@ -152,6 +162,7 @@ router.get('/', requireAuth(), async (req, res) => {
           getUnifiedIntelligence(userId, { lookbackDays: 7 }),
           generateRecommendationContext(userId),
           getUserSignals(userId, { timezoneOffset }),
+          getUserLaggedCorrelations(userId).catch(() => []),
         ]);
 
         // Shape profile data to match expected structure for generateEnhancedRecommendations
@@ -161,6 +172,17 @@ router.get('/', requireAuth(), async (req, res) => {
             region: profileRow?.region || null,
             cookingStyle: profileRow?.cookingStyle || null,
             allergies: Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [],
+            // Critical allergens = anaphylaxis or severe — must be hard-blocked in recommendations
+            criticalAllergens: Array.isArray(dietaryRow?.allergies)
+              ? dietaryRow.allergies.filter(a => {
+                  const sev = (dietaryRow?.allergenSeverity || {})[a] || 'moderate';
+                  return sev === 'anaphylaxis' || sev === 'severe';
+                })
+              : [],
+            allergenSeverity: (dietaryRow?.allergenSeverity && typeof dietaryRow.allergenSeverity === 'object')
+              ? dietaryRow.allergenSeverity : {},
+            intoleranceType: (dietaryRow?.intoleranceType && typeof dietaryRow.intoleranceType === 'object')
+              ? dietaryRow.intoleranceType : {},
             preferences: Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [],
             dislikes: Array.isArray(dietaryRow?.dislikes) ? dietaryRow.dislikes : [],
           },
@@ -179,36 +201,87 @@ router.get('/', requireAuth(), async (req, res) => {
           fats: Math.max(0, (goals.fatsG || 65) - (nutrition.totalFats || 0)),
           water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
         };
-        logDebug(`Wellness Score: ${holisticIntelligence.wellnessScore}, Recovery: ${holisticIntelligence.recoveryScore}`);
+        logDebug(`Wellness Score: ${holisticIntelligence?.wellnessScore}, Recovery: ${holisticIntelligence?.recoveryScore}`);
         logDebug(`Personalized Patterns: ${personalizedContext.hasPatterns ? 'Available' : 'Building'} (${personalizedContext.goodFoods?.length || 0} good foods, ${personalizedContext.avoidFoods?.length || 0} watch foods)`);
 
-        // Determine recommendation type based on budget, history, AND wellness state
-        const recType = determineRecommendationType(remainingBudget, profile, history, holisticIntelligence);
-        if (holisticIntelligence && typeof holisticIntelligence === 'object') {
-          holisticIntelligence.userSignals = userSignals;
-        }
+        // Micronutrient urgency: compute deficit signals from today's tracked micros.
+        // Must be computed BEFORE selectRecommendationTypeWithBandit so that
+        // MICRONUTRIENT_BOOST can be selected as a wellness override when micros are low.
+        const todayMicros = dashboardResult.today?.nutrition?.micros ?? {};
+        const micronutrientUrgency = computeMicronutrientUrgency(todayMicros);
 
-        // Generate recommendations with enhanced AI + holistic context + personalized patterns
+        // Determine recommendation type: wellness overrides first, then Thompson Sampling bandit
+        const recType = await selectRecommendationTypeWithBandit(
+          userId, mealType, remainingBudget, profile, history, holisticIntelligence, micronutrientUrgency
+        );
+
+        // Generate pre-scored candidates from the catalogue + user history.
+        // scoreCandidate() reads nutritionalGaps, recentFoodNames, and allergies from the
+        // signals object — they are NOT part of userSignalCacheService's output, so we
+        // enrich the signals inline here before passing them.
+        const recentFoodNames = (history.preferredFoods ?? []).concat(
+          (dashboardResult.today?.nutrition?.recentFoods ?? []).map((f) => f.foodName ?? f)
+        );
+        const nutritionalGaps = {
+          calories: { remaining: remainingBudget.calories },
+          protein:  { status: remainingBudget.protein  < 30  ? 'low' : 'ok', remaining: remainingBudget.protein },
+          carbs:    { status: remainingBudget.carbs    < 50  ? 'low' : 'ok', remaining: remainingBudget.carbs },
+          fats:     { status: remainingBudget.fats     < 15  ? 'low' : 'ok', remaining: remainingBudget.fats },
+          fiber:    { status: 'unknown' },
+        };
+
+        const enrichedSignals = {
+          ...userSignals,
+          nutritionalGaps,
+          recentFoodNames,
+          allergies: profile.dietary.allergies,
+          // Hard-block allergens (anaphylaxis/severe) — candidate generator must exclude these
+          criticalAllergens: profile.dietary.criticalAllergens,
+          allergenSeverity: profile.dietary.allergenSeverity,
+          intoleranceType: profile.dietary.intoleranceType,
+          // Rejection learning: foods the user explicitly rejected 2+ times
+          rejectedFoodNames: history.rejectedFoodNames ?? [],
+          // Micronutrient gap signals for candidate scoring
+          microUrgencySignals: micronutrientUrgency.urgencySignals ?? {},
+        };
+
+        const candidates = await generateCandidates(userId, {
+          signals: enrichedSignals,
+          mealType,
+          limit: 18,
+        }).catch((err) => {
+          logWarn(`candidateGenerationService failed; recommendation engine will use deterministic grounded fallback: ${err.message}`);
+          return [];
+        });
+
+        // Augment userSignals with micronutrient deficit data so the LLM prompt
+        // can reference specific nutrients when recType === MICRONUTRIENT_BOOST.
+        const userSignalsForLLM = micronutrientUrgency.hasDeficit
+          ? { ...userSignals, micronutrientDeficits: micronutrientUrgency.deficits }
+          : userSignals;
+
+        // Generate recommendations: candidates → LLM ranks + narrates
+        // userSignals and laggedCorrelations are passed cleanly (no mutation)
         const recommendations = await generateEnhancedRecommendations(
           recType,
           mealType,
           remainingBudget,
           profile,
           history,
-          parseInt(limit),
+          parsedLimit,
           holisticIntelligence,
-          personalizedContext    // 🎯 NEW: Personalized pattern context
+          personalizedContext,
+          userSignalsForLLM,
+          laggedCorrelations,
+          candidates,
         );
 
         // Enrich with micronutrients
         const enrichedRecommendations = await enrichRecommendations(recommendations);
 
-        // Save recommendations to history
+        // Persist before responding so returned recommendation IDs can be accepted immediately.
         await saveRecommendationsToHistory(db, userId, enrichedRecommendations, {
-          recType,
-          mealType,
-          remainingBudget,
-          hour
+          recType, mealType, remainingBudget, hour,
         });
 
         return {
@@ -233,7 +306,16 @@ router.get('/', requireAuth(), async (req, res) => {
             confidenceLabel: userSignals.moodConfidenceLabel,
             insight: userSignals.insights?.mood || '',
             reason: userSignals.explainability?.mood?.reason || null
-          }
+          },
+          laggedInsights: laggedCorrelations.length > 0
+            ? laggedCorrelations.slice(0, 3).map((c) => ({
+                finding: c.interpretation,
+                signalA: c.signalA,
+                signalB: c.signalB,
+                lagHours: c.optimalLagHours,
+                correlation: c.correlationAtOptimalLag,
+              }))
+            : [],
         };
       }
     );
@@ -271,14 +353,19 @@ router.get('/:id', requireAuth(), async (req, res) => {
       return errors.notFound(res, 'Recommendation');
     }
 
-    // Mark as viewed
-    await db
-      .update(recommendationsHistoryTable)
-      .set({
-        interactionStatus: 'viewed',
-        viewedAt: new Date()
-      })
-      .where(eq(recommendationsHistoryTable.id, recommendation[0].id));
+    // Mark as viewed — only when the rec has never been interacted with.
+    // Never downgrade a terminal status (accepted / rejected / customized) back to 'viewed'.
+    if (recommendation[0].interactionStatus === 'shown') {
+      await db
+        .update(recommendationsHistoryTable)
+        .set({ interactionStatus: 'viewed', viewedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(recommendationsHistoryTable.id, recommendation[0].id),
+            eq(recommendationsHistoryTable.interactionStatus, 'shown') // guard against race
+          )
+        );
+    }
 
     res.json(recommendation[0]);
   } catch (error) {
@@ -318,13 +405,31 @@ router.post('/:id/track', requireAuth(), async (req, res) => {
       updateData.viewedAt = new Date();
     }
 
-    await db
+    const [updatedRec] = await db
       .update(recommendationsHistoryTable)
       .set(updateData)
       .where(and(
         eq(recommendationsHistoryTable.recommendationId, id),
         eq(recommendationsHistoryTable.userId, userId)
-      ));
+      ))
+      .returning();
+
+    // Bayesian update: close the feedback loop for Thompson Sampling
+    if ((action === 'accept' || action === 'reject') && updatedRec?.recommendationType) {
+      const inferredHour = updatedRec.timeOfDay ?? new Date().getHours();
+      const inferredMealType = updatedRec.mealType ?? getMealType(inferredHour);
+      const armKey = generateArmKey({
+        recommendationType: updatedRec.recommendationType,
+        mealType: inferredMealType,
+        timeBucket: getTimeBucket(inferredHour),
+      });
+      updateArm(userId, armKey, action === 'accept', { foodName: updatedRec.foodName })
+        .catch((err) => console.warn('[Recommendations] Thompson Sampling update failed:', err.message));
+
+      // Invalidate collaborative-filter cache when acceptance patterns change.
+      // Next request will recompute similarity against updated history.
+      invalidateCFCache(userId);
+    }
 
     res.json({ success: true, action });
   } catch (error) {
@@ -357,8 +462,21 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
       return errors.notFound(res, 'Recommendation');
     }
 
+    // Guard idempotency: if already logged, return the existing food log entry
+    if (rec.wasLogged && rec.loggedFoodId) {
+      return res.json({
+        success: true,
+        alreadyAccepted: true,
+        foodLogId: rec.loggedFoodId,
+        message: 'Already added to food log',
+      });
+    }
+
+    // Use rec.id as the deterministic clientEventId so retried requests don't duplicate
+    const clientEventId = `rec-accept-${rec.id}`;
+
     // Add to food log
-    const [foodLog] = await db
+    const insertResult = await db
       .insert(foodLogTable)
       .values({
         userId,
@@ -371,9 +489,24 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
         mealType: mealType || rec.mealType,
         micros: rec.micros,
         sourceMeta: { source: 'recommendation', recId: id },
-        loggedDate: new Date()
+        clientEventId,
+        loggedDate: new Date(),
       })
+      .onConflictDoNothing()
       .returning();
+
+    // If conflict, fetch the existing food log entry
+    let foodLog;
+    if (insertResult.length > 0) {
+      foodLog = insertResult[0];
+    } else {
+      const [existing] = await db
+        .select()
+        .from(foodLogTable)
+        .where(and(eq(foodLogTable.userId, userId), eq(foodLogTable.clientEventId, clientEventId)))
+        .limit(1);
+      foodLog = existing;
+    }
 
     // Update recommendation history
     await db
@@ -383,9 +516,13 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
         wasLogged: true,
         loggedFoodId: foodLog.id,
         loggedAt: new Date(),
-        interactedAt: new Date()
+        interactedAt: new Date(),
+        updatedAt: new Date()
       })
       .where(eq(recommendationsHistoryTable.id, rec.id));
+
+    // Invalidate signal cache — new food log affects nutritional gap signals
+    invalidateUserSignals(userId);
 
     res.json({
       success: true,
@@ -410,25 +547,22 @@ router.get('/history/list', requireAuth(), async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
 
-    let query = db
+    // Build conditions array so userId/date are never overwritten by optional filters
+    const conditions = [
+      eq(recommendationsHistoryTable.userId, userId),
+      gte(recommendationsHistoryTable.shownAt, startDate),
+    ];
+    if (status) conditions.push(eq(recommendationsHistoryTable.interactionStatus, status));
+    if (type) conditions.push(eq(recommendationsHistoryTable.recommendationType, type));
+
+    const parsedLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
+
+    const history = await db
       .select()
       .from(recommendationsHistoryTable)
-      .where(and(
-        eq(recommendationsHistoryTable.userId, userId),
-        gte(recommendationsHistoryTable.shownAt, startDate)
-      ));
-
-    if (status) {
-      query = query.where(eq(recommendationsHistoryTable.interactionStatus, status));
-    }
-
-    if (type) {
-      query = query.where(eq(recommendationsHistoryTable.recommendationType, type));
-    }
-
-    const history = await query
+      .where(and(...conditions))
       .orderBy(desc(recommendationsHistoryTable.shownAt))
-      .limit(parseInt(limit));
+      .limit(parsedLimit);
 
     // Calculate stats
     const stats = {
@@ -467,46 +601,30 @@ router.get('/stats/acceptance-by-preference', requireAuth(), async (req, res) =>
       .where(eq(recommendationsHistoryTable.userId, userId))
       .limit(500);
 
-    if (history.length === 0) {
-      return res.json({
-        success: true,
-        stats: {
-          acceptanceRate: 0,
-          byPreferenceType: {},
-          totalShown: 0,
-          totalAccepted: 0
-        }
-      });
-    }
-
-    // Calculate overall acceptance rate (decimal 0-1 for consistency)
     const totalAccepted = history.filter(r => r.interactionStatus === 'accepted').length;
     const totalShown = history.length;
-    const overallAcceptanceRate = totalAccepted / totalShown;
+    const overallAcceptanceRate = totalShown > 0 ? totalAccepted / totalShown : 0;
 
-    // Break down by recommendation type with full stats
     const byType = {};
     history.forEach(rec => {
       const type = rec.recommendationType || 'UNKNOWN';
-      if (!byType[type]) {
-        byType[type] = { total: 0, accepted: 0 };
-      }
+      if (!byType[type]) byType[type] = { total: 0, accepted: 0, acceptanceRate: 0 };
       byType[type].total++;
-      if (rec.interactionStatus === 'accepted') {
-        byType[type].accepted++;
-      }
+      if (rec.interactionStatus === 'accepted') byType[type].accepted++;
+    });
+    Object.values(byType).forEach(d => {
+      d.acceptanceRate = d.total > 0 ? d.accepted / d.total : 0;
     });
 
-    // Add acceptance rate to each type
-    Object.entries(byType).forEach(([type, data]) => {
-      data.acceptanceRate = data.total > 0 ? (data.accepted / data.total) : 0;
-    });
-
+    // Consistent envelope regardless of whether history is empty or not
     res.json({
-      acceptanceRate: overallAcceptanceRate,
-      byType,
-      totalShown,
-      totalAccepted
+      success: true,
+      stats: {
+        acceptanceRate: overallAcceptanceRate,
+        byType,
+        totalShown,
+        totalAccepted,
+      },
     });
   } catch (error) {
     console.error('[Recommendations] Stats error:', error);
@@ -526,7 +644,7 @@ async function analyzeRecommendationHistory(db, userId) {
       .limit(100);
 
     if (!history.length) {
-      return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [] };
+      return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [], rejectedFoodNames: [] };
     }
 
     // Calculate acceptance patterns
@@ -553,15 +671,70 @@ async function analyzeRecommendationHistory(db, userId) {
       .slice(0, 5)
       .map(([food]) => food);
 
+    // Build rejected food list: foods rejected 2+ times in the last 90 days.
+    // This feeds into candidateGenerationService's rejection penalty so
+    // repeatedly rejected foods get demoted in the candidate ranking.
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const rejected = history.filter(
+      (r) => r.interactionStatus === 'rejected' && new Date(r.shownAt) >= ninetyDaysAgo
+    );
+    const rejectionCount = {};
+    for (const rec of rejected) {
+      rejectionCount[rec.foodName] = (rejectionCount[rec.foodName] || 0) + 1;
+    }
+    const rejectedFoodNames = Object.entries(rejectionCount)
+      .filter(([, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([name, count]) => ({ name, count }));
+
     return {
       acceptanceRate,
       preferredTypes,
       preferredFoods,
+      rejectedFoodNames,
       totalRecommendations: history.length
     };
   } catch (error) {
     console.error('[Recommendations] History analysis error:', error);
-    return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [] };
+    return { acceptanceRate: 0, preferredTypes: [], preferredFoods: [], rejectedFoodNames: [] };
+  }
+}
+
+// Arms eligible for Thompson Sampling exploration.
+// Must stay in sync with ARM_CATEGORIES.RECOMMENDATION_TYPE in thompsonSamplingService.js.
+const BANDIT_ARMS = ['PROTEIN_BOOST', 'LIGHT_SNACK', 'HYDRATION', 'REGIONAL_PICK', 'BALANCED_MEAL', 'FIBER_RICH', 'LOW_SODIUM', 'MICRONUTRIENT_BOOST'];
+
+/**
+ * Select recommendation type using Thompson Sampling bandit when no wellness
+ * override is needed. Falls back to deterministic logic on error.
+ *
+ * @param {string}  userId
+ * @param {string}  mealType
+ * @param {object}  remainingBudget
+ * @param {object}  profile
+ * @param {object}  history
+ * @param {object}  holisticIntelligence
+ * @returns {Promise<string>}
+ */
+async function selectRecommendationTypeWithBandit(userId, mealType, remainingBudget, profile, history, holisticIntelligence, micronutrientUrgency = null) {
+  // Wellness overrides always win — these are clinical signals, not bandit territory
+  const override = determineRecommendationType(remainingBudget, profile, history, holisticIntelligence, micronutrientUrgency);
+  const isBanditEligible = ['PROTEIN_BOOST', 'LIGHT_SNACK', 'HYDRATION', 'REGIONAL_PICK', 'BALANCED_MEAL', 'FIBER_RICH', 'LOW_SODIUM', 'MICRONUTRIENT_BOOST'].includes(override);
+
+  if (!isBanditEligible) {
+    return override; // Wellness override — skip bandit
+  }
+
+  try {
+    const hour = new Date().getHours();
+    const timeBucket = getTimeBucket(hour);
+    const candidateArms = BANDIT_ARMS.map((t) => ({ recommendationType: t, mealType, timeBucket }));
+    const result = await selectArm(userId, candidateArms, { explorationBoost: 0.1 });
+    return result.selected.recommendationType;
+  } catch (err) {
+    logWarn(`Thompson Sampling failed, using deterministic fallback: ${err.message}`);
+    return override;
   }
 }
 
@@ -569,7 +742,17 @@ async function analyzeRecommendationHistory(db, userId) {
  * Determine recommendation type with history awareness AND wellness state
  * Uses holistic intelligence to adapt recommendations to user's current state
  */
-function determineRecommendationType(remainingBudget, profile, history, holisticIntelligence = null) {
+function determineRecommendationType(remainingBudget, profile, history, holisticIntelligence = null, micronutrientUrgency = null) {
+  // Micronutrient deficit override: when 2+ micros are critically low (< 25% RDA),
+  // surface targeted micronutrient-rich foods before generic wellness overrides.
+  if (micronutrientUrgency?.hasDeficit) {
+    const criticalDeficits = Object.values(micronutrientUrgency.deficits ?? {})
+      .filter((d) => d.urgency > 0.6).length;
+    if (criticalDeficits >= 2 || (criticalDeficits >= 1 && micronutrientUrgency.topDeficit !== null)) {
+      return 'MICRONUTRIENT_BOOST';
+    }
+  }
+
   // 🧠 NEW: Wellness-state overrides (highest priority)
   if (holisticIntelligence?.currentState?.needsSpecialAttention) {
     const primaryConcern = holisticIntelligence.currentState.primaryConcern;
@@ -614,6 +797,34 @@ function determineRecommendationType(remainingBudget, profile, history, holistic
 }
 
 /**
+ * Build a warning badge for allergen matches, colour-coded by severity.
+ *
+ * @param {string} allergen   - matched allergen name
+ * @param {object} severity   - allergenSeverity map from profile
+ * @param {object} typeMap    - intoleranceType map from profile
+ * @returns {{ type, message, severity, color }}
+ */
+function buildAllergenWarningBadge(allergen, severityMap = {}, typeMap = {}) {
+  const sev  = severityMap[allergen] || 'moderate';
+  const type = typeMap[allergen]     || 'allergy';
+
+  const colorMap = {
+    anaphylaxis: '#7f1d1d',
+    severe:      '#dc2626',
+    moderate:    '#ea580c',
+    mild:        '#d97706',
+  };
+
+  const prefix = type === 'intolerance' ? 'Intolerance' : type === 'preference' ? 'Avoid' : 'Allergy';
+  return {
+    type: sev === 'anaphylaxis' || sev === 'severe' ? 'danger' : 'warning',
+    message: `${prefix}: ${allergen} (${sev})`,
+    severity: sev,
+    color: colorMap[sev] || colorMap.moderate,
+  };
+}
+
+/**
  * Improved allergen detection that avoids false positives
  * Uses word boundaries and allergen-specific patterns instead of simple substring matching
  *
@@ -623,110 +834,79 @@ function determineRecommendationType(remainingBudget, profile, history, holistic
  * - "fish" allergen: Won't match "jellyfish" or "starfish"
  * - "tree nuts": Matches almonds, cashews, walnuts, etc.
  */
-function improvedAllergenCheck(foodName, allergies) {
-  if (!allergies || allergies.length === 0) return false;
+const ALLERGEN_PATTERNS = {
+  'nut': {
+    pattern: /\b(nut|nuts|almond|walnut|cashew|pecan|pistachio|macadamia|hazelnut|chestnut|peanut)\b/i,
+    exceptions: ['coconut', 'donut', 'peanut butter'],
+  },
+  'milk':     { pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose)\b/i },
+  'fish':     { pattern: /\b(fish|salmon|tuna|cod|haddock|halibut|anchovy|trout)\b/i, exceptions: ['jellyfish', 'starfish'] },
+  'shellfish':{ pattern: /\b(shrimp|prawn|crab|lobster|oyster|clam|mussel|scallop)\b/i },
+  'egg':      { pattern: /\b(egg|eggs|mayonnaise)\b/i },
+  'soy':      { pattern: /\b(soy|soybean|tofu|tempeh|edamame|miso)\b/i },
+  'wheat':    { pattern: /\b(wheat|bread|pasta|flour|barley)\b/i, exceptions: ['buckwheat'] },
+  'peanut':   { pattern: /\b(peanut)\b/i },
+  'tree nut': { pattern: /\b(almond|walnut|cashew|pecan|pistachio|macadamia)\b/i },
+  'sesame':   { pattern: /\b(sesame|tahini)\b/i },
+  'mustard':  { pattern: /\b(mustard)\b/i },
+  'celery':   { pattern: /\b(celery|celeriac)\b/i },
+  'dairy':    { pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose|whey|casein)\b/i },
+  'gluten':   { pattern: /\b(wheat|barley|rye|gluten|seitan)\b/i, exceptions: ['buckwheat', 'gluten-free', 'gluten free'] },
+  'sulfites': { pattern: /\b(sulfite|sulfites|sulphite|sulphites|wine|dried fruit)\b/i },
+  'lupin':    { pattern: /\b(lupin|lupine|lupini)\b/i },
+  'mollusks': { pattern: /\b(squid|octopus|calamari|snail|escargot)\b/i },
+};
 
-  const foodNameLower = foodName.toLowerCase();
-
-  // Define allergen-specific patterns for precise matching
-  const allergenPatterns = {
-    'nut': {
-      // Match standalone "nut", "nuts", "peanut", "almond", etc. but NOT "coconut", "donut"
-      pattern: /\b(nut|nuts|almond|walnut|cashew|pecan|pistachio|macadamia|hazelnut|chestnut|peanut)\b/i,
-      exceptions: ['coconut', 'donut', 'peanut butter'] // These are handled separately if needed
-    },
-    'milk': {
-      pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose)\b/i
-    },
-    'fish': {
-      pattern: /\b(fish|salmon|tuna|cod|haddock|halibut|anchovy|trout)\b/i,
-      exceptions: ['jellyfish', 'starfish']
-    },
-    'shellfish': {
-      pattern: /\b(shrimp|prawn|crab|lobster|oyster|clam|mussel|scallop)\b/i
-    },
-    'egg': {
-      pattern: /\b(egg|eggs|mayonnaise)\b/i
-    },
-    'soy': {
-      pattern: /\b(soy|soybean|tofu|tempeh|edamame|miso)\b/i
-    },
-    'wheat': {
-      pattern: /\b(wheat|bread|pasta|flour|barley)\b/i,
-      exceptions: ['buckwheat'] // Not actually wheat
-    },
-    'peanut': {
-      pattern: /\b(peanut)\b/i
-    },
-    'tree nut': {
-      pattern: /\b(almond|walnut|cashew|pecan|pistachio|macadamia)\b/i
-    },
-    'sesame': {
-      pattern: /\b(sesame|tahini)\b/i
-    },
-    'mustard': {
-      pattern: /\b(mustard)\b/i
-    },
-    'celery': {
-      pattern: /\b(celery|celeriac)\b/i
-    },
-    'dairy': {
-      pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose|whey|casein)\b/i
-    },
-    'gluten': {
-      pattern: /\b(wheat|barley|rye|gluten|seitan)\b/i,
-      exceptions: ['buckwheat', 'gluten-free', 'gluten free']
-    },
-    'sulfites': {
-      pattern: /\b(sulfite|sulfites|sulphite|sulphites|wine|dried fruit)\b/i
-    },
-    'lupin': {
-      pattern: /\b(lupin|lupine|lupini)\b/i
-    },
-    'mollusks': {
-      pattern: /\b(squid|octopus|calamari|snail|escargot)\b/i
-    }
-  };
-
-  for (const allergen of allergies) {
-    const allergenLower = allergen.toLowerCase().trim();
-
-    // Check if we have a pattern for this allergen
-    const patternConfig = allergenPatterns[allergenLower];
-    if (patternConfig && patternConfig.pattern) {
-      if (patternConfig.pattern.test(foodName)) {
-        // Check exceptions (for false positives)
-        if (patternConfig.exceptions && patternConfig.exceptions.some(ex =>
-          foodNameLower.includes(ex.toLowerCase())
-        )) {
-          continue; // Skip this allergen, it's an exception
-        }
-        logWarn(`Allergen match: Food "${foodName}" contains allergen "${allergen}" (pattern match)`);
-        return true;
-      }
-    } else {
-      // Fallback: For allergens without patterns, use safer substring matching
-      // but require it to be a standalone word (not part of another word)
-      const words = foodNameLower.split(/[\s,-]/);
-      if (words.includes(allergenLower)) {
-        logWarn(`Allergen match: Food "${foodName}" contains allergen "${allergen}" (word match)`);
-        return true;
-      }
-    }
+/**
+ * Returns the names of all allergens from the user's list that match the food name.
+ * Uses pattern-based matching to avoid false positives (e.g. "nut" won't match "coconut").
+ */
+function findMatchedAllergens(food, allergies) {
+  const risk = detectAllergenRisk(food, allergies);
+  if (risk.hasRisk) {
+    const name = typeof food === 'string' ? food : (food?.foodName || food?.name || 'unknown food');
+    logWarn(`Allergen risk: Food "${name}" matched ${risk.matchedAllergens.join(', ')}`);
   }
+  return risk.matchedAllergens;
+}
 
-  return false;
+function improvedAllergenCheck(food, allergies) {
+  return detectAllergenRisk(food, allergies).hasRisk;
 }
 
 /**
- * Get meal type based on current hour
+ * Derive the user's local hour from the timezone offset sent by the device.
+ *
+ * JS getTimezoneOffset() semantics (also used by the mobile app):
+ *   offset < 0  → east of UTC  (e.g. India UTC+5:30 → -330)
+ *   offset > 0  → west of UTC  (e.g. EST  UTC-5    → +300)
+ *
+ * Therefore: localTime = UTC - offset
+ *
+ * Falls back to server local time when the header is absent or invalid,
+ * but logs a warning so it is visible in production logs.
+ *
+ * @param {number|null} timezoneOffsetMinutes
+ * @returns {number} 0-23 hour in the user's local timezone
+ */
+function getLocalHour(timezoneOffsetMinutes) {
+  if (!Number.isFinite(timezoneOffsetMinutes)) {
+    console.warn('[Recommendations] No X-Timezone-Offset header — getMealType falling back to server local time');
+    return new Date().getHours();
+  }
+  const localMs = Date.now() - timezoneOffsetMinutes * 60 * 1000;
+  return new Date(localMs).getUTCHours();
+}
+
+/**
+ * Get meal type based on the user's local hour.
  */
 function getMealType(hour) {
   if (hour >= 5 && hour < 11) return 'breakfast';
   if (hour >= 11 && hour < 15) return 'lunch';
   if (hour >= 15 && hour < 17) return 'snack';
   if (hour >= 17 && hour < 22) return 'dinner';
-  return 'snack';
+  return 'snack'; // late-night / early-morning
 }
 
 /**
@@ -757,22 +937,6 @@ function formatDietaryPreferencesWithStrength(preferences) {
   return formatted.join(', ');
 }
 
-/**
- * Extract preference IDs and build weighting context
- */
-function buildPreferenceContext(preferences) {
-  if (!Array.isArray(preferences)) return { ids: '', strengths: {} };
-
-  const strengths = {};
-  const ids = preferences
-    .filter(p => p && p.id)
-    .map(p => {
-      strengths[p.id] = p.strength || 3;
-      return p.id;
-    });
-
-  return { ids: ids.join(', '), strengths };
-}
 
 /**
  * FLAW FIX #1-6: UNIVERSAL VALIDATION & CONSTRAINTS
@@ -824,22 +988,22 @@ function validateRecommendation(rec, remainingBudget, allergies, dietaryPrefs, m
   if (rec.protein < constraints.minProtein) {
     errors.push(`Protein ${rec.protein}g below minimum ${constraints.minProtein}g for ${recType}`);
   }
-  if (rec.protein > remainingBudget.protein) {
-    errors.push(`Protein ${rec.protein}g exceeds remaining ${remainingBudget.protein}g`);
+  // Macro budget checks use a 20 % tolerance band so that late-day recommendations
+  // are not blanket-rejected when the remaining budget is very small.  Hard rejections
+  // here cause the whole LLM batch to fail validation → regeneration → fallback, which
+  // still violates the budget anyway (fallback items are not budget-aware).
+  const MACRO_TOLERANCE = 1.2;
+  if (rec.protein > remainingBudget.protein * MACRO_TOLERANCE + 5) {
+    errors.push(`Protein ${rec.protein}g significantly exceeds remaining ${remainingBudget.protein}g`);
   }
-  if (rec.carbs > remainingBudget.carbs) {
-    errors.push(`Carbs ${rec.carbs}g exceeds remaining ${remainingBudget.carbs}g`);
+  if (rec.carbs > remainingBudget.carbs * MACRO_TOLERANCE + 10) {
+    errors.push(`Carbs ${rec.carbs}g significantly exceeds remaining ${remainingBudget.carbs}g`);
   }
-  if (rec.fats > remainingBudget.fats) {
-    errors.push(`Fats ${rec.fats}g exceeds remaining ${remainingBudget.fats}g`);
+  if (rec.fats > remainingBudget.fats * MACRO_TOLERANCE + 5) {
+    errors.push(`Fats ${rec.fats}g significantly exceeds remaining ${remainingBudget.fats}g`);
   }
 
-  // 4️⃣ Allergen safety (server-side defense)
-  if (improvedAllergenCheck(rec.foodName, allergies)) {
-    errors.push(`Food contains allergens: ${allergies.join(', ')}`);
-  }
-
-  // 5️⃣ Boolean field validation
+  // 4️⃣ Boolean field validation
   if (rec.allergenFree !== undefined && typeof rec.allergenFree !== 'boolean') {
     errors.push('allergenFree must be boolean');
   }
@@ -876,16 +1040,18 @@ function getConstraintsByType(recType, mealType) {
 
   // Overrides by recommendation type (more restrictive)
   const overrideByType = {
-    PROTEIN_BOOST: { maxCalories: 400, minProtein: 20 },
-    LIGHT_SNACK: { maxCalories: 250, minProtein: 0 },
-    HYDRATION: { maxCalories: 50, minProtein: 0 },
-    BALANCED_MEAL: { maxCalories: 600, minProtein: 10 },
-    REGIONAL_PICK: { maxCalories: 700, minProtein: 8 },
-    // NEW: Wellness-aware recommendation types
-    RECOVERY_MEAL: { maxCalories: 400, minProtein: 10 },  // Light, digestible
-    STRESS_RELIEF: { maxCalories: 350, minProtein: 5 },   // Comfort foods, not heavy
-    POST_WORKOUT: { maxCalories: 500, minProtein: 25 },   // High protein + carbs
-    ENERGY_BOOST: { maxCalories: 450, minProtein: 15 }    // Sustained energy
+    PROTEIN_BOOST:  { maxCalories: 400, minProtein: 20 },
+    LIGHT_SNACK:    { maxCalories: 250, minProtein: 0 },
+    HYDRATION:      { maxCalories: 50,  minProtein: 0 },
+    BALANCED_MEAL:  { maxCalories: 600, minProtein: 10 },
+    REGIONAL_PICK:  { maxCalories: 700, minProtein: 8 },
+    FIBER_RICH:          { maxCalories: 500, minProtein: 5 },   // Focus is fiber ≥ 6g, not protein
+    LOW_SODIUM:          { maxCalories: 600, minProtein: 8 },   // Standard meal, sodium < 600mg
+    MICRONUTRIENT_BOOST: { maxCalories: 550, minProtein: 8 },   // Micronutrient-dense whole foods
+    RECOVERY_MEAL:       { maxCalories: 400, minProtein: 10 },  // Light, digestible
+    STRESS_RELIEF:       { maxCalories: 350, minProtein: 5 },   // Comfort foods, not heavy
+    POST_WORKOUT:        { maxCalories: 500, minProtein: 25 },  // High protein + carbs
+    ENERGY_BOOST:        { maxCalories: 450, minProtein: 15 },  // Sustained energy
   };
 
   const base = baseByMeal[mealType] || baseByMeal.snack;
@@ -913,11 +1079,14 @@ async function generateWithRegeneration(
   history,
   limit,
   attempt = 1,
-  holisticIntelligence = null,  // Wellness intelligence
-  personalizedContext = null    // 🎯 NEW: Personalized patterns
+  holisticIntelligence = null,
+  personalizedContext = null,
+  userSignals = null,
+  laggedCorrelations = [],
+  candidates = [],
 ) {
   const MAX_ATTEMPTS = 2;
-  const FILTER_THRESHOLD = limit * 0.67; // If we keep 2/3 or less, regenerate
+  const FILTER_THRESHOLD = limit * 0.67;
 
   if (attempt > MAX_ATTEMPTS) {
     console.warn('[Recommendations] Max regeneration attempts reached');
@@ -930,18 +1099,91 @@ async function generateWithRegeneration(
     remainingBudget,
     profile,
     history,
-    limit + (attempt - 1) * 2, // Request more on retry
-    attempt > 1, // Add regeneration hint
-    holisticIntelligence,  // Wellness intelligence
-    personalizedContext    // 🎯 NEW: Personalized patterns
+    limit + (attempt - 1) * 2,
+    attempt > 1,
+    holisticIntelligence,
+    personalizedContext,
+    userSignals,
+    laggedCorrelations,
+    candidates,
   );
 
   if (!recommendations || recommendations.length < FILTER_THRESHOLD) {
     logDebug(`Insufficient after filtering (${recommendations?.length || 0}/${limit}), regenerating...`);
-    return generateWithRegeneration(recType, mealType, remainingBudget, profile, history, limit, attempt + 1, holisticIntelligence, personalizedContext);
+    return generateWithRegeneration(recType, mealType, remainingBudget, profile, history, limit, attempt + 1, holisticIntelligence, personalizedContext, userSignals, laggedCorrelations, candidates);
   }
 
   return recommendations.slice(0, limit);
+}
+
+function buildMicronutrientContext(deficits) {
+  if (!deficits || Object.keys(deficits).length === 0) return '';
+  const lines = [
+    '',
+    '🧬 MICRONUTRIENT DEFICITS (CRITICAL — THIS IS WHY MICRONUTRIENT_BOOST WAS SELECTED)',
+    'The user is significantly low on the following micronutrients today (< 50% of daily requirement):',
+    '',
+  ];
+  for (const [nutrient, data] of Object.entries(deficits)) {
+    const pct = Math.round((data.pctRda ?? 0) * 100);
+    lines.push(`  • ${nutrient.toUpperCase()}: ${pct}% of daily requirement met (target: ${data.rda} ${nutrient.includes('IU') ? 'IU' : 'mg'})`);
+  }
+  lines.push('');
+  lines.push('REQUIREMENT: All recommendations MUST be excellent sources of at least one of the above nutrients.');
+  lines.push('Mention the specific nutrient and its benefit in the "reason" field for each recommendation.');
+  lines.push('');
+  return lines.join('\n');
+}
+
+function buildCandidatesContext(candidates) {
+  if (!candidates || candidates.length === 0) return '';
+  const lines = [
+    '',
+    '═══════════════════════════════════════════════════════════════════════════════',
+    '📋 PRE-SCORED FOOD CANDIDATES (SELECT FROM THESE — DO NOT INVENT NEW FOODS)',
+    '═══════════════════════════════════════════════════════════════════════════════',
+    '',
+    'These foods are pre-scored from the user\'s history, accepted recommendations, and food catalogue.',
+    'SELECT exactly the required number from this list. Use the nutrition values shown — do not alter or fabricate macros.',
+    '',
+    'CANDIDATES (sorted by relevance score, highest first):',
+  ];
+  candidates.forEach((c, i) => {
+    const name = c.name || c.foodName || 'Unknown';
+    const nutrition = c.nutrition || {};
+    const cal = nutrition.calories ?? c.calories ?? c.estimatedCalories ?? '?';
+    const prot = nutrition.protein ?? c.protein ?? c.estimatedProtein ?? '?';
+    const carbs = nutrition.carbs ?? c.carbs ?? c.estimatedCarbs ?? '?';
+    const fats = nutrition.fat ?? nutrition.fats ?? c.fats ?? c.estimatedFat ?? '?';
+    const fiber = nutrition.fiber ?? c.fiber ?? 0;
+    const scoreStr = c.score !== undefined ? ` [score: ${c.score.toFixed(2)}]` : '';
+    const sourceStr = c.source ? ` (${c.source})` : '';
+    const nutritionSource = c.nutritionSource?.provider
+      ? ` | source: ${c.nutritionSource.provider}${c.nutritionSource.fdcId ? ` #${c.nutritionSource.fdcId}` : ''}`
+      : '';
+    lines.push(`  ${i + 1}. "${name}" - ${cal} kcal | P: ${prot}g C: ${carbs}g F: ${fats}g Fiber: ${fiber}g${scoreStr}${sourceStr}${nutritionSource}`);
+  });
+  lines.push('', 'IMPORTANT: foodName in your output MUST exactly match one of the candidate names above.', '');
+  return lines.join('\n');
+}
+
+function buildLaggedInsightsContext(laggedCorrelations) {
+  if (!laggedCorrelations || laggedCorrelations.length === 0) return '';
+  const top = laggedCorrelations.slice(0, 3);
+  const lines = [
+    '',
+    '📊 PERSONAL TEMPORAL PATTERNS (DISCOVERED FROM THIS USER\'S OWN DATA)',
+    'These lagged correlations were found by analyzing this user\'s food logs, mood, and energy over time:',
+  ];
+  top.forEach((c) => {
+    const dir = (c.correlationAtOptimalLag ?? 0) > 0 ? 'tends to improve' : 'tends to worsen';
+    const lagH = c.optimalLagHours != null ? `~${c.optimalLagHours}h later` : '';
+    const text = c.interpretation
+      || `${c.signalA} ${dir} ${c.signalB} ${lagH}`.trim();
+    lines.push(`  • ${text}`);
+  });
+  lines.push('Use these personal patterns to strengthen personalization and avoid foods that historically hurt this user.', '');
+  return lines.join('\n');
 }
 
 function formatSignalContextForPrompt(signals) {
@@ -1001,8 +1243,11 @@ async function generateEnhancedRecommendationsCore(
   history,
   limit,
   isRegeneration = false,
-  holisticIntelligence = null,  // Wellness intelligence
-  personalizedContext = null    // 🎯 NEW: Personalized patterns from user's actual data
+  holisticIntelligence = null,
+  personalizedContext = null,
+  userSignals = null,
+  laggedCorrelations = [],
+  candidates = [],
 ) {
   // Extract cuisine preference (support both string and object format)
   let cuisinePreference = 'General';
@@ -1075,25 +1320,36 @@ PORTION & MACRO CONSTRAINTS (STRICT - APPLY TO EACH ITEM):
   const personalizedPatternContext = personalizedContext?.hasPatterns
     ? personalizedContext.context
     : '';
-  const signalContext = formatSignalContextForPrompt(holisticIntelligence?.userSignals);
+  const signalContext = formatSignalContextForPrompt(userSignals);
+  const candidatesContext = buildCandidatesContext(candidates);
+  const laggedInsightsContext = buildLaggedInsightsContext(laggedCorrelations);
+  const micronutrientContext = recType === 'MICRONUTRIENT_BOOST' && userSignals?.micronutrientDeficits
+    ? buildMicronutrientContext(userSignals.micronutrientDeficits)
+    : '';
+  const isRankerMode = candidates.length > 0;
+  const taskInstruction = isRankerMode
+    ? `SELECT exactly ${limit} foods from the PRE-SCORED CANDIDATES section below. Write personalized reason, wellnessReasoning, tips, and flavorProfile for each. Nutrition values MUST exactly match the candidate list — do not alter or fabricate macros.`
+    : `Generate exactly ${limit} SPECIFIC, DETAILED food recommendations.`;
 
   // 🧠 NEW: Build wellness-aware recommendation type descriptions
   const recTypeDescriptions = {
-    PROTEIN_BOOST: 'High-protein foods to help meet daily protein goals',
-    BALANCED_MEAL: 'Well-balanced meals with good macro distribution',
-    LIGHT_SNACK: 'Light, satisfying snacks under 250 calories',
-    HYDRATION: 'Hydrating foods and beverages to improve fluid intake',
-    REGIONAL_PICK: 'Regional/cultural favorites matching cuisine preferences',
-    // NEW wellness-aware types:
-    RECOVERY_MEAL: 'Light, easily digestible meals to support physical recovery (soups, smoothies, simple proteins)',
-    STRESS_RELIEF: 'Magnesium-rich and B-vitamin foods to reduce stress (dark chocolate, leafy greens, nuts, avocado)',
-    POST_WORKOUT: 'Protein + fast carbs for muscle recovery within the anabolic window',
-    ENERGY_BOOST: 'Sustained energy foods with complex carbs, iron, and mood-supporting nutrients'
+    PROTEIN_BOOST:  'High-protein foods to help meet daily protein goals',
+    BALANCED_MEAL:  'Well-balanced meals with good macro distribution',
+    LIGHT_SNACK:    'Light, satisfying snacks under 250 calories',
+    HYDRATION:      'Hydrating foods and beverages to improve fluid intake',
+    REGIONAL_PICK:  'Regional/cultural favorites matching cuisine preferences',
+    FIBER_RICH:          'High-fiber foods to improve gut health, satiety, and digestion (legumes, whole grains, vegetables)',
+    LOW_SODIUM:          'Low-sodium options to reduce bloating and support heart health (fresh produce, unprocessed proteins)',
+    MICRONUTRIENT_BOOST: 'Foods rich in the specific vitamins and minerals your body is currently low on (iron, calcium, vitamin-D, magnesium, etc.)',
+    RECOVERY_MEAL:       'Light, easily digestible meals to support physical recovery (soups, smoothies, simple proteins)',
+    STRESS_RELIEF:       'Magnesium-rich and B-vitamin foods to reduce stress (dark chocolate, leafy greens, nuts, avocado)',
+    POST_WORKOUT:        'Protein + fast carbs for muscle recovery within the anabolic window',
+    ENERGY_BOOST:        'Sustained energy foods with complex carbs, iron, and mood-supporting nutrients',
   };
 
   const recTypeDescription = recTypeDescriptions[recType] || recTypeDescriptions.BALANCED_MEAL;
 
-  const prompt = `You are an expert nutritionist and culinary advisor creating highly personalized meal recommendations. Generate exactly ${limit} SPECIFIC, DETAILED food recommendations.
+  const prompt = `You are an expert nutritionist and culinary advisor. ${taskInstruction}
 
 ═══════════════════════════════════════════════════════════════════════════════
 🍽️ NUTRITIONAL STATE
@@ -1111,6 +1367,9 @@ ${personalizationContext}${allergenExclusion}${dietaryGuidance}${regenerationNot
 ${wellnessContext}
 ${personalizedPatternContext}
 ${signalContext}
+${micronutrientContext}
+${candidatesContext}
+${laggedInsightsContext}
 RECOMMENDATION OBJECTIVE
 Goal: ${recType} - ${recTypeDescription}
 - Prioritize nutritional fit based on recommendation type
@@ -1263,10 +1522,10 @@ CRITICAL SAFETY RULES
 2. STRONGLY PREFER foods matching Essential (5) and Really Prefer (4) preferences
 3. Validate all nutrition values are realistic and complete
 
-OUTPUT SCHEMA (REQUIRED - RETURN AS JSON ARRAY, NOT WRAPPED):
+${isRankerMode ? `⚠️ RANKER MODE ACTIVE: foodName must exactly match one of the candidate names above. Nutrition values (calories, protein, carbs, fats, fiber, sugar) must be copied from the candidate list — do not fabricate or adjust them.\n\n` : ''}OUTPUT SCHEMA (REQUIRED - RETURN AS JSON ARRAY, NOT WRAPPED):
 [
   {
-    "foodName": "Descriptive name with cooking method + key ingredients (e.g., 'Pan-Seared Salmon with Dill-Yogurt Sauce & Roasted Asparagus')",
+    "foodName": ${isRankerMode ? '"Must exactly match a candidate name from the list above"' : '"Descriptive name with cooking method + key ingredients (e.g., \'Pan-Seared Salmon with Dill-Yogurt Sauce & Roasted Asparagus\')"'},
     "portion": "e.g., '150g salmon + 100g asparagus', '1 cup (240ml)', '2 medium pieces (80g each)'",
     "calories": number (0-${constraints.maxCalories}),
     "protein": number,
@@ -1292,10 +1551,9 @@ VALIDATION CHECKLIST
 ✓ Each item ≤ ${constraints.maxCalories} calories
 ✓ All nutrition fields are numbers (not strings, not null)
 ✓ Portion sizes in standard units with weight (grams, cups, pieces, oz, tbsp)
-✓ Diverse protein sources (mix of animal, plant, dairy)
+${isRankerMode ? '✓ foodName exactly matches a candidate name from the pre-scored list\n✓ Nutrition values copied from candidate list, not invented' : '✓ Diverse protein sources (mix of animal, plant, dairy)\n✓ Food names are SPECIFIC (include cooking method + 2-3 key ingredients/flavors)'}
 ✓ NO foods containing: ${allergies.join(', ') || 'none'}
 ✓ Returned as JSON array (not wrapped in object)
-✓ Food names are SPECIFIC (include cooking method + 2-3 key ingredients/flavors)
 ✓ Reasons reference USER'S SPECIFIC remaining budget numbers
 ✓ Tips include specific temperatures, times, and sensory cues`;
 
@@ -1329,25 +1587,87 @@ VALIDATION CHECKLIST
 
     logDebug(`Validation: ${recommendations.length} → ${validatedRecs.length} valid`);
 
-    // FLAW FIX #3: Server-side allergen filter (defense in depth)
-    const safeRecommendations = validatedRecs.filter(rec => {
+    // FLAW FIX #3: Server-side allergen filter (defense in depth, severity-aware)
+    // Critical allergens (anaphylaxis/severe) → hard-block
+    // Non-critical allergens (moderate/mild) → keep but attach a warningBadge
+    const criticalAllergens = profile?.dietary?.criticalAllergens || [];
+    const criticalAllergenSet = new Set([
+      ...criticalAllergens,
+      ...expandAllergens(criticalAllergens),
+    ]);
+    const allergenSeverityMap = profile?.dietary?.allergenSeverity || {};
+    const intoleranceTypeMap  = profile?.dietary?.intoleranceType  || {};
+
+    const safeRecommendations = [];
+    for (const rec of validatedRecs) {
       if (rec.allergenFree === false) {
         console.warn(`[Recommendations] Filtered: ${rec.foodName} - AI marked unsafe`);
-        return false;
+        continue;
       }
 
-      if (improvedAllergenCheck(rec.foodName, allergies)) {
-        console.warn(`[Recommendations] Filtered: ${rec.foodName} - contains allergen`);
-        return false;
+      const matchedAllergens = findMatchedAllergens(rec, allergies);
+      if (matchedAllergens.length === 0) {
+        safeRecommendations.push(rec);
+        continue;
       }
 
-      return true;
-    });
+      const criticalMatch = matchedAllergens.find(a => criticalAllergenSet.has(a));
+      if (criticalMatch) {
+        console.warn(`[Recommendations] Filtered: ${rec.foodName} - critical allergen: ${criticalMatch}`);
+        continue;
+      }
+
+      // Non-critical match (moderate/mild): keep but surface a warning badge
+      const primaryAllergen = matchedAllergens[0];
+      const badge = buildAllergenWarningBadge(primaryAllergen, allergenSeverityMap, intoleranceTypeMap);
+      console.warn(`[Recommendations] Warning badge attached: ${rec.foodName} - ${badge.message}`);
+      safeRecommendations.push({ ...rec, warningBadge: badge });
+    }
 
     logDebug(`Safety filter: ${validatedRecs.length} → ${safeRecommendations.length} safe`);
 
+    // RANKER MODE: Override LLM-generated macros with pre-scored candidate values to prevent hallucination.
+    // Candidates from generateCandidates() store macros under candidate.nutrition.* (not flat fields).
+    // The catalogue uses `fat` (not `fats`) so we read both names as fallbacks.
+    const candidateMap = new Map(
+      candidates.map((c) => [(c.name || c.foodName || '').toLowerCase(), c])
+    );
+    const mergedRecommendations = safeRecommendations.map((rec) => {
+      if (!isRankerMode) return rec;
+      // Fuzzy-tolerant lookup: try exact match, then check if LLM output is a substring of
+      // a candidate name (handles minor LLM paraphrasing like "Dal Soup" vs "Dal (Yellow Lentil Soup)").
+      const recNameLower = (rec.foodName || '').toLowerCase();
+      let candidate = candidateMap.get(recNameLower);
+      if (!candidate) {
+        for (const [key, c] of candidateMap) {
+          if (key.includes(recNameLower) || recNameLower.includes(key)) {
+            candidate = c;
+            break;
+          }
+        }
+      }
+      if (!candidate) {
+        console.warn(`[Recommendations] Dropped ungrounded ranker output: ${rec.foodName}`);
+        return null;
+      }
+      const n = candidate.nutrition ?? {};
+      return {
+        ...rec,
+        foodName: candidate.name || rec.foodName,
+        portion: candidate.portion || rec.portion,
+        calories: n.calories ?? rec.calories,
+        protein:  n.protein  ?? rec.protein,
+        carbs:    n.carbs    ?? rec.carbs,
+        fats:     n.fat      ?? n.fats    ?? rec.fats,   // catalogue uses 'fat', accepted recs use 'fats'
+        fiber:    n.fiber    ?? rec.fiber,
+        sugar:    n.sugar    ?? rec.sugar,
+        _candidateScore: candidate.score,
+        nutritionSource: candidate.nutritionSource,
+      };
+    }).filter(Boolean);
+
     // OPTIMIZATION: Compute personalization score once per recommendation (not during sort)
-    const scoredRecommendations = safeRecommendations.map(rec => ({
+    const scoredRecommendations = mergedRecommendations.map(rec => ({
       ...rec,
       personalizationScore: calculatePersonalizationScore(rec, remainingBudget)
     }));
@@ -1381,7 +1701,7 @@ VALIDATION CHECKLIST
       const confidence = getConfidenceContext(rec);
       const comparison = getComparisonContext(rec, rankedByScore, idx);
       const reasoning = getPersonalizationReasoning({calories, protein, carbs, fats}, remainingBudget, mealType);
-      const moodSignalReason = getMoodSignalDisplayReason(holisticIntelligence?.userSignals);
+      const moodSignalReason = getMoodSignalDisplayReason(userSignals);
 
       return {
         // Core identity
@@ -1491,6 +1811,99 @@ VALIDATION CHECKLIST
   }
 }
 
+function buildDeterministicRecommendationsFromCandidates(candidates, recType, mealType, remainingBudget, limit, userSignals = null) {
+  return candidates.slice(0, limit).map((candidate, idx) => {
+    const n = candidate.nutrition || {};
+    const calories = n.calories ?? 0;
+    const protein = n.protein ?? 0;
+    const carbs = n.carbs ?? 0;
+    const fats = n.fat ?? n.fats ?? 0;
+    const fiber = n.fiber ?? 0;
+    const sugar = n.sugar ?? 0;
+    const personalizationScore = calculatePersonalizationScore({ calories, protein, carbs, fats }, remainingBudget);
+    const prefLabel = getPreferenceLabel(3);
+    const persLabel = getPersonalizationLabel(personalizationScore);
+    const macroBalance = calculateMacroBalance({ calories, protein, carbs, fats });
+    const confidence = getConfidenceContext({ aiConfidence: candidate.source === 'usda' ? 0.95 : 0.88 });
+    const moodSignalReason = getMoodSignalDisplayReason(userSignals);
+
+    return {
+      id: `rec-${crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`}`,
+      rank: idx + 1,
+      isTopPick: idx === 0,
+      title: getTitleForType(recType),
+      foodName: candidate.name,
+      portion: candidate.portion || '1 serving',
+      calories,
+      protein,
+      carbs,
+      fats,
+      fiber,
+      sugar,
+      nutrition: {
+        calories,
+        protein,
+        carbs,
+        fats,
+        fiber,
+        sugar,
+        macroBalance,
+      },
+      preference: {
+        score: 3,
+        label: prefLabel.label,
+        icon: prefLabel.icon,
+        level: prefLabel.level,
+        reasoning: 'Selected from verified recommendation candidates',
+      },
+      personalization: {
+        score: personalizationScore,
+        label: persLabel.label,
+        emoji: persLabel.emoji,
+        level: persLabel.level,
+        reasoning: getPersonalizationReasoning({ calories, protein, carbs, fats }, remainingBudget, mealType),
+      },
+      preparation: {
+        timeMinutes: candidate.prepTime ?? 10,
+        confidence,
+        difficulty: 'easy',
+        tips: 'Use the listed portion as the nutrition baseline and adjust only after logging the actual amount.',
+      },
+      warning: null,
+      visual: {
+        color: getColorForType(recType),
+        gradient: getColorForType(recType),
+        meaning: recType,
+        icon: getTitleForType(recType).split(' ')[0],
+      },
+      comparison: {
+        rankLabel: `#${idx + 1} of ${Math.min(limit, candidates.length)}`,
+        betterOptions: Math.max(0, candidates.length - idx - 1),
+        totalRecommendations: Math.min(limit, candidates.length),
+      },
+      dietCompliance: {
+        compliant: true,
+        message: 'Selected from safe candidate pool',
+      },
+      allergenSafety: {
+        safe: true,
+        message: 'Screened against allergens and hidden allergen dishes',
+        confidence: candidate.allergenRisk?.confidence ?? 0.95,
+      },
+      reason: `${candidate.name} ranked highly for your current ${mealType} context and remaining nutrition budget.`,
+      tips: 'Use the listed portion as the nutrition baseline and adjust only after logging the actual amount.',
+      mealType,
+      recType,
+      flavorProfile: candidate.cuisineTags?.length ? `${candidate.cuisineTags.join(', ')} inspired` : null,
+      keyIngredients: [],
+      wellnessReasoning: moodSignalReason,
+      wellnessContext: moodSignalReason ? 'MOOD_SIGNAL' : null,
+      nutritionSource: candidate.nutritionSource,
+      aiGenerated: false,
+    };
+  });
+}
+
 /**
  * Main entry point: Orchestrate generation with regeneration logic
  * FLAW FIX #3: Handles incomplete recommendations gracefully
@@ -1504,10 +1917,19 @@ async function generateEnhancedRecommendations(
   profile,
   history,
   limit,
-  holisticIntelligence = null,  // Wellness intelligence
-  personalizedContext = null    // 🎯 NEW: Personalized patterns from user's actual data
+  holisticIntelligence = null,
+  personalizedContext = null,
+  userSignals = null,
+  laggedCorrelations = [],
+  candidates = [],
 ) {
   const allergies = profile?.dietary?.allergies || [];
+
+  if (!candidates || candidates.length === 0) {
+    console.warn('[Recommendations] No grounded candidates available; using curated verified fallback data');
+    return getFallbackRecommendations(recType, mealType, remainingBudget, limit)
+      .filter(rec => !improvedAllergenCheck(rec, allergies));
+  }
 
   // Try with regeneration logic (fixes flaw #3)
   let recommendations = await generateWithRegeneration(
@@ -1517,19 +1939,29 @@ async function generateEnhancedRecommendations(
     profile,
     history,
     limit,
-    1,  // attempt
-    holisticIntelligence,  // Wellness intelligence
-    personalizedContext    // 🎯 NEW: Personalized patterns
+    1,
+    holisticIntelligence,
+    personalizedContext,
+    userSignals,
+    laggedCorrelations,
+    candidates,
   );
 
   // If regeneration completely fails, fall back to curated list
   if (!recommendations || recommendations.length === 0) {
-    console.warn('[Recommendations] AI generation failed completely, using fallback');
-    recommendations = getFallbackRecommendations(recType, mealType, remainingBudget, limit);
+    console.warn('[Recommendations] AI ranking failed; using deterministic grounded candidate fallback');
+    recommendations = buildDeterministicRecommendationsFromCandidates(
+      candidates,
+      recType,
+      mealType,
+      remainingBudget,
+      limit,
+      userSignals,
+    );
   }
 
   // Final allergen filter for fallback
-  return recommendations.filter(rec => !improvedAllergenCheck(rec.foodName, allergies));
+  return recommendations.filter(rec => !improvedAllergenCheck(rec, allergies));
 }
 
 /**
@@ -1587,68 +2019,57 @@ async function enrichRecommendations(recommendations) {
  * Save recommendations to history table for tracking
  */
 async function saveRecommendationsToHistory(db, userId, recommendations, context) {
-  try {
-    const hour = context.hour;
-    const remainingBudget = context.remainingBudget;
+  if (!recommendations?.length) return;
 
-    for (const rec of recommendations) {
-      // Extract nutrition from nested structure (enriched format)
-      // enrichedRecommendations have nutrition nested under rec.nutrition.*
-      const nutrition = rec.nutrition || {};
-      const calories = nutrition.calories ?? rec.calories ?? 0;
-      const protein = nutrition.protein ?? rec.protein ?? 0;
-      const carbs = nutrition.carbs ?? rec.carbs ?? 0;
-      const fats = nutrition.fats ?? rec.fats ?? 0;
-      const fiber = nutrition.fiber ?? rec.fiber ?? 0;
-      const sugar = nutrition.sugar ?? rec.sugar ?? 0;
+  const hour = context.hour;
+  const remainingBudget = context.remainingBudget;
 
-      await db.insert(recommendationsHistoryTable).values({
-        userId,
-        recommendationId: rec.id,
-        foodName: rec.foodName,
-        portion: rec.portion,
-        calories,
-        protein,
-        carbs,
-        fats,
-        fiber,
-        sugar,
-        micros: rec.micros || {},
-        recommendationType: context.recType,
-        reason: rec.reason || nutrition.reason,
-        tips: (rec.preparation?.tips || rec.tips) || '',
-        prepTimeMinutes: rec.preparation?.timeMinutes || rec.prepTimeMinutes || 10,
-        recipeInstructions: rec.recipeInstructions || '',
-        mealType: context.mealType,
-        timeOfDay: hour,
-        remainingCalories: remainingBudget.calories,
-        remainingProtein: remainingBudget.protein,
-        remainingCarbs: remainingBudget.carbs,
-        remainingFats: remainingBudget.fats,
-        interactionStatus: 'shown',
-        aiGenerated: true,
-        aiModel: 'gpt-4o-mini',
-        aiConfidence: rec.allergenSafety?.confidence || 0.85,
-        personalizationScore: rec.personalization?.score || calculatePersonalizationScore({calories, protein, carbs, fats}, remainingBudget),
-        // NEW: Preference strength tracking fields
-        // CRITICAL: Use explicit boolean checks - undefined should NOT be treated as true
-        // Round to integer since DB column is integer type
-        preferenceStrengthMatch: Math.round(rec.preference?.score || rec.preferenceStrengthMatch || 3),
-        dietCompliant: rec.dietCompliance?.compliant === true,
-        allergenFree: rec.allergenSafety?.safe === true,
-        warningBadge: rec.warning || null,
-        createdAt: new Date()
-      }).catch(err => {
-        // Ignore constraint violations (duplicate recommendations)
-        if (!err.message.includes('unique')) {
-          throw err;
-        }
-      });
-    }
-  } catch (error) {
-    console.error('[Recommendations] Failed to save history:', error);
-    // Don't fail the request if history saving fails
-  }
+  // Build all rows first, then insert in a single batch — avoids N serial DB round-trips.
+  const rows = recommendations.map((rec) => {
+    const nutrition = rec.nutrition || {};
+    const calories = nutrition.calories ?? rec.calories ?? 0;
+    const protein  = nutrition.protein  ?? rec.protein  ?? 0;
+    const carbs    = nutrition.carbs    ?? rec.carbs    ?? 0;
+    const fats     = nutrition.fats     ?? rec.fats     ?? 0;
+    const fiber    = nutrition.fiber    ?? rec.fiber    ?? 0;
+    const sugar    = nutrition.sugar    ?? rec.sugar    ?? 0;
+
+    return {
+      userId,
+      recommendationId: rec.id,
+      foodName: rec.foodName,
+      portion: rec.portion,
+      calories, protein, carbs, fats, fiber, sugar,
+      micros: rec.micros || {},
+      recommendationType: context.recType,
+      reason: rec.reason || nutrition.reason,
+      tips: (rec.preparation?.tips || rec.tips) || '',
+      prepTimeMinutes: rec.preparation?.timeMinutes || rec.prepTimeMinutes || 10,
+      recipeInstructions: rec.recipeInstructions || '',
+      mealType: context.mealType,
+      timeOfDay: hour,
+      remainingCalories: remainingBudget.calories,
+      remainingProtein: remainingBudget.protein,
+      remainingCarbs: remainingBudget.carbs,
+      remainingFats: remainingBudget.fats,
+      interactionStatus: 'shown',
+      aiGenerated: rec.aiGenerated !== false,
+      aiModel: rec.aiGenerated === false ? 'deterministic-grounded-ranker' : 'gpt-4o-mini',
+      aiConfidence: rec.allergenSafety?.confidence || 0.85,
+      personalizationScore: rec.personalization?.score
+        || calculatePersonalizationScore({ calories, protein, carbs, fats }, remainingBudget),
+      preferenceStrengthMatch: Math.round(rec.preference?.score || rec.preferenceStrengthMatch || 3),
+      dietCompliant: rec.dietCompliance?.compliant === true,
+      allergenFree: rec.allergenSafety?.safe === true,
+      warningBadge: rec.warning || null,
+      createdAt: new Date(),
+    };
+  });
+
+  await db
+    .insert(recommendationsHistoryTable)
+    .values(rows)
+    .onConflictDoNothing({ target: recommendationsHistoryTable.recommendationId });
 }
 
 /**
@@ -1897,6 +2318,103 @@ function getFallbackRecommendations(recType, mealType, remainingBudget, limit) {
         tips: 'Scramble or poach eggs, serve on toasted whole grain with a side of fruit',
       },
     ],
+    FIBER_RICH: [
+      {
+        foodName: 'Lentil & Vegetable Soup',
+        portion: '1 bowl (300ml)',
+        calories: 220,
+        protein: 12,
+        carbs: 38,
+        fats: 3,
+        fiber: 10,
+        sugar: 5,
+        reason: 'High fiber supports gut health and satiety',
+        wellnessReasoning: 'Red lentils deliver 10g fiber per bowl, promoting a healthy microbiome and stable blood sugar',
+        tips: 'Simmer red lentils with diced carrots, tomato, cumin and turmeric for 20 minutes',
+      },
+      {
+        foodName: 'Overnight Oats with Chia & Berries',
+        portion: '1 jar (350g)',
+        calories: 310,
+        protein: 10,
+        carbs: 48,
+        fats: 8,
+        fiber: 9,
+        sugar: 12,
+        reason: 'Oats + chia seeds deliver 9g soluble and insoluble fiber',
+        wellnessReasoning: 'Beta-glucan in oats slows digestion, lowers cholesterol, and keeps you full for hours',
+        tips: 'Mix 50g oats, 1 tbsp chia seeds, 200ml milk. Refrigerate overnight. Top with berries before serving.',
+      },
+    ],
+    LOW_SODIUM: [
+      {
+        foodName: 'Grilled Salmon with Steamed Broccoli',
+        portion: '150g salmon + 150g broccoli',
+        calories: 380,
+        protein: 36,
+        carbs: 12,
+        fats: 18,
+        fiber: 5,
+        sugar: 3,
+        reason: 'Naturally low sodium, rich in omega-3 and potassium',
+        wellnessReasoning: 'Salmon and broccoli provide < 150mg sodium per serving while supporting heart health',
+        tips: 'Season salmon with lemon juice, dill and black pepper (no salt). Steam broccoli for 5 minutes until tender-crisp.',
+      },
+      {
+        foodName: 'Avocado & Tomato Salad with Lime',
+        portion: '1 bowl (250g)',
+        calories: 200,
+        protein: 3,
+        carbs: 14,
+        fats: 16,
+        fiber: 7,
+        sugar: 4,
+        reason: 'Zero added sodium, potassium-rich to offset sodium retention',
+        wellnessReasoning: 'Avocado potassium counteracts sodium effects on blood pressure; lime replaces salt for flavor',
+        tips: 'Dice avocado and tomato, squeeze fresh lime, add cilantro and black pepper. Eat immediately to prevent browning.',
+      },
+    ],
+    MICRONUTRIENT_BOOST: [
+      {
+        foodName: 'Palak Paneer (Spinach & Cottage Cheese Curry)',
+        portion: '1 serving (200g)',
+        calories: 250,
+        protein: 16,
+        carbs: 10,
+        fats: 16,
+        fiber: 5,
+        sugar: 3,
+        reason: 'Iron, calcium, and vitamin A in one dish',
+        wellnessReasoning: 'Spinach delivers iron and folate; paneer adds calcium and B12 — together they address multiple micronutrient gaps simultaneously',
+        tips: 'Blanch spinach, blend smooth. Sauté onion-tomato masala, add spinach purée and cubed paneer. Cook 5 minutes.',
+      },
+      {
+        foodName: 'Egg & Salmon Bento Bowl',
+        portion: '2 eggs + 100g salmon + 1 cup rice',
+        calories: 480,
+        protein: 38,
+        carbs: 40,
+        fats: 16,
+        fiber: 2,
+        sugar: 1,
+        reason: 'Vitamin D, B12, and omega-3 in a single meal',
+        wellnessReasoning: 'Salmon provides vitamin D and omega-3; eggs add B12, choline, and zinc — all commonly deficient in plant-forward diets',
+        tips: 'Soft-boil eggs 6 min. Sear salmon skin-down 4 min each side. Serve over rice with cucumber and soy sauce.',
+      },
+      {
+        foodName: 'Rajma (Kidney Bean Curry) with Brown Rice',
+        portion: '1 cup rajma + 3/4 cup rice',
+        calories: 380,
+        protein: 16,
+        carbs: 66,
+        fats: 5,
+        fiber: 12,
+        sugar: 4,
+        reason: 'Iron, folate, and magnesium from legumes',
+        wellnessReasoning: 'Kidney beans are one of the richest plant-based iron sources; pairing with brown rice adds magnesium and B vitamins',
+        tips: 'Pressure cook soaked beans 20 min. Prepare onion-tomato gravy with cumin, coriander, and garam masala.',
+      },
+    ],
   };
 
   return (fallbacks[recType] || fallbacks.BALANCED_MEAL).slice(0, limit);
@@ -1907,16 +2425,18 @@ function getFallbackRecommendations(recType, mealType, remainingBudget, limit) {
  */
 function getTitleForType(type) {
   const titles = {
-    PROTEIN_BOOST: '💪 Protein Boost',
-    BALANCED_MEAL: '🥗 Balanced Meal',
-    LIGHT_SNACK: '🍎 Light Snack',
-    HYDRATION: '💧 Hydration',
-    REGIONAL_PICK: '🌍 Regional Pick',
-    // NEW: Wellness-aware titles
-    RECOVERY_MEAL: '🛌 Recovery Meal',
-    STRESS_RELIEF: '🧘 Stress Relief',
-    POST_WORKOUT: '🏋️ Post-Workout',
-    ENERGY_BOOST: '⚡ Energy Boost',
+    PROTEIN_BOOST:  '💪 Protein Boost',
+    BALANCED_MEAL:  '🥗 Balanced Meal',
+    LIGHT_SNACK:    '🍎 Light Snack',
+    HYDRATION:      '💧 Hydration',
+    REGIONAL_PICK:  '🌍 Regional Pick',
+    FIBER_RICH:          '🌾 Fiber Rich',
+    LOW_SODIUM:          '🫀 Low Sodium',
+    MICRONUTRIENT_BOOST: '🧬 Micronutrient Boost',
+    RECOVERY_MEAL:       '🛌 Recovery Meal',
+    STRESS_RELIEF:  '🧘 Stress Relief',
+    POST_WORKOUT:   '🏋️ Post-Workout',
+    ENERGY_BOOST:   '⚡ Energy Boost',
   };
   return titles[type] || titles.BALANCED_MEAL;
 }
@@ -1926,16 +2446,18 @@ function getTitleForType(type) {
  */
 function getColorForType(type) {
   const colors = {
-    PROTEIN_BOOST: ['#FBBF24', '#F59E0B'],
-    BALANCED_MEAL: ['#86EFAC', '#22C55E'],
-    LIGHT_SNACK: ['#A7F3D0', '#10B981'],
-    // NEW: Wellness-aware colors
-    RECOVERY_MEAL: ['#DDD6FE', '#8B5CF6'],   // Purple - calming
-    STRESS_RELIEF: ['#FED7AA', '#F97316'],   // Orange - warm, comforting
-    POST_WORKOUT: ['#FCA5A5', '#EF4444'],    // Red - energy, action
-    ENERGY_BOOST: ['#FDE68A', '#F59E0B'],    // Yellow - bright, energizing
-    HYDRATION: ['#BFDBFE', '#3B82F6'],
-    REGIONAL_PICK: ['#E9D5FF', '#8B5CF6'],
+    PROTEIN_BOOST:  ['#FBBF24', '#F59E0B'],
+    BALANCED_MEAL:  ['#86EFAC', '#22C55E'],
+    LIGHT_SNACK:    ['#A7F3D0', '#10B981'],
+    HYDRATION:      ['#BFDBFE', '#3B82F6'],
+    REGIONAL_PICK:  ['#E9D5FF', '#8B5CF6'],
+    FIBER_RICH:          ['#BBF7D0', '#16A34A'],  // Green - gut health, plants
+    LOW_SODIUM:          ['#BAE6FD', '#0284C7'],  // Sky blue - clean, light
+    MICRONUTRIENT_BOOST: ['#E0E7FF', '#4F46E5'],  // Indigo - science, precision
+    RECOVERY_MEAL:       ['#DDD6FE', '#8B5CF6'],  // Purple - calming
+    STRESS_RELIEF:  ['#FED7AA', '#F97316'],  // Orange - warm, comforting
+    POST_WORKOUT:   ['#FCA5A5', '#EF4444'],  // Red - energy, action
+    ENERGY_BOOST:   ['#FDE68A', '#F59E0B'],  // Yellow - bright, energizing
   };
   return colors[type] || colors.BALANCED_MEAL;
 }

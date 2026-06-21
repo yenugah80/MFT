@@ -45,7 +45,7 @@ const consentLimiter = rateLimit({
  * GET /api/consent/status
  * Get user's current consent status
  */
-router.get('/status', requireAuth, async (req, res) => {
+router.get('/status', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -74,7 +74,7 @@ router.get('/status', requireAuth, async (req, res) => {
  *   "purpose": "ai-food-analysis"  // Purpose of data sharing
  * }
  */
-router.post('/give-openai-consent', requireAuth, consentLimiter, async (req, res) => {
+router.post('/give-openai-consent', requireAuth(), consentLimiter, async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -134,7 +134,7 @@ router.post('/give-openai-consent', requireAuth, consentLimiter, async (req, res
  * User revokes consent to share data with OpenAI
  * Premium features will fall back to rule-based parsing
  */
-router.post('/revoke-openai-consent', requireAuth, consentLimiter, async (req, res) => {
+router.post('/revoke-openai-consent', requireAuth(), consentLimiter, async (req, res) => {
   try {
     const userId = req.auth.userId;
 

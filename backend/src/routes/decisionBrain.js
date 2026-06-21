@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Decision Brain API Routes
  *
  * Unified intelligence endpoints for the Decision Brain service.
@@ -11,7 +11,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import {
   generateIntelligentRecommendations,
   generateMoodInsights,

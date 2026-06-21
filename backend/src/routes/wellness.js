@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Wellness Intelligence API Routes
  *
  * Exposes the Unified Intelligence Service to the mobile app
@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { getUnifiedIntelligence, formatIntelligenceForPrompt } from '../services/unifiedIntelligenceService.js';
 
 const router = express.Router();
@@ -237,7 +237,7 @@ function generateDetailedNarrative(intelligence, type) {
   if (type === 'daily' || type === 'weekly') {
     narrative.sections.push({
       title: 'What\'s Affecting You',
-      icon: '📊',
+      icon: 'ðŸ“Š',
       content: generateDomainBreakdown(insights),
       priority: 'medium'
     });
@@ -247,7 +247,7 @@ function generateDetailedNarrative(intelligence, type) {
   if (correlations.significant.length > 0) {
     narrative.sections.push({
       title: 'Patterns We\'ve Noticed',
-      icon: '🔍',
+      icon: 'ðŸ”',
       content: correlations.significant.map(c => ({
         insight: c.insight,
         recommendation: c.recommendation,
@@ -260,7 +260,7 @@ function generateDetailedNarrative(intelligence, type) {
   // Section 4: Actionable Guidance
   narrative.sections.push({
     title: 'What to Focus On',
-    icon: '🎯',
+    icon: 'ðŸŽ¯',
     content: generateActionableGuidance(currentState, insights),
     priority: 'high'
   });
@@ -268,7 +268,7 @@ function generateDetailedNarrative(intelligence, type) {
   // Section 5: Celebration / Encouragement
   narrative.sections.push({
     title: getCelebrationTitle(intelligence),
-    icon: '✨',
+    icon: 'âœ¨',
     content: generateCelebration(intelligence),
     priority: 'low'
   });
@@ -299,12 +299,12 @@ function getHeadline(wellnessScore, primaryConcern) {
 }
 
 function getWellnessEmoji(score) {
-  if (score >= 80) return '🌟';
-  if (score >= 70) return '💚';
-  if (score >= 60) return '💛';
-  if (score >= 50) return '🧡';
-  if (score >= 40) return '❤️';
-  return '❤️‍🩹';
+  if (score >= 80) return 'ðŸŒŸ';
+  if (score >= 70) return 'ðŸ’š';
+  if (score >= 60) return 'ðŸ’›';
+  if (score >= 50) return 'ðŸ§¡';
+  if (score >= 40) return 'â¤ï¸';
+  return 'â¤ï¸â€ðŸ©¹';
 }
 
 function getActionableInsight(currentState, insights) {

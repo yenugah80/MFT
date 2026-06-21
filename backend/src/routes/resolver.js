@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Recommendation Resolver API Route
  *
  * Maps generic intents from orchestrator to specific, personalized food recommendations
@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import {
   resolveIntent,
   getResolverConfidence,

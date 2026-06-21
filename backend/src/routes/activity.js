@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Activity Tracking Routes
  *
  * Full activity logging with MET-based calorie calculation and idempotency support.
@@ -15,7 +15,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { eq, and, gte, lte, desc, sql, count, sum } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { activityLogTable, profilesTable } from '../db/schema.js';
@@ -32,9 +32,12 @@ import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
+import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
 
 const router = express.Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ============================================================================
 // AUTH MIDDLEWARE
@@ -80,6 +83,10 @@ router.post('/log', async (req, res) => {
 
     if (minutes > 1440) {
       return res.status(400).json({ error: 'Duration cannot exceed 24 hours (1440 minutes)' });
+    }
+
+    if (clientEventId && !UUID_RE.test(clientEventId)) {
+      return res.status(400).json({ error: 'clientEventId must be a valid UUID v4' });
     }
 
     // Idempotency check
@@ -142,6 +149,11 @@ router.post('/log', async (req, res) => {
         loggedAt: loggedDate,
       })
       .returning();
+
+    // Invalidate signal cache so the next recommendation fetch reflects this activity
+    if (newLog) {
+      invalidateUserSignals(userId);
+    }
 
     // Update streak for activity log
     let streakResult = null;

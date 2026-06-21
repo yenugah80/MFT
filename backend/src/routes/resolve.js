@@ -23,7 +23,7 @@ import { getIngredientBreakdown, hasIngredientData } from "../services/ingredien
 import { ingredientBreakdownService } from "../services/ingredientBreakdownService.js";
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth());
 router.use(aiLimiter); // Strict rate limit for AI-powered endpoints
 
 /**

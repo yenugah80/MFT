@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Learning State API Route
  *
  * Manages user's learning progression and readiness
@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import {
   initializeLearningState,
   bootstrapLearningFromHistory,

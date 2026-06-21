@@ -1,7 +1,25 @@
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+// Valence: positive moods keep their intensity, negative moods invert it
+// so the resulting score reflects emotional wellbeing, not raw arousal
+const MOOD_VALENCE = {
+  happy: 1, calm: 1, focused: 1, energized: 1,
+  neutral: 0,
+  tired: -0.5, stressed: -1, sad: -1,
+};
+
+const applyValence = (mood, intensity) => {
+  const valence = MOOD_VALENCE[mood] ?? 0;
+  if (valence === 0) return 5; // neutral maps to midpoint
+  if (valence > 0) return intensity;
+  // negative: invert around midpoint (1→10, 10→1)
+  return 11 - intensity;
+};
+
 const toDayKey = (date, offsetMinutes) => {
-  const offset = Number.isFinite(offsetMinutes) ? offsetMinutes : date.getTimezoneOffset();
+  // Use 0 (UTC) as neutral fallback — device.getTimezoneOffset() has opposite sign
+  // from the server convention (server: +330 = IST, JS getTimezoneOffset: -330).
+  const offset = Number.isFinite(offsetMinutes) ? offsetMinutes : 0;
   const localMs = date.getTime() - offset * 60 * 1000;
   const local = new Date(localMs);
   const year = local.getUTCFullYear();
@@ -96,9 +114,11 @@ export const aggregateMoodInsights = ({
       const loggedAt = new Date(log.loggedDate);
       if (Number.isNaN(loggedAt.getTime())) return null;
 
-      const intensity = clamp(Number(log.intensity ?? 5), 1, 10);
+      const rawIntensity = clamp(Number(log.intensity ?? 5), 1, 10);
       const energyLevel = clamp(Number(log.energyLevel ?? 5), 1, 10);
       const mood = typeof log.mood === 'string' ? log.mood.toLowerCase() : 'neutral';
+      // Valence-adjusted intensity: reflects wellbeing, not arousal
+      const intensity = applyValence(mood, rawIntensity);
       const dayKey = log.dayKey || toDayKey(loggedAt);
 
       return {
@@ -115,8 +135,8 @@ export const aggregateMoodInsights = ({
 
   const latestMood = normalized[0] || null;
   const totalLogs = normalized.length;
-  const effectiveOffset = today.getTimezoneOffset();
-  const todayKey = toDayKey(today, effectiveOffset);
+  // Use 0 (UTC-neutral) for todayKey — device getTimezoneOffset() sign is inverted
+  const todayKey = toDayKey(today, 0);
 
   const dayBuckets = new Map();
   normalized.forEach((log) => {
@@ -156,7 +176,7 @@ export const aggregateMoodInsights = ({
   const trendKeys = [];
   const cursor = new Date(today);
   for (let i = 0; i < trendDays; i++) {
-    trendKeys.unshift(toDayKey(cursor));
+    trendKeys.unshift(toDayKey(cursor, 0));
     cursor.setDate(cursor.getDate() - 1);
   }
 
@@ -173,7 +193,7 @@ export const aggregateMoodInsights = ({
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const todaySummary = summaryByDay.get(todayKey);
-  const yesterdayKey = toDayKey(yesterday, effectiveOffset);
+  const yesterdayKey = toDayKey(yesterday, 0);
   const yesterdaySummary = summaryByDay.get(yesterdayKey);
   const delta = todaySummary && yesterdaySummary
     ? Number((todaySummary.intensity - yesterdaySummary.intensity).toFixed(1))

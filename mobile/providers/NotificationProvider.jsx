@@ -208,6 +208,15 @@ export const NotificationProvider = ({ children }) => {
   const initializeFCM = useCallback(async () => {
     if (!isSignedIn) return;
 
+    // Clean up any existing FCM listeners before re-initializing to prevent
+    // duplicate listeners on sign-out → sign-in cycles.
+    if (fcmListenersRef.current) {
+      fcmListenersRef.current.foreground?.remove();
+      fcmListenersRef.current.tokenRefresh?.remove();
+      fcmListenersRef.current.backgroundOpen?.remove();
+      fcmListenersRef.current = null;
+    }
+
     try {
       // Setup FCM for server-triggered push notifications
       const result = await fcmService.setupFCM();

@@ -400,11 +400,27 @@ async function calculateBadgeProgress(userId) {
     `);
     progress['mood_tracker'] = parseInt(moodDays.rows?.[0]?.count) || 0;
 
-    // Protein goal days (would need goals table)
-    progress['protein_powerhouse'] = 0; // Placeholder
+    // Days where protein >= 30% of total calories (protein_powerhouse badge)
+    const proteinDays = await db.execute(sql`
+      SELECT COUNT(*) AS count
+      FROM daily_nutrition_summary
+      WHERE user_id = ${userId}
+        AND total_calories > 0
+        AND (total_protein * 4.0) / total_calories >= 0.30
+    `);
+    progress['protein_powerhouse'] = parseInt(proteinDays.rows?.[0]?.count) || 0;
 
-    // Balanced macro days
-    progress['balanced_eater'] = 0; // Placeholder
+    // Days where all three macros are within 10-40% of total calories (balanced_eater badge)
+    const balancedDays = await db.execute(sql`
+      SELECT COUNT(*) AS count
+      FROM daily_nutrition_summary
+      WHERE user_id = ${userId}
+        AND total_calories > 0
+        AND (total_protein * 4.0) / total_calories BETWEEN 0.10 AND 0.40
+        AND (total_carbs   * 4.0) / total_calories BETWEEN 0.10 AND 0.60
+        AND (total_fats    * 9.0) / total_calories BETWEEN 0.10 AND 0.40
+    `);
+    progress['balanced_eater'] = parseInt(balancedDays.rows?.[0]?.count) || 0;
 
     // Early bird count
     const earlyBird = await db.execute(sql`

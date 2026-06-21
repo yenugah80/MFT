@@ -31,7 +31,7 @@ import {
 const router = express.Router();
 
 // All routes require authentication
-router.use(requireAuth);
+router.use(requireAuth());
 
 // ============================================================================
 // DASHBOARD ANALYTICS (Main endpoint for mobile app)

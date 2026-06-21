@@ -26,6 +26,11 @@ import {
   recommendationsHistoryTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql } from 'drizzle-orm';
+import { detectAllergenRisk, inferFoodAttributes, scoreMicronutrientFit } from './foodKnowledgeGraphService.js';
+import { getCollaborativeCandidates } from './collaborativeFilteringService.js';
+import { usdaClient } from './apiClients/USDAClient.js';
+
+const USDA_CANDIDATE_TIMEOUT_MS = Number(process.env.RECOMMENDATION_USDA_TIMEOUT_MS) || 2500;
 
 // ============================================================================
 // FOOD CATALOGUE  –  60+ diverse foods across cuisines
@@ -562,15 +567,25 @@ export const FOOD_CATALOGUE = [
  * @returns {number}
  */
 function scoreCandidate(food, signals) {
+  const allergenRisk = detectAllergenRisk(food, signals.allergies ?? []);
+  if (allergenRisk.hasRisk) return Number.NEGATIVE_INFINITY;
+
   let score = 0;
+  const nutrition = {
+    calories: Number(food.nutrition?.calories ?? food.calories ?? 0),
+    protein: Number(food.nutrition?.protein ?? food.protein ?? 0),
+    carbs: Number(food.nutrition?.carbs ?? food.carbs ?? 0),
+    fat: Number(food.nutrition?.fat ?? food.nutrition?.fats ?? food.fats ?? 0),
+    fiber: Number(food.nutrition?.fiber ?? food.fiber ?? 0),
+  };
 
   // ── Nutritional Gaps (35 pts max) ─────────────────────────────────────────
   const gaps = signals.nutritionalGaps;
-  if (gaps?.protein?.status === 'low' && food.nutrition.protein >= 15) score += 20;
-  if (gaps?.fiber?.status === 'low' && food.nutrition.fiber >= 4) score += 10;
+  if (gaps?.protein?.status === 'low' && nutrition.protein >= 15) score += 20;
+  if (gaps?.fiber?.status === 'low' && nutrition.fiber >= 4) score += 10;
   const calRemaining = gaps?.calories?.remaining ?? 2000;
-  if (food.nutrition.calories <= calRemaining) score += 5;
-  else if (food.nutrition.calories > calRemaining + 100) score -= 15;
+  if (nutrition.calories <= calRemaining) score += 5;
+  else if (nutrition.calories > calRemaining + 100) score -= 15;
 
   // ── Mood Signals (25 pts max) ─────────────────────────────────────────────
   const moodUrgency = signals.moodUrgency ?? 0;
@@ -607,9 +622,27 @@ function scoreCandidate(food, signals) {
   )) score -= 10;
 
   // ── Allergen Safety ───────────────────────────────────────────────────────
-  if (signals.allergies?.some(
-    (a) => food.name.toLowerCase().includes(a.toLowerCase())
-  )) score -= 100;
+  // ── Micronutrient Gap Bonus (20 pts max) ──────────────────────────────────
+  // Triggered when enrichedSignals contains micronutrient urgency signals from
+  // computeMicronutrientUrgency() (e.g. { iron_urgency: 0.8, calcium_urgency: 0.4 })
+  if (signals.microUrgencySignals && Object.keys(signals.microUrgencySignals).length > 0) {
+    score += scoreMicronutrientFit(food, signals.microUrgencySignals);
+  }
+
+  // ── Rejection Penalty ─────────────────────────────────────────────────────
+  // Foods the user has rejected 2+ times get a strong demotion so they stop
+  // appearing. Uses a name-normalised lookup in signals.rejectedFoodNames.
+  if (signals.rejectedFoodNames?.length > 0) {
+    const foodNameLower = food.name.toLowerCase();
+    const rejectedEntry = signals.rejectedFoodNames.find(
+      (r) => foodNameLower.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(foodNameLower)
+    );
+    if (rejectedEntry) {
+      // Scale penalty by number of rejections: 2=−25, 3=−40, 4+=−60
+      const penalty = rejectedEntry.count >= 4 ? 60 : rejectedEntry.count === 3 ? 40 : 25;
+      score -= penalty;
+    }
+  }
 
   return Math.max(0, Math.min(100, score));
 }
@@ -630,16 +663,18 @@ async function fetchUserHistoryFoods(userId) {
   thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
 
   try {
-    // Aggregate per food name to get average nutrition values
     const rows = await db
       .select({
         foodName: foodLogTable.foodName,
-        avgCalories: sql`ROUND(AVG(${foodLogTable.calories}))`.as('avg_calories'),
-        avgProtein: sql`ROUND(AVG(${foodLogTable.protein}))`.as('avg_protein'),
-        avgCarbs: sql`ROUND(AVG(${foodLogTable.carbs}))`.as('avg_carbs'),
-        avgFats: sql`ROUND(AVG(${foodLogTable.fats}))`.as('avg_fats'),
-        avgFiber: sql`ROUND(AVG(${foodLogTable.fiber}))`.as('avg_fiber'),
-        logCount: sql`COUNT(*)`.as('log_count'),
+        calories: foodLogTable.calories,
+        protein: foodLogTable.protein,
+        carbs: foodLogTable.carbs,
+        fats: foodLogTable.fats,
+        fiber: foodLogTable.fiber,
+        mealType: foodLogTable.mealType,
+        ingredients: foodLogTable.ingredients,
+        allergens: foodLogTable.allergens,
+        loggedDate: foodLogTable.loggedDate,
       })
       .from(foodLogTable)
       .where(
@@ -648,30 +683,64 @@ async function fetchUserHistoryFoods(userId) {
           gte(foodLogTable.loggedDate, thirtyDaysAgo)
         )
       )
-      .groupBy(foodLogTable.foodName)
-      .orderBy(desc(sql`COUNT(*)`));
+      .orderBy(desc(foodLogTable.loggedDate))
+      .limit(300);
 
-    return rows.map((r) => ({
-      id: `history_${r.foodName.toLowerCase().replace(/\s+/g, '_')}`,
-      name: r.foodName,
-      category: 'meal',
-      mealTypes: ['breakfast', 'lunch', 'dinner', 'snack'],
-      nutrition: {
-        calories: Number(r.avgCalories) || 0,
-        protein: Number(r.avgProtein) || 0,
-        carbs: Number(r.avgCarbs) || 0,
-        fat: Number(r.avgFats) || 0,
-        fiber: Number(r.avgFiber) || 0,
-      },
-      tags: [],
-      prepTime: 0,
-      satiety: 5,
-      moodBoost: false,
-      hydrating: false,
-      cuisineTags: [],
-      source: 'history',
-      portion: '1 serving',
-    }));
+    const grouped = new Map();
+    for (const row of rows) {
+      const key = row.foodName.toLowerCase().trim();
+      const current = grouped.get(key) || {
+        foodName: row.foodName,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fats: 0,
+        fiber: 0,
+        count: 0,
+        mealTypes: new Set(),
+        ingredients: [],
+        allergens: new Set(),
+      };
+
+      current.calories += Number(row.calories) || 0;
+      current.protein += Number(row.protein) || 0;
+      current.carbs += Number(row.carbs) || 0;
+      current.fats += Number(row.fats) || 0;
+      current.fiber += Number(row.fiber) || 0;
+      current.count += 1;
+      if (row.mealType) current.mealTypes.add(row.mealType);
+      if (Array.isArray(row.ingredients)) current.ingredients.push(...row.ingredients);
+      if (Array.isArray(row.allergens)) row.allergens.forEach((a) => current.allergens.add(String(a)));
+      grouped.set(key, current);
+    }
+
+    return [...grouped.values()].map((r) => {
+      const attrs = inferFoodAttributes({ name: r.foodName, ingredients: r.ingredients });
+      return {
+        id: `history_${r.foodName.toLowerCase().replace(/\s+/g, '_')}`,
+        name: r.foodName,
+        category: 'meal',
+        mealTypes: r.mealTypes.size > 0 ? [...r.mealTypes] : ['breakfast', 'lunch', 'dinner', 'snack'],
+        nutrition: {
+          calories: Math.round(r.calories / r.count) || 0,
+          protein: Math.round(r.protein / r.count) || 0,
+          carbs: Math.round(r.carbs / r.count) || 0,
+          fat: Math.round(r.fats / r.count) || 0,
+          fiber: Math.round(r.fiber / r.count) || 0,
+        },
+        tags: attrs.tags,
+        prepTime: 0,
+        satiety: attrs.tags.includes('high-protein') || attrs.tags.includes('fiber-rich') ? 7 : 5,
+        moodBoost: attrs.moodBoost,
+        hydrating: attrs.hydrating,
+        cuisineTags: attrs.cuisineTags,
+        source: 'history',
+        portion: '1 serving',
+        ingredients: r.ingredients,
+        knownAllergens: [...r.allergens],
+        logCount: r.count,
+      };
+    });
   } catch (err) {
     console.error('[candidateGenerationService] fetchUserHistoryFoods error:', err);
     return [];
@@ -707,31 +776,168 @@ async function fetchAcceptedRecommendations(userId) {
       .orderBy(desc(recommendationsHistoryTable.shownAt))
       .limit(50);
 
-    return rows.map((r) => ({
-      id: `accepted_${r.foodName.toLowerCase().replace(/\s+/g, '_')}`,
-      name: r.foodName,
-      category: 'meal',
-      mealTypes: r.mealType ? [r.mealType] : ['breakfast', 'lunch', 'dinner', 'snack'],
-      nutrition: {
-        calories: r.calories || 0,
-        protein: r.protein || 0,
-        carbs: r.carbs || 0,
-        fat: r.fats || 0,
-        fiber: r.fiber || 0,
-      },
-      tags: [],
-      prepTime: 0,
-      satiety: 6,
-      moodBoost: false,
-      hydrating: false,
-      cuisineTags: [],
-      source: 'accepted_recommendation',
-      portion: r.portion || '1 serving',
-    }));
+    return rows.map((r) => {
+      const attrs = inferFoodAttributes({ name: r.foodName });
+      return {
+        id: `accepted_${r.foodName.toLowerCase().replace(/\s+/g, '_')}`,
+        name: r.foodName,
+        category: 'meal',
+        mealTypes: r.mealType ? [r.mealType] : ['breakfast', 'lunch', 'dinner', 'snack'],
+        nutrition: {
+          calories: r.calories || 0,
+          protein: r.protein || 0,
+          carbs: r.carbs || 0,
+          fat: r.fats || 0,
+          fiber: r.fiber || 0,
+        },
+        tags: attrs.tags,
+        prepTime: 0,
+        satiety: attrs.tags.includes('high-protein') || attrs.tags.includes('fiber-rich') ? 7 : 6,
+        moodBoost: attrs.moodBoost,
+        hydrating: attrs.hydrating,
+        cuisineTags: attrs.cuisineTags,
+        source: 'accepted_recommendation',
+        portion: r.portion || '1 serving',
+      };
+    });
   } catch (err) {
     console.error('[candidateGenerationService] fetchAcceptedRecommendations error:', err);
     return [];
   }
+}
+
+/**
+ * Fetch food names the user has explicitly rejected 2 or more times.
+ * These are used in scoreCandidate to apply a rejection penalty.
+ *
+ * @param {string} userId
+ * @returns {Promise<Array<{name: string, count: number}>>}
+ */
+async function fetchRejectedFoodNames(userId) {
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setUTCDate(ninetyDaysAgo.getUTCDate() - 90);
+
+  try {
+    const rows = await db
+      .select({
+        foodName: recommendationsHistoryTable.foodName,
+        count: sql`COUNT(*)`.as('rejection_count'),
+      })
+      .from(recommendationsHistoryTable)
+      .where(
+        and(
+          eq(recommendationsHistoryTable.userId, userId),
+          eq(recommendationsHistoryTable.interactionStatus, 'rejected'),
+          gte(recommendationsHistoryTable.shownAt, ninetyDaysAgo)
+        )
+      )
+      .groupBy(recommendationsHistoryTable.foodName)
+      .having(sql`COUNT(*) >= 2`)
+      .orderBy(desc(sql`COUNT(*)`))
+      .limit(50);
+
+    return rows.map((r) => ({ name: r.foodName, count: Number(r.count) }));
+  } catch (err) {
+    console.error('[candidateGenerationService] fetchRejectedFoodNames error:', err);
+    return [];
+  }
+}
+
+function buildUsdaQueries(signals, mealType, profile) {
+  const queries = new Set();
+  const cuisine = String(signals.cuisinePreference || profile?.region || '').toLowerCase();
+
+  if (signals.inPostWorkoutWindow || signals.nutritionalGaps?.protein?.status === 'low') {
+    queries.add('chicken breast cooked');
+    queries.add('greek yogurt plain');
+    queries.add('salmon cooked');
+  }
+  if ((signals.hydrationUrgency ?? 0) > 0.3) {
+    queries.add('watermelon raw');
+    queries.add('cucumber raw');
+    queries.add('coconut water');
+  }
+  if ((signals.microUrgencySignals?.iron_urgency ?? 0) > 0.2) {
+    queries.add('lentils cooked');
+    queries.add('spinach cooked');
+  }
+  if ((signals.microUrgencySignals?.calcium_urgency ?? 0) > 0.2) {
+    queries.add('yogurt plain');
+    queries.add('cottage cheese');
+  }
+  if (mealType === 'breakfast') {
+    queries.add('oatmeal cooked');
+    queries.add('egg cooked');
+  } else if (mealType === 'snack') {
+    queries.add('banana raw');
+    queries.add('apple raw');
+  } else {
+    queries.add(cuisine.includes('india') || cuisine.includes('indian') ? 'lentils cooked' : 'brown rice cooked');
+    queries.add('quinoa cooked');
+  }
+
+  return [...queries].slice(0, 6);
+}
+
+async function fetchUsdaCandidates(signals, mealType, profile) {
+  const queries = buildUsdaQueries(signals, mealType, profile);
+  if (queries.length === 0) return [];
+
+  const settled = await Promise.allSettled(
+    queries.map((query) => usdaClient.searchByName(query))
+  );
+
+  const candidates = [];
+  for (const result of settled) {
+    if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
+    for (const food of result.value.slice(0, 2)) {
+      const name = food.description
+        ?.toLowerCase()
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+      if (!name) continue;
+
+      const attrs = inferFoodAttributes({ name });
+      candidates.push({
+        id: `usda_${food.fdcId}`,
+        name,
+        category: 'meal',
+        mealTypes: [mealType],
+        nutrition: {
+          calories: Number(food.macros?.calories_kcal) || 0,
+          protein: Number(food.macros?.protein_g) || 0,
+          carbs: Number(food.macros?.carbs_g) || 0,
+          fat: Number(food.macros?.fat_g) || 0,
+          fiber: Number(food.macros?.fiber_g) || 0,
+          sugar: Number(food.macros?.sugar_g) || 0,
+          sodium: Number(food.macros?.sodium_mg) || 0,
+        },
+        tags: attrs.tags,
+        prepTime: 15,
+        satiety: attrs.tags.includes('high-protein') || attrs.tags.includes('fiber-rich') ? 7 : 5,
+        moodBoost: attrs.moodBoost,
+        hydrating: attrs.hydrating,
+        cuisineTags: attrs.cuisineTags,
+        source: 'usda',
+        sourceId: food.fdcId,
+        portion: food.servingText || '100g',
+        nutritionSource: {
+          provider: 'USDA FoodData Central',
+          fdcId: food.fdcId,
+          dataType: food.dataType,
+          brandOwner: food.brandOwner || null,
+        },
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function withTimeout(promise, ms, fallbackValue) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallbackValue), ms)),
+  ]);
 }
 
 // ============================================================================
@@ -765,7 +971,7 @@ function dedupeKey(name) {
  * @param {string}   mealType
  * @returns {object[]} deduplicated candidates
  */
-function mergeCandidates(historyFoods, acceptedFoods, catalogueFoods, mealType) {
+function mergeCandidates(historyFoods, acceptedFoods, catalogueFoods, mealType, cfCandidates = []) {
   /** @type {Map<string, {food: object, weight: number}>} */
   const seen = new Map();
 
@@ -777,8 +983,11 @@ function mergeCandidates(historyFoods, acceptedFoods, catalogueFoods, mealType) 
     }
   };
 
-  // Register in ascending priority so higher-priority items overwrite
+  // Register in ascending priority so higher-priority items overwrite.
+  // CF candidates (1.2×) slot between catalogue and accepted — they are
+  // validated by peer behaviour but less authoritative than this user's own history.
   for (const f of catalogueFoods)  register(f, 1.0);
+  for (const f of cfCandidates)    register(f, 1.2);
   for (const f of acceptedFoods)   register(f, 1.5);
   for (const f of historyFoods)    register(f, 2.0);
 
@@ -830,11 +1039,36 @@ export async function generateCandidates(userId, context = {}) {
     recentFoodNames: signals.recentFoodNames ?? [],
   };
 
-  // Fetch all three sources in parallel
-  const [historyFoods, acceptedFoods] = await Promise.all([
+  // Fetch all data sources in parallel:
+  //   - user food history (30-day)
+  //   - accepted recommendations (for CF seed + source weight)
+  //   - rejection history (for penalty scoring)
+  const [historyFoods, acceptedFoods, rejectedFoodNames] = await Promise.all([
     fetchUserHistoryFoods(userId),
     fetchAcceptedRecommendations(userId),
+    fetchRejectedFoodNames(userId),
   ]);
+
+  // Wire rejection learning and micronutrient urgency into scoring signals
+  enrichedSignals.rejectedFoodNames = rejectedFoodNames;
+  // microUrgencySignals may already be set by the caller (recommendations.js)
+  // via enrichedSignals spread; preserve it if present
+  enrichedSignals.microUrgencySignals = signals.microUrgencySignals ?? {};
+
+  // Collaborative filtering: surface foods accepted by similar users
+  // Run in parallel with catalogue assembly — non-blocking fallback on error
+  const acceptedFoodNames = acceptedFoods.map((f) => f.name);
+  const cfCandidatesPromise = getCollaborativeCandidates(userId, acceptedFoodNames, { limit: 8 })
+    .catch(() => []);
+  const usdaCandidatesPromise = withTimeout(
+    fetchUsdaCandidates(enrichedSignals, enrichedSignals.mealType, profile),
+    USDA_CANDIDATE_TIMEOUT_MS,
+    []
+  )
+    .catch((err) => {
+      console.warn('[candidateGenerationService] USDA candidates unavailable:', err.message);
+      return [];
+    });
 
   // Filter catalogue to relevant meal type first for efficiency
   const catalogueFoods = FOOD_CATALOGUE.map((f) => ({
@@ -843,17 +1077,24 @@ export async function generateCandidates(userId, context = {}) {
     portion: '1 serving',
   }));
 
-  // Merge and deduplicate
+  const [cfCandidates, usdaCandidates] = await Promise.all([
+    cfCandidatesPromise,
+    usdaCandidatesPromise,
+  ]);
+
+  // Merge and deduplicate: history > accepted > CF > catalogue
   const merged = mergeCandidates(
     historyFoods,
     acceptedFoods,
-    catalogueFoods,
-    enrichedSignals.mealType
+    [...usdaCandidates, ...catalogueFoods],
+    enrichedSignals.mealType,
+    cfCandidates
   );
 
   // Score each candidate, applying source weight multiplier
   const scored = merged.map((candidate) => {
     const baseScore = scoreCandidate(candidate, enrichedSignals);
+    if (!Number.isFinite(baseScore)) return null;
     const weightedScore = Math.min(100, Math.round(baseScore * (candidate._weight ?? 1.0)));
     return {
       id: candidate.id,
@@ -866,11 +1107,17 @@ export async function generateCandidates(userId, context = {}) {
       satiety: candidate.satiety ?? 5,
       score: weightedScore,
       source: candidate.source ?? 'catalogue',
+      sourceId: candidate.sourceId ?? null,
+      nutritionSource: candidate.nutritionSource ?? {
+        provider: candidate.source === 'usda' ? 'USDA FoodData Central' : 'MFT verified catalogue',
+        id: candidate.id,
+      },
       portion: candidate.portion ?? '1 serving',
       mealTypes: candidate.mealTypes ?? [],
       cuisineTags: candidate.cuisineTags ?? [],
+      allergenRisk: detectAllergenRisk(candidate, enrichedSignals.allergies),
     };
-  });
+  }).filter(Boolean);
 
   // Sort descending by score, then alphabetically as tiebreaker
   scored.sort((a, b) => {

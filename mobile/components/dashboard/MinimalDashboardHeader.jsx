@@ -224,15 +224,20 @@ const StreakIndicator = ({ streak, bestStreak, onPress }) => {
 
   // Subtle pulse for milestone streaks
   useEffect(() => {
+    let loop;
     if (streak === 7 || streak === 14 || streak === 30 || streak === 100) {
-      Animated.loop(
+      loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
         ])
-      ).start();
+      );
+      loop.start();
     }
-    return () => pulseAnim.setValue(1);
+    return () => {
+      loop?.stop();
+      pulseAnim.setValue(1);
+    };
   }, [streak, pulseAnim]);
 
   // Auto-play Lottie when streak is active

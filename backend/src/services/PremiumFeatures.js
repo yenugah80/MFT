@@ -10,7 +10,7 @@
 
 import { db } from '../config/db.js';
 import { profilesTable } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const FEATURE_FLAGS = {
   // Phase 1: Enable hybrid mode (free regex + premium AI)
@@ -216,11 +216,16 @@ class PremiumFeaturesService {
         ...metadata,
       });
 
-      // TODO: Store in analytics table
-      // This data will help you understand:
-      // - Premium conversion rate
-      // - Feature adoption
-      // - ROI of OpenAI investment
+      await db.execute(sql`
+        INSERT INTO analytics_events (event_name, timestamp, properties, user_id)
+        VALUES (
+          ${'feature_used'},
+          ${new Date()},
+          ${JSON.stringify({ feature, tier: userTier.tier, ...metadata })},
+          ${userId}
+        )
+        ON CONFLICT DO NOTHING
+      `);
     } catch (err) {
       console.error('[PremiumFeatures] Error tracking usage:', err);
     }
@@ -258,7 +263,19 @@ class PremiumFeaturesService {
       totalCost: `$${this.metrics.premiumAICosts.toFixed(2)}`,
     });
 
-    // TODO: Store in usage tracking table for billing
+    try {
+      await db.execute(sql`
+        INSERT INTO analytics_events (event_name, timestamp, properties, user_id)
+        VALUES (
+          ${'premium_api_usage'},
+          ${new Date()},
+          ${JSON.stringify({ inputTokens, outputTokens, costUsd: cost })},
+          ${userId}
+        )
+      `);
+    } catch (err) {
+      console.error('[PremiumFeatures] Failed to record billing usage:', err);
+    }
   }
 
   /**

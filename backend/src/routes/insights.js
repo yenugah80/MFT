@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Insights API Routes
  *
  * Provides predictive insights, behavioral correlations, and weekly narratives
@@ -28,7 +28,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { and, eq, gte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import {
@@ -1290,7 +1290,7 @@ function generateWeeklyNarrative(foodLogs, moodLogs, waterLogs, summaries, goals
   let narrative = 'This week ';
 
   if (waterGoalDays >= 5) {
-    narrative += `showed real progress in your hydration habits—you hit your water goal ${waterGoalDays} out of 7 days. `;
+    narrative += `showed real progress in your hydration habitsâ€”you hit your water goal ${waterGoalDays} out of 7 days. `;
     highlights.push(`Hydration goal met ${waterGoalDays}/7 days`);
   } else if (waterGoalDays >= 3) {
     narrative += `you made solid progress with hydration, hitting your goal ${waterGoalDays} days. `;

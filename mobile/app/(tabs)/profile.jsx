@@ -20,6 +20,7 @@ import { useRouter } from "expo-router";
 import * as Haptics from 'expo-haptics';
 
 import SafeScreen from "../../components/SafeScreen";
+import HealthSyncBanner from "../../components/HealthSyncBanner";
 import useProfileForm from "../../hooks/useProfileForm";
 import { useDashboard } from "../../hooks/useDashboard";
 
@@ -360,8 +361,18 @@ export default function ProfileScreen() {
             )}
           </View>
 
+          {/* Health Platform Sync (activates when native SDK installed) */}
+          <HealthSyncBanner />
+
           {/* Settings */}
           <View style={styles.card}>
+            <SettingsRow
+              icon="calendar-outline"
+              iconColor="#8B5CF6"
+              title="Meal Plan"
+              subtitle="AI-generated weekly plan"
+              onPress={() => router.push('/meal-plan')}
+            />
             <SettingsRow
               icon="notifications"
               iconColor="#F59E0B"

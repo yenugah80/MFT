@@ -45,36 +45,21 @@ export default function StreakAtRiskBanner({
   const isCritical = hoursRemaining <= 1;
 
   useEffect(() => {
+    let pulseLoop;
+    let shakeLoop;
     if (visible) {
-      // Slide in from top
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
+      Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 8, useNativeDriver: true }).start();
 
-      // Pulse animation (more intense if urgent)
-      Animated.loop(
+      pulseLoop = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: isUrgent ? 1.03 : 1.01,
-            duration: isUrgent ? 500 : 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: isUrgent ? 500 : 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: isUrgent ? 1.03 : 1.01, duration: isUrgent ? 500 : 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: isUrgent ? 500 : 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
-      ).start();
+      );
+      pulseLoop.start();
 
-      // Shake if critical
       if (isCritical) {
-        Animated.loop(
+        shakeLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(shakeAnim, { toValue: 2, duration: 100, useNativeDriver: true }),
             Animated.timing(shakeAnim, { toValue: -2, duration: 100, useNativeDriver: true }),
@@ -82,17 +67,17 @@ export default function StreakAtRiskBanner({
             Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
             Animated.delay(2000),
           ])
-        ).start();
+        );
+        shakeLoop.start();
       }
     } else {
-      // Slide out
-      Animated.timing(slideAnim, {
-        toValue: -100,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(slideAnim, { toValue: -100, duration: 200, useNativeDriver: true }).start();
     }
-  }, [visible, isUrgent, isCritical]);
+    return () => {
+      pulseLoop?.stop();
+      shakeLoop?.stop();
+    };
+  }, [visible, isUrgent, isCritical, slideAnim, pulseAnim, shakeAnim]);
 
   if (!visible) return null;
 

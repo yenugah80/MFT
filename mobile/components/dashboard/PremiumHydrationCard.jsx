@@ -57,45 +57,29 @@ function LiquidProgress({ progress, size = 120 }) {
   const normalizedProgress = Math.min(Math.max(progress, 0), 100);
 
   useEffect(() => {
-    // Continuous wave animation
-    Animated.loop(
-      Animated.timing(waveAnim, {
-        toValue: 1,
-        duration: 4000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
+    const waveLoop = Animated.loop(
+      Animated.timing(waveAnim, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true })
+    );
+    waveLoop.start();
 
-    // Fill level animation
-    Animated.spring(fillAnim, {
-      toValue: normalizedProgress,
-      tension: 20,
-      friction: 8,
-      useNativeDriver: false,
-    }).start();
+    Animated.spring(fillAnim, { toValue: normalizedProgress, tension: 20, friction: 8, useNativeDriver: false }).start();
 
-    // Glow pulse when near goal
+    let glowLoop;
     if (normalizedProgress >= 80) {
-      Animated.loop(
+      glowLoop = Animated.loop(
         Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
+          Animated.timing(glowAnim, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
-      ).start();
+      );
+      glowLoop.start();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedProgress]);
+
+    return () => {
+      waveLoop.stop();
+      glowLoop?.stop();
+    };
+  }, [normalizedProgress, waveAnim, fillAnim, glowAnim]);
 
   const fillHeight = fillAnim.interpolate({
     inputRange: [0, 100],
@@ -368,24 +352,15 @@ function WaterDropIcon() {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 1.1,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.timing(scaleAnim, { toValue: 1.1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
-    ).start();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scaleAnim]);
 
   return (
     <Animated.View

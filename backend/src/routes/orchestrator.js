@@ -10,11 +10,12 @@ import {
   orchestrateAllUsers,
 } from '../services/recommendationOrchestratorService.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/admin.js';
 
 const router = express.Router();
 
 // Require authentication for all orchestrator routes
-router.use(requireAuth);
+router.use(requireAuth());
 
 /**
  * POST /api/orchestrator/run
@@ -53,14 +54,11 @@ router.post('/run', async (req, res) => {
  * - limit (number) - Max users to process (for testing)
  * - batchSize (number) - Users to process in parallel (default: 100)
  */
-router.post('/batch', async (req, res) => {
+router.post('/batch', requireAdmin, async (req, res) => {
   try {
-    // TODO: Add admin authorization check
-    // For now, assume internal/cron access
-
     const { limit, batchSize } = req.query;
 
-    console.log('[API] POST /orchestrator/batch (all users)');
+    console.log(`[API] POST /orchestrator/batch triggered by admin: ${req.auth.userId}`);
 
     const result = await orchestrateAllUsers({
       limit: limit ? parseInt(limit) : null,

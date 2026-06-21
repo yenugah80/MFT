@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.silverhorn.myfoodtracker",
+      "bundleIdentifier": "com.zennxt.myfoodtracker",
       "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -21,7 +21,9 @@
         "NSPhotoLibraryAddUsageDescription": "My-Food-Tracker needs permission to save meal photos to your library.",
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
-        "NSSpeechRecognitionUsageDescription": "My-Food-Tracker uses speech recognition to transcribe your voice meal logs."
+        "NSSpeechRecognitionUsageDescription": "My-Food-Tracker uses speech recognition to transcribe your voice meal logs.",
+        "NSHealthShareUsageDescription": "My-Food-Tracker reads your step count and activity data to give you personalized nutrition recommendations.",
+        "NSHealthUpdateUsageDescription": "My-Food-Tracker writes your logged meals and hydration to Apple Health to keep your health data in sync."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -49,7 +51,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.silverhorn.myfoodtracker",
+      "package": "com.zennxt.myfoodtracker",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "permissions": [
@@ -60,7 +62,14 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.WRITE_NUTRITION",
+        "android.permission.health.WRITE_HYDRATION"
       ]
     },
     "web": {
@@ -113,7 +122,16 @@
       ],
       "expo-sqlite",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/styles/images/icon.png",
+          "color": "#6B4EFF",
+          "sounds": [],
+          "mode": "production"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

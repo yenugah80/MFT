@@ -670,13 +670,18 @@ function convertNutritionToHealthFormat(nutritionRecord, platform) {
 }
 
 // ============================================================================
-// DATABASE OPERATIONS (Stubbed for demonstration)
+// DATABASE OPERATIONS
 // ============================================================================
 
 async function fetchHealthPlatformData(userId, platform, dataType, startDate, endDate) {
-  // In production, this would call HealthKit or Google Fit APIs via native bridge
-  // For now, return empty array - actual implementation would be in mobile app
-  return [];
+  // HealthKit / Google Fit data is read natively in the mobile app and POSTed
+  // to /api/health/sync. The backend never calls the native bridge directly.
+  // If this function is reached something upstream is wired incorrectly.
+  throw new Error(
+    `fetchHealthPlatformData: native bridge not callable from backend. ` +
+    `Platform='${platform}' dataType='${dataType}'. ` +
+    `Use the mobile SDK and POST data to /api/health/sync instead.`
+  );
 }
 
 async function findExistingHealthData(userId, data) {
@@ -690,7 +695,8 @@ async function findExistingHealthData(userId, data) {
       LIMIT 1
     `);
     return result.rows?.[0] || null;
-  } catch {
+  } catch (error) {
+    console.error('[HealthPlatform] findExistingHealthData failed:', error);
     return null;
   }
 }
@@ -723,9 +729,9 @@ async function updateHealthData(userId, data) {
 }
 
 async function sendToHealthPlatform(userId, platform, record) {
-  // In production, this would send to native bridge
-  // The actual write to HealthKit/Google Fit happens in mobile app
-  console.log('[HealthPlatform] Would send to platform:', platform, record.type);
+  // Writes to HealthKit / Google Fit happen natively in the mobile app.
+  // The backend signals intent; the mobile SDK performs the actual write.
+  // This is intentionally a no-op on the server side.
   return true;
 }
 

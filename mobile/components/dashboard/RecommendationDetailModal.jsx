@@ -264,11 +264,19 @@ export default function RecommendationDetailModal({
           )}
 
           {/* Phase 5: Warning Badges for Dietary Issues */}
-          {recommendation.warnings && recommendation.warnings.length > 0 && (
-            <View style={styles.warningSection}>
-              <MultipleWarnings warnings={recommendation.warnings} maxDisplay={3} />
-            </View>
-          )}
+          {(() => {
+            const warnings = [
+              ...(recommendation.warnings || []),
+              ...(recommendation.warningBadge
+                ? [{ type: recommendation.warningBadge.type === 'danger' ? 'allergen' : 'dietary', label: recommendation.warningBadge.message }]
+                : []),
+            ];
+            return warnings.length > 0 ? (
+              <View style={styles.warningSection}>
+                <MultipleWarnings warnings={warnings} maxDisplay={3} />
+              </View>
+            ) : null;
+          })()}
 
           {/* Portion Control Section */}
           <View style={styles.portionSection}>

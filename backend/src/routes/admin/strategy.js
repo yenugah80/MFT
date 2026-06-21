@@ -13,17 +13,15 @@ import express from 'express';
 import { strategicFoodParser } from '../../services/StrategicFoodParser.js';
 import { premiumFeaturesService } from '../../services/PremiumFeatures.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { requireAdmin } from '../../middleware/admin.js';
+import { adminLimiter } from '../../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Protect all endpoints - require admin role (implement based on your auth)
-router.use(requireAuth);
-router.use((req, res, next) => {
-  // TODO: Check if user is admin
-  // For now, just log access
-  console.log('[AdminStrategy] Access by user:', req.auth.userId);
-  next();
-});
+// Auth + admin guard + rate limit applied to every route in this router
+router.use(requireAuth());
+router.use(requireAdmin);
+router.use(adminLimiter);
 
 /**
  * GET /api/admin/strategy/metrics
@@ -104,7 +102,6 @@ router.get('/user/:userId', async (req, res) => {
  */
 router.post('/reset', (req, res) => {
   try {
-    // TODO: Add proper admin authorization check
     strategicFoodParser.resetStats();
 
     res.json({

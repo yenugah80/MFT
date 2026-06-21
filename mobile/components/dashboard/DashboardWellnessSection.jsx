@@ -34,6 +34,7 @@ export default function DashboardWellnessSection({
   hydrationCelebratedKey,
   onCelebrateHydration,
   onOpenMoodInsights,
+  onOpenFullMoodLogger, // Opens the full MoodLogger modal (for More button on quick-log strip)
   onViewMoodHistory, // Navigate to mood history screen
   onOpenHydrationTracker,
   onViewHydrationHistory, // Navigate to hydration history/insights screen
@@ -78,6 +79,7 @@ export default function DashboardWellnessSection({
           wellnessScore={wellnessScore}
           onOpenInsights={onOpenMoodInsights}
           onViewHistory={onViewMoodHistory}
+          onOpenFullLogger={onOpenFullMoodLogger}
           showWellnessScore={false}
         />
       </View>

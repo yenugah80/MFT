@@ -617,6 +617,83 @@ function _pruneExpiredCache() {
 setInterval(_pruneExpiredCache, 5 * 60 * 1000);
 
 // ============================================================================
+// ============================================================================
+// RECOMMENDATION ENGINE ADAPTER
+// ============================================================================
+
+/**
+ * Lightweight adapter for the recommendation engine.
+ * Returns a structured object with a continuous urgencyScore (0–1) alongside
+ * the existing dehydration risk fields, so the recommendation engine can
+ * blend hydration urgency smoothly into its scoring rather than using the
+ * stepped NONE/LOW/MODERATE/HIGH/CRITICAL ladder.
+ *
+ * urgencyScore formula:
+ *   intakeUrgency  = 1 − (percentageComplete / 100)  [intake deficit 0→1]
+ *   timeUrgency    = min(1, hoursSinceLastSip / 6)   [gap urgency, maxes at 6 h]
+ *   urgencyScore   = 0.65 × intakeUrgency + 0.35 × timeUrgency   (clamped 0–1)
+ *
+ * @param {string} userId
+ * @param {number} [tzOffsetMinutes=0]
+ * @returns {Promise<{
+ *   urgencyScore: number,
+ *   urgency: number,
+ *   dehydrationRisk: string,
+ *   riskReason: string,
+ *   insight: string,
+ *   percentageComplete: number,
+ *   consumedLiters: number,
+ *   goalLiters: number,
+ *   hasData: boolean,
+ *   explainability: object
+ * }>}
+ */
+export async function getHydrationInsightForRecommendation(userId, tzOffsetMinutes = 0) {
+  try {
+    const signal = await getHydrationSignal(userId, tzOffsetMinutes);
+
+    const pct = signal.percentageComplete ?? 0;
+    const hrs = signal.hoursSinceLastSip ?? null;
+
+    const intakeUrgency = Math.max(0, 1 - pct / 100);
+    const timeUrgency   = hrs !== null ? Math.min(1, hrs / 6) : 0;
+    const urgencyScore  = Math.min(1, 0.65 * intakeUrgency + 0.35 * timeUrgency);
+
+    return {
+      urgencyScore:        parseFloat(urgencyScore.toFixed(3)),
+      urgency:             parseFloat(urgencyScore.toFixed(3)),
+      dehydrationRisk:     signal.dehydrationRisk,
+      riskReason:          signal.riskReason,
+      insight:             signal.riskReason,
+      percentageComplete:  pct,
+      consumedLiters:      signal.consumedLiters,
+      goalLiters:          signal.goalLiters,
+      hasData:             signal.logCountToday > 0,
+      explainability: {
+        intakeUrgency:       parseFloat(intakeUrgency.toFixed(3)),
+        timeUrgency:         parseFloat(timeUrgency.toFixed(3)),
+        hoursSinceLastSip:   hrs,
+        percentageComplete:  pct,
+        formula:             '0.65 × intakeDeficit + 0.35 × timeGap',
+      },
+    };
+  } catch (error) {
+    console.error('[HydrationSignal] getHydrationInsightForRecommendation error:', error);
+    return {
+      urgencyScore: 0,
+      urgency: 0,
+      dehydrationRisk: DEHYDRATION_RISK.NONE,
+      riskReason: '',
+      insight: '',
+      percentageComplete: 0,
+      consumedLiters: 0,
+      goalLiters: DEFAULT_WATER_GOAL_LITERS,
+      hasData: false,
+      explainability: { error: error.message },
+    };
+  }
+}
+
 // DEFAULT EXPORT
 // ============================================================================
 
@@ -629,6 +706,7 @@ export default {
 
   // Core API
   getHydrationSignal,
+  getHydrationInsightForRecommendation,
   invalidateSignalCache,
   getHydrationSummary,
   evaluateNudgeEligibility,

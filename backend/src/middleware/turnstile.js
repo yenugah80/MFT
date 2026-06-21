@@ -14,6 +14,16 @@
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
+/** Escape user-controlled strings before embedding in HTML attributes */
+function escapeHtmlAttr(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /**
  * Verify Turnstile token with Cloudflare
  * @param {string} token - The Turnstile token from client
@@ -112,6 +122,8 @@ export function requireTurnstile(options = {}) {
  * Generate HTML page for Turnstile verification (for mobile WebView)
  */
 export function getTurnstilePageHTML(siteKey, action = 'verify') {
+  const safeAction = escapeHtmlAttr(action);
+  const safeSiteKey = escapeHtmlAttr(siteKey);
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -208,12 +220,12 @@ export function getTurnstilePageHTML(siteKey, action = 'verify') {
     <div class="turnstile-container">
       <div
         class="cf-turnstile"
-        data-sitekey="${siteKey}"
+        data-sitekey="${safeSiteKey}"
         data-callback="onSuccess"
         data-error-callback="onError"
         data-theme="light"
         data-size="normal"
-        data-action="${action}"
+        data-action="${safeAction}"
       ></div>
     </div>
 

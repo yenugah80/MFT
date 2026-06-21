@@ -33,9 +33,11 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "APPLE_ID_HERE",
-        "ascAppId": "ASC_APP_ID_HERE",
-        "appleTeamId": "dev@my-food-tracker.com"
+        "appleTeamId": "8R3UBMWJ2P",
+        "ascApiKeyPath": "./AuthKey_XYN85P5666.p8",
+        "ascApiKeyId": "XYN85P5666",
+        "ascApiKeyIssuerId": "49aa0f0c-ae4c-4e7b-86f1-0e75917999ec",
+        "ascAppId": "ASC_APP_ID_HERE"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

@@ -37,6 +37,7 @@ import ThemeTransition from "./ThemeTransition";
 import ThemeSettingsModal from "./ThemeSettingsModal";
 import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
+import MoodLogger from "./MoodLogger";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
 import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
@@ -264,6 +265,8 @@ export default function DashboardContent() {
   // Recommendation detail modal state
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
   const [recommendationModalVisible, setRecommendationModalVisible] = useState(false);
+  // Full MoodLogger modal — triggered by the quick-log strip "More" button on the dashboard
+  const [dashMoodModalVisible, setDashMoodModalVisible] = useState(false);
   // eslint-disable-next-line no-unused-vars
   const [acceptingRecommendation, setAcceptingRecommendation] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -1682,6 +1685,7 @@ export default function DashboardContent() {
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
           onOpenMoodInsights={() => router.push('/analytics')}
+          onOpenFullMoodLogger={() => setDashMoodModalVisible(true)}
           onViewMoodHistory={() => router.push('/analytics')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
           onViewHydrationHistory={() => router.push('/analytics')}
@@ -1938,6 +1942,13 @@ export default function DashboardContent() {
       <ThemeSettingsModal
         visible={themeModalVisible}
         onClose={() => setThemeModalVisible(false)}
+      />
+
+      {/* MoodLogger for quick-log strip "More" button — separate from FAB's own instance */}
+      <MoodLogger
+        visible={dashMoodModalVisible}
+        onClose={() => setDashMoodModalVisible(false)}
+        onSuccess={handleMoodLogged}
       />
 
       {/* Floating Action Button - Quick Actions */}

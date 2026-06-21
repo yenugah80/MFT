@@ -121,6 +121,17 @@ export default function LogScreen() {
     staleTime: 30000,
   });
 
+  // Fetch micronutrient trends for the NutrientTrendsModal
+  const { data: microTrends, isLoading: microLoading } = useQuery({
+    queryKey: ['micronutrientTrends'],
+    queryFn: async () => {
+      const response = await apiClient.get('/nutrition/micronutrient-trends?days=30');
+      return response;
+    },
+    staleTime: 15 * 60 * 1000, // 15 min — micros change slowly
+    enabled: showTrendsModal,   // only fetch when modal is open
+  });
+
   const closeAllModals = useCallback(() => {
     setShowMoodModal(false);
     setShowHydrationModal(false);
@@ -488,67 +499,74 @@ export default function LogScreen() {
   };
 
   /**
-   * Save analyzed food to log
+   * Core save logic — called after allergen check passes (or user overrides)
+   */
+  const _doSaveLog = async (foodData) => {
+    const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    const effectiveMealType = mealType || foodData.mealType || getMealTypeFromTime();
+    const foodDataWithId = {
+      ...foodData,
+      source: foodData.source || analysisSource,
+      mealType: effectiveMealType,
+      clientEventId,
+      sourceMeta: {
+        source: analysisSource,
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    await foodLog.addLog(foodDataWithId);
+
+    const calories = foodData.macros?.calories_kcal || foodData.calories || 0;
+    const foodName = foodData.name || foodData.food || 'Food';
+    announceFoodLogged(foodName, calories, effectiveMealType);
+
+    setAnalyzedFood(null);
+    setSelectedImage(null);
+
+    setLoggedMeal({
+      ...foodDataWithId,
+      originalAnalysis: analyzedFood || (foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null)
+    });
+
+    InteractionManager.runAfterInteractions(() => {
+      setTimeout(() => setShowMealLogged(true), 100);
+    });
+  };
+
+  /**
+   * Save analyzed food to log — checks allergens BEFORE saving
    */
   const handleSaveLog = async (foodData) => {
     if (isSavingLog) return;
-    setIsSavingLog(true);
 
-    try {
-      const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-      // CRITICAL FIX: Set mealType based on URL param or auto-detect from time
-      const effectiveMealType = mealType || foodData.mealType || getMealTypeFromTime();
-      const foodDataWithId = {
-        ...foodData,
-        source: foodData.source || analysisSource,
-        mealType: effectiveMealType,
-        clientEventId,
-        sourceMeta: {
-          source: analysisSource,
-          timestamp: new Date().toISOString(),
-        },
-      };
+    const foodName = foodData.name || foodData.food || 'Food';
+    const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
+    const foodAllergens = foodData.allergens || [];
 
-      await foodLog.addLog(foodDataWithId);
-
-      // Audio feedback for accessibility
-      const calories = foodData.macros?.calories_kcal || foodData.calories || 0;
-      const foodName = foodData.name || foodData.food || 'Food';
-      announceFoodLogged(foodName, calories, effectiveMealType);
-
-      // Check for allergens and warn user immediately
-      // Uses pattern matching on food name + allergens array for comprehensive detection
-      const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
-      const foodAllergens = foodData.allergens || [];
-      if (userAllergies.length > 0) {
-        const allergenCheck = getAllergenSeverity(foodAllergens, userAllergies, foodName);
-        if (allergenCheck?.hasAllergen) {
-          // Show urgent allergen warning toast
-          notify.warning(
-            `⚠️ This meal contains your allergen: ${allergenCheck.allergens.join(', ')}`,
-            { title: 'Allergen Detected', urgent: true }
+    // ALLERGEN GATE: block and ask user BEFORE saving
+    if (userAllergies.length > 0) {
+      const allergenCheck = getAllergenSeverity(foodAllergens, userAllergies, foodName);
+      if (allergenCheck?.hasAllergen) {
+        const allergenList = allergenCheck.allergens.join(', ');
+        const confirmed = await new Promise(resolve => {
+          Alert.alert(
+            '⚠️ Allergen Detected',
+            `"${foodName}" contains: ${allergenList}\n\nThis matches your allergen list. Are you sure you want to log it?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Log Anyway', style: 'destructive', onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) }
           );
-        }
+        });
+        if (!confirmed) return;
       }
+    }
 
-      // Clear state first to reduce state complexity
-      setAnalyzedFood(null);
-      setSelectedImage(null);
-
-      // Show MealLoggedCard instead of just notification
-      setLoggedMeal({
-        ...foodDataWithId,
-        originalAnalysis: analyzedFood || (foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null)
-      });
-
-      // Use InteractionManager to wait for all animations/transitions to complete
-      // This prevents bridge overflow from simultaneous UI operations
-      InteractionManager.runAfterInteractions(() => {
-        // Additional delay to ensure React has processed state updates
-        setTimeout(() => {
-          setShowMealLogged(true);
-        }, 100);
-      });
+    setIsSavingLog(true);
+    try {
+      await _doSaveLog(foodData);
     } catch (err) {
       console.error('[LogScreen] Save error:', err);
       notify.error(`Save failed: ${err.message}`);
@@ -562,19 +580,41 @@ export default function LogScreen() {
    */
   const handleSaveMeal = async () => {
     if (isSavingLog || !foodAnalysis.analysisResult) return;
-    setIsSavingLog(true);
 
+    // ALLERGEN GATE: scan all items before saving anything
+    const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
+    if (userAllergies.length > 0) {
+      const allAllergens = new Set();
+      foodAnalysis.analysisResult.items.forEach(item => {
+        const check = getAllergenSeverity(item.allergens || [], userAllergies, item.name || '');
+        if (check?.hasAllergen) check.allergens.forEach(a => allAllergens.add(a));
+      });
+      if (allAllergens.size > 0) {
+        const confirmed = await new Promise(resolve => {
+          Alert.alert(
+            '⚠️ Allergen Detected',
+            `This meal contains: ${Array.from(allAllergens).join(', ')}\n\nThis matches your allergen list. Are you sure you want to log it?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Log Anyway', style: 'destructive', onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) }
+          );
+        });
+        if (!confirmed) return;
+      }
+    }
+
+    setIsSavingLog(true);
     try {
       const mealEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
       const baseTimestamp = Date.now();
-      // CRITICAL FIX: Set mealType based on URL param or auto-detect from time
       const effectiveMealType = mealType || getMealTypeFromTime();
       let totalCalories = 0;
       let totalProtein = 0;
       let totalCarbs = 0;
       let totalFat = 0;
 
-      // P2 FIX: Batch save operations for performance and atomicity
       const savePromises = foodAnalysis.analysisResult.items.map((item, index) => {
         const servingText = item.portion?.amount && item.portion?.unit
           ? `${item.portion.amount}${item.portion.unit}`
@@ -582,10 +622,10 @@ export default function LogScreen() {
 
         const foodLogData = {
           id: `${mealEventId}-${index}`,
-          timestamp: baseTimestamp + index, // deterministic per item to avoid collisions
+          timestamp: baseTimestamp + index,
           status: 'pending',
           source: 'text',
-          mealType: effectiveMealType, // CRITICAL FIX: Include mealType
+          mealType: effectiveMealType,
           sourceMeta: {
             source: 'text',
             type: 'multi',
@@ -617,53 +657,27 @@ export default function LogScreen() {
 
       await Promise.all(savePromises);
 
-      // Audio feedback for accessibility
       const itemCount = foodAnalysis.analysisResult.items.length;
       announceMealLogged(itemCount, totalCalories, effectiveMealType);
 
-      // Check for allergens in any item and warn user immediately
-      // Uses pattern matching on item names + allergens array for comprehensive detection
-      const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
-      if (userAllergies.length > 0) {
-        const allAllergens = new Set();
-        foodAnalysis.analysisResult.items.forEach(item => {
-          const itemAllergens = item.allergens || [];
-          const itemName = item.name || item.food || '';
-          const allergenCheck = getAllergenSeverity(itemAllergens, userAllergies, itemName);
-          if (allergenCheck?.hasAllergen) {
-            allergenCheck.allergens.forEach(a => allAllergens.add(a));
-          }
-        });
-        if (allAllergens.size > 0) {
-          notify.warning(
-            `⚠️ This meal contains your allergens: ${Array.from(allAllergens).join(', ')}`,
-            { title: 'Allergen Detected', urgent: true }
-          );
-        }
-      }
+      const capturedResult = foodAnalysis.analysisResult;
+      const capturedItemCount = capturedResult.items.length;
 
-      // Clear UI first to reduce state complexity
       foodAnalysis.setInputText('');
       foodAnalysis.setAnalysisResult(null);
 
-      // Set meal data
       setLoggedMeal({
-        foodName: `Meal (${foodAnalysis.analysisResult.items.length} items)`,
+        foodName: `Meal (${capturedItemCount} items)`,
         calories: totalCalories,
         protein: totalProtein,
         carbs: totalCarbs,
         fats: totalFat,
         mealId: mealEventId,
-        originalAnalysis: foodAnalysis.analysisResult
+        originalAnalysis: capturedResult
       });
 
-      // Use InteractionManager to wait for all animations/transitions to complete
-      // This prevents bridge overflow from simultaneous UI operations
       InteractionManager.runAfterInteractions(() => {
-        // Additional delay to ensure React has processed state updates
-        setTimeout(() => {
-          setShowMealLogged(true);
-        }, 100);
+        setTimeout(() => setShowMealLogged(true), 100);
       });
     } catch (error) {
       console.error('[LogScreen] Multi-item save error:', error);
@@ -763,7 +777,7 @@ export default function LogScreen() {
       }
     } else if (analysisSource === 'text' && foodAnalysis.inputText) {
       try {
-        await foodAnalysis.analyzeText(foodAnalysis.inputText);
+        await foodAnalysis.runAnalysis();
       } catch (_e) {
         // Error handled in hook
       }
@@ -803,10 +817,12 @@ export default function LogScreen() {
 
   const handleQuickAddRecent = async (foodItem) => {
     try {
+      const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
       const foodLogData = {
         timestamp: Date.now(),
         status: 'completed',
         source: 'recent',
+        mealType: getMealTypeFromTime(),
         foodName: foodItem.foodName,
         servingSize: foodItem.servingSize || '1 serving',
         calories: foodItem.calories,
@@ -817,6 +833,7 @@ export default function LogScreen() {
         sugar: foodItem.sugar,
         sodium: foodItem.sodium,
         micros: foodItem.micros || {},
+        clientEventId,
         sourceMeta: { source: 'recent', originalId: foodItem.id },
       };
 
@@ -1283,6 +1300,8 @@ export default function LogScreen() {
         nutrient={selectedTrendNutrient}
         trends={dashboardData?.trends?.weekSummaries}
         goals={dashboardData?.goals}
+        microTrends={microTrends}
+        microLoading={microLoading}
       />
 
       <Modal

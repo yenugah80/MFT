@@ -3,13 +3,14 @@
  * 3D Lottie animations, intensity tracking, context tags, meal correlation
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   Modal,
   TouchableOpacity,
   TextInput,
+  Alert,
   Animated,
   StyleSheet,
   KeyboardAvoidingView,
@@ -17,11 +18,14 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useMoodLog } from '../hooks/useMoodLog';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../services/apiClient';
+import { useMoodLog, MOOD_DEFAULT_INTENSITY } from '../hooks/useMoodLog';
 import MoodIcon3D from './MoodTracker/MoodIcon3D';
 import { announceMoodLogged } from '../services/audioFeedback';
 import {
@@ -42,13 +46,49 @@ const hexToRgba = (hex, alpha) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// On-device keyword → mood mapping (no API call required)
+const MOOD_KEYWORDS = {
+  happy:    ['happy', 'great', 'amazing', 'good', 'joy', 'excited', 'love', 'wonderful', 'fantastic', 'elated', 'glad', 'cheerful', 'content', 'pleased', 'delighted'],
+  calm:     ['calm', 'peace', 'peaceful', 'relaxed', 'chill', 'serene', 'quiet', 'still', 'tranquil', 'settled', 'easy', 'gentle', 'composed'],
+  focused:  ['focused', 'productive', 'sharp', 'clear', 'motivated', 'determined', 'driven', 'on task', 'flow', 'in the zone', 'alert', 'concentrated'],
+  energized:['energized', 'energy', 'pumped', 'hyped', 'fired up', 'electric', 'buzzing', 'wired', 'alive', 'vibrant', 'dynamic', 'enthusiastic'],
+  neutral:  ['neutral', 'okay', 'ok', 'fine', 'normal', 'meh', 'alright', 'average', 'so-so', 'moderate', 'bland', 'indifferent'],
+  tired:    ['tired', 'exhausted', 'sleepy', 'drained', 'fatigue', 'weary', 'worn out', 'sluggish', 'groggy', 'drowsy', 'low energy', 'heavy', 'spent'],
+  stressed: ['stressed', 'anxious', 'anxiety', 'overwhelmed', 'nervous', 'tense', 'worried', 'panic', 'pressure', 'frantic', 'uneasy', 'restless', 'on edge'],
+  sad:      ['sad', 'down', 'unhappy', 'depressed', 'blue', 'low', 'upset', 'miserable', 'gloomy', 'hopeless', 'heartbroken', 'grief', 'disappointed', 'lonely', 'crying'],
+};
+
+function extractMoodFromText(text) {
+  if (!text || text.trim().length < 3) return null;
+  const lower = text.toLowerCase();
+  const scores = {};
+  for (const [mood, keywords] of Object.entries(MOOD_KEYWORDS)) {
+    scores[mood] = keywords.reduce((n, kw) => n + (lower.includes(kw) ? 1 : 0), 0);
+  }
+  const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+  return best && best[1] > 0 ? best[0] : null;
+}
+
+// Mood → which tag categories to surface first (smart contextual suggestions)
+// Keys must match TAG_CATEGORIES keys below
+const MOOD_TAG_PRIORITY = {
+  tired:    ['sleep', 'exercise'],
+  stressed: ['stress', 'social'],
+  sad:      ['social', 'sleep'],
+  happy:    ['exercise', 'social'],
+  calm:     ['sleep', 'weather'],
+  focused:  ['exercise', 'stress'],
+  energized:['exercise', 'weather'],
+  neutral:  ['sleep', 'social'],
+};
+
 // Tag categories for mood context with vibrant colors
-// Enhanced social context based on wellbeing research - who you're with matters for mood
 const TAG_CATEGORIES = {
-  sleep: { label: 'Sleep', icon: 'moon', options: ['Poor', 'Fair', 'Good', 'Excellent'], color: MOOD_PALETTE.focused.base },
-  exercise: { label: 'Exercise', icon: 'barbell', options: ['None', 'Light', 'Moderate', 'Intense'], color: SEMANTIC_ACTIONS.success },
-  social: { label: 'Who With', icon: 'people', options: ['Alone', 'Partner', 'Close Friends', 'Family', 'Coworkers'], color: MOOD_PALETTE.calm.base },
-  connection: { label: 'Connection', icon: 'heart', options: ['Disconnected', 'Neutral', 'Connected', 'Deep'], color: MOOD_PALETTE.happy.base },
+  sleep:    { label: 'Sleep',    icon: 'moon',       options: ['Poor', 'Fair', 'Good', 'Excellent'],           color: MOOD_PALETTE.focused.base },
+  exercise: { label: 'Exercise', icon: 'barbell',    options: ['None', 'Light', 'Moderate', 'Intense'],        color: SEMANTIC_ACTIONS.success },
+  social:   { label: 'Social',   icon: 'people',     options: ['Alone', 'Partner', 'Friends', 'Family'],       color: MOOD_PALETTE.calm.base },
+  stress:   { label: 'Stress',   icon: 'flash',      options: ['None', 'Low', 'Moderate', 'High'],             color: MOOD_PALETTE.stressed.base },
+  weather:  { label: 'Weather',  icon: 'partly-sunny', options: ['Sunny', 'Cloudy', 'Rainy', 'Cold'],          color: MOOD_PALETTE.energized.base },
 };
 
 /**
@@ -181,6 +221,87 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   const [tags, setTags] = useState({});
   const [note, setNote] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [savedResult, setSavedResult] = useState(null);
+  const [hoursAgo, setHoursAgo] = useState(0);
+  const [freeText, setFreeText] = useState('');
+  const [preSavePattern, setPreSavePattern] = useState(null);
+  const nlpTimerRef = useRef(null);
+  const patternTimerRef = useRef(null);
+  const closeTimerRef = useRef(null); // Fix #3: track auto-close timer so manual close can cancel it
+  const mountedRef = useRef(true);    // Fix #2: guard setState after unmount
+
+  useEffect(() => {
+    mountedRef.current = true;
+    // Capture ref values at effect time so cleanup uses the right handles
+    const nlpTimer = nlpTimerRef;
+    const patternTimer = patternTimerRef;
+    const closeTimer = closeTimerRef;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(nlpTimer.current);
+      clearTimeout(patternTimer.current);
+      clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  // Fix #1: declare handleMoodSelect BEFORE handleFreeTextChange to eliminate forward reference
+  // Fix #12: wrap in useCallback for stable prop reference across renders
+  const handleMoodSelect = useCallback((moodKey) => {
+    setSelectedMood(moodKey);
+    setFreeText('');         // Fix #8: clear free text when user manually picks a mood
+    // Pre-fill intensity slider with mood-appropriate default (Fix #6)
+    setIntensity(MOOD_DEFAULT_INTENSITY[moodKey] ?? 5);
+    setPreSavePattern(null);
+    clearTimeout(patternTimerRef.current);
+    patternTimerRef.current = setTimeout(async () => {
+      try {
+        const data = await apiClient.get(`/mood/pattern-check?mood=${moodKey}`);
+        // Fix #2: guard against setState on unmounted component
+        if (mountedRef.current && data?.patternAlert) setPreSavePattern(data.patternAlert);
+      } catch {}
+    }, 600);
+  }, []);
+
+  // NLP: debounce 400ms then auto-select mood from text
+  const handleFreeTextChange = useCallback((text) => {
+    setFreeText(text);
+    clearTimeout(nlpTimerRef.current);
+    nlpTimerRef.current = setTimeout(() => {
+      const detected = extractMoodFromText(text);
+      if (detected && mountedRef.current) handleMoodSelect(detected);
+    }, 400);
+  }, [handleMoodSelect]);
+
+  const DRAFT_KEY = 'moodLoggerDraft';
+  const DRAFT_TTL = 4 * 60 * 60 * 1000; // 4 hours
+
+  // Load draft on open
+  useEffect(() => {
+    if (!visible) return;
+    AsyncStorage.getItem(DRAFT_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - (parsed.savedAt || 0) > DRAFT_TTL) {
+          AsyncStorage.removeItem(DRAFT_KEY);
+          return;
+        }
+        if (parsed.mood) setSelectedMood(parsed.mood);
+        if (parsed.intensity) setIntensity(parsed.intensity);
+        if (parsed.energyLevel) setEnergyLevel(parsed.energyLevel);
+        if (parsed.tags) setTags(parsed.tags);
+        if (parsed.note) setNote(parsed.note);
+      } catch {}
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  // Auto-save draft on every change
+  useEffect(() => {
+    if (!visible) return;
+    const draft = { savedAt: Date.now(), mood: selectedMood, intensity, energyLevel, tags, note };
+    AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
+  }, [selectedMood, intensity, energyLevel, tags, note, visible]);
 
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -210,6 +331,10 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       setTags({});
       setNote('');
       setShowAdvanced(false);
+      setSavedResult(null);
+      setHoursAgo(0);
+      setFreeText('');
+      setPreSavePattern(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -218,36 +343,53 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
     // Validate mood selection
     if (!selectedMood) return;
 
-    // Validate intensity (1-10)
     const validatedIntensity = Math.max(1, Math.min(10, Math.round(intensity)));
-
-    // Validate energy level (1-10)
     const validatedEnergyLevel = Math.max(1, Math.min(10, Math.round(energyLevel)));
 
-    // Validate note length (max 200 characters, matches UI maxLength)
-    const trimmedNote = note.trim().substring(0, 200);
+    // Fix #5: pre-fill note from free-text if user didn't type a separate note
+    const effectiveNote = note.trim() || freeText.trim();
+    const trimmedNote = effectiveNote.substring(0, 200);
 
-    // Validate mood is in allowed list
-    const validMoods = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
-    if (!validMoods.includes(selectedMood)) {
+    // Single source of truth for valid moods — derived from MOOD_TYPES in the hook
+    if (!moodTypes.map(m => m.key).includes(selectedMood)) {
       console.error('Invalid mood type:', selectedMood);
       return;
     }
 
     try {
-      await logMood({
+      const loggedDate = hoursAgo > 0
+        ? new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString()
+        : new Date().toISOString();
+
+      const result = await logMood({
         mood: selectedMood,
         intensity: validatedIntensity,
         energyLevel: validatedEnergyLevel,
         tags,
         note: trimmedNote,
+        loggedDate,
       });
-      // Audio confirmation for accessibility
       announceMoodLogged(selectedMood, trimmedNote);
+      AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
       onSuccess?.(selectedMood);
-      onClose();
+
+      // Show acknowledgment card (streak, pattern, or mental health alert)
+      if (result?.mentalHealthAlert || result?.patternAlert || result?.logStats) {
+        setSavedResult(result);
+        // Auto-close after 3.5s; stored in ref so manual Close can cancel it (Fix #3)
+        closeTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) handleClose();
+        }, 3500);
+      } else {
+        handleClose();
+      }
     } catch (err) {
       console.error('Failed to save mood:', err);
+      Alert.alert(
+        'Could not save',
+        'Something went wrong logging your mood. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -263,6 +405,12 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
     });
   };
 
+  // Wrap onClose so it always cancels the auto-close timer (Fix #3)
+  const handleClose = useCallback(() => {
+    clearTimeout(closeTimerRef.current);
+    onClose();
+  }, [onClose]);
+
   const moodColors = selectedMood ? MOOD_PALETTE[selectedMood] : MOOD_PALETTE.neutral;
 
   return (
@@ -270,14 +418,14 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
         {/* Backdrop */}
-        <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.backdrop} onPress={handleClose}>
           <Animated.View style={{ opacity: fadeAnim, ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' }} />
         </Pressable>
 
@@ -296,12 +444,31 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
             style={styles.header}
           >
             <Text style={styles.headerTitle}>How are you feeling?</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
               <Ionicons name="close" size={24} color={TEXT.white} />
             </TouchableOpacity>
           </LinearGradient>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Free-text input — NLP auto-suggests mood from what user types */}
+            <View style={styles.section}>
+              <TextInput
+                style={styles.freeTextInput}
+                placeholder='Describe how you feel… ("I feel wired but anxious")'
+                placeholderTextColor={TEXT.tertiary}
+                value={freeText}
+                onChangeText={handleFreeTextChange}
+                multiline={false}
+                returnKeyType="done"
+                accessibilityLabel="Describe your mood in your own words"
+              />
+              {selectedMood && freeText.length > 0 && (
+                <Text style={styles.nlpHint}>
+                  Detected: {selectedMood} — tap to adjust below
+                </Text>
+              )}
+            </View>
+
             {/* Mood Selection with 3D Lottie */}
             <View style={styles.moodGrid}>
               {moodTypes.map((mood) => (
@@ -309,9 +476,10 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   <MoodIcon3D
                     mood={mood.key}
                     selected={selectedMood === mood.key}
-                    onSelect={setSelectedMood}
+                    onSelect={handleMoodSelect}
                     size={64}
                     showLabel={true}
+                    autoPlay={selectedMood === mood.key}
                   />
                 </View>
               ))}
@@ -343,9 +511,20 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               </View>
             )}
 
-            {/* Advanced Context (Collapsible) */}
+            {/* Context Tags — priority 2 shown upfront, rest collapsible */}
             {selectedMood && (
               <View style={styles.section}>
+                {/* Smart: show the 2 most relevant categories for this mood first */}
+                {(MOOD_TAG_PRIORITY[selectedMood] || ['sleep', 'social']).map((category) => (
+                  <TagSelector
+                    key={category}
+                    category={category}
+                    selectedValue={tags[category]}
+                    onSelect={handleTagSelect}
+                  />
+                ))}
+
+                {/* "More context" expander for remaining categories */}
                 <TouchableOpacity
                   style={[styles.advancedToggle, { backgroundColor: hexToRgba(moodColors.base, 0.15), borderWidth: 1, borderColor: hexToRgba(moodColors.base, 0.3) }]}
                   onPress={() => {
@@ -354,7 +533,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   }}
                 >
                   <Text style={[styles.advancedToggleText, { color: TEXT.primary }]}>
-                    Add Context (Optional)
+                    More context (optional)
                   </Text>
                   <Ionicons
                     name={showAdvanced ? 'chevron-up' : 'chevron-down'}
@@ -365,16 +544,53 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
 
                 {showAdvanced && (
                   <View style={styles.tagsContainer}>
-                    {Object.keys(TAG_CATEGORIES).map((category) => (
-                      <TagSelector
-                        key={category}
-                        category={category}
-                        selectedValue={tags[category]}
-                        onSelect={handleTagSelect}
-                      />
-                    ))}
+                    {Object.keys(TAG_CATEGORIES)
+                      .filter(c => !(MOOD_TAG_PRIORITY[selectedMood] || []).includes(c))
+                      .map((category) => (
+                        <TagSelector
+                          key={category}
+                          category={category}
+                          selectedValue={tags[category]}
+                          onSelect={handleTagSelect}
+                        />
+                      ))}
                   </View>
                 )}
+              </View>
+            )}
+
+            {/* Retroactive time picker — logging for earlier today */}
+            {selectedMood && (
+              <View style={styles.section}>
+                <Text style={[styles.noteLabel, { color: TEXT.secondary || TEXT.primary }]}>When did you feel this?</Text>
+                <View style={styles.timeChips}>
+                  {[
+                    { label: 'Now', value: 0 },
+                    { label: '1h ago', value: 1 },
+                    { label: '2h ago', value: 2 },
+                    { label: '3h ago', value: 3 },
+                  ].map(({ label, value }) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[
+                        styles.timeChip,
+                        hoursAgo === value && { backgroundColor: moodColors.base, borderColor: moodColors.base },
+                        hoursAgo !== value && { borderColor: moodColors.base },
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setHoursAgo(value);
+                      }}
+                    >
+                      <Text style={[
+                        styles.timeChipText,
+                        { color: hoursAgo === value ? TEXT.white : moodColors.base },
+                      ]}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             )}
 
@@ -396,11 +612,67 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
             )}
           </ScrollView>
 
+          {/* Post-save acknowledgment — streak, meal correlation, pattern */}
+          {savedResult && !savedResult.mentalHealthAlert && (
+            <View style={styles.ackCard}>
+              {/* Streak / log count */}
+              {savedResult.logStats?.totalLogsThisWeek > 0 && (
+                <Text style={styles.ackTitle}>
+                  ✓ Logged — {savedResult.logStats.totalLogsThisWeek === 1
+                    ? 'First mood log this week!'
+                    : `${savedResult.logStats.totalLogsThisWeek} mood logs this week`}
+                </Text>
+              )}
+              {/* Meal correlation hint */}
+              {savedResult.mealContext?.length > 0 && (
+                <Text style={styles.ackHint}>
+                  🍽 {savedResult.mealContext[0].foodName} logged {Math.round(savedResult.mealContext[0].timeDeltaHours)}h ago — we're connecting food + mood patterns
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Pattern alert — same mood repeated this week */}
+          {savedResult?.patternAlert && (
+            <View style={styles.patternCard}>
+              <Text style={styles.patternText}>{savedResult.patternAlert.message}</Text>
+            </View>
+          )}
+
+          {/* Mental health support card — shown after save if backend flags distress pattern */}
+          {savedResult?.mentalHealthAlert && (
+            <View style={styles.mentalHealthCard}>
+              <Text style={styles.mentalHealthText}>
+                {savedResult.mentalHealthAlert.message}
+              </Text>
+              <TouchableOpacity
+                style={styles.mentalHealthLink}
+                onPress={() => {
+                  const url = savedResult.mentalHealthAlert.resource;
+                  if (url) Linking.openURL(url).catch(() => {});
+                }}
+                accessibilityRole="link"
+                accessibilityLabel={savedResult.mentalHealthAlert.resourceLabel}
+              >
+                <Text style={styles.mentalHealthLinkText}>
+                  {savedResult.mentalHealthAlert.resourceLabel} →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Pre-save pattern nudge — shown when same negative mood detected 2+ times this week */}
+          {preSavePattern && !savedResult && (
+            <View style={styles.preSavePatternCard}>
+              <Text style={styles.preSavePatternText}>{preSavePattern.message}</Text>
+            </View>
+          )}
+
           {/* Action Buttons */}
           <View style={[styles.actions, { borderTopColor: moodColors?.light || MOOD_PALETTE.neutral.light }]}>
             <TouchableOpacity
               style={[styles.cancelButton, { borderColor: moodColors?.base || MOOD_PALETTE.neutral.base }]}
-              onPress={onClose}
+              onPress={handleClose}
               disabled={isLogging}
             >
               <Text style={[styles.cancelButtonText, { color: moodColors?.base || MOOD_PALETTE.neutral.base }]}>Cancel</Text>
@@ -616,6 +888,112 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     textAlign: 'right',
     marginTop: SPACING[1],
+  },
+  timeChips: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+    flexWrap: 'wrap',
+  },
+  timeChip: {
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+  },
+  timeChipText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  freeTextInput: {
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.primary,
+    backgroundColor: '#F9FAFB',
+  },
+  nlpHint: {
+    marginTop: SPACING[1],
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: '#6B7280',
+    textAlign: 'right',
+    fontStyle: 'italic',
+  },
+  ackCard: {
+    marginHorizontal: SPACING[5],
+    marginBottom: SPACING[2],
+    backgroundColor: '#F0FDF4',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  ackTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#065F46',
+  },
+  ackHint: {
+    marginTop: SPACING[1],
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: '#047857',
+  },
+  preSavePatternCard: {
+    marginHorizontal: SPACING[5],
+    marginBottom: SPACING[2],
+    backgroundColor: '#F5F3FF',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    borderLeftWidth: 3,
+    borderLeftColor: '#8B5CF6',
+  },
+  preSavePatternText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: '#5B21B6',
+    lineHeight: 18,
+  },
+  patternCard: {
+    marginHorizontal: SPACING[5],
+    marginBottom: SPACING[2],
+    backgroundColor: '#EFF6FF',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  patternText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: '#1E40AF',
+    lineHeight: 20,
+  },
+  mentalHealthCard: {
+    marginHorizontal: SPACING[5],
+    marginBottom: SPACING[3],
+    backgroundColor: '#FEF3C7',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  mentalHealthText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: '#92400E',
+    lineHeight: 20,
+  },
+  mentalHealthLink: {
+    marginTop: SPACING[2],
+  },
+  mentalHealthLinkText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#B45309',
   },
   actions: {
     flexDirection: 'row',

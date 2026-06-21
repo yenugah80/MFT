@@ -38,43 +38,37 @@ const hexToRgba = (hex, alpha) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// Keys must match the backend's validTagCategories: sleep, exercise, social, weather, stress
 const TAG_CATEGORIES = {
   sleep: {
     label: 'Sleep Quality',
     icon: 'moon',
-    color: MOOD_PALETTE.focused.base,    // Purple
+    color: MOOD_PALETTE.focused.base,
     options: ['Poor', 'Fair', 'Good', 'Excellent'],
   },
   exercise: {
     label: 'Exercise',
     icon: 'barbell',
-    color: SEMANTIC_ACTIONS.success,      // Green
+    color: SEMANTIC_ACTIONS.success,
     options: ['None', 'Light', 'Moderate', 'Intense'],
   },
   social: {
-    label: 'Who With',
+    label: 'Social',
     icon: 'people',
-    color: MOOD_PALETTE.calm.base,        // Cyan
-    options: ['Alone', 'Partner', 'Close Friends', 'Family', 'Coworkers', 'Acquaintances'],
-  },
-  connection: {
-    label: 'Connection Quality',
-    icon: 'heart',
-    color: MOOD_PALETTE.happy.base,       // Warm color for connection
-    options: ['Disconnected', 'Neutral', 'Connected', 'Deeply Connected'],
-    helperText: 'How connected did you feel?',
+    color: MOOD_PALETTE.calm.base,
+    options: ['Alone', 'Partner', 'Friends', 'Family'],
   },
   weather: {
     label: 'Weather',
     icon: 'partly-sunny',
-    color: '#F59E0B',                     // Amber
-    options: ['Sunny', 'Rainy', 'Cloudy', 'Snowy'],
+    color: '#F59E0B',
+    options: ['Sunny', 'Rainy', 'Cloudy', 'Cold'],
   },
   stress: {
     label: 'Work/Stress',
     icon: 'briefcase',
-    color: MOOD_PALETTE.energized.base,   // Orange
-    options: ['Low', 'Medium', 'High', 'Overwhelmed'],
+    color: MOOD_PALETTE.energized.base,
+    options: ['None', 'Low', 'Moderate', 'High'],
   },
 };
 

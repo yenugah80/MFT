@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Personalized Insights API Routes
  *
  * Exposes deep pattern mining and personalized narrative generation
@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { generatePersonalizedNarrative, generateQuickInsight, generateRecommendationContext } from '../services/personalizedNarrativeEngine.js';
 import { mineUserPatterns } from '../services/patternMiningService.js';
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ML Analytics API Routes
  *
  * Exposes ML-enhanced recommendation and analytics endpoints.
@@ -17,7 +17,8 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/admin.js';
 
 // Import ML services
 import {
@@ -481,14 +482,10 @@ router.get('/lagged-correlations/:signal1/:signal2', requireAuth(), async (req, 
  * - batchSize: number (default: 50)
  * - limit: number (optional)
  */
-router.post('/admin/batch', requireAuth(), async (req, res) => {
+router.post('/admin/batch', requireAuth(), requireAdmin, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const { batchSize = 50, limit } = req.body;
-
-    // TODO: Add admin role check here
-    // For now, log the admin action
-    console.log(`[ML API] Admin batch triggered by user: ${userId}`);
 
     const result = await orchestrateAllUsersML({ batchSize, limit });
 
@@ -516,12 +513,9 @@ router.post('/admin/batch', requireAuth(), async (req, res) => {
  * GET /ml/admin/global-statistics
  * Get global arm statistics across all users (admin only)
  */
-router.get('/admin/global-statistics', requireAuth(), async (req, res) => {
+router.get('/admin/global-statistics', requireAuth(), requireAdmin, async (req, res) => {
   try {
     const userId = req.auth.userId;
-
-    // TODO: Add admin role check
-    console.log(`[ML API] Global statistics requested by user: ${userId}`);
 
     const stats = await getGlobalArmStatistics();
 
@@ -548,13 +542,10 @@ router.get('/admin/global-statistics', requireAuth(), async (req, res) => {
  * GET /ml/admin/experiment/:experimentId/analysis
  * Get analysis for a specific experiment (admin only)
  */
-router.get('/admin/experiment/:experimentId/analysis', requireAuth(), async (req, res) => {
+router.get('/admin/experiment/:experimentId/analysis', requireAuth(), requireAdmin, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const { experimentId } = req.params;
-
-    // TODO: Add admin role check
-    console.log(`[ML API] Experiment analysis requested by user: ${userId}`);
 
     const analysis = await analyzeExperiment(experimentId);
 

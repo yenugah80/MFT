@@ -109,26 +109,29 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
   };
 
   useEffect(() => {
+    let glowLoop;
     if (visible) {
+      const glowLoopAnim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
+        ])
+      );
+      glowLoop = glowLoopAnim;
       Animated.sequence([
         Animated.parallel([
           Animated.spring(scaleAnim, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
           Animated.timing(opacityAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
         ]),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(glowAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
-            Animated.timing(glowAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
-          ])
-        )
+        glowLoopAnim,
       ]).start();
     } else {
       scaleAnim.setValue(0);
       opacityAnim.setValue(0);
       glowAnim.setValue(0);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+    return () => glowLoop?.stop();
+  }, [visible, glowAnim, opacityAnim, scaleAnim]);
 
   if (!visible) return null;
 
@@ -308,39 +311,24 @@ export default function PremiumAchievementsCard({
       useNativeDriver: false, // SVG props don't support native driver
     }).start();
 
-    // Flame Pulse Animation (Only if streak exists)
+    let flameLoop;
     if (streak > 0) {
-      Animated.loop(
+      flameLoop = Animated.loop(
         Animated.parallel([
           Animated.sequence([
-            Animated.timing(flameScale, {
-              toValue: 1.1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(flameScale, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
+            Animated.timing(flameScale, { toValue: 1.1, duration: 1000, useNativeDriver: true }),
+            Animated.timing(flameScale, { toValue: 1, duration: 1000, useNativeDriver: true }),
           ]),
           Animated.sequence([
-            Animated.timing(flameOpacity, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(flameOpacity, {
-              toValue: 0.8,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
+            Animated.timing(flameOpacity, { toValue: 1, duration: 1000, useNativeDriver: true }),
+            Animated.timing(flameOpacity, { toValue: 0.8, duration: 1000, useNativeDriver: true }),
           ]),
         ])
-      ).start();
+      );
+      flameLoop.start();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progress, streak]);
+    return () => flameLoop?.stop();
+  }, [progress, streak, progressAnim, flameScale, flameOpacity]);
 
   const strokeDashoffset = progressAnim.interpolate({
     inputRange: [0, 1],

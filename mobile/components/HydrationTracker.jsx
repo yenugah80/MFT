@@ -678,22 +678,14 @@ const WaterRipple = ({ delay = 0 }) => {
   const opacity = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.parallel([
-        Animated.timing(scale, {
-          toValue: 2.5,
-          duration: 1200,
-          delay,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 1200,
-          delay,
-          useNativeDriver: true,
-        }),
+        Animated.timing(scale, { toValue: 2.5, duration: 1200, delay, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 1200, delay, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, []);
 
   return (
@@ -1507,7 +1499,8 @@ export default function HydrationTracker({
 
       if (currentMilestone === 100) {
         setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 3000);
+        const t = setTimeout(() => setShowConfetti(false), 3000);
+        return () => clearTimeout(t);
       }
     }
 
@@ -1526,11 +1519,11 @@ export default function HydrationTracker({
       setIsTipMessage(true);
       setShowMilestone('tip'); // Use a special key for tips
 
-      // Reset after showing
-      setTimeout(() => {
+      const t = setTimeout(() => {
         setMilestoneMessage(null);
         setIsTipMessage(false);
       }, 4500);
+      return () => clearTimeout(t);
     }
   }, [logCount, percentage, streak, selectedBeverage]);
 

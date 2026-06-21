@@ -93,18 +93,18 @@ export default function QuickVoiceButton({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipTimeout = useRef(null);
+  const hideTimeout = useRef(null);
 
   // Show tooltip on first render for 3 seconds
   useEffect(() => {
     tooltipTimeout.current = setTimeout(() => {
       setShowTooltip(true);
-      setTimeout(() => setShowTooltip(false), 3000);
+      hideTimeout.current = setTimeout(() => setShowTooltip(false), 3000);
     }, 1000);
 
     return () => {
-      if (tooltipTimeout.current) {
-        clearTimeout(tooltipTimeout.current);
-      }
+      clearTimeout(tooltipTimeout.current);
+      clearTimeout(hideTimeout.current);
     };
   }, []);
 

@@ -313,6 +313,14 @@ export default function BodyMetricsScreen() {
   const [activityLevel, setActivityLevel] = useState("moderate");
   const [primaryGoal, setPrimaryGoal] = useState("maintain");
 
+  // Weight history
+  const [weightHistory, setWeightHistory] = useState([]);
+  const [weightTrend, setWeightTrend] = useState('stable');
+  const [weightChangeKg, setWeightChangeKg] = useState(0);
+  const [weightHistoryLoading, setWeightHistoryLoading] = useState(false);
+  const [newWeightInput, setNewWeightInput] = useState('');
+  const [loggingWeight, setLoggingWeight] = useState(false);
+
   // Computed values
   const bmi = useMemo(() => calculateBMI(weight, height), [weight, height]);
   const bmiZone = useMemo(() => getBMIZone(bmi), [bmi]);
@@ -346,26 +354,25 @@ export default function BodyMetricsScreen() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const data = await apiClient.get("/profile/me");
-      // API returns: { basics, dietary, goals, gamification, onboardingCompletedAt }
-      console.log("[BodyMetrics] ========== API RESPONSE ==========");
-      console.log("[BodyMetrics] Full basics object:", JSON.stringify(data.basics, null, 2));
-      console.log("[BodyMetrics] weightKg:", data.basics?.weightKg, "| type:", typeof data.basics?.weightKg);
-      console.log("[BodyMetrics] heightCm:", data.basics?.heightCm, "| type:", typeof data.basics?.heightCm);
-      console.log("[BodyMetrics] age:", data.basics?.age, "| type:", typeof data.basics?.age);
-      console.log("[BodyMetrics] gender:", data.basics?.gender);
-      console.log("[BodyMetrics] activityLevel:", data.basics?.activityLevel);
-      console.log("[BodyMetrics] ================================");
+      const [data, wh] = await Promise.all([
+        apiClient.get("/profile/me"),
+        apiClient.get("/nutrition/weight-history").catch(() => null),
+      ]);
 
       setProfile(data);
       setGamification(data.gamification);
-      // Handle numeric values that might be 0 (use != null instead of truthy check)
       setWeight(data.basics?.weightKg != null ? parseFloat(data.basics.weightKg) : null);
       setHeight(data.basics?.heightCm != null ? parseInt(data.basics.heightCm, 10) : null);
       setAge(data.basics?.age != null ? parseInt(data.basics.age, 10) : null);
       setGender(data.basics?.gender || null);
       setActivityLevel(data.basics?.activityLevel || "moderate");
       setPrimaryGoal(data.goals?.primaryGoal || "maintain");
+
+      if (wh) {
+        setWeightHistory(wh.entries || []);
+        setWeightTrend(wh.trend || 'stable');
+        setWeightChangeKg(wh.changeKg || 0);
+      }
     } catch (error) {
       console.error("[BodyMetrics] Failed to load", error);
       setLoadError("Failed to load your data");
@@ -373,6 +380,34 @@ export default function BodyMetricsScreen() {
       setIsLoading(false);
     }
   }, []);
+
+  const logWeight = useCallback(async () => {
+    const kg = parseFloat(newWeightInput);
+    if (isNaN(kg) || kg < 20 || kg > 499) {
+      Alert.alert('Invalid weight', 'Please enter a weight between 20 and 499 kg.');
+      return;
+    }
+    setLoggingWeight(true);
+    try {
+      const clientEventId = `w-${Date.now()}`;
+      await apiClient.post('/nutrition/weight', { weightKg: kg, clientEventId });
+      setNewWeightInput('');
+      setWeight(kg);
+      // Refresh weight history
+      setWeightHistoryLoading(true);
+      const wh = await apiClient.get('/nutrition/weight-history');
+      setWeightHistory(wh.entries || []);
+      setWeightTrend(wh.trend || 'stable');
+      setWeightChangeKg(wh.changeKg || 0);
+      setWeightHistoryLoading(false);
+      showSuccessToast('Weight logged!');
+    } catch (err) {
+      setWeightHistoryLoading(false);
+      Alert.alert('Error', err?.message || 'Failed to log weight.');
+    } finally {
+      setLoggingWeight(false);
+    }
+  }, [newWeightInput]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -574,6 +609,80 @@ export default function BodyMetricsScreen() {
           </View>
         </View>
 
+        {/* Weight History */}
+        <View style={styles.section}>
+          <SectionHeader title="Weight History" icon="scale-outline" />
+          <View style={styles.card}>
+            {/* Quick log row */}
+            <View style={styles.weightLogRow}>
+              <TextInput
+                style={styles.weightLogInput}
+                placeholder="Log today's weight (kg)"
+                placeholderTextColor={TEXT.tertiary}
+                keyboardType="decimal-pad"
+                value={newWeightInput}
+                onChangeText={setNewWeightInput}
+                returnKeyType="done"
+                onSubmitEditing={logWeight}
+              />
+              <TouchableOpacity
+                style={[styles.weightLogBtn, loggingWeight && { opacity: 0.6 }]}
+                onPress={logWeight}
+                disabled={loggingWeight}
+              >
+                {loggingWeight
+                  ? <ActivityIndicator size="small" color="#FFF" />
+                  : <Ionicons name="add" size={20} color="#FFF" />}
+              </TouchableOpacity>
+            </View>
+
+            {/* Trend indicator */}
+            {weightHistory.length > 1 && (
+              <View style={styles.weightTrendRow}>
+                <Ionicons
+                  name={weightTrend === 'gaining' ? 'trending-up' : weightTrend === 'losing' ? 'trending-down' : 'remove'}
+                  size={16}
+                  color={weightTrend === 'gaining' ? '#F59E0B' : weightTrend === 'losing' ? '#3B82F6' : '#10B981'}
+                />
+                <Text style={styles.weightTrendText}>
+                  {weightTrend === 'stable'
+                    ? 'Stable'
+                    : `${weightChangeKg > 0 ? '+' : ''}${(weightChangeKg || 0).toFixed(1)} kg trend`}
+                </Text>
+              </View>
+            )}
+
+            {/* Last 7 entries */}
+            {weightHistoryLoading ? (
+              <ActivityIndicator style={{ margin: 16 }} color={BRAND.primary} />
+            ) : weightHistory.length === 0 ? (
+              <View style={styles.weightEmptyState}>
+                <Ionicons name="scale-outline" size={32} color={TEXT.tertiary} />
+                <Text style={styles.weightEmptyText}>No entries yet. Log your weight above.</Text>
+              </View>
+            ) : (
+              // Show newest 7 entries; backend returns oldest-first so we reverse
+              [...weightHistory].reverse().slice(0, 7).map((entry, i, arr) => {
+                const prev = arr[i + 1]; // prev in display order = older
+                const delta = prev ? parseFloat(entry.weightKg) - parseFloat(prev.weightKg) : 0;
+                const date = new Date(entry.recordedDate || entry.createdAt);
+                const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return (
+                  <View key={entry.id || i} style={[styles.weightEntryRow, i > 0 && styles.weightEntryBorder]}>
+                    <Text style={styles.weightEntryDate}>{label}</Text>
+                    <Text style={styles.weightEntryKg}>{parseFloat(entry.weightKg).toFixed(1)} kg</Text>
+                    {delta !== 0 && (
+                      <Text style={[styles.weightEntryDelta, { color: delta > 0 ? '#F59E0B' : '#3B82F6' }]}>
+                        {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
+        </View>
+
         {/* Journey Stats */}
         <View style={styles.section}>
           <SectionHeader title="Your Journey" icon="trophy-outline" />
@@ -687,6 +796,20 @@ const styles = StyleSheet.create({
   metricEditContainer: { flexDirection: "row", alignItems: "center" },
   metricInput: { fontSize: 15, fontWeight: "600", color: TEXT.primary, borderBottomWidth: 2, borderBottomColor: BRAND.primary, paddingVertical: 4, minWidth: 50, textAlign: "right" },
 
+  // Weight history
+  weightLogRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  weightLogInput: { flex: 1, fontSize: 15, fontFamily: TYPOGRAPHY.family.regular, color: TEXT.primary, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  weightLogBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: BRAND.primary, alignItems: 'center', justifyContent: 'center' },
+  weightTrendRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  weightTrendText: { fontSize: 13, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.secondary },
+  weightEmptyState: { alignItems: 'center', paddingVertical: 28, gap: 8 },
+  weightEmptyText: { fontSize: 13, color: TEXT.tertiary, textAlign: 'center' },
+  weightEntryRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  weightEntryBorder: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  weightEntryDate: { flex: 1, fontSize: 14, color: TEXT.secondary },
+  weightEntryKg: { fontSize: 15, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.primary },
+  weightEntryDelta: { fontSize: 13, fontFamily: TYPOGRAPHY.family.semibold, marginLeft: 8, minWidth: 36, textAlign: 'right' },
+
   // Chips
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: "#FFF", borderWidth: 1.5, borderColor: "#E5E7EB" },
@@ -724,7 +847,7 @@ const styles = StyleSheet.create({
 
   // Success Toast
   successToast: { position: "absolute", top: 60, left: 16, right: 16, zIndex: 1000 },
-  successToastContent: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#10B981", paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, ...SHADOWS.md },
+  successToastContent: { flexDirection: "row", alignItems: "center", gap: 10, ...SHADOWS.md, backgroundColor: "#10B981", paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12 },
   successIconBg: { width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" },
   successToastText: { fontSize: 14, fontWeight: "600", color: "#FFF" },
 });

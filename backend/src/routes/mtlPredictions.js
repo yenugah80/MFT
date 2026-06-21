@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Multi-Task Learning Predictions API
  *
  * Exposes MTL prediction and personalization endpoints.
@@ -14,7 +14,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 
 import {
   predictHealthOutcomes,

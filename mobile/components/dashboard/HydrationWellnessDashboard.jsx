@@ -618,22 +618,14 @@ const WaveProgress = ({ percentage, size = 140 }) => {
   const normalizedPercentage = clamp(percentage, 0, 100);
 
   useEffect(() => {
-    // Wave animation
-    Animated.loop(
-      Animated.timing(waveAnim, {
-        toValue: 1,
-        duration: 3000,
-        useNativeDriver: true,
-      })
-    ).start();
+    const waveLoop = Animated.loop(
+      Animated.timing(waveAnim, { toValue: 1, duration: 3000, useNativeDriver: true })
+    );
+    waveLoop.start();
 
-    // Fill animation
-    Animated.spring(fillAnim, {
-      toValue: percentage,
-      tension: 20,
-      friction: 7,
-      useNativeDriver: false,
-    }).start();
+    Animated.spring(fillAnim, { toValue: percentage, tension: 20, friction: 7, useNativeDriver: false }).start();
+
+    return () => waveLoop.stop();
   }, [percentage]);
 
   const waveTranslate = waveAnim.interpolate({
@@ -810,21 +802,15 @@ const WellnessScoreCard = ({ score, compact = false }) => {
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
+        Animated.timing(glowAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0, duration: 2000, useNativeDriver: true }),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [glowAnim]);
 
   const glowOpacity = glowAnim.interpolate({
     inputRange: [0, 1],
@@ -1036,7 +1022,8 @@ export default function HydrationWellnessDashboard({
       if (onCelebrate) {
         onCelebrate(todayKey); // Notify parent to persist celebration
       }
-      setTimeout(() => setShowConfetti(false), 4000);
+      const confettiTimer = setTimeout(() => setShowConfetti(false), 4000);
+      return () => clearTimeout(confettiTimer);
     }
 
     previousPercentageRef.current = percentage;

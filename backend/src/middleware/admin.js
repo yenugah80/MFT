@@ -35,16 +35,24 @@ export function isAdmin(userId) {
  * Must be used AFTER requireAuth middleware
  *
  * Usage:
- *   router.get('/admin/endpoint', requireAuth, requireAdmin, handler);
+ *   router.get('/admin/endpoint', requireAuth(), requireAdmin, handler);
  */
 export function requireAdmin(req, res, next) {
   const userId = req.auth?.userId;
 
-  // Log all admin access attempts
+  // In production, if no admin IDs are configured the endpoint is completely closed.
+  if (process.env.NODE_ENV === 'production' && ADMIN_USER_IDS.size === 0) {
+    console.error('[Admin] CRITICAL: Admin endpoint hit but ADMIN_USER_IDS is not configured');
+    return res.status(503).json({
+      success: false,
+      error: 'Admin access is not configured on this server',
+    });
+  }
+
   console.log(`[Admin] Access attempt: ${userId || 'unauthenticated'} -> ${req.method} ${req.path}`);
 
   if (!userId) {
-    console.warn(`[Admin] Unauthorized: No user ID`);
+    console.warn('[Admin] Unauthorized: No user ID');
     return res.status(401).json({
       success: false,
       error: 'Authentication required',

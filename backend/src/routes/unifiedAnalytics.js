@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unified Analytics API Routes
  *
  * Provides endpoints for comprehensive analytics across all health domains
@@ -14,7 +14,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import {
   assessDataAvailability,
   getTimeframeAnalytics,

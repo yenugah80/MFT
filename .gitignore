@@ -56,6 +56,11 @@ mobile/sign-up-*.png
 *.jks
 *.mobileprovision
 
+# Firebase config — injected at build time via EAS Secrets
+mobile/google-services.json
+mobile/GoogleService-Info.plist
+mobile/google-service-account.json
+
 # Cloudflare
 .wrangler/
 .dev.vars

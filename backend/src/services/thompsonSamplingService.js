@@ -42,7 +42,7 @@ const DEFAULT_BETA = 1;  // Prior failures (pseudo-count)
 
 // Contextual arm categories
 const ARM_CATEGORIES = {
-  RECOMMENDATION_TYPE: ['PROTEIN_BOOST', 'LIGHT_SNACK', 'HYDRATION', 'REGIONAL_PICK', 'BALANCED_MEAL', 'FIBER_RICH', 'LOW_SODIUM'],
+  RECOMMENDATION_TYPE: ['PROTEIN_BOOST', 'LIGHT_SNACK', 'HYDRATION', 'REGIONAL_PICK', 'BALANCED_MEAL', 'FIBER_RICH', 'LOW_SODIUM', 'MICRONUTRIENT_BOOST'],
   MEAL_TYPE: ['breakfast', 'lunch', 'dinner', 'snack'],
   TIME_BUCKET: ['morning', 'midday', 'afternoon', 'evening', 'night'],
 };

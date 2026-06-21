@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Gamification API Routes
  *
  * Endpoints for badges, leaderboards, challenges, and XP
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import gamificationService from '../services/enhancedGamificationService.js';
 import analyticsEventPipeline from '../services/analyticsEventPipeline.js';
 

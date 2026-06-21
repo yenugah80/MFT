@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Correlations API Route
  *
  * Endpoints:
@@ -19,7 +19,7 @@ import {
 import {
   processIntentOverride,
 } from '../services/userIntentOverrideService.js';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -44,9 +44,16 @@ router.post('/compute', async (req, res) => {
       forceRecompute: forceRecompute || false,
     });
 
-    // Save each correlation to database
-    for (const correlation of result.correlations) {
-      await saveCorrelation(userId, correlation);
+    // Save correlations concurrently; collect partial failures instead of crashing
+    const saveResults = await Promise.allSettled(
+      result.correlations.map((c) => saveCorrelation(userId, c))
+    );
+    const failed = saveResults.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      console.error(
+        `[API] Failed to save ${failed.length}/${result.correlations.length} correlations for user ${userId}:`,
+        failed.map((f) => f.reason?.message)
+      );
     }
 
     res.json({
@@ -54,13 +61,15 @@ router.post('/compute', async (req, res) => {
       userId,
       computedAt: result.computedAt,
       correlationCount: result.correlations.length,
+      savedCount: result.correlations.length - failed.length,
+      failedCount: failed.length,
       correlations: result.correlations,
     });
   } catch (error) {
     console.error('[API] Error in POST /correlations/compute:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: ENV?.IS_PRODUCTION ? 'Internal server error' : error.message,
     });
   }
 });
@@ -78,18 +87,33 @@ router.post('/compute', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const {
-      minConfidence = 0.5,
-      correlationType = null,
-      limit = 10,
-    } = req.query;
+    const VALID_CORRELATION_TYPES = [
+      'mood_food', 'stress_eating', 'hydration_mood', 'activity_recovery',
+      'sleep_nutrition', 'caffeine_sleep', 'sugar_mood',
+    ];
+
+    const rawConfidence = parseFloat(req.query.minConfidence);
+    const minConfidence = Number.isFinite(rawConfidence)
+      ? Math.min(Math.max(rawConfidence, 0), 1)
+      : 0.5;
+
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = Number.isInteger(rawLimit)
+      ? Math.min(Math.max(rawLimit, 1), 100)
+      : 10;
+
+    const correlationType =
+      req.query.correlationType &&
+      VALID_CORRELATION_TYPES.includes(req.query.correlationType)
+        ? req.query.correlationType
+        : null;
 
     console.log(`[API] GET /correlations for user: ${userId}`);
 
     const correlations = await getUserCorrelations(userId, {
-      minConfidence: parseFloat(minConfidence),
+      minConfidence,
       correlationType,
-      limit: parseInt(limit),
+      limit,
     });
 
     res.json({

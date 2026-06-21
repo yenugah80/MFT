@@ -34,7 +34,7 @@ const router = express.Router();
  *   platform: 'ios' | 'android' | 'web'
  *   dataDays: number of days of data the user has
  */
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -61,7 +61,7 @@ router.get('/', requireAuth, async (req, res) => {
  * GET /api/flags/:flagName
  * Returns a specific flag state for the authenticated user
  */
-router.get('/:flagName', requireAuth, async (req, res) => {
+router.get('/:flagName', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
     const { flagName } = req.params;
@@ -100,7 +100,7 @@ router.get('/:flagName', requireAuth, async (req, res) => {
  * GET /api/flags/admin/config
  * Returns all flag configurations (admin only)
  */
-router.get('/admin/config', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
+router.get('/admin/config', requireAuth(), requireAdmin, adminLimiter, async (req, res) => {
   try {
     const config = getFlagConfig();
 
@@ -118,7 +118,7 @@ router.get('/admin/config', requireAuth, requireAdmin, adminLimiter, async (req,
  * POST /api/flags/admin/:flagName/enable
  * Enables a flag for all users (100% rollout)
  */
-router.post('/admin/:flagName/enable', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
+router.post('/admin/:flagName/enable', requireAuth(), requireAdmin, adminLimiter, async (req, res) => {
   try {
     const { flagName } = req.params;
 
@@ -139,7 +139,7 @@ router.post('/admin/:flagName/enable', requireAuth, requireAdmin, adminLimiter, 
  * POST /api/flags/admin/:flagName/disable
  * Disables a flag for all users (kill switch)
  */
-router.post('/admin/:flagName/disable', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
+router.post('/admin/:flagName/disable', requireAuth(), requireAdmin, adminLimiter, async (req, res) => {
   try {
     const { flagName } = req.params;
 
@@ -163,7 +163,7 @@ router.post('/admin/:flagName/disable', requireAuth, requireAdmin, adminLimiter,
  *   enabled: boolean
  *   rolloutPercent: number 0-100
  */
-router.patch('/admin/:flagName', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
+router.patch('/admin/:flagName', requireAuth(), requireAdmin, adminLimiter, async (req, res) => {
   try {
     const { flagName } = req.params;
     const updates = req.body;
@@ -187,7 +187,7 @@ router.patch('/admin/:flagName', requireAuth, requireAdmin, adminLimiter, async 
  * Body:
  *   userId: string
  */
-router.post('/admin/:flagName/allowlist', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
+router.post('/admin/:flagName/allowlist', requireAuth(), requireAdmin, adminLimiter, async (req, res) => {
   try {
     const { flagName } = req.params;
     const { userId } = req.body;
@@ -213,7 +213,7 @@ router.post('/admin/:flagName/allowlist', requireAuth, requireAdmin, adminLimite
  * DELETE /api/flags/admin/:flagName/allowlist/:userId
  * Removes a user from the flag allowlist
  */
-router.delete('/admin/:flagName/allowlist/:userId', requireAuth, requireAdmin, adminLimiter, async (req, res) => {
+router.delete('/admin/:flagName/allowlist/:userId', requireAuth(), requireAdmin, adminLimiter, async (req, res) => {
   try {
     const { flagName, userId } = req.params;
 

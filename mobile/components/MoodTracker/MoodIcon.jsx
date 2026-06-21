@@ -134,7 +134,6 @@ const MoodIcon = ({
   variant = 'gradient',
 }) => {
   const config = MOOD_CONFIG[mood] || MOOD_CONFIG.neutral;
-  const moodColors = MOOD_PALETTE?.[mood] || config;
   const iconSize = Math.round(size * 0.55);
 
   const handlePress = async () => {

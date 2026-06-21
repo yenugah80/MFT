@@ -3,13 +3,16 @@ import multer from "multer";
 import { FoodService } from "../services/foodService.js";
 import { requireAuth } from "../middleware/auth.js";
 import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
+import { db } from "../config/db.js";
+import { aiEstimatedFoodsTable } from "../db/schema.js";
+import { eq } from "drizzle-orm";
 
 // Configure Multer for audio file uploads
 const upload = multer({ dest: "uploads/" });
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.use(requireAuth());
 
 /**
  * GET /api/food/search
@@ -278,18 +281,29 @@ router.post("/transcribe-voice", upload.single('audio'), async (req, res) => {
 
     console.log(`[FoodTranscribeVoice] Transcribing audio: ${audioFile.originalname}, size: ${audioFile.size} bytes`);
 
-    // Read file buffer from disk (multer saves to disk)
     const fs = await import('fs');
-    const audioBuffer = fs.readFileSync(audioFile.path);
 
-    // Transcribe voice using FoodService
-    const result = await FoodService.transcribeVoice(audioBuffer, { language });
+    let audioBuffer;
+    try {
+      audioBuffer = fs.readFileSync(audioFile.path);
+    } catch (fsErr) {
+      console.error('[FoodTranscribeVoice] Failed to read temp audio file:', fsErr.message);
+      try { fs.unlinkSync(audioFile.path); } catch {}
+      return res.status(500).json({ error: 'Failed to read uploaded audio file' });
+    }
 
-    // Clean up temp file
-    fs.unlinkSync(audioFile.path);
+    let result;
+    try {
+      result = await FoodService.transcribeVoice(audioBuffer, { language });
+    } finally {
+      // Always clean up temp file, even on transcription error
+      try { fs.unlinkSync(audioFile.path); } catch (cleanErr) {
+        console.warn('[FoodTranscribeVoice] Failed to delete temp file:', cleanErr.message);
+      }
+    }
 
     if (!result || !result.transcript) {
-      return res.status(500).json({ error: "Transcription failed" });
+      return res.status(500).json({ error: 'Transcription failed' });
     }
 
     res.json(result);
@@ -333,18 +347,28 @@ router.post("/analyze-voice", upload.single('audio'), async (req, res) => {
 
     console.log(`[FoodAnalyzeVoice] Processing audio: ${audioFile.originalname}, size: ${audioFile.size} bytes`);
 
-    // Read file buffer from disk (multer saves to disk)
     const fs = await import('fs');
-    const audioBuffer = fs.readFileSync(audioFile.path);
 
-    // Analyze voice using FoodService
-    const result = await FoodService.analyzeVoice(audioBuffer, { language });
+    let audioBuffer;
+    try {
+      audioBuffer = fs.readFileSync(audioFile.path);
+    } catch (fsErr) {
+      console.error('[FoodAnalyzeVoice] Failed to read temp audio file:', fsErr.message);
+      try { fs.unlinkSync(audioFile.path); } catch {}
+      return res.status(500).json({ error: 'Failed to read uploaded audio file' });
+    }
 
-    // Clean up temp file
-    fs.unlinkSync(audioFile.path);
+    let result;
+    try {
+      result = await FoodService.analyzeVoice(audioBuffer, { language });
+    } finally {
+      try { fs.unlinkSync(audioFile.path); } catch (cleanErr) {
+        console.warn('[FoodAnalyzeVoice] Failed to delete temp file:', cleanErr.message);
+      }
+    }
 
     if (!result) {
-      return res.status(500).json({ error: "Voice analysis failed" });
+      return res.status(500).json({ error: 'Voice analysis failed' });
     }
 
     res.json(result);
@@ -584,33 +608,26 @@ router.post("/verify-nutrition", async (req, res) => {
       region
     });
 
-    // Import AiEstimatedFood model
-    const { AiEstimatedFood } = await import("../models/AiEstimatedFood.js");
+    // Look up the food item using Drizzle
+    const [food] = await db
+      .select()
+      .from(aiEstimatedFoodsTable)
+      .where(eq(aiEstimatedFoodsTable.id, parseInt(itemId)))
+      .limit(1);
 
-    // Find the food item
-    const food = await AiEstimatedFood.findById(itemId);
     if (!food) {
       return res.status(404).json({ error: "Food item not found" });
     }
 
-    // Add user verification record
-    const verificationRecord = {
-      userId,
-      verified,
-      corrections: verified ? {} : corrections, // Only store corrections if not verified
-      region: region || food.region,
-      cuisine: cuisine || food.cuisine,
-      timestamp: new Date()
-    };
+    // Calculate updated counters
+    let newVerificationCount = food.verificationCount || 0;
+    let newCorrectionCount = food.correctionCount || 0;
+    let updatedNutrition = food.nutrition;
 
-    food.userVerifications = food.userVerifications || [];
-    food.userVerifications.push(verificationRecord);
-
-    // Update counters
     if (verified) {
-      food.verificationCount = (food.verificationCount || 0) + 1;
+      newVerificationCount += 1;
     } else {
-      food.correctionCount = (food.correctionCount || 0) + 1;
+      newCorrectionCount += 1;
 
       // Apply corrections if significant (>10% difference from current estimate)
       if (corrections && Object.keys(corrections).length > 0) {
@@ -618,8 +635,7 @@ router.post("/verify-nutrition", async (req, res) => {
         const correctedCals = corrections.calories || currentCals;
 
         if (currentCals > 0 && Math.abs(correctedCals - currentCals) / currentCals > 0.1) {
-          // Update nutrition with corrections
-          food.nutrition = {
+          updatedNutrition = {
             ...food.nutrition,
             calories: corrections.calories || food.nutrition.calories,
             protein: corrections.protein || food.nutrition.protein,
@@ -631,52 +647,39 @@ router.post("/verify-nutrition", async (req, res) => {
     }
 
     // Recalculate confidence based on verification ratio
-    const totalVerifications = food.verificationCount + food.correctionCount;
-    if (totalVerifications > 0) {
-      food.confidence = food.verificationCount / totalVerifications;
-    }
+    const totalVerifications = newVerificationCount + newCorrectionCount;
+    const newConfidence = totalVerifications > 0
+      ? (newVerificationCount / totalVerifications).toFixed(2)
+      : food.confidence;
 
-    // Update regional accuracy tracking
-    if (region) {
-      const regionKey = region;
-      if (!food.regionalAccuracy) {
-        food.regionalAccuracy = new Map();
-      }
+    // Mark as verified if threshold met (>= 3 verifications)
+    const newIsVerified = newVerificationCount >= 3;
 
-      const regionStats = food.regionalAccuracy.get(regionKey) || {
-        verifiedCount: 0,
-        correctedCount: 0,
-        avgConfidence: food.confidence || 0
-      };
-
-      if (verified) {
-        regionStats.verifiedCount += 1;
-      } else {
-        regionStats.correctedCount += 1;
-      }
-
-      regionStats.avgConfidence = (
-        (regionStats.verifiedCount * food.confidence) +
-        (regionStats.correctedCount * 0.5)
-      ) / (regionStats.verifiedCount + regionStats.correctedCount);
-
-      food.regionalAccuracy.set(regionKey, regionStats);
-    }
-
-    // Save updated food item
-    await food.save();
+    // Persist updates using Drizzle
+    const [updatedFood] = await db
+      .update(aiEstimatedFoodsTable)
+      .set({
+        verificationCount: newVerificationCount,
+        correctionCount: newCorrectionCount,
+        confidence: newConfidence,
+        isVerified: newIsVerified,
+        nutrition: updatedNutrition,
+        updatedAt: new Date(),
+      })
+      .where(eq(aiEstimatedFoodsTable.id, food.id))
+      .returning();
 
     console.log('[FoodVerification] Verification saved:', {
       itemId,
-      newConfidence: food.confidence,
+      newConfidence: updatedFood.confidence,
       totalVerifications
     });
 
     res.json({
       success: true,
-      newConfidence: food.confidence,
-      verificationCount: food.verificationCount,
-      correctionCount: food.correctionCount,
+      newConfidence: parseFloat(updatedFood.confidence),
+      verificationCount: updatedFood.verificationCount,
+      correctionCount: updatedFood.correctionCount,
       message: verified
         ? 'Thank you for confirming! This helps improve accuracy for others.'
         : 'Thank you for the correction! We\'ve updated the estimates.'

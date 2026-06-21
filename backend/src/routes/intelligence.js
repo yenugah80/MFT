@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Intelligence API Routes
  *
  * Unified endpoint for all intelligence features:
@@ -11,7 +11,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { getUnifiedIntelligence } from '../services/unifiedIntelligenceService.js';
 import {
   trackRecommendationAction,

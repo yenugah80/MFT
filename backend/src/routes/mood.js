@@ -9,14 +9,27 @@ import { getMoodIntelligence } from "../services/moodRecommendationEngine.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationRewardService.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
+import { invalidateUserSignals } from "../services/userSignalCacheService.js";
+import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
 
 const router = express.Router();
 
-// 💰 COST OPTIMIZATION: In-memory cache for insights (24-hour TTL)
-const insightsCache = new Map();
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-router.use(requireAuth);
+// In-memory cache for AI insights — bounded to 500 entries, 24-hour TTL per entry
+const insightsCache = new Map();
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+const CACHE_MAX = 500;
+
+function setCacheEntry(key, value) {
+  if (insightsCache.size >= CACHE_MAX) {
+    // Evict the oldest entry (Map preserves insertion order)
+    insightsCache.delete(insightsCache.keys().next().value);
+  }
+  insightsCache.set(key, value);
+}
+
+router.use(requireAuth());
 
 /**
  * POST /api/mood/log
@@ -44,6 +57,10 @@ router.post("/log", async (req, res) => {
     // Validate clientEventId for idempotency
     if (!clientEventId) {
       return errors.missingField(res, 'clientEventId');
+    }
+
+    if (clientEventId && !UUID_RE.test(clientEventId)) {
+      return errors.badRequest(res, 'clientEventId must be a valid UUID v4');
     }
 
     // Validate mood value (8 core moods)
@@ -77,8 +94,9 @@ router.post("/log", async (req, res) => {
       }
     }
 
-    // Find recent meals (within 4 hours) for context
-    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    // Find recent meals within 4 hours of the mood's logged time (user-timezone-aware)
+    const moodTime = safeLoggedDate.getTime();
+    const fourHoursAgo = new Date(moodTime - 4 * 60 * 60 * 1000);
     const recentMeals = await db
       .select()
       .from(foodLogTable)
@@ -118,6 +136,14 @@ router.post("/log", async (req, res) => {
       .returning();
 
     const isNewEntry = result.length > 0;
+
+    if (isNewEntry) {
+      invalidateUserSignals(userId);
+      // Purge any cached insights for this user so next request reflects the new log
+      for (const key of insightsCache.keys()) {
+        if (key.startsWith(`${userId}-`)) insightsCache.delete(key);
+      }
+    }
 
     // If duplicate, fetch the existing entry
     let entry;
@@ -166,6 +192,71 @@ router.post("/log", async (req, res) => {
       clearPatternCache(userId);
     }
 
+    // Mental health safeguard: check for 3+ consecutive high-distress logs in last 5 days
+    let mentalHealthAlert = null;
+    try {
+      const distressMoods = ['sad', 'stressed'];
+      const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+      const recentDistress = await db
+        .select()
+        .from(moodLogTable)
+        .where(and(
+          eq(moodLogTable.userId, userId),
+          gte(moodLogTable.loggedDate, fiveDaysAgo)
+        ))
+        .orderBy(desc(moodLogTable.loggedDate))
+        .limit(5);
+
+      // Count distinct days with high-intensity distress
+      const distressDays = new Set(
+        recentDistress
+          .filter(m => distressMoods.includes(m.mood) && (m.intensity || 5) >= 7)
+          .map(m => m.dayKey || m.loggedDate?.toISOString?.().slice(0, 10))
+      );
+
+      if (distressDays.size >= 3) {
+        mentalHealthAlert = {
+          type: 'support_resource',
+          message: "We've noticed you've been feeling low for a few days. It's okay to ask for support.",
+          resource: 'https://www.crisistextline.org',
+          resourceLabel: 'Talk to someone',
+        };
+      }
+    } catch (err) {
+      console.error('[MoodLog] Mental health check failed (non-fatal):', err);
+    }
+
+    // Count how many times user logged this mood in the last 7 days (for pattern feedback + acknowledgment)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [moodFreqRow] = await db
+      .select({ count: sql`count(*)` })
+      .from(moodLogTable)
+      .where(and(
+        eq(moodLogTable.userId, userId),
+        eq(moodLogTable.mood, entry.mood || mood.toLowerCase()),
+        gte(moodLogTable.loggedDate, sevenDaysAgo)
+      ));
+    const moodFrequencyThisWeek = parseInt(moodFreqRow?.count || 0);
+
+    // Count total logs this week (for acknowledgment)
+    const [weekCountRow] = await db
+      .select({ count: sql`count(*)` })
+      .from(moodLogTable)
+      .where(and(
+        eq(moodLogTable.userId, userId),
+        gte(moodLogTable.loggedDate, sevenDaysAgo)
+      ));
+    const totalLogsThisWeek = parseInt(weekCountRow?.count || 0);
+
+    // Pattern alert — same mood 3+ times in 7 days
+    const NEGATIVE_MOODS = ['sad', 'stressed', 'tired'];
+    const patternAlert = moodFrequencyThisWeek >= 3 && NEGATIVE_MOODS.includes(entry.mood || mood.toLowerCase())
+      ? {
+          message: `You've logged "${entry.mood || mood}" ${moodFrequencyThisWeek} times this week. We're tracking what food and sleep patterns connect to this.`,
+          frequency: moodFrequencyThisWeek,
+        }
+      : null;
+
     // For API response, enrich with meal details
     const mealDetailsForResponse = recentMeals.map(m => ({
       id: m.id,
@@ -174,14 +265,22 @@ router.post("/log", async (req, res) => {
       protein: m.protein,
       fats: m.fats,
       novaScore: m.novaScore,
-      timeDeltaHours: (new Date() - new Date(m.loggedDate)) / 3600000,
+      timeDeltaHours: (Date.now() - new Date(m.loggedDate).getTime()) / 3600000,
     }));
 
     res.json({
       entry,
       wasDuplicate: !isNewEntry,
-      mealContext: mealDetailsForResponse
+      mealContext: mealDetailsForResponse,
+      logStats: { totalLogsThisWeek, moodFrequencyThisWeek },
+      ...(patternAlert && { patternAlert }),
+      ...(mentalHealthAlert && { mentalHealthAlert }),
     });
+
+    // Background: refresh lagged correlations after a new mood log.
+    // Throttled to once per 24h per user so frequent logging doesn't hammer the DB.
+    if (isNewEntry) triggerBackgroundAnalysis(userId);
+
   } catch (error) {
     console.error("[MoodLog] Error:", error);
     errors.internal(res, 'Failed to log mood');
@@ -197,23 +296,19 @@ router.get("/history", async (req, res) => {
     const userId = req.auth.userId;
     const { startDate, endDate, limit = 30 } = req.query;
 
-    let query = db
+    // Build conditions array so userId is never overwritten by date filters
+    const conditions = [eq(moodLogTable.userId, userId)];
+    if (startDate) conditions.push(gte(moodLogTable.loggedDate, new Date(startDate)));
+    if (endDate) conditions.push(lte(moodLogTable.loggedDate, new Date(endDate)));
+
+    const parsedLimit = Math.min(Math.max(parseInt(limit) || 30, 1), 365);
+
+    const history = await db
       .select()
       .from(moodLogTable)
-      .where(eq(moodLogTable.userId, userId))
-      .orderBy(desc(moodLogTable.loggedDate));
-
-    // Add date filters if provided
-    if (startDate && endDate) {
-      query = query.where(
-        and(
-          gte(moodLogTable.loggedDate, new Date(startDate)),
-          lte(moodLogTable.loggedDate, new Date(endDate))
-        )
-      );
-    }
-
-    const history = await query.limit(parseInt(limit));
+      .where(and(...conditions))
+      .orderBy(desc(moodLogTable.loggedDate))
+      .limit(parsedLimit);
 
     res.json(history);
   } catch (error) {
@@ -261,11 +356,17 @@ router.get("/trends", async (req, res) => {
     const userId = req.auth.userId;
     const { period = 'week' } = req.query;
 
-    // Calculate date range based on period
-    const days = { day: 1, week: 7, month: 30 }[period] || 7;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
+    const VALID_PERIODS = { day: 1, week: 7, month: 30 };
+    if (period && !VALID_PERIODS[period]) {
+      return errors.invalidValue(res, 'period', 'must be one of: day, week, month');
+    }
+    const days = VALID_PERIODS[period] || 7;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    // Compute start of period in the user's local timezone, not server UTC
+    const nowLocal = new Date(Date.now() - offsetMinutes * 60 * 1000);
+    nowLocal.setUTCDate(nowLocal.getUTCDate() - days);
+    nowLocal.setUTCHours(0, 0, 0, 0);
+    const startDate = new Date(nowLocal.getTime() + offsetMinutes * 60 * 1000);
 
     const moods = await db
       .select()
@@ -286,9 +387,8 @@ router.get("/trends", async (req, res) => {
       if (entry.dayKey) return entry.dayKey;
       const date = new Date(entry.loggedDate);
       if (Number.isNaN(date.getTime())) return null;
-      const offset = Number.isFinite(entry.timezoneOffset)
-        ? entry.timezoneOffset
-        : date.getTimezoneOffset();
+      // Use 0 (UTC) as neutral fallback — server timezone is wrong for all non-local users
+      const offset = Number.isFinite(entry.timezoneOffset) ? entry.timezoneOffset : 0;
       const localMs = date.getTime() - offset * 60 * 1000;
       const local = new Date(localMs);
       const year = local.getUTCFullYear();
@@ -374,8 +474,10 @@ router.post("/insights", async (req, res) => {
     const userId = req.auth.userId;
     const { days = 30, forceRefresh = false } = req.body;
 
-    // 💰 Check cache first (save AI costs!)
-    const cacheKey = `${userId}-${days}`;
+    // Cache key includes today's date so a new day always refreshes,
+    // and a new mood log within the same day can use forceRefresh=true
+    const today = new Date().toISOString().slice(0, 10);
+    const cacheKey = `${userId}-${days}-${today}`;
     const cached = insightsCache.get(cacheKey);
 
     if (!forceRefresh && cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -452,16 +554,60 @@ router.post("/insights", async (req, res) => {
       cached: false,
     };
 
-    // 💰 Cache the result for 24 hours
-    insightsCache.set(cacheKey, {
-      data: responseData,
-      timestamp: Date.now(),
-    });
+    setCacheEntry(cacheKey, { data: responseData, timestamp: Date.now() });
 
     res.json(responseData);
   } catch (error) {
     console.error("[MoodInsights] Error:", error);
     errors.internal(res, 'Failed to generate mood insights');
+  }
+});
+
+/**
+ * GET /api/mood/pattern-check?mood=sad
+ * Lightweight check: how many times has user logged this mood in last 7 days?
+ * Called when user selects a mood in the logger, before they tap Save.
+ * Returns a nudge message if the mood is repeated 3+ times this week.
+ */
+router.get("/pattern-check", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { mood } = req.query;
+
+    const VALID_MOODS = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
+    if (!mood || !VALID_MOODS.includes(mood.toLowerCase())) {
+      return res.json({ patternAlert: null });
+    }
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [row] = await db
+      .select({ count: sql`count(*)` })
+      .from(moodLogTable)
+      .where(and(
+        eq(moodLogTable.userId, userId),
+        eq(moodLogTable.mood, mood.toLowerCase()),
+        gte(moodLogTable.loggedDate, sevenDaysAgo)
+      ));
+
+    const count = parseInt(row?.count || 0);
+    const NEGATIVE_MOODS = ['sad', 'stressed', 'tired'];
+    const isNegative = NEGATIVE_MOODS.includes(mood.toLowerCase());
+
+    if (count >= 2 && isNegative) {
+      return res.json({
+        patternAlert: {
+          count,
+          message: count >= 3
+            ? `You've felt ${mood} ${count} times this week — we're tracking what food and sleep patterns connect to this.`
+            : `You've felt ${mood} ${count} times this week. We'll track what influences this for you.`,
+        },
+      });
+    }
+
+    res.json({ patternAlert: null });
+  } catch (error) {
+    console.error("[MoodPatternCheck] Error:", error);
+    res.json({ patternAlert: null }); // non-fatal — don't block logging
   }
 });
 
@@ -478,14 +624,7 @@ router.get("/intelligence", async (req, res) => {
     const intelligence = await getMoodIntelligence(userId);
 
     if (!intelligence) {
-      return res.status(404).json({
-        error: 'Insufficient data',
-        message: 'Not enough data to generate mood intelligence. Keep logging your mood, food, and activities.',
-        dataRequired: {
-          moodLogs: 5,
-          daysActive: 3
-        }
-      });
+      return errors.notFound(res, 'Mood intelligence (insufficient data – keep logging mood, food, and activities)');
     }
 
     res.json(intelligence);

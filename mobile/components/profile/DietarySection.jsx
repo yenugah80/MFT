@@ -106,8 +106,18 @@ const AnimatedChip = ({ label, isSelected, onPress, index, isEditing }) => {
   );
 };
 
+const SEVERITY_COLORS = {
+  mild:        { bg: '#fef3c7', text: '#92400e', dot: '#d97706' },
+  moderate:    { bg: '#ffedd5', text: '#9a3412', dot: '#ea580c' },
+  severe:      { bg: '#fee2e2', text: '#991b1b', dot: '#dc2626' },
+  anaphylaxis: { bg: '#fde8e8', text: '#7f1d1d', dot: '#7f1d1d' },
+};
+
+const SEVERITY_OPTIONS = ['mild', 'moderate', 'severe', 'anaphylaxis'];
+const TYPE_OPTIONS     = ['allergy', 'intolerance', 'preference'];
+
 // Allergy pill with danger styling
-const AllergyPill = ({ label, onRemove, isEditing, index }) => {
+const AllergyPill = ({ label, severity, type, onRemove, onSeverityChange, onTypeChange, isEditing, index }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -130,34 +140,86 @@ const AllergyPill = ({ label, onRemove, isEditing, index }) => {
     }).start(() => onRemove());
   }, [scaleAnim, onRemove]);
 
+  const sevColors = SEVERITY_COLORS[severity] || SEVERITY_COLORS.moderate;
+
   return (
-    <Animated.View
-      style={{
-        transform: [{ scale: scaleAnim }],
-        opacity: scaleAnim,
-      }}
-    >
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: scaleAnim }}>
+      {/* Main pill row */}
       <View style={styles.allergyPill}>
-        <Ionicons
-          name="warning"
-          size={14}
-          color={SEMANTIC.danger.dark}
-          style={styles.allergyIcon}
-        />
+        <View style={[styles.severityDot, { backgroundColor: sevColors.dot }]} />
         <Text style={styles.allergyText}>{label}</Text>
+        {/* Severity badge */}
+        <View style={[styles.severityBadge, { backgroundColor: sevColors.bg }]}>
+          <Text style={[styles.severityBadgeText, { color: sevColors.text }]}>
+            {severity || 'moderate'}
+          </Text>
+        </View>
+        {/* Type badge */}
+        {type && type !== 'allergy' && (
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>{type}</Text>
+          </View>
+        )}
         {isEditing && (
           <TouchableOpacity
             onPress={handleRemove}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons
-              name="close-circle"
-              size={18}
-              color={SEMANTIC.danger.base}
-            />
+            <Ionicons name="close-circle" size={18} color={SEMANTIC.danger.base} />
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Inline edit controls — only shown in edit mode */}
+      {isEditing && (
+        <View style={styles.allergyEditControls}>
+          <View style={styles.allergyPickerRow}>
+            {SEVERITY_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => onSeverityChange && onSeverityChange(label, opt)}
+                style={[
+                  styles.allergyPickerChip,
+                  severity === opt && {
+                    backgroundColor: (SEVERITY_COLORS[opt] || {}).dot || SEMANTIC.danger.base,
+                    borderColor: (SEVERITY_COLORS[opt] || {}).dot || SEMANTIC.danger.base,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.allergyPickerChipText,
+                    severity === opt && { color: '#fff' },
+                  ]}
+                >
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={styles.allergyPickerRow}>
+            {TYPE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => onTypeChange && onTypeChange(label, opt)}
+                style={[
+                  styles.allergyPickerChip,
+                  type === opt && { backgroundColor: SEMANTIC.info?.base || '#3b82f6', borderColor: SEMANTIC.info?.base || '#3b82f6' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.allergyPickerChipText,
+                    type === opt && { color: '#fff' },
+                  ]}
+                >
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
     </Animated.View>
   );
 };
@@ -233,13 +295,37 @@ export default function DietarySection({
     if (!current.includes(tag)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       updateField('dietary', 'allergies', [...current, tag]);
+      // Default severity/type when a new allergy is added
+      const sev = { ...(dietary.allergenSeverity || {}), [tag]: 'moderate' };
+      const typ = { ...(dietary.intoleranceType  || {}), [tag]: 'allergy'  };
+      updateField('dietary', 'allergenSeverity', sev);
+      updateField('dietary', 'intoleranceType',  typ);
     }
-  }, [dietary.allergies, updateField]);
+  }, [dietary.allergies, dietary.allergenSeverity, dietary.intoleranceType, updateField]);
 
   const removeAllergy = useCallback((tag) => {
     const current = dietary.allergies || [];
     updateField('dietary', 'allergies', current.filter(t => t !== tag));
-  }, [dietary.allergies, updateField]);
+    // Remove orphan severity/type entries
+    const sev = { ...(dietary.allergenSeverity || {}) };
+    const typ = { ...(dietary.intoleranceType  || {}) };
+    delete sev[tag];
+    delete typ[tag];
+    updateField('dietary', 'allergenSeverity', sev);
+    updateField('dietary', 'intoleranceType',  typ);
+  }, [dietary.allergies, dietary.allergenSeverity, dietary.intoleranceType, updateField]);
+
+  const updateAllergenSeverity = useCallback((tag, severity) => {
+    updateField('dietary', 'allergenSeverity', {
+      ...(dietary.allergenSeverity || {}), [tag]: severity,
+    });
+  }, [dietary.allergenSeverity, updateField]);
+
+  const updateAllergenType = useCallback((tag, type) => {
+    updateField('dietary', 'intoleranceType', {
+      ...(dietary.intoleranceType || {}), [tag]: type,
+    });
+  }, [dietary.intoleranceType, updateField]);
 
   const addDislike = useCallback((tag) => {
     const current = dietary.dislikes || [];
@@ -324,7 +410,11 @@ export default function DietarySection({
                   <AllergyPill
                     key={tag}
                     label={tag}
+                    severity={(dietary.allergenSeverity || {})[tag] || 'moderate'}
+                    type={(dietary.intoleranceType || {})[tag] || 'allergy'}
                     onRemove={() => removeAllergy(tag)}
+                    onSeverityChange={updateAllergenSeverity}
+                    onTypeChange={updateAllergenType}
                     isEditing={isEditing}
                     index={index}
                   />
@@ -476,6 +566,60 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: SEMANTIC.danger.dark,
+    flex: 1,
+  },
+  severityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 2,
+  },
+  severityBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  severityBadgeText: {
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    textTransform: 'capitalize',
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59,130,246,0.10)',
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: '#1d4ed8',
+    textTransform: 'capitalize',
+  },
+  allergyEditControls: {
+    gap: 6,
+    paddingTop: 6,
+    paddingLeft: 14,
+  },
+  allergyPickerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  allergyPickerChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(107,114,128,0.25)',
+    backgroundColor: SURFACES.background.tertiary,
+  },
+  allergyPickerChipText: {
+    fontSize: 11,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.secondary,
+    textTransform: 'capitalize',
   },
   dislikePill: {
     flexDirection: 'row',

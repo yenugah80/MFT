@@ -37,51 +37,34 @@ export default function StreakSavedModal({
   const lottieRef = useRef(null);
 
   useEffect(() => {
+    let rotateLoop;
+    let glowLoop;
     if (visible) {
-      // Reset animations
       scaleAnim.setValue(0);
       snowflakeRotate.setValue(0);
 
-      // Scale in with celebration
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 40,
-        friction: 5,
-        useNativeDriver: true,
-      }).start();
+      Animated.spring(scaleAnim, { toValue: 1, tension: 40, friction: 5, useNativeDriver: true }).start();
 
-      // Snowflake rotation
-      Animated.loop(
-        Animated.timing(snowflakeRotate, {
-          toValue: 1,
-          duration: 8000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      ).start();
+      rotateLoop = Animated.loop(
+        Animated.timing(snowflakeRotate, { toValue: 1, duration: 8000, easing: Easing.linear, useNativeDriver: true })
+      );
+      rotateLoop.start();
 
-      // Glow pulse
-      Animated.loop(
+      glowLoop = Animated.loop(
         Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 0.6,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0.3,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
+          Animated.timing(glowAnim, { toValue: 0.6, duration: 1500, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0.3, duration: 1500, useNativeDriver: true }),
         ])
-      ).start();
+      );
+      glowLoop.start();
 
-      // Play celebration animation
-      if (lottieRef.current) {
-        lottieRef.current.play();
-      }
+      lottieRef.current?.play();
     }
-  }, [visible]);
+    return () => {
+      rotateLoop?.stop();
+      glowLoop?.stop();
+    };
+  }, [visible, scaleAnim, snowflakeRotate, glowAnim]);
 
   const snowflakeSpin = snowflakeRotate.interpolate({
     inputRange: [0, 1],

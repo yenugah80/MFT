@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.silverhorn.myfoodtracker</string>
+	<string>com.zennxt.myfoodtracker</string>
 	<key>PROJECT_ID</key>
 	<string>myft-a9fc5</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:1012021599388:ios:7c9f8217bef14d9e702159</string>
+	<string>1:1012021599388:ios:786b9d351d8d532a702159</string>
 </dict>
 </plist>

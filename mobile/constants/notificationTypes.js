@@ -120,9 +120,9 @@ export const PREFERENCE_KEY_MAP = {
   hydrationNudges: 'hydration',
   activityReminders: 'activity',
   moodCheckins: 'mood',
-  streakProtection: 'motivation',
-  insightDrops: 'motivation',
-  streakCelebrations: 'motivation',
+  streakProtection: 'streakProtection',
+  insightDrops: 'insightDrops',
+  streakCelebrations: 'streakCelebrations',
 };
 
 // Default preference values

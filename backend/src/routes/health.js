@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Health Platform API Routes
  *
  * Endpoints for HealthKit/Google Fit integration
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import healthPlatformService from '../services/healthPlatformService.js';
 import analyticsEventPipeline from '../services/analyticsEventPipeline.js';
 

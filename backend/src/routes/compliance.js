@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Compliance Routes
  * Tracks dietary compliance and provides analytics for user preferences
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { foodLogTable, dietaryPreferencesTable } from '../db/schema.js';
@@ -77,56 +77,85 @@ router.get('/compliance-history', requireAuth(), async (req, res) => {
 });
 
 /**
- * Calculate daily compliance score based on user preferences
+ * Points deducted per allergen violation, keyed by severity.
  *
- * Algorithm:
- * - Allergen violation = 0 points (critical)
+ * anaphylaxis / severe → full 100-point penalty (safety-critical)
+ * moderate             → 75-point penalty
+ * mild                 → 40-point penalty
+ * intolerance type     → halves the penalty (body can handle it, just uncomfortable)
+ * preference type      → treated like a dietary mismatch, not a safety issue
+ */
+const SEVERITY_PENALTY = {
+  anaphylaxis: 100,
+  severe:      100,
+  moderate:     75,
+  mild:         40,
+};
+
+function allergenPenalty(allergen, allergenSeverity, intoleranceType) {
+  const severity = (allergenSeverity || {})[allergen] || 'moderate';
+  const type     = (intoleranceType  || {})[allergen] || 'allergy';
+
+  if (type === 'preference') return 15; // soft penalty — just a dislike
+
+  const basePenalty = SEVERITY_PENALTY[severity] ?? 75;
+  // Intolerance is physically unpleasant but not life-threatening — halve penalty
+  return type === 'intolerance' ? Math.round(basePenalty * 0.5) : basePenalty;
+}
+
+/**
+ * Calculate daily compliance score based on user preferences.
+ *
+ * Algorithm (severity-aware):
+ * - Allergen violation penalty depends on severity + intolerance/allergy/preference type
  * - Dietary preference match = weighted by preference strength
- * - Score = (compliant_meals / total_meals) * 100
+ * - Score = 100 - avg_penalty_per_meal clamped to [0, 100]
  */
 function calculateDailyCompliance(meals, dietaryProfile) {
-  if (!meals || meals.length === 0) {
-    return 100; // No meals logged = perfect compliance
-  }
+  if (!meals || meals.length === 0) return 100;
 
-  const { preferences = [], allergies = [] } = dietaryProfile;
+  const {
+    preferences    = [],
+    allergies      = [],
+    allergenSeverity = {},
+    intoleranceType  = {},
+  } = dietaryProfile;
 
   let totalScore = 0;
-  let maxScore = 0;
+  let maxScore   = 0;
 
   meals.forEach(meal => {
-    // Extract dietary info from meal
-    const mealAllergens = meal.allergens || [];
+    const mealAllergens  = meal.allergens  || [];
     const mealDietLabels = meal.dietLabels || [];
 
-    // CRITICAL: Check for allergen violations
-    const hasAllergen = mealAllergens.some(a =>
-      allergies.includes(a)
-    );
+    // --- Allergen violations ---
+    const violatedAllergens = mealAllergens.filter(a => allergies.includes(a));
 
-    if (hasAllergen) {
-      // Allergen violation = 0 points (critical safety issue)
-      maxScore += 100;
-      totalScore += 0;
+    if (violatedAllergens.length > 0) {
+      // Take the worst violation in this meal
+      const maxPenalty = Math.max(
+        ...violatedAllergens.map(a => allergenPenalty(a, allergenSeverity, intoleranceType))
+      );
+      maxScore   += 100;
+      totalScore += Math.max(0, 100 - maxPenalty);
       return;
     }
 
-    // Check dietary preference compliance
+    // --- Dietary preference compliance ---
     const matchingPrefs = preferences.filter(pref => {
       const prefId = typeof pref === 'string' ? pref : pref.id;
       return mealDietLabels.includes(prefId);
     });
 
-    // Calculate compliance points
     const compliancePoints = preferences.length > 0
       ? (matchingPrefs.length / preferences.length) * 100
-      : 100; // No preferences = compliant
+      : 100;
 
     totalScore += compliancePoints;
-    maxScore += 100;
+    maxScore   += 100;
   });
 
-  return maxScore > 0 ? Math.round((totalScore / maxScore)) : 100;
+  return maxScore > 0 ? Math.round(totalScore / maxScore) : 100;
 }
 
 export default router;

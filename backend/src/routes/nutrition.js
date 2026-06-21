@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../config/db.js";
-import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable, userPortionPreferencesTable } from "../db/schema.js";
+import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable, userPortionPreferencesTable, profilesTable } from "../db/schema.js";
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC } from "../utils/timezone.js";
@@ -15,6 +15,8 @@ import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLog
 import { calculateLevel } from "../utils/levelCalculator.js";
 import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
+import { invalidateUserSignals } from "../services/userSignalCacheService.js";
+import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -27,7 +29,7 @@ const openai = process.env.OPENAI_API_KEY
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.use(requireAuth());
 router.use(async (req, res, next) => {
   await ensureDailyNutritionSummaryTableShape();
   await ensureWaterLogTableShape();
@@ -44,9 +46,11 @@ router.post("/log", async (req, res) => {
   try {
     const userId = req.auth.userId;
     const {
-      foodName, calories, protein, carbs, fats,
+      foodName, calories, protein, carbs, fats, fiber, sugar, sodium,
       servingSize, mealType, micros, nutriscore, ecoscore, novaScore, dietLabels, allergens, ingredients, barcode, imageUrl,
-      clientEventId, sourceMeta, loggedDate
+      clientEventId, sourceMeta, loggedDate,
+      cuisine, cookingMethod, aiModel, aiConfidence,
+      voiceTranscript, multimodalSource, ingredientsBreakdown
     } = req.body;
 
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
@@ -75,6 +79,9 @@ router.post("/log", async (req, res) => {
         protein,
         carbs,
         fats,
+        fiber: fiber ?? null,
+        sugar: sugar ?? null,
+        sodium: sodium ?? null,
         servingSize,
         mealType,
         micros: micros || {},
@@ -89,6 +96,13 @@ router.post("/log", async (req, res) => {
         clientEventId,
         sourceMeta: sourceMeta || {},
         loggedDate: safeLoggedDate,
+        cuisine: cuisine || null,
+        cookingMethod: cookingMethod || null,
+        aiModel: aiModel || null,
+        aiConfidence: aiConfidence ?? null,
+        voiceTranscript: voiceTranscript || null,
+        multimodalSource: multimodalSource || {},
+        ingredientsBreakdown: ingredientsBreakdown || [],
       })
       .onConflictDoNothing({
         target: foodLogTable.clientEventId
@@ -96,6 +110,12 @@ router.post("/log", async (req, res) => {
       .returning();
 
     const isNewEntry = result.length > 0;
+
+    // Invalidate the user signal cache so the next recommendation fetch
+    // reflects the new nutritional intake (affects gap calculations)
+    if (isNewEntry) {
+      invalidateUserSignals(userId);
+    }
 
     // 4. Only update daily summary if this is a NEW entry (not duplicate)
     const today = getLocalDateUTC(offsetMinutes, safeLoggedDate);
@@ -239,6 +259,10 @@ router.post("/log", async (req, res) => {
       gamification: gamificationResult,
     });
 
+    // Background: refresh lagged correlations after a new food log.
+    // Throttled to once per 24h per user so frequent logging doesn't hammer the DB.
+    if (isNewEntry) triggerBackgroundAnalysis(userId);
+
   } catch (error) {
     console.error("[NutritionLog] Error:", error);
 
@@ -324,10 +348,10 @@ router.put("/log/:id", async (req, res) => {
     if (caloriesDelta !== 0 || proteinDelta !== 0 || carbsDelta !== 0 || fatsDelta !== 0) {
       await db.update(dailyNutritionSummaryTable)
         .set({
-          totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${caloriesDelta}`,
-          totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${proteinDelta}`,
-          totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbsDelta}`,
-          totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fatsDelta}`,
+          totalCalories: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCalories} + ${caloriesDelta})`,
+          totalProtein: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalProtein} + ${proteinDelta})`,
+          totalCarbs: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCarbs} + ${carbsDelta})`,
+          totalFats: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalFats} + ${fatsDelta})`,
           updatedAt: new Date(),
         })
         .where(
@@ -411,10 +435,10 @@ router.delete("/log/:id", async (req, res) => {
 
     await db.update(dailyNutritionSummaryTable)
       .set({
-        totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0}`,
-        totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0}`,
-        totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0}`,
-        totalFats: sql`${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0}`,
+        totalCalories: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0})`,
+        totalProtein: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0})`,
+        totalCarbs: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0})`,
+        totalFats: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0})`,
         updatedAt: new Date(),
       })
       .where(
@@ -1690,5 +1714,200 @@ async function _trackPortionAdjustment(userId, canonicalName, portionAmount, por
     console.error("[PortionLearning] Error tracking adjustment:", err);
   }
 }
+
+// ============================================================================
+// MICRONUTRIENT TREND TRACKING
+// Aggregates daily micronutrient intake over 30 days and computes deficit streaks
+// ============================================================================
+
+const MICRONUTRIENT_RDA = {
+  calcium:    { rda: 1000, unit: 'mg' },
+  iron:       { rda: 18,   unit: 'mg' },
+  magnesium:  { rda: 400,  unit: 'mg' },
+  potassium:  { rda: 3500, unit: 'mg' },
+  zinc:       { rda: 11,   unit: 'mg' },
+  vitaminA:   { rda: 900,  unit: 'mcg' },
+  vitaminC:   { rda: 90,   unit: 'mg' },
+  vitaminD:   { rda: 20,   unit: 'mcg' },
+  vitaminB12: { rda: 2.4,  unit: 'mcg' },
+  folate:     { rda: 400,  unit: 'mcg' },
+};
+
+/**
+ * GET /api/nutrition/micronutrient-trends
+ * Returns per-nutrient daily totals + deficit streaks for the last 30 days
+ */
+router.get("/micronutrient-trends", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const days = Math.min(parseInt(req.query.days || '30', 10), 90);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+
+    const since = addDaysUTC(new Date(), -days, offsetMinutes);
+
+    // Pull all food logs with micros for the window
+    const logs = await db
+      .select({ loggedDate: foodLogTable.loggedDate, micros: foodLogTable.micros })
+      .from(foodLogTable)
+      .where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, since)))
+      .orderBy(foodLogTable.loggedDate);
+
+    // Aggregate micros by calendar day
+    const byDay = {};
+    for (const log of logs) {
+      const day = normalizeDateUTC(log.loggedDate, offsetMinutes);
+      if (!byDay[day]) byDay[day] = {};
+
+      const micros = log.micros || {};
+      for (const [key, raw] of Object.entries(micros)) {
+        const val = typeof raw === 'number' ? raw
+          : typeof raw === 'object' && raw !== null ? parseFloat(raw.value ?? 0)
+          : parseFloat(String(raw).replace(/[^0-9.]/g, '') || '0');
+        if (!isNaN(val)) byDay[day][key] = (byDay[day][key] || 0) + val;
+      }
+    }
+
+    // Build daily rows sorted by date
+    const sortedDays = Object.keys(byDay).sort();
+
+    // Per-nutrient analysis
+    const nutrientAnalysis = {};
+    for (const [nutrient, { rda, unit }] of Object.entries(MICRONUTRIENT_RDA)) {
+      const dailyValues = sortedDays.map(d => ({ date: d, value: byDay[d][nutrient] || 0 }));
+
+      // Compute deficit streak (consecutive trailing days below 70% RDA)
+      let deficitStreak = 0;
+      for (let i = dailyValues.length - 1; i >= 0; i--) {
+        if (dailyValues[i].value < rda * 0.7) deficitStreak++;
+        else break;
+      }
+
+      // Weekly average
+      const last7 = dailyValues.slice(-7);
+      const avgLast7 = last7.length > 0
+        ? last7.reduce((s, d) => s + d.value, 0) / last7.length
+        : 0;
+
+      const percentOfRDA = rda > 0 ? Math.round((avgLast7 / rda) * 100) : 0;
+
+      nutrientAnalysis[nutrient] = {
+        rda,
+        unit,
+        dailyValues,
+        avgLast7: Math.round(avgLast7 * 10) / 10,
+        percentOfRDA,
+        deficitStreak,
+        status: percentOfRDA >= 100 ? 'adequate'
+               : percentOfRDA >= 70  ? 'low'
+               : 'deficient',
+      };
+    }
+
+    // Surface top deficits (deficitStreak >= 3 days)
+    const activeDeficits = Object.entries(nutrientAnalysis)
+      .filter(([, n]) => n.deficitStreak >= 3)
+      .sort((a, b) => b[1].deficitStreak - a[1].deficitStreak)
+      .map(([name, n]) => ({
+        nutrient: name,
+        deficitStreak: n.deficitStreak,
+        percentOfRDA: n.percentOfRDA,
+        unit: n.unit,
+        rda: n.rda,
+      }));
+
+    res.json({
+      userId,
+      windowDays: days,
+      nutrientAnalysis,
+      activeDeficits,
+      totalDaysTracked: sortedDays.length,
+    });
+  } catch (error) {
+    console.error("[MicronutrientTrends] Error:", error);
+    errors.internal(res, "Failed to compute micronutrient trends");
+  }
+});
+
+// ============================================================================
+// WEIGHT HISTORY
+// ============================================================================
+
+/**
+ * POST /api/nutrition/weight
+ * Log a body weight measurement
+ */
+router.post("/weight", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const { weightKg, recordedDate, clientEventId } = req.body;
+
+    if (!weightKg || isNaN(parseFloat(weightKg))) {
+      return errors.missingField(res, 'weightKg');
+    }
+    const weight = parseFloat(weightKg);
+    if (weight <= 20 || weight >= 499) {
+      return errors.invalidValue(res, 'weightKg', 'must be between 20 and 499 kg');
+    }
+
+    const safeDate = recordedDate ? new Date(recordedDate) : new Date();
+    const eventId = clientEventId || `weight-${userId}-${safeDate.toISOString()}`;
+
+    const [entry] = await db.insert(weightHistoryTable)
+      .values({ userId, weightKg: weight.toFixed(2), recordedDate: safeDate, clientEventId: eventId })
+      .onConflictDoNothing({ target: [weightHistoryTable.userId, weightHistoryTable.clientEventId] })
+      .returning();
+
+    // Also update profile with latest weight
+    await db.update(profilesTable)
+      .set({ weightKg: weight.toFixed(2), updatedAt: new Date() })
+      .where(eq(profilesTable.userId, userId));
+
+    res.json({ success: true, entry: entry || null });
+  } catch (error) {
+    console.error("[WeightLog] Error:", error);
+    errors.internal(res, "Failed to log weight");
+  }
+});
+
+/**
+ * GET /api/nutrition/weight-history
+ * Returns last N weight entries with trend analysis
+ */
+router.get("/weight-history", async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const limit = Math.min(parseInt(req.query.limit || '90', 10), 365);
+
+    const entries = await db
+      .select()
+      .from(weightHistoryTable)
+      .where(eq(weightHistoryTable.userId, userId))
+      .orderBy(desc(weightHistoryTable.recordedDate))
+      .limit(limit);
+
+    const sorted = [...entries].reverse(); // oldest first for trend
+
+    let trend = 'stable';
+    let changeKg = 0;
+    if (sorted.length >= 2) {
+      const first = parseFloat(sorted[0].weightKg);
+      const last = parseFloat(sorted[sorted.length - 1].weightKg);
+      changeKg = Math.round((last - first) * 10) / 10;
+      if (changeKg > 0.5) trend = 'gaining';
+      else if (changeKg < -0.5) trend = 'losing';
+    }
+
+    res.json({
+      entries: sorted,
+      latest: sorted[sorted.length - 1] || null,
+      trend,
+      changeKg,
+      totalEntries: sorted.length,
+    });
+  } catch (error) {
+    console.error("[WeightHistory] Error:", error);
+    errors.internal(res, "Failed to fetch weight history");
+  }
+});
 
 export default router;

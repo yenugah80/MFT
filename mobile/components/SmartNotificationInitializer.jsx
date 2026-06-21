@@ -11,7 +11,7 @@
  * Place this component inside the NotificationProvider.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { AppState } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNotification } from '../providers/NotificationProvider';
@@ -45,8 +45,7 @@ export default function SmartNotificationInitializer({ children }) {
     return Date.now() - lastCheck > interval;
   };
 
-  // Try to trigger a smart notification
-  const tryTrigger = async (type) => {
+  const tryTrigger = useCallback(async (type) => {
     if (!isSignedIn || !notify?.smart?.trigger) return null;
 
     const canSend = await SmartNotificationEngine.shouldSendNotification(type);
@@ -58,38 +57,30 @@ export default function SmartNotificationInitializer({ children }) {
       console.log(`[SmartNotifications] Triggered ${type} notification`);
     }
     return result;
-  };
+  }, [isSignedIn, notify]);
 
-  // Run contextual checks based on time
-  const runContextualChecks = async () => {
+  const runContextualChecks = useCallback(async () => {
     if (!isSignedIn) return;
 
     const hour = new Date().getHours();
 
-    // Morning (8-11am): hydration + breakfast
     if (hour >= 8 && hour < 11) {
       if (canCheck('hydration')) await tryTrigger('hydration');
       if (canCheck('meal') && hour >= 9) await tryTrigger('meal');
     }
-
-    // Midday (12-14): lunch + hydration
     if (hour >= 12 && hour < 14) {
       if (canCheck('meal')) await tryTrigger('meal');
       if (canCheck('hydration')) await tryTrigger('hydration');
     }
-
-    // Afternoon (14-18): activity + hydration
     if (hour >= 14 && hour < 18) {
       if (canCheck('activity')) await tryTrigger('activity');
       if (canCheck('hydration')) await tryTrigger('hydration');
     }
-
-    // Evening (18-22): dinner + mood
     if (hour >= 18 && hour < 22) {
       if (canCheck('meal')) await tryTrigger('meal');
       if (canCheck('mood') && hour >= 19) await tryTrigger('mood');
     }
-  };
+  }, [isSignedIn, tryTrigger]);
 
   // Watch for goal achievements to trigger celebrations
   // NOTE: Hydration celebrations are handled by HydrationTracker's MilestoneToast
@@ -121,39 +112,27 @@ export default function SmartNotificationInitializer({ children }) {
   // Handle app state changes - run checks when app comes to foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
-        // Delay to let app settle
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
         setTimeout(runContextualChecks, 3000);
       }
       appStateRef.current = nextAppState;
     });
-
     return () => subscription.remove();
-  }, [isSignedIn]);
+  }, [runContextualChecks]);
 
-  // Initial check on mount (with delay)
-  useEffect(() => {
-    if (isSignedIn) {
-      const timeout = setTimeout(runContextualChecks, 15000); // 15 second delay
-      return () => clearTimeout(timeout);
-    }
-  }, [isSignedIn]);
-
-  // Periodic checks every 30 minutes while app is active
   useEffect(() => {
     if (!isSignedIn) return;
+    const timeout = setTimeout(runContextualChecks, 15000);
+    return () => clearTimeout(timeout);
+  }, [isSignedIn, runContextualChecks]);
 
+  useEffect(() => {
+    if (!isSignedIn) return;
     const interval = setInterval(() => {
-      if (appStateRef.current === 'active') {
-        runContextualChecks();
-      }
+      if (appStateRef.current === 'active') runContextualChecks();
     }, 30 * 60 * 1000);
-
     return () => clearInterval(interval);
-  }, [isSignedIn]);
+  }, [isSignedIn, runContextualChecks]);
 
   return children;
 }

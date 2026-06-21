@@ -28,8 +28,17 @@ export const nutritionGoalsSchema = z.object({
   waterLiters: z.coerce.number().nonnegative().optional(),
 });
 
+// ~7MB base64 cap (raw image ≈ 5MB → base64 ≈ 6.7MB + small overhead)
+const MAX_IMAGE_B64_CHARS = 7 * 1024 * 1024;
+
 export const imageAnalysisSchema = z.object({
-  image: z.string({ required_error: "Image base64 data is required" }),
-  highAccuracy: z.boolean().optional(),
-  includeIngredients: z.boolean().optional(),
+  image: z
+    .string({ required_error: "Image base64 data is required" })
+    .max(MAX_IMAGE_B64_CHARS, "Image too large. Maximum size is 5 MB.")
+    .refine(
+      (v) => /^data:image\/(jpeg|jpg|png|webp|gif);base64,/.test(v),
+      "Invalid image format. Supported: jpeg, png, webp, gif."
+    ),
+  highAccuracy: z.boolean().optional().default(false),
+  includeIngredients: z.boolean().optional().default(false),
 });

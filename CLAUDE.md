@@ -109,6 +109,11 @@ MFT/
 - `shared/types/` - TypeScript type definitions
 - `shared/i18n/` - Translation files (es, fr, hi, zh)
 
+## Agent & Skill Resources
+
+- **Design System Reference**: `agents/design-system.md` — complete token reference for all agents and skills. Read before writing any mobile UI code.
+- **UI Component Skill**: `agents/skills/ui-component.md` — invoke with `/ui-component <description>` to scaffold components following the design system.
+
 ## Theme System
 
 **IMPORTANT**: The app uses a light background theme. Use these constants correctly:

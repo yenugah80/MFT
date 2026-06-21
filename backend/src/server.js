@@ -868,7 +868,7 @@ app.use("/api/meal-plan", mealPlanRouter);
 /* -------------------------------------------
    FOOD SEARCH ENDPOINT (BFF)
 -------------------------------------------- */
-app.get("/api/food/search", requireAuth, async (req, res) => {
+app.get("/api/food/search", requireAuth(), async (req, res) => {
   try {
     const { query } = req.query;
     if (!query) {
@@ -882,7 +882,7 @@ app.get("/api/food/search", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/food/barcode/:code", requireAuth, async (req, res) => {
+app.get("/api/food/barcode/:code", requireAuth(), async (req, res) => {
   try {
     const { code } = req.params;
     if (!code) {
@@ -899,7 +899,7 @@ app.get("/api/food/barcode/:code", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/food/analyze-image", requireAuth, imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
+app.post("/api/food/analyze-image", requireAuth(), imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
   try {
     const { image } = req.body; // Expecting base64 string
     const result = await FoodService.analyzeImage(image);
@@ -921,7 +921,7 @@ app.post("/api/food/analyze-image", requireAuth, imageLimiter, validate(imageAna
 /* -------------------------------------------
    MEAL API PROXY ENDPOINTS (BFF)
 -------------------------------------------- */
-app.get("/api/food/meal/:id", requireAuth, async (req, res) => {
+app.get("/api/food/meal/:id", requireAuth(), async (req, res) => {
   try {
     const { id } = req.params;
     const meal = await FoodService.getMealById(id);
@@ -932,7 +932,7 @@ app.get("/api/food/meal/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/food/random-meals", requireAuth, async (req, res) => {
+app.get("/api/food/random-meals", requireAuth(), async (req, res) => {
   try {
     const count = req.query.count ? parseInt(req.query.count) : 6;
     const meals = await FoodService.getRandomMeals(count);
@@ -942,7 +942,7 @@ app.get("/api/food/random-meals", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/food/categories", requireAuth, async (req, res) => {
+app.get("/api/food/categories", requireAuth(), async (req, res) => {
   try {
     const categories = await FoodService.getCategories();
     res.status(200).json(categories);
@@ -951,7 +951,7 @@ app.get("/api/food/categories", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/food/filter", requireAuth, async (req, res) => {
+app.get("/api/food/filter", requireAuth(), async (req, res) => {
   try {
     const { i, c } = req.query;
     let meals = [];

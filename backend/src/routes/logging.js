@@ -8,8 +8,8 @@ import {
 
 const router = express.Router();
 
-router.post("/meal", requireAuth, logMeal);
-router.post("/water", requireAuth, logWater);
-router.post("/mood", requireAuth, logMood);
+router.post("/meal", requireAuth(), logMeal);
+router.post("/water", requireAuth(), logWater);
+router.post("/mood", requireAuth(), logMood);
 
 export default router;

@@ -26,9 +26,9 @@ import {
   foodLogTable,
   moodLogTable,
   waterLogTable,
-  profilesTable,
 } from '../db/schema.js';
-import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { eq, and, gte, desc, sql } from 'drizzle-orm';
+import jStat from 'jstat';
 
 /**
  * ============================================
@@ -36,10 +36,10 @@ import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
  * ============================================
  */
 
-// Lag search parameters
+// Lag search parameters — default window is 7 days because dietary effects
+// (sugar → mood, fiber → energy) can take 1–4 days to manifest.
 const DEFAULT_MIN_LAG_HOURS = 0;
-const DEFAULT_MAX_LAG_HOURS = 48;
-const LAG_STEP_HOURS = 1; // Search every hour
+const DEFAULT_MAX_LAG_HOURS = 7 * 24; // 168 h
 
 // Statistical thresholds
 const SIGNIFICANCE_LEVEL = 0.05;
@@ -66,14 +66,16 @@ const SIGNALS = {
 
 // Predefined signal pairs to analyze
 const SIGNAL_PAIRS = [
-  { signalA: 'sugar_intake', signalB: 'mood_score', hypothesis: 'Sugar affects mood' },
-  { signalA: 'sugar_intake', signalB: 'energy_level', hypothesis: 'Sugar affects energy' },
-  { signalA: 'hydration_level', signalB: 'energy_level', hypothesis: 'Hydration affects energy' },
-  { signalA: 'hydration_level', signalB: 'mood_score', hypothesis: 'Hydration affects mood' },
-  { signalA: 'protein_intake', signalB: 'energy_level', hypothesis: 'Protein affects energy' },
-  { signalA: 'nova_score_avg', signalB: 'mood_score', hypothesis: 'Processed foods affect mood' },
-  { signalA: 'fiber_intake', signalB: 'energy_level', hypothesis: 'Fiber affects energy' },
-  { signalA: 'calorie_intake', signalB: 'mood_score', hypothesis: 'Calories affect mood' },
+  { signalA: 'sugar_intake',    signalB: 'mood_score',    hypothesis: 'Sugar affects mood' },
+  { signalA: 'sugar_intake',    signalB: 'energy_level',  hypothesis: 'Sugar affects energy' },
+  { signalA: 'hydration_level', signalB: 'energy_level',  hypothesis: 'Hydration affects energy' },
+  { signalA: 'hydration_level', signalB: 'mood_score',    hypothesis: 'Hydration affects mood' },
+  { signalA: 'protein_intake',  signalB: 'energy_level',  hypothesis: 'Protein affects energy' },
+  { signalA: 'nova_score_avg',  signalB: 'mood_score',    hypothesis: 'Processed foods affect mood' },
+  { signalA: 'fiber_intake',    signalB: 'energy_level',  hypothesis: 'Fiber affects energy' },
+  { signalA: 'calorie_intake',  signalB: 'mood_score',    hypothesis: 'Calories affect mood' },
+  { signalA: 'stress_level',    signalB: 'mood_score',    hypothesis: 'Stress affects mood' },
+  { signalA: 'stress_level',    signalB: 'energy_level',  hypothesis: 'Stress affects energy' },
 ];
 
 /**
@@ -133,57 +135,40 @@ function pearsonCorrelation(x, y) {
   };
 }
 
-/**
- * T-distribution CDF approximation
- */
+// jStat provides exact CDF implementations for both distributions,
+// replacing the hand-rolled series approximations that lost precision at df < 30.
 function tDistributionCDF(t, df) {
-  // Use normal approximation for large df
-  if (df > 30) {
-    return normalCDF(t);
-  }
+  return jStat.studentt.cdf(t, df);
+}
 
-  // Beta function approximation for smaller df
-  const x = df / (df + t * t);
-  return 1 - 0.5 * betaIncomplete(df / 2, 0.5, x);
+function fDistributionCDF(f, d1, d2) {
+  return jStat.centralF.cdf(f, d1, d2);
 }
 
 /**
- * Normal CDF
+ * Benjamini-Hochberg FDR correction for multiple comparisons.
+ * Given m p-values, returns a boolean array where true = reject null at FDR level alpha.
+ *
+ * Procedure:
+ *   1. Sort p-values ascending: p_(1) ≤ p_(2) ≤ ... ≤ p_(m)
+ *   2. Find the largest k such that p_(k) ≤ (k/m) * alpha
+ *   3. Reject all hypotheses 1..k
+ *
+ * @param {number[]} pValues
+ * @param {number} alpha  - FDR level (e.g. 0.05)
+ * @returns {boolean[]}   - parallel to pValues; true = significant after correction
  */
-function normalCDF(x) {
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-
-  const sign = x < 0 ? -1 : 1;
-  x = Math.abs(x) / Math.sqrt(2);
-
-  const t = 1.0 / (1.0 + p * x);
-  const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
-
-  return 0.5 * (1.0 + sign * y);
-}
-
-/**
- * Incomplete beta function
- */
-function betaIncomplete(a, b, x) {
-  const maxIterations = 100;
-  const epsilon = 1e-8;
-
-  let result = 0;
-  let term = 1;
-
-  for (let n = 0; n < maxIterations; n++) {
-    term *= (a + n) * x / (a + b + n);
-    result += term;
-    if (Math.abs(term) < epsilon) break;
+function benjaminiHochberg(pValues, alpha = 0.05) { // cspell:ignore benjamini hochberg
+  const m = pValues.length;
+  if (m === 0) return [];
+  const indexed = pValues.map((p, i) => ({ p, i })).sort((a, b) => a.p - b.p);
+  let lastRejected = -1;
+  for (let k = 0; k < m; k++) {
+    if (indexed[k].p <= ((k + 1) / m) * alpha) lastRejected = k;
   }
-
-  return result * Math.pow(x, a) * Math.pow(1 - x, b) / a;
+  const rejected = new Array(m).fill(false);
+  for (let k = 0; k <= lastRejected; k++) rejected[indexed[k].i] = true;
+  return rejected;
 }
 
 /**
@@ -255,7 +240,9 @@ export function computeCrossCorrelation(signalA, signalB, minLag = 0, maxLag = 2
   // Find the optimal lag's full result
   const optimalResult = correlations.find(c => c.lag === optimalLag);
 
-  // Calculate confidence interval for optimal correlation
+  // Calculate confidence interval using Fisher z-transformation.
+  // Clamp to (-0.9999, 0.9999) to avoid atanh(±1) = ±Infinity.
+  const rClamped = Math.max(-0.9999, Math.min(0.9999, maxCorrelation));
   const ciWidth = 1.96 / Math.sqrt(optimalResult.n - 3);
 
   return {
@@ -265,8 +252,8 @@ export function computeCrossCorrelation(signalA, signalB, minLag = 0, maxLag = 2
     optimalPValue: optimalResult.pValue,
     isSignificant: optimalResult.significant,
     confidenceInterval: {
-      lower: Math.tanh(Math.atanh(maxCorrelation) - ciWidth),
-      upper: Math.tanh(Math.atanh(maxCorrelation) + ciWidth),
+      lower: Math.tanh(Math.atanh(rClamped) - ciWidth),
+      upper: Math.tanh(Math.atanh(rClamped) + ciWidth),
     },
     crossCorrelationFunction: correlations,
     sampleSize: optimalResult.n,
@@ -329,16 +316,16 @@ export function grangerCausalityTest(signalA, signalB, maxLag = 3) {
   const rssUnrestricted = unrestrictedPredictions.rss;
 
   // F-test
-  const dfRestricted = n - maxLag - maxLag - 1;
   const dfUnrestricted = n - maxLag - 2 * maxLag - 1;
   const dfNumerator = maxLag;
 
-  if (rssUnrestricted <= 0 || dfUnrestricted <= 0) {
+  if (!isFinite(rssRestricted) || !isFinite(rssUnrestricted) || rssUnrestricted <= 0 || dfUnrestricted <= 0) {
     return { valid: false, error: 'Invalid regression results' };
   }
 
-  const fStatistic = ((rssRestricted - rssUnrestricted) / dfNumerator) /
-    (rssUnrestricted / dfUnrestricted);
+  // Clamp to 0: negative F (restricted fits better) means no causality, not invalid math.
+  const fStatistic = Math.max(0, ((rssRestricted - rssUnrestricted) / dfNumerator) /
+    (rssUnrestricted / dfUnrestricted));
 
   // Calculate p-value (using F-distribution approximation)
   const pValue = 1 - fDistributionCDF(fStatistic, dfNumerator, dfUnrestricted);
@@ -359,47 +346,67 @@ export function grangerCausalityTest(signalA, signalB, maxLag = 3) {
 }
 
 /**
- * Simple multivariate linear regression (OLS)
+ * Multivariate OLS via normal equations (X'X β = X'y) solved with
+ * Gaussian elimination with partial pivoting. Works correctly for the
+ * small matrices produced by Granger tests (p ≤ 7, n ≥ 17).
  */
 function simpleLinearRegression(X, y) {
   const n = y.length;
   const p = X[0]?.length || 0;
-
   if (n === 0 || p === 0) return { rss: Infinity };
 
-  // Add intercept
-  const XWithIntercept = X.map(row => [1, ...row]);
+  // Augment X with an intercept column
+  const q = p + 1;
+  const Xm = X.map(row => [1, ...row]);
 
-  // Normal equations: β = (X'X)^-1 X'y
-  // Using simplified approach for small p
-
-  // Calculate predictions using simple averaging as fallback
-  const yMean = y.reduce((a, b) => a + b, 0) / n;
-  const predictions = y.map(() => yMean);
-
-  // Calculate RSS
-  let rss = 0;
+  // Build X'X (q×q) and X'y (q×1)
+  const XtX = Array.from({ length: q }, () => new Array(q).fill(0));
+  const Xty = new Array(q).fill(0);
   for (let i = 0; i < n; i++) {
-    rss += Math.pow(y[i] - predictions[i], 2);
+    for (let j = 0; j < q; j++) {
+      Xty[j] += Xm[i][j] * y[i];
+      for (let k = j; k < q; k++) {
+        XtX[j][k] += Xm[i][j] * Xm[i][k];
+        XtX[k][j] = XtX[j][k];
+      }
+    }
   }
 
-  return { rss, predictions };
+  const beta = gaussianElimination(XtX, Xty);
+  if (!beta) return { rss: Infinity }; // singular — degenerate design matrix
+
+  let rss = 0;
+  const predictions = [];
+  for (let i = 0; i < n; i++) {
+    let yhat = 0;
+    for (let j = 0; j < q; j++) yhat += Xm[i][j] * beta[j];
+    predictions.push(yhat);
+    rss += (y[i] - yhat) ** 2;
+  }
+  return { rss, predictions, beta };
 }
 
 /**
- * F-distribution CDF approximation
+ * Solve Ax = b via Gaussian elimination with partial pivoting.
+ * Returns the solution vector, or null if A is singular.
  */
-function fDistributionCDF(f, d1, d2) {
-  // Use normal approximation for large degrees of freedom
-  if (d1 > 30 && d2 > 30) {
-    const z = Math.pow(f, 1 / 3) * (1 - 2 / (9 * d2)) - (1 - 2 / (9 * d1));
-    const se = Math.sqrt(2 / (9 * d1) + 2 / (9 * d2) * Math.pow(f, 2 / 3));
-    return normalCDF(z / se);
+function gaussianElimination(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(M[row][col]) > Math.abs(M[maxRow][col])) maxRow = row;
+    }
+    [M[col], M[maxRow]] = [M[maxRow], M[col]];
+    if (Math.abs(M[col][col]) < 1e-12) return null;
+    for (let row = 0; row < n; row++) {
+      if (row === col) continue;
+      const f = M[row][col] / M[col][col];
+      for (let k = col; k <= n; k++) M[row][k] -= f * M[col][k];
+    }
   }
-
-  // Beta function relationship
-  const x = d1 * f / (d1 * f + d2);
-  return 1 - betaIncomplete(d2 / 2, d1 / 2, 1 - x);
+  return M.map((row, i) => row[n] / row[i]);
 }
 
 /**
@@ -461,11 +468,26 @@ async function extractSignalTimeSeries(userId, signalName, days = 30) {
         .orderBy(waterLogTable.loggedDate);
       break;
 
-    case 'mood':
+    case 'mood': {
+      // field may be a dotted JSON path like 'tags.stress' for values nested
+      // inside a JSON column.  The tags column stores categorical strings
+      // ('Low', 'Moderate', 'High', 'Extreme'), not numbers — map them via CASE.
+      const isJsonPath = signal.field.includes('.');
+      const [jsonCol, jsonKey] = isJsonPath ? signal.field.split('.') : [];
+      const valueExpr = isJsonPath
+        ? sql`CASE ${moodLogTable[jsonCol]}->>${jsonKey}
+               WHEN 'Low'      THEN 2
+               WHEN 'Moderate' THEN 5
+               WHEN 'High'     THEN 8
+               WHEN 'Extreme'  THEN 10
+               ELSE NULL
+             END`
+        : moodLogTable[signal.field];
+
       logs = await db
         .select({
           timestamp: moodLogTable.loggedDate,
-          value: moodLogTable[signal.field],
+          value: valueExpr,
         })
         .from(moodLogTable)
         .where(
@@ -476,6 +498,10 @@ async function extractSignalTimeSeries(userId, signalName, days = 30) {
         )
         .orderBy(moodLogTable.loggedDate);
       break;
+    }
+
+    default:
+      throw new Error(`Unknown signal source: ${signal.source}`);
   }
 
   // Aggregate to hourly buckets
@@ -527,6 +553,7 @@ export async function discoverOptimalLag(userId, signalAName, signalBName, optio
     minLagHours = DEFAULT_MIN_LAG_HOURS,
     maxLagHours = DEFAULT_MAX_LAG_HOURS,
     days = 30,
+    skipPersist = false, // set true when called from analyzeAllSignalPairs (BH applied afterward)
   } = options;
 
   try {
@@ -547,27 +574,51 @@ export async function discoverOptimalLag(userId, signalAName, signalBName, optio
       };
     }
 
-    // Align time series to common hourly grid
-    const { alignedA, alignedB } = alignTimeSeries(signalA, signalB);
+    // Align to daily buckets — see alignTimeSeries for rationale.
+    // Each element in alignedA/B now represents one calendar day.
+    const { alignedA: rawA, alignedB: rawB, granularityDays } = alignTimeSeries(signalA, signalB);
 
-    if (alignedA.length < MIN_SAMPLE_SIZE) {
+    if (rawA.length < MIN_SAMPLE_SIZE) {
       return { valid: false, error: 'Insufficient aligned data points' };
     }
 
-    // Compute cross-correlation
+    // First-difference to remove slow trends (e.g. gradually improving mood over
+    // 30 days).  Without this, two concurrently trending signals produce a spurious
+    // positive correlation even when there is no causal link.
+    // First-differencing reduces length by 1; MIN_SAMPLE_SIZE still applies.
+    const alignedA = firstDifference(rawA);
+    const alignedB = firstDifference(rawB);
+
+    if (alignedA.length < MIN_SAMPLE_SIZE) {
+      return { valid: false, error: 'Insufficient data after first-differencing' };
+    }
+
+    // Convert the caller's hour-based lag window to days.
+    // Default is 168 h (7 days) — set by DEFAULT_MAX_LAG_HOURS.
+    // Callers that pass a custom maxLagHours get exactly what they asked for.
+    const maxLagDays = Math.ceil(maxLagHours / 24);
+    const minLagDays = Math.floor(minLagHours / 24);
+
+    // Compute cross-correlation — lag units are now days
     const ccf = computeCrossCorrelation(
       alignedA,
       alignedB,
-      minLagHours,
-      maxLagHours
+      minLagDays,
+      maxLagDays
     );
 
     if (!ccf.valid) {
       return ccf;
     }
 
-    // Run Granger causality test at optimal lag
-    const granger = grangerCausalityTest(alignedA, alignedB, Math.min(3, ccf.optimalLag));
+    // Run Granger causality test at optimal lag.
+    // maxLag must be ≥ 1; at lag=0 the inner AR loop never fires and the design
+    // matrix collapses to an empty matrix, producing NaN for the F-statistic.
+    const grangerLagDays = Math.max(1, Math.min(3, ccf.optimalLag));
+    const granger = grangerCausalityTest(alignedA, alignedB, grangerLagDays);
+
+    // Convert the optimal lag from days back to hours for storage/API compatibility
+    const optimalLagHours = ccf.optimalLag * (granularityDays ? 24 : 1);
 
     // Store result
     const result = {
@@ -575,7 +626,7 @@ export async function discoverOptimalLag(userId, signalAName, signalBName, optio
       userId,
       signalA: signalAName,
       signalB: signalBName,
-      optimalLagHours: ccf.optimalLag,
+      optimalLagHours,
       correlationAtOptimalLag: ccf.optimalCorrelation,
       pValue: ccf.optimalPValue,
       isStatisticallySignificant: ccf.isSignificant,
@@ -591,8 +642,10 @@ export async function discoverOptimalLag(userId, signalAName, signalBName, optio
       interpretation: generateInterpretation(ccf, granger, signalAName, signalBName),
     };
 
-    // Save to database if significant
-    if (ccf.isSignificant) {
+    // Save only when called standalone. analyzeAllSignalPairs passes skipPersist: true
+    // and saves after BH-FDR correction — otherwise false positives get persisted
+    // before the multi-comparison adjustment has a chance to downgrade them.
+    if (ccf.isSignificant && !skipPersist) {
       await saveLaggedCorrelation(result);
     }
 
@@ -604,41 +657,57 @@ export async function discoverOptimalLag(userId, signalAName, signalBName, optio
 }
 
 /**
- * Align two time series to common time grid
+ * First-difference a series to remove slow linear trends.
+ * Transforms [a, b, c, d] → [b-a, c-b, d-c].
+ * Reduces length by 1 — caller must re-check MIN_SAMPLE_SIZE.
+ */
+function firstDifference(series) {
+  if (series.length < 2) return [];
+  return series.slice(1).map((val, i) => val - series[i]);
+}
+
+/**
+ * Align two time series to a common daily-bucket grid.
+ *
+ * Hourly exact-matching discards nearly all real-world health data because food
+ * logs and mood logs almost never land in the same clock-hour.  Daily aggregation
+ * retains all data and matches the timescale at which dietary effects actually
+ * manifest (hours-to-days, not minutes).
+ *
+ * Returns arrays of daily averaged values for days present in BOTH signals.
+ * The "lag" unit from computeCrossCorrelation is therefore in DAYS — callers
+ * that store optimalLagHours must multiply by 24.
  */
 function alignTimeSeries(seriesA, seriesB) {
-  // Get common time range
-  const aStart = seriesA[0]?.timestamp?.getTime();
-  const aEnd = seriesA[seriesA.length - 1]?.timestamp?.getTime();
-  const bStart = seriesB[0]?.timestamp?.getTime();
-  const bEnd = seriesB[seriesB.length - 1]?.timestamp?.getTime();
+  const toDay = (ts) => {
+    const d = new Date(ts);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  };
 
-  if (!aStart || !bStart) {
-    return { alignedA: [], alignedB: [] };
-  }
-
-  const start = Math.max(aStart, bStart);
-  const end = Math.min(aEnd, bEnd);
-
-  // Create hourly grid
-  const gridA = new Map(seriesA.map(s => [s.timestamp.getTime(), s.value]));
-  const gridB = new Map(seriesB.map(s => [s.timestamp.getTime(), s.value]));
-
-  const alignedA = [];
-  const alignedB = [];
-
-  const hourMs = 60 * 60 * 1000;
-  for (let t = start; t <= end; t += hourMs) {
-    const valA = gridA.get(t);
-    const valB = gridB.get(t);
-
-    if (valA !== undefined && valB !== undefined) {
-      alignedA.push(valA);
-      alignedB.push(valB);
+  const aggregate = (series) => {
+    const map = new Map();
+    for (const s of series) {
+      if (!s.timestamp) continue;
+      const day = toDay(s.timestamp);
+      const b = map.get(day);
+      if (!b) map.set(day, { sum: s.value, count: 1 });
+      else { b.sum += s.value; b.count++; }
     }
-  }
+    return map;
+  };
 
-  return { alignedA, alignedB };
+  const bucketA = aggregate(seriesA);
+  const bucketB = aggregate(seriesB);
+
+  const commonDays = [...bucketA.keys()]
+    .filter(d => bucketB.has(d))
+    .sort((a, b) => a - b);
+
+  return {
+    alignedA: commonDays.map(d => bucketA.get(d).sum / bucketA.get(d).count),
+    alignedB: commonDays.map(d => bucketB.get(d).sum / bucketB.get(d).count),
+    granularityDays: true,
+  };
 }
 
 /**
@@ -654,13 +723,14 @@ function generateInterpretation(ccf, granger, signalA, signalB) {
 
   const direction = ccf.optimalCorrelation > 0 ? 'positive' : 'negative';
   const strength = Math.abs(ccf.optimalCorrelation) > 0.5 ? 'strong' : 'moderate';
-  const lagText = ccf.optimalLag === 0 ? 'same time'
-    : ccf.optimalLag === 1 ? '1 hour later'
-      : `${ccf.optimalLag} hours later`;
+  // optimalLag is in DAYS after the daily-bucket alignment change
+  const lagText = ccf.optimalLag === 0 ? 'the same day'
+    : ccf.optimalLag === 1 ? '1 day later'
+      : `${ccf.optimalLag} days later`;
 
   let summary = `Found a ${strength} ${direction} correlation: ${signalA} affects ${signalB} ${lagText}.`;
 
-  if (granger?.isCausal) {
+  if (granger?.causal) {
     summary += ` Granger causality test suggests this is a causal relationship.`;
   }
 
@@ -668,22 +738,26 @@ function generateInterpretation(ccf, granger, signalA, signalB) {
     summary,
     strength,
     direction,
-    lagHours: ccf.optimalLag,
-    recommendation: generateRecommendation(signalA, signalB, direction, ccf.optimalLag),
+    lagDays: ccf.optimalLag,
+    recommendation: generateRecommendation(signalA, signalB, direction),
   };
 }
 
 /**
  * Generate actionable recommendation
  */
-function generateRecommendation(signalA, signalB, direction, lag) {
+function generateRecommendation(signalA, signalB, direction) {
   const recommendations = {
-    'sugar_intake:mood_score:negative': 'Consider reducing sugar intake to improve mood stability.',
-    'sugar_intake:energy_level:negative': 'High sugar may be causing energy crashes. Try complex carbs instead.',
-    'hydration_level:energy_level:positive': 'Great! Staying hydrated is boosting your energy. Keep it up!',
-    'hydration_level:mood_score:positive': 'Hydration positively affects your mood. Maintain good water intake.',
-    'protein_intake:energy_level:positive': 'Protein is helping sustain your energy. Keep including it in meals.',
-    'nova_score_avg:mood_score:negative': 'Processed foods may be affecting your mood. Try more whole foods.',
+    'sugar_intake:mood_score:negative':       'Consider reducing sugar intake to improve mood stability.',
+    'sugar_intake:energy_level:negative':     'High sugar may be causing energy crashes. Try complex carbs instead.',
+    'hydration_level:energy_level:positive':  'Great! Staying hydrated is boosting your energy. Keep it up!',
+    'hydration_level:mood_score:positive':    'Hydration positively affects your mood. Maintain good water intake.',
+    'protein_intake:energy_level:positive':   'Protein is helping sustain your energy. Keep including it in meals.',
+    'nova_score_avg:mood_score:negative':     'Processed foods may be affecting your mood. Try more whole foods.',
+    'stress_level:mood_score:positive':       'High stress days align with lower mood scores. Try stress-reduction techniques like short walks or deep breathing.',
+    'stress_level:mood_score:negative':       'Interestingly, stress correlates with higher intensity mood — channel that energy productively.',
+    'stress_level:energy_level:negative':     'Stress is draining your energy. Prioritize recovery: sleep, light exercise, and hydration.',
+    'stress_level:energy_level:positive':     'Your energy and stress track together — structured activity may be helping you convert stress into focus.',
   };
 
   const key = `${signalA}:${signalB}:${direction}`;
@@ -695,19 +769,6 @@ function generateRecommendation(signalA, signalB, direction, lag) {
  */
 async function saveLaggedCorrelation(result) {
   try {
-    // Check if exists
-    const existing = await db
-      .select()
-      .from(laggedCorrelationsTable)
-      .where(
-        and(
-          eq(laggedCorrelationsTable.userId, result.userId),
-          eq(laggedCorrelationsTable.signalA, result.signalA),
-          eq(laggedCorrelationsTable.signalB, result.signalB)
-        )
-      )
-      .limit(1);
-
     const data = {
       userId: result.userId,
       signalA: result.signalA,
@@ -719,21 +780,22 @@ async function saveLaggedCorrelation(result) {
       sampleSize: result.sampleSize,
       confidenceInterval: result.confidenceInterval,
       isStatisticallySignificant: result.isStatisticallySignificant,
-      grangerFStatistic: result.grangerCausality?.fStatistic || null,
-      grangerPValue: result.grangerCausality?.pValue || null,
-      causalDirection: result.grangerCausality?.causalDirection || null,
+      grangerFStatistic: result.grangerCausality?.fStatistic ?? null,
+      grangerPValue: result.grangerCausality?.pValue ?? null,
+      causalDirection: result.grangerCausality?.causalDirection ?? null,
       lastComputedAt: new Date(),
       isActive: true,
     };
 
-    if (existing.length > 0) {
-      await db
-        .update(laggedCorrelationsTable)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(laggedCorrelationsTable.id, existing[0].id));
-    } else {
-      await db.insert(laggedCorrelationsTable).values(data);
-    }
+    // Atomic upsert — the schema has a unique index on (userId, signalA, signalB).
+    // The old SELECT + conditional INSERT/UPDATE was a non-atomic read-modify-write
+    // that could race on server restart or concurrent background jobs.
+    await db.insert(laggedCorrelationsTable)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [laggedCorrelationsTable.userId, laggedCorrelationsTable.signalA, laggedCorrelationsTable.signalB],
+        set: { ...data, updatedAt: new Date() },
+      });
 
     console.log(`[Lagged Correlation] Saved: ${result.signalA} → ${result.signalB}, lag=${result.optimalLagHours}h, r=${result.correlationAtOptimalLag.toFixed(3)}`);
   } catch (error) {
@@ -763,41 +825,82 @@ export async function analyzeAllSignalPairs(userId, options = {}) {
     errors: [],
   };
 
-  for (const pair of SIGNAL_PAIRS) {
-    try {
-      const result = await discoverOptimalLag(
-        userId,
-        pair.signalA,
-        pair.signalB,
-        options
-      );
+  // Run all pairs in parallel — each pair is independent and DB-read-heavy,
+  // so Promise.all gives ~10x wall-clock improvement over sequential for-of.
+  const settled = await Promise.allSettled(
+    SIGNAL_PAIRS.map(pair =>
+      discoverOptimalLag(userId, pair.signalA, pair.signalB, { ...options, skipPersist: true })
+        .then(result => ({ ...pair, result }))
+    )
+  );
 
-      results.allResults.push({
-        ...pair,
-        result,
-      });
-
-      if (result.valid && result.isStatisticallySignificant) {
-        results.significantFindings.push({
-          signalA: pair.signalA,
-          signalB: pair.signalB,
-          hypothesis: pair.hypothesis,
-          optimalLag: result.optimalLagHours,
-          correlation: result.correlationAtOptimalLag,
-          interpretation: result.interpretation,
-        });
-      }
-    } catch (error) {
-      results.errors.push({
-        pair,
-        error: error.message,
-      });
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === 'fulfilled') {
+      results.allResults.push(outcome.value);
+    } else {
+      results.errors.push({ pair: SIGNAL_PAIRS[i], error: outcome.reason?.message });
     }
   }
 
-  console.log(`[Lagged Correlation] Analyzed ${results.allResults.length} pairs for user ${userId}, found ${results.significantFindings.length} significant`);
+  // Apply Benjamini-Hochberg FDR correction across all signal pairs.
+  // Testing 10 pairs inflates false-positive risk; BH limits expected false
+  // discoveries to SIGNIFICANCE_LEVEL * m fraction of rejections.
+  const validWithPValue = results.allResults
+    .filter(r => r.result.valid && typeof r.result.pValue === 'number');
+
+  if (validWithPValue.length > 0) {
+    const pValues = validWithPValue.map(r => r.result.pValue);
+    const bhRejected = benjaminiHochberg(pValues, SIGNIFICANCE_LEVEL);
+
+    validWithPValue.forEach((r, i) => {
+      r.result.isStatisticallySignificant = bhRejected[i]
+        && Math.abs(r.result.correlationAtOptimalLag) >= MIN_CORRELATION_FOR_SIGNIFICANCE;
+    });
+  }
+
+  // Build significant findings and persist — only after BH correction.
+  // Persisting before BH would write false positives to DB that never get cleaned up.
+  for (const r of results.allResults) {
+    if (r.result.valid && r.result.isStatisticallySignificant) {
+      results.significantFindings.push({
+        signalA: r.signalA,
+        signalB: r.signalB,
+        hypothesis: r.hypothesis,
+        optimalLag: r.result.optimalLagHours,
+        correlation: r.result.correlationAtOptimalLag,
+        interpretation: r.result.interpretation,
+      });
+      await saveLaggedCorrelation(r.result);
+    }
+  }
+
+  console.log(`[Lagged Correlation] Analyzed ${results.allResults.length} pairs for user ${userId}, found ${results.significantFindings.length} significant (BH-FDR corrected)`);
 
   return results;
+}
+
+// Per-user throttle: at most one background analysis per 24 hours.
+// Prevents re-analyzing on every log when data hasn't meaningfully changed.
+const _lastAnalysisAt = new Map();
+const _ANALYSIS_THROTTLE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Fire-and-forget background correlation analysis for a user.
+ * Throttled to once per 24 hours per user.  Safe to call after every log —
+ * the throttle ensures we don't hammer the DB on high-frequency logging.
+ *
+ * @param {string} userId
+ */
+export function triggerBackgroundAnalysis(userId) {
+  const last = _lastAnalysisAt.get(userId);
+  if (last && Date.now() - last < _ANALYSIS_THROTTLE_MS) return;
+
+  _lastAnalysisAt.set(userId, Date.now());
+  analyzeAllSignalPairs(userId).catch(err => {
+    console.error(`[Lagged Correlation] Background analysis failed for ${userId}:`, err.message);
+    _lastAnalysisAt.delete(userId); // allow retry on next log after a failure
+  });
 }
 
 /**
@@ -834,6 +937,7 @@ export default {
   discoverOptimalLag,
   analyzeAllSignalPairs,
   getUserLaggedCorrelations,
+  triggerBackgroundAnalysis,
 
   // Constants
   SIGNALS,

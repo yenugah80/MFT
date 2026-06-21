@@ -43,3 +43,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Firebase config — injected at build time via EAS Secrets
+google-services.json
+GoogleService-Info.plist
+google-service-account.json

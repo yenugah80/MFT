@@ -13,7 +13,7 @@
  * - Optimistic UI updates
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +49,7 @@ import {
 import MoodIcon3D from './MoodIcon3D';
 import MoodIntensitySlider from './MoodIntensitySlider';
 import MoodJournalTags from './MoodJournalTags';
+import { useMoodLog } from '../../hooks/useMoodLog';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -60,6 +62,7 @@ const MoodTracker = ({
   recentMeals = [],
   initialMood = null,
 }) => {
+  const { logMood } = useMoodLog();
   const [selectedMood, setSelectedMood] = useState(initialMood || 'neutral');
   const [intensity, setIntensity] = useState(5);
   const [energyLevel, setEnergyLevel] = useState(5);
@@ -95,6 +98,12 @@ const MoodTracker = ({
       const draft = await AsyncStorage.getItem('moodTrackerDraft');
       if (draft) {
         const parsed = JSON.parse(draft);
+        // Discard drafts older than 4 hours — stale mood data misleads users
+        const draftAge = Date.now() - (parsed.savedAt || 0);
+        if (draftAge > 4 * 60 * 60 * 1000) {
+          await AsyncStorage.removeItem('moodTrackerDraft');
+          return;
+        }
         setSelectedMood(parsed.mood || 'neutral');
         setIntensity(parsed.intensity || 5);
         setEnergyLevel(parsed.energyLevel || 5);
@@ -109,6 +118,7 @@ const MoodTracker = ({
   const saveDraft = async () => {
     try {
       const draft = {
+        savedAt: Date.now(),
         mood: selectedMood,
         intensity,
         energyLevel,
@@ -181,6 +191,8 @@ const MoodTracker = ({
         timestamp: new Date().toISOString(),
       };
 
+      // Always call the hook to persist to backend; also notify parent if callback provided
+      await logMood(moodData);
       if (onSave) {
         await onSave(moodData);
       }
@@ -199,6 +211,11 @@ const MoodTracker = ({
     } catch (error) {
       console.error('Failed to save mood:', error);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Could not save',
+        'Something went wrong logging your mood. Please try again.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -274,6 +291,7 @@ const MoodTracker = ({
                     onSelect={setSelectedMood}
                     size={80}
                     showLabel={true}
+                    autoPlay={selectedMood === mood}
                   />
                 ))}
               </ScrollView>

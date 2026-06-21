@@ -34,7 +34,10 @@ import { db } from '../config/db.js';
 import {
   accountSettingsTable,
   gamificationTable,
-  profilesTable
+  profilesTable,
+  waterLogTable,
+  nutritionGoalsTable,
+  notificationDeliveryLogTable,
 } from '../db/schema.js';
 import { eq, isNotNull, or, and, sql, gte, lte, isNull } from 'drizzle-orm';
 import { getSmartReminders, REMINDER_TYPES } from '../services/smartReminderService.js';
@@ -99,7 +102,9 @@ let metrics = {
   byType: {},
 };
 
-// In-memory rate limiting (reset hourly)
+// In-memory fast-path cache for rate limiting (keyed by userId:hour).
+// This is a best-effort guard only — the authoritative check uses the DB
+// so server restarts don't allow burst notifications.
 const rateLimitCache = new Map();
 
 // ============================================================================
@@ -141,25 +146,40 @@ function recordSuccess() {
 // RATE LIMITING
 // ============================================================================
 
-function checkRateLimit(userId) {
+function checkRateLimitInMemory(userId) {
   const key = `${userId}:${new Date().getHours()}`;
   const current = rateLimitCache.get(key) || 0;
-
-  if (current >= CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_HOUR) {
-    return false;
-  }
-
+  if (current >= CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_HOUR) return false;
   rateLimitCache.set(key, current + 1);
   return true;
+}
+
+async function checkRateLimitFromDB(userId) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const [row] = await db
+    .select({ count: sql`COUNT(*)::int` })
+    .from(notificationDeliveryLogTable)
+    .where(
+      and(
+        eq(notificationDeliveryLogTable.userId, userId),
+        gte(notificationDeliveryLogTable.createdAt, oneHourAgo)
+      )
+    );
+  return (row?.count ?? 0) < CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_HOUR;
+}
+
+async function checkRateLimit(userId) {
+  // Fast path: in-memory check (avoids DB round-trip on most calls)
+  if (!checkRateLimitInMemory(userId)) return false;
+  // Authoritative path: DB check survives server restarts
+  return checkRateLimitFromDB(userId);
 }
 
 function clearOldRateLimits() {
   const currentHour = new Date().getHours();
   for (const [key] of rateLimitCache) {
     const [, hour] = key.split(':');
-    if (parseInt(hour) !== currentHour) {
-      rateLimitCache.delete(key);
-    }
+    if (parseInt(hour) !== currentHour) rateLimitCache.delete(key);
   }
 }
 
@@ -219,6 +239,8 @@ const REMINDER_TO_FCM_MAP = {
   [REMINDER_TYPES.HYDRATION_MIDDAY]: 'hydration',
   [REMINDER_TYPES.HYDRATION_AFTERNOON]: 'hydration',
   [REMINDER_TYPES.HYDRATION_EVENING]: 'hydration',
+  [REMINDER_TYPES.HYDRATION_GOAL_PROGRESS]: 'hydration',
+  [REMINDER_TYPES.HYDRATION_STREAK]: 'hydration',
   [REMINDER_TYPES.FOOD_BREAKFAST]: 'meal',
   [REMINDER_TYPES.FOOD_LUNCH]: 'meal',
   [REMINDER_TYPES.FOOD_DINNER]: 'meal',
@@ -227,11 +249,38 @@ const REMINDER_TO_FCM_MAP = {
   [REMINDER_TYPES.MOOD_CHECKIN_MORNING]: 'mood',
   [REMINDER_TYPES.MOOD_CHECKIN_AFTERNOON]: 'mood',
   [REMINDER_TYPES.MOOD_CHECKIN_EVENING]: 'mood',
+  [REMINDER_TYPES.MOOD_POST_MEAL]: 'mood',
   [REMINDER_TYPES.ACTIVITY_MOVEMENT]: 'activity',
   [REMINDER_TYPES.ACTIVITY_WALK]: 'activity',
   [REMINDER_TYPES.STREAK_AT_RISK]: 'streak',
+  [REMINDER_TYPES.ACHIEVEMENT_CLOSE]: 'streak',
+  [REMINDER_TYPES.WEEKLY_SUMMARY]: 'general',
   [REMINDER_TYPES.COMEBACK]: 'reengagement',
 };
+
+/**
+ * Query today's water intake and goal for a user.
+ * Returns ml values so WittyMessageEngine gets accurate hydration percentages.
+ */
+async function getTodayHydration(userId) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [waterRow] = await db
+    .select({ totalLiters: sql`COALESCE(SUM(${waterLogTable.amountLiters}::numeric), 0)` })
+    .from(waterLogTable)
+    .where(and(eq(waterLogTable.userId, userId), gte(waterLogTable.loggedDate, todayStart)));
+
+  const [goalRow] = await db
+    .select({ waterLiters: nutritionGoalsTable.waterLiters })
+    .from(nutritionGoalsTable)
+    .where(eq(nutritionGoalsTable.userId, userId))
+    .limit(1);
+
+  const currentMl = Math.round(parseFloat(waterRow?.totalLiters ?? 0) * 1000);
+  const goalMl = goalRow?.waterLiters ? Math.round(parseFloat(goalRow.waterLiters) * 1000) : 2000;
+  return { currentMl, goalMl };
+}
 
 /**
  * Send notification via both FCM and Expo (with fallback)
@@ -261,9 +310,11 @@ async function deliverNotification(user, reminder) {
 
       // Use specialized FCM functions for better witty messages
       switch (fcmType) {
-        case 'hydration':
-          result = await sendHydrationNudgeNotification(db, userId, 0, 2000, { streak });
+        case 'hydration': {
+          const { currentMl, goalMl } = await getTodayHydration(userId);
+          result = await sendHydrationNudgeNotification(db, userId, currentMl, goalMl, { streak });
           break;
+        }
         case 'meal':
           result = await sendMealReminderNotification(db, userId, { streak });
           break;
@@ -299,7 +350,27 @@ async function deliverNotification(user, reminder) {
     }
   }
 
-  return fcmSuccess || expoSuccess;
+  const delivered = fcmSuccess || expoSuccess;
+
+  // Log every successful delivery to the DB — this is the source of truth for
+  // the DB-backed rate limiter (checkRateLimitFromDB) and analytics.
+  if (delivered) {
+    try {
+      await db.insert(notificationDeliveryLogTable).values({
+        userId,
+        notificationType: type,
+        title,
+        body,
+        channel: fcmSuccess ? 'fcm' : 'expo',
+        priority: reminder.priority || 3,
+        deliveryStatus: 'sent',
+      });
+    } catch (logErr) {
+      console.warn('[SmartReminderJob] Failed to log delivery (non-critical):', logErr.message);
+    }
+  }
+
+  return delivered;
 }
 
 /**
@@ -339,7 +410,8 @@ function isInQuietHours(user) {
   // Calculate user's local hour
   const offsetMinutes = user.timezoneOffset || 0;
   const now = new Date();
-  const localHour = (now.getUTCHours() + Math.floor(offsetMinutes / 60)) % 24;
+  // Double modulo handles negative offsets (e.g. UTC-5): JS % can return negative values.
+  const localHour = ((now.getUTCHours() + Math.floor(offsetMinutes / 60)) % 24 + 24) % 24;
 
   const { start, end } = quietHours;
 
@@ -434,8 +506,8 @@ async function processUserReminders(user, runMetrics) {
     return;
   }
 
-  // Check rate limit
-  if (!checkRateLimit(userId)) {
+  // Check rate limit (async — DB-backed to survive restarts)
+  if (!await checkRateLimit(userId)) {
     runMetrics.skipped++;
     return;
   }

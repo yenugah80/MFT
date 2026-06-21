@@ -1,5 +1,5 @@
 // Existing imports already include text, integer, timestamp, etc.
-import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, boolean, index, check, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // User profiles table - stores personal information
@@ -75,9 +75,15 @@ export const dietaryPreferencesTable = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    preferences: json("preferences").default([]), // Array of dietary preferences like ['Vegan', 'Gluten-free']
-    allergies: json("allergies").default([]), // Array of allergies
-    dislikes: json("dislikes").default([]), // Array of foods user dislikes
+    preferences: json("preferences").default([]),
+    allergies: json("allergies").default([]),
+    // allergenSeverity: { peanuts: "anaphylaxis", dairy: "mild" }
+    // severity levels: mild | moderate | severe | anaphylaxis
+    allergenSeverity: json("allergen_severity").default({}),
+    // intoleranceType: { dairy: "intolerance", wheat: "allergy" }
+    // type values: allergy | intolerance | preference
+    intoleranceType: json("intolerance_type").default({}),
+    dislikes: json("dislikes").default([]),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -161,7 +167,7 @@ export const dailyMealCountsTable = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    date: timestamp("date").notNull(),
+    date: date("date").notNull(),
     mealCount: integer("meal_count").default(0),
     xpEarnedToday: integer("xp_earned_today").default(0),
     createdAt: timestamp("created_at").defaultNow(),
@@ -225,6 +231,7 @@ export const foodLogTable = pgTable(
 
     loggedDate: timestamp("logged_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => ({
     // Index for user food history queries
@@ -282,7 +289,7 @@ export const dailyNutritionSummaryTable = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    date: timestamp("date").notNull(),
+    date: date("date").notNull(),
     totalCalories: integer("total_calories").default(0),
     totalProtein: integer("total_protein").default(0),
     totalCarbs: integer("total_carbs").default(0),
@@ -312,9 +319,9 @@ export const dailyNutritionSummaryTable = pgTable(
     totalProteinCheck: check("total_protein_check", sql`${table.totalProtein} >= 0`),
     totalCarbsCheck: check("total_carbs_check", sql`${table.totalCarbs} >= 0`),
     totalFatsCheck: check("total_fats_check", sql`${table.totalFats} >= 0`),
-    dailyScoreCheck: check("daily_score_check", sql`${table.dailyScore} >= 0 AND ${table.dailyScore} <= 100`),
-    moodScoreCheck: check("mood_score_check", sql`${table.moodScore} >= 0 AND ${table.moodScore} <= 100`),
-    hydrationScoreCheck: check("hydration_score_check", sql`${table.hydrationScore} >= 0 AND ${table.hydrationScore} <= 100`),
+    dailyScoreCheck: check("daily_score_check", sql`${table.dailyScore} IS NULL OR (${table.dailyScore} >= 0 AND ${table.dailyScore} <= 100)`),
+    moodScoreCheck: check("mood_score_check", sql`${table.moodScore} IS NULL OR (${table.moodScore} >= 0 AND ${table.moodScore} <= 100)`),
+    hydrationScoreCheck: check("hydration_score_check", sql`${table.hydrationScore} IS NULL OR (${table.hydrationScore} >= 0 AND ${table.hydrationScore} <= 100)`),
   })
 );
 
@@ -326,13 +333,13 @@ export const waterLogTable = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    amountLiters: decimal("amount_liters", { precision: 3, scale: 1 }).notNull(),
+    amountLiters: decimal("amount_liters", { precision: 5, scale: 3 }).notNull(),
     beverageType: text("beverage_type").default("water"),
     hydrationFactor: decimal("hydration_factor", { precision: 3, scale: 2 }).default("1.0"),
-    hydrationLiters: decimal("hydration_liters", { precision: 3, scale: 1 }),
+    hydrationLiters: decimal("hydration_liters", { precision: 5, scale: 3 }),
 
-    // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
-    clientEventId: text("client_event_id"),
+    // Idempotency support
+    clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
 
     loggedDate: timestamp("logged_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
@@ -357,7 +364,7 @@ export const weightHistoryTable = pgTable(
     weightKg: decimal("weight_kg", { precision: 5, scale: 2 }).notNull(),
 
     // Idempotency support
-    clientEventId: text("client_event_id"),
+    clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
     recordedDate: timestamp("recorded_date").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -433,8 +440,8 @@ export const moodLogTable = pgTable(
     energyLevel: integer("energy_level"), // 1-10 energy level
     mealContext: json("meal_context").$type().default({}), // { mealIds: [123, 124], windowHours: 4 }
 
-    // Idempotency support (NULLABLE for migration, will be NOT NULL after backfill)
-    clientEventId: text("client_event_id"),
+    // Idempotency support
+    clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
 
     // Timezone normalization (stable local-day bucket)
     dayKey: text("day_key"), // YYYY-MM-DD at log time
@@ -643,7 +650,7 @@ export const hydrationDailySummaryTable = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    date: timestamp("date").notNull(),
+    date: date("date").notNull(),
 
     // Raw totals
     totalMl: integer("total_ml").notNull().default(0),
@@ -740,7 +747,7 @@ export const hydrationPredictionsTable = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    predictionDate: timestamp("prediction_date").notNull(),
+    predictionDate: date("prediction_date").notNull(),
 
     // Core prediction
     predictedNeedMl: integer("predicted_need_ml").notNull(),
@@ -873,7 +880,7 @@ export const aiEstimatedFoodsTable = pgTable(
     // Index for verified foods
     verifiedIdx: index("ai_foods_verified_idx").on(table.sourceQuery, table.isVerified),
     // Unique constraint for source query (prevent duplicates)
-    sourceQueryUnique: unique("ai_foods_source_query_unique").on(table.sourceQuery),
+    sourceQueryUnique: unique("ai_foods_source_query_unique").on(table.sourceQuery, table.cuisine, table.region),
   })
 );
 
@@ -1242,7 +1249,7 @@ export const activityLogTable = pgTable(
     notes: text("notes"),
 
     // Idempotency support
-    clientEventId: text("client_event_id"),
+    clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
 
     // Timezone normalization
     dayKey: text("day_key"), // YYYY-MM-DD at log time
@@ -1315,7 +1322,8 @@ export const sleepLogTable = pgTable(
     userDayKeyIdx: index("sleep_log_user_day_key_idx").on(table.userId, table.dayKey),
     // Unique constraints
     userSleepDateUnique: unique("sleep_log_user_sleep_date_unique").on(table.userId, table.sleepDate),
-    userClientEventIdUnique: unique("sleep_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
+    // Partial unique index: excludes NULL clientEventId so duplicate nulls are allowed
+    userClientEventIdUnique: uniqueIndex("sleep_log_user_client_event_id_unique").on(table.userId, table.clientEventId).where(sql`${table.clientEventId} IS NOT NULL`),
     // CHECK constraints
     durationCheck: check("sleep_duration_check", sql`${table.durationMinutes} > 0 AND ${table.durationMinutes} <= 1440`),
     qualityCheck: check("sleep_quality_check", sql`${table.quality} >= 1 AND ${table.quality} <= 10`),
@@ -1369,8 +1377,8 @@ export const stressLogTable = pgTable(
     userDateIdx: index("stress_log_user_date_idx").on(table.userId, table.loggedDate),
     userDayKeyIdx: index("stress_log_user_day_key_idx").on(table.userId, table.dayKey),
     userLevelIdx: index("stress_log_user_level_idx").on(table.userId, table.level),
-    // Unique constraint for idempotency
-    userClientEventIdUnique: unique("stress_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
+    // Partial unique index: excludes NULL clientEventId so duplicate nulls are allowed
+    userClientEventIdUnique: uniqueIndex("stress_log_user_client_event_id_unique").on(table.userId, table.clientEventId).where(sql`${table.clientEventId} IS NOT NULL`),
     // CHECK constraints
     levelCheck: check("stress_level_check", sql`${table.level} >= 1 AND ${table.level} <= 10`),
   })
@@ -1714,7 +1722,7 @@ export const notificationDeliveryLogTable = pgTable(
   "notification_delivery_log",
   {
     id: serial("id").primaryKey(),
-    userId: text("user_id").notNull(),
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
     notificationType: text("notification_type").notNull(),
     title: text("title").notNull(),
     body: text("body"),
@@ -1737,7 +1745,7 @@ export const notificationSnoozesTable = pgTable(
   "notification_snoozes",
   {
     id: serial("id").primaryKey(),
-    userId: text("user_id").notNull(),
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
     reminderType: text("reminder_type").notNull(),
     snoozedUntil: timestamp("snoozed_until").notNull(),
     snoozeCount: integer("snooze_count").default(1),
@@ -1755,7 +1763,7 @@ export const notificationDismissalsTable = pgTable(
   "notification_dismissals",
   {
     id: serial("id").primaryKey(),
-    userId: text("user_id").notNull(),
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
     notificationType: text("notification_type").notNull(),
     reason: text("reason"), // 'not_relevant' | 'too_frequent' | 'wrong_time' | 'other'
     dismissedAt: timestamp("dismissed_at").defaultNow(),

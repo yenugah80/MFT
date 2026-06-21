@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback, useRef } from "react";
+import { useReducer, useEffect, useCallback } from "react";
 import { Alert } from "react-native";
 import { useAuth } from "@clerk/clerk-expo";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +21,10 @@ import {
   saveGamificationStats,
   invalidateProfileCache,
 } from "../services/profileAPI";
+
+// Keyed by userId so logout→re-login (different user) always bootstraps,
+// while multiple mounts for the same user don't double-fetch.
+const _bootstrappedUsers = new Set();
 
 // Action types
 const ACTIONS = {
@@ -198,37 +202,24 @@ export default function useProfileForm(user) {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(profileReducer, initialState);
-  const hasBootstrappedRef = useRef(false);
 
-  // Helper to bootstrap profile (runs only once)
-  const bootstrapProfile = async (user, token) => {
-    // Try to fetch profile with auto-refresh support
-    const profile = await fetchUserProfile(token, getToken);
-    if (profile) {
-      return profile;
-    }
-    // If not found, create from Clerk info
-    const profileWithUser = {
-      ...DEFAULT_PROFILE,
-      basics: {
-        ...DEFAULT_PROFILE.basics,
-        fullName: user.fullName || "",
-        email: user.primaryEmailAddress?.emailAddress || "",
-      },
-    };
-    await saveProfileBasics(token, sanitizeBasicsForApi(profileWithUser.basics), getToken);
-    return profileWithUser;
-  };
+  // Clear bootstrap record on sign-out so the next login fetches a fresh profile.
+  // Effect runs when `user` changes; clearing only happens when it becomes null.
+  useEffect(() => {
+    if (user) return;
+    _bootstrappedUsers.clear();
+  }, [user]);
 
   // One-time bootstrap effect
   useEffect(() => {
-    if (!user || hasBootstrappedRef.current) return;
+    if (!user || _bootstrappedUsers.has(user.id)) return;
+
+    let isMounted = true;
 
     const run = async () => {
       try {
         console.log('[Profile] Waiting for Clerk token...');
 
-        // Wait for token with retry logic
         let token = null;
         let attempts = 0;
         const maxAttempts = 3;
@@ -238,36 +229,48 @@ export default function useProfileForm(user) {
           if (!token) {
             attempts++;
             console.warn(`[Profile] Token not ready, attempt ${attempts}/${maxAttempts}`);
-            await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms between attempts
+            await new Promise(resolve => setTimeout(resolve, 200));
           }
         }
 
+        if (!isMounted) return;
+
         if (!token) {
           console.error('[Profile] Failed to get token after retries');
-          // Mark as bootstrapped to prevent infinite retries, dispatch default profile
-          hasBootstrappedRef.current = true;
+          _bootstrappedUsers.add(user.id);
           dispatch({
             type: ACTIONS.LOAD_PROFILE,
             payload: {
               ...DEFAULT_PROFILE,
-              basics: {
-                ...DEFAULT_PROFILE.basics,
-                fullName: user.fullName || "",
-              },
+              basics: { ...DEFAULT_PROFILE.basics, fullName: user.fullName || "" },
             },
           });
           return;
         }
 
         console.log('[Profile] Token acquired, bootstrapping profile...');
-        hasBootstrappedRef.current = true;
+        _bootstrappedUsers.add(user.id);
 
-        const profile = await bootstrapProfile(user, token);
+        let profile = await fetchUserProfile(token, getToken);
+        if (!profile) {
+          profile = {
+            ...DEFAULT_PROFILE,
+            basics: {
+              ...DEFAULT_PROFILE.basics,
+              fullName: user.fullName || "",
+              email: user.primaryEmailAddress?.emailAddress || "",
+            },
+          };
+          await saveProfileBasics(token, sanitizeBasicsForApi(profile.basics), getToken);
+        }
+
+        if (!isMounted) return;
         dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profile });
         console.log('[Profile] Bootstrap complete');
       } catch (err) {
         console.error("[Profile] Bootstrap failed:", err);
-        hasBootstrappedRef.current = true;
+        _bootstrappedUsers.add(user.id);
+        if (!isMounted) return;
         dispatch({
           type: ACTIONS.LOAD_PROFILE,
           payload: {
@@ -282,9 +285,11 @@ export default function useProfileForm(user) {
       }
     };
 
-    // Small delay to ensure Clerk is fully initialized
     const timer = setTimeout(run, 100);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      isMounted = false;
+    };
   }, [user, getToken]);
 
   // Update field
@@ -378,7 +383,7 @@ export default function useProfileForm(user) {
         return false;
       }
     },
-    [state.draft, validateSection, getToken]
+    [state.draft, validateSection, getToken, queryClient]
   );
 
   // Cancel edit
@@ -440,7 +445,7 @@ export default function useProfileForm(user) {
         return false;
       }
     },
-    [state.draft, getToken]
+    [state.draft, getToken, queryClient]
   );
 
   return {

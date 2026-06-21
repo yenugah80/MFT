@@ -29,7 +29,7 @@ import {
 const router = express.Router();
 
 // Apply auth, db, and profile middleware to all routes
-router.use(requireAuth);
+router.use(requireAuth());
 router.use(attachDb);
 router.use(ensureProfile); // Auto-create profile if missing
 

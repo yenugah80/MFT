@@ -25,13 +25,14 @@
  * - Empty state for first-time users
  */
 
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Alert,
   Animated,
   Easing,
 } from 'react-native';
@@ -39,10 +40,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
-import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, MOOD_PALETTE, BRAND, TEXT, SEMANTIC_ACTIONS, SURFACES } from '../../constants/premiumTheme';
+import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, MOOD_PALETTE, TEXT, SEMANTIC_ACTIONS, SURFACES } from '../../constants/premiumTheme';
 import { useTheme } from '../../providers/ThemeProvider';
+import * as Haptics from 'expo-haptics';
 
 import MoodIcon3D from '../MoodTracker/MoodIcon3D';
+import { useMoodLog, MOOD_TYPES, MOOD_DEFAULT_INTENSITY } from '../../hooks/useMoodLog';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -137,8 +140,11 @@ const EnhancedMoodCard = ({
   showWellnessScore = true,
   onOpenInsights,
   onViewHistory,
+  onOpenFullLogger,
 }) => {
   const { colors, isDark } = useTheme();
+  const { logMood } = useMoodLog();
+  const [quickLogging, setQuickLogging] = useState(null); // mood key being logged
 
   // Theme-aware colors
   const textPrimary = colors.text.primary;
@@ -161,11 +167,7 @@ const EnhancedMoodCard = ({
     ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']
     : getPastelGradient(latestMood?.mood);
   const lastLoggedLabel = useMemo(() => formatLastLogged(latestMood?.loggedDate), [latestMood?.loggedDate]);
-  const stats = insights?.stats || null;
   const trendSummary = insights?.trendSummary || { direction: 'flat', delta: null, lastIntensity: null };
-  const confidenceLevel = insights?.confidenceLevel || 'low';
-  const dataQuality = insights?.dataQuality || { totalLogs: 0, daysWithLogs: 0 };
-  const flags = insights?.flags || { showStats: false, showTrend: false, showRecommendation: false };
 
   // Empty State - also check if mood field is missing
   if ((!latestMood || !latestMood.mood) && !loading) {
@@ -258,6 +260,52 @@ const EnhancedMoodCard = ({
             />
           </View>
           <Text style={[styles.intensityValue, { color: textPrimary }]}>{latestMood?.intensity || 5}/10</Text>
+        </View>
+      </View>
+
+      {/* ─── Quick-Log Strip ────────────────────────────────────────────────
+           One tap = logged. No modal. Lottie icons play on selection.
+           Tap "More" opens the full MoodLogger for intensity + tags + note. */}
+      <View style={[quickLogStyles.strip, { backgroundColor: sectionBg, borderColor }]}>
+        <Text style={[quickLogStyles.label, { color: textTertiary }]}>How are you feeling now?</Text>
+        <View style={quickLogStyles.icons}>
+          {MOOD_TYPES.map((m) => (
+            <TouchableOpacity
+              key={m.key}
+              style={quickLogStyles.iconWrap}
+              onPress={async () => {
+                if (quickLogging) return;
+                setQuickLogging(m.key);
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                try {
+                  await logMood({ mood: m.key, intensity: MOOD_DEFAULT_INTENSITY[m.key] ?? 5, energyLevel: 5, tags: {}, source: 'quick_log' });
+                } catch {
+                  Alert.alert('Could not save', 'Failed to log mood. Please try again.');
+                } finally {
+                  setQuickLogging(null);
+                }
+              }}
+              disabled={!!quickLogging}
+              activeOpacity={0.75}
+              accessibilityLabel={`Quick log ${m.label}`}
+            >
+              <MoodIcon3D
+                mood={m.key}
+                size={40}
+                showLabel={false}
+                autoPlay={quickLogging === m.key}
+                selected={quickLogging === m.key}
+                onSelect={() => {}}
+              />
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={[quickLogStyles.moreBtn, { borderColor: textTertiary }]}
+            onPress={onOpenFullLogger}
+            activeOpacity={0.8}
+          >
+            <Text style={[quickLogStyles.moreText, { color: textTertiary }]}>More</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -780,6 +828,43 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     marginTop: SPACING[3],
+  },
+});
+
+const quickLogStyles = StyleSheet.create({
+  strip: {
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[3],
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[3],
+  },
+  label: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.medium,
+    marginBottom: SPACING[2],
+    textAlign: 'center',
+  },
+  icons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  iconWrap: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  moreBtn: {
+    borderWidth: 1,
+    borderRadius: RADIUS.full,
+    paddingVertical: SPACING[1],
+    paddingHorizontal: SPACING[2],
+    marginLeft: SPACING[1],
+  },
+  moreText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
 });
 

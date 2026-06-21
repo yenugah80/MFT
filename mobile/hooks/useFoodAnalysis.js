@@ -805,13 +805,30 @@ export function useFoodAnalysis() {
     cachedUserId = userId;
   }, [userId]);
 
-  // Wrapper to update both state and cache with timestamp
-  const setAnalysisResult = useCallback((result) => {
+  // Internal helper: updates cache + state without touching suppression window.
+  // Used by all analysis functions inside this hook.
+  const _setResultInternal = useCallback((result) => {
     cachedAnalysisResult = result;
     cacheTimestamp = Date.now();
     cachedUserId = userId;
     setAnalysisResultState(result);
   }, [userId]);
+
+  // Public setter (exposed to callers).
+  // When a non-null result is injected from outside (e.g. voice modal), opens a
+  // suppression window so the trailing 1.5s debounce cannot overwrite it.
+  // Functional updaters (used by updateItemQuantity / removeItem / removeIngredient)
+  // bypass _setResultInternal to avoid corrupting the module-level cache.
+  const setAnalysisResult = useCallback((result) => {
+    if (typeof result === 'function') {
+      setAnalysisResultState(result);
+    } else {
+      _setResultInternal(result);
+      if (result !== null) {
+        suppressAutoAnalysisUntilRef.current = Date.now() + AUTO_ANALYSIS_DEBOUNCE_MS + 300;
+      }
+    }
+  }, [_setResultInternal]);
 
   const setInputText = useCallback((text) => {
     cachedInputText = text;
@@ -824,6 +841,10 @@ export function useFoodAnalysis() {
   const abortControllerRef = useRef(null);
   const barcodeCacheRef = useRef({});
   const rateLimitedUntilRef = useRef(0); // Timestamp when rate limit cooldown expires
+  // Suppress auto-analysis until this timestamp (set when result is injected externally,
+  // e.g. from voice modal). Uses a time window slightly longer than the debounce delay
+  // so a direct setAnalysisResult call is never overwritten by the trailing debounce.
+  const suppressAutoAnalysisUntilRef = useRef(0);
 
   // ============================================================================
   // TEXT ANALYSIS (Universal Entry Point)
@@ -887,7 +908,7 @@ export function useFoodAnalysis() {
           const offResult = await fetchFromOpenFoodFacts(text, 'text');
 
           if (offResult) {
-            setAnalysisResult({
+            _setResultInternal({
               items: [{
                 ...offResult,
                 isEditing: false,
@@ -1007,7 +1028,7 @@ export function useFoodAnalysis() {
 
       console.log('[useFoodAnalysis] Normalized items:', normalizedItems.map(i => ({ id: i.itemId, name: i.name, hasIngredients: i.ingredients?.length > 0 })));
 
-      setAnalysisResult({
+      _setResultInternal({
         ...data,
         items: normalizedItems,
       });
@@ -1023,7 +1044,7 @@ export function useFoodAnalysis() {
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken]);
+  }, [getToken, _setResultInternal]);
 
   // ============================================================================
   // BARCODE ANALYSIS
@@ -1059,7 +1080,7 @@ export function useFoodAnalysis() {
     // Check cache
     if (barcodeCacheRef.current[code]) {
       const cached = barcodeCacheRef.current[code];
-      setAnalysisResult(cached);
+      _setResultInternal(cached);
       return cached;
     }
 
@@ -1165,7 +1186,7 @@ export function useFoodAnalysis() {
       // Cache result
       barcodeCacheRef.current[code] = resultPayload;
 
-      setAnalysisResult(resultPayload);
+      _setResultInternal(resultPayload);
       setProgress(100);
 
       return resultPayload;
@@ -1178,7 +1199,7 @@ export function useFoodAnalysis() {
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken]);
+  }, [getToken, _setResultInternal]);
 
   // ============================================================================
   // VOICE ANALYSIS (with Regional Context)
@@ -1292,7 +1313,7 @@ export function useFoodAnalysis() {
               setProgress(80);
 
               // Use backend's multi-item format directly
-              setAnalysisResult({
+              _setResultInternal({
                 items: json.items.map(item => ({
                   ...item,
                   isEditing: false,
@@ -1355,7 +1376,7 @@ export function useFoodAnalysis() {
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken]);
+  }, [getToken, _setResultInternal]);
 
   // ============================================================================
   // PHOTO ANALYSIS
@@ -1423,7 +1444,7 @@ export function useFoodAnalysis() {
         try {
           // Try to import OCR module (optional dependency)
           MLKitOcr = require('@react-native-ml-kit/text-recognition');
-        } catch (importError) {
+        } catch (_importError) {
           // OCR not installed - will use GPT-4 Vision fallback
           MLKitOcr = null;
         }
@@ -1457,7 +1478,7 @@ export function useFoodAnalysis() {
           }
 
           const data = await response.json();
-          setAnalysisResult({
+          _setResultInternal({
             ...data,
             items: (data.items || []).map(item => ({
               ...item,
@@ -1605,7 +1626,7 @@ export function useFoodAnalysis() {
         editedPortion: null,
       };
 
-      setAnalysisResult({
+      _setResultInternal({
         items: [aiItem],
         totals: calculateTotals([aiItem]),
         // Include overall health metrics in result
@@ -1631,7 +1652,7 @@ export function useFoodAnalysis() {
       setIsAnalyzing(false);
       setTimeout(() => setProgress(0), PROGRESS_FADE_DELAY_MS);
     }
-  }, [getToken, analyzeBarcode]);
+  }, [getToken, analyzeBarcode, _setResultInternal]);
 
   // ============================================================================
   // UI STATE MANAGEMENT
@@ -1700,7 +1721,7 @@ export function useFoodAnalysis() {
         totals: calculateTotals(updatedItems),
       };
     });
-  }, []);
+  }, [setAnalysisResult]);
 
   /**
    * Remove item from analysis
@@ -1722,7 +1743,7 @@ export function useFoodAnalysis() {
         totals: calculateTotals(updatedItems),
       };
     });
-  }, []);
+  }, [setAnalysisResult]);
 
   /**
    * Remove ingredient from a food item and recalculate macros
@@ -1788,7 +1809,7 @@ export function useFoodAnalysis() {
         totals: calculateTotals(updatedItems),
       };
     });
-  }, []);
+  }, [setAnalysisResult]);
 
   /**
    * Trigger manual analysis
@@ -1881,11 +1902,16 @@ export function useFoodAnalysis() {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [inputText]);
+  }, [inputText, setAnalysisResult]);
 
   // Trigger analysis when debounced text changes
   useEffect(() => {
     if (debouncedText.trim() && !isAnalyzing) {
+      // Skip if within the suppression window set by an external setAnalysisResult call
+      // (e.g. voice modal injected a result — trailing debounce must not overwrite it)
+      if (Date.now() < suppressAutoAnalysisUntilRef.current) {
+        return;
+      }
       // 🆕 GET USER PROFILE FOR REGIONAL CONTEXT IN AUTO-ANALYSIS
       const performAutoAnalysis = async () => {
         try {

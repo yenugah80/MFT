@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Predictions API Routes
  *
  * Proactive wellness predictions:
@@ -9,7 +9,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import {
   generateMorningPrediction,
   generateTimeAwarePrediction,
@@ -238,7 +238,7 @@ router.get('/realtime', requireAuth(), async (req, res) => {
 
 // ============================================================================
 // PREDICTION LEARNING ENDPOINTS
-// Closed-loop system: Predictions → Check-ins → Feedback → Learning
+// Closed-loop system: Predictions â†’ Check-ins â†’ Feedback â†’ Learning
 // ============================================================================
 
 /**

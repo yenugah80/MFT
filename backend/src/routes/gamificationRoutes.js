@@ -13,7 +13,7 @@ const router = express.Router();
 
 // POST /api/gamification/check-streak
 // Call this endpoint after successfully logging a meal or water that increments the streak
-router.post('/check-streak', requireAuth, async (req, res) => {
+router.post('/check-streak', requireAuth(), async (req, res) => {
   try {
     const { currentStreak } = req.body;
     const userId = req.auth.userId;
@@ -31,7 +31,7 @@ router.post('/check-streak', requireAuth, async (req, res) => {
 
 // POST /api/gamification/restore-streak
 // Restore a broken streak using a streak freeze (within 24 hours of losing it)
-router.post('/restore-streak', requireAuth, async (req, res) => {
+router.post('/restore-streak', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
     const result = await restoreStreak(userId);
@@ -55,7 +55,7 @@ router.post('/restore-streak', requireAuth, async (req, res) => {
 
 // GET /api/gamification/user
 // Get full gamification data for the current user
-router.get('/user', requireAuth, async (req, res) => {
+router.get('/user', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -128,7 +128,7 @@ router.get('/user', requireAuth, async (req, res) => {
 
 // GET /api/gamification/streak-status
 // Get Snapchat-style streak status for popup display
-router.get('/streak-status', requireAuth, async (req, res) => {
+router.get('/streak-status', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
 
@@ -150,7 +150,7 @@ router.get('/streak-status', requireAuth, async (req, res) => {
 
 // POST /api/gamification/clear-streak-saved
 // Clear the "streak saved by freeze" flag after user acknowledges
-router.post('/clear-streak-saved', requireAuth, async (req, res) => {
+router.post('/clear-streak-saved', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
     await clearStreakSavedFlag(userId);
@@ -163,7 +163,7 @@ router.post('/clear-streak-saved', requireAuth, async (req, res) => {
 
 // GET /api/gamification/achievements
 // Get all achievements with user's unlock status
-router.get('/achievements', requireAuth, async (req, res) => {
+router.get('/achievements', requireAuth(), async (req, res) => {
   try {
     const userId = req.auth.userId;
 

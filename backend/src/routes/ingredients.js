@@ -15,7 +15,7 @@ import { ingredientBreakdownService } from '../services/ingredientBreakdownServi
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth());
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/ingredients/breakdown

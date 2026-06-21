@@ -248,7 +248,7 @@ export async function getInitialParams(userId, userProfile = null) {
   if (userProfile && clusterPrototypes) {
     const clusterId = findClosestCluster(userProfile);
     // In production, we would have cluster-specific params
-    clusterParams = null; // Placeholder
+    clusterParams = null; // Cluster-specific params not yet computed; fall back to meta-learned params
   }
 
   // Blend meta-params with cluster-specific adjustments
@@ -429,9 +429,19 @@ export async function coldStartAwarePrediction(userId, input, daysOfData) {
     };
   }
 
-  // Get personalized prediction
-  // In production, load user's personalized params from database
-  const personalizedPred = populationPred; // Placeholder
+  // Load user's personalized model params from DB if available; fall back to population
+  let personalizedPred = populationPred;
+  try {
+    const userData = await getUserTrainingData(userId, 30);
+    if (userData.length >= 5) {
+      const personalModel = createModel();
+      personalModel.setParams(metaModelParams);
+      personalModel.finetune(userData);
+      personalizedPred = personalModel.predict(input);
+    }
+  } catch (err) {
+    console.warn('[MetaLearner] Personalized prediction failed, using population:', err.message);
+  }
 
   // Blend predictions
   const blendedPred = {};
@@ -565,12 +575,54 @@ export async function metaTrain(options = {}) {
 }
 
 /**
- * Get user training data (placeholder implementation)
+ * Get encoded training data for a user from the last `numDays` days.
+ * Returns an array of encoded feature vectors ready for fine-tuning.
  */
 async function getUserTrainingData(userId, numDays) {
-  // In production, this would fetch actual encoded data from database
-  // For now, return empty to indicate data fetching needed
-  return [];
+  const since = new Date();
+  since.setDate(since.getDate() - numDays);
+
+  try {
+    const rows = await db.execute(sql`
+      SELECT
+        fl.logged_date                                              AS date,
+        COALESCE(SUM(fl.calories), 0)                             AS total_calories,
+        COALESCE(SUM(fl.protein), 0)                              AS total_protein,
+        COALESCE(SUM(fl.carbs), 0)                                AS total_carbs,
+        COALESCE(SUM(fl.fats), 0)                                 AS total_fats,
+        COALESCE(AVG(ml.intensity), 5)                            AS avg_mood_intensity,
+        COALESCE(AVG(ml.energy_level), 5)                         AS avg_energy,
+        COALESCE(SUM(wl.amount_liters), 0)                        AS total_water_liters,
+        COALESCE(SUM(al.duration_minutes), 0)                     AS activity_minutes
+      FROM food_log fl
+      LEFT JOIN mood_log   ml ON ml.user_id = fl.user_id
+            AND DATE(ml.logged_date)  = DATE(fl.logged_date)
+      LEFT JOIN water_log  wl ON wl.user_id = fl.user_id
+            AND DATE(wl.logged_date)  = DATE(fl.logged_date)
+      LEFT JOIN activity_log al ON al.user_id = fl.user_id
+            AND DATE(al.logged_at)    = DATE(fl.logged_date)
+      WHERE fl.user_id = ${userId}
+        AND fl.logged_date >= ${since}
+      GROUP BY DATE(fl.logged_date)
+      ORDER BY DATE(fl.logged_date) ASC
+    `);
+
+    return (rows.rows || []).map((row) =>
+      encodeUserDay({
+        totalCalories:   parseFloat(row.total_calories)   || 0,
+        totalProtein:    parseFloat(row.total_protein)    || 0,
+        totalCarbs:      parseFloat(row.total_carbs)      || 0,
+        totalFats:       parseFloat(row.total_fats)       || 0,
+        avgMoodIntensity:parseFloat(row.avg_mood_intensity)|| 5,
+        avgEnergy:       parseFloat(row.avg_energy)       || 5,
+        totalWaterLiters:parseFloat(row.total_water_liters)|| 0,
+        activityMinutes: parseFloat(row.activity_minutes) || 0,
+      })
+    );
+  } catch (error) {
+    console.error('[MetaLearner] getUserTrainingData failed:', error);
+    return [];
+  }
 }
 
 /**

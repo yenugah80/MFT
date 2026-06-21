@@ -632,8 +632,11 @@ export async function getProfile(req, res) {
     const normalizedDietary = {
       preferences: Array.isArray(dietary?.preferences) ? dietary.preferences : [],
       allergies: Array.isArray(dietary?.allergies) ? dietary.allergies : [],
+      allergenSeverity: (dietary?.allergenSeverity && typeof dietary.allergenSeverity === 'object')
+        ? dietary.allergenSeverity : {},
+      intoleranceType: (dietary?.intoleranceType && typeof dietary.intoleranceType === 'object')
+        ? dietary.intoleranceType : {},
       dislikes: Array.isArray(dietary?.dislikes) ? dietary.dislikes : [],
-      // 🆕 INCLUDE REGIONAL CONTEXT FROM PROFILES TABLE
       cuisinePreference: Array.isArray(profile?.cuisinePreference) ? profile.cuisinePreference : [],
       region: profile?.region || null,
       cookingStyle: profile?.cookingStyle || null
@@ -794,10 +797,28 @@ function normalizeStringArray(items) {
     .map(item => item.trim());
 }
 
+const VALID_ALLERGEN_SEVERITIES = ['mild', 'moderate', 'severe', 'anaphylaxis'];
+const VALID_INTOLERANCE_TYPES = ['allergy', 'intolerance', 'preference'];
+
+const VALID_REGIONS = [
+  'north_america', 'latin_america', 'europe', 'middle_east',
+  'south_asia', 'east_asia', 'southeast_asia', 'africa', 'oceania',
+];
+const VALID_COOKING_STYLES = ['fried', 'steamed', 'grilled', 'boiled', 'baked', 'raw', 'mixed'];
+
 export async function saveDietary(req, res) {
   try {
     const { userId } = req.auth;
-    const { preferences, allergies, dislikes, cuisinePreference, region, cookingStyle } = req.body;
+    const {
+      preferences,
+      allergies,
+      allergenSeverity,
+      intoleranceType,
+      dislikes,
+      cuisinePreference,
+      region,
+      cookingStyle,
+    } = req.body;
 
     // Validate that array fields are actually arrays
     if (preferences && !Array.isArray(preferences)) {
@@ -869,6 +890,69 @@ export async function saveDietary(req, res) {
       });
     }
 
+    // Validate allergenSeverity map (optional)
+    const normalizedAllergenSeverity = {};
+    if (allergenSeverity && typeof allergenSeverity === 'object' && !Array.isArray(allergenSeverity)) {
+      for (const [allergen, severity] of Object.entries(allergenSeverity)) {
+        if (!VALID_ALLERGIES.includes(allergen)) continue; // silently skip unknown allergens
+        if (!VALID_ALLERGEN_SEVERITIES.includes(severity)) {
+          return res.status(400).json({
+            error: 'Validation error',
+            message: `Invalid severity "${severity}" for allergen "${allergen}"`,
+            validOptions: VALID_ALLERGEN_SEVERITIES,
+          });
+        }
+        normalizedAllergenSeverity[allergen] = severity;
+      }
+    }
+
+    // Validate intoleranceType map (optional)
+    const normalizedIntoleranceType = {};
+    if (intoleranceType && typeof intoleranceType === 'object' && !Array.isArray(intoleranceType)) {
+      for (const [allergen, type] of Object.entries(intoleranceType)) {
+        if (!VALID_ALLERGIES.includes(allergen)) continue;
+        if (!VALID_INTOLERANCE_TYPES.includes(type)) {
+          return res.status(400).json({
+            error: 'Validation error',
+            message: `Invalid intolerance type "${type}" for "${allergen}"`,
+            validOptions: VALID_INTOLERANCE_TYPES,
+          });
+        }
+        normalizedIntoleranceType[allergen] = type;
+      }
+    }
+
+    // Validate region and cookingStyle against known enums
+    if (region && !VALID_REGIONS.includes(region)) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: `Invalid region "${region}"`,
+        validOptions: VALID_REGIONS,
+      });
+    }
+    if (cookingStyle && !VALID_COOKING_STYLES.includes(cookingStyle)) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: `Invalid cookingStyle "${cookingStyle}"`,
+        validOptions: VALID_COOKING_STYLES,
+      });
+    }
+
+    // Validate dislikes: max 100 items, each max 100 chars
+    if (normalizedDislikes.length > 100) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'Too many dislikes (max 100)',
+      });
+    }
+    const longDislike = normalizedDislikes.find((d) => d.length > 100);
+    if (longDislike) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: `Dislike entry too long (max 100 chars): "${longDislike.slice(0, 30)}..."`,
+      });
+    }
+
     // Ensure at least one dietary preference
     if (normalizedPreferences.length === 0 && normalizedCuisine.length === 0) {
       return res.status(400).json({
@@ -900,6 +984,8 @@ export async function saveDietary(req, res) {
           userId,
           preferences: normalizedPreferences,
           allergies: normalizedAllergies,
+          allergenSeverity: normalizedAllergenSeverity,
+          intoleranceType: normalizedIntoleranceType,
           dislikes: normalizedDislikes,
         })
         .onConflictDoUpdate({
@@ -907,6 +993,8 @@ export async function saveDietary(req, res) {
           set: {
             preferences: normalizedPreferences,
             allergies: normalizedAllergies,
+            allergenSeverity: normalizedAllergenSeverity,
+            intoleranceType: normalizedIntoleranceType,
             dislikes: normalizedDislikes,
             updatedAt: new Date(),
           },
@@ -920,6 +1008,8 @@ export async function saveDietary(req, res) {
     const dietary = {
       preferences: Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [],
       allergies: Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [],
+      allergenSeverity: dietaryRow?.allergenSeverity ?? {},
+      intoleranceType: dietaryRow?.intoleranceType ?? {},
       dislikes: Array.isArray(dietaryRow?.dislikes) ? dietaryRow.dislikes : [],
       cuisinePreference: normalizedCuisine,
     };

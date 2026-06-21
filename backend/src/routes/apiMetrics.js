@@ -14,7 +14,7 @@ const router = express.Router();
  * GET /api/metrics
  * Get API usage metrics (admin only)
  */
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth(), async (req, res) => {
   try {
     if (!isAdminRequest(req)) {
       return res.status(403).json({ error: 'Admin access required' });
@@ -53,7 +53,7 @@ router.get('/', requireAuth, async (req, res) => {
  * POST /api/metrics/reset-circuit-breaker
  * Manually reset circuit breaker for an API (admin only)
  */
-router.post('/reset-circuit-breaker/:api', requireAuth, async (req, res) => {
+router.post('/reset-circuit-breaker/:api', requireAuth(), async (req, res) => {
   try {
     if (!isAdminRequest(req)) {
       return res.status(403).json({ error: 'Admin access required' });
@@ -80,7 +80,7 @@ router.post('/reset-circuit-breaker/:api', requireAuth, async (req, res) => {
  * POST /api/metrics/clear-cache/:api
  * Clear cache for an API (admin only)
  */
-router.post('/clear-cache/:api', requireAuth, async (req, res) => {
+router.post('/clear-cache/:api', requireAuth(), async (req, res) => {
   try {
     if (!isAdminRequest(req)) {
       return res.status(403).json({ error: 'Admin access required' });

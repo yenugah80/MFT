@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Recommendation Expiry API Route
  *
  * Manages the lifecycle of recommendations
@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import {
   getExpiredRecommendations,
   archiveExpiredRecommendations,

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Stress Tracking Routes
  *
  * Dedicated stress logging with triggers, symptoms, and coping strategies.
@@ -13,7 +13,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { stressLogTable } from '../db/schema.js';

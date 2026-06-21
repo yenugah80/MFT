@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sleep Tracking Routes
  *
  * Dedicated sleep logging with quality assessment and context tags.
@@ -12,7 +12,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { eq, and, gte, lte, desc, sql, count, avg } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { sleepLogTable } from '../db/schema.js';

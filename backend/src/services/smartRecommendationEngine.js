@@ -22,6 +22,7 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, inArray } from 'drizzle-orm';
 import { getUserSignals } from './userSignalCacheService.js';
+import { computeWindowedFoodMoodCorrelations } from './moodSignalService.js';
 
 // ============================================
 // NUTRITIONAL KNOWLEDGE BASE
@@ -532,59 +533,22 @@ async function getUserFoodHistory(userId, days = 14) {
 }
 
 /**
- * Get user's mood patterns with food
+ * Get user's mood patterns with food using 3-hour temporal windows.
+ * Delegates to computeWindowedFoodMoodCorrelations which avoids the
+ * calendar-day confounder (where unrelated foods on the same day were
+ * incorrectly attributed to mood outcomes).
  */
 async function getMoodFoodCorrelations(userId) {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  // Parallelize mood and food log fetches
-  const [moodLogs, foodLogs] = await Promise.all([
-    db.select().from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, thirtyDaysAgo))),
-    db.select().from(foodLogTable).where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, thirtyDaysAgo))),
-  ]);
-
-  // Simple correlation: group by day and find patterns
-  const dayData = {};
-
-  foodLogs.forEach(log => {
-    const day = new Date(log.loggedDate).toISOString().split('T')[0];
-    if (!dayData[day]) dayData[day] = { foods: [], avgMood: null };
-    dayData[day].foods.push(log.foodName?.toLowerCase());
-  });
-
-  moodLogs.forEach(log => {
-    const day = new Date(log.loggedDate).toISOString().split('T')[0];
-    if (!dayData[day]) dayData[day] = { foods: [], avgMood: null };
-    const intensity = parseFloat(log.intensity) || 5;
-    dayData[day].avgMood = dayData[day].avgMood
-      ? (dayData[day].avgMood + intensity) / 2
-      : intensity;
-  });
-
-  // Find foods associated with good mood days (7+)
-  const goodMoodFoods = [];
-  const badMoodFoods = [];
-
-  Object.values(dayData).forEach(({ foods, avgMood }) => {
-    if (avgMood === null) return;
-    foods.forEach(food => {
-      if (avgMood >= 7) goodMoodFoods.push(food);
-      if (avgMood <= 4) badMoodFoods.push(food);
-    });
-  });
-
-  // Count and find patterns
-  const goodFoodCounts = {};
-  goodMoodFoods.forEach(f => { goodFoodCounts[f] = (goodFoodCounts[f] || 0) + 1; });
-
-  const moodBoosters = Object.entries(goodFoodCounts)
-    .filter(([_, count]) => count >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([food, _]) => food);
-
-  return { moodBoosters };
+  try {
+    const result = await computeWindowedFoodMoodCorrelations(userId, { lookbackDays: 30 });
+    return {
+      moodBoosters: result.goodFoods ?? [],
+      moodDampeners: result.watchFoods ?? [],
+    };
+  } catch (err) {
+    console.error('[SmartRecommendationEngine] getMoodFoodCorrelations error:', err);
+    return { moodBoosters: [], moodDampeners: [] };
+  }
 }
 
 /**

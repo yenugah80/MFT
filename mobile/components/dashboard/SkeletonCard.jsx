@@ -20,20 +20,14 @@ export default function SkeletonCard({ height = 120, width = '100%', borderRadiu
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(shimmerAnimation, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnimation, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
+        Animated.timing(shimmerAnimation, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(shimmerAnimation, { toValue: 0, duration: 1500, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, [shimmerAnimation]);
 
   const opacity = shimmerAnimation.interpolate({
@@ -63,20 +57,14 @@ export function SkeletonText({ width = '100%', height = 16, marginBottom = 8 }) 
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(shimmerAnimation, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnimation, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
+        Animated.timing(shimmerAnimation, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(shimmerAnimation, { toValue: 0, duration: 1500, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, [shimmerAnimation]);
 
   const opacity = shimmerAnimation.interpolate({
@@ -106,20 +94,14 @@ export function SkeletonCircle({ size = 40 }) {
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(shimmerAnimation, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnimation, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
+        Animated.timing(shimmerAnimation, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(shimmerAnimation, { toValue: 0, duration: 1500, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, [shimmerAnimation]);
 
   const opacity = shimmerAnimation.interpolate({

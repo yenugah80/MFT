@@ -31,6 +31,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "firebase-admin": "^13.0.2",
+    "jstat": "^1.9.6",
     "multer": "^2.0.2",
     "node-cache": "^5.1.2",
     "openai": "^6.10.0",

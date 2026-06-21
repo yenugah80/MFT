@@ -40,45 +40,31 @@ export default function HydrationProgressRing({
       ...animConfig,
     }).start();
 
-    // Subtle pulsing glow animation when progress > 0
+    let glowLoop;
+    let pulseLoop;
     if (percentage > 0 && !reduceMotion) {
-      Animated.loop(
+      glowLoop = Animated.loop(
         Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0,
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
+          Animated.timing(glowAnim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
-      ).start();
+      );
+      glowLoop.start();
 
-      // Gentle pulse effect when near goal (80%+)
       if (percentage >= 80) {
-        Animated.loop(
+        pulseLoop = Animated.loop(
           Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1.03,
-              duration: 1500,
-              easing: Easing.inOut(Easing.ease),
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 1500,
-              easing: Easing.inOut(Easing.ease),
-              useNativeDriver: true,
-            }),
+            Animated.timing(pulseAnim, { toValue: 1.03, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.timing(pulseAnim, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
           ])
-        ).start();
+        );
+        pulseLoop.start();
       }
     }
+    return () => {
+      glowLoop?.stop();
+      pulseLoop?.stop();
+    };
   }, [percentage, reduceMotion, animatedProgress, glowAnim, pulseAnim]);
 
   const strokeDashoffset = animatedProgress.interpolate({

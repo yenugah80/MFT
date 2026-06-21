@@ -301,7 +301,7 @@ export default function FloatingActionButton({
       <MoodLogger
         visible={moodModalVisible}
         onClose={() => setMoodModalVisible(false)}
-        onSave={handleMoodSaved}
+        onSuccess={handleMoodSaved}
       />
     </>
   );

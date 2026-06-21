@@ -171,7 +171,7 @@ export async function getExpoPushToken() {
         projectId: projectId || undefined,
       });
 
-      console.log('[PushNotifications] Got token:', tokenData.data);
+      console.log('[PushNotifications] Got token:', tokenData.data.substring(0, 20) + '...');
       return tokenData.data;
     } catch (nativeError) {
       // Handle native module not found gracefully

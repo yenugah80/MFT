@@ -47,7 +47,7 @@ export function useRecommendations({ enabled = false } = {}) {
         // apiClient.get returns data directly, not a response wrapper
         const data = await apiClient.get('/recommendations', {
           params: { limit: 5 },
-          timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
+          _timeout: 30000 // 30s timeout for recommendations endpoint (complex AI processing)
         });
         if (__DEV__) console.log('[useRecommendations] Fetch successful');
         return {

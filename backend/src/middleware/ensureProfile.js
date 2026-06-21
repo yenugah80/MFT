@@ -17,32 +17,27 @@ export const ensureProfile = async (req, res, next) => {
       return next(); // No user, skip profile creation
     }
 
-    // Check if profile exists
-    const [existingProfile] = await req.db
-      .select({ id: profilesTable.id })
-      .from(profilesTable)
-      .where(eq(profilesTable.userId, userId))
-      .limit(1);
-
-    if (existingProfile) {
-      return next(); // Profile exists, continue
-    }
-
-    // Create profile
-    console.log(`📝 Creating profile for user ${userId}`);
-
-    await req.db
+    // Upsert atomically — avoids the check-then-act race condition.
+    // onConflictDoUpdate touches updatedAt so the row is always present after this call.
+    const now = new Date();
+    const result = await req.db
       .insert(profilesTable)
       .values({
         userId,
         fullName: null,
         email: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: now,
+        updatedAt: now,
       })
-      .onConflictDoNothing(); // In case of race condition
+      .onConflictDoUpdate({
+        target: profilesTable.userId,
+        set: { updatedAt: now },
+      })
+      .returning({ id: profilesTable.id });
 
-    console.log(`✅ Profile created for user ${userId}`);
+    if (result.length > 0) {
+      console.log(`✅ Profile upserted for user ${userId}`);
+    }
     next();
   } catch (error) {
     console.error("❌ Error ensuring profile:", error);

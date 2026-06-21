@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Reminder API Routes
  *
  * Production-grade endpoints for intelligent notification scheduling and management.
@@ -23,7 +23,7 @@
  */
 
 import express from 'express';
-import { requireAuth } from '@clerk/express';
+import { requireAuth } from '../middleware/auth.js';
 import { db } from '../config/db.js';
 import {
   accountSettingsTable,
@@ -229,7 +229,10 @@ router.get('/preferences', requireAuth(), async (req, res) => {
       food: true,
       mood: true,
       activity: true,
-      motivation: true,
+      motivation: true,        // legacy key — kept for backwards compat
+      streakProtection: true,  // granular: streak-at-risk alerts
+      insightDrops: true,      // granular: insight/correlation discoveries
+      streakCelebrations: true, // granular: daily streak milestones
       quietHours: { start: 22, end: 7 },
     };
 
@@ -259,7 +262,14 @@ router.put('/preferences', requireAuth(), async (req, res) => {
     const updates = req.body;
 
     // Validate input
-    const allowedKeys = ['enabled', 'hydration', 'food', 'mood', 'activity', 'motivation', 'quietHours'];
+    const allowedKeys = [
+      'enabled', 'hydration', 'food', 'mood', 'activity',
+      'motivation',          // legacy
+      'streakProtection',    // granular
+      'insightDrops',        // granular
+      'streakCelebrations',  // granular
+      'quietHours',
+    ];
     const sanitizedUpdates = {};
     for (const key of allowedKeys) {
       if (updates[key] !== undefined) {
