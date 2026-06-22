@@ -3,11 +3,12 @@
   "name": "mft-worker",
   "main": "src/index.js",
   "compatibility_date": "2025-01-01",
+  "account_id": "3d4413dbf15b5787717abe219026ff0f",
   "observability": {
     "enabled": true
   },
   "vars": {
-    "BACKEND_URL": "https://api.my-food-tracker.com/api/health"
+    "BACKEND_URL": "https://api.my-food-tracker.com/health"
   },
   "triggers": {
     "crons": ["*/10 * * * *"]

@@ -1,13 +1,12 @@
-name: Deploy Backend
+name: Deploy Backend (Manual Fallback)
+
+# PRIMARY deployment: Railway native GitHub integration watches this repo and
+# auto-deploys on every push to main. Set up in Railway dashboard > Service > Settings > Source.
+#
+# This workflow is a MANUAL FALLBACK only — run it if native integration is ever broken.
+# Requires RAILWAY_API_TOKEN secret (generate at railway.app > Account Settings > Tokens).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'Dockerfile'
-      - 'railway.toml'
-      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 jobs:
@@ -22,7 +21,7 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy
+      - name: Deploy current code to Railway
         run: railway up --service caring-emotion --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

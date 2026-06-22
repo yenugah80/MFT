@@ -1,6 +1,6 @@
 export default {
   async scheduled(event, env) {
-    const url = env.BACKEND_URL;      // https://myfoodtracker.onrender.com/health
+    const url = env.BACKEND_URL;      // https://api.my-food-tracker.com/api/health
     const token = env.HEALTH_TOKEN;   // my-health-secret-124
 
     if (!url) {
