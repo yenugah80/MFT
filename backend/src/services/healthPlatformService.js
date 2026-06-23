@@ -660,7 +660,7 @@ function convertNutritionToHealthFormat(nutritionRecord, platform) {
         metadata: {
           mealType: nutritionRecord.meal_type,
           foodName: nutritionRecord.food_name,
-          source: 'MyFoodTracker',
+          source: 'MFT',
         },
       });
     }

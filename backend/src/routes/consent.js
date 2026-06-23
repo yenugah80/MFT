@@ -150,7 +150,7 @@ router.post('/revoke-openai-consent', requireAuth(), consentLimiter, async (req,
       consent: newConsent,
       details: {
         effectiveImmediately: true,
-        fallback: 'You will continue to use MyFoodTracker, with regex-based food analysis',
+        fallback: 'You will continue to use MFT, with regex-based food analysis',
       },
     });
   } catch (err) {

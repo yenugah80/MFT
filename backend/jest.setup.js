@@ -1,6 +1,6 @@
 import { beforeEach, jest } from '@jest/globals';
 
-// Jest setup file for MyFoodTracker backend
+// Jest setup file for MFT backend
 globalThis.jest = jest;
 
 // Mock environment variables

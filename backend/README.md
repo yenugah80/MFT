@@ -1,3 +1,3 @@
-# MyFoodTracker
+# MFT
 
 GoTo Application for healthy lifestyle

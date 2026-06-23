@@ -416,7 +416,7 @@ export async function generatePersonalizedContent(userId, notificationType, data
 
   // Default content
   return {
-    title: data.title || 'Update from MyFoodTracker',
+    title: data.title || 'Update from MFT',
     body: data.body || 'Check out what\'s new!',
     emoji: '',
   };

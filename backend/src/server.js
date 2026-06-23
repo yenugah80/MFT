@@ -531,7 +531,7 @@ export async function ensureSleepStressTables() {
 const ALLOWED_ORIGINS = [
   // Production frontend (if any web interface exists)
   ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
-  // MyFoodTracker production domain
+  // MFT production domain
   'https://api.my-food-tracker.com',
   // Development/Testing (only in development mode)
   ...(process.env.NODE_ENV === 'development' ? [
@@ -590,7 +590,7 @@ app.use('/api', globalLimiter);
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
-    message: "MyFoodTracker backend is running.",
+    message: "MFT backend is running.",
     timestamp: new Date().toISOString(),
   });
 });
