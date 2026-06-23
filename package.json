@@ -6,15 +6,13 @@
     "mobile",
     "backend",
     "worker",
-    "shared",
-    "gesture-rush"
+    "shared"
   ],
   "scripts": {
     "dev": "npm run dev:backend",
     "dev:backend": "npm --prefix backend run dev",
     "dev:mobile": "npm --prefix mobile start -- --clear",
     "dev:worker": "npm --prefix worker run dev",
-    "dev:game": "npm --prefix gesture-rush run dev",
     "build:mobile:android": "npm --prefix mobile run android",
     "build:mobile:ios": "npm --prefix mobile run ios",
     "lint": "npm run lint --workspaces --if-present",
