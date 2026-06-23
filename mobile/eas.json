@@ -22,9 +22,6 @@
     },
     "production": {
       "autoIncrement": true,
-      "hooks": {
-        "pre-install": "eas-hooks/eas-build-pre-install.sh"
-      },
       "ios": {
         "resourceClass": "m-medium"
       },
