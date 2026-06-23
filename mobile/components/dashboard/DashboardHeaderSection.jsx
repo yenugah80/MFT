@@ -185,7 +185,7 @@ export default function DashboardHeaderSection({
             </LinearGradient>
           </View>
           <View style={localStyles.brandTextContainer}>
-            <Text style={[localStyles.brandName, { color: textPrimary }]}>My-Food-Tracker</Text>
+            <Text style={[localStyles.brandName, { color: textPrimary }]}>MFT</Text>
             <Text style={[localStyles.brandTagline, { color: textTertiary }]}>Your Wellness Companion</Text>
           </View>
         </View>

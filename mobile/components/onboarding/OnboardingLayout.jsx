@@ -92,7 +92,7 @@ const OnboardingContent = ({
               source={require('../../assets/images/app-logo.png')}
               style={styles.logo}
             />
-            <Text style={styles.brandName}>MyFoodTracker</Text>
+            <Text style={styles.brandName}>MFT</Text>
             <Text style={styles.brandTagline}>Your personal nutrition companion</Text>
           </View>
         )}

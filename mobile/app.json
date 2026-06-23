@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "My-Food-Tracker",
+    "name": "MFT : My Food & Mood Tracker",
     "slug": "my-food-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,15 +15,15 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification"],
-        "NSCameraUsageDescription": "My-Food-Tracker needs camera access to photograph your meals for nutrition analysis.",
-        "NSMicrophoneUsageDescription": "My-Food-Tracker needs microphone access for voice meal logging.",
-        "NSPhotoLibraryUsageDescription": "My-Food-Tracker needs photo library access to select food photos for analysis.",
-        "NSPhotoLibraryAddUsageDescription": "My-Food-Tracker needs permission to save meal photos to your library.",
+        "NSCameraUsageDescription": "MFT needs camera access to photograph your meals for nutrition analysis.",
+        "NSMicrophoneUsageDescription": "MFT needs microphone access for voice meal logging.",
+        "NSPhotoLibraryUsageDescription": "MFT needs photo library access to select food photos for analysis.",
+        "NSPhotoLibraryAddUsageDescription": "MFT needs permission to save meal photos to your library.",
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
-        "NSSpeechRecognitionUsageDescription": "My-Food-Tracker uses speech recognition to transcribe your voice meal logs.",
-        "NSHealthShareUsageDescription": "My-Food-Tracker reads your step count and activity data to give you personalized nutrition recommendations.",
-        "NSHealthUpdateUsageDescription": "My-Food-Tracker writes your logged meals and hydration to Apple Health to keep your health data in sync."
+        "NSSpeechRecognitionUsageDescription": "MFT uses speech recognition to transcribe your voice meal logs.",
+        "NSHealthShareUsageDescription": "MFT reads your step count and activity data to give you personalized nutrition recommendations.",
+        "NSHealthUpdateUsageDescription": "MFT writes your logged meals and hydration to Apple Health to keep your health data in sync."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -84,28 +84,28 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "My-Food-Tracker needs camera access to photograph your meals for nutrition analysis.",
-          "microphonePermission": "My-Food-Tracker needs microphone access for voice meal logging."
+          "cameraPermission": "MFT needs camera access to photograph your meals for nutrition analysis.",
+          "microphonePermission": "MFT needs microphone access for voice meal logging."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "My-Food-Tracker needs microphone access for voice meal logging."
+          "microphonePermission": "MFT needs microphone access for voice meal logging."
         }
       ],
       [
         "@react-native-voice/voice",
         {
-          "microphonePermission": "Allow MyFoodTracker to access your microphone for voice logging.",
-          "speechRecognitionPermission": "Allow MyFoodTracker to transcribe your speech for food logging."
+          "microphonePermission": "Allow MFT to access your microphone for voice logging.",
+          "speechRecognitionPermission": "Allow MFT to transcribe your speech for food logging."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "My-Food-Tracker needs photo library access to select food photos for analysis.",
-          "cameraPermission": "My-Food-Tracker needs camera access to photograph your meals."
+          "photosPermission": "MFT needs photo library access to select food photos for analysis.",
+          "cameraPermission": "MFT needs camera access to photograph your meals."
         }
       ],
       [

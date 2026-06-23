@@ -728,7 +728,7 @@ export default function InsightDrivenHeader({
           </View>
           <View style={styles.brandText}>
             <Text style={styles.greeting}>{greeting}{firstName ? `, ${firstName}` : ''}</Text>
-            <Text style={styles.brandName}>MyFoodTracker</Text>
+            <Text style={styles.brandName}>MFT</Text>
           </View>
         </View>
 

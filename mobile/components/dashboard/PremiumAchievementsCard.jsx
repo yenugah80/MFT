@@ -72,7 +72,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
   const handleShare = async () => {
     try {
       const uri = await captureRef(viewShotRef, { format: 'png', quality: 0.9 });
-      const message = `🏆 I just hit Level ${level} (${rank}) on My-Food-Tracker! #HealthGoals #LevelUp`;
+      const message = `🏆 I just hit Level ${level} (${rank}) on MFT! #HealthGoals #LevelUp`;
 
       if (Platform.OS === 'ios') {
         await Share.share({
@@ -96,7 +96,7 @@ const LevelUpModal = ({ visible, level, rank, onClose }) => {
       const uri = await captureRef(viewShotRef, { format: 'png', quality: 0.9 });
       if (Platform.OS === 'ios') {
         // Instagram Stories URL Scheme
-        const instagramUrl = `instagram-stories://share?source_application=com.myfoodtracker&backgroundImage=${uri}`;
+        const instagramUrl = `instagram-stories://share?source_application=com.zennxt.myfoodtracker&backgroundImage=${uri}`;
         if (await Linking.canOpenURL(instagramUrl)) {
           await Linking.openURL(instagramUrl);
           return;

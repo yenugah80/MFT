@@ -1,6 +1,6 @@
 # Scripts
 
-Build and deployment scripts for MyFoodTracker.
+Build and deployment scripts for MFT.
 
 ## Available Scripts
 

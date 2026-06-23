@@ -452,7 +452,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
       } else {
         message = `📊 My ${periodDays}-Day Wellness Summary\n\n🏆 Avg Score: ${periodStats.avgWellnessScore}/100\n🍽️ Avg Calories: ${periodStats.avgCalories}\n💧 Avg Hydration: ${periodStats.avgHydration}%\n😊 Avg Mood: ${periodStats.avgMood}/5\n📈 ${periodStats.daysLogged}/${periodStats.totalDays} days logged`;
       }
-      message += '\n\nTracked with MyFoodTracker 🥗';
+      message += '\n\nTracked with MFT 🥗';
       await Share.share({ message });
     } catch (error) {
       console.log('Error sharing:', error);

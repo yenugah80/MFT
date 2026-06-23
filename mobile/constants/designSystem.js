@@ -1,5 +1,5 @@
 /**
- * MyFoodTracker Unified Design System
+ * MFT Unified Design System
  * Principal Staff-Level Design - 10/10 Quality Target
  *
  * Consolidates 4 competing design token files:

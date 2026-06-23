@@ -405,7 +405,7 @@ export default function ProfileScreen() {
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerBrand}>MyFoodTracker</Text>
+            <Text style={styles.footerBrand}>MFT</Text>
             <Text style={styles.footerVersion}>Version 1.0.0</Text>
             <View style={styles.footerLinks}>
               <TouchableOpacity onPress={() => Linking.openURL('https://my-food-tracker.com/privacy')}>

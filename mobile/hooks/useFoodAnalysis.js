@@ -648,7 +648,7 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
   if (!searchTerm) return null;
 
   const headers = {
-    'User-Agent': 'My-Food-Tracker/1.0 (+mobile-app)',
+    'User-Agent': 'MFT/1.0 (+mobile-app)',
     ...(OPEN_FOOD_FACTS_API_KEY ? { 'X-OpenFoodFacts-Api-Key': OPEN_FOOD_FACTS_API_KEY } : {}),
   };
 

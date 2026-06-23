@@ -33,7 +33,7 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="Introduction">
           <Text style={styles.text}>
-            My-Food-Tracker (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
+            MFT (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
             This Privacy Policy explains how we collect, use, disclose, and safeguard your
             information when you use our mobile application.
           </Text>
@@ -87,7 +87,7 @@ export default function PrivacyPolicyScreen() {
         <Section title="Data Storage and Security">
           <Text style={styles.text}>
             • Your data is stored securely using industry-standard encryption{'\n'}
-            • Data is stored on secure servers (Render, Neon Database){'\n'}
+            • Data is stored on secure servers (Railway, Neon Database){'\n'}
             • Local data is stored encrypted on your device{'\n'}
             • We implement appropriate security measures to protect your data{'\n'}
             • Regular security audits and updates
@@ -154,7 +154,7 @@ export default function PrivacyPolicyScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            By using My-Food-Tracker, you acknowledge that you have read and understood
+            By using MFT, you acknowledge that you have read and understood
             this Privacy Policy.
           </Text>
         </View>

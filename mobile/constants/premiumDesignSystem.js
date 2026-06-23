@@ -1,5 +1,5 @@
 /**
- * Premium Design System - MyFoodTracker 2025
+ * Premium Design System - MFT 2025
  *
  * Design Philosophy: "Informed Simplicity"
  * - Every element serves a purpose

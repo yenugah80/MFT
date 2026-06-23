@@ -197,7 +197,7 @@ export const ANIMATION_DURATIONS = {
 
 // Accessibility labels
 export const A11Y_LABELS = {
-  step1: 'Step 1 of 4: Welcome to MyFoodTracker. Select your primary fitness goal - lose weight, maintain, or gain weight',
+  step1: 'Step 1 of 4: Welcome to MFT. Select your primary fitness goal - lose weight, maintain, or gain weight',
   step2: 'Step 2 of 4: Enter your measurements. Provide your age, weight, height, and activity level so we can personalize your nutrition plan',
   step3: 'Step 3 of 4: Select your food preferences. Choose your dietary style, identify any allergies or intolerances, and pick your favorite cuisines',
   step4: 'Step 4 of 4: Review your calculated daily nutrition targets. Your personalized calorie, protein, carbs, fats, and water intake goals are ready',

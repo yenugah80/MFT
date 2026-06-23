@@ -34,14 +34,14 @@ export default function TermsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
           <Text style={styles.text}>
-            By using MyFoodTracker, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use our app.
+            By using MFT, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use our app.
           </Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>2. Use License</Text>
           <Text style={styles.text}>
-            You are granted a limited, non-exclusive, non-transferable license to use MyFoodTracker for personal, non-commercial purposes in accordance with these terms.
+            You are granted a limited, non-exclusive, non-transferable license to use MFT for personal, non-commercial purposes in accordance with these terms.
           </Text>
         </View>
 
@@ -55,17 +55,17 @@ export default function TermsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>4. Health & Medical Disclaimer</Text>
           <Text style={styles.text}>
-            IMPORTANT: MyFoodTracker is a wellness tool, NOT a medical device. The app, including all nutritional information, insights, predictions, correlations, and recommendations, is provided for informational and educational purposes only.{'\n\n'}
+            IMPORTANT: MFT is a wellness tool, NOT a medical device. The app, including all nutritional information, insights, predictions, correlations, and recommendations, is provided for informational and educational purposes only.{'\n\n'}
             This app does NOT provide medical advice, diagnosis, or treatment. The information should not be used as a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of a qualified healthcare provider with any questions regarding a medical condition, dietary needs, or health goals.{'\n\n'}
-            MyFoodTracker is NOT intended to diagnose, treat, cure, or prevent any disease or health condition. If you have or suspect you have a medical problem, eating disorder, or other health condition, promptly contact your healthcare provider.{'\n\n'}
-            Never disregard professional medical advice or delay seeking it because of information provided by this app. Reliance on any information provided by MyFoodTracker is solely at your own risk.
+            MFT is NOT intended to diagnose, treat, cure, or prevent any disease or health condition. If you have or suspect you have a medical problem, eating disorder, or other health condition, promptly contact your healthcare provider.{'\n\n'}
+            Never disregard professional medical advice or delay seeking it because of information provided by this app. Reliance on any information provided by MFT is solely at your own risk.
           </Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>5. Limitation of Liability</Text>
           <Text style={styles.text}>
-            In no event shall MyFoodTracker be liable for any indirect, incidental, special, consequential, or punitive damages arising out of your use of or inability to use the app.
+            In no event shall MFT be liable for any indirect, incidental, special, consequential, or punitive damages arising out of your use of or inability to use the app.
           </Text>
         </View>
 

@@ -1,30 +1,61 @@
+<!-- CI/CD Status -->
+<p align="center">
+  <a href="https://github.com/yenugah80/MFT/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/yenugah80/MFT/ci.yml?branch=main&style=for-the-badge&logo=github-actions&logoColor=white&label=CI" alt="CI"/></a>
+  <a href="https://github.com/yenugah80/MFT/actions/workflows/deploy-backend.yml"><img src="https://img.shields.io/github/actions/workflow/status/yenugah80/MFT/deploy-backend.yml?branch=main&style=for-the-badge&logo=railway&logoColor=white&label=Backend+Deploy" alt="Backend Deploy"/></a>
+  <a href="https://github.com/yenugah80/MFT/actions/workflows/deploy-worker.yml"><img src="https://img.shields.io/github/actions/workflow/status/yenugah80/MFT/deploy-worker.yml?branch=main&style=for-the-badge&logo=cloudflare&logoColor=white&label=Worker+Deploy" alt="Worker Deploy"/></a>
+</p>
+
+<!-- GitHub Stats -->
 <p align="center">
   <a href="https://github.com/yenugah80/MFT/stargazers"><img src="https://img.shields.io/github/stars/yenugah80/MFT?style=for-the-badge&logo=github&color=gold" alt="Stars"/></a>
   <a href="https://github.com/yenugah80/MFT/network/members"><img src="https://img.shields.io/github/forks/yenugah80/MFT?style=for-the-badge&logo=github&color=blue" alt="Forks"/></a>
   <a href="https://github.com/yenugah80/MFT/issues"><img src="https://img.shields.io/github/issues/yenugah80/MFT?style=for-the-badge&logo=github&color=red" alt="Issues"/></a>
   <a href="https://github.com/yenugah80/MFT/commits/main"><img src="https://img.shields.io/github/last-commit/yenugah80/MFT?style=for-the-badge&logo=github&color=green" alt="Last Commit"/></a>
+  <a href="https://github.com/yenugah80/MFT/graphs/contributors"><img src="https://img.shields.io/github/contributors/yenugah80/MFT?style=for-the-badge&logo=github&color=orange" alt="Contributors"/></a>
+  <img src="https://img.shields.io/github/repo-size/yenugah80/MFT?style=for-the-badge&logo=github&color=purple" alt="Repo Size"/>
 </p>
 
+<!-- Mobile Stack -->
 <p align="center">
   <img src="https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React Native"/>
   <img src="https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo"/>
-  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js"/>
-  <img src="https://img.shields.io/badge/PostgreSQL-Neon-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
-  <img src="https://img.shields.io/badge/OpenAI-GPT--4-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI"/>
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
+  <img src="https://img.shields.io/badge/React_Query-5.x-FF4154?style=for-the-badge&logo=reactquery&logoColor=white" alt="React Query"/>
+  <img src="https://img.shields.io/badge/Clerk-Auth-6C47FF?style=for-the-badge&logo=clerk&logoColor=white" alt="Clerk"/>
 </p>
 
+<!-- Backend Stack -->
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js"/>
+  <img src="https://img.shields.io/badge/Express-5.x-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-Neon-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+  <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=for-the-badge&logo=drizzle&logoColor=black" alt="Drizzle ORM"/>
+  <img src="https://img.shields.io/badge/OpenAI-GPT--4o-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI"/>
+</p>
+
+<!-- Infrastructure -->
+<p align="center">
+  <img src="https://img.shields.io/badge/Railway-Deployed-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" alt="Railway"/>
+  <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers"/>
+  <img src="https://img.shields.io/badge/Neon-Serverless_DB-00E699?style=for-the-badge&logo=neon&logoColor=black" alt="Neon"/>
+  <img src="https://img.shields.io/badge/Redis-Cache-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
+</p>
+
+<!-- Quality & Info -->
 <p align="center">
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge" alt="PRs Welcome"/>
   <img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge" alt="License"/>
   <img src="https://img.shields.io/badge/Platform-iOS%20%7C%20Android-lightgrey?style=for-the-badge&logo=apple&logoColor=white" alt="Platform"/>
+  <img src="https://img.shields.io/badge/Maintained-Yes-success?style=for-the-badge" alt="Maintained"/>
+  <img src="https://img.shields.io/badge/Made_with-❤️-ff69b4?style=for-the-badge" alt="Made with Love"/>
 </p>
 
 <br/>
 
 <h1 align="center">
-  <img src="mobile/assets/images/app-logo.png" alt="MyFoodTracker" width="140">
+  <img src="mobile/assets/images/app-logo.png" alt="MFT : My Food & Mood Tracker" width="140">
   <br/>
-  <b>MyFoodTracker</b>
+  <b>MFT : My Food & Mood Tracker</b>
 </h1>
 
 <p align="center">
@@ -47,11 +78,11 @@
 
 ---
 
-## Why MyFoodTracker?
+## Why MFT?
 
 **Not another calorie counter.** We built what we wished existed: an app that actually *learns* you.
 
-| Other Apps | MyFoodTracker |
+| Other Apps | MFT |
 |------------|---------------|
 | Generic advice for everyone | Insights from YOUR actual data |
 | "Drink more water" | "Your mood was 7.2/10 on days you drank 2L+ vs 5.1/10 otherwise" |
@@ -415,7 +446,7 @@ EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 ## 📁 Project Structure
 
 ```
-MyFoodTracker/
+MFT/
 ├── mobile/                    # React Native Expo app
 │   ├── app/                   # Expo Router screens
 │   │   ├── (auth)/           # Sign-in, sign-up
@@ -480,7 +511,7 @@ We welcome contributions! Please:
 
 ## ⚠️ Disclaimer
 
-MyFoodTracker is a **wellness tool**, not a medical device. It cannot diagnose conditions or replace professional medical advice. Always consult healthcare providers for medical decisions.
+MFT is a **wellness tool**, not a medical device. It cannot diagnose conditions or replace professional medical advice. Always consult healthcare providers for medical decisions.
 
 **Not intended to treat:** eating disorders, diabetes, or any medical condition.
 
@@ -488,7 +519,7 @@ MyFoodTracker is a **wellness tool**, not a medical device. It cannot diagnose c
 
 ## 📄 License
 
-Proprietary — © 2026 MyFoodTracker. All rights reserved.
+Proprietary — © 2026 MFT. All rights reserved.
 
 ---
 

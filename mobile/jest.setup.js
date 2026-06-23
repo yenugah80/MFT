@@ -1,4 +1,4 @@
-// Jest setup file for MyFoodTracker mobile app
+// Jest setup file for MFT mobile app
 
 // Set __DEV__ for tests
 global.__DEV__ = true;

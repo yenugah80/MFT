@@ -1,5 +1,5 @@
 /**
- * DARK PREMIUM THEME - My-Food-Tracker
+ * DARK PREMIUM THEME - MFT
  * Inspired by Whoop, Levels, Apple Watch
  *
  * Features:

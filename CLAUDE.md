@@ -1,8 +1,8 @@
-# MyFoodTracker - Project Guide for Claude
+# MFT : My Food & Mood Tracker - Project Guide for Claude
 
 ## Project Overview
 
-MyFoodTracker is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, mood, and overall health metrics.
+MFT (My Food & Mood Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.
 
 ## Tech Stack
 
@@ -73,16 +73,26 @@ MFT/
 │   ├── types/                # Shared TypeScript types
 │   └── i18n/                 # Internationalization files
 ├── agents/                    # AI agents & automation
+│   ├── design-system.md      # Design token reference for all agents
 │   └── skills/               # Claude Code custom skills
 ├── docs/                      # Documentation
-│   ├── architecture/         # Architecture docs
 │   ├── api/                  # API documentation
+│   ├── architecture/         # Architecture docs
+│   ├── branding/             # Brand guidelines & rename tracking
+│   ├── database/             # SQL migrations & schema docs
+│   ├── infrastructure/       # DNS, deployment config docs
 │   └── proposals/            # Feature proposals
+├── store-assets/              # App store assets
+│   ├── google-play/          # Android store assets
+│   └── screenshots/          # App preview screenshots
 ├── scripts/                   # Build & deployment scripts
+├── .github/                   # GitHub workflows & Copilot instructions
+│   ├── workflows/            # CI/CD pipelines
+│   └── copilot-instructions.md
 ├── CLAUDE.md                  # This file
 ├── .mcp.json                  # MCP server configuration
 ├── package.json               # Root workspace config
-├── wrangler.toml              # Cloudflare config
+├── railway.toml               # Railway deployment config
 └── README.md
 ```
 

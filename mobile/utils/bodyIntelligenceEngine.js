@@ -31,7 +31,7 @@
  * - Benjamini-Hochberg FDR correction for multiple comparisons
  * - Bayesian updating for personalization
  *
- * @author MyFoodTracker Team
+ * @author MFT Team
  * @version 2.0.0
  */
 

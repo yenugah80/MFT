@@ -1,4 +1,4 @@
-# MyFoodTracker Design System Reference
+# MFT Design System Reference
 
 > This document is the authoritative design reference for agents and skills working on the MFT mobile app. Read this before writing or reviewing any UI code.
 

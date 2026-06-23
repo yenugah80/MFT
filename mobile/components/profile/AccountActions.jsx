@@ -221,7 +221,7 @@ export default function AccountActions({ onSignOut }) {
 
       {/* App Version */}
       <View style={styles.footer}>
-        <Text style={styles.footerText}>MyFoodTracker v1.0.0</Text>
+        <Text style={styles.footerText}>MFT v1.0.0</Text>
         <Text style={styles.footerSubtext}>Made with care for your health</Text>
       </View>
     </View>

@@ -203,7 +203,7 @@ export default function InsightsIndex() {
           <View style={styles.disclaimerContainer}>
             <Ionicons name="information-circle-outline" size={16} color={TEXT.muted} />
             <Text style={styles.disclaimerText}>
-              MyFoodTracker provides wellness insights for informational purposes only.
+              MFT provides wellness insights for informational purposes only.
               Not intended as medical advice. Consult a healthcare professional for
               health decisions.
             </Text>

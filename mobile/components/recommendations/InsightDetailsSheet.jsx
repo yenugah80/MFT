@@ -344,7 +344,7 @@ export default function InsightDetailsSheet({
       confidence?.score ? `Confidence: ${confidence.score}%` : null,
       confidence?.source ? `Source: ${confidence.source}` : null,
       ``,
-      `Shared from MyFoodTracker`,
+      `Shared from MFT`,
     ].filter(Boolean).join('\n');
 
     if (onShare) {

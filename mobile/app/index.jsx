@@ -13,5 +13,5 @@ export default function AppIndex() {
     );
   }
 
-  return <Redirect href={isSignedIn ? "/(tabs)" : "/(auth)/sign-in"} />;
+  return <Redirect href={isSignedIn ? "/(tabs)" : "/(auth)/sign-up"} />;
 }

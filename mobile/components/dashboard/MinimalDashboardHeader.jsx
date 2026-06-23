@@ -367,7 +367,7 @@ export default function MinimalDashboardHeader({
             source={require('../../assets/images/app-logo.png')}
             style={styles.logoImage}
           />
-          <Text style={styles.brandName}>MyFoodTracker</Text>
+          <Text style={styles.brandName}>MFT</Text>
         </View>
         <View style={styles.headerActions}>
           {/* Notification Bell */}

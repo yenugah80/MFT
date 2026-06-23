@@ -95,7 +95,7 @@ const tokenCache = {
 
 // Debug logging to verify environment variables
 console.log("🔑 Clerk Key loaded:", publishableKey ? "✅ YES" : "❌ NO");
-// Note: API_URL is configured in constants/api.js - defaults to Render backend
+// Note: API_URL is configured in constants/api.js - defaults to the Railway backend.
 
 if (!publishableKey) {
   throw new Error(

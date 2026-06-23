@@ -74,7 +74,7 @@ export default function PrivacyScreen() {
     try {
       const data = await apiClient.get("/profile/export");
       const jsonString = JSON.stringify(data, null, 2);
-      const fileName = `myfoodtracker-data-${new Date().toISOString().split('T')[0]}.json`;
+      const fileName = `mft-data-${new Date().toISOString().split('T')[0]}.json`;
       const filePath = `${FileSystem.cacheDirectory || ''}${fileName}`;
 
       await FileSystem.writeAsStringAsync(filePath, jsonString);

@@ -1,8 +1,8 @@
-# MyFoodTracker – Copilot Instructions
+# MFT Copilot Instructions
 
 - **Architecture**: Expo/React Native app (`mobile/`) backed by Express + Drizzle + Neon (`backend/`). Clerk secures both sides; mobile talks to backend REST at `/api/*`.
-- **Run locally**: from repo root `npm run dev:backend` (nodemon) and `npm run dev:mobile` (expo start --clear). Backend .env needs `DATABASE_URL`, `PORT` (optional), `HEALTH_TOKEN`; Clerk server keys loaded via environment. Mobile needs `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`; set `EXPO_PUBLIC_API_URL` if you must override the default Render URL.
-- **API base**: `mobile/constants/api.js` always points to Render (`https://myfoodtracker.onrender.com/api`) unless `EXPO_PUBLIC_API_URL` is set. Avoid localhost unless you explicitly override; `API_BASE_URL` strips the `/api` suffix for legacy calls.
+- **Run locally**: from repo root `npm run dev:backend` (nodemon) and `npm run dev:mobile` (expo start --clear). Backend .env needs `DATABASE_URL`, `PORT` (optional), `HEALTH_TOKEN`; Clerk server keys loaded via environment. Mobile needs `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`; set `EXPO_PUBLIC_API_BASE_URL` if you must override the default Railway URL.
+- **API base**: `mobile/constants/api.js` points to the Railway-backed production API at `https://api.my-food-tracker.com/api` unless `EXPO_PUBLIC_API_BASE_URL` is set. Avoid localhost unless you explicitly override; `API_BASE_URL` strips the `/api` suffix for legacy calls.
 - **Server boot**: `backend/src/server.js` applies `clerkMiddleware` before all routes, attaches Drizzle `db`, and runs table guards `ensureProfilesTableShape` + `ensureRecommendationsHistoryTable` before starting the streak cron (`initStreakCronJob`). Keep new routes behind `requireAuth`.
 - **Persistence**: Drizzle schema lives in `backend/src/db/schema.js`; Neon connection configured in `backend/src/config/db.js`. When adding columns, mirror the guard pattern (see `ensureProfilesTableShape`) to keep older DBs compatible.
 - **Nutrition logging**: `backend/src/routes/nutrition.js` uses `clientEventId` for idempotent inserts, updates daily summaries with deltas, and applies timezone helpers (`parseTimezoneOffsetMinutes`, `getLocalDateUTC`). Preserve this pattern when touching log/edit/delete flows.
