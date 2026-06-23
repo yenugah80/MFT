@@ -26,6 +26,6 @@
     "node": ">=18.0.0"
   },
   "overrides": {
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.8.3"
   }
 }
