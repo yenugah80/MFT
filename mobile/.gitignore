@@ -44,7 +44,5 @@ app-example
 /ios
 /android
 
-# Firebase config — injected at build time via EAS Secrets
-google-services.json
-GoogleService-Info.plist
+# Firebase service account (server secret — never commit)
 google-service-account.json
