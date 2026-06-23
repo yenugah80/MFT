@@ -11,7 +11,6 @@
  */
 const REQUIRED_ENV_VARS = [
   'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY',
-  'EXPO_PUBLIC_API_BASE_URL',
 ];
 
 /**
@@ -110,20 +109,7 @@ function validateConfigurationValues() {
     }
   }
 
-  // 2. Validate API base URL format
-  const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (apiUrl) {
-    if (!apiUrl.startsWith('http')) {
-      ValidationState.errors.push('API base URL must start with http:// or https://');
-    }
-    try {
-      new URL(apiUrl); // Validate URL is parseable
-    } catch (e) {
-      ValidationState.errors.push(`API base URL is malformed: ${apiUrl}`);
-    }
-  }
-
-  // 3. Validate timeout is a valid number
+  // 2. Validate timeout is a valid number
   const timeout = process.env.EXPO_PUBLIC_API_TIMEOUT_MS;
   if (timeout) {
     const timeoutMs = parseInt(timeout, 10);

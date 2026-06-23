@@ -1,19 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-/**
- * Get the correct API URL based on environment
- * - Always prefer custom EXPO_PUBLIC_API_BASE_URL if set
- * - Default: Hetzner backend
- */
 function getApiUrl() {
-  // If user provided custom URL, use it (highest priority)
-  // NOTE: Variable name is EXPO_PUBLIC_API_BASE_URL (matches environmentValidation.js)
-  if (process.env.EXPO_PUBLIC_API_BASE_URL) {
-    return process.env.EXPO_PUBLIC_API_BASE_URL;
-  }
-
-  // Default: Production backend (Railway)
   return 'https://api.my-food-tracker.com/api';
 }
 
