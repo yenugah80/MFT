@@ -5,19 +5,21 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useRef, useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   AuthCanvas,
   AuthDivider,
   AuthField,
   AuthHeading,
   BackButton,
-  FeatureRail,
   FooterLink,
   GoogleButton,
   Notice,
   PrimaryButton,
   WelcomeBrand,
+  WelcomeFeatureChips,
+  WelcomeHeadlineContent,
+  WelcomePrivacyNote,
+  WelcomeSubheadlineContent,
   AUTH_COLORS,
 } from "../../components/auth/LaunchAuthDesign";
 import { parseClerkError } from "../../utils/errors";
@@ -127,25 +129,19 @@ export default function SignUpScreen() {
       <AuthCanvas keyboard={false}>
         <View style={styles.welcomeShell}>
           <WelcomeBrand />
-
-          <Animated.View entering={FadeInDown.delay(150).duration(420)} style={styles.welcomeCopy}>
-            <AuthHeading
-              centered
-              title="Understand your daily wellness habits."
-              subtitle="Track. Reflect. Improve your well-being."
-            />
-          </Animated.View>
-
-          <FeatureRail />
-
-          <PrimaryButton title="Create Account" onPress={() => setStep("details")} />
-
-          <View style={styles.welcomeFooter}>
+          <WelcomeHeadlineContent />
+          <View style={styles.welcomeMiddle}>
+            <WelcomeFeatureChips />
+            <WelcomeSubheadlineContent />
+          </View>
+          <View style={styles.welcomeBottom}>
+            <PrimaryButton title="Create Account" onPress={() => setStep("details")} />
             <FooterLink
               prompt="Already have an account?"
               action="Sign In"
               onPress={() => router.replace("/(auth)/sign-in")}
             />
+            <WelcomePrivacyNote />
           </View>
         </View>
       </AuthCanvas>
@@ -167,7 +163,7 @@ export default function SignUpScreen() {
         subtitle="Let's get started."
       />
 
-      <Animated.View entering={FadeInDown.delay(120).duration(420)}>
+      <View>
         <Notice type={messageType} text={message} />
 
         {/* Google SSO — primary social option shown first */}
@@ -266,7 +262,7 @@ export default function SignUpScreen() {
             onPress={() => router.replace("/(auth)/sign-in")}
           />
         </View>
-      </Animated.View>
+      </View>
     </AuthCanvas>
   );
 }
@@ -274,14 +270,16 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   welcomeShell: {
     flex: 1,
-    justifyContent: "center",
-    paddingBottom: 18,
+    paddingBottom: 12,
   },
-  welcomeCopy: {
-    marginTop: -12,
+  welcomeMiddle: {
+    alignItems: "center",
+    marginTop: 28,
+    gap: 14,
   },
-  welcomeFooter: {
-    marginTop: 42,
+  welcomeBottom: {
+    marginTop: "auto",
+    gap: 6,
   },
   topRow: {
     minHeight: 54,

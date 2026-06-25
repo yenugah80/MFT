@@ -30,6 +30,7 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import { TenorSans_400Regular } from "@expo-google-fonts/tenor-sans";
+import { GreatVibes_400Regular } from "@expo-google-fonts/great-vibes";
 import SafeScreen from "@/components/SafeScreen";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { ProfileProvider } from "@/providers/ProfileProvider";
@@ -120,6 +121,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     TenorSans_400Regular,
+    GreatVibes_400Regular,
   });
 
   // Hide splash screen when fonts are ready

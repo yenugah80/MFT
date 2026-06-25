@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   AuthCanvas,
   AuthDivider,
@@ -272,7 +271,7 @@ export default function SignInScreen() {
 
       <AuthHeading compact title={screenCopy.title} subtitle={screenCopy.subtitle} />
 
-      <Animated.View entering={FadeInDown.delay(120).duration(420)}>
+      <View>
         <Notice type={messageType} text={message} />
 
         {/* Google SSO — only shown on the main sign-in mode */}
@@ -435,7 +434,7 @@ export default function SignInScreen() {
             <FooterLink prompt="Remembered it?" action="Back to Sign In" onPress={resetToSignIn} />
           )}
         </View>
-      </Animated.View>
+      </View>
     </AuthCanvas>
   );
 }
