@@ -48,6 +48,9 @@ yarn-error.log*
 .claude/worktrees/
 skills/
 
+# Store assets & screenshots (large binaries, managed outside git)
+store-assets/
+
 # Local QA screenshots
 mobile/*preview*.png
 mobile/root-*.png
