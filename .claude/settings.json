@@ -264,7 +264,26 @@
       "Bash(xargs -I{} gh run view {} --repo yenugah80/MFT --log)",
       "Bash(grep -v \"^$\")",
       "Bash(curl -s -X POST https://backboard.railway.app/graphql/v2 -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"query{project\\(id:\\\\\"3deeefd3-91c8-4034-b82d-6e30d3287bf3\\\\\"\\){services{edges{node{deployments\\(first:1\\){edges{node{id status createdAt}}}}}}}}\"}')",
-      "Bash(curl -s -X POST https://backboard.railway.app/graphql/v2 -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"query { deploymentLogs\\(deploymentId: \\\\\"acf9024d-4285-4811-8e95-af57e0676429\\\\\", limit: 100\\) { message severity timestamp } }\"}')"
+      "Bash(curl -s -X POST https://backboard.railway.app/graphql/v2 -H 'Content-Type: application/json' -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -d '{\"query\":\"query { deploymentLogs\\(deploymentId: \\\\\"acf9024d-4285-4811-8e95-af57e0676429\\\\\", limit: 100\\) { message severity timestamp } }\"}')",
+      "Bash(eas build:list --platform android --limit 3)",
+      "Bash(eas build:list --platform android --limit 1)",
+      "Bash(java -version)",
+      "Bash(where gradle *)",
+      "PowerShell(java -version 2>&1)",
+      "PowerShell(Get-Command gradle -ErrorAction SilentlyContinue)",
+      "PowerShell($env:ANDROID_HOME)",
+      "Bash(npx eas-cli@latest build:view fde4f721-7ee4-4857-8873-548d6c3aa343 --json)",
+      "Bash(eas build:view b1c84e5c-5636-46ae-afac-71f4cc0ee15f --json)",
+      "WebFetch(domain:storage.googleapis.com)",
+      "Bash(eas build:view c7a6f225-bd76-48e7-8c24-742bfcad8795 --json)",
+      "Bash(scp \"C:/Users/harik/MacTransfer/backend.env\" harikay@192.168.1.173:/Users/harikay/Desktop/MFT/MFT/backend/.env)",
+      "Bash(scp \"C:/Users/harik/MacTransfer/mobile.env\" harikay@192.168.1.173:/Users/harikay/Desktop/MFT/MFT/mobile/.env)",
+      "Bash(scp \"C:/Users/harik/MacTransfer/env.local\" harikay@192.168.1.173:/Users/harikay/Desktop/MFT/MFT/.env.local)",
+      "Bash(scp \"C:/Users/harik/MacTransfer/firebase-service-account.json\" harikay@192.168.1.173:/Users/harikay/Desktop/MFT/MFT/backend/firebase-service-account.json)",
+      "Bash(scp \"C:/Users/harik/MacTransfer/google-services.json\" harikay@192.168.1.173:/Users/harikay/Desktop/MFT/MFT/mobile/google-services.json)",
+      "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @./google-services.json --non-interactive)",
+      "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @./google-services.json --visibility secret --non-interactive)",
+      "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @google-services.json --visibility secret --non-interactive)"
     ]
   }
 }

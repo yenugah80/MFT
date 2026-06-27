@@ -326,7 +326,21 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\)['expo']; print\\('Version:', d.get\\('version'\\)\\); print\\('iOS bundleId:', d['ios']['bundleIdentifier']\\); print\\('Android package:', d['android']['package']\\); print\\('Runtime policy:', d.get\\('runtimeVersion',{}\\)\\)\")",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['submit'], indent=2\\)\\)\")",
       "Bash(python -c ' *)",
-      "Bash(python -c \"import json; d=json.load\\(open\\('mobile/app.json'\\)\\)['expo']; print\\('iOS bundleIdentifier:', d['ios']['bundleIdentifier']\\); print\\('Android package:', d['android']['package']\\)\")"
+      "Bash(python -c \"import json; d=json.load\\(open\\('mobile/app.json'\\)\\)['expo']; print\\('iOS bundleIdentifier:', d['ios']['bundleIdentifier']\\); print\\('Android package:', d['android']['package']\\)\")",
+      "Bash(eas build:list --platform android --limit 3 --json)",
+      "Bash(eas build:list --platform android --limit 1 --json)",
+      "Bash(curl -s \"https://storage.googleapis.com/eas-workflows-production/logs/91264355-29bc-4019-be18-08002c3180c2/b1c84e5c-5636-46ae-afac-71f4cc0ee15f/2026-06-23T19%3A18%3A33Z-e5507789-67bc-4dd4-acdc-08bb5b5b9735.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260623%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260623T201141Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=16a90d4c2b0616fac2ea79d89964d4b886a977b7f74e06f16ca93325fe998a7930c35a1d1af1cad504f753f9d693b906a0b86ecccfb166f6b5704afa8d70113d25eadc213b18523fed9dbd2923c0f2605fa817258d21a978fc7730cf0e40ca9dad878ec3a12f97511ee03fc84fddc353107882ad5f9b6282f5310157d7db30e1ae07947d2195554ef0398db95144ba624a91b6f2e721d1cc0ba3084440bf084784d24155ab3fb1d303e987bf6470a65c22e6ec0a35e8a1079da66a5ee5851247b225e8ae1cc122ce98342064e5df6234e3da6f8a0e3a02107a63fa5e2f551afced862416eacd164f1cbc856cac483406e2b80f11b6cd5f6ec2dd413e86b8716b\")",
+      "Bash(eas build:view b1c84e5c-5636-46ae-afac-71f4cc0ee15f)",
+      "Bash(eas build:list --platform android --limit 5 --json)",
+      "Bash(python -c \"import json,sys; builds=json.load\\(sys.stdin\\); [print\\(f\\\\\"{b['id'][:8]} | {b['status']:10} | versionCode={b['appBuildVersion']} | {b['createdAt'][:16]} | commit={b['gitCommitHash'][:8]} | {b.get\\('error',{}\\).get\\('errorCode',''\\)}\\\\\"\\) for b in builds]\")",
+      "Bash(python -c \"import json,sys; b=json.load\\(sys.stdin\\)[0]; print\\(b['logFiles'][0] if b['logFiles'] else 'no logs'\\)\")",
+      "Bash(python -c \"import json,sys; b=json.load\\(sys.stdin\\)[0]; print\\(b['logFiles'][0] if b.get\\('logFiles'\\) else 'none'\\)\")",
+      "Bash(python *)",
+      "Bash(scp \"C:\\\\Users\\\\harik\\\\Desktop\\\\MFT\\\\MFT\\\\backend\\\\.env\" harik@Harikas-MacBook-Air.local:~/Desktop/MFT/MFT/backend/.env)",
+      "Bash(scp \"C:\\\\Users\\\\harik\\\\Desktop\\\\MFT\\\\MFT\\\\mobile\\\\.env\" harik@Harikas-MacBook-Air.local:~/Desktop/MFT/MFT/mobile/.env)",
+      "Bash(scp \"C:\\\\Users\\\\harik\\\\Desktop\\\\MFT\\\\MFT\\\\.env.local\" harik@Harikas-MacBook-Air.local:~/Desktop/MFT/MFT/.env.local)",
+      "Bash(scp \"C:\\\\Users\\\\harik\\\\Desktop\\\\MFT\\\\MFT\\\\backend\\\\firebase-service-account.json\" harik@Harikas-MacBook-Air.local:~/Desktop/MFT/MFT/backend/firebase-service-account.json)",
+      "Bash(scp \"C:\\\\Users\\\\harik\\\\Desktop\\\\MFT\\\\MFT\\\\mobile\\\\google-services.json\" harik@Harikas-MacBook-Air.local:~/Desktop/MFT/MFT/mobile/google-services.json)"
     ]
   },
   "enableAllProjectMcpServers": true,
