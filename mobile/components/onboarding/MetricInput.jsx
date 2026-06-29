@@ -5,7 +5,7 @@
  *   - surface-container-lowest (#ffffff) background — inner-glow against green surfaces
  *   - No explicit border; ghost border at 15% opacity for focus/error
  *   - Label sits ABOVE the field, never inside as a placeholder
- *   - Error: #aa371c text + 5% error-container tint on background
+ *   - Error: #DC2626 text + 6% red tint on background
  *   - Unit toggle: pill group, background-only switching, zero borders
  */
 
@@ -21,15 +21,15 @@ import {
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  surfLow:       '#ffffff',
-  surfHigh:      '#beeec8',
-  primary:       '#1c6d25',
-  onSurface:     '#0e3a20',
-  onSurfaceVar:  'rgba(14, 58, 32, 0.50)',
-  outlineFocus:  'rgba(28, 109, 37, 0.30)',
-  error:         '#aa371c',
-  errorTint:     'rgba(170, 55, 28, 0.05)',
-  ambientShadow: 'rgba(14, 58, 32, 0.06)',
+  surfLow:       '#FFFFFF',
+  surfHigh:      '#F0F5F2',
+  primary:       '#0F9B5E',
+  onSurface:     '#111827',
+  onSurfaceVar:  'rgba(17, 24, 39, 0.45)',
+  outlineFocus:  'rgba(15, 155, 94, 0.30)',
+  error:         '#DC2626',
+  errorTint:     'rgba(220, 38, 38, 0.06)',
+  ambientShadow: 'rgba(0, 0, 0, 0.06)',
 };
 
 const MetricInput = ({
@@ -159,18 +159,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  /* White inner-glow surface */
+  /* Light gray-green input surface — premium feel */
   fieldSurface: {
     flex: 1,
-    backgroundColor: DS.surfLow,
-    borderRadius: 16,
+    backgroundColor: DS.surfHigh,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: 'transparent',
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 2,
   },
   fieldSurfaceError: {
     backgroundColor: DS.errorTint,
@@ -183,7 +178,7 @@ const styles = StyleSheet.create({
     color: DS.onSurface,
     minHeight: 54,
   },
-  /* Unit group — contained pill, no borders */
+  /* Unit group — segmented control pill */
   unitGroup: {
     flexDirection: 'row',
     backgroundColor: DS.surfHigh,
@@ -213,7 +208,7 @@ const styles = StyleSheet.create({
     color: DS.onSurface,
   },
   unitLabelActive: {
-    color: '#ffffff',
+    color: '#FFFFFF',
   },
   errorMsg: {
     fontSize: 12,

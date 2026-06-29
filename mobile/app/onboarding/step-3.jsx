@@ -1,16 +1,15 @@
 /**
- * Onboarding Step 3 — "The Organic Editorial" Design System
+ * Onboarding Step 3 — Premium Wellness Design
  *
- * Rules enforced:
- *   - Zero 1px borders — tonal background shift only
- *   - Tabs: #d2f7d8 → #beeec8 active, background-only switching (no border-bottom)
- *   - Content section card: #d2f7d8 background, no borderLeft
- *   - Smart suggestions: #beeec8 pills, no borders
- *   - Allergy note: rgba(170,55,28,0.05) tint, #aa371c text — no borders
- *   - Strength section: #d2f7d8 background, no borders
- *   - Buttons: pill borderRadius 999, gradient #1c6d25→#9df197 primary
- *   - Ambient shadows: rgba(14, 58, 32, 0.06)
- *   - Spring animations: stiffness 300, damping 20
+ * - White card surfaces on cream (#F8FBF9) background
+ * - Refined mint-green primary (#0F9B5E)
+ * - Tabs: white active with green accent, soft gray inactive
+ * - Content section card: white background, gentle shadow
+ * - Smart suggestions: light green pills (#ECFDF5)
+ * - Allergy note: soft red tint, no borders
+ * - Buttons: pill borderRadius 999, gradient #0F9B5E → #34D399
+ * - Gentle shadows: rgba(0,0,0,0.06)
+ * - Spring animations: stiffness 300, damping 20
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -48,14 +47,16 @@ import {
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  surfContainer:    '#d2f7d8',
-  surfContainerHi:  '#beeec8',
-  primary:          '#1c6d25',
-  onSurface:        '#0e3a20',
-  onSurfaceVar:     'rgba(14, 58, 32, 0.50)',
-  error:            '#aa371c',
-  errorTint:        'rgba(170, 55, 28, 0.05)',
-  ambientShadow:    'rgba(14, 58, 32, 0.06)',
+  surface:          '#F8FBF9',
+  surfContainer:    '#FFFFFF',
+  surfContainerHi:  '#F0F5F2',
+  primary:          '#0F9B5E',
+  primaryLight:     '#34D399',
+  onSurface:        '#111827',
+  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
+  error:            '#DC2626',
+  errorTint:        'rgba(220, 38, 38, 0.06)',
+  ambientShadow:    'rgba(0, 0, 0, 0.06)',
 };
 
 /* Data normalization helpers */
@@ -484,7 +485,7 @@ const Step3Screen = () => {
 
         <PillButton
           onPress={handleContinue}
-          colors={['#1c6d25', '#9df197']}
+          colors={[DS.primary, DS.primaryLight]}
           wrapperStyle={styles.continueWrapper}
         >
           <Text style={styles.continueBtnText}>{ONBOARDING_COPY.step3.continueBtn || 'Continue'}</Text>
@@ -506,24 +507,24 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 13,
     paddingHorizontal: 8,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: 'center',
     gap: 4,
     position: 'relative',
   },
   tabInactive: {
-    backgroundColor: DS.surfContainer,
-    opacity: 0.65,
+    backgroundColor: DS.surfContainerHi,
+    opacity: 0.70,
   },
   tabActive: {
-    backgroundColor: DS.surfContainerHi,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 2,
+    backgroundColor: DS.surfContainer,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
     opacity: 1,
   },
   tabLabel: {
@@ -543,7 +544,7 @@ const styles = StyleSheet.create({
   },
   tabSubActive: {
     color: DS.onSurface,
-    opacity: 0.7,
+    opacity: 0.65,
   },
   badge: {
     position: 'absolute',
@@ -557,7 +558,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeInactive: {
-    backgroundColor: DS.surfContainer,
+    backgroundColor: 'rgba(17,24,39,0.10)',
   },
   badgeActive: {
     backgroundColor: DS.primary,
@@ -568,21 +569,21 @@ const styles = StyleSheet.create({
     color: DS.onSurfaceVar,
   },
   badgeTextActive: {
-    color: '#ffffff',
+    color: '#FFFFFF',
   },
 
   /* ── Content card ── */
   contentCard: {
     backgroundColor: DS.surfContainer,
     borderRadius: 20,
-    padding: 16,
+    padding: 18,
     gap: 14,
     marginBottom: 14,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: 3,
   },
   contentHeader: {
     flexDirection: 'row',
@@ -593,14 +594,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.onSurface,
+    letterSpacing: -0.2,
   },
 
   /* Smart suggestions */
   suggestionsCard: {
-    backgroundColor: DS.surfContainerHi,
+    backgroundColor: '#ECFDF5',
     borderRadius: 14,
-    padding: 12,
-    gap: 4,
+    padding: 14,
+    gap: 6,
   },
   suggestionsHeader: {
     flexDirection: 'row',
@@ -613,7 +615,7 @@ const styles = StyleSheet.create({
     color: DS.primary,
   },
   suggestionsHint: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
     marginBottom: 4,
@@ -624,10 +626,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   suggestionChip: {
-    backgroundColor: DS.surfContainer,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   suggestionChipText: {
     fontSize: 12,
@@ -643,36 +650,37 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: DS.errorTint,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
   },
   allergyNoteText: {
     flex: 1,
     fontSize: 12,
     fontFamily: TYPOGRAPHY.family.medium,
     color: DS.error,
-    lineHeight: 16,
+    lineHeight: 17,
   },
 
   /* Strength sliders */
   strengthCard: {
     backgroundColor: DS.surfContainer,
     borderRadius: 20,
-    padding: 16,
+    padding: 18,
     gap: 8,
     marginBottom: 14,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: 3,
   },
   strengthTitle: {
     fontSize: 15,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.onSurface,
+    letterSpacing: -0.2,
   },
   strengthHint: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
   },
@@ -701,7 +709,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 16,
+    paddingVertical: 17,
     paddingHorizontal: 20,
     borderRadius: 999,
     backgroundColor: DS.surfContainerHi,
@@ -715,9 +723,9 @@ const styles = StyleSheet.create({
   continueWrapper: {
     flex: 2,
     borderRadius: 999,
-    shadowColor: '#1c6d25',
+    shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.30,
     shadowRadius: 16,
     elevation: 8,
   },
@@ -726,13 +734,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 17,
     paddingHorizontal: 24,
     borderRadius: 999,
     overflow: 'hidden',
   },
   continueBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.2,
@@ -740,9 +748,9 @@ const styles = StyleSheet.create({
 
   /* Severity panel */
   severityPanel: {
-    backgroundColor: DS.surfContainerHi,
+    backgroundColor: '#ECFDF5',
     borderRadius: 16,
-    padding: 14,
+    padding: 16,
     gap: 10,
     marginTop: 4,
   },
@@ -757,16 +765,16 @@ const styles = StyleSheet.create({
     color: DS.primary,
   },
   severityPanelHint: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   allergenDetailRow: {
     gap: 6,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(14,58,32,0.08)',
+    borderTopColor: 'rgba(17,24,39,0.07)',
   },
   allergenDetailName: {
     fontSize: 12,
@@ -783,12 +791,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   allergenChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(14,58,32,0.20)',
-    backgroundColor: DS.surfContainer,
+    borderColor: 'rgba(17,24,39,0.12)',
+    backgroundColor: '#FFFFFF',
   },
   allergenChipText: {
     fontSize: 11,

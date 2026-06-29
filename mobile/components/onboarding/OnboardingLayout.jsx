@@ -1,12 +1,11 @@
 /**
- * OnboardingLayout — "The Organic Editorial" Design System
+ * OnboardingLayout — Premium Wellness Design
  *
- * Surface hierarchy: surface (#eaffeb) canvas → surface-container (#d2f7d8) header band
- * Rules enforced:
- *   - Zero 1px borders — separation via tonal shift only
- *   - Progress: 6px thick pill track
- *   - Title: editorial 28px with tight tracking
- *   - Ambient shadow on logo (6% on-surface, not black)
+ * - Warm cream (#F8FBF9) canvas with white (#FFFFFF) header band
+ * - Refined mint-green primary (#0F9B5E)
+ * - Progress: 5px pill segments, green fill
+ * - Title: large bold heading, clear hierarchy
+ * - Gentle shadow on logo card
  */
 
 import React, { useMemo } from 'react';
@@ -24,13 +23,14 @@ import BackButton from './BackButton';
 import { SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  surface:          '#eaffeb',
-  surfaceContainer: '#d2f7d8',
-  surfContainerHi:  '#beeec8',
-  primary:          '#1c6d25',
-  onSurface:        '#0e3a20',
-  onSurfaceVar:     'rgba(14, 58, 32, 0.52)',
-  ambientShadow:    'rgba(14, 58, 32, 0.06)',
+  surface:          '#F8FBF9',
+  surfaceContainer: '#FFFFFF',
+  surfContainerHi:  '#F0F5F2',
+  primary:          '#0F9B5E',
+  primaryLight:     '#34D399',
+  onSurface:        '#111827',
+  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
+  ambientShadow:    'rgba(0, 0, 0, 0.06)',
 };
 
 const OnboardingLayout = ({
@@ -106,7 +106,7 @@ const OnboardingContent = ({
           <Text style={styles.stepCounter}>{step} of {totalSteps}</Text>
         </View>
 
-        {/* Progress track — 6px thick, pill caps, tonal fill */}
+        {/* Progress track — 5px pill segments, gap via row */}
         <View style={styles.progressRow}>
           {Array.from({ length: totalSteps }, (_, i) => (
             <View
@@ -114,7 +114,6 @@ const OnboardingContent = ({
               style={[
                 styles.progressSeg,
                 { backgroundColor: i < step ? DS.primary : DS.surfContainerHi },
-                i < totalSteps - 1 && { marginRight: 6 },
               ]}
             />
           ))}
@@ -152,43 +151,48 @@ const styles = StyleSheet.create({
   root:  { flex: 1, backgroundColor: DS.surface },
   flex:  { flex: 1 },
 
-  /* Header */
+  /* Header — white card with subtle bottom shadow */
   header: {
     backgroundColor: DS.surfaceContainer,
     paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 26,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
-  /* Brand hero — step 1 asymmetric block */
+  /* Brand hero — step 1: centered logo + app name */
   brandHero: {
     alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 8,
+    paddingVertical: 16,
+    marginBottom: 4,
   },
   logo: {
-    width: 76,
-    height: 76,
+    width: 80,
+    height: 80,
     borderRadius: 24,
-    marginBottom: 12,
-    /* Ambient shadow — 6% on-surface, diffused */
-    shadowColor: DS.onSurface,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
+    marginBottom: 14,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
     elevation: 6,
   },
   brandName: {
-    fontSize: 26,
+    fontSize: 28,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.primary,
-    letterSpacing: -0.8,
-    marginBottom: 2,
+    letterSpacing: -1,
+    marginBottom: 4,
   },
   brandTagline: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
+    letterSpacing: 0.1,
   },
 
   /* Nav */
@@ -196,34 +200,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   navGhost: { width: 40, height: 40 },
   stepCounter: {
     fontSize: 13,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: DS.onSurfaceVar,
+    letterSpacing: 0.2,
   },
 
-  /* Progress */
+  /* Progress — sleek 5px pill segments */
   progressRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 22,
+    gap: 6,
   },
   progressSeg: {
     flex: 1,
-    height: 6,
+    height: 5,
     borderRadius: 999,
   },
 
   /* Title */
-  titleBlock: { gap: 5 },
+  titleBlock: { gap: 6 },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.onSurface,
     letterSpacing: -0.8,
-    lineHeight: 34,
+    lineHeight: 36,
   },
   subtitle: {
     fontSize: 15,
@@ -238,7 +244,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 48,
+    paddingBottom: 52,
     gap: 20,
   },
 });

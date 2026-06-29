@@ -1,12 +1,12 @@
 /**
- * ChipSelector — "The Organic Editorial" Design System
+ * ChipSelector — Premium Wellness Design
  *
- * Chip spec (DESIGN.md):
- *   - surface-container-highest (#beeec8) background — unselected
- *   - tertiary-container (#feb64c) background — selected (warm sun-kissed)
- *   - Zero borders — tonal background shift is the only selection signal
+ * Chip spec:
+ *   - #F0F5F2 background — unselected
+ *   - #0F9B5E background (primary) — selected, white text
+ *   - Pill borderRadius 999, spring feedback
  *   - Spring animation: stiffness 300, damping 20
- *   - Ambient shadow on selected: 6% on-surface opacity
+ *   - Gentle shadow on selected chip
  */
 
 import React from 'react';
@@ -20,11 +20,11 @@ import {
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  surfContainerHi: '#beeec8',    // unselected chip background
-  tertiary:        '#feb64c',    // selected chip background (tertiary-container)
-  onSurface:       '#0e3a20',    // unselected text
-  onTertiary:      '#3d2200',    // selected text (warm dark amber)
-  ambientShadow:   'rgba(14, 58, 32, 0.06)',
+  surfContainerHi: '#F0F5F2',    // unselected chip background
+  primary:         '#0F9B5E',    // selected chip background
+  onSurface:       '#111827',    // unselected text
+  onPrimary:       '#FFFFFF',    // selected text
+  ambientShadow:   'rgba(0, 0, 0, 0.06)',
 };
 
 const ChipSelector = ({
@@ -161,19 +161,14 @@ const styles = StyleSheet.create({
   },
   chipUnselected: {
     backgroundColor: DS.surfContainerHi,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 1,
   },
   chipSelected: {
-    backgroundColor: DS.tertiary,
-    shadowColor: DS.onSurface,
+    backgroundColor: DS.primary,
+    shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
-    elevation: 3,
+    elevation: 4,
   },
   emoji: {
     fontSize: 16,
@@ -186,7 +181,7 @@ const styles = StyleSheet.create({
     color: DS.onSurface,
   },
   labelSelected: {
-    color: DS.onTertiary,
+    color: DS.onPrimary,
     fontFamily: TYPOGRAPHY.family.bold,
   },
 });

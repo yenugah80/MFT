@@ -1,16 +1,15 @@
 /**
- * Onboarding Step 4 — "The Organic Editorial" Design System
+ * Onboarding Step 4 — Premium Wellness Design
  *
- * Rules enforced:
- *   - Zero 1px borders — macro cards use ambient shadow + tonal bg only
- *   - Macro cards: #ffffff inner-glow surface, no borderColor
- *   - Water card: tonal surface-container gradient (design system greens)
- *   - Loading state: #beeec8 icon container, no borders
- *   - Info note: #d2f7d8 background, no borders
- *   - Hero: decorative circles bleed off edges
- *   - Get Started: pill borderRadius 999, gradient #1c6d25→#9df197
- *   - Spring animations: stiffness 300, damping 20
- *   - Ambient shadows: rgba(14, 58, 32, 0.06)
+ * - White macro cards with gentle shadows on cream (#F8FBF9)
+ * - Refined mint-green primary (#0F9B5E) hero gradient
+ * - Hero: deep green → mint gradient with decorative circles
+ * - Macro cards: white surface, colored icon bg, macro-specific accent colors
+ * - Water card: soft cyan-tinted gradient (#E0F7FA → #B2EBF2)
+ * - Info note: #ECFDF5 background, no borders
+ * - Get Started: pill 999, gradient #0F9B5E → #34D399
+ * - Spring animations: stiffness 300, damping 20
+ * - Gentle shadows: rgba(0,0,0,0.06)
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -34,16 +33,17 @@ import { ONBOARDING_COPY, A11Y_LABELS } from '../../constants/onboardingConfig';
 import { MACRO_COLORS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  surface:          '#eaffeb',
-  surfContainer:    '#d2f7d8',
-  surfContainerHi:  '#beeec8',
-  surfLow:          '#ffffff',
-  primary:          '#1c6d25',
-  primaryLight:     '#9df197',
-  onSurface:        '#0e3a20',
-  onSurfaceVar:     'rgba(14, 58, 32, 0.50)',
-  onPrimary:        '#ffffff',
-  ambientShadow:    'rgba(14, 58, 32, 0.06)',
+  surface:          '#F8FBF9',
+  surfContainer:    '#FFFFFF',
+  surfContainerHi:  '#F0F5F2',
+  surfLow:          '#FFFFFF',
+  primary:          '#0F9B5E',
+  primaryLight:     '#34D399',
+  primaryDark:      '#0A7A49',
+  onSurface:        '#111827',
+  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
+  onPrimary:        '#FFFFFF',
+  ambientShadow:    'rgba(0, 0, 0, 0.06)',
 };
 
 /* ─── Macro Card ─── */
@@ -112,7 +112,7 @@ const WaterCard = ({ value, onEdit, delay = 0 }) => {
         style={({ pressed }) => pressed && { opacity: 0.9 }}
       >
         <LinearGradient
-          colors={['#d2f7d8', '#beeec8']}
+          colors={['#E0F7FA', '#B2EBF2']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.waterGradient}
@@ -185,11 +185,13 @@ const Step4Screen = () => {
   };
 
   const handleGetStarted = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (_) {}
     try {
       await completeOnboarding();
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to complete onboarding. Please try again.');
+      const msg = err.message || 'Failed to complete onboarding. Please try again.';
+      console.error('[Step4] completeOnboarding failed:', msg);
+      if (typeof Alert !== 'undefined' && Alert.alert) Alert.alert('Error', msg);
     }
   };
 
@@ -243,7 +245,7 @@ const Step4Screen = () => {
           style={({ pressed }) => pressed && { opacity: 0.95 }}
         >
           <LinearGradient
-            colors={['#1c6d25', '#9df197']}
+            colors={[DS.primaryDark, DS.primary, DS.primaryLight]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
@@ -359,7 +361,7 @@ const Step4Screen = () => {
           accessibilityLabel="Complete onboarding and get started"
         >
           <LinearGradient
-            colors={isSaving ? [DS.surfContainerHi, DS.surfContainerHi] : ['#1c6d25', '#9df197']}
+            colors={isSaving ? [DS.surfContainerHi, DS.surfContainerHi] : [DS.primary, DS.primaryLight]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.getStartedBtn}
@@ -443,48 +445,49 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    gap: 12,
+    gap: 16,
   },
   loadingIconBg: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: DS.surfContainerHi,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
-    shadowColor: DS.ambientShadow,
+    marginBottom: 8,
+    shadowColor: 'rgba(0,0,0,1)',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   loadingTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.onSurface,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
   loadingSubtitle: {
     fontSize: 14,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
     textAlign: 'center',
+    lineHeight: 20,
   },
 
   /* Hero card */
   heroCard: {
-    marginBottom: 20,
+    marginBottom: 22,
     borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: '#1c6d25',
+    shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.28,
     shadowRadius: 28,
     elevation: 10,
   },
   heroGradient: {
-    padding: 24,
+    padding: 26,
     borderRadius: 28,
     overflow: 'hidden',
     position: 'relative',
@@ -492,30 +495,30 @@ const styles = StyleSheet.create({
   /* Decorative circles bleed off edges */
   heroDecor1: {
     position: 'absolute',
-    top: -40,
-    right: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    top: -45,
+    right: -45,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   heroDecor2: {
     position: 'absolute',
-    bottom: -30,
-    left: -30,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    bottom: -35,
+    left: -35,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   heroDecor3: {
     position: 'absolute',
-    top: 30,
-    right: 60,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    top: 35,
+    right: 65,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   heroContent: {
     position: 'relative',
@@ -525,56 +528,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 999,
   },
   heroBadgeText: {
     fontSize: 12,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.primary,
+    color: DS.primaryDark,
   },
   heroEditBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.20)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   heroValueSection: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   heroValue: {
-    fontSize: 64,
+    fontSize: 68,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: -3,
-    lineHeight: 70,
+    lineHeight: 74,
   },
   heroUnit: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 1.5,
+    color: 'rgba(255,255,255,0.80)',
+    letterSpacing: 2,
     textTransform: 'uppercase',
-    marginTop: 2,
+    marginTop: 4,
   },
   heroFooter: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
     paddingHorizontal: 16,
   },
   heroMetric: {
@@ -585,9 +588,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   heroMetricValue: {
     fontSize: 14,
@@ -596,8 +599,8 @@ const styles = StyleSheet.create({
   },
   heroMetricDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    height: 26,
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
 
   /* Section header */
@@ -608,12 +611,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.onSurface,
+    letterSpacing: -0.3,
   },
   sectionSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
   },
@@ -621,8 +625,8 @@ const styles = StyleSheet.create({
   /* Macro grid */
   macroGrid: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
+    gap: 12,
+    marginBottom: 14,
   },
   macroCard: {
     flex: 1,
@@ -630,19 +634,19 @@ const styles = StyleSheet.create({
   macroCardInner: {
     backgroundColor: DS.surfLow,
     borderRadius: 18,
-    padding: 12,
+    padding: 14,
     alignItems: 'center',
-    gap: 4,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 14,
+    gap: 5,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
   },
   macroIconBg: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 2,
@@ -652,7 +656,7 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: DS.onSurfaceVar,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
   macroValueRow: {
     flexDirection: 'row',
@@ -660,7 +664,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   macroValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: TYPOGRAPHY.family.bold,
     letterSpacing: -0.5,
   },
@@ -674,7 +678,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     marginTop: 2,
-    opacity: 0.55,
+    opacity: 0.50,
   },
   macroEditText: {
     fontSize: 9,
@@ -684,27 +688,27 @@ const styles = StyleSheet.create({
 
   /* Water card */
   waterCard: {
-    marginBottom: 14,
+    marginBottom: 16,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: 3,
   },
   waterGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
     gap: 14,
     borderRadius: 20,
   },
   waterIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -714,10 +718,10 @@ const styles = StyleSheet.create({
   waterLabel: {
     fontSize: 11,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.primary,
+    color: '#0277BD',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 2,
+    letterSpacing: 0.8,
+    marginBottom: 3,
   },
   waterValueRow: {
     flexDirection: 'row',
@@ -725,47 +729,43 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   waterValue: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: TYPOGRAPHY.family.bold,
-    color: DS.onSurface,
+    color: '#01579B',
     letterSpacing: -1,
   },
   waterUnit: {
     fontSize: 13,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: DS.onSurfaceVar,
+    color: '#0277BD',
+    opacity: 0.80,
   },
 
   /* Info note */
   infoNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: DS.surfContainer,
-    padding: 14,
+    gap: 10,
+    backgroundColor: '#ECFDF5',
+    padding: 16,
     borderRadius: 16,
-    marginBottom: 20,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 1,
+    marginBottom: 22,
   },
   infoNoteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
-    lineHeight: 18,
+    lineHeight: 19,
   },
 
   /* Get Started pill */
   btnContainer: {
     marginBottom: 8,
     borderRadius: 999,
-    shadowColor: '#1c6d25',
+    shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.32,
     shadowRadius: 20,
     elevation: 10,
   },
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 18,
+    paddingVertical: 19,
     paddingHorizontal: 32,
     borderRadius: 999,
     gap: 12,
@@ -783,13 +783,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   rocketBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     justifyContent: 'center',
     alignItems: 'center',
   },

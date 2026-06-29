@@ -76,11 +76,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: SURFACES.background.tertiary,
+    backgroundColor: '#F0F5F2',
   },
   buttonDisabled: {
-    backgroundColor: SURFACES.card.border,
-    opacity: 0.5,
+    backgroundColor: '#F0F5F2',
+    opacity: 0.45,
   },
 });
 

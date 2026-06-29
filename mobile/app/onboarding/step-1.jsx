@@ -1,9 +1,10 @@
 /**
- * Onboarding Step 1 — "The Organic Editorial" Design System
+ * Onboarding Step 1 — Premium Wellness Design
  *
- * - No borders — tonal layering only
- * - Pill CTA: borderRadius 999, gradient #1c6d25 → #9df197
- * - Ambient shadow: 6% on-surface
+ * - Warm cream background (#F8FBF9) with white card surfaces
+ * - Refined mint-green primary (#0F9B5E)
+ * - Pill CTA: borderRadius 999, gradient #0F9B5E → #34D399
+ * - Gentle box-shadow cards (rgba(0,0,0,0.06))
  * - Spring press feedback: stiffness 300, damping 20
  */
 
@@ -24,8 +25,13 @@ import { GOALS, ONBOARDING_COPY } from '../../constants/onboardingConfig';
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  onSurface:    '#0e3a20',
-  onSurfaceVar: 'rgba(14, 58, 32, 0.50)',
+  primary:      '#0F9B5E',
+  primaryDark:  '#0A7A49',
+  primaryLight: '#34D399',
+  onSurface:    '#111827',
+  onSurfaceVar: 'rgba(17, 24, 39, 0.45)',
+  surface:      '#F8FBF9',
+  card:         '#FFFFFF',
 };
 
 const Step1Screen = () => {
@@ -110,7 +116,7 @@ const Step1Screen = () => {
           accessibilityState={{ disabled: !selectedGoal }}
         >
           <LinearGradient
-            colors={selectedGoal ? ['#1c6d25', '#9df197'] : ['#beeec8', '#d2f7d8']}
+            colors={selectedGoal ? [DS.primary, DS.primaryLight] : ['#D1FAE5', '#A7F3D0']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.ctaButton}
@@ -124,7 +130,7 @@ const Step1Screen = () => {
             <Ionicons
               name="arrow-forward"
               size={18}
-              color={selectedGoal ? 'rgba(255,255,255,0.9)' : 'rgba(14,58,32,0.4)'}
+              color={selectedGoal ? 'rgba(255,255,255,0.95)' : DS.onSurfaceVar}
             />
           </LinearGradient>
         </Pressable>
@@ -139,11 +145,11 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: DS.onSurfaceVar,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: -4,
+    letterSpacing: 1.4,
+    marginBottom: -8,
   },
   goalsContainer: {
-    gap: 12,
+    gap: 14,
   },
   spacer: {
     flex: 1,
@@ -154,9 +160,9 @@ const styles = StyleSheet.create({
   ctaWrapper: {
     borderRadius: 999,
     marginBottom: 8,
-    shadowColor: '#1c6d25',
+    shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.30,
     shadowRadius: 20,
     elevation: 8,
   },
@@ -165,7 +171,7 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   ctaButton: {
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 28,
     borderRadius: 999,
     flexDirection: 'row',
@@ -175,7 +181,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.2,

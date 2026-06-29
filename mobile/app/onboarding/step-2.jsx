@@ -1,15 +1,13 @@
 /**
- * Onboarding Step 2 — "The Organic Editorial" Design System
+ * Onboarding Step 2 — Premium Wellness Design
  *
- * Rules enforced:
- *   - Zero 1px borders — tonal background shifts only
- *   - Section cards: surface-container (#d2f7d8) background, borderRadius 20
- *   - Gender/Activity: #beeec8 unselected, #1c6d25 selected, NO border
- *   - FtIn inputs: #ffffff inner-glow surfaces (matches MetricInput spec)
- *   - Error: #aa371c text + rgba(170,55,28,0.05) tint — no borders
- *   - Buttons: pill borderRadius 999, gradient #1c6d25→#9df197 primary
- *   - Ambient shadows: rgba(14, 58, 32, 0.06)
- *   - Spring animations: stiffness 300, damping 20
+ * - White card surfaces on cream (#F8FBF9) background
+ * - Refined mint-green primary (#0F9B5E)
+ * - Input fields: light gray-green bg (#F0F5F2), no borders, 12px radius
+ * - Gender/Activity: white unselected, #0F9B5E selected
+ * - Buttons: pill borderRadius 999, gradient #0F9B5E → #34D399 primary
+ * - Gentle shadows: rgba(0,0,0,0.06)
+ * - Spring animations: stiffness 300, damping 20
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -37,17 +35,18 @@ import {
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const DS = {
-  surface:          '#eaffeb',
-  surfContainer:    '#d2f7d8',
-  surfContainerHi:  '#beeec8',
-  surfLow:          '#ffffff',
-  primary:          '#1c6d25',
-  onSurface:        '#0e3a20',
-  onSurfaceVar:     'rgba(14, 58, 32, 0.50)',
-  onPrimary:        '#ffffff',
-  error:            '#aa371c',
-  errorTint:        'rgba(170, 55, 28, 0.05)',
-  ambientShadow:    'rgba(14, 58, 32, 0.06)',
+  surface:          '#F8FBF9',
+  surfContainer:    '#FFFFFF',
+  surfContainerHi:  '#F0F5F2',
+  surfLow:          '#FFFFFF',
+  primary:          '#0F9B5E',
+  primaryLight:     '#34D399',
+  onSurface:        '#111827',
+  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
+  onPrimary:        '#FFFFFF',
+  error:            '#DC2626',
+  errorTint:        'rgba(220, 38, 38, 0.06)',
+  ambientShadow:    'rgba(0, 0, 0, 0.06)',
 };
 
 /* ─── Animated pill button helper ─── */
@@ -335,7 +334,7 @@ const Step2Screen = () => {
         <PillButton
           onPress={handleContinue}
           disabled={!isFormValid}
-          colors={['#1c6d25', '#9df197']}
+          colors={[DS.primary, DS.primaryLight]}
           style={[
             styles.continueWrapper,
             !isFormValid && styles.continueWrapperDisabled,
@@ -356,42 +355,43 @@ const Step2Screen = () => {
 };
 
 const styles = StyleSheet.create({
-  /* Section cards — tonal lift, zero borders */
+  /* Section cards — white surface, gentle shadow */
   sectionCard: {
     backgroundColor: DS.surfContainer,
     borderRadius: 20,
-    padding: 16,
-    gap: 12,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
+    padding: 20,
+    gap: 14,
+    shadowColor: 'rgba(0,0,0,1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: 3,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   sectionIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: DS.surfContainerHi,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: TYPOGRAPHY.family.bold,
     color: DS.onSurface,
     flex: 1,
+    letterSpacing: -0.2,
   },
   sectionHint: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
-    lineHeight: 17,
+    lineHeight: 18,
     marginTop: -4,
   },
 
@@ -404,10 +404,10 @@ const styles = StyleSheet.create({
   genderBtn: {
     flex: 1,
     minWidth: '28%',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 16,
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   genderBtnUnselected: {
     backgroundColor: DS.surfContainerHi,
@@ -416,12 +416,12 @@ const styles = StyleSheet.create({
     backgroundColor: DS.primary,
     shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOpacity: 0.30,
+    shadowRadius: 14,
+    elevation: 6,
   },
   genderEmoji: {
-    fontSize: 26,
+    fontSize: 28,
   },
   genderLabel: {
     fontSize: 13,
@@ -435,10 +435,10 @@ const styles = StyleSheet.create({
 
   /* Activity */
   activityGrid: {
-    gap: 8,
+    gap: 10,
   },
   activityBtn: {
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
@@ -451,11 +451,11 @@ const styles = StyleSheet.create({
     shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowRadius: 14,
+    elevation: 6,
   },
   activityIcon: {
-    fontSize: 28,
+    fontSize: 30,
     marginBottom: 4,
   },
   activityLabel: {
@@ -469,14 +469,14 @@ const styles = StyleSheet.create({
     color: DS.onPrimary,
   },
   activityDesc: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: TYPOGRAPHY.family.regular,
     color: DS.onSurfaceVar,
-    lineHeight: 15,
+    lineHeight: 16,
     textAlign: 'center',
   },
   activityDescSelected: {
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.80)',
   },
 
   /* Ft/in height inputs */
@@ -498,15 +498,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DS.surfLow,
-    borderRadius: 16,
+    backgroundColor: DS.surfContainerHi,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    shadowColor: DS.ambientShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 2,
   },
   ftInInput: {
     flex: 1,
@@ -554,7 +549,7 @@ const styles = StyleSheet.create({
     color: DS.onSurface,
   },
   unitBtnTextActive: {
-    color: '#ffffff',
+    color: '#FFFFFF',
   },
 
   /* Error */
@@ -563,9 +558,9 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.medium,
     color: DS.error,
     backgroundColor: DS.errorTint,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
 
   spacer: { minHeight: 12 },
@@ -581,7 +576,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 16,
+    paddingVertical: 17,
     paddingHorizontal: 20,
     borderRadius: 999,
     backgroundColor: DS.surfContainerHi,
@@ -595,9 +590,9 @@ const styles = StyleSheet.create({
   continueWrapper: {
     flex: 2,
     borderRadius: 999,
-    shadowColor: '#1c6d25',
+    shadowColor: DS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.30,
     shadowRadius: 16,
     elevation: 8,
   },
@@ -610,13 +605,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 17,
     paddingHorizontal: 24,
     borderRadius: 999,
     overflow: 'hidden',
   },
   continueBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFFFFF',
     letterSpacing: 0.2,
