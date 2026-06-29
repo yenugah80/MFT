@@ -1,197 +1,137 @@
-/**
- * GoalCard — Horizontal card for goal selection (Premium Wellness Design)
- * Full-width gradient cards with frosted icon bubble and checkmark selection state.
- * Spring animation: Stiffness 300, Damping 20 (per design spec).
- */
-
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Pressable, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
 const GoalCard = ({
-  id,
-  iconName,
-  label,
-  description,
-  gradientStart,
-  gradientEnd,
-  isSelected = false,
-  onPress,
+  id, iconName, label, description,
+  gradientStart, gradientEnd,
+  isSelected = false, onPress,
 }) => {
-  const animScale = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowOpacity = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0.5)).current;
 
-  const handlePressIn = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Animated.spring(animScale, {
-      toValue: 0.97,
-      useNativeDriver: true,
-      stiffness: 300,
-      damping: 20,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(animScale, {
-      toValue: 1,
-      useNativeDriver: true,
-      stiffness: 300,
-      damping: 20,
-    }).start();
-  };
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(glowOpacity, { toValue: isSelected ? 1 : 0, useNativeDriver: true, stiffness: 200, damping: 20 }),
+      Animated.spring(checkScale, { toValue: isSelected ? 1 : 0.5, useNativeDriver: true, stiffness: 300, damping: 18 }),
+    ]).start();
+  }, [isSelected]);
 
   return (
-    <Animated.View style={{ transform: [{ scale: animScale }] }}>
+    <Animated.View style={[
+      styles.wrapper,
+      {
+        shadowOpacity: isSelected ? 0.40 : 0.08,
+        shadowRadius: isSelected ? 24 : 8,
+        shadowColor: gradientStart,
+        shadowOffset: { width: 0, height: isSelected ? 10 : 4 },
+        elevation: isSelected ? 18 : 4,
+        transform: [{ scale: scaleAnim }],
+      }
+    ]}>
       <Pressable
-        onPress={() => {
-          Haptics.selectionAsync();
-          onPress?.(id);
-        }}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+        onPress={() => onPress?.(id)}
+        onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, stiffness: 400, damping: 20 }).start()}
+        onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, stiffness: 300, damping: 20 }).start()}
         accessibilityRole="radio"
         accessibilityLabel={label}
         accessibilityState={{ selected: isSelected }}
       >
-        <LinearGradient
-          colors={[gradientStart, gradientEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            styles.card,
-            isSelected && {
-              shadowColor: gradientStart,
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.42,
-              shadowRadius: 22,
-              elevation: 16,
-            },
-          ]}
-        >
-          {/* Depth circles — bleed off edge for asymmetry */}
-          <View style={styles.decorCircleLarge} />
-          <View style={styles.decorCircleSmall} />
+        {/* Base white card — always visible */}
+        <View style={styles.cardBase}>
+          {/* Gradient overlay — fades in when selected */}
+          <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: glowOpacity, borderRadius: 20 }]}>
+            <LinearGradient
+              colors={[gradientStart, gradientEnd]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </Animated.View>
 
-          {/* Frosted icon bubble */}
-          <View style={styles.iconBubble}>
-            <Ionicons name={iconName} size={30} color="#FFFFFF" />
-          </View>
+          {/* Decorative orbs */}
+          <Animated.View style={[styles.orb, styles.orbLarge, { opacity: glowOpacity, backgroundColor: 'rgba(255,255,255,0.13)' }]} />
+          <Animated.View style={[styles.orb, styles.orbSmall, { opacity: glowOpacity, backgroundColor: 'rgba(255,255,255,0.09)' }]} />
+
+          {/* Icon bubble */}
+          <Animated.View style={[
+            styles.iconBubble,
+            {
+              backgroundColor: glowOpacity.interpolate({ inputRange: [0, 1], outputRange: [`${gradientStart}18`, 'rgba(255,255,255,0.25)'] }),
+              borderColor: glowOpacity.interpolate({ inputRange: [0, 1], outputRange: [`${gradientStart}35`, 'rgba(255,255,255,0.45)'] }),
+            }
+          ]}>
+            <Animated.View>
+              <Ionicons
+                name={iconName}
+                size={28}
+                color={isSelected ? '#FFFFFF' : gradientStart}
+              />
+            </Animated.View>
+          </Animated.View>
 
           {/* Text */}
-          <View style={styles.textContent}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={styles.description}>{description}</Text>
+          <View style={styles.textBlock}>
+            <Animated.Text style={[
+              styles.label,
+              { color: isSelected ? '#FFFFFF' : '#111827' }
+            ]}>
+              {label}
+            </Animated.Text>
+            <Animated.Text style={[
+              styles.description,
+              { color: isSelected ? 'rgba(255,255,255,0.82)' : '#6B7280' }
+            ]}>
+              {description}
+            </Animated.Text>
           </View>
 
-          {/* Selection indicator */}
-          <View style={styles.rightSide}>
-            {isSelected ? (
-              <View style={styles.checkBadge}>
-                <Ionicons name="checkmark-sharp" size={15} color={gradientStart} />
-              </View>
-            ) : (
-              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.50)" />
-            )}
-          </View>
-
-          {/* Selected border shimmer */}
-          {isSelected && <View style={styles.selectedBorder} />}
-        </LinearGradient>
+          {/* Check badge */}
+          <Animated.View style={[
+            styles.badge,
+            {
+              backgroundColor: isSelected ? 'rgba(255,255,255,0.95)' : '#F3F4F6',
+              transform: [{ scale: checkScale }],
+            }
+          ]}>
+            <Ionicons
+              name={isSelected ? 'checkmark-sharp' : 'chevron-forward'}
+              size={15}
+              color={isSelected ? gradientStart : '#9CA3AF'}
+            />
+          </Animated.View>
+        </View>
       </Pressable>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 22,
+  wrapper: { borderRadius: 20 },
+  cardBase: {
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 6,
+    minHeight: 90,
+    backgroundColor: '#FFFFFF',
   },
-  decorCircleLarge: {
-    position: 'absolute',
-    top: -55,
-    right: -38,
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    pointerEvents: 'none',
-  },
-  decorCircleSmall: {
-    position: 'absolute',
-    bottom: -40,
-    right: 60,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    pointerEvents: 'none',
-  },
+  orb: { position: 'absolute', borderRadius: 999 },
+  orbLarge: { width: 180, height: 180, top: -70, right: -50 },
+  orbSmall: { width: 110, height: 110, bottom: -45, right: 55 },
   iconBubble: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 18,
-    flexShrink: 0,
+    width: 62, height: 62, borderRadius: 18, borderWidth: 1.5,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 16, flexShrink: 0,
   },
-  textContent: {
-    flex: 1,
-    marginRight: 10,
-  },
-  label: {
-    fontSize: 18,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#FFFFFF',
-    marginBottom: 5,
-    letterSpacing: -0.5,
-  },
-  description: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: 18,
-    letterSpacing: 0.1,
-  },
-  rightSide: {
-    flexShrink: 0,
-    width: 30,
-    alignItems: 'center',
-  },
-  checkBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  selectedBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 22,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.55)',
-    pointerEvents: 'none',
-  },
+  textBlock: { flex: 1, marginRight: 12 },
+  label: { fontSize: 17, fontFamily: TYPOGRAPHY.family.bold, marginBottom: 4, letterSpacing: -0.3 },
+  description: { fontSize: 13, fontFamily: TYPOGRAPHY.family.regular, lineHeight: 18 },
+  badge: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
 });
 
 export default GoalCard;

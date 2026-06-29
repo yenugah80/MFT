@@ -1,67 +1,110 @@
-/**
- * OnboardingLayout — Premium Wellness Design
- *
- * - Warm cream (#F8FBF9) canvas with white (#FFFFFF) header band
- * - Refined mint-green primary (#0F9B5E)
- * - Progress: 5px pill segments, green fill
- * - Title: large bold heading, clear hierarchy
- * - Gentle shadow on logo card
- */
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Image,
+  View, Text, StyleSheet, KeyboardAvoidingView,
+  Platform, ScrollView, Image, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import BackButton from './BackButton';
-import { SPACING, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TYPOGRAPHY } from '../../constants/premiumTheme';
 
-const DS = {
-  surface:          '#F8FBF9',
-  surfaceContainer: '#FFFFFF',
-  surfContainerHi:  '#F0F5F2',
-  primary:          '#0F9B5E',
-  primaryLight:     '#34D399',
-  onSurface:        '#111827',
-  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
-  ambientShadow:    'rgba(0, 0, 0, 0.06)',
-};
+// Per-step gradient backgrounds
+const STEP_GRADIENTS = [
+  ['#0F9B5E', '#1DB97A', '#E8F8F0'],   // Step 1 – deep green → mint → cream
+  ['#6366F1', '#818CF8', '#EEF2FF'],   // Step 2 – indigo → soft lavender → white
+  ['#F59E0B', '#FBBF24', '#FFFBEB'],   // Step 3 – amber → gold → cream
+  ['#0F9B5E', '#34D399', '#ECFDF5'],   // Step 4 – green → mint → pale
+];
 
 const OnboardingLayout = ({
-  step = 1,
-  totalSteps = 4,
-  title,
-  subtitle,
-  children,
-  onBack,
-  canGoBack = true,
-  scrollEnabled = true,
-  keyboardAvoidingEnabled = true,
+  step = 1, totalSteps = 4, title, subtitle, children,
+  onBack, canGoBack = true, scrollEnabled = true, keyboardAvoidingEnabled = true,
 }) => {
-  const handleBack = () => { if (canGoBack && onBack) onBack(); };
+  const idx = Math.min(step - 1, STEP_GRADIENTS.length - 1);
+  const [topColor, midColor, bgColor] = STEP_GRADIENTS[idx];
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    slideAnim.setValue(30);
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, stiffness: 200, damping: 22 }),
+    ]).start();
+  }, [step]);
 
   const inner = (
-    <OnboardingContent
-      step={step}
-      totalSteps={totalSteps}
-      title={title}
-      subtitle={subtitle}
-      onBack={handleBack}
-      canGoBack={canGoBack}
-      scrollEnabled={scrollEnabled}
-    >
-      {children}
-    </OnboardingContent>
+    <Animated.View style={[styles.flex, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      {/* Gradient hero band */}
+      <LinearGradient
+        colors={[topColor, midColor, bgColor]}
+        style={styles.heroBand}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+      >
+        {/* Decorative circles */}
+        <View style={[styles.circle, styles.circleTopRight, { backgroundColor: 'rgba(255,255,255,0.12)' }]} />
+        <View style={[styles.circle, styles.circleBottomLeft, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+
+        {/* Nav row */}
+        <View style={styles.navRow}>
+          {canGoBack
+            ? <BackButton onPress={() => canGoBack && onBack?.()} enabled={canGoBack} light />
+            : <View style={styles.navGhost} />}
+          <View style={styles.stepPill}>
+            <Text style={styles.stepPillText}>{step} / {totalSteps}</Text>
+          </View>
+        </View>
+
+        {/* Brand — step 1 only */}
+        {step === 1 && (
+          <View style={styles.brandHero}>
+            <View style={styles.logoWrapper}>
+              <Image source={require('../../assets/images/app-logo.png')} style={styles.logo} />
+            </View>
+            <Text style={styles.brandName}>MFT</Text>
+            <Text style={styles.brandTagline}>Your personal nutrition companion</Text>
+          </View>
+        )}
+
+        {/* Title */}
+        {title && (
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>{title}</Text>
+            {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          </View>
+        )}
+
+        {/* Progress dots */}
+        <View style={styles.dotsRow}>
+          {Array.from({ length: totalSteps }, (_, i) => (
+            <View key={i} style={[styles.dot, i < step ? styles.dotActive : styles.dotInactive]} />
+          ))}
+        </View>
+      </LinearGradient>
+
+      {/* Content area */}
+      <View style={[styles.contentArea, { backgroundColor: bgColor }]}>
+        {scrollEnabled ? (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[styles.scrollContent, styles.flex]}>{children}</View>
+        )}
+      </View>
+    </Animated.View>
   );
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={[styles.root, { backgroundColor: topColor }]}>
       {keyboardAvoidingEnabled ? (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -75,177 +118,89 @@ const OnboardingLayout = ({
   );
 };
 
-const OnboardingContent = ({
-  step, totalSteps, title, subtitle, children, onBack, canGoBack, scrollEnabled,
-}) => {
-  const progressPct = useMemo(() => step / totalSteps, [step, totalSteps]);
-
-  return (
-    <View style={styles.flex}>
-      {/* ── Header band: surface-container tonal lift, zero borders ── */}
-      <View style={styles.header}>
-
-        {/* Brand — step 1 only, asymmetric hero */}
-        {step === 1 && (
-          <View style={styles.brandHero}>
-            <Image
-              source={require('../../assets/images/app-logo.png')}
-              style={styles.logo}
-            />
-            <Text style={styles.brandName}>MFT</Text>
-            <Text style={styles.brandTagline}>Your personal nutrition companion</Text>
-          </View>
-        )}
-
-        {/* Nav row */}
-        <View style={styles.navRow}>
-          {canGoBack
-            ? <BackButton onPress={onBack} enabled={canGoBack} />
-            : <View style={styles.navGhost} />
-          }
-          <Text style={styles.stepCounter}>{step} of {totalSteps}</Text>
-        </View>
-
-        {/* Progress track — 5px pill segments, gap via row */}
-        <View style={styles.progressRow}>
-          {Array.from({ length: totalSteps }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.progressSeg,
-                { backgroundColor: i < step ? DS.primary : DS.surfContainerHi },
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Editorial title block */}
-        {title && (
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{title}</Text>
-            {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-          </View>
-        )}
-      </View>
-
-      {/* ── Content canvas: base surface ── */}
-      {scrollEnabled ? (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-        >
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={[styles.scrollContent, styles.flex]}>{children}</View>
-      )}
-    </View>
-  );
-};
-
 const styles = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: DS.surface },
+  root:  { flex: 1 },
   flex:  { flex: 1 },
 
-  /* Header — white card with subtle bottom shadow */
-  header: {
-    backgroundColor: DS.surfaceContainer,
+  heroBand: {
     paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 26,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingTop: 12,
+    paddingBottom: 32,
+    position: 'relative',
+    overflow: 'hidden',
   },
 
-  /* Brand hero — step 1: centered logo + app name */
-  brandHero: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    marginBottom: 4,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    marginBottom: 14,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  brandName: {
-    fontSize: 28,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: DS.primary,
-    letterSpacing: -1,
-    marginBottom: 4,
-  },
-  brandTagline: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: DS.onSurfaceVar,
-    letterSpacing: 0.1,
-  },
+  // Decorative circles
+  circle: { position: 'absolute', borderRadius: 999 },
+  circleTopRight: { width: 200, height: 200, top: -60, right: -60 },
+  circleBottomLeft: { width: 140, height: 140, bottom: -40, left: -30 },
 
-  /* Nav */
+  // Nav
   navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  navGhost: { width: 40, height: 40 },
-  stepCounter: {
+  navGhost: { width: 44, height: 44 },
+  stepPill: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+  },
+  stepPillText: {
+    color: '#FFFFFF',
     fontSize: 13,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.onSurfaceVar,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
 
-  /* Progress — sleek 5px pill segments */
-  progressRow: {
-    flexDirection: 'row',
-    marginBottom: 22,
-    gap: 6,
+  // Brand (step 1)
+  brandHero: { alignItems: 'center', marginBottom: 24 },
+  logoWrapper: {
+    width: 100, height: 100, borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  progressSeg: {
-    flex: 1,
-    height: 5,
-    borderRadius: 999,
+  logo: { width: 80, height: 80, borderRadius: 20 },
+  brandName: {
+    fontSize: 36, fontFamily: TYPOGRAPHY.family.bold,
+    color: '#FFFFFF', letterSpacing: -1, marginBottom: 4,
+  },
+  brandTagline: {
+    fontSize: 15, fontFamily: TYPOGRAPHY.family.regular,
+    color: 'rgba(255,255,255,0.85)', letterSpacing: 0.1,
   },
 
-  /* Title */
-  titleBlock: { gap: 6 },
+  // Title
+  titleBlock: { marginBottom: 16, gap: 6 },
   title: {
-    fontSize: 30,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: DS.onSurface,
-    letterSpacing: -0.8,
-    lineHeight: 36,
+    fontSize: 32, fontFamily: TYPOGRAPHY.family.bold,
+    color: '#FFFFFF', letterSpacing: -0.8, lineHeight: 38,
   },
   subtitle: {
-    fontSize: 15,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: DS.onSurfaceVar,
-    lineHeight: 22,
+    fontSize: 15, fontFamily: TYPOGRAPHY.family.regular,
+    color: 'rgba(255,255,255,0.80)', lineHeight: 22,
   },
 
-  /* Content */
+  // Progress dots
+  dotsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  dot: { height: 6, borderRadius: 999 },
+  dotActive: { flex: 2, backgroundColor: '#FFFFFF' },
+  dotInactive: { flex: 1, backgroundColor: 'rgba(255,255,255,0.30)' },
+
+  // Content
+  contentArea: { flex: 1, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
   scroll: { flex: 1 },
   scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 52,
-    gap: 20,
+    flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 48, gap: 16,
   },
 });
 

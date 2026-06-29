@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { TEXT, SURFACES } from '../../constants/premiumTheme';
 
-const BackButton = ({ onPress, enabled = true }) => {
+const BackButton = ({ onPress, enabled = true, light = false }) => {
   const animScale = React.useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -62,7 +62,7 @@ const BackButton = ({ onPress, enabled = true }) => {
         <Ionicons
           name="chevron-back"
           size={24}
-          color={enabled ? TEXT.primary : TEXT.muted}
+          color={light ? 'rgba(255,255,255,0.95)' : (enabled ? TEXT.primary : TEXT.muted)}
         />
       </Pressable>
     </Animated.View>
@@ -73,14 +73,13 @@ const styles = StyleSheet.create({
   button: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F5F2',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   buttonDisabled: {
-    backgroundColor: '#F0F5F2',
-    opacity: 0.45,
+    opacity: 0.35,
   },
 });
 
