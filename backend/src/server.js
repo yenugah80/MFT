@@ -531,16 +531,17 @@ export async function ensureSleepStressTables() {
 const ALLOWED_ORIGINS = [
   // Production frontend (if any web interface exists)
   ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
-  // MFT production domain
+  // MFT production domains
   'https://api.my-food-tracker.com',
-  // Development/Testing (only in development mode)
-  ...(process.env.NODE_ENV === 'development' ? [
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'http://localhost:19000',  // Expo dev
-    'http://localhost:19001',  // Expo dev
-    'http://localhost:19006',  // Expo web
-  ] : []),
+  'https://my-food-tracker.com',
+  'https://app.my-food-tracker.com',
+  // Local dev – Expo web dev server ports (auth still enforced via Clerk JWT)
+  'http://localhost:3000',
+  'http://localhost:8081',
+  'http://localhost:8082',
+  'http://localhost:19000',
+  'http://localhost:19001',
+  'http://localhost:19006',
   // Expo hosted app
   ...(process.env.EXPO_APP_URL ? [process.env.EXPO_APP_URL] : []),
 ];
