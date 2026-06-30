@@ -5,15 +5,18 @@
  */
 
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { Platform, View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { TYPOGRAPHY } from '../constants/premiumTheme';
 import { initDatabase, getDatabaseStats } from '../services/database';
 
 export default function DatabaseInitializer({ children }) {
-  const [isReady, setIsReady] = useState(false);
+  // SQLite is not available on web — skip initialization entirely
+  const [isReady, setIsReady] = useState(Platform.OS === 'web');
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     let mounted = true;
 
     async function initialize() {

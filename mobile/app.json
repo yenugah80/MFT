@@ -73,7 +73,7 @@
       ]
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/styles/images/adaptive-icon.png"
     },
     "plugins": [

@@ -7,6 +7,8 @@ const config = getDefaultConfig(__dirname);
 const WEB_STUBS = {
   'lottie-react-native': path.join(__dirname, 'polyfills.lottie-stub.js'),
   'expo-sqlite': path.join(__dirname, 'polyfills.sqlite-stub.js'),
+  '@react-native-firebase/messaging': path.join(__dirname, 'polyfills.firebase-stub.js'),
+  '@react-native-firebase/app': path.join(__dirname, 'polyfills.firebase-app-stub.js'),
 };
 
 const originalResolver = config.resolver.resolveRequest;
