@@ -577,22 +577,20 @@ app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
 // Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
 app.use(clerkMiddleware());
 
-// @clerk/express v1.7+ changed req.auth to a function.
-// requireAuth() needs req.auth() to be callable; all 255 route handlers need req.auth.userId.
-// Fix: call authFn() once and copy its properties onto the function itself so both work.
+// @clerk/express v1.7+ changed req.auth to a callable function.
+// requireAuth() calls req.auth()?.userId internally — that still works fine.
+// Route handlers use req.auth.userId (property access) — we make those lazy getters
+// so they resolve AFTER requireAuth() has fully validated the JWT, not before.
 app.use((req, _res, next) => {
   if (typeof req.auth === 'function') {
     const authFn = req.auth;
-    try {
-      const authData = authFn.call(req);
-      if (authData && typeof authData === 'object') {
-        Object.assign(authFn, authData);
-      }
-    } catch (_) {
-      // JWT not present or invalid — requireAuth() will handle the 401
+    for (const prop of ['userId', 'sessionId', 'sessionClaims', 'orgId', 'orgRole', 'orgSlug', 'has', 'getToken']) {
+      Object.defineProperty(authFn, prop, {
+        get() { return authFn()?.[prop]; },
+        configurable: true,
+        enumerable: true,
+      });
     }
-    // req.auth stays as the function (requireAuth calls req.auth()?.userId)
-    // req.auth.userId etc. now also work directly via Object.assign above
   }
   next();
 });

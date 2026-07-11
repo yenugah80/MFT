@@ -51,7 +51,26 @@ const OnboardingGuard = ({ children }) => {
   // 🆕 PREVENT DUPLICATE CHECKS: Track if check is already in progress
   const isCheckingRef = useRef(false);
   const redirectTimeoutRef = useRef(null); // ✅ FIX: Track timeout to cancel on unmount
+  const retryTimerRef = useRef(null);
   // ✅ CRITICAL FIX: Use module-level flag instead of component-level ref (survives unmount)
+
+  // Auto-retry profile fetch when we get a 401 (token not ready yet)
+  useEffect(() => {
+    const is401 = profileError?.message?.includes('401') || profileError?.response?.status === 401;
+    if (is401 && isSignedIn) {
+      retryTimerRef.current = setTimeout(() => {
+        console.log('[OnboardingGuard] Auto-retrying profile after 401...');
+        isCheckingRef.current = false;
+        refetchProfile();
+      }, 2000);
+    }
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [profileError, isSignedIn, refetchProfile]);
 
   useEffect(() => {
     // ✅ Reset redirect flag when auth state changes (user logs out/in)
@@ -67,13 +86,23 @@ const OnboardingGuard = ({ children }) => {
       return;
     }
 
-    // Only check when auth is loaded and user is signed in
-    if (!isLoaded || !isSignedIn) {
-      // Not authenticated yet — ensure spinner is shown, not error screen
+    // Clerk still initializing — show spinner until it's ready
+    if (!isLoaded) {
       setIsCheckingOnboarding(true);
       setError(null);
       return;
     }
+
+    // User is not signed in — let Expo Router redirect to sign-in screen
+    if (!isSignedIn) {
+      setIsCheckingOnboarding(false);
+      setError(null);
+      return;
+    }
+
+    // User is signed in — show spinner immediately while we check their profile
+    setIsCheckingOnboarding(true);
+    setError(null);
 
     // ✅ Mark that we're checking to prevent re-runs
     isCheckingRef.current = true;
