@@ -17,7 +17,7 @@ const router = express.Router();
  */
 router.get('/compliance-history', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { days = 30 } = req.query;
 
     const startDate = new Date();

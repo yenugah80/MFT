@@ -37,7 +37,7 @@ const router = express.Router();
  */
 router.get('/pending', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /expiry/pending for user: ${userId}`);
 
@@ -80,7 +80,7 @@ router.get('/pending', requireAuth(), async (req, res) => {
  */
 router.get('/stats', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /expiry/stats for user: ${userId}`);
 
@@ -115,7 +115,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
  */
 router.post('/archive', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] POST /expiry/archive for user: ${userId}`);
 
@@ -157,7 +157,7 @@ router.post('/archive', requireAuth(), async (req, res) => {
 router.post('/:id/revalidate', requireAuth(), async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!id) {
       return res.status(400).json({
@@ -205,7 +205,7 @@ router.post('/:id/revalidate', requireAuth(), async (req, res) => {
  */
 router.post('/cleanup', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { daysOld = 90 } = req.body;
 
     console.log(

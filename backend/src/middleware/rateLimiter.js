@@ -68,8 +68,8 @@ async function initRedisForRateLimiting() {
  */
 const keyGenerator = (req) => {
   // Prefer userId for authenticated requests (most secure)
-  if (req.auth?.userId) {
-    return `user:${req.auth.userId}`;
+  if ((typeof req.auth === 'function' ? req.auth() : req.auth)?.userId) {
+    return `user:${(typeof req.auth === 'function' ? req.auth() : req.auth)?.userId}`;
   }
 
   // Fall back to IP for unauthenticated requests

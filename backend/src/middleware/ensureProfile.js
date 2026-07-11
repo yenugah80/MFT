@@ -11,10 +11,12 @@ import { profilesTable } from "../db/schema.js";
  */
 export const ensureProfile = async (req, res, next) => {
   try {
-    const { userId } = req.auth;
+    const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const userId = auth?.userId;
 
     if (!userId) {
-      return next(); // No user, skip profile creation
+      console.warn('[ensureProfile] No userId in auth — skipping profile creation');
+      return next();
     }
 
     // Upsert atomically — avoids the check-then-act race condition.

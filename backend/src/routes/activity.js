@@ -62,7 +62,7 @@ router.get('/constants', (req, res) => {
 
 router.post('/log', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const {
       type = 'general',
@@ -198,7 +198,7 @@ router.post('/log', async (req, res) => {
 
 router.get('/today', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const today = getDayKey(new Date(), offsetMinutes);
 
@@ -257,7 +257,7 @@ router.get('/today', async (req, res) => {
 
 router.get('/history', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30, type, limit = 100, offset = 0 } = req.query;
 
     const startDate = new Date();
@@ -315,7 +315,7 @@ router.get('/history', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const activityId = parseInt(req.params.id);
 
     if (!activityId || isNaN(activityId)) {
@@ -354,7 +354,7 @@ router.delete('/:id', async (req, res) => {
 
 router.get('/week-data', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
 
     // Get last 7 days
@@ -403,7 +403,7 @@ router.get('/week-data', async (req, res) => {
 
 router.get('/analytics/dashboard', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const analytics = await activityAnalyticsService.getDashboardAnalytics(userId);
 
     res.json(analytics);
@@ -419,7 +419,7 @@ router.get('/analytics/dashboard', async (req, res) => {
 
 router.get('/analytics/cold-start', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const coldStart = await activityAnalyticsService.getColdStartStage(userId);
 
     res.json(coldStart);
@@ -435,7 +435,7 @@ router.get('/analytics/cold-start', async (req, res) => {
 
 router.get('/analytics/patterns', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = parseInt(req.query.days) || 30;
 
     const patterns = await activityAnalyticsService.analyzeActivityPatterns(userId, days);
@@ -456,7 +456,7 @@ router.get('/analytics/patterns', async (req, res) => {
 
 router.get('/analytics/prediction/tomorrow', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const patterns = await activityAnalyticsService.analyzeActivityPatterns(userId, 30);
     const prediction = await activityAnalyticsService.predictTomorrow(userId, patterns);
@@ -474,7 +474,7 @@ router.get('/analytics/prediction/tomorrow', async (req, res) => {
 
 router.get('/analytics/recommendations', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const [patterns, correlations] = await Promise.all([
       activityAnalyticsService.analyzeActivityPatterns(userId, 30),
@@ -503,7 +503,7 @@ router.get('/analytics/recommendations', async (req, res) => {
 
 router.post('/insights', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30 } = req.body;
 
     // Get activity count for minimum data check
@@ -559,7 +559,7 @@ router.post('/insights', async (req, res) => {
 
 router.post('/analytics/feedback', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { insightType, insightId, wasHelpful, dismissed, dismissReason } = req.body;
 
     // Store feedback using raw SQL since we don't have a dedicated feedback table for activity
@@ -715,7 +715,7 @@ function getFallbackInsights(patterns) {
  */
 router.get('/intelligence', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const intelligence = await getActivityIntelligence(userId);
 

@@ -4,7 +4,7 @@ import { clearPatternCache } from "../services/patternMiningService.js";
 
 export async function logMeal(req, res) {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const {
       foodName,
       calories,
@@ -77,7 +77,7 @@ export async function logMeal(req, res) {
 
 export async function logWater(req, res) {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { amountLiters } = req.body;
     const parsed = parseFloat(amountLiters);
 
@@ -109,7 +109,7 @@ export async function logWater(req, res) {
 
 export async function logMood(req, res) {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { mood, note, source } = req.body;
 
     if (!mood) {

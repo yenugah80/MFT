@@ -25,7 +25,7 @@ router.use(requireAuth());
  */
 router.post('/run', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] POST /orchestrator/run for user: ${userId}`);
 
@@ -58,7 +58,7 @@ router.post('/batch', requireAdmin, async (req, res) => {
   try {
     const { limit, batchSize } = req.query;
 
-    console.log(`[API] POST /orchestrator/batch triggered by admin: ${req.auth.userId}`);
+    console.log(`[API] POST /orchestrator/batch triggered by admin: ${(typeof req.auth === 'function' ? req.auth() : req.auth)?.userId}`);
 
     const result = await orchestrateAllUsers({
       limit: limit ? parseInt(limit) : null,

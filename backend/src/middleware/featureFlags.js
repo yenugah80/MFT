@@ -175,7 +175,7 @@ export async function getAllFlagStates(userId, context = {}) {
  */
 export function requireFlag(flagName, options = {}) {
   return async (req, res, next) => {
-    const userId = req.auth?.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Build context from request
     const context = {

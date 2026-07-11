@@ -20,7 +20,7 @@ const router = express.Router();
  */
 router.get('/personalized', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { days = 30 } = req.query;
 
     const narrative = await generatePersonalizedNarrative(userId, {
@@ -50,7 +50,7 @@ router.get('/personalized', requireAuth(), async (req, res) => {
  */
 router.get('/quick', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
 
     const insight = await generateQuickInsight(userId);
 
@@ -75,7 +75,7 @@ router.get('/quick', requireAuth(), async (req, res) => {
  */
 router.get('/patterns', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { days = 30 } = req.query;
 
     const patterns = await mineUserPatterns(userId, {
@@ -104,7 +104,7 @@ router.get('/patterns', requireAuth(), async (req, res) => {
  */
 router.get('/food-correlations', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { days = 30 } = req.query;
 
     const patterns = await mineUserPatterns(userId, {
@@ -199,7 +199,7 @@ router.get('/food-correlations', requireAuth(), async (req, res) => {
  */
 router.get('/timing', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { days = 30 } = req.query;
 
     const patterns = await mineUserPatterns(userId, {
@@ -262,7 +262,7 @@ router.get('/timing', requireAuth(), async (req, res) => {
  */
 router.get('/recommendation-context', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
 
     const context = await generateRecommendationContext(userId);
 
@@ -288,7 +288,7 @@ router.get('/recommendation-context', requireAuth(), async (req, res) => {
  */
 router.get('/summary', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
 
     const [quickInsight, patterns] = await Promise.all([
       generateQuickInsight(userId),

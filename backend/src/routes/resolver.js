@@ -37,7 +37,7 @@ const router = express.Router();
  */
 router.post('/resolve', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { intent, count = 3 } = req.body;
 
     if (!intent || typeof intent !== 'string') {

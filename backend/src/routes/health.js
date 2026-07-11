@@ -24,7 +24,7 @@ router.use(requireAuth());
  */
 router.get('/permissions', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { platform = 'healthkit' } = req.query;
 
     const permissions = await healthPlatformService.getPermissions(userId, platform);
@@ -46,7 +46,7 @@ router.get('/permissions', async (req, res) => {
  */
 router.post('/permissions', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { platform, permissions } = req.body;
 
     await healthPlatformService.updateSettings(userId, platform, {
@@ -77,7 +77,7 @@ router.post('/permissions', async (req, res) => {
  */
 router.get('/activity/today', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const summary = await healthPlatformService.getHealthSummary(userId, new Date());
 
     res.json({
@@ -99,7 +99,7 @@ router.get('/activity/today', async (req, res) => {
  */
 router.get('/activity/history', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 7 } = req.query;
 
     const trends = await healthPlatformService.getHealthTrends(userId, 'steps', parseInt(days));
@@ -126,7 +126,7 @@ router.get('/activity/history', async (req, res) => {
  */
 router.get('/sleep', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
@@ -154,7 +154,7 @@ router.get('/sleep', async (req, res) => {
  */
 router.get('/heart-rate', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
@@ -183,7 +183,7 @@ router.get('/heart-rate', async (req, res) => {
  */
 router.get('/body', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const [weightTrend, bodyFatTrend] = await Promise.all([
       healthPlatformService.getHealthTrends(userId, 'weight', 30),
@@ -218,7 +218,7 @@ router.get('/body', async (req, res) => {
  */
 router.get('/insights', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const summary = await healthPlatformService.getHealthSummary(userId, new Date());
 
     // Generate insights based on health data
@@ -297,7 +297,7 @@ router.get('/insights', async (req, res) => {
  */
 router.post('/sync', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { platform = 'healthkit', dataTypes, forceFullSync = false } = req.body;
 
     const result = await healthPlatformService.syncWithHealthPlatform(userId, platform, {
@@ -336,7 +336,7 @@ router.post('/sync', async (req, res) => {
  */
 router.post('/nutrition', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const nutritionData = req.body;
 
     // This would trigger the mobile app to write to HealthKit/Google Fit
@@ -367,7 +367,7 @@ router.post('/nutrition', async (req, res) => {
  */
 router.post('/water', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { amount, timestamp } = req.body;
 
     analyticsEventPipeline?.trackEvent({
@@ -393,7 +393,7 @@ router.post('/water', async (req, res) => {
  */
 router.post('/written', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { platform, type, data, timestamp } = req.body;
 
     analyticsEventPipeline?.trackEvent({

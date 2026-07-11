@@ -116,7 +116,7 @@ async function logNotificationDelivery(userId, notification, channel = 'api') {
  */
 router.get('/now', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Get smart reminders
     const allReminders = await getSmartReminders(userId);
@@ -152,7 +152,7 @@ router.get('/now', requireAuth(), async (req, res) => {
  */
 router.get('/schedule', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const scheduled = await scheduleUserReminders(userId);
     const activeSnoozes = await getActiveSnoozes(userId);
@@ -188,7 +188,7 @@ router.get('/schedule', requireAuth(), async (req, res) => {
  */
 router.get('/patterns', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const patterns = await learnUserPatterns(userId);
 
     res.json({
@@ -215,7 +215,7 @@ router.get('/patterns', requireAuth(), async (req, res) => {
  */
 router.get('/preferences', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const [settings] = await db
       .select()
@@ -258,7 +258,7 @@ router.get('/preferences', requireAuth(), async (req, res) => {
  */
 router.put('/preferences', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const updates = req.body;
 
     // Validate input
@@ -329,7 +329,7 @@ router.put('/preferences', requireAuth(), async (req, res) => {
  */
 router.post('/snooze', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { reminderType, snoozeDuration = 30 } = req.body; // duration in minutes
 
     if (!reminderType) {
@@ -389,7 +389,7 @@ router.post('/snooze', requireAuth(), async (req, res) => {
  */
 router.get('/snoozes', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const now = new Date();
 
     const snoozes = await db
@@ -428,7 +428,7 @@ router.get('/snoozes', requireAuth(), async (req, res) => {
  */
 router.delete('/snooze/:type', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { type } = req.params;
 
     await db
@@ -465,7 +465,7 @@ router.delete('/snooze/:type', requireAuth(), async (req, res) => {
  */
 router.post('/dismiss', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { reminderType, reason } = req.body;
 
     if (!reminderType) {
@@ -514,7 +514,7 @@ router.post('/dismiss', requireAuth(), async (req, res) => {
  */
 router.post('/clicked', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { notificationId, notificationType, screenNavigated } = req.body;
 
     if (notificationId) {
@@ -566,7 +566,7 @@ router.post('/clicked', requireAuth(), async (req, res) => {
  */
 router.get('/history', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const offset = parseInt(req.query.offset) || 0;
 
@@ -611,7 +611,7 @@ router.get('/history', requireAuth(), async (req, res) => {
  */
 router.get('/analytics', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = Math.min(parseInt(req.query.days) || 30, 90);
     const since = new Date();
     since.setDate(since.getDate() - days);

@@ -47,7 +47,7 @@ router.use(requireAuth());
  */
 router.get('/dashboard', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Try to ensure user has a hydration profile (graceful if table doesn't exist)
     try {
@@ -97,7 +97,7 @@ router.get('/dashboard', async (req, res) => {
  */
 router.get('/cold-start', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const coldStart = await getColdStartStage(userId);
 
     res.json(coldStart);
@@ -119,7 +119,7 @@ router.get('/cold-start', async (req, res) => {
  */
 router.get('/patterns', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = parseInt(req.query.days) || 30;
 
     const patterns = await analyzeHydrationPatterns(userId, days);
@@ -141,7 +141,7 @@ router.get('/patterns', async (req, res) => {
  */
 router.get('/persona', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const persona = await classifyPersona(userId);
 
     res.json(persona);
@@ -161,7 +161,7 @@ router.get('/persona', async (req, res) => {
  */
 router.get('/prediction/tomorrow', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // First check if we have a cached prediction
     let prediction = await getTomorrowPrediction(userId);
@@ -193,7 +193,7 @@ router.get('/prediction/tomorrow', async (req, res) => {
  */
 router.post('/prediction/refresh', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { meetingCount } = req.body;
 
     const context = { meetingCount };
@@ -220,7 +220,7 @@ router.post('/prediction/refresh', async (req, res) => {
  */
 router.get('/profile', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const profile = await getOrCreateHydrationProfile(userId);
 
     res.json(profile);
@@ -236,7 +236,7 @@ router.get('/profile', async (req, res) => {
  */
 router.post('/profile/refresh-stage', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const newStage = await updateOnboardingStage(userId);
 
     res.json({ stage: newStage });
@@ -264,7 +264,7 @@ router.post('/profile/refresh-stage', async (req, res) => {
  */
 router.post('/feedback', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { insightType, insightId, ...feedback } = req.body;
 
     if (!insightType || !insightId) {
@@ -286,7 +286,7 @@ router.post('/feedback', async (req, res) => {
  */
 router.get('/feedback/dismissed', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const dismissed = await getDismissedInsightTypes(userId);
 
     res.json({ dismissedTypes: dismissed });
@@ -308,7 +308,7 @@ router.get('/feedback/dismissed', async (req, res) => {
  */
 router.post('/aggregate', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const date = req.body.date ? new Date(req.body.date) : new Date(Date.now() - 86400000);
 
     const summary = await computeDailySummary(userId, date);

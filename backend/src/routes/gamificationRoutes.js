@@ -16,7 +16,7 @@ const router = express.Router();
 router.post('/check-streak', requireAuth(), async (req, res) => {
   try {
     const { currentStreak } = req.body;
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (typeof currentStreak !== 'number') {
       return res.status(400).json({ error: 'currentStreak is required' });
@@ -33,7 +33,7 @@ router.post('/check-streak', requireAuth(), async (req, res) => {
 // Restore a broken streak using a streak freeze (within 24 hours of losing it)
 router.post('/restore-streak', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const result = await restoreStreak(userId);
 
     if (result.success) {
@@ -57,7 +57,7 @@ router.post('/restore-streak', requireAuth(), async (req, res) => {
 // Get full gamification data for the current user
 router.get('/user', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Fetch gamification stats
     const [gamification] = await db.select()
@@ -130,7 +130,7 @@ router.get('/user', requireAuth(), async (req, res) => {
 // Get Snapchat-style streak status for popup display
 router.get('/streak-status', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Check if any popup should be shown
     const popupData = await checkStreakBrokenPopup(userId);
@@ -152,7 +152,7 @@ router.get('/streak-status', requireAuth(), async (req, res) => {
 // Clear the "streak saved by freeze" flag after user acknowledges
 router.post('/clear-streak-saved', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     await clearStreakSavedFlag(userId);
     res.json({ success: true });
   } catch (error) {
@@ -165,7 +165,7 @@ router.post('/clear-streak-saved', requireAuth(), async (req, res) => {
 // Get all achievements with user's unlock status
 router.get('/achievements', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Get user's unlocked achievements
     const unlockedAchievements = await getUserAchievements(userId);

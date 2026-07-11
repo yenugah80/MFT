@@ -31,7 +31,7 @@ const router = express.Router();
  */
 router.get('/availability', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const lookbackDays = parseInt(req.query.days) || 30;
 
     const availability = await assessDataAvailability(userId, lookbackDays);
@@ -56,7 +56,7 @@ router.get('/availability', requireAuth(), async (req, res) => {
  */
 router.get('/daily', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const dateParam = req.query.date;
 
     const referenceDate = dateParam ? new Date(dateParam) : new Date();
@@ -89,7 +89,7 @@ router.get('/daily', requireAuth(), async (req, res) => {
  */
 router.get('/weekly', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const dateParam = req.query.date;
 
     const referenceDate = dateParam ? new Date(dateParam) : new Date();
@@ -122,7 +122,7 @@ router.get('/weekly', requireAuth(), async (req, res) => {
  */
 router.get('/monthly', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const dateParam = req.query.date;
 
     const referenceDate = dateParam ? new Date(dateParam) : new Date();
@@ -155,7 +155,7 @@ router.get('/monthly', requireAuth(), async (req, res) => {
  */
 router.get('/custom', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
@@ -216,7 +216,7 @@ router.get('/custom', requireAuth(), async (req, res) => {
  */
 router.get('/wellness', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const timeframe = req.query.timeframe || TIMEFRAMES.WEEKLY;
 
     if (!Object.values(TIMEFRAMES).includes(timeframe)) {
@@ -255,7 +255,7 @@ router.get('/wellness', requireAuth(), async (req, res) => {
  */
 router.get('/trends', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const timeframe = req.query.timeframe || TIMEFRAMES.WEEKLY;
 
     // Get current period
@@ -371,7 +371,7 @@ function calculateTrends(current, previous) {
  */
 router.get('/recommendations', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const period = req.query.period || 'week'; // today, week, month, all
 
     const recommendations = await getAnalyticsRecommendations(userId, period);

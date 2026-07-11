@@ -68,7 +68,7 @@ router.use(requireAuth());
  */
 router.get('/predictive', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 14 } = req.query;
 
     const startDate = new Date();
@@ -130,7 +130,7 @@ router.get('/predictive', async (req, res) => {
  */
 router.get('/correlations', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { limit = 5 } = req.query;
 
     // Fetch stored correlations from the database
@@ -191,7 +191,7 @@ router.get('/correlations', async (req, res) => {
  */
 router.get('/weekly-narrative', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Get date range for this week (Monday to Sunday)
     const today = new Date();
@@ -258,7 +258,7 @@ router.get('/weekly-narrative', async (req, res) => {
  */
 router.get('/what-to-change', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 14);
@@ -299,7 +299,7 @@ router.get('/what-to-change', async (req, res) => {
  */
 router.get('/ai-analysis', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 14 } = req.query;
 
     const startDate = new Date();
@@ -412,7 +412,7 @@ router.get('/ai-analysis', async (req, res) => {
  */
 router.get('/patterns/personalized', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { windowDays = 21 } = req.query;
 
     // Compute correlations using the enhanced correlation engine
@@ -1605,7 +1605,7 @@ function getSchedule(type) {
  */
 router.get('/combined', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 14 } = req.query;
 
     const startDate = new Date();
@@ -1738,7 +1738,7 @@ router.get('/combined', async (req, res) => {
  */
 router.get('/user-patterns', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Get data from the last 30 days
     const startDate = new Date();
@@ -2176,7 +2176,7 @@ function calculateAverageDailyLogs(foodLogs, moodLogs, waterLogs) {
  */
 router.get('/novel-correlations', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { lookbackDays = 30, limit = 5 } = req.query;
 
     // Get novel correlations with full statistical analysis
@@ -2226,7 +2226,7 @@ router.get('/novel-correlations', async (req, res) => {
  */
 router.get('/unified-correlations', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { limit = 10, lookbackDays = 30 } = req.query;
 
     // Fetch from both systems in parallel
@@ -2411,7 +2411,7 @@ function computeImportanceScore(correlation) {
  */
 router.post('/recommendations/track', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { recommendationId, recommendationType, domain, actionType, title, action, difficultyTier, context } = req.body;
 
     if (!recommendationType || !domain || !actionType) {
@@ -2454,7 +2454,7 @@ router.post('/recommendations/track', async (req, res) => {
  */
 router.post('/recommendations/verify', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { actionId } = req.body;
 
     if (!actionId) {
@@ -2513,7 +2513,7 @@ router.post('/verification/process-pending', async (req, res) => {
  */
 router.post('/predictions/log', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { predictionType, predictedValue, confidence, intervalLow, intervalHigh, context } = req.body;
 
     if (!predictionType || predictedValue === undefined) {
@@ -2584,7 +2584,7 @@ router.post('/predictions/verify', async (req, res) => {
  */
 router.get('/predictions/accuracy', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { predictionType } = req.query;
 
     const accuracy = await calculatePredictionAccuracy(
@@ -2619,7 +2619,7 @@ router.get('/predictions/accuracy', async (req, res) => {
  */
 router.post('/feedback', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const {
       insightId,
       insightType, // 'correlation', 'prediction', 'recommendation', 'pattern'
@@ -2713,7 +2713,7 @@ router.post('/feedback', async (req, res) => {
  */
 router.get('/feedback', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { limit = 50, insightType } = req.query;
 
     const conditions = [eq(insightFeedbackTable.userId, userId)];
@@ -2762,7 +2762,7 @@ router.get('/feedback', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Get prediction accuracy stats
     const predictionStats = await getPredictionAccuracyStats(userId);
@@ -2824,7 +2824,7 @@ router.get('/stats', async (req, res) => {
  */
 router.post('/implicit-outcomes', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const results = await measureImplicitOutcomes(userId);
 

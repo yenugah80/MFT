@@ -34,7 +34,7 @@ router.use(requireAuth());
  */
 router.post('/compute', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { windowTypes, forceRecompute } = req.body;
 
     console.log(`[API] POST /correlations/compute for user: ${userId}`);
@@ -86,7 +86,7 @@ router.post('/compute', async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const VALID_CORRELATION_TYPES = [
       'mood_food', 'stress_eating', 'hydration_mood', 'activity_recovery',
       'sleep_nutrition', 'caffeine_sleep', 'sugar_mood',
@@ -203,7 +203,7 @@ router.get('/:id/evidence', async (req, res) => {
 router.post('/:id/feedback', async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { overrideType, userReason } = req.body;
 
     if (!overrideType) {
@@ -244,7 +244,7 @@ router.post('/:id/feedback', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] DELETE /correlations/${id} for user: ${userId}`);
 

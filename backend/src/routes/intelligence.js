@@ -45,7 +45,7 @@ const router = express.Router();
  */
 router.get('/unified', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { period = 'week' } = req.query;
 
     // Validate period
@@ -101,7 +101,7 @@ router.get('/unified', requireAuth(), async (req, res) => {
  */
 router.post('/track-action', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { recommendationId, actionType, context = {} } = req.body;
 
     // Validate required fields
@@ -165,7 +165,7 @@ router.post('/track-action', requireAuth(), async (req, res) => {
  */
 router.post('/satisfaction', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { trackingId, helpful, rating, feedback } = req.body;
 
     // Validate required fields
@@ -216,7 +216,7 @@ router.post('/satisfaction', requireAuth(), async (req, res) => {
  */
 router.get('/status', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     res.json({
       success: true,

@@ -100,7 +100,7 @@ async function generateRecommendationsWithDedup(userId, mealType, limit, generat
  */
 router.get('/smart', requireAuth(), aiLimiter, async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { limit = 5, mealType } = req.query;
 
     // Validate limit
@@ -135,7 +135,7 @@ router.get('/smart', requireAuth(), aiLimiter, async (req, res) => {
  */
 router.get('/', requireAuth(), aiLimiter, async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { limit = 5 } = req.query;
     const parsedLimit = Math.min(Math.max(parseInt(limit) || 5, 1), 10);
 
@@ -337,7 +337,7 @@ router.get('/', requireAuth(), aiLimiter, async (req, res) => {
  */
 router.get('/:id', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { id } = req.params;
 
     const recommendation = await db
@@ -380,7 +380,7 @@ router.get('/:id', requireAuth(), async (req, res) => {
  */
 router.post('/:id/track', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { id } = req.params;
     const { action, reason } = req.body;
 
@@ -444,7 +444,7 @@ router.post('/:id/track', requireAuth(), async (req, res) => {
  */
 router.post('/:id/accept', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { id } = req.params;
     const { portion, mealType } = req.body;
 
@@ -541,7 +541,7 @@ router.post('/:id/accept', requireAuth(), async (req, res) => {
  */
 router.get('/history/list', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { days = 30, status, type, limit = 50 } = req.query;
 
     const startDate = new Date();
@@ -592,7 +592,7 @@ router.get('/history/list', requireAuth(), async (req, res) => {
  */
 router.get('/stats/acceptance-by-preference', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
 
     // Fetch all recommendations shown to this user
     const history = await db

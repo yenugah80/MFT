@@ -37,7 +37,7 @@ const router = express.Router();
  */
 router.get('/predict', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const result = await predictHealthOutcomes(userId);
 
     res.json(result);
@@ -57,7 +57,7 @@ router.get('/predict', requireAuth(), async (req, res) => {
  */
 router.get('/predict/:date', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date } = req.params;
 
     // Validate date format
@@ -88,7 +88,7 @@ router.get('/predict/:date', requireAuth(), async (req, res) => {
  */
 router.get('/forecast', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = parseInt(req.query.days) || 3;
 
     const forecasts = [];
@@ -137,7 +137,7 @@ router.get('/forecast', requireAuth(), async (req, res) => {
  */
 router.get('/status', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const result = await getPersonalizationStatus(userId);
 
     res.json(result);
@@ -157,7 +157,7 @@ router.get('/status', requireAuth(), async (req, res) => {
  */
 router.post('/update', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const result = await updateUserModel(userId);
 
     res.json(result);
@@ -177,7 +177,7 @@ router.post('/update', requireAuth(), async (req, res) => {
  */
 router.get('/insights', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const result = await getModelInsights(userId);
 
     res.json(result);

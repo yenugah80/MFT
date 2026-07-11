@@ -50,7 +50,7 @@ router.use(requireAuth());
  */
 router.get('/recommendations', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const {
       domain = 'all',
       explain = 'true',
@@ -93,7 +93,7 @@ router.get('/recommendations', async (req, res) => {
  */
 router.get('/mood-insights', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /decision-brain/mood-insights for user: ${userId}`);
 
@@ -140,7 +140,7 @@ router.get('/mood-insights', async (req, res) => {
  */
 router.get('/nutrition-insights', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /decision-brain/nutrition-insights for user: ${userId}`);
 
@@ -172,7 +172,7 @@ router.get('/nutrition-insights', async (req, res) => {
  */
 router.get('/hydration-insights', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /decision-brain/hydration-insights for user: ${userId}`);
 
@@ -204,7 +204,7 @@ router.get('/hydration-insights', async (req, res) => {
  */
 router.get('/activity-insights', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /decision-brain/activity-insights for user: ${userId}`);
 
@@ -235,7 +235,7 @@ router.get('/activity-insights', async (req, res) => {
  */
 router.get('/status', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /decision-brain/status for user: ${userId}`);
 
@@ -266,7 +266,7 @@ router.get('/status', async (req, res) => {
  */
 router.post('/feedback', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { correlationId, feedbackType, reason } = req.body;
 
     if (!correlationId || !feedbackType) {

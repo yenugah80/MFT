@@ -67,7 +67,7 @@ router.get('/constants', (req, res) => {
 
 router.post('/log', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const {
       bedTime,
@@ -227,7 +227,7 @@ router.post('/log', async (req, res) => {
 
 router.get('/today', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
 
     // Get yesterday's date (last night's sleep)
@@ -271,7 +271,7 @@ router.get('/today', async (req, res) => {
 
 router.get('/history', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30, limit = 100, offset = 0 } = req.query;
 
     const startDate = new Date();
@@ -338,7 +338,7 @@ router.get('/history', async (req, res) => {
 
 router.get('/trends', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30 } = req.query;
 
     const startDate = new Date();
@@ -432,7 +432,7 @@ router.get('/trends', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const sleepId = parseInt(req.params.id);
 
     if (!sleepId || isNaN(sleepId)) {

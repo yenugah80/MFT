@@ -37,7 +37,7 @@ const CAFFEINE_LIMIT = CAFFEINE_DAILY_LIMIT_MG;
 router.post("/log", async (req, res) => {
   try {
     await ensureWaterLogTableShape();
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const { amountLiters, loggedDate, clientEventId, beverageType } = req.body;
 
@@ -174,7 +174,7 @@ router.post("/log", async (req, res) => {
 router.get("/today", async (req, res) => {
   try {
     await ensureWaterLogTableShape();
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const { start, end } = getLocalDayRange(offsetMinutes);
@@ -247,7 +247,7 @@ router.get("/today", async (req, res) => {
 router.get("/history", async (req, res) => {
   try {
     await ensureWaterLogTableShape();
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { startDate, endDate, limit = 100 } = req.query;
 
     // Get client's timezone offset for accurate date grouping
@@ -322,7 +322,7 @@ router.get("/history", async (req, res) => {
 router.post("/celebration", async (req, res) => {
   try {
     await ensureDailyNutritionSummaryTableShape();
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { dateKey } = req.body;
 
     if (!dateKey || typeof dateKey !== "string") {
@@ -368,7 +368,7 @@ router.post("/celebration", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { id } = req.params;
 
     const [deleted] = await db

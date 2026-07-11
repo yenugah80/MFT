@@ -512,7 +512,7 @@ export function performanceMiddleware() {
 
       recordRequestMetrics(endpoint, req.method, res.statusCode, latencyMs, {
         userAgent: req.headers['user-agent'],
-        userId: req.auth?.userId,
+        userId: (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId,
       });
 
       originalEnd.apply(res, args);

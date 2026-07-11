@@ -38,7 +38,7 @@ const router = express.Router();
  */
 router.get('/morning', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -82,7 +82,7 @@ router.get('/morning', requireAuth(), async (req, res) => {
  */
 router.get('/now', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -127,7 +127,7 @@ router.get('/now', requireAuth(), async (req, res) => {
  */
 router.post('/meal-feeling', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -173,7 +173,7 @@ router.post('/meal-feeling', requireAuth(), async (req, res) => {
  */
 router.get('/realtime', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -252,7 +252,7 @@ router.get('/realtime', requireAuth(), async (req, res) => {
  */
 router.get('/pending-check-ins', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -352,7 +352,7 @@ function mapPredictionTypeToDomain(predictionType) {
  */
 router.post('/outcome', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -414,7 +414,7 @@ router.post('/outcome', requireAuth(), async (req, res) => {
  */
 router.get('/thresholds', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -469,7 +469,7 @@ router.get('/thresholds', requireAuth(), async (req, res) => {
  */
 router.get('/stories', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -502,7 +502,7 @@ router.get('/stories', requireAuth(), async (req, res) => {
  */
 router.post('/stories/:storyId/acknowledge', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { storyId } = req.params;
     const { reaction } = req.body;
 

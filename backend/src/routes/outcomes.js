@@ -37,7 +37,7 @@ router.use(requireAuth());
  */
 router.get('/stats', async (req, res, next) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30 } = req.query;
 
     const daysAgo = new Date();
@@ -108,7 +108,7 @@ router.get('/stats', async (req, res, next) => {
  */
 router.get('/confidence', async (req, res, next) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 14 } = req.query;
 
     const daysAgo = new Date();
@@ -196,7 +196,7 @@ router.get('/confidence', async (req, res, next) => {
  */
 router.get('/wellness-confidence', async (req, res, next) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Get today's data
     const todayStart = new Date();

@@ -22,7 +22,7 @@ router.use(requireAuth());
 // ─────────────────────────────────────────────────────────────
 router.post('/', aiLimiter, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const {
       days = 7,
       mealsPerDay = 3,
@@ -148,7 +148,7 @@ RULES:
 // ─────────────────────────────────────────────────────────────
 router.post('/save', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { plan } = req.body;
     if (!plan) return res.status(400).json({ error: 'plan is required' });
 
@@ -172,7 +172,7 @@ router.post('/save', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 router.get('/saved', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const result = await db.execute(sql`
       SELECT plan_data, saved_at

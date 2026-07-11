@@ -24,7 +24,7 @@ router.use(requireAuth());
  */
 router.get('/badges', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const badges = await gamificationService.getUserBadges(userId);
 
     // Track analytics
@@ -52,7 +52,7 @@ router.get('/badges', async (req, res) => {
  */
 router.post('/badges/check', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const awarded = await gamificationService.checkAndAwardBadges(userId);
 
     if (awarded.length > 0) {
@@ -87,7 +87,7 @@ router.post('/badges/check', async (req, res) => {
  */
 router.get('/leaderboard', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { type = 'global', limit = 50 } = req.query;
 
     let leaderboard;
@@ -140,7 +140,7 @@ router.get('/leaderboard', async (req, res) => {
  */
 router.get('/challenges', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const [daily, weekly] = await Promise.all([
       gamificationService.getDailyChallenges(userId),
@@ -182,7 +182,7 @@ router.get('/challenges', async (req, res) => {
  */
 router.post('/challenges/:id/progress', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { id } = req.params;
     const { progress, type = 'daily' } = req.body;
 
@@ -222,7 +222,7 @@ router.post('/challenges/:id/progress', async (req, res) => {
  */
 router.get('/xp', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 7 } = req.query;
 
     const breakdown = await gamificationService.getXPBreakdown(userId, parseInt(days));
@@ -251,7 +251,7 @@ router.get('/xp', async (req, res) => {
  */
 router.post('/xp/award', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { amount, reason } = req.body;
 
     if (!amount || amount <= 0 || amount > 1000) {
@@ -292,7 +292,7 @@ router.post('/xp/award', async (req, res) => {
  */
 router.get('/summary', async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const [badges, dailyChallenges, weeklyChallenges, userRank, xpBreakdown] = await Promise.all([
       gamificationService.getUserBadges(userId),

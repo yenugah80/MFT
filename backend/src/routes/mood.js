@@ -37,7 +37,7 @@ router.use(requireAuth());
  */
 router.post("/log", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const {
       mood,
@@ -293,7 +293,7 @@ router.post("/log", async (req, res) => {
  */
 router.get("/history", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { startDate, endDate, limit = 30 } = req.query;
 
     // Build conditions array so userId is never overwritten by date filters
@@ -323,7 +323,7 @@ router.get("/history", async (req, res) => {
  */
 router.get("/today", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const { start, end } = getLocalDayRange(offsetMinutes);
@@ -353,7 +353,7 @@ router.get("/today", async (req, res) => {
  */
 router.get("/trends", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { period = 'week' } = req.query;
 
     const VALID_PERIODS = { day: 1, week: 7, month: 30 };
@@ -471,7 +471,7 @@ router.get("/trends", async (req, res) => {
  */
 router.post("/insights", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30, forceRefresh = false } = req.body;
 
     // Cache key includes today's date so a new day always refreshes,
@@ -571,7 +571,7 @@ router.post("/insights", async (req, res) => {
  */
 router.get("/pattern-check", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { mood } = req.query;
 
     const VALID_MOODS = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
@@ -618,7 +618,7 @@ router.get("/pattern-check", async (req, res) => {
  */
 router.get("/intelligence", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[MoodIntelligence] Generating intelligence for user: ${userId}`);
 
     const intelligence = await getMoodIntelligence(userId);

@@ -44,7 +44,7 @@ router.use(aiLimiter); // Strict rate limit for AI-powered endpoints
  */
 router.post("/", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { mode, query, barcode, imageBase64, mealType, userContext } = req.body;
 
     // Validation

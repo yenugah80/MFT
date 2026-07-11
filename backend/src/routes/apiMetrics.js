@@ -130,7 +130,7 @@ function isAdminRequest(req) {
     return false;
   }
 
-  return adminUserIds.includes(req.auth?.userId);
+  return adminUserIds.includes((typeof req.auth === 'function' ? req.auth() : req.auth)?.userId);
 }
 
 export default router;

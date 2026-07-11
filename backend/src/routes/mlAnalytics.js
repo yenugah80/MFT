@@ -84,7 +84,7 @@ const router = express.Router();
  */
 router.get('/recommendations', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const {
       includeExperiments = 'true',
       includeDriftCheck = 'true',
@@ -131,7 +131,7 @@ router.get('/recommendations', requireAuth(), async (req, res) => {
  */
 router.post('/feedback', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { recommendationId, armKey, accepted, metadata = {} } = req.body;
 
     if (!armKey || typeof accepted !== 'boolean') {
@@ -180,7 +180,7 @@ router.post('/feedback', requireAuth(), async (req, res) => {
  */
 router.get('/metrics', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const metrics = await getUserMLMetrics(userId);
 
     metrics._audit = {
@@ -206,7 +206,7 @@ router.get('/metrics', requireAuth(), async (req, res) => {
  */
 router.get('/arm-statistics', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const stats = await getArmStatistics(userId);
 
     res.json({
@@ -240,7 +240,7 @@ router.get('/arm-statistics', requireAuth(), async (req, res) => {
  */
 router.get('/experiments', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const experiments = await getUserExperiments(userId);
 
     res.json({
@@ -274,7 +274,7 @@ router.get('/experiments', requireAuth(), async (req, res) => {
  */
 router.get('/drift', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const driftStatus = await getLatestDriftStatus(userId);
 
     res.json({
@@ -307,7 +307,7 @@ router.get('/drift', requireAuth(), async (req, res) => {
  */
 router.post('/drift/check', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { metric = 'acceptance_rate', windowDays = 7 } = req.body;
 
     let result;
@@ -348,7 +348,7 @@ router.post('/drift/check', requireAuth(), async (req, res) => {
  */
 router.get('/interactions', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = parseInt(req.query.days) || 30;
 
     const interactions = await getUserInteractions(userId, days);
@@ -404,7 +404,7 @@ router.get('/interactions', requireAuth(), async (req, res) => {
  */
 router.get('/lagged-correlations', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = parseInt(req.query.days) || 30;
     const maxLag = parseInt(req.query.maxLag) || 3;
 
@@ -444,7 +444,7 @@ router.get('/lagged-correlations', requireAuth(), async (req, res) => {
  */
 router.get('/lagged-correlations/:signal1/:signal2', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { signal1, signal2 } = req.params;
     const days = parseInt(req.query.days) || 30;
     const maxLag = parseInt(req.query.maxLag) || 3;
@@ -484,7 +484,7 @@ router.get('/lagged-correlations/:signal1/:signal2', requireAuth(), async (req, 
  */
 router.post('/admin/batch', requireAuth(), requireAdmin, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { batchSize = 50, limit } = req.body;
 
     const result = await orchestrateAllUsersML({ batchSize, limit });
@@ -515,7 +515,7 @@ router.post('/admin/batch', requireAuth(), requireAdmin, async (req, res) => {
  */
 router.get('/admin/global-statistics', requireAuth(), requireAdmin, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const stats = await getGlobalArmStatistics();
 
@@ -544,7 +544,7 @@ router.get('/admin/global-statistics', requireAuth(), requireAdmin, async (req, 
  */
 router.get('/admin/experiment/:experimentId/analysis', requireAuth(), requireAdmin, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { experimentId } = req.params;
 
     const analysis = await analyzeExperiment(experimentId);
@@ -583,7 +583,7 @@ router.get('/admin/experiment/:experimentId/analysis', requireAuth(), requireAdm
  */
 router.post('/admin/jobs/daily', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[ML API] Daily orchestration job triggered by user: ${userId}`);
 
     const result = await runDailyOrchestration();
@@ -613,7 +613,7 @@ router.post('/admin/jobs/daily', requireAuth(), async (req, res) => {
  */
 router.post('/admin/jobs/weekly-drift', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[ML API] Weekly drift detection job triggered by user: ${userId}`);
 
     const result = await runWeeklyDriftDetection();
@@ -643,7 +643,7 @@ router.post('/admin/jobs/weekly-drift', requireAuth(), async (req, res) => {
  */
 router.post('/admin/jobs/weekly-lag', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[ML API] Weekly lagged correlation job triggered by user: ${userId}`);
 
     const result = await runWeeklyLaggedCorrelations();
@@ -673,7 +673,7 @@ router.post('/admin/jobs/weekly-lag', requireAuth(), async (req, res) => {
  */
 router.post('/admin/jobs/monthly-interactions', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[ML API] Monthly interaction analysis job triggered by user: ${userId}`);
 
     const result = await runMonthlyInteractionAnalysis();
@@ -703,7 +703,7 @@ router.post('/admin/jobs/monthly-interactions', requireAuth(), async (req, res) 
  */
 router.post('/admin/jobs/monthly-report', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[ML API] Monthly health report job triggered by user: ${userId}`);
 
     const result = await generateMonthlyHealthReport();

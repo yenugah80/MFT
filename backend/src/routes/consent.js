@@ -37,7 +37,7 @@ const consentLimiter = rateLimit({
   legacyHeaders: false,   // Disable `X-RateLimit-*` headers
   keyGenerator: (req) => {
     // Rate limit by userId (all consent endpoints require auth via requireAuth middleware)
-    return req.auth?.userId || 'unauthenticated';
+    return (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId || 'unauthenticated';
   },
 });
 
@@ -47,7 +47,7 @@ const consentLimiter = rateLimit({
  */
 router.get('/status', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const status = await premiumFeaturesService.getOpenAIConsentStatus(userId);
 
@@ -76,7 +76,7 @@ router.get('/status', requireAuth(), async (req, res) => {
  */
 router.post('/give-openai-consent', requireAuth(), consentLimiter, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // SECURITY: Validate userId exists and is a string
     if (!userId || typeof userId !== 'string') {
@@ -136,7 +136,7 @@ router.post('/give-openai-consent', requireAuth(), consentLimiter, async (req, r
  */
 router.post('/revoke-openai-consent', requireAuth(), consentLimiter, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Revoke consent
     const newConsent = await premiumFeaturesService.setOpenAIConsent(

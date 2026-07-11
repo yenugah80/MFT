@@ -41,7 +41,7 @@ const router = express.Router();
  */
 router.get('/state', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /learning/state for user: ${userId}`);
 
@@ -90,7 +90,7 @@ router.get('/state', requireAuth(), async (req, res) => {
  */
 router.get('/summary', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     console.log(`[API] GET /learning/summary for user: ${userId}`);
 
@@ -135,7 +135,7 @@ router.get('/summary', requireAuth(), async (req, res) => {
  */
 router.post('/feedback', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { feedbackType, correlationId, reason } = req.body;
 
     if (!feedbackType) {

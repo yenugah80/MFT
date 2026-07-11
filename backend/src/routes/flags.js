@@ -36,7 +36,7 @@ const router = express.Router();
  */
 router.get('/', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     // Build context from request
     const context = {
@@ -63,7 +63,7 @@ router.get('/', requireAuth(), async (req, res) => {
  */
 router.get('/:flagName', requireAuth(), async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { flagName } = req.params;
 
     // Build context from request

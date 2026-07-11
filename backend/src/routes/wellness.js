@@ -20,7 +20,7 @@ const router = express.Router();
  */
 router.get('/intelligence', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { lookbackDays = 7 } = req.query;
 
     const intelligence = await getUnifiedIntelligence(userId, {
@@ -53,7 +53,7 @@ router.get('/intelligence', requireAuth(), async (req, res) => {
  */
 router.get('/summary', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
 
     const intelligence = await getUnifiedIntelligence(userId, { lookbackDays: 7 });
 
@@ -92,7 +92,7 @@ router.get('/summary', requireAuth(), async (req, res) => {
  */
 router.get('/narrative', requireAuth(), async (req, res) => {
   try {
-    const { userId } = req.auth;
+    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { type = 'daily' } = req.query; // daily, weekly, insight
 
     const intelligence = await getUnifiedIntelligence(userId, {

@@ -579,7 +579,7 @@ app.use(clerkMiddleware());
 
 // @clerk/express v1.7+ changed req.auth to a callable function.
 // requireAuth() calls req.auth()?.userId internally — that still works fine.
-// Route handlers use req.auth.userId (property access) — we make those lazy getters
+// Route handlers use (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId (property access) — we make those lazy getters
 // so they resolve AFTER requireAuth() has fully validated the JWT, not before.
 app.use((req, _res, next) => {
   if (typeof req.auth === 'function') {
@@ -596,6 +596,14 @@ app.use((req, _res, next) => {
 });
 
 app.use(attachDb);
+
+// Request logging — helps diagnose mobile auth issues in Railway logs
+app.use('/api', (req, _res, next) => {
+  const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+  const uid = auth?.userId ?? 'no-auth';
+  console.log(`[REQ] ${req.method} ${req.path} uid=${uid}`);
+  next();
+});
 
 // Rate limiting - applied to all API routes
 // Burst limiter prevents rapid-fire requests (10/sec)

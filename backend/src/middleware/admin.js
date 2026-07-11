@@ -38,7 +38,7 @@ export function isAdmin(userId) {
  *   router.get('/admin/endpoint', requireAuth(), requireAdmin, handler);
  */
 export function requireAdmin(req, res, next) {
-  const userId = req.auth?.userId;
+  const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
   // In production, if no admin IDs are configured the endpoint is completely closed.
   if (process.env.NODE_ENV === 'production' && ADMIN_USER_IDS.size === 0) {
@@ -76,7 +76,7 @@ export function requireAdmin(req, res, next) {
  * Useful for endpoints that behave differently for admins
  */
 export function checkAdmin(req, res, next) {
-  req.isAdmin = isAdmin(req.auth?.userId);
+  req.isAdmin = isAdmin((typeof req.auth === 'function' ? req.auth() : req.auth)?.userId);
   next();
 }
 

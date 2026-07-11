@@ -44,7 +44,7 @@ router.use(async (req, res, next) => {
  */
 router.post("/log", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const {
       foodName, calories, protein, carbs, fats, fiber, sugar, sodium,
       servingSize, mealType, micros, nutriscore, ecoscore, novaScore, dietLabels, allergens, ingredients, barcode, imageUrl,
@@ -286,7 +286,7 @@ router.post("/log", async (req, res) => {
  */
 router.put("/log/:id", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const logId = parseInt(req.params.id);
     const {
       foodName, calories, protein, carbs, fats,
@@ -403,7 +403,7 @@ router.put("/log/:id", async (req, res) => {
  */
 router.delete("/log/:id", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const logId = parseInt(req.params.id);
 
     if (isNaN(logId)) {
@@ -482,7 +482,7 @@ router.delete("/log/:id", async (req, res) => {
  */
 router.get("/history", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date, limit = 50 } = req.query;
     
     let whereClause = eq(foodLogTable.userId, userId);
@@ -635,7 +635,7 @@ router.post("/voice-log", upload.single("audio"), async (req, res) => {
  */
 router.get("/summary", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date, startDate, endDate, limit = 30 } = req.query;
 
     let whereClause = eq(dailyNutritionSummaryTable.userId, userId);
@@ -677,7 +677,7 @@ router.get("/summary", async (req, res) => {
  */
 router.get("/water", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date, startDate, endDate, limit = 50 } = req.query;
 
     let whereClause = eq(waterLogTable.userId, userId);
@@ -723,7 +723,7 @@ router.get("/water", async (req, res) => {
  */
 router.get("/weight", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { startDate, endDate, limit = 50 } = req.query;
 
     let whereClause = eq(weightHistoryTable.userId, userId);
@@ -759,7 +759,7 @@ router.get("/weight", async (req, res) => {
  */
 router.get("/mood", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { date, startDate, endDate, limit = 50 } = req.query;
 
     let whereClause = eq(moodLogTable.userId, userId);
@@ -807,7 +807,7 @@ router.get("/mood", async (req, res) => {
 router.get("/dashboard", async (req, res) => {
   try {
     await ensureWaterLogTableShape();
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
 
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const { start: todayStart, end: todayEnd } = getLocalDayRange(offsetMinutes);
@@ -1332,7 +1332,7 @@ router.get("/dashboard", async (req, res) => {
  */
 router.post("/backfill-xp", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     console.log(`[Backfill] Starting XP backfill for user ${userId}`);
 
     const result = await backfillXPFromHistory(userId, db);
@@ -1358,7 +1358,7 @@ router.post("/backfill-xp", async (req, res) => {
  */
 router.get("/history-stats", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { mealType } = req.query;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const today = getLocalDateUTC(offsetMinutes);
@@ -1539,7 +1539,7 @@ router.get("/history-stats", async (req, res) => {
  */
 router.post("/goals", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const {
       primaryGoal,
       dailyCalories,
@@ -1592,7 +1592,7 @@ router.post("/goals", async (req, res) => {
  */
 router.patch("/log/:id/portion", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { id } = req.params;
     const { portionAmount, portionUnit, canonicalName } = req.body;
 
@@ -1739,7 +1739,7 @@ const MICRONUTRIENT_RDA = {
  */
 router.get("/micronutrient-trends", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = Math.min(parseInt(req.query.days || '30', 10), 90);
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
 
@@ -1838,7 +1838,7 @@ router.get("/micronutrient-trends", async (req, res) => {
  */
 router.post("/weight", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { weightKg, recordedDate, clientEventId } = req.body;
 
     if (!weightKg || isNaN(parseFloat(weightKg))) {
@@ -1875,7 +1875,7 @@ router.post("/weight", async (req, res) => {
  */
 router.get("/weight-history", async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const limit = Math.min(parseInt(req.query.limit || '90', 10), 365);
 
     const entries = await db

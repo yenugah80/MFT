@@ -24,7 +24,7 @@ router.use(requireAuth());
 
 router.post('/breakdown', aiLimiter, async (req, res) => {
   try {
-    const userId = req.auth.userId;
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { foodName, brand, region, existingNutrition } = req.body;
 
     if (!foodName) {
