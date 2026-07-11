@@ -3,7 +3,7 @@
  * Redirects to the appropriate step based on saved progress
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet, Text, Pressable } from 'react-native';
 import { useOnboarding } from '../../contexts/OnboardingContext';
@@ -12,10 +12,15 @@ import { BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 export default function OnboardingIndex() {
   const { step, isLoading, resetOnboarding } = useOnboarding();
   const [showDevOptions, setShowDevOptions] = useState(false);
+  const fallbackTimerRef = useRef(null);
 
   useEffect(() => {
     // Wait for context to load state from AsyncStorage
     if (!isLoading) {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
       // In dev mode, show options if resuming from a later step
       if (__DEV__ && step > 1) {
         setShowDevOptions(true);
@@ -23,7 +28,22 @@ export default function OnboardingIndex() {
         // Navigate to the current step
         router.replace(`/onboarding/step-${step}`);
       }
+      return;
     }
+
+    // Fallback: if still loading after 3s, force redirect to step-1
+    // This handles the race condition where router.replace conflicts with a pending Redirect
+    fallbackTimerRef.current = setTimeout(() => {
+      console.warn('[OnboardingIndex] Load timeout - forcing redirect to step-1');
+      router.replace('/onboarding/step-1');
+    }, 3000);
+
+    return () => {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
+    };
   }, [step, isLoading]);
 
   const handleResume = () => {

@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useRef } from "react";
 import { View, ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import { COLORS } from "../../constants/colors";
 import { TYPOGRAPHY, BRAND, TEXT, SURFACES } from "../../constants/premiumTheme";
@@ -9,6 +10,21 @@ import { useProfileContext } from "../../providers/ProfileProvider";
 const TabsLayout = () => {
   const { isSignedIn, isLoaded } = useAuth();
   const { onboardingComplete, isLoading: profileLoading, error, refetchProfile } = useProfileContext();
+  const retryTimerRef = useRef(null);
+
+  // Auto-retry profile fetch if stuck on 401 — happens when token provider isn't ready yet
+  useEffect(() => {
+    const is401 = error?.message?.includes('401') || error?.response?.status === 401;
+    if (is401) {
+      retryTimerRef.current = setTimeout(() => {
+        console.log('[TabsLayout] Auto-retrying profile after 401...');
+        refetchProfile();
+      }, 2000);
+    }
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, [error, refetchProfile]);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
@@ -25,10 +41,10 @@ const TabsLayout = () => {
   // CRITICAL FIX: Handle API errors - don't redirect to onboarding on error!
   // This was causing returning users to see onboarding when backend was slow/failing
   if (error) {
-    // 401 errors are expected when auth token isn't ready yet - don't show error screen
+    // 401 errors are expected when auth token isn't ready yet - auto-retry handles recovery
     const is401 = error?.message?.includes('401') || error?.response?.status === 401;
     if (is401) {
-      console.log('[TabsLayout] Auth token not ready, waiting...');
+      console.log('[TabsLayout] Auth token not ready, waiting for auto-retry...');
       return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
           <ActivityIndicator size="large" color={COLORS.primary} />

@@ -39,12 +39,14 @@ function OnboardingStack() {
           name="index"
           options={{
             title: 'Loading',
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen
           name="step-1"
           options={{
             title: 'Welcome',
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen

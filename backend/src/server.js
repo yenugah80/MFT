@@ -577,6 +577,15 @@ app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
 // Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
 app.use(clerkMiddleware());
 
+// @clerk/express v1.7+ changed req.auth to a function. Normalize it back to a plain object
+// so all existing route handlers using req.auth.userId continue to work without changes.
+app.use((req, _res, next) => {
+  if (typeof req.auth === 'function') {
+    req.auth = req.auth();
+  }
+  next();
+});
+
 app.use(attachDb);
 
 // Rate limiting - applied to all API routes
