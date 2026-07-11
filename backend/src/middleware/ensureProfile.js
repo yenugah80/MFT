@@ -4,6 +4,7 @@
  */
 import { eq } from "drizzle-orm";
 import { profilesTable } from "../db/schema.js";
+import { getAuth } from "@clerk/express";
 
 /**
  * Ensures authenticated user has a profile in the database
@@ -11,8 +12,7 @@ import { profilesTable } from "../db/schema.js";
  */
 export const ensureProfile = async (req, res, next) => {
   try {
-    const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
-    const userId = auth?.userId;
+    const { userId } = getAuth(req);
 
     if (!userId) {
       console.warn('[ensureProfile] No userId in auth — skipping profile creation');

@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
 import {
   profilesTable,
   dietaryPreferencesTable,
@@ -36,7 +37,7 @@ const VALID_CUISINE_PREFERENCES = [
 // --- Push Token Management ---
 export async function savePushToken(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { expoPushToken } = req.body;
 
     if (!expoPushToken || typeof expoPushToken !== 'string') {
@@ -97,7 +98,7 @@ export async function savePushToken(req, res) {
   } catch (error) {
     // Handle foreign key constraint violation gracefully
     if (error.code === '23503') { // PostgreSQL foreign key violation
-      console.log(`[savePushToken] Profile not found (FK error) for user ${(typeof req.auth === 'function' ? req.auth() : req.auth)?.userId}`);
+      console.log(`[savePushToken] Profile not found (FK error) for user ${getAuth(req)?.userId}`);
       return res.status(202).json({
         success: false,
         tokenRegistered: false,
@@ -112,7 +113,7 @@ export async function savePushToken(req, res) {
 
 export async function deletePushToken(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
 
     await req.db
       .update(accountSettingsTable)
@@ -133,7 +134,7 @@ export async function deletePushToken(req, res) {
 
 export async function getPushTokenStatus(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
 
     const [settings] = await req.db
       .select({
@@ -156,7 +157,7 @@ export async function getPushTokenStatus(req, res) {
 // --- FCM Token Management (Firebase Cloud Messaging) ---
 export async function saveFCMToken(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { fcmToken, platform } = req.body;
 
     if (!fcmToken || typeof fcmToken !== 'string') {
@@ -216,7 +217,7 @@ export async function saveFCMToken(req, res) {
   } catch (error) {
     // Handle foreign key constraint violation gracefully
     if (error.code === '23503') {
-      console.log(`[saveFCMToken] Profile not found (FK error) for user ${(typeof req.auth === 'function' ? req.auth() : req.auth)?.userId}`);
+      console.log(`[saveFCMToken] Profile not found (FK error) for user ${getAuth(req)?.userId}`);
       return res.status(202).json({
         success: false,
         tokenRegistered: false,
@@ -231,7 +232,7 @@ export async function saveFCMToken(req, res) {
 
 export async function deleteFCMToken(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
 
     await req.db
       .update(accountSettingsTable)
@@ -253,7 +254,7 @@ export async function deleteFCMToken(req, res) {
 
 export async function getFCMTokenStatus(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
 
     const [settings] = await req.db
       .select({
@@ -278,7 +279,7 @@ export async function getFCMTokenStatus(req, res) {
 // --- Combined Push Token Endpoint (Expo + FCM) ---
 export async function saveBothPushTokens(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { expoPushToken, fcmToken, platform } = req.body;
 
     // Check if profile exists first
@@ -360,7 +361,7 @@ export async function saveBothPushTokens(req, res) {
 // --- Notification Preferences ---
 export async function getNotifications(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const [settings] = await req.db
       .select({ notifications: accountSettingsTable.notifications })
       .from(accountSettingsTable)
@@ -398,7 +399,7 @@ export async function getNotifications(req, res) {
 
 export async function saveNotifications(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { notifications } = req.body;
     if (typeof notifications !== "object" || notifications === null) {
       return res.status(400).json({ error: "Invalid notifications object" });
@@ -426,7 +427,7 @@ export async function saveNotifications(req, res) {
 
 export async function getPrivacySettings(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const [settings] = await req.db
       .select({ privacy: accountSettingsTable.privacy })
       .from(accountSettingsTable)
@@ -448,7 +449,7 @@ export async function getPrivacySettings(req, res) {
 
 export async function savePrivacySettings(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { privacy } = req.body;
     if (typeof privacy !== "object" || privacy === null) {
       return res.status(400).json({ error: "Invalid privacy object" });
@@ -477,7 +478,7 @@ export async function savePrivacySettings(req, res) {
 
 export async function getPreferences(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const [settings] = await req.db
       .select({ preferences: accountSettingsTable.preferences })
       .from(accountSettingsTable)
@@ -499,7 +500,7 @@ export async function getPreferences(req, res) {
 
 export async function savePreferences(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { preferences } = req.body;
     if (typeof preferences !== "object" || preferences === null) {
       return res.status(400).json({ error: "Invalid preferences object" });
@@ -528,8 +529,8 @@ export async function savePreferences(req, res) {
 
 export async function getProfile(req, res) {
   try {
-    const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
-    const { userId } = auth;
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     // Ensure schema is up to date
     await ensureProfilesTableShape();
@@ -674,7 +675,7 @@ export async function getProfile(req, res) {
 
 export async function saveBasics(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     let { fullName, email, gender, age, weightKg, heightCm, activityLevel } = req.body;
     await ensureProfilesTableShape();
 
@@ -753,7 +754,7 @@ export async function saveBasics(req, res) {
     res.status(200).json(basics);
   } catch (error) {
     console.error('[saveBasics] ❌ Error saving profile basics:', {
-      userId: (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId,
+      userId: getAuth(req)?.userId,
       error: error.message,
       code: error.code,
     });
@@ -809,7 +810,7 @@ const VALID_COOKING_STYLES = ['fried', 'steamed', 'grilled', 'boiled', 'baked', 
 
 export async function saveDietary(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const {
       preferences,
       allergies,
@@ -1025,7 +1026,7 @@ export async function saveDietary(req, res) {
     res.status(200).json(dietary);
   } catch (error) {
     console.error('[saveDietary] ❌ Error saving dietary preferences:', {
-      userId: (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId,
+      userId: getAuth(req)?.userId,
       error: error.message,
       code: error.code,
     });
@@ -1035,7 +1036,7 @@ export async function saveDietary(req, res) {
 
 export async function saveGoals(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     let { primaryGoal, dailyCalories, proteinG, carbsG, fatsG, waterLiters } = req.body;
 
     // Sanitize primaryGoal - normalize to valid values
@@ -1190,7 +1191,7 @@ export async function saveGoals(req, res) {
 
 export async function saveGamification(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     const { xp, level, streak, badges } = req.body;
     // Use atomic upsert to avoid race condition (check-then-act)
     const gamificationResult = await req.db
@@ -1234,7 +1235,7 @@ export async function saveGamification(req, res) {
  */
 export async function completeOnboarding(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
 
     // Ensure schema is up to date
     await ensureProfilesTableShape();
@@ -1272,7 +1273,7 @@ export async function completeOnboarding(req, res) {
 // --- GDPR Data Export ---
 export async function exportUserData(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     console.log(`[exportUserData] Exporting data for user ${userId}`);
 
     // Load all user data in parallel
@@ -1327,7 +1328,7 @@ export async function exportUserData(req, res) {
 // --- GDPR Account Deletion ---
 export async function deleteAccount(req, res) {
   try {
-    const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const { userId } = getAuth(req);
     console.log(`[deleteAccount] ⚠️ Deleting account for user ${userId}`);
 
     // Check if profile exists

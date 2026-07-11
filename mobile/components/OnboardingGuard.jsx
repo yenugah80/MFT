@@ -136,6 +136,7 @@ const OnboardingGuard = ({ children }) => {
               setIsCheckingOnboarding(false);
             } else {
               console.log('[OnboardingGuard] 🔴 No draft found and profile unavailable');
+              setIsCheckingOnboarding(false);
               setError({
                 message: 'Unable to load profile. Please check your connection.',
                 status: profileError?.status,
@@ -144,6 +145,7 @@ const OnboardingGuard = ({ children }) => {
             }
           } catch (storageError) {
             console.warn('[OnboardingGuard] AsyncStorage error:', storageError?.message);
+            setIsCheckingOnboarding(false);
             setError({
               message: 'Unable to load profile. Please check your connection.',
               canRetry: true
