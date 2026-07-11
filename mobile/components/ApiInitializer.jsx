@@ -27,10 +27,14 @@ const ApiInitializer = ({ children }) => {
       }
 
       try {
-        const token = await getToken({ template: 'backend' });
+        const token = await getToken();
         if (!token && __DEV__) {
           console.log('[ApiInitializer] Token unavailable - session may be initializing');
         } else if (__DEV__ && token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log('[ApiInitializer] Token iss:', payload.iss, '| exp:', new Date(payload.exp * 1000).toISOString());
+          } catch {}
           console.log('[ApiInitializer] Token acquired (length %d)', token.length);
         }
         return token;

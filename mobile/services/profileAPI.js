@@ -41,7 +41,7 @@ const parseErrorResponse = async (response) => {
 const refreshTokenAndRetry = async (getToken, requestFn) => {
   try {
     // Get a fresh token
-    const freshToken = await getToken({ template: "backend", skipCache: true });
+    const freshToken = await getToken({ skipCache: true });
 
     if (!freshToken) {
       console.warn('[ProfileAPI] Failed to refresh token');

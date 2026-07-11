@@ -1,10 +1,10 @@
-import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+import { requireAuth as clerkRequireAuth, getAuth } from '@clerk/express';
 
 // Factory that returns a Clerk auth middleware instance.
-// All routes must call requireAuth() — this ensures consistent usage across the codebase.
-export const requireAuth = () => ClerkExpressRequireAuth({});
+// Uses @clerk/express (same SDK as clerkMiddleware in server.js) to avoid dual-SDK conflicts.
+export const requireAuth = () => clerkRequireAuth();
 
 // Helper to extract userId safely
 export const getUserId = (req) => {
-  return req.auth.userId;
+  return getAuth(req).userId;
 };

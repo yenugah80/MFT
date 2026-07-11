@@ -225,7 +225,7 @@ export default function useProfileForm(user) {
         const maxAttempts = 3;
 
         while (!token && attempts < maxAttempts) {
-          token = await getToken({ template: "backend" });
+          token = await getToken();
           if (!token) {
             attempts++;
             console.warn(`[Profile] Token not ready, attempt ${attempts}/${maxAttempts}`);
@@ -338,7 +338,7 @@ export default function useProfileForm(user) {
       dispatch({ type: ACTIONS.SAVE_SECTION_START });
 
       try {
-        const token = await getToken({ template: "backend" });
+        const token = await getToken();
         const dataToSave = state.draft[section];
 
         switch (section) {
@@ -397,7 +397,7 @@ export default function useProfileForm(user) {
       dispatch({ type: ACTIONS.SAVE_SECTION_START });
 
       try {
-        const token = await getToken({ template: "backend" });
+        const token = await getToken();
 
         // Build the data object with the updated field
         const currentSectionData = state.draft[section];
