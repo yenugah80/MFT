@@ -13,6 +13,7 @@ import { getAuth } from "@clerk/express";
 export const ensureProfile = async (req, res, next) => {
   try {
     const { userId } = getAuth(req);
+    console.log(`[ensureProfile] userId=${userId ?? 'NULL'} path=${req.path}`);
 
     if (!userId) {
       console.warn('[ensureProfile] No userId in auth — skipping profile creation');
