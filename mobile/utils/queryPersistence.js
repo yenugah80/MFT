@@ -27,7 +27,7 @@ export const persistOptions = {
   // Profile changes should be reflected within 4 hours
   // Analytics data (less critical) can use longer cache
   maxAge: 1000 * 60 * 60 * 4, // 4 hours
-  buster: '', // Change this to invalidate all cached data
+  buster: 'v2', // Bumped to clear stale cache after Clerk SDK auth fix
   dehydrateOptions: {
     // Don't persist queries with errors
     shouldDehydrateQuery: (query) => {

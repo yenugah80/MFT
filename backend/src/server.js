@@ -578,16 +578,21 @@ app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
 app.use(clerkMiddleware());
 
 // @clerk/express v1.7+ changed req.auth to a function.
-// Wrap it in a Proxy so it remains callable (requireAuth() calls req.auth() internally)
-// AND supports property access (req.auth.userId) used in all existing route handlers.
+// requireAuth() needs req.auth() to be callable; all 255 route handlers need req.auth.userId.
+// Fix: call authFn() once and copy its properties onto the function itself so both work.
 app.use((req, _res, next) => {
   if (typeof req.auth === 'function') {
     const authFn = req.auth;
-    req.auth = new Proxy(authFn, {
-      get(target, prop) {
-        return target()?.[prop];
-      },
-    });
+    try {
+      const authData = authFn.call(req);
+      if (authData && typeof authData === 'object') {
+        Object.assign(authFn, authData);
+      }
+    } catch (_) {
+      // JWT not present or invalid — requireAuth() will handle the 401
+    }
+    // req.auth stays as the function (requireAuth calls req.auth()?.userId)
+    // req.auth.userId etc. now also work directly via Object.assign above
   }
   next();
 });

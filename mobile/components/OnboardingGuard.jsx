@@ -69,7 +69,9 @@ const OnboardingGuard = ({ children }) => {
 
     // Only check when auth is loaded and user is signed in
     if (!isLoaded || !isSignedIn) {
-      setIsCheckingOnboarding(false);
+      // Not authenticated yet — ensure spinner is shown, not error screen
+      setIsCheckingOnboarding(true);
+      setError(null);
       return;
     }
 
