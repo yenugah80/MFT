@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { clerkMiddleware } from "@clerk/express";
+import { clerkMiddleware, getAuth } from "@clerk/express";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -600,10 +600,21 @@ app.use(attachDb);
 
 // Request logging — helps diagnose mobile auth issues in Railway logs
 app.use('/api', (req, _res, next) => {
-  const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
-  const uid = auth?.userId ?? 'no-auth';
-  console.log(`[REQ] ${req.method} ${req.path} uid=${uid}`);
+  const { userId } = getAuth(req);
+  const hasBearer = !!req.headers.authorization;
+  console.log(`[REQ] ${req.method} ${req.path} uid=${userId ?? 'NULL'} bearer=${hasBearer}`);
   next();
+});
+
+// Diagnostic endpoint — shows raw auth state without requireAuth blocking
+app.get('/api/auth-debug', (req, res) => {
+  const { userId, sessionId } = getAuth(req);
+  res.json({
+    userId: userId ?? null,
+    sessionId: sessionId ?? null,
+    hasAuthHeader: !!req.headers.authorization,
+    authHeaderPrefix: req.headers.authorization?.slice(0, 20) ?? null,
+  });
 });
 
 // Rate limiting - applied to all API routes
