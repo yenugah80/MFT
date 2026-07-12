@@ -576,7 +576,10 @@ app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
 
 // Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
 // Pass secretKey explicitly so Railway env var is never missed
-app.use(clerkMiddleware({ secretKey: process.env.CLERK_SECRET_KEY }));
+app.use(clerkMiddleware({
+  secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+}));
 
 // @clerk/express v1.7+ changed req.auth to a callable function.
 // requireAuth() calls req.auth()?.userId internally — that still works fine.
@@ -609,11 +612,27 @@ app.use('/api', (req, _res, next) => {
 // Diagnostic endpoint — shows raw auth state without requireAuth blocking
 app.get('/api/auth-debug', (req, res) => {
   const { userId, sessionId } = getAuth(req);
+  const authHeader = req.headers.authorization ?? null;
+  // Decode JWT header/payload without verifying signature (for diagnostics only)
+  let jwtPayload = null;
+  try {
+    const token = authHeader?.replace('Bearer ', '');
+    if (token) {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        jwtPayload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      }
+    }
+  } catch (_) {}
   res.json({
     userId: userId ?? null,
     sessionId: sessionId ?? null,
-    hasAuthHeader: !!req.headers.authorization,
-    authHeaderPrefix: req.headers.authorization?.slice(0, 20) ?? null,
+    hasAuthHeader: !!authHeader,
+    jwtIss: jwtPayload?.iss ?? null,
+    jwtSub: jwtPayload?.sub ?? null,
+    jwtExp: jwtPayload?.exp ? new Date(jwtPayload.exp * 1000).toISOString() : null,
+    secretKeyPresent: !!process.env.CLERK_SECRET_KEY,
+    publishableKeyPresent: !!process.env.CLERK_PUBLISHABLE_KEY,
   });
 });
 
