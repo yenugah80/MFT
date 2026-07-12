@@ -575,7 +575,8 @@ app.use(requireCloudflare({ blockDirect: false, allowDevelopment: true }));
 // app.use(blockBots({ allowedPaths: ['/health', '/api/health'] }));
 
 // Clerk middleware - MUST be applied before any routes using @clerk/express requireAuth()
-app.use(clerkMiddleware());
+// Pass secretKey explicitly so Railway env var is never missed
+app.use(clerkMiddleware({ secretKey: process.env.CLERK_SECRET_KEY }));
 
 // @clerk/express v1.7+ changed req.auth to a callable function.
 // requireAuth() calls req.auth()?.userId internally — that still works fine.
