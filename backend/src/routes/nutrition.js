@@ -3,8 +3,8 @@ import { db } from "../config/db.js";
 import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable, userPortionPreferencesTable, profilesTable } from "../db/schema.js";
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
-import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC } from "../utils/timezone.js";
-import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape } from "../utils/schemaGuards.js";
+import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC, toDateStr } from "../utils/timezone.js";
+import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape, ensureFoodLogTableShape } from "../utils/schemaGuards.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import multer from "multer";
@@ -33,6 +33,7 @@ router.use(requireAuth());
 router.use(async (req, res, next) => {
   await ensureDailyNutritionSummaryTableShape();
   await ensureWaterLogTableShape();
+  await ensureFoodLogTableShape();
   next();
 });
 
@@ -126,7 +127,7 @@ router.post("/log", async (req, res) => {
       await db.insert(dailyNutritionSummaryTable)
         .values({
           userId,
-          date: today,
+          date: toDateStr(today),
           totalCalories: calories || 0,
           totalProtein: protein || 0,
           totalCarbs: carbs || 0,
@@ -241,7 +242,7 @@ router.post("/log", async (req, res) => {
       .where(
         and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, today)
+          eq(dailyNutritionSummaryTable.date, toDateStr(today))
         )
       )
       .limit(1);
@@ -344,6 +345,7 @@ router.put("/log/:id", async (req, res) => {
     // 4. Update daily summary with deltas (can be positive or negative)
     const logDate = new Date(existingEntry.loggedDate);
     logDate.setHours(0, 0, 0, 0);
+    const logDateStr = toDateStr(logDate);
 
     if (caloriesDelta !== 0 || proteinDelta !== 0 || carbsDelta !== 0 || fatsDelta !== 0) {
       await db.update(dailyNutritionSummaryTable)
@@ -357,7 +359,7 @@ router.put("/log/:id", async (req, res) => {
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            eq(dailyNutritionSummaryTable.date, logDate)
+            eq(dailyNutritionSummaryTable.date, logDateStr)
           )
         );
     }
@@ -368,7 +370,7 @@ router.put("/log/:id", async (req, res) => {
       .where(
         and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDate)
+          eq(dailyNutritionSummaryTable.date, logDateStr)
         )
       )
       .limit(1);
@@ -432,6 +434,7 @@ router.delete("/log/:id", async (req, res) => {
     // 3. Subtract from daily summary
     const logDate = new Date(existingEntry.loggedDate);
     logDate.setHours(0, 0, 0, 0);
+    const logDateStr = toDateStr(logDate);
 
     await db.update(dailyNutritionSummaryTable)
       .set({
@@ -444,7 +447,7 @@ router.delete("/log/:id", async (req, res) => {
       .where(
         and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDate)
+          eq(dailyNutritionSummaryTable.date, logDateStr)
         )
       );
 
@@ -454,7 +457,7 @@ router.delete("/log/:id", async (req, res) => {
       .where(
         and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDate)
+          eq(dailyNutritionSummaryTable.date, logDateStr)
         )
       )
       .limit(1);
@@ -641,20 +644,20 @@ router.get("/summary", async (req, res) => {
     let whereClause = eq(dailyNutritionSummaryTable.userId, userId);
 
     if (date) {
-      // Single date query
+      // Single date query — date column needs YYYY-MM-DD string
       const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
-      whereClause = and(whereClause, eq(dailyNutritionSummaryTable.date, targetDate));
+      targetDate.setUTCHours(0, 0, 0, 0);
+      whereClause = and(whereClause, eq(dailyNutritionSummaryTable.date, toDateStr(targetDate)));
     } else if (startDate && endDate) {
-      // Date range query
+      // Date range query — date column needs YYYY-MM-DD string
       const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
+      start.setUTCHours(0, 0, 0, 0);
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      end.setUTCHours(0, 0, 0, 0);
       whereClause = and(
         whereClause,
-        gte(dailyNutritionSummaryTable.date, start),
-        lte(dailyNutritionSummaryTable.date, end)
+        gte(dailyNutritionSummaryTable.date, toDateStr(start)),
+        lte(dailyNutritionSummaryTable.date, toDateStr(end))
       );
     }
 
@@ -852,7 +855,7 @@ router.get("/dashboard", async (req, res) => {
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            eq(dailyNutritionSummaryTable.date, today)
+            eq(dailyNutritionSummaryTable.date, toDateStr(today))
           )
         )
         .limit(1),
@@ -863,7 +866,7 @@ router.get("/dashboard", async (req, res) => {
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            gte(dailyNutritionSummaryTable.date, sevenDaysAgo)
+            gte(dailyNutritionSummaryTable.date, toDateStr(sevenDaysAgo))
           )
         )
         .orderBy(desc(dailyNutritionSummaryTable.date)),
@@ -977,7 +980,7 @@ router.get("/dashboard", async (req, res) => {
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            eq(dailyNutritionSummaryTable.date, yesterday)
+            eq(dailyNutritionSummaryTable.date, toDateStr(yesterday))
           )
         )
         .limit(1),

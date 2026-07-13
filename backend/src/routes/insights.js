@@ -31,6 +31,7 @@ import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { and, eq, gte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
+import { toDateStr } from '../utils/timezone.js';
 import {
   foodLogTable,
   moodLogTable,
@@ -228,7 +229,7 @@ router.get('/weekly-narrative', async (req, res) => {
       db.select().from(dailyNutritionSummaryTable)
         .where(and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          gte(dailyNutritionSummaryTable.date, weekStart)
+          gte(dailyNutritionSummaryTable.date, toDateStr(weekStart))
         ))
         .orderBy(desc(dailyNutritionSummaryTable.date)),
 
@@ -341,7 +342,7 @@ router.get('/ai-analysis', async (req, res) => {
         .from(dailyNutritionSummaryTable)
         .where(and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          gte(dailyNutritionSummaryTable.date, startDate)
+          gte(dailyNutritionSummaryTable.date, toDateStr(startDate))
         ))
         .orderBy(desc(dailyNutritionSummaryTable.date)),
     ]);
@@ -1650,7 +1651,7 @@ router.get('/combined', async (req, res) => {
 
       db.select()
         .from(dailyNutritionSummaryTable)
-        .where(and(eq(dailyNutritionSummaryTable.userId, userId), gte(dailyNutritionSummaryTable.date, weekStart)))
+        .where(and(eq(dailyNutritionSummaryTable.userId, userId), gte(dailyNutritionSummaryTable.date, toDateStr(weekStart))))
         .orderBy(desc(dailyNutritionSummaryTable.date)),
 
       db.select()

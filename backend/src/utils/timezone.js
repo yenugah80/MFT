@@ -82,6 +82,14 @@ export function addDaysUTC(date, days) {
   return next;
 }
 
+// Convert a Date to YYYY-MM-DD string using UTC components.
+// Required for Drizzle ORM `date` column comparisons with postgres-js:
+// the driver expects a string, not a Date object, for `date` type columns.
+export function toDateStr(date) {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return null;
+  return date.toISOString().split('T')[0];
+}
+
 export function normalizeDateUTC(date) {
   const normalized = new Date(date);
   normalized.setUTCHours(0, 0, 0, 0);

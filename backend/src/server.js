@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { clerkMiddleware, getAuth } from "@clerk/express";
+import { clerkMiddleware } from "@clerk/express";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -601,40 +601,6 @@ app.use((req, _res, next) => {
 
 app.use(attachDb);
 
-// Request logging — helps diagnose mobile auth issues in Railway logs
-app.use('/api', (req, _res, next) => {
-  const { userId } = getAuth(req);
-  const hasBearer = !!req.headers.authorization;
-  console.log(`[REQ] ${req.method} ${req.path} uid=${userId ?? 'NULL'} bearer=${hasBearer}`);
-  next();
-});
-
-// Diagnostic endpoint — shows raw auth state without requireAuth blocking
-app.get('/api/auth-debug', (req, res) => {
-  const { userId, sessionId } = getAuth(req);
-  const authHeader = req.headers.authorization ?? null;
-  // Decode JWT header/payload without verifying signature (for diagnostics only)
-  let jwtPayload = null;
-  try {
-    const token = authHeader?.replace('Bearer ', '');
-    if (token) {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        jwtPayload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-      }
-    }
-  } catch (_) {}
-  res.json({
-    userId: userId ?? null,
-    sessionId: sessionId ?? null,
-    hasAuthHeader: !!authHeader,
-    jwtIss: jwtPayload?.iss ?? null,
-    jwtSub: jwtPayload?.sub ?? null,
-    jwtExp: jwtPayload?.exp ? new Date(jwtPayload.exp * 1000).toISOString() : null,
-    secretKeyPresent: !!process.env.CLERK_SECRET_KEY,
-    publishableKeyPresent: !!process.env.CLERK_PUBLISHABLE_KEY,
-  });
-});
 
 // Rate limiting - applied to all API routes
 // Burst limiter prevents rapid-fire requests (10/sec)

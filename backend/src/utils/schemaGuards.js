@@ -21,6 +21,20 @@ export async function ensureWaterLogTableShape() {
   }
 }
 
+let foodLogTableEnsured = false;
+export async function ensureFoodLogTableShape() {
+  if (foodLogTableEnsured) return;
+  try {
+    await db.execute(
+      sql`ALTER TABLE "food_log" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now();`
+    );
+    foodLogTableEnsured = true;
+    console.log("✅ Food log table schema verified and updated");
+  } catch (err) {
+    console.error("❌ Failed to ensure food_log table shape:", err);
+  }
+}
+
 let dailyNutritionSummaryTableEnsured = false;
 export async function ensureDailyNutritionSummaryTableShape() {
   if (dailyNutritionSummaryTableEnsured) return;

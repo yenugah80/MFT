@@ -15,7 +15,6 @@ const ApiInitializer = ({ children }) => {
   useEffect(() => {
     // Only set token provider once Clerk is fully loaded
     if (!isLoaded) {
-      console.log('[ApiInitializer] Waiting for Clerk to load...');
       return;
     }
 
@@ -28,15 +27,6 @@ const ApiInitializer = ({ children }) => {
 
       try {
         const token = await getToken();
-        if (!token && __DEV__) {
-          console.log('[ApiInitializer] Token unavailable - session may be initializing');
-        } else if (__DEV__ && token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            console.log('[ApiInitializer] Token iss:', payload.iss, '| exp:', new Date(payload.exp * 1000).toISOString());
-          } catch {}
-          console.log('[ApiInitializer] Token acquired (length %d)', token.length);
-        }
         return token;
       } catch (error) {
         // "Unable to authenticate" is expected when session isn't ready
@@ -50,8 +40,6 @@ const ApiInitializer = ({ children }) => {
         return null;
       }
     });
-
-    console.log('[ApiInitializer] API client initialized with Clerk token provider');
 
     // Invalidate auth-dependent queries so they refetch with the new token.
     // This fixes the case where profile/dashboard cached a 401 before the token was ready.
