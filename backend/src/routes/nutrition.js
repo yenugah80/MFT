@@ -4,7 +4,7 @@ import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryT
 import { FoodService } from "../services/foodService.js";
 import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC, toDateStr } from "../utils/timezone.js";
-import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape, ensureFoodLogTableShape } from "../utils/schemaGuards.js";
+import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape, ensureFoodLogTableShape, ensureGamificationTableShape } from "../utils/schemaGuards.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import multer from "multer";
@@ -34,6 +34,7 @@ router.use(async (req, res, next) => {
   await ensureDailyNutritionSummaryTableShape();
   await ensureWaterLogTableShape();
   await ensureFoodLogTableShape();
+  await ensureGamificationTableShape();
   next();
 });
 

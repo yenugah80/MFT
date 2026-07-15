@@ -19,6 +19,7 @@ import {
   getLocalDateUTC,
   addDaysUTC,
   normalizeDateUTC,
+  toDateStr,
 } from '../utils/timezone.js';
 
 /**
@@ -52,7 +53,7 @@ export async function getDashboardData(db, userId, offsetMinutes = 0) {
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            eq(dailyNutritionSummaryTable.date, today)
+            eq(dailyNutritionSummaryTable.date, toDateStr(today))
           )
         )
         .limit(1),
@@ -63,7 +64,7 @@ export async function getDashboardData(db, userId, offsetMinutes = 0) {
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            gte(dailyNutritionSummaryTable.date, sevenDaysAgo)
+            gte(dailyNutritionSummaryTable.date, toDateStr(sevenDaysAgo))
           )
         )
         .orderBy(desc(dailyNutritionSummaryTable.date)),

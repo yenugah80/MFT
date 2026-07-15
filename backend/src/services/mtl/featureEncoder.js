@@ -35,6 +35,7 @@ import {
   dailyNutritionSummaryTable,
 } from '../../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { toDateStr } from '../../utils/timezone.js';
 
 /**
  * ============================================
@@ -547,8 +548,8 @@ async function fetchHistoricalSummary(userId, startDate, endDate) {
       .where(
         and(
           eq(dailyNutritionSummaryTable.userId, userId),
-          gte(dailyNutritionSummaryTable.date, startDate),
-          lte(dailyNutritionSummaryTable.date, endDate)
+          gte(dailyNutritionSummaryTable.date, toDateStr(startDate)),
+          lte(dailyNutritionSummaryTable.date, toDateStr(endDate))
         )
       )
       .orderBy(dailyNutritionSummaryTable.date);

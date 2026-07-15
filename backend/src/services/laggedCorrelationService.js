@@ -29,6 +29,7 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql } from 'drizzle-orm';
 import jStat from 'jstat';
+import { ensureLaggedCorrelationsTableShape } from '../utils/schemaGuards.js';
 
 /**
  * ============================================
@@ -769,6 +770,7 @@ function generateRecommendation(signalA, signalB, direction) {
  */
 async function saveLaggedCorrelation(result) {
   try {
+    await ensureLaggedCorrelationsTableShape();
     const data = {
       userId: result.userId,
       signalA: result.signalA,
@@ -911,6 +913,7 @@ export function triggerBackgroundAnalysis(userId) {
  */
 export async function getUserLaggedCorrelations(userId) {
   try {
+    await ensureLaggedCorrelationsTableShape();
     const correlations = await db
       .select()
       .from(laggedCorrelationsTable)
