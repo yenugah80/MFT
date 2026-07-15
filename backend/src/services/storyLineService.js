@@ -1,6 +1,7 @@
 import { db } from "../config/db.js";
 import { dailyNutritionSummaryTable } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
+import { toDateStr } from "../utils/timezone.js";
 
 /**
  * Generates a short "Story Line" insight for a specific day based on logs.
@@ -96,7 +97,7 @@ export async function updateDailySummary(userId, date, data) {
     await db.insert(dailyNutritionSummaryTable)
       .values({
         userId,
-        date: new Date(date),
+        date: toDateStr(date instanceof Date ? date : new Date(date)),
         totalCalories: data.nutrition.totalCalories,
         totalProtein: data.nutrition.totalProtein,
         dailyScore,

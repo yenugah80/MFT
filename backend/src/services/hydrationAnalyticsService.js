@@ -30,6 +30,7 @@ import {
   insightFeedbackTable,
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { toDateStr } from '../utils/timezone.js';
 
 // ============================================================================
 // PERSONA DEFINITIONS
@@ -766,7 +767,7 @@ export async function savePrediction(userId, prediction) {
       .insert(hydrationPredictionsTable)
       .values({
         userId,
-        predictionDate,
+        predictionDate: toDateStr(predictionDate),
         predictedNeedMl: Math.round(prediction.predictedNeedLiters * 1000),
         baselineMl: Math.round(prediction.typicalIntakeLiters * 1000),
         factors: prediction.factors,
@@ -813,7 +814,7 @@ export async function getTomorrowPrediction(userId) {
       .where(
         and(
           eq(hydrationPredictionsTable.userId, userId),
-          eq(hydrationPredictionsTable.predictionDate, tomorrow)
+          eq(hydrationPredictionsTable.predictionDate, toDateStr(tomorrow))
         )
       )
       .limit(1);
@@ -991,7 +992,7 @@ export async function computeDailySummary(userId, date) {
       .insert(hydrationDailySummaryTable)
       .values({
         userId,
-        date: dateStart,
+        date: toDateStr(dateStart),
         totalMl: Math.round(totalMl),
         hydrationMl: Math.round(hydrationMl),
         logCount: logs.length,
