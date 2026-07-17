@@ -2027,12 +2027,14 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
   // Build all rows first, then insert in a single batch — avoids N serial DB round-trips.
   const rows = recommendations.map((rec) => {
     const nutrition = rec.nutrition || {};
-    const calories = nutrition.calories ?? rec.calories ?? 0;
-    const protein  = nutrition.protein  ?? rec.protein  ?? 0;
-    const carbs    = nutrition.carbs    ?? rec.carbs    ?? 0;
-    const fats     = nutrition.fats     ?? rec.fats     ?? 0;
-    const fiber    = nutrition.fiber    ?? rec.fiber    ?? 0;
-    const sugar    = nutrition.sugar    ?? rec.sugar    ?? 0;
+    // recommendations_history stores these as integer columns, but AI-estimated
+    // nutrition values (e.g. "0.6g fiber") are frequently fractional — round before insert.
+    const calories = Math.round(nutrition.calories ?? rec.calories ?? 0);
+    const protein  = Math.round(nutrition.protein  ?? rec.protein  ?? 0);
+    const carbs    = Math.round(nutrition.carbs    ?? rec.carbs    ?? 0);
+    const fats     = Math.round(nutrition.fats     ?? rec.fats     ?? 0);
+    const fiber    = Math.round(nutrition.fiber    ?? rec.fiber    ?? 0);
+    const sugar    = Math.round(nutrition.sugar    ?? rec.sugar    ?? 0);
 
     return {
       userId,
@@ -2048,10 +2050,12 @@ async function saveRecommendationsToHistory(db, userId, recommendations, context
       recipeInstructions: rec.recipeInstructions || '',
       mealType: context.mealType,
       timeOfDay: hour,
-      remainingCalories: remainingBudget.calories,
-      remainingProtein: remainingBudget.protein,
-      remainingCarbs: remainingBudget.carbs,
-      remainingFats: remainingBudget.fats,
+      // Same integer-column constraint as above — remainingBudget is derived from
+      // float subtraction (goal - consumed) and is frequently fractional.
+      remainingCalories: Math.round(remainingBudget.calories),
+      remainingProtein: Math.round(remainingBudget.protein),
+      remainingCarbs: Math.round(remainingBudget.carbs),
+      remainingFats: Math.round(remainingBudget.fats),
       interactionStatus: 'shown',
       aiGenerated: rec.aiGenerated !== false,
       aiModel: rec.aiGenerated === false ? 'deterministic-grounded-ranker' : 'gpt-4o-mini',
