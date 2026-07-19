@@ -9,8 +9,10 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
 import {
@@ -24,6 +26,13 @@ import {
 } from '../../constants/premiumTheme';
 
 export default function HydrationTab({ data, period, recommendations = [] }) {
+  const router = useRouter();
+
+  const handleViewInsights = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/insights/hydration-cognition');
+  };
+
   // Empty state when no data and no recommendations
   if (!data && recommendations.length === 0) {
     return (
@@ -214,6 +223,12 @@ export default function HydrationTab({ data, period, recommendations = [] }) {
         </View>
       )}
 
+      <TouchableOpacity style={styles.patternsLink} onPress={handleViewInsights} activeOpacity={0.7}>
+        <Ionicons name="water-outline" size={18} color={TEXT.primary} />
+        <Text style={styles.patternsLinkText}>See Hydration & Energy Insights</Text>
+        <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+      </TouchableOpacity>
+
       <View style={styles.bottomPadding} />
     </ScrollView>
   );
@@ -270,6 +285,19 @@ const styles = StyleSheet.create({
   card: {
     ...CARD_SYSTEM.standard,
     marginBottom: SPACING[4],
+  },
+  patternsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    ...CARD_SYSTEM.standard,
+  },
+  patternsLinkText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
   },
   cardTitle: {
     fontSize: TYPOGRAPHY.size.md,
