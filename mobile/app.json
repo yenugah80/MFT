@@ -134,7 +134,8 @@
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      "./plugins/withNotificationColorManifestFix.js"
     ],
     "experiments": {
       "typedRoutes": true,
