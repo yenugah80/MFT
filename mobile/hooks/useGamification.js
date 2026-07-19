@@ -318,63 +318,24 @@ export function useGamification() {
  */
 export const GAMIFICATION_KEYS = {
   badges: ['gamification', 'badges'],
-  leaderboard: (type) => ['gamification', 'leaderboard', type],
   challenges: ['gamification', 'challenges'],
-  xpHistory: (days) => ['gamification', 'xp', days],
-  summary: ['gamification', 'summary'],
 };
 
 /**
- * Get all badges with user's progress
+ * Get all achievements ("badges") with the user's unlock status.
+ * Backed by GET /gamification/achievements — the real, working achievement
+ * system (achievements + user_achievements tables), auto-awarded server-side
+ * whenever checkAchievements() runs (see nutrition.js dashboard flow).
  */
 export function useBadges(options = {}) {
   return useQuery({
     queryKey: GAMIFICATION_KEYS.badges,
     queryFn: async () => {
       // apiClient returns data directly, not wrapped in response
-      const data = await apiClient.get('/gamification/badges');
+      const data = await apiClient.get('/gamification/achievements');
       return data;
     },
     staleTime: 5 * 60 * 1000,
-    ...options,
-  });
-}
-
-/**
- * Check and award new badges
- */
-export function useCheckBadges() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      // apiClient returns data directly
-      const data = await apiClient.post('/gamification/badges/check');
-      return data;
-    },
-    onSuccess: (data) => {
-      if (data.awarded?.length > 0) {
-        queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.badges });
-        queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.summary });
-      }
-    },
-  });
-}
-
-/**
- * Get leaderboard data
- */
-export function useLeaderboard(type = 'global', limit = 50, options = {}) {
-  return useQuery({
-    queryKey: GAMIFICATION_KEYS.leaderboard(type),
-    queryFn: async () => {
-      // apiClient returns data directly
-      const data = await apiClient.get('/gamification/leaderboard', {
-        params: { type, limit },
-      });
-      return data;
-    },
-    staleTime: 2 * 60 * 1000,
     ...options,
   });
 }
@@ -392,65 +353,6 @@ export function useChallenges(options = {}) {
     },
     staleTime: 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
-    ...options,
-  });
-}
-
-/**
- * Update challenge progress
- */
-export function useUpdateChallengeProgress() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ challengeId, progress, type = 'daily' }) => {
-      // apiClient returns data directly
-      const data = await apiClient.post(`/gamification/challenges/${challengeId}/progress`, {
-        progress,
-        type,
-      });
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.challenges });
-      if (data.completed) {
-        queryClient.invalidateQueries({ queryKey: ['gamification', 'xp'] });
-        queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEYS.summary });
-      }
-    },
-  });
-}
-
-/**
- * Get XP breakdown and history
- */
-export function useXPHistory(days = 7, options = {}) {
-  return useQuery({
-    queryKey: GAMIFICATION_KEYS.xpHistory(days),
-    queryFn: async () => {
-      // apiClient returns data directly
-      const data = await apiClient.get('/gamification/xp', {
-        params: { days },
-      });
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-    ...options,
-  });
-}
-
-/**
- * Get complete gamification summary
- */
-export function useGamificationSummary(options = {}) {
-  return useQuery({
-    queryKey: GAMIFICATION_KEYS.summary,
-    queryFn: async () => {
-      // apiClient returns data directly
-      const data = await apiClient.get('/gamification/summary');
-      return data;
-    },
-    staleTime: 2 * 60 * 1000,
     ...options,
   });
 }

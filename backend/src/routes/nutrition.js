@@ -1223,6 +1223,8 @@ router.get("/dashboard", async (req, res) => {
       ...gamificationRow,
       streak: currentStreak,            // CRITICAL: Use calculated streak, not stale DB value
       level: levelInfo.level,           // Override DB level with calculated level
+      levelName: levelInfo.levelName,
+      rank: levelInfo.rank,
       nextLevelXp: levelInfo.nextLevelXP,  // FIX: Use correct case (capital XP)
       currentLevelXp: levelInfo.currentLevelXP,
       progressPercent: levelInfo.progressPercent,

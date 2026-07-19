@@ -19,7 +19,6 @@ import {
 } from "./db/schema.js";
 import { sql } from "drizzle-orm";
 import { FoodService } from "./services/foodService.js";
-import { validate, imageAnalysisSchema } from "./middleware/validation.js";
 import nutritionRouter from "./routes/nutrition.js";
 import complianceRouter from "./routes/compliance.js";
 import foodRouter from "./routes/food.js";
@@ -56,7 +55,6 @@ import intelligenceRouter from "./routes/intelligence.js";
 import wellnessRouter from "./routes/wellness.js";
 import personalizedInsightsRouter from "./routes/personalizedInsights.js";
 import ingredientsRouter from "./routes/ingredients.js";
-import enhancedGamificationRouter from "./routes/gamification.js";
 import healthPlatformRouter from "./routes/health.js";
 import mealPlanRouter from "./routes/mealPlan.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
@@ -64,7 +62,7 @@ import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartR
 import { initNutrientDeficitJob } from "./jobs/nutrientDeficitJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 import { initializeFirebase, isFirebaseReady } from "./config/firebase.js";
-import { globalLimiter, aiLimiter, imageLimiter, burstLimiter } from "./middleware/rateLimiter.js";
+import { globalLimiter, aiLimiter, burstLimiter } from "./middleware/rateLimiter.js";
 
 const app = express();
 const PORT = ENV.PORT || process.env.PORT || 5001;
@@ -161,6 +159,8 @@ async function ensureGamificationColumns() {
     await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "streak_saved_by_freeze" BOOLEAN DEFAULT FALSE;`);
     await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "previous_streak" INTEGER DEFAULT 0;`);
     await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "streak_reset_at" TIMESTAMP;`);
+    await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "daily_challenge_state" JSONB DEFAULT '{}';`);
+    await db.execute(sql`ALTER TABLE "gamification" ADD COLUMN IF NOT EXISTS "weekly_challenge_state" JSONB DEFAULT '{}';`);
     gamificationColumnsEnsured = true;
     console.log('✅ Gamification columns verified');
   } catch (err) {
@@ -873,11 +873,6 @@ app.use("/api/insights/personalized", personalizedInsightsRouter);
 // regional variations (US, India, UK, Japan, Middle East), and real-time nutrition recalculation
 app.use("/api/ingredients", ingredientsRouter);
 
-// Mount Enhanced Gamification Router (Badges, Leaderboards, Challenges)
-// Note: Production-grade gamification with badge tiers, global/weekly leaderboards,
-// daily/weekly challenges with XP rewards, and Thompson Sampling optimization
-app.use("/api/gamification", enhancedGamificationRouter);
-
 // Mount Health Platform Router (HealthKit/Google Fit Integration)
 // Note: Bi-directional sync with health platforms, activity/sleep/heart rate data,
 // nutrition export, privacy-preserving data handling
@@ -919,20 +914,6 @@ app.get("/api/food/barcode/:code", requireAuth(), async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.log("Error searching barcode", error);
-    res.status(500).json({ error: "Something went wrong" });
-  }
-});
-
-app.post("/api/food/analyze-image", requireAuth(), imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
-  try {
-    const { image } = req.body; // Expecting base64 string
-    const result = await FoodService.analyzeImage(image);
-    if (!result) {
-      return res.status(422).json({ error: "Could not analyze image" });
-    }
-    res.status(200).json(result);
-  } catch (error) {
-    console.log("Error analyzing image", error);
     res.status(500).json({ error: "Something went wrong" });
   }
 });

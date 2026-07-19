@@ -17,7 +17,6 @@ export { default as smartNotificationEngine } from './smartNotificationEngine.js
 
 // Health & Gamification
 export { default as healthPlatformService } from './healthPlatformService.js';
-export { default as enhancedGamificationService } from './enhancedGamificationService.js';
 
 // Existing Services
 export { default as smartNutritionResolver } from './smartNutritionResolver.js';

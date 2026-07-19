@@ -80,15 +80,10 @@ export { default as useTurnstile } from './useTurnstile';
 // Feedback
 export { default as useInsightFeedback } from './useInsightFeedback';
 
-// Enhanced Gamification (badges, leaderboards, challenges)
+// Enhanced Gamification (achievements, challenges)
 export {
   useBadges,
-  useCheckBadges,
-  useLeaderboard,
   useChallenges,
-  useUpdateChallengeProgress,
-  useXPHistory,
-  useGamificationSummary,
   GAMIFICATION_KEYS,
 } from './useGamification';
 
