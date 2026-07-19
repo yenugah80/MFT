@@ -292,6 +292,37 @@ export default function useProfileForm(user) {
     };
   }, [user, getToken]);
 
+  // The bootstrap effect above only ever fetches once per session (see
+  // _bootstrappedUsers) and never touches React Query's cache directly, so it
+  // has no way to see it when something elsewhere calls
+  // queryClient.invalidateQueries({ queryKey: ['profile'] }) — notably
+  // OnboardingContext does exactly that right after completeOnboarding() saves
+  // basics/dietary/goals, expecting the profile screen to pick up the fresh
+  // data. Without this, the screen keeps showing whatever it fetched on the
+  // very first mount (often still-empty defaults, if that happened before
+  // onboarding finished). Subscribe to the cache directly and force a fresh
+  // fetch whenever the 'profile' key changes.
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event?.type !== 'updated' || event?.query?.queryKey?.[0] !== 'profile') return;
+
+      (async () => {
+        try {
+          const token = await getToken();
+          if (!token) return;
+          const profile = await fetchUserProfile(token, getToken);
+          if (profile) dispatch({ type: ACTIONS.LOAD_PROFILE, payload: profile });
+        } catch (err) {
+          console.error('[Profile] Refetch after cache invalidation failed:', err);
+        }
+      })();
+    });
+
+    return unsubscribe;
+  }, [user, getToken, queryClient]);
+
   // Update field
   const updateField = useCallback((section, key, value) => {
     dispatch({
