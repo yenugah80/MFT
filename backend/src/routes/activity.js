@@ -77,12 +77,24 @@ router.post('/log', async (req, res) => {
     } = req.body;
 
     // Validation
-    if (!minutes || minutes <= 0) {
-      return res.status(400).json({ error: 'Duration in minutes is required and must be positive' });
+    if (!minutes || typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) {
+      return res.status(400).json({ error: 'Duration in minutes is required and must be a positive number' });
     }
 
     if (minutes > 1440) {
       return res.status(400).json({ error: 'Duration cannot exceed 24 hours (1440 minutes)' });
+    }
+
+    // heartRateAvg/steps/durationMinutes are integer columns — validate range and
+    // round below rather than letting a fractional value (e.g. an averaged sensor
+    // reading) 500 on insert.
+    if (heartRateAvg !== undefined && heartRateAvg !== null &&
+        (typeof heartRateAvg !== 'number' || !Number.isFinite(heartRateAvg) || heartRateAvg < 30 || heartRateAvg > 250)) {
+      return res.status(400).json({ error: 'heartRateAvg must be a number between 30 and 250' });
+    }
+    if (steps !== undefined && steps !== null &&
+        (typeof steps !== 'number' || !Number.isFinite(steps) || steps < 0 || steps > 200000)) {
+      return res.status(400).json({ error: 'steps must be a non-negative number' });
     }
 
     if (clientEventId && !UUID_RE.test(clientEventId)) {
@@ -135,13 +147,13 @@ router.post('/log', async (req, res) => {
       .values({
         userId,
         type,
-        durationMinutes: minutes,
+        durationMinutes: Math.round(minutes),
         intensity,
         metValue: metValue.toString(),
         caloriesBurned: calories,
-        heartRateAvg: heartRateAvg || null,
+        heartRateAvg: heartRateAvg != null ? Math.round(heartRateAvg) : null,
         distanceKm: distanceKm ? distanceKm.toString() : null,
-        steps: steps || null,
+        steps: steps != null ? Math.round(steps) : null,
         notes: notes || null,
         clientEventId: clientEventId || null,
         dayKey,

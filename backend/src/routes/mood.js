@@ -63,23 +63,27 @@ router.post("/log", async (req, res) => {
       return errors.badRequest(res, 'clientEventId must be a valid UUID v4');
     }
 
-    // Validate mood value (8 core moods)
+    // Validate mood value (8 core moods) — mood.toLowerCase() below assumes a string
     const validMoods = ['happy', 'calm', 'focused', 'energized', 'neutral', 'tired', 'stressed', 'sad'];
-    if (!validMoods.includes(mood.toLowerCase())) {
+    if (typeof mood !== 'string' || !validMoods.includes(mood.toLowerCase())) {
       return errors.invalidValue(res, 'mood', `must be one of: ${validMoods.join(', ')}`);
     }
 
-    // Validate intensity and energyLevel (1-10)
-    if (intensity && (intensity < 1 || intensity > 10)) {
-      return errors.invalidValue(res, 'intensity', 'must be between 1 and 10');
+    // Validate intensity and energyLevel (1-10). Checked explicitly for undefined/null
+    // rather than `intensity && ...` — that form treats a legitimate 0 as "not provided"
+    // and silently swaps in the default further down instead of rejecting it.
+    const hasIntensity = intensity !== undefined && intensity !== null;
+    if (hasIntensity && (typeof intensity !== 'number' || !Number.isFinite(intensity) || intensity < 1 || intensity > 10)) {
+      return errors.invalidValue(res, 'intensity', 'must be a number between 1 and 10');
     }
-    if (energyLevel && (energyLevel < 1 || energyLevel > 10)) {
-      return errors.invalidValue(res, 'energyLevel', 'must be between 1 and 10');
+    const hasEnergyLevel = energyLevel !== undefined && energyLevel !== null;
+    if (hasEnergyLevel && (typeof energyLevel !== 'number' || !Number.isFinite(energyLevel) || energyLevel < 1 || energyLevel > 10)) {
+      return errors.invalidValue(res, 'energyLevel', 'must be a number between 1 and 10');
     }
 
     // Validate note length (max 200 characters)
-    if (note && note.length > 200) {
-      return errors.invalidValue(res, 'note', 'must be 200 characters or less');
+    if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > 200)) {
+      return errors.invalidValue(res, 'note', 'must be a string of 200 characters or less');
     }
 
     // Validate tags schema (optional but strict when provided)
@@ -93,6 +97,13 @@ router.post("/log", async (req, res) => {
         // Allow unknown tags but log warning (flexible for future expansion)
       }
     }
+
+    // Resolve the logged date first — moodTime/dayKey and the meal-context lookup
+    // below all depend on it.
+    const parsedLoggedDate = loggedDate ? new Date(loggedDate) : new Date();
+    const safeLoggedDate = Number.isNaN(parsedLoggedDate.getTime()) ? new Date() : parsedLoggedDate;
+    const localDay = getLocalDateUTC(offsetMinutes, safeLoggedDate);
+    const dayKey = localDay.toISOString().slice(0, 10);
 
     // Find recent meals within 4 hours of the mood's logged time (user-timezone-aware)
     const moodTime = safeLoggedDate.getTime();
@@ -114,16 +125,14 @@ router.post("/log", async (req, res) => {
     };
 
     // Insert with idempotency protection via ON CONFLICT
-    const parsedLoggedDate = loggedDate ? new Date(loggedDate) : new Date();
-    const safeLoggedDate = Number.isNaN(parsedLoggedDate.getTime()) ? new Date() : parsedLoggedDate;
-    const localDay = getLocalDateUTC(offsetMinutes, safeLoggedDate);
-    const dayKey = localDay.toISOString().slice(0, 10);
-
     const result = await db.insert(moodLogTable).values({
       userId,
       mood: mood.toLowerCase(),
-      intensity: intensity || 5,
-      energyLevel: energyLevel || 5,
+      // intensity/energy_level are integer columns — round in case a slider
+      // ever produces a fractional value (same class of bug as the
+      // recommendations_history 500: fractional value into an integer column).
+      intensity: hasIntensity ? Math.round(intensity) : 5,
+      energyLevel: hasEnergyLevel ? Math.round(energyLevel) : 5,
       tags: tags || {},
       mealContext,
       note: note || null,

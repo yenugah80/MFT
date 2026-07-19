@@ -104,9 +104,11 @@ router.post('/log', async (req, res) => {
       clientEventId,
     } = req.body;
 
-    // Validation
-    if (!level || level < 1 || level > 10) {
-      return res.status(400).json({ error: 'Stress level must be between 1 and 10' });
+    // Validation. level is an integer column with a DB CHECK (1-10) — reject
+    // non-numbers/fractional values here so a bad request gets a clean 400
+    // instead of a raw constraint-violation 500.
+    if (!level || typeof level !== 'number' || !Number.isFinite(level) || level < 1 || level > 10) {
+      return res.status(400).json({ error: 'Stress level must be a number between 1 and 10' });
     }
 
     const loggedDate = loggedAt ? new Date(loggedAt) : new Date();
@@ -142,7 +144,7 @@ router.post('/log', async (req, res) => {
       .insert(stressLogTable)
       .values({
         userId,
-        level,
+        level: Math.round(level),
         triggers,
         physicalSymptoms,
         copingUsed,

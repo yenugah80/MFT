@@ -1555,15 +1555,45 @@ router.post("/goals", async (req, res) => {
       waterLiters,
     } = req.body;
 
+    // Validate against the same ranges enforced by the DB CHECK constraints below
+    // (dailyCalories/proteinG/carbsG/fatsG/waterLiters), so bad input gets a clean
+    // 400 instead of surfacing as a raw constraint-violation 500.
+    const numericFields = [
+      { key: 'primaryGoal', value: primaryGoal, kind: 'enum', options: ['lose', 'maintain', 'gain'] },
+      { key: 'dailyCalories', value: dailyCalories, kind: 'number', min: 800, max: 10000 },
+      { key: 'proteinG', value: proteinG, kind: 'number', min: 0, max: 500 },
+      { key: 'carbsG', value: carbsG, kind: 'number', min: 0, max: 1000 },
+      { key: 'fatsG', value: fatsG, kind: 'number', min: 0, max: 300 },
+      { key: 'waterLiters', value: waterLiters, kind: 'number', min: 0, max: 10 },
+    ];
+    for (const field of numericFields) {
+      if (field.value === undefined || field.value === null) continue;
+      if (field.kind === 'enum') {
+        if (!field.options.includes(field.value)) {
+          return res.status(400).json({ error: `${field.key} must be one of: ${field.options.join(', ')}` });
+        }
+      } else if (typeof field.value !== 'number' || !Number.isFinite(field.value) || field.value < field.min || field.value > field.max) {
+        return res.status(400).json({ error: `${field.key} must be a number between ${field.min} and ${field.max}` });
+      }
+    }
+
+    // dailyCalories/proteinG/carbsG/fatsG are integer columns — round in case a
+    // TDEE/macro calculator produces a fractional value (same class of bug fixed
+    // in recommendations_history: fractional input into an integer column 500s).
+    const roundedCalories = dailyCalories != null ? Math.round(dailyCalories) : dailyCalories;
+    const roundedProtein = proteinG != null ? Math.round(proteinG) : proteinG;
+    const roundedCarbs = carbsG != null ? Math.round(carbsG) : carbsG;
+    const roundedFats = fatsG != null ? Math.round(fatsG) : fatsG;
+
     const [row] = await db
       .insert(nutritionGoalsTable)
       .values({
         userId,
         primaryGoal,
-        dailyCalories,
-        proteinG,
-        carbsG,
-        fatsG,
+        dailyCalories: roundedCalories,
+        proteinG: roundedProtein,
+        carbsG: roundedCarbs,
+        fatsG: roundedFats,
         waterLiters,
         updatedAt: new Date(),
       })
@@ -1571,10 +1601,10 @@ router.post("/goals", async (req, res) => {
         target: nutritionGoalsTable.userId,
         set: {
           primaryGoal,
-          dailyCalories,
-          proteinG,
-          carbsG,
-          fatsG,
+          dailyCalories: roundedCalories,
+          proteinG: roundedProtein,
+          carbsG: roundedCarbs,
+          fatsG: roundedFats,
           waterLiters,
           updatedAt: new Date(),
         },
