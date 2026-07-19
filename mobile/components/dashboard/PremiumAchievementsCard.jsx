@@ -230,7 +230,7 @@ export default function PremiumAchievementsCard({
   // Handle navigation to achievements screen
   const handleViewAll = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/achievements');
+    router.push('/achievements?from=dashboard');
   };
 
   // Theme-aware colors

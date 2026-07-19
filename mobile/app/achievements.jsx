@@ -8,7 +8,7 @@
 import React, { useMemo, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useDashboard } from '../hooks/useDashboard';
@@ -33,6 +33,7 @@ import {
 
 export default function AchievementsScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams();
   const { data: dashboardData } = useDashboard();
 
   const {
@@ -97,26 +98,27 @@ export default function AchievementsScreen() {
   );
   const journeyProgress = Math.min(currentIslandIndex / (JOURNEY_ISLANDS.length - 1), 1);
 
-  // Guards against handleBack's own router.back()/replace() re-triggering the
+  // Guards against handleBack's own router.replace() re-triggering the
   // beforeRemove listener below and recursing.
   const isNavigatingAway = useRef(false);
+  // /achievements sits outside any Stack group, so when it's pushed from inside
+  // the tabs navigator, expo-router's canGoBack()/back() don't reliably resolve
+  // back to the originating tab (canGoBack() can report false even when there is
+  // a real previous screen, silently falling back to dashboard regardless of
+  // where the user actually came from). Both entry points (profile card,
+  // dashboard card) pass ?from=, so route deterministically off that instead.
   const handleBack = useCallback(async () => {
     if (isNavigatingAway.current) return;
     isNavigatingAway.current = true;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/dashboard');
-    }
-  }, [router]);
+    router.replace(from === 'profile' ? '/(tabs)/profile' : '/(tabs)/dashboard');
+  }, [router, from]);
 
   // The iOS edge-swipe gesture dispatches GO_BACK straight to the native stack,
-  // bypassing the header button's onPress entirely — this screen sits outside any
-  // group Stack, so the native stack it lands in has no prior route registered even
-  // though router.canGoBack() (expo-router's own history) correctly knows there is
-  // one. Intercept every back attempt — swipe, hardware back, or button — and route
-  // it through the same handleBack logic so they all behave identically.
+  // bypassing the header button's onPress entirely. Intercept every back attempt
+  // — swipe, hardware back, or button — and route it through the same handleBack
+  // logic so they all land on the correct tab instead of the gesture triggering
+  // React Navigation's own (broken, in this route topology) default pop.
   const navigation = useNavigation();
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
