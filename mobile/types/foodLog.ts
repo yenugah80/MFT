@@ -95,6 +95,13 @@ export interface FoodLog {
   barcode?: string;
   imageUrl?: string; // Photo if uploaded
 
+  // AI analysis metadata (photo/multimodal logging)
+  cuisine?: string; // e.g. 'South Indian', 'American'
+  aiModel?: string; // e.g. 'gpt-4o', 'gpt-4o-mini'
+  aiConfidence?: number; // 0-1
+  voiceTranscript?: string; // Spoken description attached to a photo
+  multimodalSource?: Record<string, any>; // { photo: true, voice: true }
+
   // Sync metadata
   createdAt?: Date;
   updatedAt?: Date;
@@ -284,6 +291,7 @@ export function transformFoodLogToBackend(log: FoodLog): any {
       sodium, // NEW: include sodium
       servingSize: log.servingSize,
       mealType: log.mealType,
+      cookingMethod: log.cookingMethod,
       micros: (log.micros && typeof log.micros === 'object') ? log.micros : {},
       nutriscore: log.nutriscore,
       ecoscore: log.ecoscore,
@@ -297,6 +305,14 @@ export function transformFoodLogToBackend(log: FoodLog): any {
       source: log.source,
       clientEventId: log.clientEventId,  // CRITICAL FIX: Include for idempotency
       sourceMeta: log.sourceMeta || {},
+      // AI analysis metadata — food_log has real columns for these (schema.js
+      // foodLogTable) and POST /nutrition/log already accepts them; previously
+      // computed by photo analysis and then silently dropped before saving.
+      cuisine: log.cuisine,
+      aiModel: log.aiModel,
+      aiConfidence: log.aiConfidence,
+      voiceTranscript: log.voiceTranscript,
+      multimodalSource: log.multimodalSource || {},
     };
   } catch (error) {
     console.error('[transformFoodLogToBackend] Transformation failed:', error, log);

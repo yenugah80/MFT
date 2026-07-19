@@ -43,9 +43,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
-
-// Note: Voice description feature uses Alert.alert() (built-in)
-// No external speech module required - works offline
+import { useServerVoice } from '../../hooks/useServerVoice';
 
 import {
   BRAND,
@@ -202,6 +200,18 @@ function AnimatedCloseButton({ onPress, style }) {
 export default function CameraModal({ visible, onClose, onPhotoTaken }) {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
+  // Same engine as the standalone Voice Logging tab (on-device speech recognition
+  // via @react-native-voice/voice — requires a dev build, same as that tab already
+  // does, so this doesn't introduce a new environment limitation). Only the
+  // transcript half of the hook is used here; analyzeTranscript (nutrition
+  // parsing) isn't needed since this is just descriptive context for the photo.
+  const {
+    isRecording: isRecordingVoice,
+    startRecording: startVoiceRecording,
+    stopRecording: stopVoiceRecording,
+    cancelRecording: cancelVoiceRecording,
+    error: voiceError,
+  } = useServerVoice({ voiceLanguage: 'en' });
 
   // ─────────────────────────────────────────────
   // State
@@ -212,9 +222,11 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
   const [showGrid, setShowGrid] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
-  // 🆕 VOICE DESCRIPTION STATE
+  // Voice description state — recording itself is owned by useBackendVoice above;
+  // isTranscribing covers the gap between "stopped recording" and "got text back"
+  // (an upload + Whisper call), which is a distinct loading state from isRecordingVoice.
   const [voiceTranscript, setVoiceTranscript] = useState(null);
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   // ─────────────────────────────────────────────
   // Request permissions on mount
@@ -235,10 +247,20 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
       setZoom(0);
       setError(null);
       setIsProcessing(false);
-      setVoiceTranscript(null); // 🆕 RESET VOICE
-      setIsRecordingVoice(false); // 🆕 STOP RECORDING IF ACTIVE
+      setVoiceTranscript(null);
+      setIsTranscribing(false);
+      // Release the mic if the modal is dismissed mid-recording — otherwise the
+      // recording session (and permission indicator) stays alive in the background.
+      if (isRecordingVoice) cancelVoiceRecording();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // Surface voice recording/transcription failures (mic permission denied, upload
+  // or Whisper failure) in the same error banner used for photo capture errors.
+  useEffect(() => {
+    if (voiceError) setError(voiceError);
+  }, [voiceError]);
 
   // ─────────────────────────────────────────────
   // Handlers
@@ -324,53 +346,34 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
     setShowGrid(prev => !prev);
   };
 
-  // 🆕 VOICE DESCRIPTION HANDLERS
+  // Voice description: tap to start recording, tap again to stop + transcribe
+  // (same useServerVoice engine as the standalone Voice Logging tab).
   const handleAddVoiceDescription = async () => {
     if (isRecordingVoice) {
-      // Stop recording
-      setIsRecordingVoice(false);
-      await triggerHaptic('success');
+      await triggerHaptic();
+      setIsTranscribing(true);
+      const result = await stopVoiceRecording();
+      setIsTranscribing(false);
+
+      if (result && !result.isEmpty && result.transcript) {
+        setVoiceTranscript(result.transcript);
+        await triggerHaptic('success');
+      } else {
+        // stopVoiceRecording already sets its own error state for the empty-transcript
+        // case ("No speech detected...") — surface it in the shared error banner
+        // rather than silently pretending a transcript was added.
+        setError(voiceError || 'Could not hear anything — try again');
+        await triggerHaptic('error');
+      }
       return;
     }
 
-    try {
-      // Show simple recording UI
-      setIsRecordingVoice(true);
-      await triggerHaptic();
-
-      // For now, we'll use a simple approach: prompt user to speak
-      // In production, you'd use React Native Audio for actual recording
-      // This is a simplified example using device voice memo
-      Alert.alert(
-        'Voice Description (Optional)',
-        'Say what you\'re eating - mention ingredients, cooking method, portion size, etc.',
-        [
-          {
-            text: 'Cancel',
-            onPress: () => {
-              setIsRecordingVoice(false);
-            },
-            style: 'cancel',
-          },
-          {
-            text: 'Added',
-            onPress: async () => {
-              // In a real app, you'd transcribe here
-              // For now, set a placeholder transcript
-              setVoiceTranscript('Voice description added');
-              setIsRecordingVoice(false);
-              await triggerHaptic('success');
-            },
-          },
-        ],
-        { cancelable: false }
-      );
-    } catch (err) {
-      console.error('[CameraModal] Voice recording failed:', err);
-      setError('Voice recording failed');
-      setIsRecordingVoice(false);
-      await triggerHaptic('error');
-    }
+    setError(null);
+    await triggerHaptic();
+    await startVoiceRecording();
+    // Permission-denial (or any other start failure) lands in the voiceError
+    // effect below, not here — voiceError is stale in this closure immediately
+    // after the await, since the hook's setState hasn't flushed yet.
   };
 
   const handleClearVoice = async () => {
@@ -597,18 +600,26 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
                   <TouchableOpacity
                     style={styles.voiceButton}
                     onPress={handleAddVoiceDescription}
-                    disabled={isRecordingVoice}
+                    disabled={isTranscribing}
                   >
-                    <Ionicons
-                      name={isRecordingVoice ? 'mic' : 'mic-outline'}
-                      size={ICON_SIZES.md}
-                      color={isRecordingVoice ? SEMANTIC.danger.base : BRAND.primary}
-                    />
+                    {isTranscribing ? (
+                      <ActivityIndicator size="small" color={BRAND.primary} />
+                    ) : (
+                      <Ionicons
+                        name={isRecordingVoice ? 'mic' : 'mic-outline'}
+                        size={ICON_SIZES.md}
+                        color={isRecordingVoice ? SEMANTIC.danger.base : BRAND.primary}
+                      />
+                    )}
                     <Text style={styles.voiceButtonText}>
-                      {isRecordingVoice ? 'Recording...' : 'Add Voice Description (Optional)'}
+                      {isTranscribing
+                        ? 'Transcribing...'
+                        : isRecordingVoice
+                          ? 'Tap to stop'
+                          : 'Add Voice Description (Optional)'}
                     </Text>
                     <Text style={styles.voiceHint}>
-                      Mention ingredients, cooking method, portion size
+                      {isRecordingVoice ? 'Listening...' : 'Mention ingredients, cooking method, portion size'}
                     </Text>
                   </TouchableOpacity>
                 ) : (

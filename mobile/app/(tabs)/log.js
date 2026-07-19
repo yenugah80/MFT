@@ -221,7 +221,7 @@ export default function LogScreen() {
   /**
    * Handle photo from CameraModal
    */
-  const handlePhotoFromCamera = async (imageUri) => {
+  const handlePhotoFromCamera = async (imageUri, barcode = null, voiceTranscript = null) => {
     // CRITICAL: Clear ALL other results first to prevent duplicates
     resetForNewAnalysis();
     foodAnalysis.setInputText('');
@@ -231,7 +231,11 @@ export default function LogScreen() {
     setAnalysisSource('photo');
 
     try {
-      await foodAnalysis.analyzePhoto(imageUri);
+      // barcode/voiceTranscript come from CameraModal's onPhotoTaken(uri, barcode, voiceTranscript) —
+      // previously dropped here, which silently meant the multimodal (photo+voice) path never fired.
+      // skipCompression: true because CameraModal already resized/recompressed the image before
+      // calling onPhotoTaken — re-running the same resize here would just waste CPU.
+      await foodAnalysis.analyzePhoto(imageUri, barcode, voiceTranscript, { skipCompression: true });
       // Success - analysisResult will be set by the hook
     } catch (error) {
       console.error('[LogScreen] Photo analysis failed:', error);

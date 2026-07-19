@@ -6,6 +6,8 @@ import { buildUnifiedResponse } from "../utils/unifiedResponseBuilder.js";
 import { db } from "../config/db.js";
 import { aiEstimatedFoodsTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
+import { imageLimiter } from "../middleware/rateLimiter.js";
+import { validate, imageAnalysisSchema } from "../middleware/validation.js";
 
 // Configure Multer for audio file uploads
 const upload = multer({ dest: "uploads/" });
@@ -110,7 +112,7 @@ router.get("/barcode/:code", async (req, res) => {
  *
  * Returns: UNIFIED RESPONSE STRUCTURE (same as voice/text/barcode)
  */
-router.post("/analyze-image", async (req, res) => {
+router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
   try {
     const { image, highAccuracy = false, includeIngredients = false, mealType = 'snack' } = req.body;
     if (!image) return res.status(400).json({ error: "Image required" });
@@ -195,6 +197,17 @@ router.post("/analyze-image", async (req, res) => {
     // CRITICAL FIX: Add top-level foodName for backwards compatibility
     // The frontend's buildFoodLog expects raw.foodName, but unifiedResponse has items[0].name
     const foodName = rawItems[0]?.name || result.title || result.foodName || 'Unknown Food';
+    const confidence = result.confidence ?? rawItems[0]?.confidence ?? 0.75;
+
+    // Unlike the text path (resolve.js), there's no separate name-resolution step here
+    // to guard against overwriting a correct parse — the vision model names and
+    // estimates nutrition in one call, so a wrong name and wrong macros come from
+    // the same low-confidence guess. Flagging it lets the client prompt a review
+    // instead of silently trusting an uncertain read.
+    const lowConfidence = confidence < 0.6;
+    if (lowConfidence) {
+      console.warn(`[FoodAnalyzeImage] Low-confidence result (${confidence}): foodName="${foodName}"`);
+    }
 
     console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, foodName="${foodName}", healthScore=${unifiedResponse.healthScore}`);
 
@@ -224,7 +237,8 @@ router.post("/analyze-image", async (req, res) => {
         cuisine: result.cuisine || rawItems[0]?.cuisine || null,
         healthScore: result.healthScore || null,
         portionAssessment: result.portionAssessment || null,
-        confidence: result.confidence || rawItems[0]?.confidence || 0.75,
+        confidence,
+        lowConfidence,
         suggestions: result.suggestions || [],
         imageAnalysis: result.imageAnalysis || null
       }
@@ -397,7 +411,7 @@ router.post("/analyze-voice", upload.single('audio'), async (req, res) => {
  *
  * Returns: UNIFIED RESPONSE STRUCTURE with multimodal metadata
  */
-router.post("/analyze-multimodal", async (req, res) => {
+router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
   try {
     const {
       image,

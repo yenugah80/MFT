@@ -699,11 +699,22 @@ async function fetchFromOpenFoodFacts(query, mode = 'text') {
 /**
  * Compress image for upload
  * @param {string} uri - Image URI
+ * @param {boolean} skipManipulation - Skip the resize/recompress step (already done
+ *   upstream, e.g. by CameraModal) and just read+base64-encode the file as-is.
  * @returns {Promise<string>} Base64-encoded compressed image
  */
-async function compressImage(uri) {
+async function compressImage(uri, skipManipulation = false) {
   if (!uri) {
     throw new Error('Photo analysis unavailable: missing image URI.');
+  }
+
+  if (!readAsStringAsync) {
+    throw new Error('Photo analysis unavailable: expo-file-system missing. Install expo-file-system and rebuild on device.');
+  }
+
+  if (skipManipulation) {
+    const encoding = EncodingType?.Base64 || 'base64';
+    return readAsStringAsync(uri, { encoding });
   }
 
   let manipulateAsync, SaveFormat;
@@ -718,10 +729,6 @@ async function compressImage(uri) {
   } catch (e) {
     console.warn('[useFoodAnalysis] expo-image-manipulator not available, using original image:', e?.message);
     compressionAvailable = false;
-  }
-
-  if (!readAsStringAsync) {
-    throw new Error('Photo analysis unavailable: expo-file-system missing. Install expo-file-system and rebuild on device.');
   }
 
   // Try to compress if available
@@ -1387,9 +1394,13 @@ export function useFoodAnalysis() {
    * @param {string} uri - Image URI
    * @param {string|null} barcode - Optional barcode from photo
    * @param {string|null} voiceTranscript - Optional voice description of photo
+   * @param {{ skipCompression?: boolean }} options - skipCompression: true when the
+   *   caller (e.g. CameraModal) already resized/recompressed the image, to avoid
+   *   redundantly re-encoding it here.
    * @returns {Promise<void>}
    */
-  const analyzePhoto = useCallback(async (uri, barcode = null, voiceTranscript = null) => {
+  const analyzePhoto = useCallback(async (uri, barcode = null, voiceTranscript = null, options = {}) => {
+    const { skipCompression = false } = options;
     // If barcode detected, use barcode analysis
     if (barcode) {
       return analyzeBarcode(barcode);
@@ -1502,7 +1513,13 @@ export function useFoodAnalysis() {
       // Compress image
       let base64;
       try {
-        base64 = await compressImage(uri);
+        base64 = await compressImage(uri, skipCompression);
+        // Backend's imageAnalysisSchema requires a data: URI (not bare base64) —
+        // output is JPEG in every real path here (CameraModal.optimizeImage and
+        // compressImage's own manipulateAsync step both force SaveFormat.JPEG).
+        if (base64 && !base64.startsWith('data:')) {
+          base64 = `data:image/jpeg;base64,${base64}`;
+        }
       } catch (e) {
         const errorMsg = e.message || 'Image compression failed';
         console.error('[useFoodAnalysis] Image compression error:', e);
@@ -1517,6 +1534,14 @@ export function useFoodAnalysis() {
         ? `${API_URL}/food/analyze-multimodal`
         : AI_IMAGE_ENDPOINT;
 
+      // Plain photo analysis uses the cheaper gpt-4o-mini (matches the backend's
+      // documented default) — only bump to gpt-4o when a voice description is
+      // attached, since /analyze-multimodal already defaults highAccuracy=true
+      // server-side for that case and the user has invested extra context.
+      // Computed once and reused below for the logged aiModel, since the API
+      // response doesn't echo back which model actually served the request.
+      const usedHighAccuracy = !!voiceTranscript;
+
       // Send to AI vision API with regional context and user goals
       const { res, json } = await fetchWithTimeout(
         analysisEndpoint,
@@ -1528,7 +1553,7 @@ export function useFoodAnalysis() {
           },
           body: JSON.stringify({
             image: base64,
-            highAccuracy: true,
+            highAccuracy: usedHighAccuracy,
             includeIngredients: true,
             // 🆕 REGIONAL CONTEXT (enables better portion sizing and model selection)
             cuisinePreference,
@@ -1583,6 +1608,16 @@ export function useFoodAnalysis() {
       });
 
       foodLog.imageUrl = uri;
+      // These are computed by this analysis call but previously never made it onto
+      // the saved food_log row — food_log has real columns for all of them
+      // (backend/src/db/schema.js foodLogTable) and POST /nutrition/log already
+      // accepts them, they just weren't being sent.
+      foodLog.cookingMethod = rawAIData.cookingMethod || cookingMethod || null;
+      foodLog.cuisine = rawAIData.cuisine || cuisinePreference || null;
+      foodLog.aiConfidence = typeof rawAIData.confidence === 'number' ? rawAIData.confidence : null;
+      foodLog.aiModel = usedHighAccuracy ? 'gpt-4o' : 'gpt-4o-mini';
+      foodLog.voiceTranscript = voiceTranscript || null;
+      foodLog.multimodalSource = voiceTranscript ? { photo: true, voice: true } : { photo: true };
 
       // Extract health metrics from unified response
       const unifiedHealthScore = rawAIData.healthScore ?? foodLog.healthScore ?? null;
