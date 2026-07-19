@@ -15,7 +15,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, G, Text as SvgText } from "react-native-svg";
-import SafeScreen from "../../components/SafeScreen";
 import {
   BRAND,
   TEXT,
@@ -477,18 +476,18 @@ export default function BodyMetricsScreen() {
 
   if (isLoading) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.loadingText}>Loading your profile...</Text>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   if (loadError) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.centerContainer}>
           <Ionicons name="alert-circle-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorText}>{loadError}</Text>
@@ -496,17 +495,17 @@ export default function BodyMetricsScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient colors={["#8B5CF6", "#7C3AED"]} style={styles.header}>
           <View style={styles.headerTop}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}>
               <Ionicons name="arrow-back" size={24} color="#FFF" />
             </TouchableOpacity>
             <View style={[styles.lifecycleBadge, { backgroundColor: `${lifecycle.color}30` }]}>
@@ -731,7 +730,7 @@ export default function BodyMetricsScreen() {
           </View>
         </Animated.View>
       )}
-    </SafeScreen>
+    </View>
   );
 }
 

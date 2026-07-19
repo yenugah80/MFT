@@ -26,7 +26,6 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
-import SafeScreen from '../../components/SafeScreen';
 import { useNotification } from '../../providers/NotificationProvider';
 import apiClient from '../../services/apiClient';
 import {
@@ -391,17 +390,17 @@ export default function NotificationsScreen() {
 
   if (isLoading) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.loadingText}>Loading settings...</Text>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {/* Header */}
       <LinearGradient
         colors={SURFACES.gradient.primary}
@@ -413,7 +412,11 @@ export default function NotificationsScreen() {
           style={styles.backButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/profile');
+            }
           }}
           accessibilityLabel="Back to Profile"
         >
@@ -471,7 +474,7 @@ export default function NotificationsScreen() {
           </Text>
         </View>
       </ScrollView>
-    </SafeScreen>
+    </View>
   );
 }
 

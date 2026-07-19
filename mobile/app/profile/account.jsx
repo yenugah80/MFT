@@ -10,7 +10,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 
-import SafeScreen from "../../components/SafeScreen";
 import { TEXT, BRAND, TYPOGRAPHY } from "../../constants/premiumTheme";
 
 // Info Row Component
@@ -41,7 +40,7 @@ export default function AccountScreen() {
     : "Unknown";
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -53,7 +52,11 @@ export default function AccountScreen() {
             style={styles.backButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)/profile');
+              }
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -170,7 +173,7 @@ export default function AccountScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeScreen>
+    </View>
   );
 }
 

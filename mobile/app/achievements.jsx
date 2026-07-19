@@ -5,10 +5,10 @@
  * captain tip, voyage map, treasure chests, and badges.
  */
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useDashboard } from '../hooks/useDashboard';
@@ -97,10 +97,35 @@ export default function AchievementsScreen() {
   );
   const journeyProgress = Math.min(currentIslandIndex / (JOURNEY_ISLANDS.length - 1), 1);
 
-  const handleBack = async () => {
+  // Guards against handleBack's own router.back()/replace() re-triggering the
+  // beforeRemove listener below and recursing.
+  const isNavigatingAway = useRef(false);
+  const handleBack = useCallback(async () => {
+    if (isNavigatingAway.current) return;
+    isNavigatingAway.current = true;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
-  };
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/dashboard');
+    }
+  }, [router]);
+
+  // The iOS edge-swipe gesture dispatches GO_BACK straight to the native stack,
+  // bypassing the header button's onPress entirely — this screen sits outside any
+  // group Stack, so the native stack it lands in has no prior route registered even
+  // though router.canGoBack() (expo-router's own history) correctly knows there is
+  // one. Intercept every back attempt — swipe, hardware back, or button — and route
+  // it through the same handleBack logic so they all behave identically.
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (isNavigatingAway.current) return;
+      e.preventDefault();
+      handleBack();
+    });
+    return unsubscribe;
+  }, [navigation, handleBack]);
 
   const handleQuestPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

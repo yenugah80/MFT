@@ -3,14 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import SafeScreen from "../../components/SafeScreen";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../../constants/premiumTheme";
 
 export default function TermsScreen() {
   const router = useRouter();
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <LinearGradient
         colors={SURFACES.gradient.primary}
         start={{ x: 0, y: 0 }}
@@ -19,7 +18,7 @@ export default function TermsScreen() {
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
           accessibilityLabel="Back to Profile"
         >
           <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
@@ -90,7 +89,7 @@ export default function TermsScreen() {
           </Text>
         </View>
       </ScrollView>
-    </SafeScreen>
+    </View>
   );
 }
 

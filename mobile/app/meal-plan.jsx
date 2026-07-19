@@ -6,7 +6,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import SafeScreen from '../components/SafeScreen';
 import apiClient from '../services/apiClient';
 import {
   BRAND, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS,
@@ -243,7 +242,7 @@ export default function MealPlanScreen() {
   const toggleDay = (idx) => setExpandedDay(prev => prev === idx ? -1 : idx);
 
   return (
-    <SafeScreen style={styles.container}>
+    <View style={[{ flex: 1, backgroundColor: '#FFFFFF' }, styles.container]}>
       {/* Header */}
       <LinearGradient
         colors={[BRAND.primary, BRAND.secondary || '#6366F1']}
@@ -252,7 +251,7 @@ export default function MealPlanScreen() {
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/dashboard'))}>
             <Ionicons name="chevron-back" size={22} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Meal Plan</Text>
@@ -360,7 +359,7 @@ export default function MealPlanScreen() {
         onGenerate={handleGenerate}
         loading={generating}
       />
-    </SafeScreen>
+    </View>
   );
 }
 

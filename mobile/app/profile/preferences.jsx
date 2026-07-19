@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityI
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import SafeScreen from "../../components/SafeScreen";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../../constants/premiumTheme";
 import { SUPPORTED_LANGUAGES, LANGUAGE_ORDER, getLanguageConfig } from "../../constants/languages";
 import apiClient from "../../services/apiClient";
@@ -83,18 +82,18 @@ export default function PreferencesScreen() {
 
   if (isLoading) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.loadingText}>Loading preferences...</Text>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   if (loadError) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorText}>{loadError}</Text>
@@ -102,12 +101,12 @@ export default function PreferencesScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <LinearGradient
         colors={SURFACES.gradient.primary}
         start={{ x: 0, y: 0 }}
@@ -116,7 +115,7 @@ export default function PreferencesScreen() {
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
           accessibilityLabel="Back to Profile"
         >
           <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
@@ -335,7 +334,7 @@ export default function PreferencesScreen() {
           </View>
         </Pressable>
       </Modal>
-    </SafeScreen>
+    </View>
   );
 }
 
