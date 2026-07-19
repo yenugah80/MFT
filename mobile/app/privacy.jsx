@@ -7,14 +7,13 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import SafeScreen from '@/components/SafeScreen';
 import { TYPOGRAPHY } from '../constants/premiumTheme';
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => {
           if (router.canGoBack()) {
@@ -159,7 +158,7 @@ export default function PrivacyPolicyScreen() {
           </Text>
         </View>
       </ScrollView>
-    </SafeScreen>
+    </View>
   );
 }
 

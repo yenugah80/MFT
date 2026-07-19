@@ -11,8 +11,8 @@ export function WelcomeFeatureChips() {
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: 18,
+    marginTop: 10,
     marginBottom: 10,
-    transform: [{ translateY: 18 }],
+    transform: [{ translateY: 14 }],
   },
 });

@@ -351,8 +351,13 @@ const GoalEditSheet = ({
             <Text style={styles.quickAdjustLabel}>Quick adjust:</Text>
             <View style={styles.quickButtons}>
               {[-10, -5, 5, 10].map((delta) => {
-                const newVal = value + delta * step;
+                // The actual amount applied is delta * step (e.g. delta=10, step=50 -> +500),
+                // so the label must show that real amount, not the raw delta.
+                const appliedAmount = delta * step;
+                const newVal = value + appliedAmount;
                 const isDisabled = newVal < min || newVal > max;
+                const decimalPlaces = step < 1 ? 1 : 0;
+                const displayAmount = Number(appliedAmount.toFixed(decimalPlaces));
                 return (
                   <Pressable
                     key={delta}
@@ -376,7 +381,7 @@ const GoalEditSheet = ({
                         isDisabled && styles.quickButtonTextDisabled,
                       ]}
                     >
-                      {delta > 0 ? `+${delta}` : delta}
+                      {displayAmount > 0 ? `+${displayAmount}` : displayAmount}
                     </Text>
                   </Pressable>
                 );

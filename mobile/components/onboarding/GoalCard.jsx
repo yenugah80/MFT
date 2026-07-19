@@ -1,137 +1,115 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Pressable, Text, StyleSheet, Animated } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { TYPOGRAPHY } from '../../constants/premiumTheme';
+import { AUTH_COLORS } from '../auth/constants';
 
 const GoalCard = ({
   id, iconName, label, description,
-  gradientStart, gradientEnd,
+  gradientStart: accentColor,
   isSelected = false, onPress,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowOpacity = useRef(new Animated.Value(0)).current;
-  const checkScale = useRef(new Animated.Value(0.5)).current;
+  const selectAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(glowOpacity, { toValue: isSelected ? 1 : 0, useNativeDriver: true, stiffness: 200, damping: 20 }),
-      Animated.spring(checkScale, { toValue: isSelected ? 1 : 0.5, useNativeDriver: true, stiffness: 300, damping: 18 }),
-    ]).start();
+    Animated.spring(selectAnim, {
+      toValue: isSelected ? 1 : 0,
+      useNativeDriver: false,
+      stiffness: 260,
+      damping: 22,
+    }).start();
   }, [isSelected]);
 
+  const borderColor = selectAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(15, 36, 31, 0.08)', accentColor],
+  });
+  const backgroundColor = selectAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(255, 255, 255, 0.82)', `${accentColor}14`],
+  });
+  const iconBg = selectAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [`${accentColor}20`, `${accentColor}38`],
+  });
+
   return (
-    <Animated.View style={[
-      styles.wrapper,
-      {
-        shadowOpacity: isSelected ? 0.40 : 0.08,
-        shadowRadius: isSelected ? 24 : 8,
-        shadowColor: gradientStart,
-        shadowOffset: { width: 0, height: isSelected ? 10 : 4 },
-        elevation: isSelected ? 18 : 4,
-        transform: [{ scale: scaleAnim }],
-      }
-    ]}>
-      <Pressable
-        onPress={() => onPress?.(id)}
-        onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, stiffness: 400, damping: 20 }).start()}
-        onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, stiffness: 300, damping: 20 }).start()}
-        accessibilityRole="radio"
-        accessibilityLabel={label}
-        accessibilityState={{ selected: isSelected }}
+    // Scale (native-driven) and border/shadow color (JS-driven) can't live on the
+    // same Animated node — RN errors once one is flattened to native. Split them.
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Animated.View
+        style={[
+          styles.wrapper,
+          {
+            borderColor,
+            backgroundColor,
+            shadowColor: isSelected ? accentColor : 'rgba(7, 19, 30, 0.16)',
+            shadowOpacity: isSelected ? 0.28 : 0.08,
+            shadowRadius: isSelected ? 18 : 12,
+          },
+        ]}
       >
-        {/* Base white card — always visible */}
-        <View style={styles.cardBase}>
-          {/* Gradient overlay — fades in when selected */}
-          <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: glowOpacity, borderRadius: 20 }]}>
-            <LinearGradient
-              colors={[gradientStart, gradientEnd]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
+        <Pressable
+          onPress={() => onPress?.(id)}
+          onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, stiffness: 400, damping: 20 }).start()}
+          onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, stiffness: 300, damping: 20 }).start()}
+          style={styles.pressable}
+          accessibilityRole="radio"
+          accessibilityLabel={label}
+          accessibilityState={{ selected: isSelected }}
+        >
+          <Animated.View style={[styles.iconBubble, { backgroundColor: iconBg }]}>
+            <Ionicons name={iconName} size={22} color={accentColor} />
           </Animated.View>
 
-          {/* Decorative orbs */}
-          <Animated.View style={[styles.orb, styles.orbLarge, { opacity: glowOpacity, backgroundColor: 'rgba(255,255,255,0.13)' }]} />
-          <Animated.View style={[styles.orb, styles.orbSmall, { opacity: glowOpacity, backgroundColor: 'rgba(255,255,255,0.09)' }]} />
-
-          {/* Icon bubble */}
-          <Animated.View style={[
-            styles.iconBubble,
-            {
-              backgroundColor: glowOpacity.interpolate({ inputRange: [0, 1], outputRange: [`${gradientStart}18`, 'rgba(255,255,255,0.25)'] }),
-              borderColor: glowOpacity.interpolate({ inputRange: [0, 1], outputRange: [`${gradientStart}35`, 'rgba(255,255,255,0.45)'] }),
-            }
-          ]}>
-            <Animated.View>
-              <Ionicons
-                name={iconName}
-                size={28}
-                color={isSelected ? '#FFFFFF' : gradientStart}
-              />
-            </Animated.View>
-          </Animated.View>
-
-          {/* Text */}
           <View style={styles.textBlock}>
-            <Animated.Text style={[
-              styles.label,
-              { color: isSelected ? '#FFFFFF' : '#111827' }
-            ]}>
-              {label}
-            </Animated.Text>
-            <Animated.Text style={[
-              styles.description,
-              { color: isSelected ? 'rgba(255,255,255,0.82)' : '#6B7280' }
-            ]}>
-              {description}
-            </Animated.Text>
+            <Text style={styles.label}>{label}</Text>
+            <Text style={styles.description}>{description}</Text>
           </View>
 
-          {/* Check badge */}
-          <Animated.View style={[
-            styles.badge,
-            {
-              backgroundColor: isSelected ? 'rgba(255,255,255,0.95)' : '#F3F4F6',
-              transform: [{ scale: checkScale }],
-            }
-          ]}>
-            <Ionicons
-              name={isSelected ? 'checkmark-sharp' : 'chevron-forward'}
-              size={15}
-              color={isSelected ? gradientStart : '#9CA3AF'}
-            />
-          </Animated.View>
-        </View>
-      </Pressable>
+          <View style={[styles.badge, isSelected && { backgroundColor: accentColor, borderColor: accentColor }]}>
+            {isSelected && <Ionicons name="checkmark" size={13} color={AUTH_COLORS.white} />}
+          </View>
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: { borderRadius: 20 },
-  cardBase: {
-    borderRadius: 20,
+  wrapper: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    shadowColor: 'rgba(7, 19, 30, 0.16)',
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  pressable: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 20,
-    overflow: 'hidden',
-    minHeight: 90,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    minHeight: 76,
   },
-  orb: { position: 'absolute', borderRadius: 999 },
-  orbLarge: { width: 180, height: 180, top: -70, right: -50 },
-  orbSmall: { width: 110, height: 110, bottom: -45, right: 55 },
   iconBubble: {
-    width: 62, height: 62, borderRadius: 18, borderWidth: 1.5,
+    width: 46, height: 46, borderRadius: 14,
     justifyContent: 'center', alignItems: 'center',
-    marginRight: 16, flexShrink: 0,
+    marginRight: 13, flexShrink: 0,
   },
-  textBlock: { flex: 1, marginRight: 12 },
-  label: { fontSize: 17, fontFamily: TYPOGRAPHY.family.bold, marginBottom: 4, letterSpacing: -0.3 },
-  description: { fontSize: 13, fontFamily: TYPOGRAPHY.family.regular, lineHeight: 18 },
-  badge: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  textBlock: { flex: 1, marginRight: 8 },
+  label: {
+    fontSize: 15, fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.ink, marginBottom: 2, letterSpacing: 0.1,
+  },
+  description: {
+    fontSize: 12.5, fontFamily: 'DMSans_500Medium',
+    color: AUTH_COLORS.muted, lineHeight: 17,
+  },
+  badge: {
+    width: 24, height: 24, borderRadius: 12,
+    borderWidth: 1.5, borderColor: 'rgba(15, 36, 31, 0.16)',
+    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+  },
 });
 
 export default GoalCard;

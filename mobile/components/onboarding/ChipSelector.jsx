@@ -1,12 +1,6 @@
 /**
- * ChipSelector — Premium Wellness Design
- *
- * Chip spec:
- *   - #F0F5F2 background — unselected
- *   - #0F9B5E background (primary) — selected, white text
- *   - Pill borderRadius 999, spring feedback
- *   - Spring animation: stiffness 300, damping 20
- *   - Gentle shadow on selected chip
+ * ChipSelector — warm-cream / deep-green editorial chip
+ * (matches the brand established in components/auth)
  */
 
 import React from 'react';
@@ -17,15 +11,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { TYPOGRAPHY } from '../../constants/premiumTheme';
-
-const DS = {
-  surfContainerHi: '#F0F5F2',    // unselected chip background
-  primary:         '#0F9B5E',    // selected chip background
-  onSurface:       '#111827',    // unselected text
-  onPrimary:       '#FFFFFF',    // selected text
-  ambientShadow:   'rgba(0, 0, 0, 0.06)',
-};
+import { AUTH_COLORS } from '../auth/constants';
 
 const ChipSelector = ({
   title,
@@ -138,8 +124,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.onSurface,
+    fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.ink,
     letterSpacing: -0.1,
     marginBottom: 4,
   },
@@ -160,11 +146,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   chipUnselected: {
-    backgroundColor: DS.surfContainerHi,
+    backgroundColor: 'rgba(107, 78, 255, 0.05)',
   },
   chipSelected: {
-    backgroundColor: DS.primary,
-    shadowColor: DS.primary,
+    backgroundColor: AUTH_COLORS.primary,
+    shadowColor: AUTH_COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -175,14 +161,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontFamily: 'DMSans_700Bold',
   },
   labelUnselected: {
-    color: DS.onSurface,
+    color: AUTH_COLORS.ink,
   },
   labelSelected: {
-    color: DS.onPrimary,
-    fontFamily: TYPOGRAPHY.family.bold,
+    color: AUTH_COLORS.white,
   },
 });
 

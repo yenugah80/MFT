@@ -40,7 +40,6 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
-import OnboardingGuard from "@/components/OnboardingGuard";
 import SmartNotificationInitializer from "@/components/SmartNotificationInitializer";
 import InitializationGuard from "@/components/InitializationGuard";
 import { cleanupAnalytics } from "@/services/analytics";
@@ -198,9 +197,7 @@ export default function RootLayout() {
                       {/* SmartNotificationInitializer activates data-driven notifications with witty messages */}
                       <SmartNotificationInitializer>
                         <SafeScreen>
-                          <OnboardingGuard>
-                            <Slot />
-                          </OnboardingGuard>
+                          <Slot />
                         </SafeScreen>
                       </SmartNotificationInitializer>
                     </InitializationGuard>

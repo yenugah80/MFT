@@ -44,6 +44,29 @@ export const calculateTDEE = (bmr, activityLevel) => {
 };
 
 /**
+ * Derive a single activityLevel bucket from a set of checked
+ * ACTIVITY_CHECKLIST item ids (see constants/onboardingConfig.js).
+ * Weights are summed and mapped onto the same 5 buckets calculateTDEE
+ * expects, so nothing downstream needs to know the checklist exists.
+ * @param {string[]} selectedIds
+ * @param {{id: string, weight: number}[]} checklist - ACTIVITY_CHECKLIST
+ * @returns {string|null} activityLevel id, or null if nothing is checked
+ */
+export const computeActivityLevel = (selectedIds, checklist) => {
+  if (!selectedIds || selectedIds.length === 0) return null;
+
+  const score = checklist
+    .filter((item) => selectedIds.includes(item.id))
+    .reduce((sum, item) => sum + item.weight, 0);
+
+  if (score <= 0) return 'sedentary';
+  if (score <= 2) return 'lightly_active';
+  if (score <= 4) return 'moderate';
+  if (score <= 6) return 'very_active';
+  return 'extremely_active';
+};
+
+/**
  * Adjust calories based on primary goal
  * @param {number} tdee - Total Daily Energy Expenditure
  * @param {string} primaryGoal - 'lose' | 'maintain' | 'gain'

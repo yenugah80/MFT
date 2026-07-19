@@ -6,10 +6,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import * as Haptics from "expo-haptics";
-import SafeScreen from "../../components/SafeScreen";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, VIBRANT_WELLNESS } from "../../constants/premiumTheme";
 import apiClient from "../../services/apiClient";
 import { useAuth } from "@clerk/clerk-expo";
+import { HAS_SIGNED_IN_KEY } from "../(auth)/sign-in";
 
 export default function PrivacyScreen() {
   const router = useRouter();
@@ -115,6 +116,7 @@ export default function PrivacyScreen() {
     setIsDeleting(true);
     try {
       await apiClient.delete("/profile/delete-account");
+      await AsyncStorage.removeItem(HAS_SIGNED_IN_KEY);
       await signOut();
       router.replace("/(auth)/sign-in");
     } catch (error) {
@@ -127,18 +129,18 @@ export default function PrivacyScreen() {
 
   if (isLoading) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.loadingText}>Loading privacy settings...</Text>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   if (loadError) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorText}>{loadError}</Text>
@@ -146,12 +148,12 @@ export default function PrivacyScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <LinearGradient
         colors={SURFACES.gradient.primary}
         start={{ x: 0, y: 0 }}
@@ -160,7 +162,7 @@ export default function PrivacyScreen() {
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
           accessibilityLabel="Back to Profile"
         >
           <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
@@ -281,7 +283,7 @@ export default function PrivacyScreen() {
           Under GDPR, you have the right to access, export, and delete your personal data at any time.
         </Text>
       </ScrollView>
-    </SafeScreen>
+    </View>
   );
 }
 

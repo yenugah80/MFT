@@ -1,13 +1,6 @@
 /**
- * Onboarding Step 2 — Premium Wellness Design
- *
- * - White card surfaces on cream (#F8FBF9) background
- * - Refined mint-green primary (#0F9B5E)
- * - Input fields: light gray-green bg (#F0F5F2), no borders, 12px radius
- * - Gender/Activity: white unselected, #0F9B5E selected
- * - Buttons: pill borderRadius 999, gradient #0F9B5E → #34D399 primary
- * - Gentle shadows: rgba(0,0,0,0.06)
- * - Spring animations: stiffness 300, damping 20
+ * Onboarding Step 2 — matches the warm-cream / deep-green editorial
+ * brand established in the auth flow (see components/auth).
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -27,26 +20,39 @@ import MetricInput from '../../components/onboarding/MetricInput';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import {
   ACTIVITY_LEVELS,
+  ACTIVITY_CHECKLIST,
   GENDERS,
   VALIDATION_RANGES,
   ONBOARDING_COPY,
   A11Y_LABELS,
 } from '../../constants/onboardingConfig';
-import { TYPOGRAPHY } from '../../constants/premiumTheme';
+import { AUTH_COLORS } from '../../components/auth/constants';
+import { computeActivityLevel } from '../../utils/onboardingCalculations';
 
 const DS = {
-  surface:          '#F8FBF9',
-  surfContainer:    '#FFFFFF',
-  surfContainerHi:  '#F0F5F2',
-  surfLow:          '#FFFFFF',
-  primary:          '#0F9B5E',
-  primaryLight:     '#34D399',
-  onSurface:        '#111827',
-  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
-  onPrimary:        '#FFFFFF',
-  error:            '#DC2626',
-  errorTint:        'rgba(220, 38, 38, 0.06)',
-  ambientShadow:    'rgba(0, 0, 0, 0.06)',
+  surfContainer:    'rgba(255, 255, 255, 0.82)',
+  surfContainerHi:  'rgba(107, 78, 255, 0.05)',
+  primary:          AUTH_COLORS.primary,
+  primaryLight:     AUTH_COLORS.primaryLight,
+  onSurface:        AUTH_COLORS.ink,
+  onSurfaceVar:     AUTH_COLORS.muted,
+  onPrimary:        AUTH_COLORS.white,
+  error:            AUTH_COLORS.danger,
+  errorTint:        AUTH_COLORS.dangerBg,
+};
+
+const GENDER_META = {
+  female: { icon: 'woman-outline', color: '#C7638A', bg: 'rgba(199, 99, 138, 0.10)' },
+  male:   { icon: 'man-outline',   color: '#4A7BA6', bg: 'rgba(74, 123, 166, 0.10)' },
+  other:  { icon: 'male-female-outline', color: '#8767B8', bg: 'rgba(135, 103, 184, 0.10)' },
+};
+
+const ACTIVITY_META = {
+  sedentary:        { icon: 'body-outline',    color: '#6B94B3' },
+  lightly_active:   { icon: 'walk-outline',    color: '#5FA88C' },
+  moderate:         { icon: 'bicycle-outline', color: AUTH_COLORS.primary },
+  very_active:      { icon: 'barbell-outline', color: '#C1832B' },
+  extremely_active: { icon: 'flash-outline',   color: '#C1642B' },
 };
 
 /* ─── Animated pill button helper ─── */
@@ -64,9 +70,9 @@ const PillButton = ({ onPress, disabled, colors, children, style }) => {
         disabled={disabled}
       >
         <LinearGradient
-          colors={disabled ? [DS.surfContainerHi, DS.surfContainer] : colors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          colors={disabled ? ['#E5E1D8', '#DAD5CA'] : colors}
+          start={{ x: 0, y: 0.2 }}
+          end={{ x: 1, y: 0.8 }}
           style={styles.pillGradient}
         >
           {children}
@@ -114,6 +120,19 @@ const Step2Screen = () => {
 
   const handleContinue = () => { if (isFormValid) goToNextStep(); };
 
+  const toggleActivityItem = (itemId) => {
+    const current = step2Data.activityChecklist || [];
+    const next = current.includes(itemId)
+      ? current.filter((id) => id !== itemId)
+      : [...current, itemId];
+    updateStepData('step2', {
+      activityChecklist: next,
+      activityLevel: computeActivityLevel(next, ACTIVITY_CHECKLIST),
+    });
+  };
+
+  const resolvedActivity = ACTIVITY_LEVELS.find((a) => a.id === step2Data.activityLevel);
+
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step2);
   }, []);
@@ -132,7 +151,7 @@ const Step2Screen = () => {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionIconBadge}>
-            <Ionicons name="body" size={18} color={DS.primary} />
+            <Ionicons name="body" size={14} color={DS.primary} />
           </View>
           <Text style={styles.sectionTitle}>Your Measurements</Text>
         </View>
@@ -147,6 +166,7 @@ const Step2Screen = () => {
           error={errors.age}
           min={VALIDATION_RANGES.age.min}
           max={VALIDATION_RANGES.age.max}
+          icon="calendar-outline"
         />
 
         <MetricInput
@@ -159,6 +179,7 @@ const Step2Screen = () => {
           selectedUnit={step2Data.weightUnit}
           onUnitChange={(u) => updateStepData('step2', { weightUnit: u })}
           error={errors.weight}
+          icon="scale-outline"
         />
 
         {/* Height — cm or ft/in */}
@@ -173,6 +194,7 @@ const Step2Screen = () => {
             selectedUnit={step2Data.heightUnit}
             onUnitChange={(u) => updateStepData('step2', { heightUnit: u })}
             error={errors.height}
+            icon="resize-outline"
           />
         ) : (
           <View style={styles.ftInContainer}>
@@ -241,7 +263,7 @@ const Step2Screen = () => {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionIconBadge}>
-            <Ionicons name="person" size={18} color={DS.primary} />
+            <Ionicons name="person" size={14} color={DS.primary} />
           </View>
           <Text style={styles.sectionTitle}>{ONBOARDING_COPY.step2.genderLabel}</Text>
         </View>
@@ -250,20 +272,29 @@ const Step2Screen = () => {
         <View style={styles.genderGrid}>
           {GENDERS.map((gender) => {
             const isSelected = step2Data.gender === gender.id;
-            const icons = { male: '👨', female: '👩', other: '🧑' };
+            const meta = GENDER_META[gender.id] || GENDER_META.other;
             return (
               <Pressable
                 key={gender.id}
                 onPress={() => updateStepData('step2', { gender: gender.id })}
                 style={[
-                  styles.genderBtn,
-                  isSelected ? styles.genderBtnSelected : styles.genderBtnUnselected,
+                  styles.genderCard,
+                  { borderColor: isSelected ? meta.color : 'rgba(15, 36, 31, 0.08)' },
+                  isSelected && { backgroundColor: `${meta.color}14` },
                 ]}
                 accessibilityRole="radio"
+                accessibilityLabel={gender.label}
                 accessibilityState={{ checked: isSelected }}
               >
-                <Text style={styles.genderEmoji}>{icons[gender.id] || '🧑'}</Text>
-                <Text style={[styles.genderLabel, isSelected && styles.genderLabelSelected]}>
+                {isSelected && (
+                  <View style={[styles.checkBadge, { backgroundColor: meta.color }]}>
+                    <Ionicons name="checkmark" size={8} color="#FFFFFF" />
+                  </View>
+                )}
+                <View style={[styles.genderIconBg, { backgroundColor: isSelected ? `${meta.color}26` : meta.bg }]}>
+                  <Ionicons name={meta.icon} size={18} color={meta.color} />
+                </View>
+                <Text style={[styles.genderLabel, isSelected && { color: meta.color }]}>
                   {gender.label}
                 </Text>
               </Pressable>
@@ -277,39 +308,66 @@ const Step2Screen = () => {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionIconBadge}>
-            <Ionicons name="flame" size={18} color={DS.primary} />
+            <Ionicons name="flame" size={14} color={DS.primary} />
           </View>
           <Text style={styles.sectionTitle}>{ONBOARDING_COPY.step2.activityLabel}</Text>
         </View>
         <Text style={styles.sectionHint}>{ONBOARDING_COPY.step2.activityHint}</Text>
 
         <View style={styles.activityGrid}>
-          {ACTIVITY_LEVELS.map((activity, index) => {
-            const isSelected = step2Data.activityLevel === activity.id;
-            const actIcons = ['🪑', '🚶', '🏃', '🏋️', '⚡'];
+          {ACTIVITY_CHECKLIST.map((item) => {
+            const isChecked = (step2Data.activityChecklist || []).includes(item.id);
             return (
               <Pressable
-                key={activity.id}
-                onPress={() => updateStepData('step2', { activityLevel: activity.id })}
+                key={item.id}
+                onPress={() => toggleActivityItem(item.id)}
                 style={[
-                  styles.activityBtn,
-                  isSelected ? styles.activityBtnSelected : styles.activityBtnUnselected,
+                  styles.activityTile,
+                  { borderColor: isChecked ? item.color : 'rgba(15, 36, 31, 0.08)' },
+                  isChecked && { backgroundColor: `${item.color}14` },
                 ]}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: isSelected }}
+                accessibilityRole="checkbox"
+                accessibilityLabel={`${item.label}, ${item.description}`}
+                accessibilityState={{ checked: isChecked }}
               >
-                <Text style={styles.activityIcon}>{actIcons[index] || '🏃'}</Text>
-                <Text style={[styles.activityLabel, isSelected && styles.activityLabelSelected]}>
-                  {activity.shortLabel}
-                </Text>
-                <Text style={[styles.activityDesc, isSelected && styles.activityDescSelected]}>
-                  {activity.description}
+                {isChecked && (
+                  <View style={[styles.activityCheckBadge, { backgroundColor: item.color }]}>
+                    <Ionicons name="checkmark" size={8} color="#FFFFFF" />
+                  </View>
+                )}
+                <View style={[
+                  styles.activityTileIconBg,
+                  { backgroundColor: isChecked ? `${item.color}26` : `${item.color}12` },
+                ]}>
+                  <Ionicons name={item.icon} size={17} color={item.color} />
+                </View>
+                <Text style={[styles.activityTileLabel, isChecked && { color: item.color }]} numberOfLines={2}>
+                  {item.label}
                 </Text>
               </Pressable>
             );
           })}
         </View>
         {errors.activityLevel ? <Text style={styles.errorMsg}>{errors.activityLevel}</Text> : null}
+
+        {resolvedActivity && (
+          <View style={styles.activityResultBanner}>
+            <View style={[
+              styles.activityResultIconBg,
+              { backgroundColor: `${(ACTIVITY_META[resolvedActivity.id] || ACTIVITY_META.moderate).color}20` },
+            ]}>
+              <Ionicons
+                name={(ACTIVITY_META[resolvedActivity.id] || ACTIVITY_META.moderate).icon}
+                size={14}
+                color={(ACTIVITY_META[resolvedActivity.id] || ACTIVITY_META.moderate).color}
+              />
+            </View>
+            <View style={styles.activityResultText}>
+              <Text style={styles.activityResultLabel}>Your activity level: {resolvedActivity.label}</Text>
+              <Text style={styles.activityResultDesc}>{resolvedActivity.description}</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.spacer} />
@@ -326,15 +384,15 @@ const Step2Screen = () => {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={18} color={DS.onSurface} />
+          <Ionicons name="arrow-back" size={16} color={DS.onSurface} />
           <Text style={styles.backBtnText}>{ONBOARDING_COPY.step2.backBtn}</Text>
         </Pressable>
 
-        {/* Continue — gradient pill */}
+        {/* Continue — vivid gradient pill */}
         <PillButton
           onPress={handleContinue}
           disabled={!isFormValid}
-          colors={[DS.primary, DS.primaryLight]}
+          colors={[AUTH_COLORS.primaryLight, AUTH_COLORS.primary, AUTH_COLORS.primaryDeep]}
           style={[
             styles.continueWrapper,
             !isFormValid && styles.continueWrapperDisabled,
@@ -345,8 +403,8 @@ const Step2Screen = () => {
           </Text>
           <Ionicons
             name="arrow-forward"
-            size={18}
-            color={isFormValid ? 'rgba(255,255,255,0.9)' : DS.onSurfaceVar}
+            size={16}
+            color={isFormValid ? AUTH_COLORS.white : DS.onSurfaceVar}
           />
         </PillButton>
       </View>
@@ -355,180 +413,217 @@ const Step2Screen = () => {
 };
 
 const styles = StyleSheet.create({
-  /* Section cards — white surface, gentle shadow */
+  /* Section cards — glass surface, gentle shadow */
   sectionCard: {
     backgroundColor: DS.surfContainer,
-    borderRadius: 20,
-    padding: 20,
-    gap: 14,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(15, 36, 31, 0.08)',
+    padding: 13,
+    gap: 9,
+    shadowColor: 'rgba(7, 19, 30, 0.16)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
     elevation: 3,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   sectionIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#ECFDF5',
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: 'rgba(107, 78, 255, 0.10)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
     flex: 1,
     letterSpacing: -0.2,
   },
   sectionHint: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.regular,
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
-    lineHeight: 18,
-    marginTop: -4,
+    lineHeight: 15,
+    marginTop: -3,
   },
 
-  /* Gender */
+  /* Gender — tinted cards with icon bubble */
   genderGrid: {
     flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
+    gap: 7,
   },
-  genderBtn: {
+  genderCard: {
     flex: 1,
-    minWidth: '28%',
-    paddingVertical: 14,
-    borderRadius: 16,
+    position: 'relative',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    backgroundColor: DS.surfContainerHi,
     alignItems: 'center',
     gap: 6,
   },
-  genderBtnUnselected: {
-    backgroundColor: DS.surfContainerHi,
-  },
-  genderBtnSelected: {
-    backgroundColor: DS.primary,
-    shadowColor: DS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.30,
-    shadowRadius: 14,
-    elevation: 6,
-  },
-  genderEmoji: {
-    fontSize: 28,
-  },
-  genderLabel: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.onSurface,
-  },
-  genderLabelSelected: {
-    color: DS.onPrimary,
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-
-  /* Activity */
-  activityGrid: {
-    gap: 10,
-  },
-  activityBtn: {
-    paddingVertical: 15,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+  genderIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  activityBtnUnselected: {
-    backgroundColor: DS.surfContainerHi,
-  },
-  activityBtnSelected: {
-    backgroundColor: DS.primary,
-    shadowColor: DS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    elevation: 6,
-  },
-  activityIcon: {
-    fontSize: 30,
-    marginBottom: 4,
-  },
-  activityLabel: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.bold,
+  genderLabel: {
+    fontSize: 10.5,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  activityLabelSelected: {
-    color: DS.onPrimary,
-  },
-  activityDesc: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: DS.onSurfaceVar,
-    lineHeight: 16,
     textAlign: 'center',
+    lineHeight: 13,
   },
-  activityDescSelected: {
-    color: 'rgba(255,255,255,0.80)',
+  checkBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+
+  /* Activity — checklist tile grid */
+  activityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  activityTile: {
+    position: 'relative',
+    width: '48.3%',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    backgroundColor: DS.surfContainerHi,
+    alignItems: 'center',
+    gap: 6,
+  },
+  activityTileIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityTileLabel: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+    color: DS.onSurface,
+    textAlign: 'center',
+    lineHeight: 14,
+    letterSpacing: -0.1,
+  },
+  activityCheckBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+
+  /* Activity — computed result banner */
+  activityResultBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    backgroundColor: 'rgba(107, 78, 255, 0.06)',
+    borderRadius: 12,
+    padding: 9,
+  },
+  activityResultIconBg: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  activityResultText: {
+    flex: 1,
+  },
+  activityResultLabel: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_700Bold',
+    color: DS.onSurface,
+    letterSpacing: -0.1,
+  },
+  activityResultDesc: {
+    fontSize: 10,
+    fontFamily: 'DMSans_400Regular',
+    color: DS.onSurfaceVar,
+    marginTop: 1,
   },
 
   /* Ft/in height inputs */
   ftInContainer: {
-    gap: 8,
+    gap: 6,
   },
   fieldLabel: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
     letterSpacing: -0.1,
   },
   ftInRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   ftInSurface: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: DS.surfContainerHi,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   ftInInput: {
     flex: 1,
-    fontSize: 22,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
     textAlign: 'center',
-    minHeight: 44,
-    paddingVertical: 4,
+    minHeight: 34,
+    paddingVertical: 2,
   },
   ftInUnit: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
     color: DS.primary,
-    marginLeft: 6,
+    marginLeft: 4,
   },
 
   /* Unit toggle pill group */
   unitGroup: {
     flexDirection: 'row',
     backgroundColor: DS.surfContainerHi,
-    borderRadius: 14,
+    borderRadius: 11,
     overflow: 'hidden',
   },
   unitBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -536,16 +631,16 @@ const styles = StyleSheet.create({
     backgroundColor: DS.primary,
   },
   unitBtnLeft: {
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   unitBtnRight: {
-    borderTopRightRadius: 14,
-    borderBottomRightRadius: 14,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
   },
   unitBtnText: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
   },
   unitBtnTextActive: {
@@ -554,47 +649,49 @@ const styles = StyleSheet.create({
 
   /* Error */
   errorMsg: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.medium,
+    fontSize: 11,
+    fontFamily: 'DMSans_500Medium',
     color: DS.error,
     backgroundColor: DS.errorTint,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
 
-  spacer: { minHeight: 12 },
+  spacer: { minHeight: 4 },
 
   /* Navigation row */
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
+    gap: 10,
+    marginBottom: 4,
   },
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 17,
-    paddingHorizontal: 20,
+    gap: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: DS.surfContainerHi,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.92)',
     flex: 1,
   },
   backBtnText: {
-    fontSize: 15,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: 13,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
   },
   continueWrapper: {
     flex: 2,
     borderRadius: 999,
-    shadowColor: DS.primary,
+    shadowColor: 'rgba(3, 21, 35, 0.34)',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.30,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.20,
+    shadowRadius: 14,
+    elevation: 5,
   },
   continueWrapperDisabled: {
     shadowOpacity: 0,
@@ -604,15 +701,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 17,
-    paddingHorizontal: 24,
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
     borderRadius: 999,
     overflow: 'hidden',
   },
   continueBtnText: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },

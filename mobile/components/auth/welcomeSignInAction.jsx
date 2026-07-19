@@ -11,7 +11,7 @@ export function WelcomeSignInAction({ onPress }) {
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: 44,
-    transform: [{ translateY: -36 }],
+    marginTop: 40,
+    transform: [{ translateY: -38 }],
   },
 });

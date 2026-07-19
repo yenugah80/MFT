@@ -66,7 +66,7 @@ export function FeatureRail() {
 export function WelcomeTrustMessage() {
   return (
     <View style={styles.trustMessage}>
-      <Ionicons name="analytics-outline" size={17} color={AUTH_COLORS.greenSoft} />
+      <Ionicons name="analytics-outline" size={17} color={AUTH_COLORS.primaryLight} />
       <Text style={styles.trustMessageText}>Personalized insights from your daily habits</Text>
     </View>
   );
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   heroSubBrand: {
     marginTop: 4,
     fontSize: 13,
-    color: AUTH_COLORS.greenSoft,
+    color: AUTH_COLORS.primaryLight,
     fontFamily: "DMSans_500Medium",
     letterSpacing: 0.2,
   },
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   smallLogo: { width: 34, height: 34 },
   smallBrandText: {
     fontSize: 12,
-    color: AUTH_COLORS.green,
+    color: AUTH_COLORS.primary,
     fontFamily: "DMSans_700Bold",
     letterSpacing: 8,
   },
@@ -132,8 +132,8 @@ const styles = StyleSheet.create({
   },
   welcomeHeadline: {
     maxWidth: 360,
-    fontSize: IS_COMPACT ? 36 : 44,
-    lineHeight: IS_COMPACT ? 44 : 54,
+    fontSize: IS_COMPACT ? 26 : 32,
+    lineHeight: IS_COMPACT ? 32 : 40,
     color: AUTH_COLORS.ink,
     fontFamily: "TenorSans_400Regular",
     textAlign: "center",
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: "rgba(255, 255, 255, 0.58)",
     borderWidth: 0.5,
-    borderColor: "rgba(6, 69, 45, 0.07)",
+    borderColor: "rgba(107, 78, 255, 0.07)",
     shadowColor: "rgba(7, 19, 30, 0.08)",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   trustMessageText: {
     fontSize: 11,
     lineHeight: 15,
-    color: AUTH_COLORS.green,
+    color: AUTH_COLORS.primary,
     fontFamily: "DMSans_500Medium",
     textAlign: "center",
     letterSpacing: 0,

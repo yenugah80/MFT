@@ -12,9 +12,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.zennxt.myfoodtracker",
       "buildNumber": "1",
+      "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "NSCameraUsageDescription": "MFT needs camera access to photograph your meals for nutrition analysis.",
         "NSMicrophoneUsageDescription": "MFT needs microphone access for voice meal logging.",
         "NSPhotoLibraryUsageDescription": "MFT needs photo library access to select food photos for analysis.",
@@ -147,6 +150,9 @@
     "owner": "harikay",
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/91264355-29bc-4019-be18-08002c3180c2"
     }
   }
 }

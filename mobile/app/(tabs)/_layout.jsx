@@ -1,84 +1,24 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef } from "react";
-import { View, ActivityIndicator, Text, TouchableOpacity } from "react-native";
-import { COLORS } from "../../constants/colors";
-import { TYPOGRAPHY, BRAND, TEXT, SURFACES } from "../../constants/premiumTheme";
+import { BRAND, TEXT, SURFACES, TYPOGRAPHY } from "../../constants/premiumTheme";
 import { useProfileContext } from "../../providers/ProfileProvider";
+import LoadingSpinner from "../../components/LoadingSpinner";
 
 const TabsLayout = () => {
   const { isSignedIn, isLoaded } = useAuth();
-  const { onboardingComplete, isLoading: profileLoading, error, refetchProfile } = useProfileContext();
-  const retryTimerRef = useRef(null);
+  const { onboardingComplete, profile, isLoading } = useProfileContext();
 
-  // Auto-retry profile fetch if stuck on 401 — happens when token provider isn't ready yet
-  useEffect(() => {
-    const is401 = error?.message?.includes('401') || error?.response?.status === 401;
-    if (is401) {
-      retryTimerRef.current = setTimeout(() => {
-        console.log('[TabsLayout] Auto-retrying profile after 401...');
-        refetchProfile();
-      }, 2000);
-    }
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    };
-  }, [error, refetchProfile]);
-
+  // Safety guards — index.jsx handles the happy-path routing;
+  // these only fire on direct deep-links or unexpected state changes.
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
-  // Show loading while profile is being fetched or onboarding status is unknown
-  if (profileLoading || onboardingComplete === null) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
-  }
+  // Block only on the INITIAL profile load (no cached data yet).
+  // Background refetches keep isLoading false, so this never re-fires mid-session.
+  if (!profile && isLoading) return <LoadingSpinner message="Loading your profile…" />;
 
-  // CRITICAL FIX: Handle API errors - don't redirect to onboarding on error!
-  // This was causing returning users to see onboarding when backend was slow/failing
-  if (error) {
-    // 401 errors are expected when auth token isn't ready yet - auto-retry handles recovery
-    const is401 = error?.message?.includes('401') || error?.response?.status === 401;
-    if (is401) {
-      console.log('[TabsLayout] Auth token not ready, waiting for auto-retry...');
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      );
-    }
-
-    // Log non-401 errors as warnings (not errors to avoid red screen in dev)
-    console.warn('[TabsLayout] Profile fetch error:', error);
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 24 }}>
-        <Ionicons name="cloud-offline-outline" size={48} color={COLORS.textLight} />
-        <Text style={{ fontSize: 18, fontFamily: TYPOGRAPHY.family.semibold, color: COLORS.text, marginTop: 16, textAlign: 'center' }}>
-          Connection Issue
-        </Text>
-        <Text style={{ fontSize: 14, fontFamily: TYPOGRAPHY.family.regular, color: COLORS.textLight, marginTop: 8, textAlign: 'center' }}>
-          Unable to load your profile. Please check your connection and try again.
-        </Text>
-        <TouchableOpacity
-          onPress={() => refetchProfile()}
-          style={{ marginTop: 24, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
-        >
-          <Text style={{ color: '#FFFFFF', fontFamily: TYPOGRAPHY.family.semibold }}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Only redirect to onboarding if profile loaded successfully AND onboarding is incomplete
-  // onboardingComplete is true if: onboardingCompletedAt exists OR profile has full data
-  if (onboardingComplete === false) {
-    console.log('[TabsLayout] New user detected - redirecting to onboarding');
-    return <Redirect href="/onboarding" />;
-  }
+  if (onboardingComplete === false) return <Redirect href="/onboarding" />;
 
   return (
     <Tabs

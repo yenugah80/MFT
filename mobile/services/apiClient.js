@@ -97,7 +97,7 @@ class ApiClient {
     try {
       return await this.tokenProvider();
     } catch (error) {
-      if (__DEV__) console.error('[API] Token error:', error.message);
+      if (__DEV__) console.warn('[API] Token error:', error.message);
       return null;
     }
   }
@@ -121,15 +121,17 @@ class ApiClient {
       });
 
       clearTimeout(timeout);
-      this.isHealthy = response.ok;
+      // Any HTTP response means the server is reachable (even 403 from Cloudflare challenge).
+      // Only network-level failures (timeout, DNS) mean truly offline.
+      this.isHealthy = response.status < 500;
       this.lastHealthCheck = now;
 
-      if (__DEV__) console.log(`[API] Health: ${this.isHealthy ? '✅' : '⚠️'}`);
+      if (__DEV__) console.log(`[API] Health: ${this.isHealthy ? '✅' : '⚠️'} (${response.status})`);
       return this.isHealthy;
     } catch (error) {
       this.isHealthy = false;
       this.lastHealthCheck = now;
-      if (__DEV__) console.error(`[API] ❌ Health check failed at ${this.baseURL}/health. Error: ${error.message}`);
+      if (__DEV__) console.warn(`[API] ⚠️ Health check failed at ${this.baseURL}/health. Error: ${error.message}`);
       return false;
     }
   }
@@ -138,6 +140,8 @@ class ApiClient {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'User-Agent': 'MFT-Mobile/1.0 (React Native; Expo)',
+      'X-Client-Type': 'mobile',
       ...customHeaders,
     };
 
@@ -171,6 +175,11 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        // Read Retry-After before consuming the body — headers remain accessible after body read.
+        const retryAfterHeader = response.status === 429
+          ? response.headers.get('Retry-After')
+          : null;
+
         const error = new Error(`HTTP ${response.status}`);
         error.response = {
           status: response.status,
@@ -180,7 +189,11 @@ class ApiClient {
 
         // Fast retry logic
         if (isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
-          const delay = RETRY_CONFIG.delays[attempt];
+          let delay = RETRY_CONFIG.delays[attempt];
+          if (retryAfterHeader) {
+            const seconds = parseInt(retryAfterHeader, 10);
+            if (!isNaN(seconds) && seconds > 0) delay = seconds * 1000;
+          }
           if (__DEV__) console.log(`[API] Retry (${attempt + 1}/${RETRY_CONFIG.maxRetries}) after ${delay}ms`);
           await sleep(delay);
           return this.fetchWithRetry(url, options, attempt + 1);
@@ -220,8 +233,8 @@ class ApiClient {
           this.isHealthy = false;
           if (__DEV__ && error.message !== 'Request timeout') {
             const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
-            console.error(
-              `[API] ❌ Backend Error (${error.response?.status || 'Offline'}).\n` +
+            console.warn(
+              `[API] ⚠️ Backend unreachable (${error.response?.status || 'Offline'}).\n` +
               `URL: ${this.baseURL}\n` +
               `Details: ${serverError}`
             );
@@ -312,7 +325,10 @@ export function warmupBackend() {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000); // 15s for cold start
 
-      const response = await fetch(`${apiClient.baseURL.replace('/api', '')}/health`, {
+      // Remove only the trailing API path. A plain replace('/api', '') also
+      // matches the hostname in https://api.my-food-tracker.com and produces
+      // the invalid host https://.my-food-tracker.com.
+      const response = await fetch(`${apiClient.baseURL.replace(/\/api\/?$/, '')}/health`, {
         method: 'GET',
         signal: controller.signal,
         headers: { 'Accept': 'application/json' },

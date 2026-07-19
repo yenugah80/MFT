@@ -1,12 +1,12 @@
 import { View, ActivityIndicator, Text, StyleSheet } from "react-native";
-import { TEXT, SURFACES, SPACING, TYPOGRAPHY, BRAND } from "../constants/premiumTheme";
+import { TEXT, SPACING, TYPOGRAPHY, BRAND } from "../constants/premiumTheme";
 
-export default function LoadingSpinner({ message = "Loading...", size = "large" }) {
+export default function LoadingSpinner({ message, size = "large", backgroundColor = "#FFFFFF" }) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor }]}>
       <View style={styles.content}>
         <ActivityIndicator size={size} color={BRAND.primary} />
-        <Text style={styles.message}>{message}</Text>
+        {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
     </View>
   );
@@ -18,7 +18,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: SPACING[8],
-    backgroundColor: SURFACES.background.primary,
   },
   content: {
     alignItems: "center",

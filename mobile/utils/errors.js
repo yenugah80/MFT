@@ -10,7 +10,7 @@ export const parseClerkError = (error) => {
   if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
     // Return the first error's long message or message
     const firstError = error.errors[0];
-    return firstError.longMessage || firstError.message || "Authentication failed.";
+    return firstError.longMessage || firstError.long_message || firstError.message || "Authentication failed.";
   }
 
   // Check for standard Error object message

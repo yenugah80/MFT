@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   AuthCanvas,
   AuthField,
@@ -137,7 +136,7 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
       <SmallBrand style={styles.brand} />
       <AuthHeading title="Check your email" subtitle={`Enter the verification code sent to ${email}.`} />
 
-      <Animated.View entering={FadeInDown.delay(140).duration(420)}>
+      <View>
         <Notice type={messageType} text={message} />
 
         <AuthField
@@ -169,7 +168,7 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
         <View style={styles.footer}>
           <FooterLink prompt="Wrong email?" action="Back to sign up" onPress={onBack} />
         </View>
-      </Animated.View>
+      </View>
     </AuthCanvas>
   );
 };
@@ -189,7 +188,7 @@ const styles = StyleSheet.create({
   },
   resendText: {
     fontSize: 15,
-    color: AUTH_COLORS.green,
+    color: AUTH_COLORS.primary,
     fontFamily: "DMSans_700Bold",
   },
   footer: {

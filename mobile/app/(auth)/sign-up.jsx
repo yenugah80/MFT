@@ -1,11 +1,14 @@
 import { useOAuth, useSignUp } from "@clerk/clerk-expo";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { Ionicons } from "@expo/vector-icons";
-import * as Linking from "expo-linking";
+import { makeRedirectUri } from "expo-auth-session";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useFocusEffect } from "expo-router";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import {
+  AppleButton,
   AuthCanvas,
   AuthDivider,
   AuthField,
@@ -16,6 +19,7 @@ import {
   Notice,
   PrimaryButton,
   WelcomeBrand,
+  WelcomeCreateAccountAction,
   WelcomeFeatureChips,
   WelcomeHeadlineContent,
   WelcomePrivacyNote,
@@ -28,10 +32,12 @@ import VerifyEmail from "./verify-email";
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
 
+const OAUTH_REDIRECT_URL = makeRedirectUri({ native: "my-food-tracker://oauth-native-callback" });
+
 export default function SignUpScreen() {
   const router = useRouter();
   const { isLoaded, signUp } = useSignUp();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const lastNameRef = useRef(null);
   const emailRef = useRef(null);
@@ -44,6 +50,7 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
@@ -55,21 +62,72 @@ export default function SignUpScreen() {
     setMessage(text);
   };
 
+  useFocusEffect(
+    useRef(() => {
+      setMessage(null);
+    }).current
+  );
+
   const handleGoogleSignUp = async () => {
     setGoogleLoading(true);
     setMessage(null);
     try {
-      const { createdSessionId, setActive } = await startOAuthFlow({
-        redirectUrl: Linking.createURL("/"),
+      console.warn("[Auth] Google OAuth redirectUrl:", OAUTH_REDIRECT_URL);
+      const { createdSessionId, setActive } = await startGoogleOAuthFlow({
+        redirectUrl: OAUTH_REDIRECT_URL,
       });
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
         router.replace("/onboarding/step-1");
       }
     } catch (err) {
-      setNotice("error", "Google sign-up failed. Please try again or use email.");
+      console.warn("[Auth] Google sign-up failed:", err);
+      setNotice("error", __DEV__ ? parseClerkError(err) : "Google sign-up failed. Please try again or use email.");
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignUp = async () => {
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      setNotice("error", "Sign in with Apple is not available on this device.");
+      return;
+    }
+
+    setAppleLoading(true);
+    setMessage(null);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const attempt = await signUp.create({
+        strategy: "oauth_apple",
+        redirectUrl: OAUTH_REDIRECT_URL,
+        token: credential.identityToken,
+        ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
+        ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
+      });
+
+      if (attempt.status === "complete" || attempt.status === "missing_requirements") {
+        router.replace("/onboarding/step-1");
+      }
+    } catch (err) {
+      if (err.code === "ERR_REQUEST_CANCELED") return;
+      console.warn("[Auth] Apple sign-up failed:", err);
+      const appleMsg = {
+        ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
+        ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
+        ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
+        ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
+      }[err.code];
+      setNotice("error", appleMsg || parseClerkError(err) || "Apple sign-up failed. Please try again or use email.");
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -93,12 +151,17 @@ export default function SignUpScreen() {
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPendingVerification(true);
     } catch (err) {
-      if (err?.errors?.[0]?.code === "form_identifier_exists") {
+      const code = err?.errors?.[0]?.code;
+      console.warn("[Auth] Sign-up error code:", code, err);
+      if (code === "form_identifier_exists") {
         setNotice("error", "This email is already registered. Please sign in instead.");
         return;
       }
+      if (code === "captcha_missing_token" || code === "captcha_invalid") {
+        setNotice("error", "Security check failed. Please try again in a moment.");
+        return;
+      }
       setNotice("error", parseClerkError(err));
-      console.log("CLERK SIGN-UP ERROR:", err);
     } finally {
       setLoading(false);
     }
@@ -135,7 +198,7 @@ export default function SignUpScreen() {
             <WelcomeSubheadlineContent />
           </View>
           <View style={styles.welcomeBottom}>
-            <PrimaryButton title="Create Account" onPress={() => setStep("details")} />
+            <WelcomeCreateAccountAction onPress={() => setStep("details")} />
             <FooterLink
               prompt="Already have an account?"
               action="Sign In"
@@ -163,13 +226,8 @@ export default function SignUpScreen() {
         subtitle="Let's get started."
       />
 
-      <View>
-        <Notice type={messageType} text={message} />
-
-        {/* Google SSO — primary social option shown first */}
-        <GoogleButton onPress={handleGoogleSignUp} loading={googleLoading} />
-
-        <AuthDivider />
+      <View style={styles.detailsForm}>
+        <Notice type={messageType} text={message} onDismiss={() => setMessage(null)} />
 
         {/* Name row */}
         <View style={styles.nameRow}>
@@ -255,11 +313,21 @@ export default function SignUpScreen() {
           onPress={handleSignUp}
         />
 
-        <View style={styles.footer}>
-          <FooterLink
-            prompt="Already have an account?"
-            action="Sign In"
-            onPress={() => router.replace("/(auth)/sign-in")}
+        <AuthDivider />
+
+        {/* Social SSO — compact row keeps create-account within one viewport */}
+        <View style={styles.socialRow}>
+          <AppleButton
+            onPress={handleAppleSignUp}
+            loading={appleLoading}
+            title="Apple"
+            style={[styles.socialOption, styles.socialOptionApple]}
+          />
+          <GoogleButton
+            onPress={handleGoogleSignUp}
+            loading={googleLoading}
+            title="Google"
+            style={styles.socialOption}
           />
         </View>
       </View>
@@ -274,7 +342,7 @@ const styles = StyleSheet.create({
   },
   welcomeMiddle: {
     alignItems: "center",
-    marginTop: 28,
+    marginTop: 14,
     gap: 14,
   },
   welcomeBottom: {
@@ -282,8 +350,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   topRow: {
-    minHeight: 54,
+    minHeight: 46,
     justifyContent: "center",
+    marginBottom: 14,
+  },
+  detailsForm: {
+    marginTop: 30,
   },
   nameRow: {
     flexDirection: "row",
@@ -292,7 +364,18 @@ const styles = StyleSheet.create({
   nameField: {
     flex: 1,
   },
-  footer: {
-    marginTop: 32,
+  socialRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 10,
+  },
+  socialOption: {
+    flex: 1,
+    marginTop: 0,
+    height: 46,
+    paddingHorizontal: 10,
+  },
+  socialOptionApple: {
+    marginTop: 0,
   },
 });

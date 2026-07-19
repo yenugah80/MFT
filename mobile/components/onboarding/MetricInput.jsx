@@ -1,15 +1,9 @@
 /**
- * MetricInput — "The Organic Editorial" Design System
- *
- * Input spec (DESIGN.md):
- *   - surface-container-lowest (#ffffff) background — inner-glow against green surfaces
- *   - No explicit border; ghost border at 15% opacity for focus/error
- *   - Label sits ABOVE the field, never inside as a placeholder
- *   - Error: #DC2626 text + 6% red tint on background
- *   - Unit toggle: pill group, background-only switching, zero borders
+ * MetricInput — warm-cream / deep-green editorial input
+ * (matches the brand established in components/auth)
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -18,19 +12,8 @@ import {
   Animated,
   StyleSheet,
 } from 'react-native';
-import { TYPOGRAPHY } from '../../constants/premiumTheme';
-
-const DS = {
-  surfLow:       '#FFFFFF',
-  surfHigh:      '#F0F5F2',
-  primary:       '#0F9B5E',
-  onSurface:     '#111827',
-  onSurfaceVar:  'rgba(17, 24, 39, 0.45)',
-  outlineFocus:  'rgba(15, 155, 94, 0.30)',
-  error:         '#DC2626',
-  errorTint:     'rgba(220, 38, 38, 0.06)',
-  ambientShadow: 'rgba(0, 0, 0, 0.06)',
-};
+import { Ionicons } from '@expo/vector-icons';
+import { AUTH_COLORS } from '../auth/constants';
 
 const MetricInput = ({
   label,
@@ -45,8 +28,10 @@ const MetricInput = ({
   error,
   min,
   max,
+  icon,
+  iconColor = AUTH_COLORS.primary,
+  iconBg,
 }) => {
-  const [focused, setFocused] = useState(false);
   const borderOpacity = useRef(new Animated.Value(0)).current;
 
   const animateBorder = (to) =>
@@ -74,17 +59,25 @@ const MetricInput = ({
 
   const borderColor = borderOpacity.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', hasError ? DS.error : DS.outlineFocus],
+    outputRange: ['transparent', hasError ? AUTH_COLORS.danger : 'rgba(107, 78, 255, 0.30)'],
   });
 
   return (
     <View style={styles.wrapper}>
       {/* Label — always above */}
-      <Text style={styles.label}>{label}</Text>
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      </View>
 
       <View style={styles.row}>
-        {/* White inner-glow input surface */}
+        {!!icon && (
+          <View style={[styles.iconBubble, { backgroundColor: iconBg || `${iconColor}16` }]}>
+            <Ionicons name={icon} size={15} color={iconColor} />
+          </View>
+        )}
+
+        {/* Input surface */}
         <Animated.View
           style={[
             styles.fieldSurface,
@@ -99,7 +92,7 @@ const MetricInput = ({
             onFocus={() => { animateBorder(1); }}
             onBlur={() => { animateBorder(0); }}
             placeholder={placeholder}
-            placeholderTextColor={DS.onSurfaceVar}
+            placeholderTextColor={AUTH_COLORS.muted}
             keyboardType={keyboardType}
             returnKeyType="done"
             selectTextOnFocus
@@ -141,58 +134,68 @@ const styles = StyleSheet.create({
   wrapper: {
     gap: 6,
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+  },
   label: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.onSurface,
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.ink,
     letterSpacing: -0.1,
   },
   hint: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: DS.onSurfaceVar,
-    lineHeight: 17,
-    marginTop: -2,
+    fontSize: 10,
+    fontFamily: 'DMSans_400Regular',
+    color: AUTH_COLORS.muted,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
-  /* Light gray-green input surface — premium feel */
+  iconBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
   fieldSurface: {
     flex: 1,
-    backgroundColor: DS.surfHigh,
-    borderRadius: 14,
+    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    borderRadius: 11,
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
   fieldSurfaceError: {
-    backgroundColor: DS.errorTint,
+    backgroundColor: AUTH_COLORS.dangerBg,
   },
   input: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 22,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: DS.onSurface,
-    minHeight: 54,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.ink,
+    minHeight: 38,
   },
   /* Unit group — segmented control pill */
   unitGroup: {
     flexDirection: 'row',
-    backgroundColor: DS.surfHigh,
-    borderRadius: 14,
+    backgroundColor: 'rgba(107, 78, 255, 0.05)',
+    borderRadius: 11,
     overflow: 'hidden',
   },
   unitBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   unitBtnActive: {
-    backgroundColor: DS.primary,
+    backgroundColor: AUTH_COLORS.primary,
   },
   unitBtnLeft: {
     borderTopLeftRadius: 14,
@@ -203,17 +206,18 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 14,
   },
   unitLabel: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.onSurface,
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.ink,
   },
   unitLabelActive: {
     color: '#FFFFFF',
   },
   errorMsg: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: DS.error,
+    fontSize: 10,
+    fontFamily: 'DMSans_500Medium',
+    color: AUTH_COLORS.danger,
+    marginLeft: 42,
   },
 });
 

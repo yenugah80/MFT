@@ -11,6 +11,6 @@ export function WelcomeSubheadlineContent() {
 
 const styles = StyleSheet.create({
   root: {
-    transform: [{ translateY: 22 }],
+    transform: [{ translateY: 10 }],
   },
 });

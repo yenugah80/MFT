@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES } from '../../constants/premiumTheme';
+import { AUTH_COLORS } from '../auth/constants';
 
-const BackButton = ({ onPress, enabled = true, light = false }) => {
+const BackButton = ({ onPress, enabled = true }) => {
   const animScale = React.useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -62,7 +62,7 @@ const BackButton = ({ onPress, enabled = true, light = false }) => {
         <Ionicons
           name="chevron-back"
           size={24}
-          color={light ? 'rgba(255,255,255,0.95)' : (enabled ? TEXT.primary : TEXT.muted)}
+          color={enabled ? AUTH_COLORS.ink : AUTH_COLORS.muted}
         />
       </Pressable>
     </Animated.View>
@@ -76,7 +76,14 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.92)',
+    shadowColor: 'rgba(35, 20, 65, 0.18)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 4,
   },
   buttonDisabled: {
     opacity: 0.35,

@@ -1,206 +1,213 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, Image, Animated,
+  Platform, ScrollView, Animated, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import BackButton from './BackButton';
-import { TYPOGRAPHY } from '../../constants/premiumTheme';
-
-// Per-step gradient backgrounds
-const STEP_GRADIENTS = [
-  ['#0F9B5E', '#1DB97A', '#E8F8F0'],   // Step 1 – deep green → mint → cream
-  ['#6366F1', '#818CF8', '#EEF2FF'],   // Step 2 – indigo → soft lavender → white
-  ['#F59E0B', '#FBBF24', '#FFFBEB'],   // Step 3 – amber → gold → cream
-  ['#0F9B5E', '#34D399', '#ECFDF5'],   // Step 4 – green → mint → pale
-];
+import { AUTH_COLORS } from '../auth/constants';
+import { ScreenBackdrop } from '../auth/canvas';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 
 const OnboardingLayout = ({
-  step = 1, totalSteps = 4, title, subtitle, children,
+  step = 1, totalSteps = 4, title, subtitle, children, footer,
   onBack, canGoBack = true, scrollEnabled = true, keyboardAvoidingEnabled = true,
+  onSkip,
 }) => {
-  const idx = Math.min(step - 1, STEP_GRADIENTS.length - 1);
-  const [topColor, midColor, bgColor] = STEP_GRADIENTS[idx];
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+  const router = useRouter();
+  const { setStep } = useOnboarding();
+
+  const navigateToStep = (targetStep) => {
+    if (targetStep === step || targetStep < 1 || targetStep > totalSteps) return;
+    setStep(targetStep);
+    router.replace(`/onboarding/step-${targetStep}`);
+  };
+
+  const handleSkip = () => {
+    if (onSkip) {
+      onSkip();
+      return;
+    }
+    navigateToStep(step + 1);
+  };
 
   useEffect(() => {
     fadeAnim.setValue(0);
-    slideAnim.setValue(30);
+    slideAnim.setValue(24);
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, stiffness: 200, damping: 22 }),
     ]).start();
   }, [step]);
 
+  const titleLines = typeof title === 'string' ? title.split('\n') : [];
+
   const inner = (
     <Animated.View style={[styles.flex, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      {/* Gradient hero band */}
-      <LinearGradient
-        colors={[topColor, midColor, bgColor]}
-        style={styles.heroBand}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-      >
-        {/* Decorative circles */}
-        <View style={[styles.circle, styles.circleTopRight, { backgroundColor: 'rgba(255,255,255,0.12)' }]} />
-        <View style={[styles.circle, styles.circleBottomLeft, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-
-        {/* Nav row */}
-        <View style={styles.navRow}>
+      {/* Nav row */}
+      <View style={styles.navRow}>
+        <View style={styles.navLeft}>
           {canGoBack
-            ? <BackButton onPress={() => canGoBack && onBack?.()} enabled={canGoBack} light />
-            : <View style={styles.navGhost} />}
-          <View style={styles.stepPill}>
-            <Text style={styles.stepPillText}>{step} / {totalSteps}</Text>
-          </View>
+            ? <BackButton onPress={() => canGoBack && onBack?.()} enabled={canGoBack} />
+            : null}
+          <Text style={styles.stepLabel}>Step {step} of {totalSteps}</Text>
         </View>
 
-        {/* Brand — step 1 only */}
-        {step === 1 && (
-          <View style={styles.brandHero}>
-            <View style={styles.logoWrapper}>
-              <Image source={require('../../assets/images/app-logo.png')} style={styles.logo} />
-            </View>
-            <Text style={styles.brandName}>MFT</Text>
-            <Text style={styles.brandTagline}>Your personal nutrition companion</Text>
-          </View>
-        )}
-
-        {/* Title */}
-        {title && (
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{title}</Text>
-            {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-          </View>
-        )}
-
-        {/* Progress dots */}
-        <View style={styles.dotsRow}>
-          {Array.from({ length: totalSteps }, (_, i) => (
-            <View key={i} style={[styles.dot, i < step ? styles.dotActive : styles.dotInactive]} />
-          ))}
+        <View style={styles.progressTrack}>
+          {Array.from({ length: totalSteps }, (_, i) => {
+            const isCompleted = i < step - 1;
+            const isCurrent = i === step - 1;
+            const isFuture = i > step - 1;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => navigateToStep(i + 1)}
+                disabled={isCurrent}
+                hitSlop={10}
+                style={({ pressed }) => [
+                  styles.progressSegment,
+                  isCurrent || isCompleted
+                    ? styles.progressSegmentActive
+                    : styles.progressSegmentInactive,
+                  isCompleted && styles.progressSegmentCompleted,
+                  isFuture && pressed && styles.progressSegmentPressed,
+                ]}
+              />
+            );
+          })}
         </View>
-      </LinearGradient>
+      </View>
+
+      {/* Title */}
+      {titleLines.length > 0 && (
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>
+            {titleLines.map((line, i) => (
+              <Text key={i} style={i === titleLines.length - 1 && titleLines.length > 1 ? styles.titleAccent : null}>
+                {line}
+                {i < titleLines.length - 1 ? '\n' : ''}
+              </Text>
+            ))}
+          </Text>
+          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        </View>
+      )}
 
       {/* Content area */}
-      <View style={[styles.contentArea, { backgroundColor: bgColor }]}>
-        {scrollEnabled ? (
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {children}
-          </ScrollView>
-        ) : (
-          <View style={[styles.scrollContent, styles.flex]}>{children}</View>
-        )}
-      </View>
+      {scrollEnabled ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={[styles.scrollContent, styles.flex]}>{children}</View>
+      )}
+
+      {footer && <View style={styles.footer}>{footer}</View>}
+
+      {/* Skip this step — hidden on the final step */}
+      {step < totalSteps && (
+        <Pressable onPress={handleSkip} style={styles.skipRow}>
+          <Text style={styles.skipText}>Skip this step</Text>
+          <Text style={styles.skipNote}> · You can adjust this in your profile later</Text>
+        </Pressable>
+      )}
     </Animated.View>
   );
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: topColor }]}>
-      {keyboardAvoidingEnabled ? (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.flex}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 100}
-        >
-          {inner}
-        </KeyboardAvoidingView>
-      ) : inner}
-    </SafeAreaView>
+    <ScreenBackdrop style={styles.root}>
+      <SafeAreaView style={styles.flex}>
+        {keyboardAvoidingEnabled ? (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.flex}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 100}
+          >
+            {inner}
+          </KeyboardAvoidingView>
+        ) : inner}
+      </SafeAreaView>
+    </ScreenBackdrop>
   );
 };
 
 const styles = StyleSheet.create({
-  root:  { flex: 1 },
-  flex:  { flex: 1 },
-
-  heroBand: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 32,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-
-  // Decorative circles
-  circle: { position: 'absolute', borderRadius: 999 },
-  circleTopRight: { width: 200, height: 200, top: -60, right: -60 },
-  circleBottomLeft: { width: 140, height: 140, bottom: -40, left: -30 },
+  root: { flex: 1 },
+  flex: { flex: 1 },
 
   // Nav
   navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    marginBottom: 14,
   },
-  navGhost: { width: 44, height: 44 },
-  stepPill: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
+  navLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepLabel: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_500Medium',
+    color: AUTH_COLORS.muted,
   },
-  stepPillText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    letterSpacing: 0.3,
-  },
-
-  // Brand (step 1)
-  brandHero: { alignItems: 'center', marginBottom: 24 },
-  logoWrapper: {
-    width: 100, height: 100, borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  logo: { width: 80, height: 80, borderRadius: 20 },
-  brandName: {
-    fontSize: 36, fontFamily: TYPOGRAPHY.family.bold,
-    color: '#FFFFFF', letterSpacing: -1, marginBottom: 4,
-  },
-  brandTagline: {
-    fontSize: 15, fontFamily: TYPOGRAPHY.family.regular,
-    color: 'rgba(255,255,255,0.85)', letterSpacing: 0.1,
-  },
+  progressTrack: { flexDirection: 'row', gap: 4, width: 96 },
+  progressSegment: { flex: 1, height: 4, borderRadius: 999 },
+  progressSegmentActive: { backgroundColor: AUTH_COLORS.primary },
+  progressSegmentInactive: { backgroundColor: 'rgba(107, 78, 255, 0.14)' },
+  progressSegmentCompleted: { opacity: 0.55 },
+  progressSegmentPressed: { backgroundColor: 'rgba(107, 78, 255, 0.28)' },
 
   // Title
-  titleBlock: { marginBottom: 16, gap: 6 },
+  titleBlock: { paddingHorizontal: 20, marginBottom: 16, gap: 6 },
   title: {
-    fontSize: 32, fontFamily: TYPOGRAPHY.family.bold,
-    color: '#FFFFFF', letterSpacing: -0.8, lineHeight: 38,
+    fontSize: 28, fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.ink, letterSpacing: -0.4, lineHeight: 32,
   },
+  titleAccent: { color: AUTH_COLORS.primary },
   subtitle: {
-    fontSize: 15, fontFamily: TYPOGRAPHY.family.regular,
-    color: 'rgba(255,255,255,0.80)', lineHeight: 22,
+    fontSize: 14, fontFamily: 'DMSans_500Medium',
+    color: AUTH_COLORS.muted, lineHeight: 20,
   },
-
-  // Progress dots
-  dotsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  dot: { height: 6, borderRadius: 999 },
-  dotActive: { flex: 2, backgroundColor: '#FFFFFF' },
-  dotInactive: { flex: 1, backgroundColor: 'rgba(255,255,255,0.30)' },
 
   // Content
-  contentArea: { flex: 1, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
   scroll: { flex: 1 },
   scrollContent: {
-    flexGrow: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 48, gap: 16,
+    paddingHorizontal: 20, paddingBottom: 16, paddingTop: 2, gap: 14,
+  },
+
+  // Footer (fixed CTA area, outside scroll)
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+
+  // Skip row
+  skipRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingBottom: 4,
+  },
+  skipText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    color: AUTH_COLORS.primary,
+    textDecorationLine: 'underline',
+  },
+  skipNote: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: AUTH_COLORS.muted,
   },
 });
 

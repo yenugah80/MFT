@@ -3,21 +3,58 @@
  */
 
 // ============================================================================
-// Profile Types
+// Profile Types  (/api/profile/me response shape)
 // ============================================================================
 
-export interface Profile {
-  id: number;
-  userId: string;
-  fullName: string | null;
-  email: string | null;
-  gender: 'female' | 'male' | 'other' | null;
+export interface ProfileBasics {
+  fullName: string;
+  email: string;
+  gender: string;
   age: number | null;
-  weightKg: string | null; // Decimal stored as string
+  weightKg: string | null;
   heightCm: number | null;
-  activityLevel: string | null;
-  createdAt: string;
-  updatedAt: string;
+  activityLevel: string;
+}
+
+/** A dietary or cuisine preference as stored/returned by the backend (id + 1-5 strength). */
+export interface PreferenceItem {
+  id: string;
+  strength: number;
+}
+
+export interface ProfileDietary {
+  preferences: PreferenceItem[];
+  allergies: string[];
+  allergenSeverity: Record<string, string>;
+  intoleranceType: Record<string, string>;
+  dislikes: string[];
+  cuisinePreference: PreferenceItem[];
+  region: string | null;
+  cookingStyle: string | null;
+}
+
+export interface ProfileGoals {
+  primaryGoal: string;
+  dailyCalories: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatsG: number | null;
+  waterLiters: string | null;
+}
+
+export interface ProfileGamification {
+  xp: number;
+  level: number;
+  streak: number;
+  badges: string[];
+}
+
+export interface Profile {
+  basics: ProfileBasics;
+  dietary: ProfileDietary;
+  goals: ProfileGoals;
+  gamification: ProfileGamification;
+  onboardingCompletedAt: string | null;
 }
 
 // ============================================================================

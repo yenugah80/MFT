@@ -11,6 +11,6 @@ export function WelcomeCreateAccountAction({ onPress }) {
 
 const styles = StyleSheet.create({
   root: {
-    transform: [{ translateY: -36 }],
+    transform: [{ translateY: -46 }],
   },
 });

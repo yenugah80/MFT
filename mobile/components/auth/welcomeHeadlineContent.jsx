@@ -11,6 +11,6 @@ export function WelcomeHeadlineContent() {
 
 const styles = StyleSheet.create({
   root: {
-    transform: [{ translateY: 0 }],
+    transform: [{ translateY: 16 }],
   },
 });

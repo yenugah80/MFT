@@ -19,7 +19,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import * as Haptics from 'expo-haptics';
 
-import SafeScreen from "../../components/SafeScreen";
 import HealthSyncBanner from "../../components/HealthSyncBanner";
 import useProfileForm from "../../hooks/useProfileForm";
 import { useDashboard } from "../../hooks/useDashboard";
@@ -193,12 +192,12 @@ export default function ProfileScreen() {
 
   if (!isLoaded || !profile) {
     return (
-      <SafeScreen>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.loadingText}>Loading profile…</Text>
         </View>
-      </SafeScreen>
+      </View>
     );
   }
 
@@ -229,7 +228,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeScreen edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -299,7 +298,7 @@ export default function ProfileScreen() {
             level={level}
             streak={streak}
             daysLogged={daysLogged}
-            onPress={() => router.push('/achievements')}
+            onPress={() => router.push('/achievements?from=profile')}
           />
 
           {/* Body Metrics */}
@@ -423,7 +422,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
-    </SafeScreen>
+    </View>
   );
 }
 

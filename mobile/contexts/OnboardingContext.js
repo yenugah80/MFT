@@ -7,6 +7,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, u
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   calculateNutritionTargets,
   validateNutritionTargets,
@@ -50,6 +51,7 @@ const initialState = {
       heightInches: '',
       gender: null,
       activityLevel: null,
+      activityChecklist: [],
     },
     step3: {
       dietaryPreferences: [],
@@ -243,6 +245,7 @@ export function OnboardingProvider({ children }) {
   const [state, dispatch] = useReducer(onboardingReducer, initialState);
   const { getToken, user } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const hasLoadedDraft = useRef(false);
 
   // Load draft from AsyncStorage on mount
@@ -465,6 +468,16 @@ export function OnboardingProvider({ children }) {
       await AsyncStorage.removeItem('@onboarding_draft');
       await AsyncStorage.removeItem('@onboarding_current_step');
 
+      // Must update cache before navigating — stale cache causes (tabs)/_layout to bounce back.
+      queryClient.setQueryData(['profile'], (old) => ({
+        ...(old ?? {}),
+        onboardingCompletedAt: new Date().toISOString(),
+      }));
+      // Trigger a background refetch so dashboard immediately gets the full profile
+      // (basics, dietary, goals) that were just saved — setQueryData alone only patches
+      // onboardingCompletedAt; staleTime would otherwise delay the full fetch by 5 min.
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+
       dispatch({
         type: ACTIONS.SAVE_SUCCESS,
         payload: 4,
@@ -478,16 +491,16 @@ export function OnboardingProvider({ children }) {
         payload: error.message || 'Failed to complete onboarding.',
       });
     }
-  }, [state.draft, getToken, router, user]);
+  }, [state, getToken, router, user, queryClient]);
 
   const resetOnboarding = useCallback(async () => {
     try {
       await AsyncStorage.removeItem('@onboarding_draft');
       await AsyncStorage.removeItem('@onboarding_current_step');
-      dispatch({ type: ACTIONS.RESET });
-    } catch (error) {
-      console.warn('[OnboardingContext] Error resetting:', error);
+    } catch (_) {
+      // Storage failure is non-fatal — in-memory state resets regardless.
     }
+    dispatch({ type: ACTIONS.RESET });
   }, []);
 
   const clearError = useCallback(() => {

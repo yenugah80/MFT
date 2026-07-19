@@ -1,15 +1,6 @@
 /**
- * Onboarding Step 4 — Premium Wellness Design
- *
- * - White macro cards with gentle shadows on cream (#F8FBF9)
- * - Refined mint-green primary (#0F9B5E) hero gradient
- * - Hero: deep green → mint gradient with decorative circles
- * - Macro cards: white surface, colored icon bg, macro-specific accent colors
- * - Water card: soft cyan-tinted gradient (#E0F7FA → #B2EBF2)
- * - Info note: #ECFDF5 background, no borders
- * - Get Started: pill 999, gradient #0F9B5E → #34D399
- * - Spring animations: stiffness 300, damping 20
- * - Gentle shadows: rgba(0,0,0,0.06)
+ * Onboarding Step 4 — matches the warm-cream / deep-green editorial
+ * brand established in the auth flow (see components/auth).
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -29,108 +20,87 @@ import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '../../components/onboarding/OnboardingLayout';
 import GoalEditSheet from '../../components/onboarding/GoalEditSheet';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import { ONBOARDING_COPY, A11Y_LABELS } from '../../constants/onboardingConfig';
-import { MACRO_COLORS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { useRouter } from 'expo-router';
+import { ONBOARDING_COPY, A11Y_LABELS, ACTIVITY_LEVELS, GENDERS } from '../../constants/onboardingConfig';
+import { getGoalContext } from '../../utils/onboardingCalculations';
+import { AUTH_COLORS } from '../../components/auth/constants';
 
 const DS = {
-  surface:          '#F8FBF9',
-  surfContainer:    '#FFFFFF',
-  surfContainerHi:  '#F0F5F2',
+  surfContainer:    'rgba(255, 255, 255, 0.82)',
+  surfContainerHi:  'rgba(107, 78, 255, 0.05)',
   surfLow:          '#FFFFFF',
-  primary:          '#0F9B5E',
-  primaryLight:     '#34D399',
-  primaryDark:      '#0A7A49',
-  onSurface:        '#111827',
-  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
-  onPrimary:        '#FFFFFF',
-  ambientShadow:    'rgba(0, 0, 0, 0.06)',
+  primary:          AUTH_COLORS.primary,
+  onSurface:        AUTH_COLORS.ink,
+  onSurfaceVar:     AUTH_COLORS.muted,
 };
 
-/* ─── Macro Card ─── */
-const MacroCard = ({ label, value, unit, iconName, color, lightColor, onEdit, delay = 0 }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, delay, useNativeDriver: true }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        delay,
-        useNativeDriver: true,
-        stiffness: 300,
-        damping: 20,
-      }),
-    ]).start();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [delay]);
-
-  return (
-    <Animated.View style={[styles.macroCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onEdit?.();
-        }}
-        style={({ pressed }) => [
-          styles.macroCardInner,
-          pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
-        ]}
-      >
-        <View style={[styles.macroIconBg, { backgroundColor: lightColor }]}>
-          <Ionicons name={iconName} size={20} color={color} />
-        </View>
-        <Text style={styles.macroLabel}>{label}</Text>
-        <View style={styles.macroValueRow}>
-          <Text style={[styles.macroValue, { color }]}>{value ?? '--'}</Text>
-          <Text style={styles.macroUnit}>{unit}</Text>
-        </View>
-        <View style={styles.macroEditHint}>
-          <Ionicons name="pencil-outline" size={10} color={DS.onSurfaceVar} />
-          <Text style={styles.macroEditText}>tap to edit</Text>
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
+// Bold, saturated palette for the Targets card only — scoped here so it doesn't
+// affect other screens that share the app-wide (muted) MACRO_COLORS palette.
+const TARGET_COLORS = {
+  protein: { base: '#4C63D2', light: '#DCE3FA' },
+  carbs:   { base: '#2FA35C', light: '#D7F3E1' },
+  fats:    { base: '#E0643C', light: '#FCE2D6' },
+  water:   { base: '#0284C7', light: '#D6F1FB' },
 };
 
-/* ─── Water Card ─── */
-const WaterCard = ({ value, onEdit, delay = 0 }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 350, delay, useNativeDriver: true }).start();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [delay]);
+/* ─── Macro Row — one row in the unified targets card (also used for water) ─── */
+const MacroRow = ({ label, value, pct, color, lightColor, iconName, caption, unit = 'g', onEdit, isLast }) => (
+  <Pressable
+    onPress={() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onEdit?.();
+    }}
+    style={({ pressed }) => [
+      styles.macroRow,
+      !isLast && styles.macroRowDivider,
+      pressed && { opacity: 0.6 },
+    ]}
+    accessibilityRole="button"
+    accessibilityLabel={`${label}, ${value ?? '--'} ${unit}, ${typeof pct === 'number' ? `${pct} percent of calories` : ''}. Double tap to edit.`}
+  >
+    <View style={[styles.macroRowIconBg, { backgroundColor: lightColor }]}>
+      <Ionicons name={iconName} size={18} color={color} />
+    </View>
+    <View style={styles.macroRowText}>
+      <View style={styles.macroRowTopLine}>
+        <Text style={styles.macroRowLabel}>{label}</Text>
+        {typeof pct === 'number' && <Text style={[styles.macroRowPct, { color }]}>{pct}%</Text>}
+      </View>
+      {!!caption && <Text style={styles.macroRowCaption} numberOfLines={2}>{caption}</Text>}
+    </View>
+    <View style={styles.macroRowValueBlock}>
+      <Text style={[styles.macroRowValue, { color }]}>{value ?? '--'}</Text>
+      <Text style={styles.macroRowUnit}>{unit}</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={15} color={DS.onSurfaceVar} style={{ opacity: 0.5, marginLeft: 2 }} />
+  </Pressable>
+);
+
+/* ─── Compact profile chip strip — lives inside the hero card ─── */
+const ProfileChipStrip = ({ step2Data }) => {
+  const genderLabel = GENDERS.find((g) => g.id === step2Data.gender)?.label || step2Data.gender;
+  const activity = ACTIVITY_LEVELS.find((a) => a.id === step2Data.activityLevel);
+  const heightDisplay = step2Data.heightUnit === 'ft'
+    ? `${step2Data.heightFeet}'${step2Data.heightInches}"`
+    : `${step2Data.height} cm`;
+
+  const chips = [
+    `${step2Data.age} yrs`,
+    `${step2Data.weight} ${step2Data.weightUnit}`,
+    heightDisplay,
+    genderLabel,
+    activity?.shortLabel || activity?.label,
+  ].filter((label) => label && label !== 'undefined');
 
   return (
-    <Animated.View style={[styles.waterCard, { opacity: fadeAnim }]}>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onEdit?.();
-        }}
-        style={({ pressed }) => pressed && { opacity: 0.9 }}
-      >
-        <LinearGradient
-          colors={['#E0F7FA', '#B2EBF2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.waterGradient}
-        >
-          <View style={styles.waterIconBg}>
-            <Ionicons name="water" size={24} color="#0e6b8c" />
-          </View>
-          <View style={styles.waterInfo}>
-            <Text style={styles.waterLabel}>Daily Hydration</Text>
-            <View style={styles.waterValueRow}>
-              <Text style={styles.waterValue}>{value ?? '--'}</Text>
-              <Text style={styles.waterUnit}>liters</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={DS.primary} />
-        </LinearGradient>
-      </Pressable>
-    </Animated.View>
+    <View style={styles.profileChipsRow}>
+      {chips.map((label, i) => (
+        <React.Fragment key={label}>
+          <Text style={styles.profileChipText}>{label}</Text>
+          {i < chips.length - 1 && <Text style={styles.profileChipDot}>·</Text>}
+        </React.Fragment>
+      ))}
+    </View>
   );
 };
 
@@ -138,17 +108,21 @@ const WaterCard = ({ value, onEdit, delay = 0 }) => {
 const Step4Screen = () => {
   const {
     step1Data,
+    step2Data,
     step4Data,
     calculatedGoals,
     calculateGoals,
     updateGoals,
     goToPreviousStep,
     completeOnboarding,
+    resetOnboarding,
     isSaving,
     error,
   } = useOnboarding();
 
+  const router = useRouter();
   const [editingGoal, setEditingGoal] = useState(null);
+  const redirectingRef = useRef(false);
 
   const heroFadeAnim  = useRef(new Animated.Value(0)).current;
   const heroScaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -156,8 +130,19 @@ const Step4Screen = () => {
   const btnScale      = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (!calculatedGoals) calculateGoals();
-  }, [calculatedGoals, calculateGoals]);
+    if (calculatedGoals || redirectingRef.current) return;
+    const weight = parseFloat(step2Data?.weight);
+    const age = parseInt(step2Data?.age, 10);
+    const hasStep2 = !isNaN(weight) && weight > 0 && !isNaN(age) && age > 0;
+    if (!hasStep2) {
+      // Stale draft — step 2 never completed. Reset once (guard prevents re-entry
+      // after resetOnboarding clears step2Data and triggers a re-render).
+      redirectingRef.current = true;
+      resetOnboarding().then(() => router.replace('/onboarding/step-2'));
+    } else {
+      calculateGoals();
+    }
+  }, [calculatedGoals, calculateGoals, step2Data, router, resetOnboarding]);
 
   useEffect(() => {
     if (calculatedGoals) {
@@ -170,10 +155,10 @@ const Step4Screen = () => {
   }, [calculatedGoals, heroFadeAnim, heroScaleAnim, btnSlideAnim]);
 
   useEffect(() => {
-    if (error && editingGoal !== 'saving') {
+    if (error && !isSaving) {
       Alert.alert('Error', error, [{ text: 'OK' }]);
     }
-  }, [error, editingGoal]);
+  }, [error, isSaving]);
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step4);
@@ -186,17 +171,30 @@ const Step4Screen = () => {
 
   const handleGetStarted = async () => {
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (_) {}
-    try {
-      await completeOnboarding();
-    } catch (err) {
-      const msg = err.message || 'Failed to complete onboarding. Please try again.';
-      console.error('[Step4] completeOnboarding failed:', msg);
-      if (typeof Alert !== 'undefined' && Alert.alert) Alert.alert('Error', msg);
-    }
+    // completeOnboarding handles errors internally via SAVE_ERROR dispatch.
+    // The useEffect above shows the Alert when state.error is set.
+    await completeOnboarding();
   };
 
   const springBtn = (to) =>
     Animated.spring(btnScale, { toValue: to, useNativeDriver: true, stiffness: 300, damping: 20 }).start();
+
+  const { calorieContext, proteinContext } = calculatedGoals
+    ? getGoalContext(calculatedGoals, { primaryGoal: step1Data.primaryGoal })
+    : { calorieContext: '', proteinContext: '' };
+
+  // Macro split is derived from this user's own gram targets, not a fixed ratio.
+  const totalCalories = step4Data.dailyCalories || 1;
+  const proteinPct = Math.round(((step4Data.proteinG || 0) * 4 / totalCalories) * 100);
+  const carbsPct = Math.round(((step4Data.carbsG || 0) * 4 / totalCalories) * 100);
+  const fatsPct = Math.round(((step4Data.fatsG || 0) * 9 / totalCalories) * 100);
+
+  const isHighActivity = step2Data?.activityLevel === 'very_active' || step2Data?.activityLevel === 'extremely_active';
+  const carbsContext = isHighActivity
+    ? 'Extra fuel for your training volume'
+    : step1Data.primaryGoal === 'lose'
+      ? 'Steady energy through your deficit'
+      : "Your body's primary energy source";
 
   /* Loading state */
   if (!calculatedGoals) {
@@ -245,7 +243,7 @@ const Step4Screen = () => {
           style={({ pressed }) => pressed && { opacity: 0.95 }}
         >
           <LinearGradient
-            colors={[DS.primaryDark, DS.primary, DS.primaryLight]}
+            colors={[AUTH_COLORS.heroDark, '#170D33', '#0A0616']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
@@ -259,17 +257,23 @@ const Step4Screen = () => {
               <View style={styles.heroHeader}>
                 <View style={styles.heroBadge}>
                   <Ionicons name="sparkles" size={13} color={DS.primary} />
-                  <Text style={styles.heroBadgeText}>Your Daily Target</Text>
+                  <Text style={styles.heroBadgeText}>Personalized For You</Text>
                 </View>
                 <View style={styles.heroEditBadge}>
                   <Ionicons name="pencil" size={12} color="rgba(255,255,255,0.9)" />
                 </View>
               </View>
 
+              <ProfileChipStrip step2Data={step2Data} />
+
               <View style={styles.heroValueSection}>
                 <Text style={styles.heroValue}>{step4Data.dailyCalories ?? '--'}</Text>
                 <Text style={styles.heroUnit}>calories</Text>
               </View>
+
+              {!!calorieContext && (
+                <Text style={styles.heroContext}>{calorieContext}</Text>
+              )}
 
               <View style={styles.heroFooter}>
                 {[
@@ -293,62 +297,70 @@ const Step4Screen = () => {
             </View>
           </LinearGradient>
         </Pressable>
+
+        {/* ── Targets — seamless continuation of the same card ── */}
+        <View style={styles.macroSection}>
+          <View style={styles.macroSectionHeader}>
+            <Text style={styles.macroSectionTitle}>Your Targets</Text>
+            <Text style={styles.macroSectionSubtitle}>Tap to adjust</Text>
+          </View>
+
+          <View style={styles.macroBarTrack}>
+            <View style={[styles.macroBarFill, { flex: Math.max(proteinPct, 1), backgroundColor: TARGET_COLORS.protein.base }]} />
+            <View style={[styles.macroBarFill, { flex: Math.max(carbsPct, 1), backgroundColor: TARGET_COLORS.carbs.base }]} />
+            <View style={[styles.macroBarFill, { flex: Math.max(fatsPct, 1), backgroundColor: TARGET_COLORS.fats.base }]} />
+          </View>
+
+          <View style={styles.macroRowsGroup}>
+            <MacroRow
+              label="Protein"
+              value={step4Data.proteinG}
+              pct={proteinPct}
+              iconName="barbell"
+              color={TARGET_COLORS.protein.base}
+              lightColor={TARGET_COLORS.protein.light}
+              caption={proteinContext}
+              onEdit={() => setEditingGoal('proteinG')}
+            />
+            <MacroRow
+              label="Carbs"
+              value={step4Data.carbsG}
+              pct={carbsPct}
+              iconName="flash"
+              color={TARGET_COLORS.carbs.base}
+              lightColor={TARGET_COLORS.carbs.light}
+              caption={carbsContext}
+              onEdit={() => setEditingGoal('carbsG')}
+            />
+            <MacroRow
+              label="Fats"
+              value={step4Data.fatsG}
+              pct={fatsPct}
+              iconName="nutrition-outline"
+              color={TARGET_COLORS.fats.base}
+              lightColor={TARGET_COLORS.fats.light}
+              caption="Supports hormones & nutrient absorption"
+              onEdit={() => setEditingGoal('fatsG')}
+            />
+            <MacroRow
+              label="Water"
+              value={step4Data.waterLiters}
+              iconName="water"
+              color={TARGET_COLORS.water.base}
+              lightColor={TARGET_COLORS.water.light}
+              caption="Stay hydrated throughout the day"
+              unit="L"
+              onEdit={() => setEditingGoal('waterLiters')}
+              isLast
+            />
+          </View>
+        </View>
       </Animated.View>
 
-      {/* Section header */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Daily Macros</Text>
-        <Text style={styles.sectionSubtitle}>Tap any card to adjust</Text>
-      </View>
-
-      {/* ── Macro cards grid ── */}
-      <View style={styles.macroGrid}>
-        <MacroCard
-          label="Protein"
-          value={step4Data.proteinG}
-          unit="g"
-          iconName="barbell"
-          color={MACRO_COLORS.protein.base}
-          lightColor="#F3E8FF"
-          onEdit={() => setEditingGoal('proteinG')}
-          delay={100}
-        />
-        <MacroCard
-          label="Carbs"
-          value={step4Data.carbsG}
-          unit="g"
-          iconName="flash"
-          color={MACRO_COLORS.carbs.base}
-          lightColor="#DBEAFE"
-          onEdit={() => setEditingGoal('carbsG')}
-          delay={200}
-        />
-        <MacroCard
-          label="Fats"
-          value={step4Data.fatsG}
-          unit="g"
-          iconName="water-outline"
-          color={MACRO_COLORS.fat.base}
-          lightColor="#FEF3C7"
-          onEdit={() => setEditingGoal('fatsG')}
-          delay={300}
-        />
-      </View>
-
-      {/* ── Water card ── */}
-      <WaterCard
-        value={step4Data.waterLiters}
-        onEdit={() => setEditingGoal('waterLiters')}
-        delay={400}
-      />
-
-      {/* ── Info note ── */}
-      <View style={styles.infoNote}>
-        <Ionicons name="information-circle-outline" size={16} color={DS.onSurfaceVar} />
-        <Text style={styles.infoNoteText}>
-          These targets are calculated based on your profile. You can adjust them anytime in Settings.
-        </Text>
-      </View>
+      {/* ── Fine-tune hint ── */}
+      <Text style={styles.finetuneHint}>
+        Tap any target to fine-tune it — you can always adjust later in Settings.
+      </Text>
 
       {/* ── Get Started pill ── */}
       <Animated.View style={[styles.btnContainer, { transform: [{ translateY: btnSlideAnim }, { scale: btnScale }] }]}>
@@ -361,9 +373,9 @@ const Step4Screen = () => {
           accessibilityLabel="Complete onboarding and get started"
         >
           <LinearGradient
-            colors={isSaving ? [DS.surfContainerHi, DS.surfContainerHi] : [DS.primary, DS.primaryLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+            colors={isSaving ? ['#E5E1D8', '#DAD5CA'] : [AUTH_COLORS.primaryLight, AUTH_COLORS.primary, AUTH_COLORS.primaryDeep]}
+            start={{ x: 0, y: 0.2 }}
+            end={{ x: 1, y: 0.8 }}
             style={styles.getStartedBtn}
           >
             {isSaving ? (
@@ -402,7 +414,7 @@ const Step4Screen = () => {
         currentValue={step4Data.proteinG}
         min={0} max={500} step={5} unit="g"
         context="Essential for muscle repair and growth"
-        color={MACRO_COLORS.protein.base}
+        color={TARGET_COLORS.protein.base}
       />
       <GoalEditSheet
         visible={editingGoal === 'carbsG'}
@@ -412,7 +424,7 @@ const Step4Screen = () => {
         currentValue={step4Data.carbsG}
         min={0} max={1000} step={5} unit="g"
         context="Your body's primary energy source"
-        color={MACRO_COLORS.carbs.base}
+        color={TARGET_COLORS.carbs.base}
       />
       <GoalEditSheet
         visible={editingGoal === 'fatsG'}
@@ -422,7 +434,7 @@ const Step4Screen = () => {
         currentValue={step4Data.fatsG}
         min={0} max={300} step={5} unit="g"
         context="Important for hormones and brain health"
-        color={MACRO_COLORS.fat.base}
+        color={TARGET_COLORS.fats.base}
       />
       <GoalEditSheet
         visible={editingGoal === 'waterLiters'}
@@ -432,7 +444,7 @@ const Step4Screen = () => {
         currentValue={step4Data.waterLiters}
         min={0.5} max={10} step={0.5} unit="L"
         context="Stay hydrated throughout the day"
-        color="#0e6b8c"
+        color={TARGET_COLORS.water.base}
       />
     </OnboardingLayout>
   );
@@ -451,7 +463,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: 'rgba(107, 78, 255, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -463,16 +475,34 @@ const styles = StyleSheet.create({
   },
   loadingTitle: {
     fontSize: 22,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
     letterSpacing: -0.5,
   },
   loadingSubtitle: {
     fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.regular,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  /* Profile chip strip — lives inside the dark hero header */
+  profileChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileChipText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    color: 'rgba(255,255,255,0.65)',
+  },
+  profileChipDot: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
+    marginHorizontal: 6,
   },
 
   /* Hero card */
@@ -480,7 +510,7 @@ const styles = StyleSheet.create({
     marginBottom: 22,
     borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: DS.primary,
+    shadowColor: 'rgba(3, 21, 35, 0.34)',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.28,
     shadowRadius: 28,
@@ -488,7 +518,9 @@ const styles = StyleSheet.create({
   },
   heroGradient: {
     padding: 26,
-    borderRadius: 28,
+    paddingBottom: 22,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -500,7 +532,7 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   heroDecor2: {
     position: 'absolute',
@@ -509,7 +541,7 @@ const styles = StyleSheet.create({
     width: 110,
     height: 110,
     borderRadius: 55,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   heroDecor3: {
     position: 'absolute',
@@ -518,7 +550,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   heroContent: {
     position: 'relative',
@@ -541,14 +573,14 @@ const styles = StyleSheet.create({
   },
   heroBadgeText: {
     fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.primaryDark,
+    fontFamily: 'DMSans_700Bold',
+    color: AUTH_COLORS.primary,
   },
   heroEditBadge: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.20)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -558,24 +590,33 @@ const styles = StyleSheet.create({
   },
   heroValue: {
     fontSize: 68,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     letterSpacing: -3,
     lineHeight: 74,
   },
   heroUnit: {
     fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.medium,
+    fontFamily: 'DMSans_500Medium',
     color: 'rgba(255,255,255,0.80)',
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginTop: 4,
   },
+  heroContext: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_400Regular',
+    color: 'rgba(255,255,255,0.72)',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
   heroFooter: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 16,
     paddingVertical: 13,
     paddingHorizontal: 16,
@@ -586,7 +627,7 @@ const styles = StyleSheet.create({
   },
   heroMetricLabel: {
     fontSize: 10,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontFamily: 'DMSans_700Bold',
     color: 'rgba(255,255,255,0.65)',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -594,7 +635,7 @@ const styles = StyleSheet.create({
   },
   heroMetricValue: {
     fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
   },
   heroMetricDivider: {
@@ -603,167 +644,128 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
 
-  /* Section header */
-  sectionHeader: {
+  /* Macro breakdown — light section of the unified nutrition card */
+  macroSection: {
+    backgroundColor: DS.surfLow,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 6,
+  },
+  macroSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: DS.onSurface,
-    letterSpacing: -0.3,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: DS.onSurfaceVar,
-  },
-
-  /* Macro grid */
-  macroGrid: {
-    flexDirection: 'row',
-    gap: 12,
     marginBottom: 14,
   },
-  macroCard: {
-    flex: 1,
+  macroSectionTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: DS.onSurface,
+    letterSpacing: -0.2,
   },
-  macroCardInner: {
-    backgroundColor: DS.surfLow,
-    borderRadius: 18,
-    padding: 14,
-    alignItems: 'center',
-    gap: 5,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  macroIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  macroLabel: {
-    fontSize: 10,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: DS.onSurfaceVar,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  macroValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 2,
-  },
-  macroValue: {
-    fontSize: 24,
-    fontFamily: TYPOGRAPHY.family.bold,
-    letterSpacing: -0.5,
-  },
-  macroUnit: {
-    fontSize: 11,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: DS.onSurfaceVar,
-  },
-  macroEditHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginTop: 2,
-    opacity: 0.50,
-  },
-  macroEditText: {
-    fontSize: 9,
-    fontFamily: TYPOGRAPHY.family.regular,
+  macroSectionSubtitle: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
   },
 
-  /* Water card */
-  waterCard: {
-    marginBottom: 16,
-    borderRadius: 20,
+  /* Proportional macro bar — segment widths reflect this user's actual gram split */
+  macroBarTrack: {
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: 999,
     overflow: 'hidden',
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    backgroundColor: 'rgba(15, 36, 31, 0.07)',
+    marginBottom: 18,
   },
-  waterGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 18,
-    gap: 14,
-    borderRadius: 20,
-  },
-  waterIconBg: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  waterInfo: {
-    flex: 1,
-  },
-  waterLabel: {
-    fontSize: 11,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#0277BD',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 3,
-  },
-  waterValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  waterValue: {
-    fontSize: 30,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#01579B',
-    letterSpacing: -1,
-  },
-  waterUnit: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: '#0277BD',
-    opacity: 0.80,
+  macroBarFill: {
+    marginHorizontal: 1,
+    borderRadius: 999,
   },
 
-  /* Info note */
-  infoNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#ECFDF5',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 22,
+  /* Macro rows */
+  macroRowsGroup: {
+    gap: 0,
   },
-  infoNoteText: {
+  macroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+  },
+  macroRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(15, 36, 31, 0.07)',
+  },
+  macroRowIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    flexShrink: 0,
+  },
+  macroRowText: {
     flex: 1,
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.regular,
+    marginRight: 8,
+  },
+  macroRowTopLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  macroRowLabel: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: DS.onSurface,
+  },
+  macroRowPct: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+  },
+  macroRowCaption: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
-    lineHeight: 19,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  macroRowValueBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
+    flexShrink: 0,
+  },
+  macroRowValue: {
+    fontSize: 19,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: -0.3,
+  },
+  macroRowUnit: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    color: DS.onSurfaceVar,
+  },
+
+  /* Fine-tune hint — plain caption, no card */
+  finetuneHint: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: DS.onSurfaceVar,
+    textAlign: 'center',
+    lineHeight: 17,
+    marginBottom: 18,
+    paddingHorizontal: 12,
   },
 
   /* Get Started pill */
   btnContainer: {
+    alignSelf: 'center',
     marginBottom: 8,
     borderRadius: 999,
-    shadowColor: DS.primary,
+    shadowColor: 'rgba(3, 21, 35, 0.34)',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.32,
     shadowRadius: 20,
@@ -781,7 +783,7 @@ const styles = StyleSheet.create({
   },
   getStartedText: {
     fontSize: 18,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
@@ -789,7 +791,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },

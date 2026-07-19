@@ -1,0 +1,13 @@
+diff --git a/node_modules/@clerk/clerk-expo/dist/provider/singleton/createClerkInstance.js b/node_modules/@clerk/clerk-expo/dist/provider/singleton/createClerkInstance.js
+index 8deece7..b3fb329 100644
+--- a/node_modules/@clerk/clerk-expo/dist/provider/singleton/createClerkInstance.js
++++ b/node_modules/@clerk/clerk-expo/dist/provider/singleton/createClerkInstance.js
+@@ -133,7 +133,7 @@ function createClerkInstance(ClerkClass) {
+       __internal_clerk.__unstable__onBeforeRequest(async (requestInit) => {
+         var _a2;
+         requestInit.credentials = "omit";
+-        (_a2 = requestInit.url) == null ? void 0 : _a2.searchParams.append("_is_native", "1");
++        // (_a2 = requestInit.url) == null ? void 0 : _a2.searchParams.append("_is_native", "1"); // disabled: native_api not enabled on this instance
+         const jwt = await getToken(KEY);
+         requestInit.headers.set("authorization", jwt || "");
+         if ((0, import_utils.isNative)()) {

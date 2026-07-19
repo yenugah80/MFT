@@ -1,12 +1,15 @@
-import { useOAuth, useSignIn } from "@clerk/clerk-expo";
+import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
+import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import * as Linking from "expo-linking";
+import { makeRedirectUri } from "expo-auth-session";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import {
+  AppleButton,
   AuthCanvas,
   AuthDivider,
   AuthField,
@@ -23,7 +26,8 @@ import { parseClerkError } from "../../utils/errors";
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
 
-const HAS_SIGNED_IN_KEY = "@mft:hasSignedInBefore";
+export const HAS_SIGNED_IN_KEY = "@mft:hasSignedInBefore";
+const OAUTH_REDIRECT_URL = makeRedirectUri({ native: "my-food-tracker://oauth-native-callback" });
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -34,7 +38,8 @@ export default function SignInScreen() {
   const confirmPasswordRef = useRef(null);
   const resetAttemptRef = useRef(null);
   const { signIn, setActive, isLoaded } = useSignIn();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { signUp, setActive: setSignUpActive } = useSignUp();
+  const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const [mode, setMode] = useState("signIn");
   const [email, setEmail] = useState("");
@@ -44,6 +49,7 @@ export default function SignInScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
@@ -59,6 +65,12 @@ export default function SignInScreen() {
     setMessageType(type);
     setMessage(text);
   };
+
+  useFocusEffect(
+    useRef(() => {
+      setMessage(null);
+    }).current
+  );
 
   const screenCopy = useMemo(() => {
     if (mode === "resetRequest") {
@@ -108,17 +120,77 @@ export default function SignInScreen() {
     setGoogleLoading(true);
     setMessage(null);
     try {
-      const { createdSessionId, setActive: oauthSetActive } = await startOAuthFlow({
-        redirectUrl: Linking.createURL("/"),
+      const { createdSessionId, setActive: oauthSetActive } = await startGoogleOAuthFlow({
+        redirectUrl: OAUTH_REDIRECT_URL,
       });
       if (createdSessionId && oauthSetActive) {
         await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
         await oauthSetActive({ session: createdSessionId });
       }
     } catch (err) {
-      setNotice("error", "Google sign-in failed. Please try again or use email.");
+      console.warn("[Auth] Google sign-in failed:", err);
+      setNotice("error", __DEV__ ? parseClerkError(err) : "Google sign-in failed. Please try again or use email.");
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      setNotice("error", "Sign in with Apple is not available on this device.");
+      return;
+    }
+
+    setAppleLoading(true);
+    setMessage(null);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      try {
+        const attempt = await signIn.create({
+          strategy: "oauth_apple",
+          redirectUrl: OAUTH_REDIRECT_URL,
+          token: credential.identityToken,
+        });
+        if (attempt.status === "complete") {
+          await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+          await setActive({ session: attempt.createdSessionId });
+        }
+      } catch (clerkErr) {
+        if (clerkErr?.errors?.[0]?.code === "external_account_not_found") {
+          const attempt = await signUp.create({
+            strategy: "oauth_apple",
+            redirectUrl: OAUTH_REDIRECT_URL,
+            token: credential.identityToken,
+            ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
+            ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
+          });
+          if (attempt.status === "complete" || attempt.status === "missing_requirements") {
+            await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+            await setSignUpActive({ session: attempt.createdSessionId });
+          }
+        } else {
+          throw clerkErr;
+        }
+      }
+    } catch (err) {
+      if (err.code === "ERR_REQUEST_CANCELED") return;
+      console.warn("[Auth] Apple sign-in failed:", err);
+      const appleMsg = {
+        ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
+        ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
+        ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
+        ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
+      }[err.code];
+      setNotice("error", appleMsg || parseClerkError(err) || "Apple sign-in failed. Please try again or use email.");
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -272,11 +344,12 @@ export default function SignInScreen() {
       <AuthHeading compact title={screenCopy.title} subtitle={screenCopy.subtitle} />
 
       <View>
-        <Notice type={messageType} text={message} />
+        <Notice type={messageType} text={message} onDismiss={() => setMessage(null)} />
 
-        {/* Google SSO — only shown on the main sign-in mode */}
+        {/* Social SSO — only shown on the main sign-in mode */}
         {showSignIn ? (
           <>
+            <AppleButton onPress={handleAppleSignIn} loading={appleLoading} title="Continue with Apple" />
             <GoogleButton onPress={handleGoogleSignIn} loading={googleLoading} title="Continue with Google" />
             <AuthDivider />
           </>
@@ -456,7 +529,7 @@ const styles = StyleSheet.create({
   },
   forgot: {
     fontSize: 15,
-    color: AUTH_COLORS.green,
+    color: AUTH_COLORS.primary,
     fontFamily: "DMSans_700Bold",
   },
   footer: {

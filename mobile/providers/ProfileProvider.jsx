@@ -33,7 +33,7 @@ export const useProfileContext = () => {
  * Wraps the app to provide profile context to all child components
  */
 export const ProfileProvider = ({ children }) => {
-  const { data: profile, isLoading, error, refetch } = useProfile();
+  const { data: profile, isLoading, isFetching, error, refetch } = useProfile();
 
   /**
    * Calculate onboarding completion status
@@ -49,11 +49,12 @@ export const ProfileProvider = ({ children }) => {
     if (isLoading || !profile) return null;
 
     const hasCompletedAtTimestamp = !!profile.onboardingCompletedAt;
+    // Fallback for legacy users who completed setup before onboardingCompletedAt existed.
     const hasFullProfile = !!(
-      profile.age &&
-      profile.weightKg &&
-      profile.heightCm &&
-      profile.activityLevel
+      profile.basics?.age &&
+      profile.basics?.weightKg &&
+      profile.basics?.heightCm &&
+      profile.basics?.activityLevel
     );
 
     return hasCompletedAtTimestamp || hasFullProfile;
@@ -73,10 +74,14 @@ export const ProfileProvider = ({ children }) => {
   const value = {
     // Raw profile data
     profile,
-    // Loading state
+    // True only on the very first fetch (no cached data yet)
     isLoading,
+    // True during any fetch including background refetches — use to disable retry button
+    isFetching,
     // Error state (if profile fetch failed)
     error,
+    // True only when fetch has permanently failed (no cached data available)
+    isError: !!error && !profile,
     // Memoized onboarding status
     onboardingComplete,
     isOnboarding,

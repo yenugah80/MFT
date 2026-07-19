@@ -1,15 +1,6 @@
 /**
- * Onboarding Step 3 — Premium Wellness Design
- *
- * - White card surfaces on cream (#F8FBF9) background
- * - Refined mint-green primary (#0F9B5E)
- * - Tabs: white active with green accent, soft gray inactive
- * - Content section card: white background, gentle shadow
- * - Smart suggestions: light green pills (#ECFDF5)
- * - Allergy note: soft red tint, no borders
- * - Buttons: pill borderRadius 999, gradient #0F9B5E → #34D399
- * - Gentle shadows: rgba(0,0,0,0.06)
- * - Spring animations: stiffness 300, damping 20
+ * Onboarding Step 3 — matches the warm-cream / deep-green editorial
+ * brand established in the auth flow (see components/auth).
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -29,14 +20,9 @@ import * as Haptics from 'expo-haptics';
 import OnboardingLayout from '../../components/onboarding/OnboardingLayout';
 import ChipSelector from '../../components/onboarding/ChipSelector';
 import PreferenceStrengthSelector from '../../components/onboarding/PreferenceStrengthSelector';
-import PreferenceCombinationCard from '../../components/onboarding/PreferenceCombinationCard';
 
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import {
-  getSmartCuisineSuggestions,
-  getPreferenceCombinationExplanation,
-  SAMPLE_DISHES,
-} from '../../utils/onboardingSmartSuggestions';
+import { getSmartCuisineSuggestions } from '../../utils/onboardingSmartSuggestions';
 import {
   DIETARY_PREFERENCES,
   ALLERGIES,
@@ -44,19 +30,17 @@ import {
   ONBOARDING_COPY,
   A11Y_LABELS,
 } from '../../constants/onboardingConfig';
-import { TYPOGRAPHY } from '../../constants/premiumTheme';
+import { AUTH_COLORS } from '../../components/auth/constants';
 
 const DS = {
-  surface:          '#F8FBF9',
-  surfContainer:    '#FFFFFF',
-  surfContainerHi:  '#F0F5F2',
-  primary:          '#0F9B5E',
-  primaryLight:     '#34D399',
-  onSurface:        '#111827',
-  onSurfaceVar:     'rgba(17, 24, 39, 0.45)',
-  error:            '#DC2626',
-  errorTint:        'rgba(220, 38, 38, 0.06)',
-  ambientShadow:    'rgba(0, 0, 0, 0.06)',
+  surfContainer:    'rgba(255, 255, 255, 0.82)',
+  surfContainerHi:  'rgba(107, 78, 255, 0.05)',
+  primary:          AUTH_COLORS.primary,
+  primaryLight:     AUTH_COLORS.primaryLight,
+  onSurface:        AUTH_COLORS.ink,
+  onSurfaceVar:     AUTH_COLORS.muted,
+  error:            AUTH_COLORS.danger,
+  errorTint:        AUTH_COLORS.dangerBg,
 };
 
 /* Data normalization helpers */
@@ -75,11 +59,6 @@ const normalizePreferences = (prefs) => {
   });
 };
 
-const getSampleDishId = (firstPref) => {
-  if (!firstPref) return null;
-  return typeof firstPref === 'string' ? firstPref : (firstPref?.id || null);
-};
-
 /* Animated pill button */
 const PillButton = ({ onPress, colors, children, wrapperStyle }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -88,7 +67,7 @@ const PillButton = ({ onPress, colors, children, wrapperStyle }) => {
   return (
     <Animated.View style={[{ transform: [{ scale }] }, wrapperStyle]}>
       <Pressable onPress={onPress} onPressIn={() => spring(0.96)} onPressOut={() => spring(1)}>
-        <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.pillGradient}>
+        <LinearGradient colors={colors} start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 0.8 }} style={styles.pillGradient}>
           {children}
         </LinearGradient>
       </Pressable>
@@ -155,7 +134,6 @@ const Step3Screen = () => {
   const fadeAnimsRef = useRef([0, 1, 2].map(() => new Animated.Value(0)));
   const fadeAnims = fadeAnimsRef.current;
   const [smartSuggestedCuisines, setSmartSuggestedCuisines] = useState([]);
-  const [preferenceCombination, setPreferenceCombination] = useState(null);
   const [strengthValues, setStrengthValues] = useState({});
 
   useEffect(() => {
@@ -172,12 +150,7 @@ const Step3Screen = () => {
   useEffect(() => {
     const dietaryPrefs = step3Data.dietaryPreferences || [];
     setSmartSuggestedCuisines(getSmartCuisineSuggestions(dietaryPrefs));
-    if (dietaryPrefs.length > 0 || (step3Data.cuisinePreferences || []).length > 0) {
-      setPreferenceCombination(getPreferenceCombinationExplanation(dietaryPrefs, step3Data.cuisinePreferences || []));
-    } else {
-      setPreferenceCombination(null);
-    }
-  }, [step3Data.dietaryPreferences, step3Data.cuisinePreferences]);
+  }, [step3Data.dietaryPreferences]);
 
   useEffect(() => {
     fadeAnims[activeSection].setValue(0);
@@ -310,6 +283,7 @@ const Step3Screen = () => {
       onBack={goToPreviousStep}
       canGoBack={true}
       scrollEnabled={true}
+      onSkip={handleSkip}
     >
       {/* ── Section tabs — background-only switching ── */}
       <View style={styles.tabsRow}>
@@ -365,6 +339,31 @@ const Step3Screen = () => {
           multiSelect={true}
         />
 
+        {/* Strength — compact inline rows, only for selected items */}
+        {currentSection.showStrengthSliders && currentSection.selectedItems.length > 0 && (
+          <View style={styles.strengthInline}>
+            <Text style={styles.strengthInlineCaption}>How important is each one?</Text>
+            {currentSection.selectedItems
+              .filter((item, idx, self) => {
+                const id = typeof item === 'string' ? item : item.id;
+                return self.findIndex((i) => (typeof i === 'string' ? i : i.id) === id) === idx;
+              })
+              .map((item) => {
+                const itemId = typeof item === 'string' ? item : item.id;
+                const key = `${currentSection.id}-${itemId}`;
+                const itemLabel = currentSection.items.find((i) => i.id === itemId)?.label || itemId;
+                return (
+                  <PreferenceStrengthSelector
+                    key={key}
+                    preferenceLabel={itemLabel}
+                    currentStrength={strengthValues[key] || 3}
+                    onStrengthChange={(s) => handleStrengthChange(itemId, s)}
+                  />
+                );
+              })}
+          </View>
+        )}
+
         {/* Smart suggestions — cuisine tab */}
         {currentSection.id === 'cuisine' && smartSuggestedCuisines.length > 0 && (
           <View style={styles.suggestionsCard}>
@@ -417,60 +416,6 @@ const Step3Screen = () => {
         )}
       </Animated.View>
 
-      {/* ── Strength sliders ── */}
-      {currentSection.showStrengthSliders && currentSection.selectedItems.length > 0 && (
-        <View style={styles.strengthCard}>
-          <Text style={styles.strengthTitle}>Preference Strength</Text>
-          <Text style={styles.strengthHint}>How important is each preference?</Text>
-          <View style={styles.slidersContainer}>
-            {currentSection.selectedItems
-              .filter((item, idx, self) => {
-                const id = typeof item === 'string' ? item : item.id;
-                return self.findIndex((i) => (typeof i === 'string' ? i : i.id) === id) === idx;
-              })
-              .map((item) => {
-                const itemId = typeof item === 'string' ? item : item.id;
-                const key = `${currentSection.id}-${itemId}`;
-                return (
-                  <PreferenceStrengthSelector
-                    key={key}
-                    preferenceId={itemId}
-                    preferenceLabel={typeof item === 'string' ? item : item.label}
-                    currentStrength={strengthValues[key] || 3}
-                    onStrengthChange={(s) => handleStrengthChange(itemId, s)}
-                    showDescription={true}
-                  />
-                );
-              })}
-          </View>
-        </View>
-      )}
-
-      {/* ── Preference combination card ── */}
-      {preferenceCombination && (
-        <PreferenceCombinationCard
-          title={preferenceCombination.title}
-          description={preferenceCombination.description}
-          dietaryPrefs={step3Data.dietaryPreferences || []}
-          cuisinePrefs={step3Data.cuisinePreferences || []}
-          sampleDishes={(() => {
-            const firstPref = step3Data.dietaryPreferences?.[0];
-            const dishId = getSampleDishId(firstPref);
-            return dishId && SAMPLE_DISHES[dishId] ? SAMPLE_DISHES[dishId] : [];
-          })()}
-        />
-      )}
-
-      {/* ── Skip link ── */}
-      <Pressable
-        onPress={handleSkip}
-        style={({ pressed }) => pressed && { opacity: 0.6 }}
-        accessibilityRole="button"
-        accessibilityLabel="Skip this step"
-      >
-        <Text style={styles.skipText}>{ONBOARDING_COPY.step3.skipBtn || 'Skip for now'}</Text>
-      </Pressable>
-
       {/* ── Navigation buttons ── */}
       <View style={styles.buttonRow}>
         <Pressable
@@ -485,11 +430,11 @@ const Step3Screen = () => {
 
         <PillButton
           onPress={handleContinue}
-          colors={[DS.primary, DS.primaryLight]}
+          colors={[AUTH_COLORS.primaryLight, AUTH_COLORS.primary, AUTH_COLORS.primaryDeep]}
           wrapperStyle={styles.continueWrapper}
         >
           <Text style={styles.continueBtnText}>{ONBOARDING_COPY.step3.continueBtn || 'Continue'}</Text>
-          <Ionicons name="arrow-forward" size={18} color="rgba(255,255,255,0.9)" />
+          <Ionicons name="arrow-forward" size={18} color={AUTH_COLORS.white} />
         </PillButton>
       </View>
     </OnboardingLayout>
@@ -520,16 +465,18 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     backgroundColor: DS.surfContainer,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
+    borderWidth: 1.5,
+    borderColor: 'rgba(15, 36, 31, 0.08)',
+    shadowColor: 'rgba(7, 19, 30, 0.16)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
     shadowRadius: 8,
     elevation: 3,
     opacity: 1,
   },
   tabLabel: {
     fontSize: 11,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurfaceVar,
     textAlign: 'center',
   },
@@ -538,7 +485,7 @@ const styles = StyleSheet.create({
   },
   tabSub: {
     fontSize: 9,
-    fontFamily: TYPOGRAPHY.family.regular,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
     textAlign: 'center',
   },
@@ -558,14 +505,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeInactive: {
-    backgroundColor: 'rgba(17,24,39,0.10)',
+    backgroundColor: 'rgba(15,36,31,0.10)',
   },
   badgeActive: {
     backgroundColor: DS.primary,
   },
   badgeText: {
     fontSize: 9,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurfaceVar,
   },
   badgeTextActive: {
@@ -576,12 +523,14 @@ const styles = StyleSheet.create({
   contentCard: {
     backgroundColor: DS.surfContainer,
     borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(15, 36, 31, 0.08)',
     padding: 18,
     gap: 14,
     marginBottom: 14,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowColor: 'rgba(7, 19, 30, 0.16)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
   },
@@ -592,14 +541,14 @@ const styles = StyleSheet.create({
   },
   contentTitle: {
     fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
     letterSpacing: -0.2,
   },
 
   /* Smart suggestions */
   suggestionsCard: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: 'rgba(107, 78, 255, 0.06)',
     borderRadius: 14,
     padding: 14,
     gap: 6,
@@ -611,12 +560,12 @@ const styles = StyleSheet.create({
   },
   suggestionsTitle: {
     fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.primary,
   },
   suggestionsHint: {
     fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.regular,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
     marginBottom: 4,
   },
@@ -638,7 +587,7 @@ const styles = StyleSheet.create({
   },
   suggestionChipText: {
     fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.primary,
     textTransform: 'capitalize',
   },
@@ -655,52 +604,33 @@ const styles = StyleSheet.create({
   allergyNoteText: {
     flex: 1,
     fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.medium,
+    fontFamily: 'DMSans_500Medium',
     color: DS.error,
     lineHeight: 17,
   },
 
-  /* Strength sliders */
-  strengthCard: {
-    backgroundColor: DS.surfContainer,
-    borderRadius: 20,
-    padding: 18,
-    gap: 8,
-    marginBottom: 14,
-    shadowColor: 'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+  /* Strength — compact inline rows within the content card */
+  strengthInline: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(15, 36, 31, 0.07)',
+    paddingTop: 10,
+    gap: 2,
   },
-  strengthTitle: {
-    fontSize: 15,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: DS.onSurface,
-    letterSpacing: -0.2,
-  },
-  strengthHint: {
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.regular,
+  strengthInlineCaption: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurfaceVar,
-  },
-  slidersContainer: {
-    gap: 12,
-    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 2,
   },
 
   /* Skip */
-  skipText: {
-    textAlign: 'center',
-    fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: DS.onSurfaceVar,
-    marginVertical: 8,
-  },
 
   /* Navigation */
   buttonRow: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 12,
     marginBottom: 8,
   },
@@ -710,24 +640,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 17,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     borderRadius: 999,
-    backgroundColor: DS.surfContainerHi,
-    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.92)',
   },
   backBtnText: {
     fontSize: 15,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
   },
   continueWrapper: {
-    flex: 2,
     borderRadius: 999,
-    shadowColor: DS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.30,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowColor: 'rgba(3, 21, 35, 0.34)',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    elevation: 6,
   },
   pillGradient: {
     flexDirection: 'row',
@@ -735,20 +665,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 17,
-    paddingHorizontal: 24,
+    paddingHorizontal: 32,
     borderRadius: 999,
     overflow: 'hidden',
   },
   continueBtnText: {
     fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
 
   /* Severity panel */
   severityPanel: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: 'rgba(107, 78, 255, 0.06)',
     borderRadius: 16,
     padding: 16,
     gap: 10,
@@ -761,12 +691,12 @@ const styles = StyleSheet.create({
   },
   severityPanelTitle: {
     fontSize: 13,
-    fontFamily: TYPOGRAPHY.family.bold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.primary,
   },
   severityPanelHint: {
     fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.regular,
+    fontFamily: 'DMSans_400Regular',
     color: DS.onSurfaceVar,
     lineHeight: 17,
   },
@@ -774,11 +704,11 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(17,24,39,0.07)',
+    borderTopColor: 'rgba(15,36,31,0.07)',
   },
   allergenDetailName: {
     fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
     textTransform: 'capitalize',
   },
@@ -795,12 +725,12 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(17,24,39,0.12)',
+    borderColor: 'rgba(15,36,31,0.12)',
     backgroundColor: '#FFFFFF',
   },
   allergenChipText: {
     fontSize: 11,
-    fontFamily: TYPOGRAPHY.family.semibold,
+    fontFamily: 'DMSans_700Bold',
     color: DS.onSurface,
   },
 });

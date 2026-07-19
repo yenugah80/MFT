@@ -283,7 +283,30 @@
       "Bash(scp \"C:/Users/harik/MacTransfer/google-services.json\" harikay@192.168.1.173:/Users/harikay/Desktop/MFT/MFT/mobile/google-services.json)",
       "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @./google-services.json --non-interactive)",
       "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @./google-services.json --visibility secret --non-interactive)",
-      "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @google-services.json --visibility secret --non-interactive)"
+      "Bash(eas env:create --name GOOGLE_SERVICES_JSON --type file --environment production --value @google-services.json --visibility secret --non-interactive)",
+      "Bash(python3 -c ' *)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-harikay-Desktop-MFT/4cc6f6b1-a61c-4994-be5e-ee90fe280657/scratchpad/*.png)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"Expo PID: $!\")",
+      "Bash(echo \"Started PID: $!\")",
+      "Bash(osascript -e ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://api.my-food-tracker.com/health)",
+      "Bash(curl -s https://api.my-food-tracker.com/)",
+      "Bash(kill 1724 1739)",
+      "Bash(railway variables *)",
+      "Bash(node -e \"const v=require\\('/tmp/rw_vars.json'\\); console.log\\(Object.keys\\(v\\).filter\\(k=>k.includes\\('DATABASE'\\)\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node /private/tmp/claude-501/-Users-harikay-Desktop-MFT/8a419818-5097-4aa4-a366-6a9bfaa9a8c3/scratchpad/check_schema.mjs)",
+      "Bash(node _tmp_check_schema.mjs)",
+      "Bash(node --check src/routes/recommendations.js)",
+      "Bash(git commit -m ' *)",
+      "Bash(plutil -p \"/Users/harikay/Library/Developer/CoreSimulator/Devices/63B4F2C3-8A30-4708-A55D-D71DD850A02A/data/Containers/Bundle/Application/A22EFC82-BC6B-419A-950B-F00EDAB2AF9B/MFTMyFoodMoodTracker.app/Info.plist\")",
+      "Bash(npx --no-install babel-parser)",
+      "Bash(lsof -nP -iTCP:8081 -sTCP:LISTEN)",
+      "Bash(lsof -nP -iTCP:3000,5000,8080,4000 -sTCP:LISTEN)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp/claude-501/-Users-harikay-Desktop-MFT/4cc6f6b1-a61c-4994-be5e-ee90fe280657/scratchpad"
     ]
   }
 }

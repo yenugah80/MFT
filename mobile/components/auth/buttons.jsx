@@ -36,9 +36,9 @@ export function PrimaryButton({ title, loading, onPress, disabled, style }) {
       ]}
     >
       <LinearGradient
-        colors={[AUTH_COLORS.greenDeep, "#031B2A", "#020914"]}
-        start={{ x: 0, y: 0.2 }}
-        end={{ x: 1, y: 0.8 }}
+        colors={[AUTH_COLORS.primaryLight, AUTH_COLORS.primary, AUTH_COLORS.primaryDeep]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.primaryButton}
       >
         <Text style={styles.primaryText}>{title}</Text>
@@ -53,7 +53,7 @@ export function PrimaryButton({ title, loading, onPress, disabled, style }) {
   );
 }
 
-export function AppleButton({ onPress, loading, title = "Continue with Apple" }) {
+export function AppleButton({ onPress, loading, title = "Continue with Apple", style }) {
   return (
     <Pressable
       onPress={onPress}
@@ -61,6 +61,7 @@ export function AppleButton({ onPress, loading, title = "Continue with Apple" })
       style={({ pressed }) => [
         styles.socialButton,
         styles.socialButtonApple,
+        style,
         pressed && styles.socialButtonPressed,
         loading && styles.disabled,
       ]}
@@ -78,7 +79,7 @@ export function AppleButton({ onPress, loading, title = "Continue with Apple" })
   );
 }
 
-export function GoogleButton({ onPress, loading, title = "Continue with Google" }) {
+export function GoogleButton({ onPress, loading, title = "Continue with Google", style }) {
   return (
     <Pressable
       onPress={onPress}
@@ -86,6 +87,7 @@ export function GoogleButton({ onPress, loading, title = "Continue with Google" 
       style={({ pressed }) => [
         styles.socialButton,
         styles.socialButtonGoogle,
+        style,
         pressed && styles.socialButtonPressed,
         loading && styles.disabled,
       ]}
@@ -117,50 +119,50 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.65 },
   backButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: IS_COMPACT ? 44 : 48,
+    height: IS_COMPACT ? 44 : 48,
+    borderRadius: IS_COMPACT ? 22 : 24,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255, 255, 255, 0.86)",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.92)",
-    shadowColor: "rgba(12, 34, 26, 0.18)",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 5,
+    shadowColor: "rgba(35, 20, 65, 0.18)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 4,
   },
   primaryWrap: {
-    marginTop: 0,
-    shadowColor: "rgba(3, 21, 35, 0.34)",
+    marginTop: IS_COMPACT ? 10 : 16,
+    shadowColor: AUTH_COLORS.primary,
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    elevation: 6,
+    shadowOpacity: 0.38,
+    shadowRadius: 20,
+    elevation: 8,
   },
   primaryPressed: {
     transform: [{ scale: 0.985 }],
   },
   primaryButton: {
-    height: 56,
-    borderRadius: 28,
+    height: IS_COMPACT ? 50 : 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
   },
   primaryText: {
-    fontSize: 18,
+    fontSize: IS_COMPACT ? 16 : 17,
     color: AUTH_COLORS.white,
     fontFamily: "DMSans_700Bold",
     letterSpacing: 0,
   },
   primaryIcon: {
     position: "absolute",
-    right: 26,
+    right: 24,
   },
   socialButton: {
-    height: IS_COMPACT ? 50 : 56,
-    borderRadius: 16,
+    height: IS_COMPACT ? 44 : 48,
+    borderRadius: 15,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
@@ -173,7 +175,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 4,
-    marginTop: 8,
+    marginTop: 6,
   },
   socialButtonApple: {
     marginTop: 0,
@@ -186,28 +188,28 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.72)",
   },
   socialIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderWidth: 1,
     borderColor: "rgba(7, 19, 30, 0.06)",
-    marginRight: 14,
+    marginRight: 10,
   },
   appleIconBadge: {
     backgroundColor: "rgba(7, 19, 30, 0.04)",
   },
   socialButtonText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: IS_COMPACT ? 13 : 14,
     fontFamily: "DMSans_700Bold",
     color: AUTH_COLORS.text,
     letterSpacing: 0,
   },
   socialArrow: {
-    marginLeft: 12,
+    marginLeft: 8,
   },
   footerRow: {
     flexDirection: "row",
@@ -223,10 +225,10 @@ const styles = StyleSheet.create({
   },
   footerAction: {
     fontSize: 16,
-    color: AUTH_COLORS.green,
+    color: AUTH_COLORS.primary,
     fontFamily: "DMSans_700Bold",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(6, 69, 45, 0.38)",
+    borderBottomColor: "rgba(107, 78, 255, 0.38)",
     paddingBottom: 2,
   },
 });

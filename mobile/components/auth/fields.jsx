@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { AUTH_COLORS, IS_COMPACT } from "./constants";
 
 export function AuthHeading({ title, subtitle, centered = false, compact = false }) {
@@ -51,7 +51,7 @@ export function AuthField({
         <Ionicons
           name={icon}
           size={22}
-          color={focused ? AUTH_COLORS.green : AUTH_COLORS.muted}
+          color={focused ? AUTH_COLORS.primary : AUTH_COLORS.muted}
           style={styles.inputIcon}
         />
         <TextInput
@@ -59,7 +59,7 @@ export function AuthField({
           style={styles.input}
           placeholder={placeholder}
           placeholderTextColor={AUTH_COLORS.muted}
-          selectionColor={AUTH_COLORS.green}
+          selectionColor={AUTH_COLORS.primary}
           keyboardAppearance="light"
           value={value}
           onChangeText={onChangeText}
@@ -87,7 +87,7 @@ export function PasswordVisibilityButton({ visible, onPress }) {
   );
 }
 
-export function Notice({ type, text }) {
+export function Notice({ type, text, onDismiss }) {
   if (!text) return null;
   const isError = type === "error";
   return (
@@ -98,6 +98,11 @@ export function Notice({ type, text }) {
         color={isError ? AUTH_COLORS.danger : AUTH_COLORS.success}
       />
       <Text style={[styles.noticeText, isError && styles.noticeTextError]}>{text}</Text>
+      {onDismiss && (
+        <TouchableOpacity onPress={onDismiss} hitSlop={12} style={styles.noticeDismiss}>
+          <Ionicons name="close" size={15} color={isError ? AUTH_COLORS.danger : AUTH_COLORS.success} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -126,8 +131,8 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   headingCompact: {
-    marginTop: IS_COMPACT ? 8 : 10,
-    marginBottom: IS_COMPACT ? 8 : 12,
+    marginTop: IS_COMPACT ? 6 : 10,
+    marginBottom: IS_COMPACT ? 6 : 10,
   },
   textCenter: { textAlign: "center" },
   screenTitle: {
@@ -144,30 +149,30 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   screenTitleWelcome: {
-    fontSize: IS_COMPACT ? 26 : 30,
-    lineHeight: IS_COMPACT ? 32 : 38,
+    fontSize: IS_COMPACT ? 25 : 28,
+    lineHeight: IS_COMPACT ? 31 : 34,
   },
   screenSubtitle: {
     marginTop: 8,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: AUTH_COLORS.muted,
     fontFamily: "DMSans_500Medium",
     letterSpacing: 0,
   },
   fieldWrapper: {
-    marginBottom: 14,
+    marginBottom: IS_COMPACT ? 14 : 18,
   },
   fieldWrapperNoLabel: {},
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "DMSans_700Bold",
     color: AUTH_COLORS.text,
-    marginBottom: 7,
+    marginBottom: 8,
     letterSpacing: 0,
   },
   inputShell: {
-    height: IS_COMPACT ? 52 : 56,
+    height: IS_COMPACT ? 46 : 50,
     borderRadius: 14,
     paddingHorizontal: 16,
     flexDirection: "row",
@@ -185,7 +190,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.84)",
   },
   inputShellFocused: {
-    borderColor: "rgba(6, 69, 45, 0.42)",
+    borderColor: "rgba(107, 78, 255, 0.42)",
     backgroundColor: "rgba(255, 255, 255, 0.95)",
     shadowOpacity: 0.14,
     shadowRadius: 18,
@@ -220,25 +225,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: IS_COMPACT ? 9 : 10,
     borderRadius: 15,
-    marginBottom: 18,
+    marginBottom: IS_COMPACT ? 10 : 12,
   },
   noticeSuccess: { backgroundColor: AUTH_COLORS.successBg },
   noticeError: { backgroundColor: AUTH_COLORS.dangerBg },
   noticeText: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
     color: AUTH_COLORS.success,
     fontFamily: "DMSans_500Medium",
   },
   noticeTextError: { color: AUTH_COLORS.danger },
+  noticeDismiss: {
+    marginLeft: 2,
+  },
   authDivider: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    marginVertical: 16,
+    marginVertical: IS_COMPACT ? 16 : 22,
   },
   authDividerLine: {
     flex: 1,

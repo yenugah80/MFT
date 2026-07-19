@@ -1,10 +1,10 @@
-import SafeScreen from "../../components/SafeScreen";
+import { View } from "react-native";
 import DashboardContent from "../../components/DashboardContent";
 
 export default function DashboardScreen() {
   return (
-    <SafeScreen>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <DashboardContent />
-    </SafeScreen>
+    </View>
   );
 }
