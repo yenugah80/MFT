@@ -32,7 +32,7 @@ import {
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
 import { cache as redisCache, isRedisAvailable, cacheKeys } from '../config/redis.js';
-import { checkNutritionPlausibility } from './nutritionPlausibilityChecker.js';
+import { checkNutritionPlausibility, getExpectedDensityForFood } from './nutritionPlausibilityChecker.js';
 
 // FIXED P1: Feature flags for dual-prompt system
 const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
@@ -41,6 +41,11 @@ const ENABLE_USDA_VERIFICATION = process.env.ENABLE_USDA_VERIFICATION === 'true'
 // with the reference band injected as context (escalated to the stronger model). Only
 // fires on the rare flagged item, so the common path keeps zero added latency.
 const ENABLE_PLAUSIBILITY_CORRECTION = process.env.ENABLE_PLAUSIBILITY_CORRECTION !== 'false'; // Default: enabled
+// Prompt-time calibration: inject the expected density for the dish INTO the estimation
+// prompt so the model is anchored to a realistic value up front — for every recognized
+// dish, at zero added latency (same call). This is the primary accuracy lever; the
+// plausibility check + correction are the safety net for what slips through.
+const ENABLE_DENSITY_CALIBRATION = process.env.ENABLE_DENSITY_CALIBRATION !== 'false'; // Default: enabled
 
 // In-memory cache (fallback when Redis unavailable)
 // Also serves as L1 cache for faster reads
@@ -617,12 +622,33 @@ class SmartNutritionResolver {
       console.log(`[SmartResolver] ➕ Addition modifiers: ${metadata.additions.additions.map(a => `${a.item}×${a.multiplier}`).join(', ')}`);
     }
 
+    // Prompt-time density calibration (accuracy lever, every dish, zero added latency):
+    // anchor the model to a realistic per-100g density for THIS dish before it answers.
+    // Additive context only — the model is told to override it if the described portion
+    // or preparation clearly differs, so it never forces a wrong number onto a variant.
+    const messages = [
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user },
+    ];
+    if (ENABLE_DENSITY_CALIBRATION) {
+      const expected = getExpectedDensityForFood(foodQuery);
+      if (expected) {
+        const anchor = expected.referenceKcalPer100g
+          ? `about ${expected.referenceKcalPer100g} kcal per 100g (typical range ${expected.min}-${expected.max})`
+          : `typically ${expected.min}-${expected.max} kcal per 100g`;
+        messages.push({
+          role: 'user',
+          content:
+            `CALIBRATION for "${foodQuery}": a standard preparation is ${anchor}. Use this as an ` +
+            `anchor for calorie density unless the described portion or preparation clearly differs ` +
+            `(e.g. extra oil/ghee, diet version, unusual portion). Keep macros internally consistent.`,
+        });
+      }
+    }
+
     // Use safe wrapper - validates and sanitizes JSON BEFORE returning
     const estimation = await safeJSONCompletion(
-      [
-        { role: 'system', content: prompt.system },
-        { role: 'user', content: prompt.user },
-      ],
+      messages,
       {
         model: 'gpt-4o-mini',
         temperature: 0.0,

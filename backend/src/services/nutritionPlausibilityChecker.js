@@ -194,6 +194,46 @@ function findStandardFoodMatch(foodName = '') {
 }
 
 /**
+ * Expected per-100g calorie density for a dish, from its NAME ALONE (no estimate
+ * required). This is the calibration lever: injected into the estimation prompt so
+ * the model is anchored to a realistic density BEFORE it answers, for every dish —
+ * the highest-accuracy, zero-latency intervention (the model produces the number,
+ * just better-informed). Returns null for unrecognized foods (no useful anchor →
+ * don't inject noise).
+ *
+ * @param {string} foodName
+ * @returns {{ tier: 'known_dish'|'category', category: string, min: number, max: number,
+ *             referenceKcalPer100g: number|null, matchedReference: string|null } | null}
+ */
+export function getExpectedDensityForFood(foodName = '') {
+  if (!foodName || typeof foodName !== 'string') return null;
+  const standardMatch = findStandardFoodMatch(foodName);
+  if (standardMatch) {
+    return {
+      tier: 'known_dish',
+      category: 'known_dish',
+      min: Math.round(standardMatch.kcalPer100g * 0.75),
+      max: Math.round(standardMatch.kcalPer100g * 1.25),
+      referenceKcalPer100g: Math.round(standardMatch.kcalPer100g),
+      matchedReference: standardMatch.name,
+    };
+  }
+  const category = classifyFoodCategory(foodName);
+  if (category) {
+    const band = CATEGORY_DENSITY_BANDS[category];
+    return {
+      tier: 'category',
+      category,
+      min: band.min,
+      max: band.max,
+      referenceKcalPer100g: null,
+      matchedReference: null,
+    };
+  }
+  return null; // unrecognized → no confident anchor
+}
+
+/**
  * @param {{ foodName?: string, macros?: { calories_kcal?: number }, servingGrams?: number }} estimation
  * @returns {{
  *   plausible: boolean,
