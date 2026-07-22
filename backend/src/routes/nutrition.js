@@ -17,6 +17,7 @@ import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
+import { checkNutritionPlausibility } from "../services/nutritionPlausibilityChecker.js";
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -64,12 +65,38 @@ router.post("/log", async (req, res) => {
       return errors.missingField(res, 'clientEventId');
     }
 
-    // 2. Validation Rule: Check Macro/Calorie consistency
+    // 2a. Internal consistency: calories ≈ Atwater(protein, carbs, fat)
     const validation = validateMacros(calories, protein, carbs, fats);
     if (!validation.isValid) {
       console.warn(`[NutritionLog] Macro mismatch for ${foodName}: Expected ${validation.expectedCalories}, got ${calories}`);
       // We don't block it, but we could flag it. For now, just warn.
     }
+
+    // 2b. Absolute plausibility (calorie density vs. what this kind of food should be).
+    // This is the UNIVERSAL write-boundary net: every input type — text, photo, voice,
+    // barcode, search, manual edit — converges here before persistence, so a bad
+    // estimate is caught regardless of which analyzer produced it (see
+    // nutritionPlausibilityChecker.js). Non-blocking by design: we persist the verdict
+    // into sourceMeta as a durable audit trail and emit a structured telemetry line so
+    // estimate accuracy is measurable over time, rather than silently rewriting values.
+    const servingGramsFromLabel = (() => {
+      const m = typeof servingSize === 'string' ? servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i) : null;
+      return m ? parseFloat(m[1]) : undefined;
+    })();
+    const plausibility = checkNutritionPlausibility({
+      foodName,
+      macros: { calories_kcal: calories },
+      servingGrams: servingGramsFromLabel,
+    });
+    if (!plausibility.plausible) {
+      console.warn(
+        `[NutritionLog][plausibility] IMPLAUSIBLE food="${foodName}" ${plausibility.kcalPer100g}kcal/100g ` +
+        `expected=${plausibility.expectedRange.min}-${plausibility.expectedRange.max} ` +
+        `tier=${plausibility.tier} severity=${plausibility.severity} ` +
+        `source=${sourceMeta?.inputMode || sourceMeta?.source || 'unknown'} aiModel=${aiModel || 'n/a'}`
+      );
+    }
+    const auditedSourceMeta = { ...(sourceMeta || {}), plausibility };
 
     // 3. Idempotent Insert: Use ON CONFLICT DO NOTHING
     // If (userId, clientEventId) already exists → returns empty array
@@ -96,7 +123,7 @@ router.post("/log", async (req, res) => {
         barcode,
         imageUrl,
         clientEventId,
-        sourceMeta: sourceMeta || {},
+        sourceMeta: auditedSourceMeta,
         loggedDate: safeLoggedDate,
         cuisine: cuisine || null,
         cookingMethod: cookingMethod || null,

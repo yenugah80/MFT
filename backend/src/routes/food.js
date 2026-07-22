@@ -8,6 +8,7 @@ import { aiEstimatedFoodsTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
+import { checkNutritionPlausibility } from "../services/nutritionPlausibilityChecker.js";
 
 // Configure Multer for audio file uploads
 const upload = multer({ dest: "uploads/" });
@@ -209,6 +210,18 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
       console.warn(`[FoodAnalyzeImage] Low-confidence result (${confidence}): foodName="${foodName}"`);
     }
 
+    // Absolute calorie-density plausibility check (same one used in the text path,
+    // smartNutritionResolver.js) — confidence alone doesn't catch a result that's
+    // internally consistent but wrong by roughly a constant factor.
+    const portionAmount = rawItems[0]?.canonical?.portion?.amount;
+    const portionUnit = rawItems[0]?.canonical?.portion?.unit;
+    const servingGrams = portionUnit === 'g' && typeof portionAmount === 'number' ? portionAmount : undefined;
+    const plausibilityCheck = checkNutritionPlausibility({
+      foodName,
+      macros: { calories_kcal: unifiedResponse.totals?.calories || 0 },
+      servingGrams,
+    });
+
     console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, foodName="${foodName}", healthScore=${unifiedResponse.healthScore}`);
 
     // Build enhanced response with all analysis metadata
@@ -239,6 +252,8 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
         portionAssessment: result.portionAssessment || null,
         confidence,
         lowConfidence,
+        nutritionPlausible: plausibilityCheck.plausible,
+        plausibilityCheck,
         suggestions: result.suggestions || [],
         imageAnalysis: result.imageAnalysis || null
       }
@@ -551,6 +566,16 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
     unifiedResponse.portionAssessment = result.portionAssessment || null;
     unifiedResponse.suggestions = result.suggestions || [];
     unifiedResponse.imageAnalysis = result.imageAnalysis || null;
+
+    // Same absolute calorie-density plausibility check as /analyze-image and the
+    // text path (smartNutritionResolver.js) — catches internally-consistent-but-
+    // wrong-magnitude estimates that confidence scores alone don't.
+    const multimodalPlausibilityCheck = checkNutritionPlausibility({
+      foodName: rawItems[0]?.name || result.title || result.foodName || 'Unknown Food',
+      macros: { calories_kcal: unifiedResponse.totals?.calories || 0 },
+    });
+    unifiedResponse.nutritionPlausible = multimodalPlausibilityCheck.plausible;
+    unifiedResponse.plausibilityCheck = multimodalPlausibilityCheck;
 
     console.log(`[FoodMultimodal] Enhanced response:`, {
       items: unifiedResponse.items?.length || 1,

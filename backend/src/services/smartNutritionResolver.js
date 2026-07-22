@@ -32,10 +32,15 @@ import {
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
 import { cache as redisCache, isRedisAvailable, cacheKeys } from '../config/redis.js';
+import { checkNutritionPlausibility } from './nutritionPlausibilityChecker.js';
 
 // FIXED P1: Feature flags for dual-prompt system
 const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
 const ENABLE_USDA_VERIFICATION = process.env.ENABLE_USDA_VERIFICATION === 'true';
+// Self-correction: when an estimate is flagged implausible, re-query the model ONCE
+// with the reference band injected as context (escalated to the stronger model). Only
+// fires on the rare flagged item, so the common path keeps zero added latency.
+const ENABLE_PLAUSIBILITY_CORRECTION = process.env.ENABLE_PLAUSIBILITY_CORRECTION !== 'false'; // Default: enabled
 
 // In-memory cache (fallback when Redis unavailable)
 // Also serves as L1 cache for faster reads
@@ -307,6 +312,8 @@ class SmartNutritionResolver {
 
         this.stats.usdaVerifications++;
 
+        const usdaPlausibilityCheck = checkNutritionPlausibility(usdaResult);
+
         const result = {
           ...usdaResult,
           source: usdaResult.validationPassed ? 'usda_verified' : 'usda_unvalidated',
@@ -317,6 +324,8 @@ class SmartNutritionResolver {
           isComplex: false,
           estimationTier: promptTier, // FIXED P0: Track which prompt tier
           cacheKey,
+          nutritionPlausible: usdaPlausibilityCheck.plausible,
+          plausibilityCheck: usdaPlausibilityCheck,
         };
 
         // CRITICAL: Only cache valid USDA results, same as OpenAI
@@ -407,6 +416,11 @@ class SmartNutritionResolver {
       'caesar salad', 'cobb salad', 'greek salad', 'caprese salad',
       // Regional multi-component
       'pad thai', 'pho', 'ramen', 'dosa', 'samosa', 'kebab', 'shawarma', 'falafel',
+      // South/Southeast Indian tempered/multi-ingredient dishes — previously missing,
+      // which routed these to the minimal-token "simple" prompt tier and contributed
+      // to implausible estimates (e.g. "Semiya upma" at ~half realistic calorie density)
+      'upma', 'poha', 'khichdi', 'pongal', 'uttapam', 'idli sambar', 'vada', 'poriyal',
+      'biryani rice', 'pulao', 'fried rice',
     ];
 
     return complexDishes.some(dish => query.includes(dish));
@@ -522,6 +536,10 @@ class SmartNutritionResolver {
           estimate.validationPassed = false;
         }
 
+        // Absolute plausibility check — catches internally-consistent-but-wrong-magnitude
+        // estimates that _validateMacros can't (see nutritionPlausibilityChecker.js).
+        const plausibilityCheck = checkNutritionPlausibility(estimate);
+
         const result = {
           ...estimate,
           source: estimate.confidence >= 80 ? 'openai_estimation' : 'openai_estimation_low_confidence',
@@ -529,6 +547,8 @@ class SmartNutritionResolver {
           originalQuery: item.name,
           estimationTier: promptTier, // FIXED P0: Track prompt tier
           validationPassed: estimate.validationPassed ?? true, // Include validation status
+          nutritionPlausible: plausibilityCheck.plausible,
+          plausibilityCheck,
         };
 
         // FIXED: Track metrics for batch results
@@ -625,8 +645,39 @@ class SmartNutritionResolver {
     );
 
     // Post-processing: Calculate confidence intervals if not provided
-    const confidenceIntervals = estimation.confidenceIntervals ||
+    let confidenceIntervals = estimation.confidenceIntervals ||
       this._calculateConfidenceIntervals(adjustedMacros, estimation.recognitionConfidence || estimation.confidence);
+
+    // Absolute plausibility check on the final (context-adjusted) macros — catches
+    // internally-consistent-but-wrong-magnitude estimates that _validateMacros can't
+    // (see nutritionPlausibilityChecker.js for why "Semiya upma" at 87 kcal/100g slips
+    // past the Atwater check but is still roughly half of a realistic value).
+    let plausibilityCheck = checkNutritionPlausibility({
+      foodName: estimation.foodName,
+      macros: adjustedMacros,
+      servingGrams: estimation.servingGrams,
+    });
+
+    // Self-correction loop: detection alone doesn't recover the real value. When the
+    // estimate is flagged, re-query the model ONCE with the reference band as context.
+    // Only runs on flagged items → the common (plausible) path adds zero latency.
+    let correctedMacros = null;
+    let correctionMeta = null;
+    if (ENABLE_PLAUSIBILITY_CORRECTION && !plausibilityCheck.plausible) {
+      const correction = await this._correctImplausibleEstimate(
+        foodQuery, portion, context, estimation, adjustedMacros, plausibilityCheck
+      );
+      if (correction) {
+        correctedMacros = correction.macros;
+        correctionMeta = correction.meta;
+        plausibilityCheck = correction.plausibilityCheck; // re-checked post-correction
+        // Recompute uncertainty band from the corrected macros so it isn't stale.
+        confidenceIntervals = this._calculateConfidenceIntervals(
+          correctedMacros, estimation.recognitionConfidence || estimation.confidence
+        );
+      }
+    }
+    const finalMacros = correctedMacros || adjustedMacros;
 
     // Return validated and structured response with enhanced fields
     return {
@@ -637,9 +688,13 @@ class SmartNutritionResolver {
       recognitionStatus: estimation.recognitionStatus || 'identified',
       estimationTier: estimation.estimationTier || 'standard',
       validationPassed: estimation.validationPassed ?? true,
+      nutritionPlausible: plausibilityCheck.plausible,
+      plausibilityCheck,
+      correctionApplied: !!correctedMacros,
+      correctionMeta,
 
-      // Macros with potential context adjustments
-      macros: adjustedMacros,
+      // Macros with potential context adjustments (and correction, if it fired)
+      macros: finalMacros,
       macrosOriginal: estimation.macros, // Keep original for comparison
 
       // Confidence intervals for uncertainty
@@ -1008,6 +1063,78 @@ class SmartNutritionResolver {
     if (errors.length > 0) {
       this.stats.schemaValidationErrors++;
       throw new OpenAIValidationError('Schema validation failed', { errors, warnings, estimation });
+    }
+  }
+
+  /**
+   * Self-correction for a flagged-implausible estimate. Re-queries the model ONCE
+   * with the reference density band injected as corrective context, escalated to the
+   * stronger model (gpt-4o) since this only runs on rare outliers where accuracy
+   * outweighs cost. Accepts the re-estimate ONLY if it is genuinely more plausible —
+   * otherwise keeps the original and leaves the flag on for user review (never loops,
+   * never silently downgrades). This is the "context matters" lever applied surgically.
+   * @private
+   */
+  async _correctImplausibleEstimate(foodQuery, portion, context, originalEstimation, adjustedMacros, plausibilityCheck) {
+    try {
+      const currentDensity = plausibilityCheck.kcalPer100g;
+      const { min, max } = plausibilityCheck.expectedRange;
+      const direction = currentDensity < min ? 'too LOW' : 'too HIGH';
+      const dish = originalEstimation.foodName;
+
+      // Build the normal prompt, then append the correction as an extra user turn so
+      // the hint reaches the model regardless of the prompt builder's internals.
+      const basePrompt = buildNutritionEstimationPrompt(foodQuery, portion, context);
+      const correctionHint =
+        `IMPORTANT — RE-ESTIMATE: Your previous nutrition estimate for "${dish}" worked out to about ` +
+        `${currentDensity} kcal per 100g, which is implausibly ${direction} for this dish. A typical ` +
+        `"${dish}" is roughly ${min}-${max} kcal per 100g. Re-estimate carefully using a REALISTIC ` +
+        `calorie density and portion weight for THIS specific dish, keeping macros internally consistent ` +
+        `(protein×4 + carbs×4 + fat×9 ≈ calories). Return the same JSON schema.`;
+
+      const reEstimate = await safeJSONCompletion(
+        [
+          { role: 'system', content: basePrompt.system },
+          { role: 'user', content: basePrompt.user },
+          { role: 'user', content: correctionHint },
+        ],
+        { model: 'gpt-4o', temperature: 0.0, maxTokens: 1200, maxRetries: 1 }
+      );
+
+      this._validateNutritionSchema(reEstimate);
+      this._validateMacros(reEstimate);
+      const reAdjusted = this._applyContextAdjustments(
+        reEstimate.macros, context.preparationContext, reEstimate.modifiersApplied
+      );
+      const recheck = checkNutritionPlausibility({
+        foodName: reEstimate.foodName || dish,
+        macros: reAdjusted,
+        servingGrams: reEstimate.servingGrams,
+      });
+
+      this.stats.plausibilityCorrections = (this.stats.plausibilityCorrections || 0) + 1;
+      console.log(
+        `[SmartResolver][correction] "${dish}": ${currentDensity} → ${recheck.kcalPer100g} kcal/100g ` +
+        `(${recheck.plausible ? '✅ now plausible' : '⚠️ still implausible, keeping original + flag'})`
+      );
+
+      if (recheck.plausible) {
+        return {
+          macros: reAdjusted,
+          plausibilityCheck: recheck,
+          meta: {
+            corrected: true,
+            model: 'gpt-4o',
+            reason: 'plausibility_correction',
+            fromKcalPer100g: currentDensity,
+            toKcalPer100g: recheck.kcalPer100g,
+          },
+        };
+      }
+      return null; // correction didn't help — keep original estimate and its flag
+    } catch (err) {
+      console.warn(`[SmartResolver][correction] Failed for "${originalEstimation.foodName}": ${err.message}`);
+      return null;
     }
   }
 

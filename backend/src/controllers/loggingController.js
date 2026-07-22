@@ -1,6 +1,7 @@
 import { foodLogTable, waterLogTable, moodLogTable } from "../db/schema.js";
 import errors from "../utils/errorResponse.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
+import { checkNutritionPlausibility } from "../services/nutritionPlausibilityChecker.js";
 
 export async function logMeal(req, res) {
   try {
@@ -31,6 +32,26 @@ export async function logMeal(req, res) {
 
     if (!foodName) {
       return errors.missingField(res, "foodName");
+    }
+
+    // Same universal plausibility net as /nutrition/log — this is a second live
+    // food-log write path, so it gets the same calorie-density sanity check and
+    // audit-trail telemetry (see nutritionPlausibilityChecker.js). Non-blocking.
+    const gramsFromLabel = (() => {
+      const m = typeof servingSize === 'string' ? servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i) : null;
+      return m ? parseFloat(m[1]) : undefined;
+    })();
+    const plausibility = checkNutritionPlausibility({
+      foodName,
+      macros: { calories_kcal: calories },
+      servingGrams: gramsFromLabel,
+    });
+    if (!plausibility.plausible) {
+      console.warn(
+        `[LoggingController][plausibility] IMPLAUSIBLE food="${foodName}" ${plausibility.kcalPer100g}kcal/100g ` +
+        `expected=${plausibility.expectedRange.min}-${plausibility.expectedRange.max} ` +
+        `tier=${plausibility.tier} severity=${plausibility.severity} source=${source || 'unknown'}`
+      );
     }
 
     const result = await req.db

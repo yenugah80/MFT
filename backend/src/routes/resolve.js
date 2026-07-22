@@ -572,6 +572,14 @@ async function resolveGenericFood(parsedFood) {
       }
     }
     if (nutrition.warning) flags.push('needs_verification');
+    // Absolute calorie-density plausibility (attached by smartNutritionResolver).
+    // A severe miss means the estimate is likely wrong by ~2x+ — surface it so the
+    // review UI can prompt a correction rather than logging a bad number silently.
+    if (nutrition.nutritionPlausible === false) {
+      flags.push(nutrition.plausibilityCheck?.severity === 'severe'
+        ? 'implausible_nutrition_severe'
+        : 'implausible_nutrition');
+    }
 
     // 🆕 CRITICAL FIX: Preserve ORIGINAL parsed food name!
     // The smartNutritionResolver may return a hallucinated foodName (e.g., "rice" → "Indian Chicken Curry")
@@ -692,6 +700,8 @@ async function resolveGenericFood(parsedFood) {
       scores: {},
       sourceEvidence,
       flags,
+      nutritionPlausible: nutrition.nutritionPlausible ?? true,
+      plausibilityCheck: nutrition.plausibilityCheck || null,
 
       // 🆕 ENHANCED: Disambiguation support for UI
       disambiguationNeeded: nutrition.disambiguationNeeded || false,
