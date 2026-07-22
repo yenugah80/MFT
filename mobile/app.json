@@ -135,7 +135,8 @@
           "mode": "production"
         }
       ],
-      "./plugins/withAndroidManifestMergerFixes.js"
+      "./plugins/withAndroidManifestMergerFixes.js",
+      "./plugins/withExcludeLegacySupportLibrary.js"
     ],
     "experiments": {
       "typedRoutes": true,
