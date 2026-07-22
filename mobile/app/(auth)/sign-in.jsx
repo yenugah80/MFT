@@ -346,15 +346,6 @@ export default function SignInScreen() {
       <View>
         <Notice type={messageType} text={message} onDismiss={() => setMessage(null)} />
 
-        {/* Social SSO — only shown on the main sign-in mode */}
-        {showSignIn ? (
-          <>
-            <AppleButton onPress={handleAppleSignIn} loading={appleLoading} title="Continue with Apple" />
-            <GoogleButton onPress={handleGoogleSignIn} loading={googleLoading} title="Continue with Google" />
-            <AuthDivider />
-          </>
-        ) : null}
-
         <AuthField
           label="Email Address"
           icon="mail-outline"
@@ -495,6 +486,15 @@ export default function SignInScreen() {
           loading={loading}
           onPress={showSignIn ? handleSignIn : showResetRequest ? startResetFlow : completeReset}
         />
+
+        {/* Social SSO — only shown on the main sign-in mode, below the credentials form */}
+        {showSignIn ? (
+          <>
+            <AuthDivider />
+            <AppleButton onPress={handleAppleSignIn} loading={appleLoading} title="Continue with Apple" />
+            <GoogleButton onPress={handleGoogleSignIn} loading={googleLoading} title="Continue with Google" />
+          </>
+        ) : null}
 
         <View style={styles.footer}>
           {showSignIn ? (
