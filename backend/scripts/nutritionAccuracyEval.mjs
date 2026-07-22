@@ -86,9 +86,9 @@ async function main() {
       const atwater = p * 4 + Math.max(0, c - fib) * 4 + fib * 2 + f * 9;
       const macroConsistent = cals > 0 ? Math.abs(cals - atwater) / cals <= 0.12 : false;
       const conf = confBucket(r.confidence ?? r.sourceConfidence ?? 0.7);
-      rows.push({ dish, cuisine, resolved: true, density: Math.round(density), lo, hi, inRange, rangeExceed, pctErrVsMid, macroConsistent, conf, corrected: !!r.correctionApplied });
+      rows.push({ dish, cuisine, resolved: true, density: Math.round(density), lo, hi, inRange, rangeExceed, pctErrVsMid, macroConsistent, conf, corrected: !!r.correctionApplied, macroReconciled: !!r.macroReconciled });
       const mark = inRange ? '✅' : rangeExceed <= mid * 0.15 ? '🟡' : '❌';
-      console.log(`  ${mark} ${dish.padEnd(24)} est=${String(Math.round(density)).padStart(4)}  range=${lo}-${hi}${inRange ? '' : `  (+${Math.round(rangeExceed)} out)`}  ${macroConsistent ? '' : '⚠macro'}${r.correctionApplied ? ' [corrected]' : ''}`);
+      console.log(`  ${mark} ${dish.padEnd(24)} est=${String(Math.round(density)).padStart(4)}  range=${lo}-${hi}${inRange ? '' : `  (+${Math.round(rangeExceed)} out)`}  ${macroConsistent ? '' : '⚠macro'}${r.correctionApplied ? ' [corrected]' : ''}${r.macroReconciled ? ' [macro-reconciled]' : ''}`);
     } catch (e) { console.log(`  ⚠️  ${dish}: ${e.message}`); rows.push({ dish, cuisine, resolved: false }); }
   }
 
@@ -104,8 +104,9 @@ async function main() {
   console.log(`  WITHIN acceptable range:    ${inRange}/${resolved.length} (${(inRange / resolved.length * 100).toFixed(0)}%)   ← primary metric`);
   console.log(`  Mean kcal outside range:    ${exceed.length ? (exceed.reduce((a, b) => a + b, 0) / exceed.length).toFixed(0) : 0} kcal (over ${exceed.length} misses)`);
   console.log(`  Median % err vs midpoint:   ${median(pctErrs).toFixed(0)}%   (robust; MAPE=${(pctErrs.reduce((a, b) => a + b, 0) / pctErrs.length).toFixed(0)}% shown for reference only)`);
-  console.log(`  Macro consistency (Atwater):${macroOk}/${resolved.length} (${(macroOk / resolved.length * 100).toFixed(0)}%)`);
-  console.log(`  Corrections fired:          ${resolved.filter(r => r.corrected).length}`);
+  console.log(`  Macro consistency (Atwater):${macroOk}/${resolved.length} (${(macroOk / resolved.length * 100).toFixed(0)}%)   ← measured AFTER reconciliation runs`);
+  console.log(`  Macro reconciliations fired:${resolved.filter(r => r.macroReconciled).length}   (calories rewritten from macros; alcohol/sugar-alcohol dishes are exempt)`);
+  console.log(`  Density corrections fired:  ${resolved.filter(r => r.corrected).length}`);
   // Confidence grouping
   console.log('  Within-range by confidence:');
   for (const b of ['high', 'med', 'low']) {

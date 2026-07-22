@@ -580,6 +580,9 @@ async function resolveGenericFood(parsedFood) {
         ? 'implausible_nutrition_severe'
         : 'implausible_nutrition');
     }
+    // Calories were auto-reconciled from macros (Atwater) because the model's stated
+    // total didn't add up — surfaced so the UI/audit trail can show it was corrected.
+    if (nutrition.macroReconciled) flags.push('macro_reconciled');
 
     // 🆕 CRITICAL FIX: Preserve ORIGINAL parsed food name!
     // The smartNutritionResolver may return a hallucinated foodName (e.g., "rice" → "Indian Chicken Curry")
@@ -702,6 +705,7 @@ async function resolveGenericFood(parsedFood) {
       flags,
       nutritionPlausible: nutrition.nutritionPlausible ?? true,
       plausibilityCheck: nutrition.plausibilityCheck || null,
+      macroReconciled: nutrition.macroReconciled ?? false,
 
       // 🆕 ENHANCED: Disambiguation support for UI
       disambiguationNeeded: nutrition.disambiguationNeeded || false,

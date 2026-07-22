@@ -47,6 +47,16 @@ const ENABLE_PLAUSIBILITY_CORRECTION = process.env.ENABLE_PLAUSIBILITY_CORRECTIO
 // plausibility check + correction are the safety net for what slips through.
 const ENABLE_DENSITY_CALIBRATION = process.env.ENABLE_DENSITY_CALIBRATION !== 'false'; // Default: enabled
 
+// Ethanol (7 kcal/g) isn't tracked as its own macro field, so alcoholic drinks/dishes
+// legitimately fail the Atwater check (protein/carb/fat alone under-account for their
+// calories) — this is expected, not an error, and must not be "corrected" away.
+const ALCOHOL_KEYWORDS_REGEX = new RegExp(
+  '\\b(?:beer|wine|rum|whiskey|whisky|vodka|gin|tequila|liqueur|liquor|cocktail|' +
+  'margarita|sangria|mimosa|champagne|prosecco|sake|brandy|cider|mojito|daiquiri|' +
+  'martini|spritz|bourbon|scotch|sherry|port wine)\\b',
+  'i'
+);
+
 // In-memory cache (fallback when Redis unavailable)
 // Also serves as L1 cache for faster reads
 const memoryCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, maxKeys: 5000 }); // 1 hour L1 cache
@@ -718,6 +728,8 @@ class SmartNutritionResolver {
       plausibilityCheck,
       correctionApplied: !!correctedMacros,
       correctionMeta,
+      macroReconciled: !!estimation.macroReconciled,
+      originalCaloriesKcal: estimation.originalCaloriesKcal ?? null,
 
       // Macros with potential context adjustments (and correction, if it fired)
       macros: finalMacros,
@@ -1167,6 +1179,14 @@ class SmartNutritionResolver {
   /**
    * FIXED P0: Validate macros using scientifically correct Atwater factors
    * Accounts for fiber (2 kcal/g) and high-carb foods
+   *
+   * Reconciliation: when stated calories don't reconcile with stated macros beyond
+   * tolerance, AND there's no alcohol/sugar-alcohol explanation (ethanol and sugar
+   * alcohols aren't tracked as their own macro field, so a mismatch there is expected),
+   * trust the compositional macros and recompute calories from them via Atwater. Grams
+   * reasoned from ingredients are less prone to error than a separately-stated total,
+   * and this keeps calories_kcal — the value every downstream plausibility/calibration/
+   * UI check anchors on — self-consistent. Deterministic, in-process, no network call.
    * @private
    */
   _validateMacros(estimation) {
@@ -1179,16 +1199,39 @@ class SmartNutritionResolver {
     const diff = Math.abs(calories_kcal - calculated);
     const tolerance = calories_kcal * 0.15; // 15% tolerance for high-fiber foods
 
-    if (diff > tolerance) {
-      // Log warning but don't fail - OpenAI might have alcohol or sugar alcohols
+    if (diff <= tolerance) {
+      estimation.validationPassed = true;
+      return;
+    }
+
+    const name = (estimation.foodName || '').toLowerCase();
+    const hasUntrackedCalorieSource =
+      detectSugarAlcohols(name).hasSugarAlcohols || ALCOHOL_KEYWORDS_REGEX.test(name);
+
+    if (hasUntrackedCalorieSource) {
+      // Expected mismatch — don't reconcile, just flag as unvalidated (existing behavior:
+      // lowers trust/confidence downstream, excluded from cache).
       console.warn(
         `[SmartResolver] Macro validation warning for ${estimation.foodName}: ` +
-        `calculated ${calculated.toFixed(0)} kcal but got ${calories_kcal} (diff: ${((diff/calories_kcal)*100).toFixed(1)}%)`
+        `calculated ${calculated.toFixed(0)} kcal but got ${calories_kcal} (diff: ${((diff / calories_kcal) * 100).toFixed(1)}%) ` +
+        `— not reconciling (alcohol/sugar-alcohol calories aren't in the macro fields)`
       );
       estimation.validationPassed = false;
-    } else {
-      estimation.validationPassed = true;
+      return;
     }
+
+    // Genuine inconsistency, most likely an arithmetic slip on the model's stated total.
+    // Reconcile deterministically instead of just flagging it.
+    const reconciledCalories = Math.round(calculated);
+    console.warn(
+      `[SmartResolver] Macro/calorie mismatch for ${estimation.foodName}: ` +
+      `stated ${calories_kcal} kcal vs ${reconciledCalories} kcal from macros ` +
+      `(diff: ${((diff / calories_kcal) * 100).toFixed(1)}%) — reconciling to macro-derived value`
+    );
+    estimation.macroReconciled = true;
+    estimation.originalCaloriesKcal = calories_kcal;
+    estimation.macros.calories_kcal = reconciledCalories;
+    estimation.validationPassed = true;
   }
 
   /**
