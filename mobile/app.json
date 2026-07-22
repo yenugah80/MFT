@@ -135,7 +135,7 @@
           "mode": "production"
         }
       ],
-      "./plugins/withNotificationColorManifestFix.js"
+      "./plugins/withAndroidManifestMergerFixes.js"
     ],
     "experiments": {
       "typedRoutes": true,
