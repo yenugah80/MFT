@@ -1,94 +1,126 @@
 #!/usr/bin/env node
 /**
- * Nutrition Accuracy Eval — measures how CLOSE real AI estimates land to reference
- * densities, across world cuisines. This is the "every dish accuracy" measurement,
- * and the way to prove the prompt-time density calibration actually helps.
+ * Nutrition Accuracy Eval — measures how well real AI estimates match plausible
+ * per-100g calorie densities across world cuisines, using RANGES (not point values).
  *
- * DIFFERENT FROM nutritionPlausibilityHarness.mjs:
- *   - That harness is deterministic (no network), tests the CHECKER, gates CI.
- *   - THIS eval calls the REAL AI pipeline (network + OpenAI cost, non-deterministic),
- *     so it is deliberately OUT of CI. Run it on demand to measure/track accuracy.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * GROUND-TRUTH HONESTY (read this before trusting any number below)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Variable dishes (pho, ramen, katsu, paratha, curry) do NOT have a single correct
+ * calorie value — preparation, oil, and portion move them by 2x+. So this eval does
+ * NOT compare against a single number. Each dish has a documented ACCEPTABLE RANGE
+ * (typical home/restaurant prep, per 100g). The primary metric is "within range",
+ * which honestly measures "did the estimate land in a plausible zone" rather than
+ * "did it hit a fabricated point value".
+ *
+ * These ranges are hand-curated approximations from general nutrition knowledge, NOT
+ * a certified benchmark. This is a DIRECTIONAL smoke test for regressions and gross
+ * errors — not evidence of absolute accuracy. A production benchmark needs sourced,
+ * documented references (USDA/NCCDB) with recipe + serving definitions and n≥several
+ * hundred. Treat single-digit metric moves as noise.
+ *
+ * DIFFERENT FROM nutritionPlausibilityHarness.mjs (the CI gate): that one is
+ * deterministic and tests the CHECKER. THIS calls the real AI pipeline (network +
+ * OpenAI cost, non-deterministic — OpenAI output varies run to run), so it is
+ * deliberately OUT of CI. Run on demand.
  *
  * USAGE
- *   node scripts/nutritionAccuracyEval.mjs                    # eval with current config
- *   node scripts/nutritionAccuracyEval.mjs --limit 15        # cheaper subset
- *   ENABLE_DENSITY_CALIBRATION=false node scripts/nutritionAccuracyEval.mjs   # A/B: off
- *   (run once with calibration on, once off — clear Redis between for a clean A/B —
- *    and compare the reported MAE to quantify the lift.)
- *
- * Requires backend/.env with DATABASE_URL + OPENAI_API_KEY.
- *
- * METRIC: for each dish we request a 100g portion, so estimated density = estimated
- * calories (normalized by returned grams). We report mean absolute percentage error
- * (MAPE) vs. a reference density, plus the share of dishes within ±15% / ±25%, plus a
- * per-cuisine breakdown so weak cuisines are visible. Reference densities are realistic
- * mid-range values (USDA / published regional tables) — themselves approximate, so
- * treat single-digit MAPE differences as noise and focus on the distribution.
+ *   npm run eval:nutrition                 # full set
+ *   node scripts/nutritionAccuracyEval.mjs --limit 15
+ *   ENABLE_DENSITY_CALIBRATION=false node scripts/nutritionAccuracyEval.mjs   # A/B off
+ * Requires backend/.env with DATABASE_URL + a FUNDED OPENAI_API_KEY.
  */
 
 import 'dotenv/config';
 
-// [dish, reference kcal/100g, cuisine]
-const GOLDEN = [
-  ['Semiya upma', 175, 'indian'], ['Poha', 160, 'indian'], ['Masala dosa', 168, 'indian'],
-  ['Idli', 135, 'indian'], ['Chicken biryani', 200, 'indian'], ['Dal tadka', 120, 'indian'],
-  ['Palak paneer', 150, 'indian'], ['Chana masala', 140, 'indian'], ['Plain paratha', 330, 'indian'],
-  ['Beef pho', 65, 'vietnamese'], ['Chicken ramen', 90, 'japanese'], ['Chicken katsu', 250, 'japanese'],
-  ['Pad thai', 200, 'thai'], ['Green curry chicken', 130, 'thai'], ['Bibimbap', 145, 'korean'],
-  ['Fried rice', 190, 'chinese'], ['Chow mein', 210, 'chinese'],
-  ['Falafel', 330, 'middle-eastern'], ['Hummus', 175, 'middle-eastern'], ['Chicken shawarma', 220, 'middle-eastern'],
-  ['Beef tacos', 210, 'mexican'], ['Chicken burrito', 200, 'mexican'], ['Guacamole', 160, 'mexican'],
-  ['Jollof rice', 190, 'west-african'], ['Injera', 210, 'ethiopian'],
-  ['Spaghetti bolognese', 160, 'italian'], ['Margherita pizza', 260, 'italian'], ['Risotto', 165, 'italian'],
-  ['Grilled chicken breast', 165, 'american'], ['Greek salad', 90, 'greek'], ['Oatmeal', 70, 'american'],
+// [dish, minDensity, maxDensity, cuisine]  — kcal per 100g acceptable range.
+// Ranges are intentionally wide for dishes whose preparation varies a lot.
+const REFERENCE_RANGES = [
+  ['Semiya upma', 150, 230, 'indian'], ['Poha', 130, 200, 'indian'], ['Masala dosa', 150, 220, 'indian'],
+  ['Idli', 110, 160, 'indian'], ['Chicken biryani', 170, 250, 'indian'], ['Dal tadka', 90, 160, 'indian'],
+  ['Palak paneer', 120, 190, 'indian'], ['Chana masala', 110, 180, 'indian'], ['Plain paratha', 280, 360, 'indian'],
+  ['Rajma', 100, 160, 'indian'], ['Aloo gobi', 80, 150, 'indian'],
+  ['Beef pho', 45, 95, 'vietnamese'], ['Chicken ramen', 70, 130, 'japanese'], ['Chicken katsu', 230, 360, 'japanese'],
+  ['Salmon sushi', 120, 180, 'japanese'], ['Miso soup', 25, 70, 'japanese'],
+  ['Pad thai', 150, 260, 'thai'], ['Green curry chicken', 100, 170, 'thai'], ['Tom yum soup', 30, 90, 'thai'],
+  ['Bibimbap', 110, 190, 'korean'], ['Kimchi', 15, 60, 'korean'],
+  ['Fried rice', 150, 240, 'chinese'], ['Chow mein', 160, 260, 'chinese'], ['Congee', 40, 90, 'chinese'],
+  ['Falafel', 270, 380, 'middle-eastern'], ['Hummus', 140, 220, 'middle-eastern'], ['Chicken shawarma', 180, 280, 'middle-eastern'],
+  ['Tabbouleh', 50, 130, 'middle-eastern'],
+  ['Beef tacos', 170, 260, 'mexican'], ['Chicken burrito', 160, 250, 'mexican'], ['Guacamole', 120, 200, 'mexican'],
+  ['Jollof rice', 150, 240, 'west-african'], ['Injera', 160, 250, 'ethiopian'],
+  ['Spaghetti bolognese', 120, 210, 'italian'], ['Margherita pizza', 220, 300, 'italian'], ['Risotto', 130, 210, 'italian'],
+  ['Grilled chicken breast', 130, 200, 'american'], ['Greek salad', 60, 130, 'greek'], ['Oatmeal', 50, 100, 'american'],
+  ['Apple', 45, 60, 'fruit'], ['Almonds', 550, 620, 'ingredient'],
 ];
 
-function arg(name, def) {
-  const i = process.argv.indexOf(name);
-  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def;
-}
+const MIN_CUISINE_N = 5; // don't report a cuisine average below this — too noisy
+
+function arg(name, def) { const i = process.argv.indexOf(name); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def; }
+function median(xs) { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+function confBucket(c) { const n = c > 1 ? c / 100 : c; return n >= 0.85 ? 'high' : n >= 0.6 ? 'med' : 'low'; }
 
 async function main() {
-  const limit = parseInt(arg('--limit', String(GOLDEN.length)), 10);
-  const set = GOLDEN.slice(0, limit);
+  const limit = parseInt(arg('--limit', String(REFERENCE_RANGES.length)), 10);
+  const set = REFERENCE_RANGES.slice(0, limit);
   const calibration = process.env.ENABLE_DENSITY_CALIBRATION !== 'false';
+  console.log(`\nNutrition Accuracy Eval — ${set.length} dishes (ranges), calibration=${calibration ? 'ON' : 'OFF'}\n`);
 
-  console.log(`\nNutrition Accuracy Eval — ${set.length} dishes, calibration=${calibration ? 'ON' : 'OFF'}\n`);
   const { smartNutritionResolver } = await import('../src/services/smartNutritionResolver.js');
-
   const rows = [];
-  for (const [dish, refDensity, cuisine] of set) {
+
+  for (const [dish, lo, hi, cuisine] of set) {
     try {
       const r = await smartNutritionResolver.resolveFood(dish, '100 g');
-      const cals = r?.macros?.calories_kcal;
+      const m = r?.macros || {};
+      const cals = m.calories_kcal;
       const grams = r?.servingGrams > 0 ? r.servingGrams : 100;
-      const density = typeof cals === 'number' ? (cals / grams) * 100 : null;
-      if (density == null) { console.log(`  ⚠️  ${dish}: no estimate`); continue; }
-      const errPct = Math.abs(density - refDensity) / refDensity * 100;
-      rows.push({ dish, cuisine, refDensity, density: Math.round(density), errPct, corrected: !!r.correctionApplied, plausible: r.nutritionPlausible !== false });
-      console.log(`  ${errPct <= 15 ? '✅' : errPct <= 25 ? '🟡' : '❌'} ${dish.padEnd(24)} est=${String(Math.round(density)).padStart(4)}  ref=${String(refDensity).padStart(4)}  err=${errPct.toFixed(0).padStart(3)}%${r.correctionApplied ? '  [corrected]' : ''}`);
-    } catch (e) {
-      console.log(`  ⚠️  ${dish}: ${e.message}`);
-    }
+      if (typeof cals !== 'number') { console.log(`  ⚠️  ${dish}: no estimate (unresolved)`); rows.push({ dish, cuisine, resolved: false }); continue; }
+      const density = (cals / grams) * 100;
+      const mid = (lo + hi) / 2;
+      const inRange = density >= lo && density <= hi;
+      const rangeExceed = inRange ? 0 : Math.min(Math.abs(density - lo), Math.abs(density - hi)); // kcal outside plausible zone
+      const pctErrVsMid = Math.abs(density - mid) / mid * 100;
+      // Macro consistency (Atwater, fiber at 2 kcal/g), tolerate ±12%.
+      const p = m.protein_g || 0, c = m.carbs_g || 0, f = m.fat_g || 0, fib = m.fiber_g || 0;
+      const atwater = p * 4 + Math.max(0, c - fib) * 4 + fib * 2 + f * 9;
+      const macroConsistent = cals > 0 ? Math.abs(cals - atwater) / cals <= 0.12 : false;
+      const conf = confBucket(r.confidence ?? r.sourceConfidence ?? 0.7);
+      rows.push({ dish, cuisine, resolved: true, density: Math.round(density), lo, hi, inRange, rangeExceed, pctErrVsMid, macroConsistent, conf, corrected: !!r.correctionApplied });
+      const mark = inRange ? '✅' : rangeExceed <= mid * 0.15 ? '🟡' : '❌';
+      console.log(`  ${mark} ${dish.padEnd(24)} est=${String(Math.round(density)).padStart(4)}  range=${lo}-${hi}${inRange ? '' : `  (+${Math.round(rangeExceed)} out)`}  ${macroConsistent ? '' : '⚠macro'}${r.correctionApplied ? ' [corrected]' : ''}`);
+    } catch (e) { console.log(`  ⚠️  ${dish}: ${e.message}`); rows.push({ dish, cuisine, resolved: false }); }
   }
 
-  if (!rows.length) { console.log('\nNo results.'); process.exit(1); }
-  const mape = rows.reduce((s, r) => s + r.errPct, 0) / rows.length;
-  const within15 = rows.filter(r => r.errPct <= 15).length;
-  const within25 = rows.filter(r => r.errPct <= 25).length;
-  const byCuisine = {};
-  for (const r of rows) (byCuisine[r.cuisine] ||= []).push(r.errPct);
+  const resolved = rows.filter(r => r.resolved);
+  if (!resolved.length) { console.log('\nNo results (check OPENAI_API_KEY funding).'); process.exit(1); }
+  const inRange = resolved.filter(r => r.inRange).length;
+  const exceed = resolved.filter(r => !r.inRange).map(r => r.rangeExceed);
+  const pctErrs = resolved.map(r => r.pctErrVsMid);
+  const macroOk = resolved.filter(r => r.macroConsistent).length;
 
-  console.log('\n───────────────────────────────────────────');
-  console.log(`  MAPE (mean abs % error):  ${mape.toFixed(1)}%`);
-  console.log(`  Within ±15%:              ${within15}/${rows.length} (${(within15 / rows.length * 100).toFixed(0)}%)`);
-  console.log(`  Within ±25%:              ${within25}/${rows.length} (${(within25 / rows.length * 100).toFixed(0)}%)`);
-  console.log(`  Corrections fired:        ${rows.filter(r => r.corrected).length}`);
-  console.log('  Per cuisine (avg err%):');
-  for (const [c, errs] of Object.entries(byCuisine).sort((a, b) => (b[1].reduce((x, y) => x + y, 0) / b[1].length) - (a[1].reduce((x, y) => x + y, 0) / a[1].length))) {
-    console.log(`     ${c.padEnd(16)} ${(errs.reduce((x, y) => x + y, 0) / errs.length).toFixed(0)}%`);
+  console.log('\n───────────────────────────────────────────────');
+  console.log(`  Coverage (resolved):        ${resolved.length}/${rows.length}`);
+  console.log(`  WITHIN acceptable range:    ${inRange}/${resolved.length} (${(inRange / resolved.length * 100).toFixed(0)}%)   ← primary metric`);
+  console.log(`  Mean kcal outside range:    ${exceed.length ? (exceed.reduce((a, b) => a + b, 0) / exceed.length).toFixed(0) : 0} kcal (over ${exceed.length} misses)`);
+  console.log(`  Median % err vs midpoint:   ${median(pctErrs).toFixed(0)}%   (robust; MAPE=${(pctErrs.reduce((a, b) => a + b, 0) / pctErrs.length).toFixed(0)}% shown for reference only)`);
+  console.log(`  Macro consistency (Atwater):${macroOk}/${resolved.length} (${(macroOk / resolved.length * 100).toFixed(0)}%)`);
+  console.log(`  Corrections fired:          ${resolved.filter(r => r.corrected).length}`);
+  // Confidence grouping
+  console.log('  Within-range by confidence:');
+  for (const b of ['high', 'med', 'low']) {
+    const g = resolved.filter(r => r.conf === b);
+    if (g.length) console.log(`     ${b.padEnd(5)} ${g.filter(r => r.inRange).length}/${g.length} in range`);
   }
-  console.log('───────────────────────────────────────────\n');
+  // Per-cuisine only when n is large enough to mean anything
+  console.log(`  Per cuisine (only n≥${MIN_CUISINE_N}):`);
+  const byC = {}; for (const r of resolved) (byC[r.cuisine] ||= []).push(r);
+  const reported = Object.entries(byC).filter(([, g]) => g.length >= MIN_CUISINE_N);
+  if (!reported.length) console.log(`     (no cuisine has n≥${MIN_CUISINE_N} in this run — use a larger --limit)`);
+  for (const [c, g] of reported) console.log(`     ${c.padEnd(16)} ${g.filter(r => r.inRange).length}/${g.length} in range`);
+  console.log('───────────────────────────────────────────────');
+  console.log('  NOTE: ranges are curated approximations, not a certified benchmark.');
+  console.log('  This is a directional smoke test — not proof of absolute accuracy.\n');
   process.exit(0);
 }
 
