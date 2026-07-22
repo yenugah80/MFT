@@ -34,12 +34,23 @@
  *    [com.android.support:support-compat:28.0.0] ... Suggestion: add
  *    'tools:replace="android:appComponentFactory"' to <application> element."
  * This is a straight attribute set on <application> — no ordering concerns.
+ *
+ * First attempt at this fix only added tools:replace without a value, which
+ * Gradle correctly rejects during manifest merger validation:
+ *   "tools:replace specified at line:27 for attribute
+ *    android:appComponentFactory, but no new value specified — Validation
+ *    failed, exiting"
+ * tools:replace means "prefer whatever value I declare here over the
+ * library's" — it isn't meaningful without actually declaring a value. Must
+ * also set android:appComponentFactory explicitly to the AndroidX value
+ * (what we actually want to win the merge).
  */
 
 const { withAndroidManifest, AndroidConfig } = require('expo/config-plugins');
 
 const NOTIFICATION_COLOR_META_DATA_NAME = 'com.google.firebase.messaging.default_notification_color';
 const NOTIFICATION_ICON_COLOR_RESOURCE = '@color/notification_icon_color';
+const ANDROIDX_APP_COMPONENT_FACTORY = 'androidx.core.app.CoreComponentFactory';
 const TOOLS_NAMESPACE = 'http://schemas.android.com/tools';
 
 function withAndroidManifestMergerFixes(config) {
@@ -65,13 +76,14 @@ function withAndroidManifestMergerFixes(config) {
     console.log(`[withAndroidManifestMergerFixes] Ensured tools:replace on ${NOTIFICATION_COLOR_META_DATA_NAME}`);
 
     // Fix 2 — appComponentFactory
+    mainApplication.$['android:appComponentFactory'] = ANDROIDX_APP_COMPONENT_FACTORY;
     const existingReplace = mainApplication.$['tools:replace'];
     const replaceAttrs = new Set(
       existingReplace ? existingReplace.split(',').map((s) => s.trim()) : []
     );
     replaceAttrs.add('android:appComponentFactory');
     mainApplication.$['tools:replace'] = Array.from(replaceAttrs).join(',');
-    console.log('[withAndroidManifestMergerFixes] Ensured tools:replace on application@appComponentFactory');
+    console.log(`[withAndroidManifestMergerFixes] Set android:appComponentFactory=${ANDROIDX_APP_COMPONENT_FACTORY} with tools:replace`);
 
     return config;
   });
