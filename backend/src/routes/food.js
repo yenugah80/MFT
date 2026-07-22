@@ -118,12 +118,51 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
     const { image, highAccuracy = false, includeIngredients = false, mealType = 'snack' } = req.body;
     if (!image) return res.status(400).json({ error: "Image required" });
 
-    const result = await FoodService.analyzeImage(image, {
+    let result = await FoodService.analyzeImage(image, {
       highAccuracy,
       includeIngredients,
     });
     // Result should never be null now (FoodService throws on failure)
     if (!result) return res.status(500).json({ error: "AI could not analyze this image. Please try with a clearer photo." });
+
+    // Photo-path self-correction (mirrors the text path). The vision model names the
+    // dish AND estimates in one call, so unlike text we can't calibrate up front — but
+    // once we HAVE the name we can detect an implausible density and re-analyze the
+    // image ONCE with the reference band injected, escalated to the stronger model.
+    // Only fires on flagged single-item photos → common path keeps zero added latency.
+    if (process.env.ENABLE_PLAUSIBILITY_CORRECTION !== 'false' && !result.isMultiItem) {
+      const dishName = result.title || result.foodName;
+      const firstCheck = checkNutritionPlausibility({
+        foodName: dishName,
+        macros: { calories_kcal: result.calories || 0 },
+      });
+      if (!firstCheck.plausible && firstCheck.expectedRange) {
+        const dir = firstCheck.kcalPer100g < firstCheck.expectedRange.min ? 'low' : 'high';
+        const hint =
+          `IMPORTANT — RE-ANALYZE: This looks like "${dishName}". A calorie density of ` +
+          `~${firstCheck.kcalPer100g} kcal/100g is implausibly ${dir}; a typical "${dishName}" is ` +
+          `${firstCheck.expectedRange.min}-${firstCheck.expectedRange.max} kcal/100g. Re-examine the ` +
+          `image and give a REALISTIC estimate, keeping macros internally consistent.`;
+        try {
+          const retry = await FoodService.analyzeImage(image, {
+            highAccuracy: true, // escalate to gpt-4o for the correction pass
+            includeIngredients,
+            customInstructions: hint,
+          });
+          if (retry) {
+            const recheck = checkNutritionPlausibility({
+              foodName: retry.title || retry.foodName || dishName,
+              macros: { calories_kcal: retry.calories || 0 },
+            });
+            console.log(`[FoodAnalyzeImage][correction] "${dishName}": ${firstCheck.kcalPer100g} → ${recheck.kcalPer100g} kcal/100g (${recheck.plausible ? '✅ corrected' : '⚠️ still off, keeping better of the two'})`);
+            // Accept the retry only if it's actually more plausible than the first pass.
+            if (recheck.plausible) result = retry;
+          }
+        } catch (correctionErr) {
+          console.warn(`[FoodAnalyzeImage][correction] Failed for "${dishName}": ${correctionErr.message}`);
+        }
+      }
+    }
 
     // Transform result to rawItems format - handle both multi-item and single-item
     const rawItems = result.isMultiItem && result.items
