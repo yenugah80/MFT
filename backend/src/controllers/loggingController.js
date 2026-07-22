@@ -1,7 +1,7 @@
 import { foodLogTable, waterLogTable, moodLogTable } from "../db/schema.js";
 import errors from "../utils/errorResponse.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
-import { checkNutritionPlausibility } from "../services/nutritionPlausibilityChecker.js";
+import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
 
 export async function logMeal(req, res) {
   try {
@@ -34,16 +34,41 @@ export async function logMeal(req, res) {
       return errors.missingField(res, "foodName");
     }
 
-    // Same universal plausibility net as /nutrition/log — this is a second live
-    // food-log write path, so it gets the same calorie-density sanity check and
-    // audit-trail telemetry (see nutritionPlausibilityChecker.js). Non-blocking.
+    // Same universal macro-consistency + plausibility net as /nutrition/log — this is
+    // a second live food-log write path, so it gets the same Atwater reconciliation,
+    // calorie-density sanity check, and persisted audit trail (see
+    // nutritionPlausibilityChecker.js). Non-blocking; reconciliation is deterministic.
+    let effectiveCalories = calories;
+    let macroReconciled = false;
+    let originalCaloriesKcal = null;
+    const macroConsistency = checkMacroConsistency({
+      foodName,
+      macros: { calories_kcal: calories, protein_g: protein, carbs_g: carbs, fat_g: fats, fiber_g: fiber },
+    });
+    if (!macroConsistency.consistent) {
+      if (macroConsistency.shouldReconcile) {
+        console.warn(
+          `[LoggingController][macro] Reconciling calories for "${foodName}": stated ${calories} kcal vs ` +
+          `${macroConsistency.calculatedCalories} kcal from macros (diff: ${macroConsistency.diffPercent.toFixed(1)}%)`
+        );
+        originalCaloriesKcal = calories;
+        effectiveCalories = macroConsistency.calculatedCalories;
+        macroReconciled = true;
+      } else {
+        console.warn(
+          `[LoggingController][macro] Mismatch for "${foodName}" not reconciled (alcohol/sugar-alcohol ` +
+          `calories aren't in the macro fields): stated ${calories} vs ${macroConsistency.calculatedCalories} kcal from macros`
+        );
+      }
+    }
+
     const gramsFromLabel = (() => {
       const m = typeof servingSize === 'string' ? servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i) : null;
       return m ? parseFloat(m[1]) : undefined;
     })();
     const plausibility = checkNutritionPlausibility({
       foodName,
-      macros: { calories_kcal: calories },
+      macros: { calories_kcal: effectiveCalories },
       servingGrams: gramsFromLabel,
     });
     if (!plausibility.plausible) {
@@ -59,7 +84,7 @@ export async function logMeal(req, res) {
       .values({
         userId,
         foodName,
-        calories: calories ?? null,
+        calories: effectiveCalories ?? null,
         protein: protein ?? null,
         carbs: carbs ?? null,
         fats: fats ?? null,
@@ -79,6 +104,11 @@ export async function logMeal(req, res) {
         imageUrl: imageUrl ?? null,
         loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
         source,
+        sourceMeta: {
+          plausibility,
+          macroReconciled,
+          ...(macroReconciled ? { originalCaloriesKcal } : {}),
+        },
       })
       .returning();
 

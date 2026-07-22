@@ -1116,6 +1116,7 @@ export default function LogScreen() {
               saving={isSavingLog}
               analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
               analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
+              analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
             />
 
             {/* "Did you mean?" Suggestions - Only for text input */}

@@ -39,6 +39,17 @@
  */
 
 import { STANDARD_FOODS } from '../data/standardFoodNutrition.js';
+import { detectSugarAlcohols } from './apiClients/prompts/nutritionEstimation.js';
+
+// Ethanol (7 kcal/g) isn't tracked as its own macro field, so alcoholic drinks/dishes
+// legitimately fail the Atwater check (protein/carb/fat alone under-account for their
+// calories) — this is expected, not an error, and must not be "corrected" away.
+const ALCOHOL_KEYWORDS_REGEX = new RegExp(
+  '\\b(?:beer|wine|rum|whiskey|whisky|vodka|gin|tequila|liqueur|liquor|cocktail|' +
+  'margarita|sangria|mimosa|champagne|prosecco|sake|brandy|cider|mojito|daiquiri|' +
+  'martini|spritz|bourbon|scotch|sherry|port wine)\\b',
+  'i'
+);
 
 // kcal per 100g plausible range per coarse category. Ranges are intentionally wide —
 // this is a smell test for "wrong by ~2x or more", not a precision database.
@@ -308,5 +319,41 @@ export function checkNutritionPlausibility(estimation) {
     matchedReference,
     referenceKcalPer100g,
     severity,
+  };
+}
+
+/**
+ * Decide whether stated calories reconcile with stated macros (Atwater factors), and
+ * whether a mismatch should be auto-corrected. Pure decision logic — no mutation, no
+ * I/O — so callers (smartNutritionResolver's _validateMacros) own applying the result,
+ * and this stays importable from CI/no-network contexts (see the reconciliation harness).
+ *
+ * Ethanol and sugar alcohols aren't tracked as their own macro field, so a genuine
+ * mismatch for an alcoholic drink/dish or a keto/sugar-free item is EXPECTED — those are
+ * flagged as inconsistent but never reconciled, since forcing plain Atwater math on them
+ * would introduce a new, different error rather than fix one.
+ *
+ * @param {{ foodName?: string, macros: { calories_kcal:number, protein_g:number, carbs_g:number, fat_g:number, fiber_g?:number } }} estimation
+ * @returns {{ consistent: boolean, shouldReconcile: boolean, calculatedCalories: number, diffPercent: number }}
+ */
+export function checkMacroConsistency(estimation) {
+  const { calories_kcal, protein_g, carbs_g, fat_g, fiber_g = 0 } = estimation.macros;
+
+  const digestibleCarbs = Math.max(0, carbs_g - fiber_g);
+  const calculated = (protein_g * 4) + (digestibleCarbs * 4) + (fiber_g * 2) + (fat_g * 9);
+
+  const diff = Math.abs(calories_kcal - calculated);
+  const tolerance = calories_kcal * 0.15; // 15% tolerance for high-fiber foods
+  const consistent = diff <= tolerance;
+
+  const name = (estimation.foodName || '').toLowerCase();
+  const hasUntrackedCalorieSource = !consistent &&
+    (detectSugarAlcohols(name).hasSugarAlcohols || ALCOHOL_KEYWORDS_REGEX.test(name));
+
+  return {
+    consistent,
+    shouldReconcile: !consistent && !hasUntrackedCalorieSource,
+    calculatedCalories: Math.round(calculated),
+    diffPercent: calories_kcal > 0 ? (diff / calories_kcal) * 100 : 0,
   };
 }

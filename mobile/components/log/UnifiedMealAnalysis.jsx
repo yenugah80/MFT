@@ -1037,6 +1037,9 @@ export default function UnifiedMealAnalysis({
   // photo/barcode path attaches it at the top level of the analysis result.
   analysisPlausible,
   analysisPlausibilityCheck,
+  // Backend already auto-corrected calories to match the stated macros (Atwater) —
+  // same per-item vs. top-level split as the plausibility verdict above.
+  analysisMacroReconciled,
 }) {
   // An estimate is flagged when the backend's calorie-density plausibility check
   // failed for any item, or for the overall photo/barcode result. Surfaced as a
@@ -1046,6 +1049,11 @@ export default function UnifiedMealAnalysis({
   const topLevelFlagged = analysisPlausible === false;
   const plausibilityWarning = flaggedItem?.plausibilityCheck || analysisPlausibilityCheck;
   const hasImplausible = !!flaggedItem || topLevelFlagged;
+
+  // Macro reconciliation already happened server-side before we ever saw this data —
+  // this is a calm FYI ("we fixed a mismatch"), not an alert asking the user to check
+  // anything, so it gets its own lower-key banner rather than reusing the amber one.
+  const wasMacroReconciled = !!analysisMacroReconciled || items.some((i) => i.macroReconciled);
   const [expandedItems, setExpandedItems] = useState({});
   const [showAllMicros, setShowAllMicros] = useState(false);
   const [excludedItems, setExcludedItems] = useState(new Set());
@@ -1296,6 +1304,21 @@ export default function UnifiedMealAnalysis({
               {plausibilityWarning?.expectedRange
                 ? `This reads as ${plausibilityWarning.kcalPer100g} kcal per 100g, but this kind of dish is usually ${plausibilityWarning.expectedRange.min}–${plausibilityWarning.expectedRange.max}. Check the portion, or tap Edit if it looks off.`
                 : `The calories look unusual for this dish. Check the portion, or tap Edit if it looks off.`}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* === MACRO RECONCILIATION NOTE === */}
+      {/* Informational only: the backend already recalculated calories to match the
+          protein/carb/fat breakdown before we ever received this data. Nothing for the
+          user to act on, so this is calm/blue, not the amber "please check" banner. */}
+      {!hasImplausible && wasMacroReconciled && (
+        <View style={styles.macroReconciledBanner}>
+          <Ionicons name="checkmark-circle-outline" size={18} color="#1D4ED8" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.macroReconciledText}>
+              Calories adjusted to match the protein/carb/fat breakdown for accuracy.
             </Text>
           </View>
         </View>
@@ -1709,6 +1732,25 @@ const styles = StyleSheet.create({
   plausibilityText: {
     fontSize: 12,
     color: '#92400E',
+    lineHeight: 17,
+  },
+
+  // Macro Reconciliation Note (calm/informational — nothing for the user to act on)
+  macroReconciledBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  macroReconciledText: {
+    fontSize: 12,
+    color: '#1E3A8A',
     lineHeight: 17,
   },
 

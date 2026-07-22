@@ -25,14 +25,13 @@ import {
   detectBrandFood,
   detectBoneInFood,
   detectLeftoverFood,
-  detectSugarAlcohols,
   PREPARATION_ADJUSTMENTS,
   BRAND_FOODS,
 } from './apiClients/prompts/nutritionEstimation.js';
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
 import { cache as redisCache, isRedisAvailable, cacheKeys } from '../config/redis.js';
-import { checkNutritionPlausibility, getExpectedDensityForFood } from './nutritionPlausibilityChecker.js';
+import { checkNutritionPlausibility, getExpectedDensityForFood, checkMacroConsistency } from './nutritionPlausibilityChecker.js';
 
 // FIXED P1: Feature flags for dual-prompt system
 const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
@@ -46,16 +45,6 @@ const ENABLE_PLAUSIBILITY_CORRECTION = process.env.ENABLE_PLAUSIBILITY_CORRECTIO
 // dish, at zero added latency (same call). This is the primary accuracy lever; the
 // plausibility check + correction are the safety net for what slips through.
 const ENABLE_DENSITY_CALIBRATION = process.env.ENABLE_DENSITY_CALIBRATION !== 'false'; // Default: enabled
-
-// Ethanol (7 kcal/g) isn't tracked as its own macro field, so alcoholic drinks/dishes
-// legitimately fail the Atwater check (protein/carb/fat alone under-account for their
-// calories) — this is expected, not an error, and must not be "corrected" away.
-const ALCOHOL_KEYWORDS_REGEX = new RegExp(
-  '\\b(?:beer|wine|rum|whiskey|whisky|vodka|gin|tequila|liqueur|liquor|cocktail|' +
-  'margarita|sangria|mimosa|champagne|prosecco|sake|brandy|cider|mojito|daiquiri|' +
-  'martini|spritz|bourbon|scotch|sherry|port wine)\\b',
-  'i'
-);
 
 // In-memory cache (fallback when Redis unavailable)
 // Also serves as L1 cache for faster reads
@@ -1190,30 +1179,22 @@ class SmartNutritionResolver {
    * @private
    */
   _validateMacros(estimation) {
-    const { calories_kcal, protein_g, carbs_g, fat_g, fiber_g = 0 } = estimation.macros;
+    const { consistent, shouldReconcile, calculatedCalories, diffPercent } = checkMacroConsistency(estimation);
 
-    // Atwater calorie calculation with fiber
-    const digestibleCarbs = Math.max(0, carbs_g - fiber_g);
-    const calculated = (protein_g * 4) + (digestibleCarbs * 4) + (fiber_g * 2) + (fat_g * 9);
-
-    const diff = Math.abs(calories_kcal - calculated);
-    const tolerance = calories_kcal * 0.15; // 15% tolerance for high-fiber foods
-
-    if (diff <= tolerance) {
+    if (consistent) {
       estimation.validationPassed = true;
       return;
     }
 
-    const name = (estimation.foodName || '').toLowerCase();
-    const hasUntrackedCalorieSource =
-      detectSugarAlcohols(name).hasSugarAlcohols || ALCOHOL_KEYWORDS_REGEX.test(name);
+    const calories_kcal = estimation.macros.calories_kcal;
 
-    if (hasUntrackedCalorieSource) {
-      // Expected mismatch — don't reconcile, just flag as unvalidated (existing behavior:
-      // lowers trust/confidence downstream, excluded from cache).
+    if (!shouldReconcile) {
+      // Expected mismatch (alcohol/sugar-alcohol) — don't reconcile, just flag as
+      // unvalidated (existing behavior: lowers trust/confidence downstream, excluded
+      // from cache).
       console.warn(
         `[SmartResolver] Macro validation warning for ${estimation.foodName}: ` +
-        `calculated ${calculated.toFixed(0)} kcal but got ${calories_kcal} (diff: ${((diff / calories_kcal) * 100).toFixed(1)}%) ` +
+        `calculated ${calculatedCalories} kcal but got ${calories_kcal} (diff: ${diffPercent.toFixed(1)}%) ` +
         `— not reconciling (alcohol/sugar-alcohol calories aren't in the macro fields)`
       );
       estimation.validationPassed = false;
@@ -1222,15 +1203,14 @@ class SmartNutritionResolver {
 
     // Genuine inconsistency, most likely an arithmetic slip on the model's stated total.
     // Reconcile deterministically instead of just flagging it.
-    const reconciledCalories = Math.round(calculated);
     console.warn(
       `[SmartResolver] Macro/calorie mismatch for ${estimation.foodName}: ` +
-      `stated ${calories_kcal} kcal vs ${reconciledCalories} kcal from macros ` +
-      `(diff: ${((diff / calories_kcal) * 100).toFixed(1)}%) — reconciling to macro-derived value`
+      `stated ${calories_kcal} kcal vs ${calculatedCalories} kcal from macros ` +
+      `(diff: ${diffPercent.toFixed(1)}%) — reconciling to macro-derived value`
     );
     estimation.macroReconciled = true;
     estimation.originalCaloriesKcal = calories_kcal;
-    estimation.macros.calories_kcal = reconciledCalories;
+    estimation.macros.calories_kcal = calculatedCalories;
     estimation.validationPassed = true;
   }
 

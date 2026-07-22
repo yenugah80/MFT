@@ -2,7 +2,7 @@ import express from "express";
 import { db } from "../config/db.js";
 import { foodLogTable, dailyNutritionSummaryTable, waterLogTable, weightHistoryTable, moodLogTable, gamificationTable, nutritionGoalsTable, userPortionPreferencesTable, profilesTable } from "../db/schema.js";
 import { FoodService } from "../services/foodService.js";
-import { validateMacros, scaleNutrients } from "../utils/nutrition.js";
+import { scaleNutrients } from "../utils/nutrition.js";
 import { parseTimezoneOffsetMinutes, getLocalDayRange, getLocalDateUTC, addDaysUTC, normalizeDateUTC, toDateStr } from "../utils/timezone.js";
 import { ensureWaterLogTableShape, ensureDailyNutritionSummaryTableShape, ensureFoodLogTableShape, ensureGamificationTableShape } from "../utils/schemaGuards.js";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
@@ -17,7 +17,7 @@ import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
-import { checkNutritionPlausibility } from "../services/nutritionPlausibilityChecker.js";
+import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -65,27 +65,50 @@ router.post("/log", async (req, res) => {
       return errors.missingField(res, 'clientEventId');
     }
 
-    // 2a. Internal consistency: calories ≈ Atwater(protein, carbs, fat)
-    const validation = validateMacros(calories, protein, carbs, fats);
-    if (!validation.isValid) {
-      console.warn(`[NutritionLog] Macro mismatch for ${foodName}: Expected ${validation.expectedCalories}, got ${calories}`);
-      // We don't block it, but we could flag it. For now, just warn.
+    // 2a. Internal consistency: calories ≈ Atwater(protein, carbs, fat), fiber- and
+    // alcohol/sugar-alcohol-aware (see nutritionPlausibilityChecker.js — shared with
+    // smartNutritionResolver so there's one macro-consistency rule, not two that can
+    // drift). This is the UNIVERSAL write-boundary net: every input type — text,
+    // photo, voice, barcode, search, manual edit — converges here before persistence.
+    // A genuine mismatch (no alcohol/sugar-alcohol explanation) is RECONCILED here too,
+    // not just flagged — so a manually-entered or photo-sourced meal with inconsistent
+    // macros gets the same correction the AI-estimation path already gets.
+    let effectiveCalories = calories;
+    let macroReconciled = false;
+    let originalCaloriesKcal = null;
+    const macroConsistency = checkMacroConsistency({
+      foodName,
+      macros: { calories_kcal: calories, protein_g: protein, carbs_g: carbs, fat_g: fats, fiber_g: fiber },
+    });
+    if (!macroConsistency.consistent) {
+      if (macroConsistency.shouldReconcile) {
+        console.warn(
+          `[NutritionLog][macro] Reconciling calories for "${foodName}": stated ${calories} kcal vs ` +
+          `${macroConsistency.calculatedCalories} kcal from macros (diff: ${macroConsistency.diffPercent.toFixed(1)}%)`
+        );
+        originalCaloriesKcal = calories;
+        effectiveCalories = macroConsistency.calculatedCalories;
+        macroReconciled = true;
+      } else {
+        console.warn(
+          `[NutritionLog][macro] Mismatch for "${foodName}" not reconciled (alcohol/sugar-alcohol ` +
+          `calories aren't in the macro fields): stated ${calories} vs ${macroConsistency.calculatedCalories} kcal from macros`
+        );
+      }
     }
 
-    // 2b. Absolute plausibility (calorie density vs. what this kind of food should be).
-    // This is the UNIVERSAL write-boundary net: every input type — text, photo, voice,
-    // barcode, search, manual edit — converges here before persistence, so a bad
-    // estimate is caught regardless of which analyzer produced it (see
-    // nutritionPlausibilityChecker.js). Non-blocking by design: we persist the verdict
-    // into sourceMeta as a durable audit trail and emit a structured telemetry line so
-    // estimate accuracy is measurable over time, rather than silently rewriting values.
+    // 2b. Absolute plausibility (calorie density vs. what this kind of food should be),
+    // evaluated on the (possibly reconciled) effective calories. Non-blocking by design:
+    // we persist the verdict into sourceMeta as a durable audit trail and emit a
+    // structured telemetry line so estimate accuracy is measurable over time, rather
+    // than silently rewriting values with no trace.
     const servingGramsFromLabel = (() => {
       const m = typeof servingSize === 'string' ? servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i) : null;
       return m ? parseFloat(m[1]) : undefined;
     })();
     const plausibility = checkNutritionPlausibility({
       foodName,
-      macros: { calories_kcal: calories },
+      macros: { calories_kcal: effectiveCalories },
       servingGrams: servingGramsFromLabel,
     });
     if (!plausibility.plausible) {
@@ -96,7 +119,12 @@ router.post("/log", async (req, res) => {
         `source=${sourceMeta?.inputMode || sourceMeta?.source || 'unknown'} aiModel=${aiModel || 'n/a'}`
       );
     }
-    const auditedSourceMeta = { ...(sourceMeta || {}), plausibility };
+    const auditedSourceMeta = {
+      ...(sourceMeta || {}),
+      plausibility,
+      macroReconciled,
+      ...(macroReconciled ? { originalCaloriesKcal } : {}),
+    };
 
     // 3. Idempotent Insert: Use ON CONFLICT DO NOTHING
     // If (userId, clientEventId) already exists → returns empty array
@@ -104,7 +132,7 @@ router.post("/log", async (req, res) => {
       .values({
         userId,
         foodName,
-        calories,
+        calories: effectiveCalories,
         protein,
         carbs,
         fats,
@@ -156,7 +184,7 @@ router.post("/log", async (req, res) => {
         .values({
           userId,
           date: toDateStr(today),
-          totalCalories: calories || 0,
+          totalCalories: effectiveCalories || 0,
           totalProtein: protein || 0,
           totalCarbs: carbs || 0,
           totalFats: fats || 0,
@@ -164,7 +192,7 @@ router.post("/log", async (req, res) => {
         .onConflictDoUpdate({
           target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
           set: {
-            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${calories || 0}`,
+            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${effectiveCalories || 0}`,
             totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
             totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
             totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,

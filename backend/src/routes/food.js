@@ -8,7 +8,34 @@ import { aiEstimatedFoodsTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
-import { checkNutritionPlausibility } from "../services/nutritionPlausibilityChecker.js";
+import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+
+// Macro/calorie self-consistency (Atwater), reconciled in place BEFORE totals are
+// built from it — same rule as the text-estimation and DB write-boundary paths (see
+// nutritionPlausibilityChecker.js), so every input type gets the same correction.
+// Mutates `item.calories` when a genuine mismatch is found; returns whether it fired.
+function reconcileItemMacros(item, fallbackName) {
+  const macroConsistency = checkMacroConsistency({
+    foodName: item.title || item.foodName || item.name || fallbackName,
+    macros: {
+      calories_kcal: item.calories || 0,
+      protein_g: item.protein || 0,
+      carbs_g: item.carbs || 0,
+      fat_g: item.fat ?? item.fats ?? 0,
+      fiber_g: item.fiber || 0,
+    },
+  });
+  if (!macroConsistency.consistent && macroConsistency.shouldReconcile) {
+    console.warn(
+      `[FoodAnalyzeImage][macro] Reconciling calories for "${item.title || item.foodName || fallbackName}": ` +
+      `stated ${item.calories} kcal vs ${macroConsistency.calculatedCalories} kcal from macros ` +
+      `(diff: ${macroConsistency.diffPercent.toFixed(1)}%)`
+    );
+    item.calories = macroConsistency.calculatedCalories;
+    return true;
+  }
+  return false;
+}
 
 // Configure Multer for audio file uploads
 const upload = multer({ dest: "uploads/" });
@@ -164,6 +191,19 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
       }
     }
 
+    // Macro-consistency reconciliation, mutated in place before totals are built from
+    // it. Any item reconciled → surfaced as one top-level flag (mirrors how
+    // nutritionPlausible/plausibilityCheck are also blended-totals, top-level signals
+    // for this path — see below).
+    let macroReconciled = false;
+    if (result.isMultiItem && Array.isArray(result.items)) {
+      for (const item of result.items) {
+        if (reconcileItemMacros(item, 'item')) macroReconciled = true;
+      }
+    } else {
+      macroReconciled = reconcileItemMacros(result, 'Photo analysis');
+    }
+
     // Transform result to rawItems format - handle both multi-item and single-item
     const rawItems = result.isMultiItem && result.items
       ? result.items.map(item => ({
@@ -293,6 +333,7 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
         lowConfidence,
         nutritionPlausible: plausibilityCheck.plausible,
         plausibilityCheck,
+        macroReconciled,
         suggestions: result.suggestions || [],
         imageAnalysis: result.imageAnalysis || null
       }
@@ -519,6 +560,18 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
       return res.status(500).json({ error: "Multimodal analysis failed" });
     }
 
+    // Macro-consistency reconciliation, mutated in place before totals are built from
+    // it (same rule as /analyze-image, resolve.js, and the DB write boundary — see
+    // nutritionPlausibilityChecker.js).
+    let macroReconciled = false;
+    if (result.isMultiItem && Array.isArray(result.items)) {
+      for (const item of result.items) {
+        if (reconcileItemMacros(item, 'item')) macroReconciled = true;
+      }
+    } else {
+      macroReconciled = reconcileItemMacros(result, 'Multimodal analysis');
+    }
+
     // Transform result to rawItems format - handle both multi-item and single-item
     const rawItems = result.isMultiItem && result.items
       ? result.items.map(item => ({
@@ -615,6 +668,7 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
     });
     unifiedResponse.nutritionPlausible = multimodalPlausibilityCheck.plausible;
     unifiedResponse.plausibilityCheck = multimodalPlausibilityCheck;
+    unifiedResponse.macroReconciled = macroReconciled;
 
     console.log(`[FoodMultimodal] Enhanced response:`, {
       items: unifiedResponse.items?.length || 1,
