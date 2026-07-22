@@ -1114,6 +1114,8 @@ export default function LogScreen() {
               onSave={handleSaveMeal}
               onEdit={handleCancel}
               saving={isSavingLog}
+              analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
+              analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
             />
 
             {/* "Did you mean?" Suggestions - Only for text input */}

@@ -1033,7 +1033,19 @@ export default function UnifiedMealAnalysis({
   onEdit,
   onItemsChange,
   saving = false,
+  // Backend plausibility verdict. Text/multi-item path attaches it per item;
+  // photo/barcode path attaches it at the top level of the analysis result.
+  analysisPlausible,
+  analysisPlausibilityCheck,
 }) {
+  // An estimate is flagged when the backend's calorie-density plausibility check
+  // failed for any item, or for the overall photo/barcode result. Surfaced as a
+  // gentle "double-check this" nudge — never blocks logging (the user knows their
+  // food better than any heuristic), but makes Edit/Report the obvious next step.
+  const flaggedItem = items.find((i) => i.nutritionPlausible === false);
+  const topLevelFlagged = analysisPlausible === false;
+  const plausibilityWarning = flaggedItem?.plausibilityCheck || analysisPlausibilityCheck;
+  const hasImplausible = !!flaggedItem || topLevelFlagged;
   const [expandedItems, setExpandedItems] = useState({});
   const [showAllMicros, setShowAllMicros] = useState(false);
   const [excludedItems, setExcludedItems] = useState(new Set());
@@ -1269,6 +1281,23 @@ export default function UnifiedMealAnalysis({
             )}
           </View>
           <MicroBarChart micros={calculatedTotals.micros} maxBars={showAllMicros ? 12 : 6} />
+        </View>
+      )}
+
+      {/* === PLAUSIBILITY WARNING === */}
+      {/* Shown when the backend flags the calorie density as unlikely for this dish.
+          Non-blocking: nudges the user to verify the amount / edit before logging. */}
+      {hasImplausible && (
+        <View style={styles.plausibilityBanner}>
+          <Ionicons name="alert-circle-outline" size={18} color="#B45309" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.plausibilityTitle}>Double-check this estimate</Text>
+            <Text style={styles.plausibilityText}>
+              {plausibilityWarning?.expectedRange
+                ? `This reads as ${plausibilityWarning.kcalPer100g} kcal per 100g, but this kind of dish is usually ${plausibilityWarning.expectedRange.min}–${plausibilityWarning.expectedRange.max}. Check the portion, or tap Edit if it looks off.`
+                : `The calories look unusual for this dish. Check the portion, or tap Edit if it looks off.`}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -1656,6 +1685,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT.tertiary,
     fontStyle: 'italic',
+  },
+
+  // Plausibility Warning Banner (stronger than the confidence note — amber alert)
+  plausibilityBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  plausibilityTitle: {
+    fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  plausibilityText: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 17,
   },
 
   // Confidence Banner

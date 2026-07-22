@@ -22,6 +22,12 @@ jobs:
       - name: Install all workspace packages
         run: npm install
 
+      # Nutrition accuracy gate — deterministic, no secrets, <1s. Fails the build if
+      # the plausibility checker regresses (a false positive on a real dish, or a
+      # missed known error). Runs first because it's fast and needs no external services.
+      - name: Nutrition accuracy harness
+        run: npm run harness:nutrition --workspace=backend
+
       - name: Run backend tests
         run: npm test --workspace=backend
         env:

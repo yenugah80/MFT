@@ -19,6 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Accuracy gate BEFORE deploy — this workflow fires on push to main
+      # independently of ci.yml, so gate the deploy itself on the nutrition harness.
+      # Deterministic, no secrets, ~1s: a regression here blocks the deploy.
+      - name: Install workspace packages
+        run: npm install
+
+      - name: Nutrition accuracy harness (deploy gate)
+        run: npm run harness:nutrition --workspace=backend
+
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
