@@ -37,28 +37,31 @@ export function calculateLogXP(logType, context = {}) {
   if (!rewards) return 5; // Default fallback
 
   switch (logType) {
-    case 'food':
+    case 'food': {
       // First 3 meals of the day get bonus XP
       const logNumber = context.logNumber || 1;
       return logNumber <= rewards.dailyCap ? rewards.first : rewards.subsequent;
+    }
 
-    case 'water':
+    case 'water': {
       // Base XP + bonus if this log hits daily goal
       let waterXP = rewards.base;
       if (context.hitDailyGoal) waterXP += rewards.goalBonus;
       return waterXP;
+    }
 
     case 'mood':
       // Flat XP for mood tracking (important for mental health)
       return rewards.base;
 
-    case 'activity':
+    case 'activity': {
       // Base XP + bonus based on duration (1 XP per 5 minutes, capped at 20 bonus)
       let activityXP = rewards.base;
       if (context.durationMinutes) {
         activityXP += Math.min(Math.floor(context.durationMinutes / 5), 20);
       }
       return activityXP;
+    }
 
     default:
       return 5;

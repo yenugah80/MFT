@@ -206,15 +206,16 @@ function getMotivationMessage(type, context = {}) {
   const { streak = 0, daysInactive = 0, previousStreak = 0 } = context;
 
   switch (type) {
-    case 'streak_at_risk':
+    case 'streak_at_risk': {
       const streakMessage = WittyMessageEngine.getStreakMessage(streak);
       return {
         title: `${streak}-day streak at risk 🔥`,
         body: streakMessage?.body || "You didn't come this far to only come this far. Log something.",
         tone: TONE_STYLES.MOTIVATING,
       };
+    }
 
-    case 'comeback':
+    case 'comeback': {
       const reengageMessage = WittyMessageEngine.getReengagementMessage({
         daysInactive,
         previousStreak,
@@ -223,6 +224,7 @@ function getMotivationMessage(type, context = {}) {
       return reengageMessage
         ? { ...reengageMessage, tone: TONE_STYLES.GENTLE }
         : { title: "Still here for you", body: "Whenever you're ready, we're ready. No pressure.", tone: TONE_STYLES.GENTLE };
+    }
 
     case 'achievement_close':
       return {

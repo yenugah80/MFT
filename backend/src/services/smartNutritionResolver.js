@@ -16,21 +16,11 @@ import { usdaClient } from './apiClients/USDAClient.js';
 import {
   buildNutritionEstimationPrompt,
   buildBatchNutritionEstimationPrompt,
-  expandAbbreviations,
-  detectHomonyms,
-  parseNegationModifiers,
-  parseAdditionModifiers,
-  detectPreparationContext,
-  parseVagueQuantity,
   detectBrandFood,
-  detectBoneInFood,
-  detectLeftoverFood,
-  PREPARATION_ADJUSTMENTS,
-  BRAND_FOODS,
 } from './apiClients/prompts/nutritionEstimation.js';
 import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError } from './apiClients/SafeOpenAIWrapper.js';
 import NodeCache from 'node-cache';
-import { cache as redisCache, isRedisAvailable, cacheKeys } from '../config/redis.js';
+import { cache as redisCache, isRedisAvailable } from '../config/redis.js';
 import { checkNutritionPlausibility, getExpectedDensityForFood, checkMacroConsistency } from './nutritionPlausibilityChecker.js';
 
 // FIXED P1: Feature flags for dual-prompt system

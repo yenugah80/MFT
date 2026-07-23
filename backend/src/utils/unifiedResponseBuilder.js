@@ -260,7 +260,6 @@ function calculateHealthScoreFromNutrition(nutrition, cookingMethod = null) {
 
   const calories = nutrition.calories || 0;
   const protein = nutrition.protein || 0;
-  const carbs = nutrition.carbs || 0;
   const fat = nutrition.fat || 0;
   const fiber = nutrition.fiber || 0;
   const sugar = nutrition.sugar || 0;

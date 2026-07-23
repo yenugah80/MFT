@@ -173,12 +173,14 @@ class DenseLayer {
     switch (this.activation) {
       case 'relu':
         return gradOutput.map((g, i) => this.preActivationCache[i] > 0 ? g : 0);
-      case 'sigmoid':
+      case 'sigmoid': {
         const sigOut = this.applyActivation(this.preActivationCache);
         return gradOutput.map((g, i) => g * sigOut[i] * (1 - sigOut[i]));
-      case 'tanh':
+      }
+      case 'tanh': {
         const tanhOut = this.applyActivation(this.preActivationCache);
         return gradOutput.map((g, i) => g * (1 - tanhOut[i] * tanhOut[i]));
+      }
       case 'linear':
       default:
         return gradOutput;

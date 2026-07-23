@@ -570,7 +570,7 @@ function getTimeframeBounds(timeframe, referenceDate) {
       periodLabel = startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
       break;
 
-    case TIMEFRAMES.WEEKLY:
+    case TIMEFRAMES.WEEKLY: {
       // Start from Monday of current week
       const dayOfWeek = ref.getDay();
       const diff = ref.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
@@ -582,6 +582,7 @@ function getTimeframeBounds(timeframe, referenceDate) {
       endDate.setHours(23, 59, 59, 999);
       periodLabel = `Week of ${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
       break;
+    }
 
     case TIMEFRAMES.MONTHLY:
       startDate = new Date(ref.getFullYear(), ref.getMonth(), 1, 0, 0, 0, 0);
