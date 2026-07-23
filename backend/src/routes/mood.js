@@ -87,8 +87,12 @@ router.post("/log", async (req, res) => {
     }
 
     // Validate tags schema (optional but strict when provided)
+    // sleep/exercise/stress removed — each has its own dedicated logging
+    // feature now (Sleep, Activity, Stress), so MoodLogger.jsx no longer
+    // sends them. Old entries with those keys are untouched (this is a
+    // warn-only allow-list, not a hard rejection), just no longer expected.
     if (tags && typeof tags === 'object') {
-      const validTagCategories = ['sleep', 'exercise', 'social', 'weather', 'stress'];
+      const validTagCategories = ['social', 'weather'];
       const providedCategories = Object.keys(tags);
       const invalidCategories = providedCategories.filter(cat => !validTagCategories.includes(cat));
 
@@ -201,11 +205,19 @@ router.post("/log", async (req, res) => {
       clearPatternCache(userId);
     }
 
-    // Mental health safeguard: check for 3+ consecutive high-distress logs in last 5 days
+    // Mental health safeguard: check for 3+ distinct days of high-distress logs in last 5 days
     let mentalHealthAlert = null;
     try {
       const distressMoods = ['sad', 'stressed'];
       const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+      // limit(5) here was a real bug: it caps to the 5 MOST RECENT rows, not
+      // 5 days — a user logging mood more than once a day (fully supported,
+      // even encouraged elsewhere in this file) could have those 5 rows
+      // entirely consumed by 1-3 recent days, so the query never actually
+      // reached back far enough to see the full 5-day window it claims to
+      // check. That silently weakens a crisis-support safeguard. The WHERE
+      // clause already bounds this to 5 days of one user's data, so a
+      // generous cap (not a functional constraint) is enough here.
       const recentDistress = await db
         .select()
         .from(moodLogTable)
@@ -214,7 +226,7 @@ router.post("/log", async (req, res) => {
           gte(moodLogTable.loggedDate, fiveDaysAgo)
         ))
         .orderBy(desc(moodLogTable.loggedDate))
-        .limit(5);
+        .limit(50);
 
       // Count distinct days with high-intensity distress
       const distressDays = new Set(
