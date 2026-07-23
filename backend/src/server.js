@@ -343,6 +343,13 @@ export async function ensureMLTables() {
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_arms_user_id" ON "recommendation_arms" ("user_id");`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_rec_arms_arm_key" ON "recommendation_arms" ("arm_key");`);
+    // Schema drift fix: the Drizzle schema (schema.js) has always declared
+    // first_trial_at, but this raw-SQL migration never created it — every
+    // getUserArms() select against the live table has been throwing
+    // "column does not exist" since the column was added to the ORM schema,
+    // which was silently swallowing Thompson Sampling and adding latency to
+    // every /recommendations request via the retry/fallback path.
+    await db.execute(sql`ALTER TABLE "recommendation_arms" ADD COLUMN IF NOT EXISTS "first_trial_at" TIMESTAMP;`);
 
     // A/B Test definitions table
     await db.execute(sql`
