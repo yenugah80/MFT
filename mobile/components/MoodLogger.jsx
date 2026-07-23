@@ -69,25 +69,13 @@ function extractMoodFromText(text) {
   return best && best[1] > 0 ? best[0] : null;
 }
 
-// Mood → which tag categories to surface first (smart contextual suggestions)
-// Keys must match TAG_CATEGORIES keys below
-const MOOD_TAG_PRIORITY = {
-  tired:    ['sleep', 'exercise'],
-  stressed: ['stress', 'social'],
-  sad:      ['social', 'sleep'],
-  happy:    ['exercise', 'social'],
-  calm:     ['sleep', 'weather'],
-  focused:  ['exercise', 'stress'],
-  energized:['exercise', 'weather'],
-  neutral:  ['sleep', 'social'],
-};
-
-// Tag categories for mood context with vibrant colors
+// Tag categories for mood context with vibrant colors.
+// Exercise, Sleep, and Stress deliberately excluded — each already has its
+// own dedicated logging feature elsewhere in this app (Activity, Sleep,
+// Stress tabs), so asking about them again inside Mood would duplicate that.
+// Social and Weather have no other home, so they stay as mood-specific context.
 const TAG_CATEGORIES = {
-  sleep:    { label: 'Sleep',    icon: 'moon',       options: ['Poor', 'Fair', 'Good', 'Excellent'],           color: MOOD_PALETTE.focused.base },
-  exercise: { label: 'Exercise', icon: 'barbell',    options: ['None', 'Light', 'Moderate', 'Intense'],        color: SEMANTIC_ACTIONS.success },
   social:   { label: 'Social',   icon: 'people',     options: ['Alone', 'Partner', 'Friends', 'Family'],       color: MOOD_PALETTE.calm.base },
-  stress:   { label: 'Stress',   icon: 'flash',      options: ['None', 'Low', 'Moderate', 'High'],             color: MOOD_PALETTE.stressed.base },
   weather:  { label: 'Weather',  icon: 'partly-sunny', options: ['Sunny', 'Cloudy', 'Rainy', 'Cold'],          color: MOOD_PALETTE.energized.base },
 };
 
@@ -219,7 +207,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   const [intensity, setIntensity] = useState(5);
   const [tags, setTags] = useState({});
   const [note, setNote] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [savedResult, setSavedResult] = useState(null);
   const [hoursAgo, setHoursAgo] = useState(0);
   const [freeText, setFreeText] = useState('');
@@ -327,7 +314,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       setIntensity(5);
       setTags({});
       setNote('');
-      setShowAdvanced(false);
       setSavedResult(null);
       setHoursAgo(0);
       setFreeText('');
@@ -504,11 +490,12 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               </View>
             )}
 
-            {/* Context Tags — priority 2 shown upfront, rest collapsible */}
+            {/* Context Tags — only Social and Weather remain (Exercise/Sleep/
+                Stress live in their own dedicated features), so both fit
+                upfront with no need for a "more context" expander. */}
             {selectedMood && (
               <View style={styles.section}>
-                {/* Smart: show the 2 most relevant categories for this mood first */}
-                {(MOOD_TAG_PRIORITY[selectedMood] || ['sleep', 'social']).map((category) => (
+                {Object.keys(TAG_CATEGORIES).map((category) => (
                   <TagSelector
                     key={category}
                     category={category}
@@ -516,39 +503,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                     onSelect={handleTagSelect}
                   />
                 ))}
-
-                {/* "More context" expander for remaining categories */}
-                <TouchableOpacity
-                  style={[styles.advancedToggle, { backgroundColor: hexToRgba(moodColors.base, 0.15), borderWidth: 1, borderColor: hexToRgba(moodColors.base, 0.3) }]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowAdvanced(!showAdvanced);
-                  }}
-                >
-                  <Text style={[styles.advancedToggleText, { color: TEXT.primary }]}>
-                    More context (optional)
-                  </Text>
-                  <Ionicons
-                    name={showAdvanced ? 'chevron-up' : 'chevron-down'}
-                    size={20}
-                    color={moodColors.base}
-                  />
-                </TouchableOpacity>
-
-                {showAdvanced && (
-                  <View style={styles.tagsContainer}>
-                    {Object.keys(TAG_CATEGORIES)
-                      .filter(c => !(MOOD_TAG_PRIORITY[selectedMood] || []).includes(c))
-                      .map((category) => (
-                        <TagSelector
-                          key={category}
-                          category={category}
-                          selectedValue={tags[category]}
-                          onSelect={handleTagSelect}
-                        />
-                      ))}
-                  </View>
-                )}
               </View>
             )}
 
@@ -809,21 +763,6 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     textAlign: 'center',
     marginTop: SPACING[1],
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[3],
-    borderRadius: RADIUS.lg,
-  },
-  advancedToggleText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-  },
-  tagsContainer: {
-    marginTop: SPACING[3],
   },
   tagCategory: {
     marginBottom: SPACING[3],
