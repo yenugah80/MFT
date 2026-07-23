@@ -65,9 +65,22 @@ function CalorieRing({ consumed, goal }) {
   const progress = goal > 0 ? Math.min(consumed / goal, 1) : 0;
   const strokeDashoffset = circumference * (1 - progress);
   const percent = goal > 0 ? Math.round((consumed / goal) * 100) : 0;
+  const remaining = Math.max(0, goal - consumed);
+  const ringLabel = isOverGoal
+    ? `Calories: ${Math.round(consumed)} of ${Math.round(goal)} consumed, ${Math.round(consumed - goal)} over goal`
+    : `Calories: ${Math.round(consumed)} of ${Math.round(goal)} consumed, ${percent} percent of daily goal, ${Math.round(remaining)} remaining`;
 
   return (
-    <View style={styles.ringWrapper}>
+    // Grouped as one accessible element — a screen reader hears a single
+    // coherent summary instead of "306... kcal... consumed... 23%..." as
+    // disconnected fragments.
+    <View
+      style={styles.ringWrapper}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={ringLabel}
+      accessibilityValue={{ min: 0, max: 100, now: Math.min(percent, 100) }}
+    >
       <Svg width={size} height={size}>
         <Circle
           cx={size / 2}
@@ -95,16 +108,11 @@ function CalorieRing({ consumed, goal }) {
       </Svg>
       <View style={styles.ringCenter} pointerEvents="none">
         <Ionicons name="flame" size={20} color={MODERN_MACROS.calories.base} />
-        <Text style={styles.ringValue} accessibilityLabel={`${Math.round(consumed)} calories consumed`}>
-          {Math.round(consumed)}
-        </Text>
+        <Text style={styles.ringValue}>{Math.round(consumed)}</Text>
         <Text style={styles.ringUnit}>kcal</Text>
         <Text style={styles.ringSubtext}>consumed</Text>
       </View>
-      <View
-        style={styles.ringBadge}
-        accessibilityLabel={`${percent} percent of daily calorie goal`}
-      >
+      <View style={styles.ringBadge} pointerEvents="none">
         <Text style={styles.ringBadgeText}>{percent}% of daily goal</Text>
       </View>
     </View>
@@ -117,19 +125,26 @@ function MacroTile({ label, value, goal, color, icon, unit = 'g' }) {
   const percentage = goal > 0 ? Math.min((value / goal) * 100, 100) : 0;
   const isOverGoal = value > goal;
   const remaining = Math.max(0, goal - value);
+  const remainingText = isOverGoal ? `${Math.round(value - goal)}${unit} over` : `${Math.round(remaining)}${unit} left`;
+  const tileLabel = `${label}: ${Math.round(value)} of ${Math.round(goal)} ${unit}, ${Math.round(percentage)} percent, ${remainingText}`;
 
   return (
-    <View style={[styles.macroTile, { backgroundColor: `${color}12` }]}>
+    // Grouped as one accessible element for the same reason as CalorieRing —
+    // one coherent announcement instead of value/percent/remaining read separately.
+    <View
+      style={[styles.macroTile, { backgroundColor: `${color}12` }]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={tileLabel}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(percentage) }}
+    >
       <View style={styles.macroTileHeader}>
         <View style={[styles.macroTileIcon, { backgroundColor: `${color}20` }]}>
           <Ionicons name={icon} size={16} color={color} />
         </View>
         <Text style={styles.macroTileLabel}>{label}</Text>
       </View>
-      <Text
-        style={styles.macroTileValue}
-        accessibilityLabel={`${label}: ${Math.round(value)} of ${Math.round(goal)} ${unit}`}
-      >
+      <Text style={styles.macroTileValue}>
         {Math.round(value)}{unit} <Text style={styles.macroTileGoal}>/ {Math.round(goal)}{unit}</Text>
       </Text>
       <View style={styles.macroTileBarRow}>
@@ -143,28 +158,37 @@ function MacroTile({ label, value, goal, color, icon, unit = 'g' }) {
         </View>
         <Text style={styles.macroTilePercent}>{Math.round(percentage)}%</Text>
       </View>
-      <Text style={styles.macroTileRemaining}>
-        {isOverGoal ? `${Math.round(value - goal)}${unit} over` : `${Math.round(remaining)}${unit} left`}
-      </Text>
+      <Text style={styles.macroTileRemaining}>{remainingText}</Text>
     </View>
   );
 }
 
 function MealRow({ meal, onPress }) {
+  const name = meal.foodName || 'Meal';
+  const time = formatTime(meal.loggedDate);
+  const calories = Math.round(meal.calories || 0);
+
   return (
-    <TouchableOpacity style={styles.mealRow} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.mealRow}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, ${time}, ${calories} kilocalories`}
+      accessibilityHint="Opens meal details"
+    >
       {meal.imageUrl ? (
-        <Image source={{ uri: meal.imageUrl }} style={styles.mealThumbnail} />
+        <Image source={{ uri: meal.imageUrl }} style={styles.mealThumbnail} accessible={false} />
       ) : (
         <View style={styles.mealThumbnailPlaceholder}>
           <Ionicons name="restaurant-outline" size={18} color={TEXT.tertiary} />
         </View>
       )}
       <View style={styles.mealRowInfo}>
-        <Text style={styles.mealRowName} numberOfLines={1}>{meal.foodName || 'Meal'}</Text>
-        <Text style={styles.mealRowTime}>{formatTime(meal.loggedDate)}</Text>
+        <Text style={styles.mealRowName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.mealRowTime}>{time}</Text>
       </View>
-      <Text style={styles.mealRowCalories}>{Math.round(meal.calories || 0)} kcal</Text>
+      <Text style={styles.mealRowCalories}>{calories} kcal</Text>
       <Ionicons name="chevron-forward" size={16} color={TEXT.tertiary} />
     </TouchableOpacity>
   );
