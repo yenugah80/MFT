@@ -5,8 +5,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import * as Crypto from 'expo-crypto';
 import apiClient from '../services/apiClient';
 
 /**
@@ -66,7 +66,6 @@ export function getIntensityLevel(key) {
  * Hook for activity logging operations
  */
 export function useActivityLog() {
-  const { userId } = useAuth();
   const queryClient = useQueryClient();
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState(null);
@@ -132,11 +131,11 @@ export function useActivityLog() {
    */
   const logActivityMutation = useMutation({
     mutationFn: async (activityData) => {
-      // Generate strong clientEventId for idempotency
-      const timestamp = Date.now();
-      const random1 = Math.random().toString(36).substring(2, 15);
-      const random2 = Math.random().toString(36).substring(2, 15);
-      const clientEventId = `${userId}-activity-${timestamp}-${random1}-${random2}`;
+      // Backend requires clientEventId to be a valid UUID v4 (see
+      // activity.js's UUID_RE check) — the old "userId-activity-timestamp-
+      // random-random" format always failed that check, so every activity
+      // log request 400'd.
+      const clientEventId = Crypto.randomUUID();
 
       return await apiClient.post('/activity/log', {
         ...activityData,

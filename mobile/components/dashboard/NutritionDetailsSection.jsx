@@ -12,10 +12,10 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
-import { TEXT, SURFACES, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, CARD_SYSTEM, BRAND } from '../../constants/premiumTheme';
 import { MODERN_MACROS } from '../../constants/modernColorPalette';
-import SmartEmptyState from './SmartEmptyState';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -86,22 +86,9 @@ function MacroChip({ label, value, goal, color }) {
 export default function NutritionDetailsSection({
   today = {},
   goals = {},
-  userHistory = {},
-  streak = 0,
   onViewFoodHistory,
-  // Brand-new users already see a "Log breakfast" prompt in the dashboard's
-  // top-level empty state (DashboardContent's EmptyState card) — rendering
-  // this section's own SmartEmptyState too duplicates that same CTA right
-  // below it on the very first screen a new user sees.
-  suppressEmptyState = false,
 }) {
   const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
-
-  const toggleExpand = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(!expanded);
-  };
 
   // Parse today's nutrition data
   const nutrition = today?.nutrition || {};
@@ -123,6 +110,25 @@ export default function NutritionDetailsSection({
   const sodiumGoal = goals?.sodiumMg || 2300;
 
   const hasData = calories > 0 || protein > 0 || carbs > 0;
+
+  // Nothing to hide when empty — start expanded so the empty-state preview
+  // (0g macro bars + log CTAs) is visible immediately instead of behind a tap.
+  const [expanded, setExpanded] = useState(!hasData);
+
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(!expanded);
+  };
+
+  const handleSnapMeal = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push({ pathname: '/(tabs)/log', params: { focus: 'camera' } });
+  };
+
+  const handleManualLog = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('/(tabs)/log');
+  };
 
   // Calculate overall progress
   const overallProgress = useMemo(() => {
@@ -273,19 +279,58 @@ export default function NutritionDetailsSection({
                 </TouchableOpacity>
               )}
             </>
-          ) : suppressEmptyState ? null : (
-            <SmartEmptyState
-              domain="nutrition"
-              userHistory={userHistory}
-              streak={streak}
-              onLogPress={() => router.push('/(tabs)/log')}
-              onSuggestionPress={(suggestion) => {
-                router.push({
-                  pathname: '/(tabs)/log',
-                  params: { prefill: suggestion },
-                });
-              }}
-            />
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateMessage}>
+                Log your first meal to see today's picture take shape
+              </Text>
+
+              <View style={styles.emptyStateActions}>
+                <TouchableOpacity
+                  style={styles.snapButton}
+                  onPress={handleSnapMeal}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Snap a meal"
+                >
+                  <Ionicons name="camera" size={18} color="#FFF" />
+                  <Text style={styles.snapButtonText}>Snap a meal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.logButton}
+                  onPress={handleManualLog}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log manually"
+                >
+                  <Ionicons name="add" size={18} color={BRAND.primary} />
+                  <Text style={styles.logButtonText}>Log</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Preview of what today's picture will look like once logged */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Energy</Text>
+                <NutrientBar
+                  label="Calories"
+                  value={0}
+                  goal={calorieGoal}
+                  color={MODERN_MACROS.calories.base}
+                  unit=""
+                  icon="flame"
+                  isPrimary
+                />
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Macronutrients</Text>
+                <View style={styles.nutrientsContainer}>
+                  <NutrientBar label="Protein" value={0} goal={proteinGoal} color={MODERN_MACROS.protein.base} icon="fitness" />
+                  <NutrientBar label="Carbohydrates" value={0} goal={carbsGoal} color={MODERN_MACROS.carbs.base} icon="leaf" />
+                  <NutrientBar label="Fat" value={0} goal={fatGoal} color={MODERN_MACROS.fat.base} icon="flash" />
+                </View>
+              </View>
+            </View>
           )}
         </View>
       )}
@@ -498,32 +543,53 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
 
-  // Empty state
+  // Empty state — 0g macro bar preview + log CTAs
   emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING[6],
-    gap: SPACING[2],
+    gap: SPACING[5],
   },
-  emptyIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: SURFACES.background.tertiary,
+  emptyStateMessage: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.secondary,
+    textAlign: 'center',
+  },
+  emptyStateActions: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+  },
+  snapButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING[2],
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.lg,
+    backgroundColor: BRAND.primary,
   },
-  emptyTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
+  snapButtonText: {
+    fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
+    color: '#FFF',
   },
-  emptyDescription: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-    maxWidth: 280,
+  logButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[1],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: `${BRAND.primary}30`,
+  },
+  logButtonText: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: BRAND.primary,
   },
 
   // View Food History Link

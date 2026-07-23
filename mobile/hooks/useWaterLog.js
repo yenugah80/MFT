@@ -5,8 +5,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
+import * as Crypto from 'expo-crypto';
 import apiClient from '../services/apiClient';
 import {
   cancelStreakProtectionIfLoggedToday,
@@ -26,7 +26,6 @@ export { WATER_PRESETS };
  * Hook for water logging operations
  */
 export function useWaterLog() {
-  const { userId } = useAuth();
   const queryClient = useQueryClient();
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState(null);
@@ -36,12 +35,10 @@ export function useWaterLog() {
    */
   const logWaterMutation = useMutation({
     mutationFn: async ({ amountLiters, beverageType }) => {
-      // Generate strong clientEventId for idempotency (prevents duplicate entries from double-taps)
-      // Format: userId-timestamp-random1-random2 for maximum uniqueness
-      const timestamp = Date.now();
-      const random1 = Math.random().toString(36).substring(2, 15);
-      const random2 = Math.random().toString(36).substring(2, 15);
-      const clientEventId = `${userId}-${timestamp}-${random1}-${random2}`;
+      // Backend requires clientEventId to be a valid UUID v4 (see water.js's
+      // UUID_RE check) — the old "userId-timestamp-random-random" format
+      // always failed that check, so every water log request 400'd.
+      const clientEventId = Crypto.randomUUID();
 
       return await apiClient.post('/water/log', {
         amountLiters,

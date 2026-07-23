@@ -35,7 +35,6 @@ import { useTheme } from "../providers/ThemeProvider";
 // Premium components
 import ThemeTransition from "./ThemeTransition";
 import ThemeSettingsModal from "./ThemeSettingsModal";
-import EmptyState from "./EmptyState";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import MoodLogger from "./MoodLogger";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
@@ -1468,20 +1467,6 @@ export default function DashboardContent() {
           </TouchableOpacity>
         )}
 
-        {/* FIRST-TIME USER ONLY - Brand new users see clean onboarding */}
-        {/* Returning users who missed a day see full dashboard, not this */}
-        {isNewUser && !showYesterdayFallback && (
-          <EmptyState
-            icon="scan-outline"
-            title="3 meals unlocks your baseline"
-            description="Log what you eat. We'll find your patterns—protein timing, energy dips, what actually works for you."
-            actionLabel="Log breakfast →"
-            onAction={() => {
-              router.push('/(tabs)/log');
-            }}
-          />
-        )}
-
         {/* INLINE INSIGHTS REMOVED - Moved to Notification Center */}
         {/* All smart insights and anomaly nudges now appear in the notification bell icon */}
         {/* This keeps the dashboard clean and focused on data visualization */}
@@ -1527,22 +1512,15 @@ export default function DashboardContent() {
 
         {/* ============================================ */}
         {/* NUTRITION DETAILS - Comprehensive nutrition breakdown */}
-        {/* Shows: Progress rings, macro bars, quick stats */}
-        {/* Expandable card with all nutrition data integrated */}
-        {/* Smart empty state for returning users when no data today */}
+        {/* Shows: macro bars, quick stats. Doubles as the empty state / */}
+        {/* first-log CTA for new users — auto-expands with a 0g preview */}
+        {/* and Snap/Log actions when there's no data yet, so there's one */}
+        {/* single entry point instead of a separate onboarding hero above it. */}
         {/* ============================================ */}
         <NutritionDetailsSection
           today={today}
           goals={goals}
-          streak={currentStreak}
-          userHistory={{
-            totalDays: parseDecimal(gamification?.totalLoggingDays, 0),
-            yesterdayCalories: data?.trends?.yesterdayCalories || 0,
-            yesterdayMeals: data?.trends?.yesterdayMeals || 0,
-            avgCalories: data?.trends?.avgCalories || 0,
-          }}
           onViewFoodHistory={() => router.push('/analytics')}
-          suppressEmptyState={isNewUser}
         />
 
         {/* ============================================ */}

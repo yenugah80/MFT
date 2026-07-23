@@ -167,6 +167,10 @@ export default function LogScreen() {
           notify.info(foodMessages.readyToLog(mealType), { domain: 'food' });
         }
         break;
+      case 'camera':
+        closeAllModals();
+        setShowCameraModal(true);
+        break;
       default:
         break;
     }
