@@ -22,31 +22,31 @@ export interface OrchestratorResult {
     subtitle?: string;
     confidence: number;
     confidenceLabel: 'Low' | 'Moderate' | 'High' | 'Very High';
-    actions?: Array<{
+    actions?: {
       icon: string;
       text: string;
       description: string;
       type: string;
       metadata?: Record<string, any>;
-    }>;
+    }[];
     visualComponent?: string;
   };
 
   // Supporting correlations/patterns
-  correlations: Array<{
+  correlations: {
     id: number;
     pattern: string;
     confidence: number;
     occurrences: number;
     affectedDomains: string[];
     whatHappens: string;
-    evidence: Array<{
+    evidence: {
       date: string;
       strength: number;
       context?: string;
       tags?: string[];
-    }>;
-  }>;
+    }[];
+  }[];
 
   // User's journey through lifecycle
   lifecycle: {

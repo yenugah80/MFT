@@ -3,17 +3,6 @@ import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { Platform } from "react-native";
 import { setBackgroundMessageHandler } from "@/services/fcmService";
-
-// Register FCM background handler at module level — MUST be outside any component
-// so it is registered before React renders (Firebase requirement).
-// Skip on web: Firebase messaging is not supported and this crashes SSR.
-if (Platform.OS !== 'web') {
-  setBackgroundMessageHandler(async (remoteMessage) => {
-    // Background/killed-state FCM messages are displayed automatically by Firebase.
-    // Only add custom data processing here if needed.
-    console.log("[App] FCM background message:", remoteMessage.notification?.title);
-  });
-}
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { LogBox, View } from "react-native";
@@ -46,6 +35,17 @@ import { cleanupAnalytics } from "@/services/analytics";
 import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
 import Toast from "react-native-toast-message";
 import "@/i18n/config"; // Initialize i18n
+
+// Register FCM background handler at module level — MUST be outside any component
+// so it is registered before React renders (Firebase requirement).
+// Skip on web: Firebase messaging is not supported and this crashes SSR.
+if (Platform.OS !== 'web') {
+  setBackgroundMessageHandler(async (remoteMessage) => {
+    // Background/killed-state FCM messages are displayed automatically by Firebase.
+    // Only add custom data processing here if needed.
+    console.log("[App] FCM background message:", remoteMessage.notification?.title);
+  });
+}
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();

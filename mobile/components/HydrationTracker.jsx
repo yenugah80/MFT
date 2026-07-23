@@ -40,8 +40,6 @@ import Svg, {
   Circle,
 } from 'react-native-svg';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
 import {
   TEXT,
   SEMANTIC,
@@ -54,6 +52,8 @@ import {
   BRAND,
 } from '../constants/premiumTheme';
 import { announceWaterLogged, announceHydrationGoalReached } from '../services/audioFeedback';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ============================================================================
 // CONSTANTS & CONFIG

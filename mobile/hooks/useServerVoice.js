@@ -381,6 +381,15 @@ export const useServerVoice = (options = {}) => {
     // Generate normalized cache key (lowercase, no extra spaces)
     const cacheKey = transcript.toLowerCase().trim();
 
+    // Declared here (not inside the try block below) so both are still in
+    // scope in the catch block — try{} and catch{} are separate block
+    // scopes, a `let` declared inside try is invisible inside catch. Was
+    // previously declared at the old line 425 inside the try, which meant
+    // rejectRequest(err) in the catch block threw its own ReferenceError on
+    // any real failure — masking the original error and leaving the pending
+    // request promise other concurrent callers await on unresolved forever.
+    let resolveRequest, rejectRequest;
+
     try {
       // OPTIMIZATION 1: Check in-memory cache first (instant)
       if (inMemoryCacheRef.current.has(cacheKey)) {
@@ -421,8 +430,7 @@ export const useServerVoice = (options = {}) => {
 
       // Create a promise for THIS request that other duplicates can wait on
       // IMPORTANT: Only create AFTER checking cache and duplicates
-      // so that resolveRequest/rejectRequest are always defined for this request
-      let resolveRequest, rejectRequest;
+      // (resolveRequest/rejectRequest declared above the try block)
       const requestPromise = new Promise((resolve, reject) => {
         resolveRequest = resolve;
         rejectRequest = reject;

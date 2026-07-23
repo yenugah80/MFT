@@ -29,6 +29,8 @@ import * as Haptics from 'expo-haptics';
 import LottieView from 'lottie-react-native';
 import { generateStoryLine } from '../../utils/healthCalculations';
 
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+
 // Lottie mood animation sources
 const MOOD_LOTTIE_SOURCES = {
   happy: require('../../constants/lottie/mood-happy.json'),
@@ -40,8 +42,6 @@ const MOOD_LOTTIE_SOURCES = {
   stressed: require('../../constants/lottie/mood-stressed.json'),
   sad: require('../../constants/lottie/mood-sad.json'),
 };
-
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAY_WIDTH = (SCREEN_WIDTH - 48) / 7;

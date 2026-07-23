@@ -856,7 +856,7 @@ export default function DashboardContent() {
     }
 
     return calData;
-  }, [data, trendData]);
+  }, [data, trendData, uniqueFoodLogs, aggregatedMicros]);
 
   // Detect anomalies in data
   const dataAnomalies = useMemo(() => {
@@ -1091,7 +1091,7 @@ export default function DashboardContent() {
         habits: safePercent('habits'),
       },
     };
-  }, [data]);
+  }, [data, currentStreak]);
 
   // Handlers
   // eslint-disable-next-line no-unused-vars

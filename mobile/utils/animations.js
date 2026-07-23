@@ -10,6 +10,7 @@
 
 import { Animated, Easing, Platform, AccessibilityInfo } from 'react-native';
 import { ANIMATION } from '../constants/premiumDesignSystem';
+import { useRef, useEffect, useCallback } from 'react';
 
 // ============================================================================
 // EASING CURVES - Natural, Apple-inspired motion
@@ -470,8 +471,6 @@ export function accessibleAnimation(
 // ============================================================================
 // HOOKS (for use in components)
 // ============================================================================
-
-import { useRef, useEffect, useCallback } from 'react';
 
 /**
  * Hook for fade-in animation on mount

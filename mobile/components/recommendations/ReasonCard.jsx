@@ -39,13 +39,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-// Clipboard with graceful fallback
-let Clipboard = null;
-try {
-  Clipboard = require('expo-clipboard');
-} catch (e) {
-  // expo-clipboard not available - will fallback gracefully
-}
 
 import {
   PREMIUM_COLORS,
@@ -54,6 +47,13 @@ import {
   RADIUS,
   SHADOWS,
 } from '../../constants/premiumDesignSystem';
+// Clipboard with graceful fallback
+let Clipboard = null;
+try {
+  Clipboard = require('expo-clipboard');
+} catch (e) {
+  // expo-clipboard not available - will fallback gracefully
+}
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {

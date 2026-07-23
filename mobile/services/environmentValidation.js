@@ -23,6 +23,19 @@ const OPTIONAL_ENV_VARS = [
 ];
 
 /**
+ * Metro/babel-preset-expo only statically inlines literal
+ * `process.env.EXPO_PUBLIC_X` reads at build time — `process.env[x]` with a
+ * dynamic key is never replaced and evaluates to undefined in a built app.
+ * Every var this module can check must therefore be read literally here.
+ */
+const ENV_VALUES = {
+  EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
+  EXPO_PUBLIC_LOG_LEVEL: process.env.EXPO_PUBLIC_LOG_LEVEL,
+  EXPO_PUBLIC_API_TIMEOUT_MS: process.env.EXPO_PUBLIC_API_TIMEOUT_MS,
+};
+
+/**
  * Validation results
  */
 const ValidationState = {
@@ -53,7 +66,7 @@ export function validateEnvironment() {
 
   // Step 1: Check required variables exist and are non-empty
   const missing = REQUIRED_ENV_VARS.filter((varName) => {
-    const value = process.env[varName];
+    const value = ENV_VALUES[varName];
     return !value || value.trim() === '';
   });
 
@@ -68,7 +81,7 @@ export function validateEnvironment() {
 
   // Step 2: Check optional variables and warn if missing
   const missingOptional = OPTIONAL_ENV_VARS.filter((varName) => {
-    const value = process.env[varName];
+    const value = ENV_VALUES[varName];
     return !value || value.trim() === '';
   });
 
@@ -135,7 +148,7 @@ function validateConfigurationValues() {
  * Get a validated environment variable with fallback
  */
 export function getEnvVar(varName, fallback = null) {
-  const value = process.env[varName] || fallback;
+  const value = ENV_VALUES[varName] || fallback;
 
   if (!value && REQUIRED_ENV_VARS.includes(varName)) {
     console.error(`[EnvironmentValidation] Required environment variable missing: ${varName}`);

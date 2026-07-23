@@ -41,13 +41,6 @@ import Svg, {
   ClipPath,
 } from 'react-native-svg';
 
-// Lottie Animation Assets
-const LOTTIE_ANIMATIONS = {
-  celebration: require('../../assets/animations/celebration.json'),
-  success: require('../../assets/animations/success.json'),
-  streak: require('../../assets/animations/streak.json'),
-};
-
 import GlassCard from './GlassCard';
 import {
   TEXT,
@@ -63,6 +56,13 @@ import {
 } from '../../constants/premiumTheme';
 import { getItem, setItem, STORAGE_KEYS } from '../../utils/storage';
 import { parseLiters, parseGoal, safeDivide, calculatePercentage, parseDecimal } from '../../utils/safeNumbers';
+
+// Lottie Animation Assets
+const LOTTIE_ANIMATIONS = {
+  celebration: require('../../assets/animations/celebration.json'),
+  success: require('../../assets/animations/success.json'),
+  streak: require('../../assets/animations/streak.json'),
+};
 
 // Create animated SVG component
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);

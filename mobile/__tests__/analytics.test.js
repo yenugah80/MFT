@@ -8,10 +8,6 @@
  */
 
 // Mock the API_URL constant
-jest.mock('../constants/api', () => ({
-  API_URL: 'https://test-api.example.com/api',
-}));
-
 // Import after mocking
 import {
   fetchFoodSuggestions,
@@ -20,6 +16,10 @@ import {
   initAnalytics,
   getAnalyticsStatus,
 } from '../services/analytics';
+
+jest.mock('../constants/api', () => ({
+  API_URL: 'https://test-api.example.com/api',
+}));
 
 describe('Analytics Service', () => {
   beforeEach(() => {

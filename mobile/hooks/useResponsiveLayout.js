@@ -62,34 +62,3 @@ export function useResponsiveLayout() {
     actionColumns: isMobileSmall ? 1 : isMobile ? 2 : 3,
   };
 }
-
-/**
- * Responsive text size helper
- * Scales font sizes based on screen width
- *
- * @param {number} baseSize - Font size for standard device (375px)
- * @returns {number} Scaled font size
- */
-export function getResponsiveFontSize(baseSize) {
-  const { width } = useWindowDimensions();
-  const scaleFactor = width / 375; // Normalize to 375px base
-  return Math.round(baseSize * scaleFactor);
-}
-
-/**
- * Responsive spacing helper
- * Returns consistent spacing values that scale with screen size
- *
- * @returns {Object} Spacing values
- */
-export function getResponsiveSpacing() {
-  const { padding, gap } = useResponsiveLayout();
-
-  return {
-    xs: gap,           // Extra small: 6-8px
-    sm: gap * 1.5,     // Small: 9-12px
-    md: padding,       // Medium: 12-16px
-    lg: padding * 1.5, // Large: 18-24px
-    xl: padding * 2,   // Extra large: 24-32px
-  };
-}
