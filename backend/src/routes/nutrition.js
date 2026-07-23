@@ -1017,11 +1017,16 @@ router.get("/dashboard", async (req, res) => {
       // Wrapped in try-catch to handle missing table gracefully
       (async () => {
         try {
+          // Drizzle's sql`` + db.execute() can't serialize a raw Date object
+          // (postgres-js throws "must be of type string ... Received an
+          // instance of Date") — pass ISO strings instead. This was silently
+          // swallowed by the catch below as "table may not exist" on every
+          // single call, so today's activity has never actually loaded here.
           return await db.execute(sql`
             SELECT * FROM activity_log
             WHERE user_id = ${userId}
-            AND logged_at >= ${todayStart}
-            AND logged_at <= ${todayEnd}
+            AND logged_at >= ${todayStart.toISOString()}
+            AND logged_at <= ${todayEnd.toISOString()}
             ORDER BY logged_at DESC
           `);
         } catch (err) {

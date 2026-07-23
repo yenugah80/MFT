@@ -475,7 +475,7 @@ async function persistMetrics(endpoint, hourKey, metrics) {
         avg_latency_ms, p50_latency_ms, p95_latency_ms, p99_latency_ms,
         min_latency_ms, max_latency_ms, created_at
       ) VALUES (
-        ${endpoint}, ${hourBucket}, ${metrics.count}, ${metrics.errors},
+        ${endpoint}, ${hourBucket.toISOString()}, ${metrics.count}, ${metrics.errors},
         ${Math.round(metrics.sum / metrics.count)},
         ${sorted[Math.floor(sorted.length * 0.5)] || 0},
         ${sorted[Math.floor(sorted.length * 0.95)] || 0},

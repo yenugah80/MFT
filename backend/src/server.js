@@ -530,6 +530,48 @@ export async function ensureMLTables() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "notification_dismissals_user_type_idx" ON "notification_dismissals" ("user_id", "notification_type", "dismissed_at");`);
     console.log('✅ Predictions and notification delivery/snooze/dismissal tables verified');
 
+    // Health platform sync tables — queried by /api/health (routes/health.js,
+    // mounted below) but never created by any migration. Not in schema.js
+    // (these are raw-SQL only), so columns are inferred directly from every
+    // query in healthPlatformService.js.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "health_data" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "data_type" TEXT NOT NULL,
+        "value" DECIMAL(12,4),
+        "unit" TEXT,
+        "timestamp" TIMESTAMP NOT NULL,
+        "platform" TEXT NOT NULL,
+        "metadata" JSONB DEFAULT '{}',
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "health_data_user_type_idx" ON "health_data" ("user_id", "data_type");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "health_data_user_timestamp_idx" ON "health_data" ("user_id", "timestamp");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "health_sync_state" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "platform" TEXT NOT NULL,
+        "sync_status" TEXT DEFAULT 'pending',
+        "permissions" JSONB DEFAULT '{}',
+        "data_types_enabled" JSONB DEFAULT '[]',
+        "sync_frequency" TEXT,
+        "conflict_strategy" TEXT,
+        "last_sync_at" TIMESTAMP,
+        "sync_anchor" TEXT,
+        "error_count" INTEGER DEFAULT 0,
+        "last_error" TEXT,
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT "health_sync_state_user_platform_unique" UNIQUE("user_id", "platform")
+      );
+    `);
+    console.log('✅ Health platform sync tables verified');
+
     // Drift detection metrics table
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "drift_metrics" (

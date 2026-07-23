@@ -148,7 +148,7 @@ export async function recordImplicitSignal(userId, itemId, itemType, signalType,
       INSERT INTO implicit_signals (
         user_id, item_id, item_type, signal_type, signal_data, timestamp
       ) VALUES (
-        ${userId}, ${itemId}, ${itemType}, ${signalType}, ${signal.signalData}, ${signal.timestamp}
+        ${userId}, ${itemId}, ${itemType}, ${signalType}, ${signal.signalData}, ${signal.timestamp.toISOString()}
       )
     `);
 

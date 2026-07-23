@@ -154,37 +154,36 @@ async function updateSyncState(userId, platform, updates) {
   const cacheKey = `sync_state:${userId}:${platform}`;
 
   try {
+    // sql.raw() only accepts a plain string — it has no parameter binding.
+    // The previous version built a `values` array and $1/$2/... placeholder
+    // string but never passed values anywhere, so this UPDATE always ran
+    // with literal, unbound "$1" text and never actually persisted state.
+    // sql.join() composes properly parameterized fragments instead.
     const setClauses = [];
-    const values = [];
 
     if (updates.lastSyncAt !== undefined) {
-      setClauses.push('last_sync_at = $1');
-      values.push(updates.lastSyncAt);
+      const value = updates.lastSyncAt instanceof Date ? updates.lastSyncAt.toISOString() : updates.lastSyncAt;
+      setClauses.push(sql`last_sync_at = ${value}`);
     }
     if (updates.syncAnchor !== undefined) {
-      setClauses.push(`sync_anchor = $${values.length + 1}`);
-      values.push(updates.syncAnchor);
+      setClauses.push(sql`sync_anchor = ${updates.syncAnchor}`);
     }
     if (updates.syncStatus !== undefined) {
-      setClauses.push(`sync_status = $${values.length + 1}`);
-      values.push(updates.syncStatus);
+      setClauses.push(sql`sync_status = ${updates.syncStatus}`);
     }
     if (updates.errorCount !== undefined) {
-      setClauses.push(`error_count = $${values.length + 1}`);
-      values.push(updates.errorCount);
+      setClauses.push(sql`error_count = ${updates.errorCount}`);
     }
     if (updates.lastError !== undefined) {
-      setClauses.push(`last_error = $${values.length + 1}`);
-      values.push(updates.lastError);
+      setClauses.push(sql`last_error = ${updates.lastError}`);
     }
 
     if (setClauses.length > 0) {
-      values.push(userId, platform);
-      await db.execute(sql.raw(`
+      await db.execute(sql`
         UPDATE health_sync_state
-        SET ${setClauses.join(', ')}, updated_at = NOW()
-        WHERE user_id = $${values.length - 1} AND platform = $${values.length}
-      `));
+        SET ${sql.join(setClauses, sql`, `)}, updated_at = NOW()
+        WHERE user_id = ${userId} AND platform = ${platform}
+      `);
     }
 
     // Update cache
@@ -588,8 +587,8 @@ async function exportToHealthPlatform(userId, platform, startDate, endDate) {
     const nutritionData = await db.execute(sql`
       SELECT * FROM food_log
       WHERE user_id = ${userId}
-        AND logged_at >= ${startDate}
-        AND logged_at <= ${endDate}
+        AND logged_at >= ${startDate.toISOString()}
+        AND logged_at <= ${endDate.toISOString()}
         AND (health_platform_synced IS NULL OR health_platform_synced = false)
       ORDER BY logged_at ASC
       LIMIT ${CONFIG.SYNC_BATCH_SIZE}
@@ -690,8 +689,8 @@ async function findExistingHealthData(userId, data) {
       SELECT * FROM health_data
       WHERE user_id = ${userId}
         AND data_type = ${data.type}
-        AND timestamp >= ${new Date(data.timestamp.getTime() - 60000)}
-        AND timestamp <= ${new Date(data.timestamp.getTime() + 60000)}
+        AND timestamp >= ${new Date(data.timestamp.getTime() - 60000).toISOString()}
+        AND timestamp <= ${new Date(data.timestamp.getTime() + 60000).toISOString()}
       LIMIT 1
     `);
     return result.rows?.[0] || null;
@@ -705,7 +704,7 @@ async function insertHealthData(userId, data) {
   try {
     await db.execute(sql`
       INSERT INTO health_data (user_id, data_type, value, unit, timestamp, platform, metadata)
-      VALUES (${userId}, ${data.type}, ${data.value}, ${data.unit}, ${data.timestamp}, ${data.platform}, ${JSON.stringify(data.metadata)})
+      VALUES (${userId}, ${data.type}, ${data.value}, ${data.unit}, ${data.timestamp.toISOString()}, ${data.platform}, ${JSON.stringify(data.metadata)})
     `);
     return true;
   } catch (error) {
@@ -719,7 +718,7 @@ async function updateHealthData(userId, data) {
     await db.execute(sql`
       UPDATE health_data
       SET value = ${data.value}, metadata = ${JSON.stringify(data.metadata)}, updated_at = NOW()
-      WHERE user_id = ${userId} AND data_type = ${data.type} AND timestamp = ${data.timestamp}
+      WHERE user_id = ${userId} AND data_type = ${data.type} AND timestamp = ${data.timestamp.toISOString()}
     `);
     return true;
   } catch (error) {
@@ -791,8 +790,8 @@ async function getHealthSummary(userId, date = new Date()) {
       FROM health_data
       WHERE user_id = ${userId}
         AND data_type IN ('steps', 'activeEnergy', 'distance', 'exerciseMinutes')
-        AND timestamp >= ${startOfDay}
-        AND timestamp <= ${endOfDay}
+        AND timestamp >= ${startOfDay.toISOString()}
+        AND timestamp <= ${endOfDay.toISOString()}
       GROUP BY data_type
     `);
 
@@ -815,8 +814,8 @@ async function getHealthSummary(userId, date = new Date()) {
       FROM health_data
       WHERE user_id = ${userId}
         AND data_type LIKE 'sleep%'
-        AND timestamp >= ${sleepStart}
-        AND timestamp <= ${endOfDay}
+        AND timestamp >= ${sleepStart.toISOString()}
+        AND timestamp <= ${endOfDay.toISOString()}
       GROUP BY data_type
     `);
 
@@ -881,7 +880,7 @@ async function getHealthTrends(userId, dataType, days = 7) {
       FROM health_data
       WHERE user_id = ${userId}
         AND data_type = ${dataType}
-        AND timestamp >= ${startDate}
+        AND timestamp >= ${startDate.toISOString()}
       GROUP BY DATE(timestamp)
       ORDER BY date ASC
     `);
