@@ -217,7 +217,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   const { logMood, isLogging, moodTypes } = useMoodLog();
   const [selectedMood, setSelectedMood] = useState(null);
   const [intensity, setIntensity] = useState(5);
-  const [energyLevel, setEnergyLevel] = useState(5);
   const [tags, setTags] = useState({});
   const [note, setNote] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -288,7 +287,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
         }
         if (parsed.mood) setSelectedMood(parsed.mood);
         if (parsed.intensity) setIntensity(parsed.intensity);
-        if (parsed.energyLevel) setEnergyLevel(parsed.energyLevel);
         if (parsed.tags) setTags(parsed.tags);
         if (parsed.note) setNote(parsed.note);
       } catch {}
@@ -299,9 +297,9 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
   // Auto-save draft on every change
   useEffect(() => {
     if (!visible) return;
-    const draft = { savedAt: Date.now(), mood: selectedMood, intensity, energyLevel, tags, note };
+    const draft = { savedAt: Date.now(), mood: selectedMood, intensity, tags, note };
     AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
-  }, [selectedMood, intensity, energyLevel, tags, note, visible]);
+  }, [selectedMood, intensity, tags, note, visible]);
 
   // Animations
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -327,7 +325,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       fadeAnim.setValue(0);
       setSelectedMood(null);
       setIntensity(5);
-      setEnergyLevel(5);
       setTags({});
       setNote('');
       setShowAdvanced(false);
@@ -344,7 +341,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
     if (!selectedMood) return;
 
     const validatedIntensity = Math.max(1, Math.min(10, Math.round(intensity)));
-    const validatedEnergyLevel = Math.max(1, Math.min(10, Math.round(energyLevel)));
 
     // Fix #5: pre-fill note from free-text if user didn't type a separate note
     const effectiveNote = note.trim() || freeText.trim();
@@ -364,7 +360,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       const result = await logMood({
         mood: selectedMood,
         intensity: validatedIntensity,
-        energyLevel: validatedEnergyLevel,
         tags,
         note: trimmedNote,
         loggedDate,
@@ -485,14 +480,14 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               ))}
             </View>
 
-            {/* Why these two matter — set once, not repeated per-slider, so it
-                explains real payoff (food/sleep correlation) without turning
-                a quick log into a wall of text. */}
+            {/* Why this matters — explains real payoff (food/sleep correlation)
+                without turning a quick log into a wall of text. Energy is
+                deliberately not asked here — that's what Activity logging
+                already covers, asking again in Mood would just duplicate it. */}
             {selectedMood && (
               <Text style={styles.slidersContextHint}>
-                These two numbers are what let us find your real patterns —
-                like a mood dip tracking with low protein, or energy tracking
-                with hydration — not just averages.
+                This is what lets us find your real patterns — like a mood dip
+                tracking with low protein — not just averages.
               </Text>
             )}
 
@@ -505,19 +500,6 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   moodColor={moodColors.base}
                   label="Mood Intensity"
                   helperText="How strong is this feeling?"
-                />
-              </View>
-            )}
-
-            {/* Energy Level Slider */}
-            {selectedMood && (
-              <View style={styles.section}>
-                <IntensitySlider
-                  value={energyLevel}
-                  onChange={setEnergyLevel}
-                  moodColor={moodColors.base}
-                  label="Energy Level"
-                  helperText="Separate from mood — you can feel happy and drained, or stressed and wired"
                 />
               </View>
             )}
