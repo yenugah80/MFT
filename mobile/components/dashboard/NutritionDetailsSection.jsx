@@ -89,6 +89,11 @@ export default function NutritionDetailsSection({
   userHistory = {},
   streak = 0,
   onViewFoodHistory,
+  // Brand-new users already see a "Log breakfast" prompt in the dashboard's
+  // top-level empty state (DashboardContent's EmptyState card) — rendering
+  // this section's own SmartEmptyState too duplicates that same CTA right
+  // below it on the very first screen a new user sees.
+  suppressEmptyState = false,
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -268,7 +273,7 @@ export default function NutritionDetailsSection({
                 </TouchableOpacity>
               )}
             </>
-          ) : (
+          ) : suppressEmptyState ? null : (
             <SmartEmptyState
               domain="nutrition"
               userHistory={userHistory}

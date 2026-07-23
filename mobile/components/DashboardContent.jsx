@@ -1542,6 +1542,7 @@ export default function DashboardContent() {
             avgCalories: data?.trends?.avgCalories || 0,
           }}
           onViewFoodHistory={() => router.push('/analytics')}
+          suppressEmptyState={isNewUser}
         />
 
         {/* ============================================ */}
