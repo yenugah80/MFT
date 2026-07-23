@@ -130,7 +130,7 @@ async function getUserDataStats(userId) {
       calories: foodLogTable.calories,
       protein: foodLogTable.protein,
       carbs: foodLogTable.carbs,
-      fat: foodLogTable.fat,
+      fat: foodLogTable.fats,
       loggedDate: foodLogTable.loggedDate,
     }).from(foodLogTable).where(eq(foodLogTable.userId, userId)),
 
