@@ -382,6 +382,154 @@ export async function ensureMLTables() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_ab_assign_user_id" ON "ab_test_assignments" ("user_id");`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "idx_ab_assign_experiment" ON "ab_test_assignments" ("experiment_id");`);
 
+    // Schema drift fix: these 7 tables are declared in schema.js and queried
+    // live by /api/predictions (predictions.js) and /api/reminders
+    // (reminders.js) but were never created here — every request to those
+    // two routes has been failing with "relation does not exist".
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "prediction_log" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "prediction_type" TEXT NOT NULL,
+        "prediction_subtype" TEXT,
+        "predicted_outcome" TEXT NOT NULL,
+        "predicted_severity" TEXT NOT NULL,
+        "predicted_time" TIMESTAMP NOT NULL,
+        "prediction_window_minutes" INTEGER DEFAULT 60,
+        "trigger_type" TEXT NOT NULL,
+        "trigger_data" JSONB NOT NULL,
+        "confidence" DECIMAL(3,2) NOT NULL,
+        "confidence_factors" JSONB,
+        "thresholds_used" JSONB NOT NULL,
+        "was_personalized" BOOLEAN DEFAULT FALSE,
+        "user_message" TEXT NOT NULL,
+        "prevention_tip" TEXT,
+        "check_in_sent_at" TIMESTAMP,
+        "check_in_method" TEXT,
+        "outcome_status" TEXT DEFAULT 'pending',
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "expires_at" TIMESTAMP NOT NULL
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_log_user_status_idx" ON "prediction_log" ("user_id", "outcome_status");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_log_time_idx" ON "prediction_log" ("predicted_time");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_log_type_idx" ON "prediction_log" ("user_id", "prediction_type");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "prediction_outcomes" (
+        "id" SERIAL PRIMARY KEY,
+        "prediction_id" INTEGER NOT NULL REFERENCES "prediction_log"("id") ON DELETE CASCADE,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "actual_outcome" TEXT NOT NULL,
+        "outcome_intensity" INTEGER,
+        "timing_accuracy" TEXT,
+        "actual_time" TIMESTAMP,
+        "user_notes" TEXT,
+        "context_factors" JSONB,
+        "was_helpful" BOOLEAN,
+        "followed_prevention_tip" BOOLEAN,
+        "tip_effectiveness" TEXT,
+        "feedback_method" TEXT NOT NULL,
+        "prediction_accurate" BOOLEAN NOT NULL,
+        "accuracy_score" DECIMAL(3,2),
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_outcomes_user_idx" ON "prediction_outcomes" ("user_id");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_outcomes_accurate_idx" ON "prediction_outcomes" ("user_id", "prediction_accurate");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "prediction_stories" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "story_type" TEXT NOT NULL,
+        "story_title" TEXT NOT NULL,
+        "story_body" TEXT NOT NULL,
+        "story_emoji" TEXT,
+        "related_prediction_ids" JSONB,
+        "related_dates" JSONB,
+        "pattern_data" JSONB,
+        "shown_count" INTEGER DEFAULT 0,
+        "last_shown_at" TIMESTAMP,
+        "user_acknowledged" BOOLEAN DEFAULT FALSE,
+        "user_reaction" TEXT,
+        "relevance_score" DECIMAL(3,2) DEFAULT 1.00,
+        "expires_at" TIMESTAMP,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_stories_user_type_idx" ON "prediction_stories" ("user_id", "story_type");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "prediction_stories_shown_idx" ON "prediction_stories" ("user_id", "last_shown_at");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "pending_check_ins" (
+        "id" SERIAL PRIMARY KEY,
+        "prediction_id" INTEGER NOT NULL REFERENCES "prediction_log"("id") ON DELETE CASCADE,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "scheduled_for" TIMESTAMP NOT NULL,
+        "window_end" TIMESTAMP NOT NULL,
+        "title" TEXT NOT NULL,
+        "body" TEXT NOT NULL,
+        "emoji" TEXT,
+        "action_buttons" JSONB,
+        "status" TEXT DEFAULT 'pending',
+        "sent_at" TIMESTAMP,
+        "responded_at" TIMESTAMP,
+        "response_value" TEXT,
+        "attempt_count" INTEGER DEFAULT 0,
+        "last_attempt_at" TIMESTAMP,
+        "failure_reason" TEXT,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "pending_checkins_user_pending_idx" ON "pending_check_ins" ("user_id", "status");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "pending_checkins_scheduled_idx" ON "pending_check_ins" ("scheduled_for");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "notification_delivery_log" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "notification_type" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "body" TEXT,
+        "channel" TEXT DEFAULT 'fcm',
+        "priority" INTEGER DEFAULT 3,
+        "delivery_status" TEXT DEFAULT 'sent',
+        "error_message" TEXT,
+        "clicked_at" TIMESTAMP,
+        "screen_navigated" TEXT,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "notification_delivery_user_created_idx" ON "notification_delivery_log" ("user_id", "created_at");`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "notification_delivery_type_status_idx" ON "notification_delivery_log" ("notification_type", "delivery_status");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "notification_snoozes" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "reminder_type" TEXT NOT NULL,
+        "snoozed_until" TIMESTAMP NOT NULL,
+        "snooze_count" INTEGER DEFAULT 1,
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "updated_at" TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT "unique_user_reminder_snooze" UNIQUE("user_id", "reminder_type")
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "notification_snoozes_active_idx" ON "notification_snoozes" ("user_id", "snoozed_until");`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "notification_dismissals" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "notification_type" TEXT NOT NULL,
+        "reason" TEXT,
+        "dismissed_at" TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "notification_dismissals_user_type_idx" ON "notification_dismissals" ("user_id", "notification_type", "dismissed_at");`);
+    console.log('✅ Predictions and notification delivery/snooze/dismissal tables verified');
+
     // Drift detection metrics table
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "drift_metrics" (
