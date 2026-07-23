@@ -15,6 +15,7 @@ import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
 import ProgressRing from './ProgressRing';
 import MiniBarChart from './MiniBarChart';
+import AnalyticsEmptyState from './AnalyticsEmptyState';
 import {
   TEXT,
   SURFACES,
@@ -45,6 +46,7 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
   }
 
   const { totalMinutes, cdcGoalPercent, activeDays, weekData, streak } = data || {};
+  const hasRealData = (totalMinutes || 0) > 0;
 
   // Separate recommendations by type
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -74,8 +76,18 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
         </View>
       )}
 
-      {/* Key Metrics - Only show if we have data */}
-      {data && (
+      {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
+          a friendly empty state instead of a wall of "0" cards */}
+      {data && !hasRealData && (
+        <AnalyticsEmptyState
+          icon="fitness-outline"
+          iconColor={VIBRANT_WELLNESS.activity.solid}
+          title="No activity data yet"
+          subtitle="Log a workout to see your progress and get personalized insights"
+        />
+      )}
+
+      {data && hasRealData && (
         <>
           <View style={styles.metricsRow}>
             <MetricCard

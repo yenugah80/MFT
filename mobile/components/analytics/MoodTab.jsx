@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
 import MiniLineChart from './MiniLineChart';
+import AnalyticsEmptyState from './AnalyticsEmptyState';
 import {
   TEXT,
   SURFACES,
@@ -76,6 +77,7 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
 
   const { avgScore, dominantMood, entriesLogged, bestDay, trend } = data || {};
   const moodColor = MOOD_PALETTE[dominantMood]?.base || VIBRANT_WELLNESS.mood.solid;
+  const hasRealData = (entriesLogged || 0) > 0;
 
   // Separate recommendations by type
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -105,8 +107,18 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
         </View>
       )}
 
-      {/* Key Metrics - Only show if we have data */}
-      {data && (
+      {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
+          a friendly empty state instead of a wall of "0" cards */}
+      {data && !hasRealData && (
+        <AnalyticsEmptyState
+          icon="happy-outline"
+          iconColor={VIBRANT_WELLNESS.mood.solid}
+          title="No mood data yet"
+          subtitle="Track your mood to discover patterns and get personalized insights"
+        />
+      )}
+
+      {data && hasRealData && (
         <>
           <View style={styles.metricsRow}>
             <MetricCard

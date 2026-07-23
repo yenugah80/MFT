@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { useAnalytics } from '../../hooks/useAnalytics';
@@ -30,6 +31,7 @@ import HydrationTab from '../../components/analytics/HydrationTab';
 import WellnessTab from '../../components/analytics/WellnessTab';
 import AnalyticsTabBar from '../../components/analytics/AnalyticsTabBar';
 import TimeframeSelector from '../../components/analytics/TimeframeSelector';
+import FadeInView from '../../components/FadeInView';
 
 import {
   TEXT,
@@ -39,6 +41,7 @@ import {
   TYPOGRAPHY,
   BRAND,
 } from '../../constants/premiumTheme';
+import { BOLD_GRADIENTS } from '../../constants/modernColorPalette';
 
 export default function AnalyticsScreen() {
   const router = useRouter();
@@ -163,7 +166,8 @@ export default function AnalyticsScreen() {
   const showLoading = isLoading && !refreshing && !hasAnyData;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={BOLD_GRADIENTS.dashboard} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
@@ -200,18 +204,22 @@ export default function AnalyticsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.contentContainer}>
+        <FadeInView key={activeDomain} animation="slideUp" style={styles.contentContainer}>
           {renderDomainContent()}
-        </View>
+        </FadeInView>
       )}
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: SURFACES.background.primary,
+  },
+  container: {
+    flex: 1,
   },
   header: {
     paddingHorizontal: SPACING[4],

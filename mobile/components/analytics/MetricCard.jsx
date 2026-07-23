@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, SPACING, RADIUS, TYPOGRAPHY, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SPACING, TYPOGRAPHY, CARD_SYSTEM } from '../../constants/premiumTheme';
 
 export default function MetricCard({
   value,
@@ -42,18 +42,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[3],
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: SURFACES.card.border,
-    ...CARD_SYSTEM.compact,
+    ...CARD_SYSTEM.standard,
     marginBottom: 0,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING[2],

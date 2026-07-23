@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
 import ProgressRing from './ProgressRing';
+import AnalyticsEmptyState from './AnalyticsEmptyState';
 import {
   TEXT,
   SURFACES,
@@ -48,6 +49,7 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
   }
 
   const { todayMl, goalMl, goalPercent, streak, avgDaily } = data || {};
+  const hasRealData = (todayMl || 0) > 0;
 
   // Convert ml to liters for display
   const todayL = ((todayMl || 0) / 1000).toFixed(1);
@@ -86,8 +88,18 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
         </View>
       )}
 
-      {/* Key Metrics - Only show if we have data */}
-      {data && (
+      {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
+          a friendly empty state instead of a wall of "0" cards */}
+      {data && !hasRealData && (
+        <AnalyticsEmptyState
+          icon="water-outline"
+          iconColor={VIBRANT_WELLNESS.hydration.solid}
+          title="No hydration data yet"
+          subtitle="Log water intake to see your progress and get personalized insights"
+        />
+      )}
+
+      {data && hasRealData && (
         <>
           <View style={styles.metricsRow}>
             <MetricCard

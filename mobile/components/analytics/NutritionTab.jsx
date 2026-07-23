@@ -36,6 +36,7 @@ import { SmartRecommendationSummary, SmartRecommendationsList } from './SmartRec
 import { SmartRecommendationsLoadingSkeleton } from './SkeletonLoader';
 import { useQuickLogCelebration } from './CelebrationAnimation';
 import MiniLineChart from './MiniLineChart';
+import AnalyticsEmptyState from './AnalyticsEmptyState';
 import { useSmartRecommendations } from '../../hooks/useRecommendations';
 import {
   TEXT,
@@ -123,6 +124,7 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
 
   const { calories, macros, mealsLogged, weekData = [], weeklyAverages } = data || { calories: {}, macros: {}, mealsLogged: 0 };
   const hasWeekTrend = weekData.some((d) => d.calories > 0);
+  const hasRealData = (calories.consumed || 0) > 0 || (mealsLogged || 0) > 0;
 
   // Separate recommendations by type for organized display
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -156,8 +158,18 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
           </View>
         )}
 
-        {/* Key Metrics - Only show if we have data */}
-        {data && (
+        {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
+            a friendly empty state instead of a wall of "0" cards */}
+        {data && !hasRealData && (
+          <AnalyticsEmptyState
+            icon="nutrition-outline"
+            iconColor={VIBRANT_WELLNESS.nutrition.solid}
+            title="No nutrition data yet"
+            subtitle="Log your meals to see analytics and personalized insights"
+          />
+        )}
+
+        {data && hasRealData && (
           <>
             <View style={styles.metricsRow}>
             <MetricCard
