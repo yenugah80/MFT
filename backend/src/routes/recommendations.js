@@ -262,19 +262,44 @@ router.get('/', requireAuth(), aiLimiter, async (req, res) => {
 
         // Generate recommendations: candidates → LLM ranks + narrates
         // userSignals and laggedCorrelations are passed cleanly (no mutation)
-        const recommendations = await generateEnhancedRecommendations(
-          recType,
-          mealType,
-          remainingBudget,
-          profile,
-          history,
-          parsedLimit,
-          holisticIntelligence,
-          personalizedContext,
-          userSignalsForLLM,
-          laggedCorrelations,
-          candidates,
-        );
+        //
+        // AI ranking can retry OpenAI up to twice (generateWithRegeneration's
+        // MAX_ATTEMPTS), and each call carries the client's own 30s timeout —
+        // so a slow-but-eventually-successful OpenAI response could still run
+        // past the mobile app's 30s request timeout even though nothing here
+        // actually errors. Race it against a deadline well under that budget;
+        // on timeout, fall back to the same deterministic candidate path the
+        // AI-ranking failure case already uses, so the endpoint always
+        // responds in time instead of hanging on a slow model response.
+        const AI_RANKING_DEADLINE_MS = 18000;
+        let recommendations = await Promise.race([
+          generateEnhancedRecommendations(
+            recType,
+            mealType,
+            remainingBudget,
+            profile,
+            history,
+            parsedLimit,
+            holisticIntelligence,
+            personalizedContext,
+            userSignalsForLLM,
+            laggedCorrelations,
+            candidates,
+          ),
+          new Promise((resolve) => setTimeout(() => resolve(null), AI_RANKING_DEADLINE_MS)),
+        ]);
+
+        if (!recommendations || recommendations.length === 0) {
+          console.warn('[Recommendations] AI ranking exceeded deadline or failed; using deterministic grounded candidate fallback');
+          recommendations = buildDeterministicRecommendationsFromCandidates(
+            candidates,
+            recType,
+            mealType,
+            remainingBudget,
+            parsedLimit,
+            userSignalsForLLM,
+          ).filter(rec => !improvedAllergenCheck(rec, profile?.dietary?.allergies || []));
+        }
 
         // Enrich with micronutrients
         const enrichedRecommendations = await enrichRecommendations(recommendations);
