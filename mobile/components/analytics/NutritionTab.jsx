@@ -15,7 +15,7 @@
  * - Skeleton loading states
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -26,16 +26,16 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
-import SmartRecommendationCard, { SmartRecommendationSummary, SmartRecommendationsList } from './SmartRecommendationCard';
+import { SmartRecommendationSummary, SmartRecommendationsList } from './SmartRecommendationCard';
 import { SmartRecommendationsLoadingSkeleton } from './SkeletonLoader';
 import { useQuickLogCelebration } from './CelebrationAnimation';
-import { SmartFoodHeader } from './PersonalizedGreeting';
+import MiniLineChart from './MiniLineChart';
 import { useSmartRecommendations } from '../../hooks/useRecommendations';
 import {
   TEXT,
@@ -48,18 +48,19 @@ import {
   MACRO_COLORS,
   BRAND,
 } from '../../constants/premiumTheme';
-import { getTimeTheme } from '../../constants/smartRecommendationTheme';
+
+// Screen width minus the container's own horizontal padding (SPACING[4] * 2)
+// and the card's inner padding (CARD_SYSTEM.standard's SPACING[4] * 2).
+const CHART_WIDTH = Dimensions.get('window').width - SPACING[4] * 4;
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function NutritionTab({ data, period, recommendations = [], onRefresh }) {
+export default function NutritionTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
   const [showSmartRecs, setShowSmartRecs] = useState(false);
   const [loggingId, setLoggingId] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const timeTheme = getTimeTheme();
 
   // Celebration hook for quick-log success
   const { celebrate, CelebrationComponent } = useQuickLogCelebration();
@@ -75,16 +76,13 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
     hasRecommendations: hasSmartRecs,
   } = useSmartRecommendations({ enabled: showSmartRecs });
 
-  // Handle pull-to-refresh
+  // Handle pull-to-refresh — refreshing state is owned by the parent screen
+  // (same refreshing/onRefresh props all 5 tabs receive); this also refreshes
+  // smart recs alongside the shared refetch.
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      if (onRefresh) await onRefresh();
-      if (showSmartRecs) await fetchRecommendations();
-    } finally {
-      setRefreshing(false);
-    }
+    if (onRefresh) await onRefresh();
+    if (showSmartRecs) await fetchRecommendations();
   }, [onRefresh, showSmartRecs, fetchRecommendations]);
 
   // Handle toggling smart recommendations section
@@ -123,7 +121,8 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
     );
   }
 
-  const { calories, macros, mealsLogged } = data || { calories: {}, macros: {}, mealsLogged: 0 };
+  const { calories, macros, mealsLogged, weekData = [], weeklyAverages } = data || { calories: {}, macros: {}, mealsLogged: 0 };
+  const hasWeekTrend = weekData.some((d) => d.calories > 0);
 
   // Separate recommendations by type for organized display
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -183,53 +182,55 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
             />
           </View>
 
-          {/* Calorie Progress */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Calorie Progress</Text>
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min(calories.percentage || 0, 100)}%`,
-                      backgroundColor: getCalorieColor(calories.percentage || 0),
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={styles.progressText}>
-                {(calories.consumed || 0).toLocaleString()} / {(calories.budget || 2000).toLocaleString()} cal
-              </Text>
-            </View>
-          </View>
-
-          {/* Macro Breakdown */}
-          {macros && (
+          {/* Weekly Trend — the dashboard's Nutrition card already shows today's
+              calorie ring in full detail, so this leans into what it doesn't:
+              how intake has moved across the week. */}
+          {hasWeekTrend && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Macros</Text>
+              <Text style={styles.cardTitle}>Weekly Trend</Text>
+              <MiniLineChart
+                data={weekData.map((d) => d.calories)}
+                labels={weekData.map((d) => d.label)}
+                width={CHART_WIDTH}
+                color={VIBRANT_WELLNESS.nutrition.solid}
+                showGrid
+              />
+              {weeklyAverages && (
+                <Text style={styles.trendSubtext}>
+                  Averaging {Math.round(weeklyAverages.avgCalories).toLocaleString()} cal/day this week
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Weekly Macro Averages — same protein/carbs/fat the dashboard card
+              tracks, but averaged across the week instead of restating today's
+              totals in a different widget shape. */}
+          {weeklyAverages && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Weekly Macro Averages</Text>
               <View style={styles.macroList}>
                 <MacroBar
                   name="Protein"
-                  consumed={macros.protein?.consumed || 0}
+                  consumed={Math.round(weeklyAverages.avgProtein || 0)}
                   goal={macros.protein?.goal || 150}
-                  percentage={macros.protein?.percentage || 0}
+                  percentage={macroPercentage(weeklyAverages.avgProtein, macros.protein?.goal)}
                   color={MACRO_COLORS.protein.base}
                   unit="g"
                 />
                 <MacroBar
                   name="Carbs"
-                  consumed={macros.carbs?.consumed || 0}
+                  consumed={Math.round(weeklyAverages.avgCarbs || 0)}
                   goal={macros.carbs?.goal || 250}
-                  percentage={macros.carbs?.percentage || 0}
+                  percentage={macroPercentage(weeklyAverages.avgCarbs, macros.carbs?.goal)}
                   color={MACRO_COLORS.carbs.base}
                   unit="g"
                 />
                 <MacroBar
                   name="Fat"
-                  consumed={macros.fat?.consumed || 0}
+                  consumed={Math.round(weeklyAverages.avgFats || 0)}
                   goal={macros.fat?.goal || 65}
-                  percentage={macros.fat?.percentage || 0}
+                  percentage={macroPercentage(weeklyAverages.avgFats, macros.fat?.goal)}
                   color={MACRO_COLORS.fat.base}
                   unit="g"
                 />
@@ -392,10 +393,8 @@ function InsightItem({ icon, color, text }) {
   );
 }
 
-function getCalorieColor(percentage) {
-  if (percentage >= 100) return '#10B981';
-  if (percentage >= 75) return '#F59E0B';
-  return VIBRANT_WELLNESS.nutrition.solid;
+function macroPercentage(consumed, goal) {
+  return goal > 0 ? Math.min(((consumed || 0) / goal) * 100, 100) : 0;
 }
 
 const styles = StyleSheet.create({
@@ -441,23 +440,11 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
     marginBottom: SPACING[3],
   },
-  progressContainer: {
-    gap: SPACING[2],
-  },
-  progressBar: {
-    height: 12,
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: RADIUS.full,
-  },
-  progressText: {
+  trendSubtext: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     textAlign: 'center',
+    marginTop: SPACING[3],
   },
   macroList: {
     gap: SPACING[3],

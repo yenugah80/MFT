@@ -143,6 +143,27 @@ export function useAnalytics(period = 'week') {
         },
       },
       mealsLogged: recStats?.today || dashData?.recentMeals?.length || 0,
+      // Zero-filled 7-day calorie/macro trend (oldest -> newest), built from
+      // the dashboard payload's already-fetched weekSummaries so a day with
+      // no logs renders as a real gap instead of skewing the chart's spacing.
+      weekData: (() => {
+        const summaryByDate = new Map((dashData?.trends?.weekSummaries || []).map((s) => [s.date, s]));
+        return Array.from({ length: 7 }, (_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - (6 - i));
+          const dateStr = d.toISOString().split('T')[0];
+          const summary = summaryByDate.get(dateStr);
+          return {
+            date: dateStr,
+            label: d.toLocaleDateString('en-US', { weekday: 'narrow' }),
+            calories: summary?.totalCalories || 0,
+          };
+        });
+      })(),
+      // Server-computed averages over days that actually have a summary row
+      // (not the zero-filled weekData above) — same figures as the dashboard
+      // would show if it exposed a weekly view, just not duplicated there today.
+      weeklyAverages: dashData?.trends?.weeklyAverages || null,
       // Add recommendations
       recommendations: recommendations?.nutrition || [],
     };

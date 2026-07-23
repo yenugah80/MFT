@@ -6,18 +6,21 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
+// Keys match the app-wide period convention (useAnalytics.js's
+// getPeriodParams, backend query params) — not this component's own
+// invented daily/weekly/monthly, since this is the only place it's used.
 const TIMEFRAMES = [
-  { key: 'daily', label: 'Day', icon: 'today-outline' },
-  { key: 'weekly', label: 'Week', icon: 'calendar-outline' },
-  { key: 'monthly', label: 'Month', icon: 'calendar-number-outline' },
+  { key: 'today', label: 'Day', icon: 'today-outline' },
+  { key: 'week', label: 'Week', icon: 'calendar-outline' },
+  { key: 'month', label: 'Month', icon: 'calendar-number-outline' },
 ];
 
 const TimeframeSelector = ({
-  selected = 'weekly',
+  selected = 'week',
   onSelect,
   disabled = false,
   style,

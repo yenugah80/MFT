@@ -9,12 +9,13 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
+import ProgressRing from './ProgressRing';
 import {
   TEXT,
   SURFACES,
@@ -22,10 +23,12 @@ import {
   RADIUS,
   TYPOGRAPHY,
   CARD_SYSTEM,
+  SEMANTIC,
   VIBRANT_WELLNESS,
+  BRAND,
 } from '../../constants/premiumTheme';
 
-export default function HydrationTab({ data, period, recommendations = [] }) {
+export default function HydrationTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
   const router = useRouter();
 
   const handleViewInsights = () => {
@@ -62,7 +65,18 @@ export default function HydrationTab({ data, period, recommendations = [] }) {
   const suggestionRecs = recommendations.filter(r => r.type === 'suggestion');
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={BRAND.primary}
+          colors={[BRAND.primary]}
+        />
+      }
+    >
       {/* Priority Actions */}
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
@@ -87,7 +101,7 @@ export default function HydrationTab({ data, period, recommendations = [] }) {
               value={`${goalPercent || 0}%`}
               label="of Goal"
               icon="checkmark-circle"
-              iconColor={(goalPercent || 0) >= 100 ? '#10B981' : VIBRANT_WELLNESS.hydration.solid}
+              iconColor={(goalPercent || 0) >= 100 ? SEMANTIC.success.base : VIBRANT_WELLNESS.hydration.solid}
             />
             <MetricCard
               value={streak || 0}
@@ -102,24 +116,14 @@ export default function HydrationTab({ data, period, recommendations = [] }) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Daily Progress</Text>
             <View style={styles.ringContainer}>
-              <View style={styles.ringWrapper}>
-                <View style={styles.ringBackground}>
-                  <View
-                    style={[
-                      styles.ringFill,
-                      {
-                        width: `${Math.min(goalPercent || 0, 100)}%`,
-                        backgroundColor: getHydrationColor(goalPercent || 0),
-                      },
-                    ]}
-                  />
-                </View>
-                <View style={styles.ringCenter}>
-                  <Ionicons name="water" size={32} color={VIBRANT_WELLNESS.hydration.solid} />
-                  <Text style={styles.ringValue}>{glasses}</Text>
-                  <Text style={styles.ringLabel}>of {goalGlasses} glasses</Text>
-                </View>
-              </View>
+              <ProgressRing
+                value={todayMl || 0}
+                goal={goalMl || 2000}
+                color={getHydrationColor(goalPercent || 0)}
+                icon="water"
+                centerValue={glasses}
+                centerLabel={`of ${goalGlasses} glasses`}
+              />
             </View>
           </View>
 
@@ -191,7 +195,7 @@ export default function HydrationTab({ data, period, recommendations = [] }) {
           <View style={styles.insightsList}>
             <InsightItem
               icon={(goalPercent || 0) >= 100 ? 'checkmark-circle' : 'alert-circle'}
-              color={(goalPercent || 0) >= 100 ? '#10B981' : '#F59E0B'}
+              color={(goalPercent || 0) >= 100 ? SEMANTIC.success.base : SEMANTIC.warning.base}
               text={
                 (goalPercent || 0) >= 100
                   ? 'You hit your hydration goal!'
@@ -215,7 +219,7 @@ export default function HydrationTab({ data, period, recommendations = [] }) {
             {(goalPercent || 0) < 50 && (
               <InsightItem
                 icon="notifications"
-                color="#3B82F6"
+                color={SEMANTIC.info.base}
                 text="Tip: Set reminders to drink water throughout the day"
               />
             )}
@@ -244,8 +248,12 @@ function InsightItem({ icon, color, text }) {
 }
 
 function getHydrationColor(percentage) {
-  if (percentage >= 100) return '#10B981';
-  if (percentage >= 75) return '#0891B2';
+  // Below 100%, these are shades of the hydration domain's own blue getting
+  // lighter the further you are from goal — not generic status colors, so
+  // SEMANTIC tokens don't apply to the middle two tiers the way they do
+  // for "goal met."
+  if (percentage >= 100) return SEMANTIC.success.base;
+  if (percentage >= 75) return VIBRANT_WELLNESS.hydration.solid;
   if (percentage >= 50) return '#06B6D4';
   return '#22D3EE';
 }
@@ -309,36 +317,6 @@ const styles = StyleSheet.create({
   ringContainer: {
     alignItems: 'center',
     paddingVertical: SPACING[2],
-  },
-  ringWrapper: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  ringBackground: {
-    width: '100%',
-    height: 16,
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-  },
-  ringFill: {
-    height: '100%',
-    borderRadius: RADIUS.full,
-  },
-  ringCenter: {
-    alignItems: 'center',
-    marginTop: SPACING[4],
-  },
-  ringValue: {
-    fontSize: TYPOGRAPHY.size['4xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginTop: SPACING[1],
-  },
-  ringLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
   },
   glassesContainer: {
     flexDirection: 'row',

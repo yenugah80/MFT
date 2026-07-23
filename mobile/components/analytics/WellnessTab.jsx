@@ -9,9 +9,10 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
+import GaugeChart from './GaugeChart';
 import {
   TEXT,
   SURFACES,
@@ -19,10 +20,12 @@ import {
   RADIUS,
   TYPOGRAPHY,
   CARD_SYSTEM,
+  SEMANTIC,
   VIBRANT_WELLNESS,
+  BRAND,
 } from '../../constants/premiumTheme';
 
-export default function WellnessTab({ data, period, recommendations = [], stats }) {
+export default function WellnessTab({ data, period, recommendations = [], stats, onRefresh, refreshing = false }) {
   // Empty state when no data and no recommendations
   if (recommendations.length === 0) {
     return (
@@ -69,15 +72,24 @@ export default function WellnessTab({ data, period, recommendations = [], stats 
   const breakdown = wellnessScoreRec?.metric?.breakdown || {};
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={BRAND.primary}
+          colors={[BRAND.primary]}
+        />
+      }
+    >
       {/* Wellness Score Card */}
       {wellnessScoreRec && (
         <View style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <Text style={styles.scoreTitle}>Wellness Score</Text>
-            <View style={styles.scoreCircle}>
-              <Text style={styles.scoreValue}>{wellnessScore}</Text>
-            </View>
+          <Text style={styles.scoreTitle}>Wellness Score</Text>
+          <View style={styles.gaugeWrapper}>
+            <GaugeChart value={wellnessScore} size={180} label="out of 100" />
           </View>
           <Text style={styles.scoreMessage}>{wellnessScoreRec.message}</Text>
 
@@ -142,7 +154,7 @@ export default function WellnessTab({ data, period, recommendations = [], stats 
       {/* How It Works */}
       <View style={styles.infoCard}>
         <View style={styles.infoHeader}>
-          <Ionicons name="information-circle" size={20} color="#6366F1" />
+          <Ionicons name="information-circle" size={20} color={SEMANTIC.info.base} />
           <Text style={styles.infoTitle}>How Wellness Score Works</Text>
         </View>
         <Text style={styles.infoText}>
@@ -223,32 +235,17 @@ const styles = StyleSheet.create({
   scoreCard: {
     ...CARD_SYSTEM.standard,
     marginBottom: SPACING[4],
-    backgroundColor: '#EC489910',
-    borderColor: '#EC489930',
-  },
-  scoreHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING[3],
   },
   scoreTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
+    alignSelf: 'flex-start',
+    marginBottom: SPACING[2],
   },
-  scoreCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#EC4899',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreValue: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#FFFFFF',
+  gaugeWrapper: {
+    marginVertical: SPACING[2],
   },
   scoreMessage: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -256,8 +253,10 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     lineHeight: 20,
     marginBottom: SPACING[4],
+    textAlign: 'center',
   },
   breakdownContainer: {
+    alignSelf: 'stretch',
     gap: SPACING[3],
   },
   breakdownRow: {
@@ -304,8 +303,8 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     ...CARD_SYSTEM.standard,
-    backgroundColor: '#6366F110',
-    borderColor: '#6366F130',
+    backgroundColor: SEMANTIC.info.bg,
+    borderColor: `${SEMANTIC.info.base}30`,
   },
   infoHeader: {
     flexDirection: 'row',
@@ -334,7 +333,7 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
     paddingLeft: SPACING[2],
     borderLeftWidth: 2,
-    borderLeftColor: '#6366F130',
+    borderLeftColor: `${SEMANTIC.info.base}30`,
   },
   bottomPadding: {
     height: SPACING[8],

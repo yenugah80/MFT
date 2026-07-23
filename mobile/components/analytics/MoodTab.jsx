@@ -9,12 +9,13 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
+import MiniLineChart from './MiniLineChart';
 import {
   TEXT,
   SURFACES,
@@ -22,9 +23,15 @@ import {
   RADIUS,
   TYPOGRAPHY,
   CARD_SYSTEM,
+  SEMANTIC,
   VIBRANT_WELLNESS,
   MOOD_PALETTE,
+  BRAND,
 } from '../../constants/premiumTheme';
+
+// Screen width minus the container's own horizontal padding (SPACING[4] * 2)
+// and the card's inner padding (CARD_SYSTEM.standard's SPACING[4] * 2).
+const CHART_WIDTH = Dimensions.get('window').width - SPACING[4] * 4;
 
 const MOOD_ICONS = {
   happy: 'happy',
@@ -48,7 +55,7 @@ const MOOD_LABELS = {
   sad: 'Sad',
 };
 
-export default function MoodTab({ data, period, recommendations = [] }) {
+export default function MoodTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
   const router = useRouter();
 
   const handleViewPatterns = () => {
@@ -77,7 +84,18 @@ export default function MoodTab({ data, period, recommendations = [] }) {
   const suggestionRecs = recommendations.filter(r => r.type === 'suggestion');
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={BRAND.primary}
+          colors={[BRAND.primary]}
+        />
+      }
+    >
       {/* Priority Actions */}
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
@@ -117,28 +135,15 @@ export default function MoodTab({ data, period, recommendations = [] }) {
           {trend && trend.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Mood Trend</Text>
-              <View style={styles.trendContainer}>
-                {trend.slice(-7).map((entry, index) => {
-                  const intensity = entry.intensity || 5;
-                  const height = (intensity / 10) * 60;
-                  const entryMood = entry.mood || 'neutral';
-                  const entryColor = MOOD_PALETTE[entryMood]?.base || VIBRANT_WELLNESS.mood.solid;
-
-                  return (
-                    <View key={index} style={styles.trendBarWrapper}>
-                      <View
-                        style={[
-                          styles.trendBar,
-                          { height, backgroundColor: entryColor },
-                        ]}
-                      />
-                      <Text style={styles.trendLabel}>
-                        {new Date(entry.loggedDate).toLocaleDateString('en-US', { weekday: 'narrow' })}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
+              <MiniLineChart
+                data={trend.slice(-7).map((entry) => entry.intensity || 5)}
+                labels={trend.slice(-7).map((entry) =>
+                  new Date(entry.loggedDate).toLocaleDateString('en-US', { weekday: 'narrow' })
+                )}
+                width={CHART_WIDTH}
+                color={moodColor}
+                showGrid
+              />
             </View>
           )}
 
@@ -220,7 +225,7 @@ export default function MoodTab({ data, period, recommendations = [] }) {
             )}
             <InsightItem
               icon="trending-up"
-              color={parseFloat(avgScore) >= 6 ? '#10B981' : '#F59E0B'}
+              color={parseFloat(avgScore) >= 6 ? SEMANTIC.success.base : SEMANTIC.warning.base}
               text={parseFloat(avgScore) >= 6 ? 'Your mood has been positive overall' : 'Room for improvement - try some self-care'}
             />
             <InsightItem
@@ -307,28 +312,6 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
-  },
-  trendContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 80,
-    gap: SPACING[2],
-  },
-  trendBarWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  trendBar: {
-    width: '80%',
-    borderRadius: RADIUS.sm,
-    minHeight: 8,
-  },
-  trendLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: SPACING[1],
   },
   distributionContainer: {
     gap: SPACING[3],

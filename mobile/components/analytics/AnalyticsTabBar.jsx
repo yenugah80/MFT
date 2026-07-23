@@ -1,11 +1,15 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TEXT, SURFACES, SPACING, RADIUS, TYPOGRAPHY, VIBRANT_WELLNESS } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, SPACING, TYPOGRAPHY, BRAND, VIBRANT_WELLNESS } from '../../constants/premiumTheme';
 
+// Wellness has no entry in VIBRANT_WELLNESS (it's the cross-domain composite,
+// not a single tracked domain like the other 4) — BRAND.primary fits it
+// better than a hardcoded one-off hex, and matches the app's actual brand
+// color rather than an arbitrary pink no other screen uses for "wellness".
 const TABS = [
-  { key: 'wellness', label: 'Wellness', icon: 'heart', color: '#EC4899' },
+  { key: 'wellness', label: 'Wellness', icon: 'heart', color: BRAND.primary },
   { key: 'nutrition', label: 'Nutrition', icon: 'nutrition', color: VIBRANT_WELLNESS.nutrition.solid },
   { key: 'mood', label: 'Mood', icon: 'happy', color: VIBRANT_WELLNESS.mood.solid },
   { key: 'activity', label: 'Activity', icon: 'fitness', color: VIBRANT_WELLNESS.activity.solid },

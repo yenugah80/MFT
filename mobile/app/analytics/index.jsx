@@ -29,6 +29,7 @@ import ActivityTab from '../../components/analytics/ActivityTab';
 import HydrationTab from '../../components/analytics/HydrationTab';
 import WellnessTab from '../../components/analytics/WellnessTab';
 import AnalyticsTabBar from '../../components/analytics/AnalyticsTabBar';
+import TimeframeSelector from '../../components/analytics/TimeframeSelector';
 
 import {
   TEXT,
@@ -38,13 +39,6 @@ import {
   TYPOGRAPHY,
   BRAND,
 } from '../../constants/premiumTheme';
-
-// Period options for time filtering
-const PERIODS = [
-  { key: 'today', label: 'Today' },
-  { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-];
 
 export default function AnalyticsScreen() {
   const router = useRouter();
@@ -172,28 +166,19 @@ export default function AnalyticsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleBack}
-          activeOpacity={0.7}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="chevron-back" size={28} color={TEXT.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Your Progress</Text>
-        <View style={styles.periodPicker}>
-          {PERIODS.map((p) => (
-            <TouchableOpacity
-              key={p.key}
-              style={[styles.periodButton, period === p.key && styles.periodButtonActive]}
-              onPress={() => handlePeriodChange(p.key)}
-            >
-              <Text style={[styles.periodText, period === p.key && styles.periodTextActive]}>
-                {p.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="chevron-back" size={28} color={TEXT.primary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Your Progress</Text>
+          <View style={styles.headerSpacer} />
         </View>
+        <TimeframeSelector selected={period} onSelect={handlePeriodChange} />
       </View>
 
       {/* Domain Tab Bar */}
@@ -229,14 +214,16 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.primary,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: SPACING[4],
     paddingVertical: SPACING[3],
+    gap: SPACING[3],
     backgroundColor: SURFACES.card.primary,
     borderBottomWidth: 1,
     borderBottomColor: SURFACES.divider,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     width: 44,
@@ -246,6 +233,10 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: SURFACES.background.tertiary,
   },
+  headerSpacer: {
+    width: 44,
+    height: 44,
+  },
   title: {
     flex: 1,
     fontSize: TYPOGRAPHY.size.lg,
@@ -254,29 +245,6 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
     textAlign: 'center',
     marginHorizontal: SPACING[3],
-  },
-  periodPicker: {
-    flexDirection: 'row',
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.md,
-    padding: 2,
-  },
-  periodButton: {
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[1.5],
-    borderRadius: RADIUS.sm,
-  },
-  periodButtonActive: {
-    backgroundColor: SURFACES.card.primary,
-  },
-  periodText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.tertiary,
-  },
-  periodTextActive: {
-    color: TEXT.primary,
   },
   contentContainer: {
     flex: 1,

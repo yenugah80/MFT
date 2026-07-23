@@ -9,23 +9,30 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
+import ProgressRing from './ProgressRing';
+import MiniBarChart from './MiniBarChart';
 import {
   TEXT,
   SURFACES,
   SPACING,
-  RADIUS,
   TYPOGRAPHY,
   CARD_SYSTEM,
+  SEMANTIC,
   VIBRANT_WELLNESS,
+  BRAND,
 } from '../../constants/premiumTheme';
+
+// Per-day scaling reference for the weekly bar chart — matches the previous
+// hand-rolled bar's own assumption (60 min = a "full" day's bar).
+const DAY_BAR_MAX_MINUTES = 60;
 
 const CDC_WEEKLY_GOAL = 150; // minutes
 
-export default function ActivityTab({ data, period, recommendations = [] }) {
+export default function ActivityTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
   // Empty state when no data and no recommendations
   if (!data && recommendations.length === 0) {
     return (
@@ -46,7 +53,18 @@ export default function ActivityTab({ data, period, recommendations = [] }) {
   const suggestionRecs = recommendations.filter(r => r.type === 'suggestion');
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={BRAND.primary}
+          colors={[BRAND.primary]}
+        />
+      }
+    >
       {/* Priority Actions */}
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
@@ -72,7 +90,7 @@ export default function ActivityTab({ data, period, recommendations = [] }) {
               label="CDC Goal"
               subtitle="150 min/wk"
               icon="ribbon"
-              iconColor={(cdcGoalPercent || 0) >= 100 ? '#10B981' : VIBRANT_WELLNESS.activity.solid}
+              iconColor={(cdcGoalPercent || 0) >= 100 ? SEMANTIC.success.base : VIBRANT_WELLNESS.activity.solid}
             />
             <MetricCard
               value={activeDays || 0}
@@ -87,23 +105,13 @@ export default function ActivityTab({ data, period, recommendations = [] }) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Weekly Goal Progress</Text>
             <View style={styles.goalContainer}>
-              <View style={styles.arcContainer}>
-                <View style={styles.arcBackground}>
-                  <View
-                    style={[
-                      styles.arcFill,
-                      {
-                        width: `${Math.min(cdcGoalPercent || 0, 100)}%`,
-                        backgroundColor: getGoalColor(cdcGoalPercent || 0),
-                      },
-                    ]}
-                  />
-                </View>
-                <View style={styles.arcCenter}>
-                  <Text style={styles.arcValue}>{totalMinutes || 0}</Text>
-                  <Text style={styles.arcLabel}>of {CDC_WEEKLY_GOAL} min</Text>
-                </View>
-              </View>
+              <ProgressRing
+                value={totalMinutes || 0}
+                goal={CDC_WEEKLY_GOAL}
+                color={getGoalColor(cdcGoalPercent || 0)}
+                centerValue={totalMinutes || 0}
+                centerLabel={`of ${CDC_WEEKLY_GOAL} min`}
+              />
               <Text style={styles.goalSubtext}>
                 {(cdcGoalPercent || 0) >= 100
                   ? 'You hit your CDC goal!'
@@ -116,32 +124,15 @@ export default function ActivityTab({ data, period, recommendations = [] }) {
           {weekData && weekData.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>This Week</Text>
-              <View style={styles.weekContainer}>
-                {weekData.map((day, index) => {
-                  const height = day.minutes > 0 ? Math.min((day.minutes / 60) * 50, 50) : 4;
-                  const isActive = day.minutes > 0;
-
-                  return (
-                    <View key={index} style={styles.dayColumn}>
-                      <Text style={styles.dayMinutes}>
-                        {day.minutes > 0 ? day.minutes : ''}
-                      </Text>
-                      <View
-                        style={[
-                          styles.dayBar,
-                          {
-                            height,
-                            backgroundColor: isActive
-                              ? VIBRANT_WELLNESS.activity.solid
-                              : SURFACES.background.tertiary,
-                          },
-                        ]}
-                      />
-                      <Text style={styles.dayLabel}>{day.label}</Text>
-                    </View>
-                  );
-                })}
-              </View>
+              <MiniBarChart
+                data={weekData.map((day) => ({
+                  label: day.label,
+                  value: day.minutes || 0,
+                  maxValue: DAY_BAR_MAX_MINUTES,
+                  color: (day.minutes || 0) > 0 ? VIBRANT_WELLNESS.activity.solid : SURFACES.background.tertiary,
+                }))}
+                unit="min"
+              />
             </View>
           )}
         </>
@@ -181,7 +172,7 @@ export default function ActivityTab({ data, period, recommendations = [] }) {
           <View style={styles.insightsList}>
             <InsightItem
               icon={(cdcGoalPercent || 0) >= 100 ? 'checkmark-circle' : 'alert-circle'}
-              color={(cdcGoalPercent || 0) >= 100 ? '#10B981' : '#F59E0B'}
+              color={(cdcGoalPercent || 0) >= 100 ? SEMANTIC.success.base : SEMANTIC.warning.base}
               text={
                 (cdcGoalPercent || 0) >= 100
                   ? 'Meeting CDC recommendation of 150 min/week'
@@ -228,10 +219,10 @@ function InsightItem({ icon, color, text }) {
 }
 
 function getGoalColor(percentage) {
-  if (percentage >= 100) return '#10B981';
-  if (percentage >= 70) return '#34D399';
-  if (percentage >= 40) return '#F59E0B';
-  return '#EF4444';
+  if (percentage >= 100) return SEMANTIC.success.base;
+  if (percentage >= 70) return SEMANTIC.success.light;
+  if (percentage >= 40) return SEMANTIC.warning.base;
+  return SEMANTIC.danger.base;
 }
 
 const styles = StyleSheet.create({
@@ -281,66 +272,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING[3],
   },
-  arcContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  arcBackground: {
-    width: '100%',
-    height: 16,
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-  },
-  arcFill: {
-    height: '100%',
-    borderRadius: RADIUS.full,
-  },
-  arcCenter: {
-    alignItems: 'center',
-    marginTop: SPACING[3],
-  },
-  arcValue: {
-    fontSize: TYPOGRAPHY.size['3xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-  },
-  arcLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-  },
   goalSubtext: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     textAlign: 'center',
-  },
-  weekContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 100,
-  },
-  dayColumn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: SPACING[1],
-  },
-  dayMinutes: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    height: 14,
-  },
-  dayBar: {
-    width: '60%',
-    borderRadius: RADIUS.sm,
-    minHeight: 4,
-  },
-  dayLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: SPACING[1],
   },
   insightsList: {
     gap: SPACING[2],

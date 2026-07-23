@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { TEXT, BRAND, SURFACES, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TEXT, BRAND, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 
 /**
  * MiniBarChart - Compact horizontal bar chart
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   barContainer: {
     flex: 1,
     height: '100%',
-    backgroundColor: SURFACES.card,
+    backgroundColor: SURFACES.background.tertiary,
     borderRadius: 4,
     overflow: 'hidden',
   },
