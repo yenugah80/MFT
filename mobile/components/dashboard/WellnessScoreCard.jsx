@@ -428,104 +428,35 @@ export default function WellnessScoreCard({
     };
   }, [today, scoreData]);
 
-  // Dynamic personalized message
+  // Cross-domain completeness nudge — this card's job is the composite score
+  // across all 4 domains, so its message should only ever say WHICH domains
+  // are still missing (by name), never restate a domain's own numbers.
+  // Nutrition/Hydration cards already own showing "306 cal" / "3 of 8 glasses"
+  // etc. — repeating those here was the root of the dashboard duplication.
   const personalizedMessage = useMemo(() => {
-    const nutrition = today?.nutrition || {};
-    const calories = nutrition.totalCalories || 0;
-    const protein = nutrition.totalProtein || 0;
-    const water = today?.waterIntakeLiters || 0;
-    const mealCount = (today?.foodLogs || []).length;
-    const calorieGoal = goals?.dailyCalories || 2000;
-    const proteinGoal = goals?.proteinG || 150;
-    const waterGoal = goals?.waterLiters || 2.5;
-    const hour = new Date().getHours();
-    const name = userName ? userName.split(' ')[0] : '';
-
-    const hasMeals = mealCount > 0;
-    const hasWater = water > 0;
+    const hasMeals = (today?.foodLogs || []).length > 0;
+    const hasWater = (today?.waterIntakeLiters || 0) > 0;
     const hasMood = (moodLogs || []).length > 0;
+    const hasActivity = (activityData?.minutes || today?.activity?.totalMinutes || 0) > 0;
 
-    // Calculate percentages
-    const calPercent = calorieGoal > 0 ? Math.round((calories / calorieGoal) * 100) : 0;
-    const proteinPercent = proteinGoal > 0 ? Math.round((protein / proteinGoal) * 100) : 0;
-    const waterPercent = waterGoal > 0 ? Math.round((water / waterGoal) * 100) : 0;
-    const glasses = Math.round(water / 0.25);
+    const missing = [];
+    if (!hasMeals) missing.push('meals');
+    if (!hasWater) missing.push('water');
+    if (!hasMood) missing.push('mood');
+    if (!hasActivity) missing.push('activity');
 
-    // Nothing logged - don't show message (header subtitle already handles this)
-    if (!hasMeals && !hasWater && !hasMood) {
+    // Nothing logged: header subtitle already handles it.
+    // Everything logged: the achievement badge + tier subtitle already say
+    // enough — a third stacked message here would be redundant, not helpful.
+    if (missing.length === 0 || missing.length === 4) {
       return null;
     }
 
-    // Build context-aware message
-    const remaining = {
-      calories: Math.max(0, calorieGoal - calories),
-      protein: Math.max(0, proteinGoal - protein),
-      water: Math.max(0, Math.round((waterGoal - water) / 0.25)), // glasses remaining
-    };
-
-    // All data logged - celebratory or summary
-    if (hasMeals && hasWater && hasMood) {
-      if (calPercent >= 90 && calPercent <= 110 && proteinPercent >= 80) {
-        return `Nailed it! ${Math.round(calories)} cal, ${Math.round(protein)}g protein`;
-      }
-      if (proteinPercent >= 100) {
-        return `Protein goal crushed! ${Math.round(protein)}g today`;
-      }
-      if (calPercent > 115) {
-        return `${Math.round(calories)} cal (${calPercent}%) - solid fuel today`;
-      }
-      return `${Math.round(calories)} cal • ${Math.round(protein)}g protein • ${glasses} glasses`;
-    }
-
-    // Partial data - show progress + what's missing
-    const parts = [];
-    const missing = [];
-
-    if (hasMeals) {
-      if (calPercent >= 80) {
-        parts.push(`${calPercent}% calories`);
-      } else {
-        parts.push(`${Math.round(calories)} cal`);
-      }
-      if (proteinPercent >= 50) {
-        parts.push(`${proteinPercent}% protein`);
-      }
-    } else {
-      missing.push('meals');
-    }
-
-    if (hasWater) {
-      if (waterPercent >= 80) {
-        parts.push(`${glasses} glasses`);
-      } else {
-        parts.push(`${remaining.water} glasses to go`);
-      }
-    } else {
-      missing.push('water');
-    }
-
-    if (!hasMood) {
-      missing.push('mood');
-    }
-
-    // Construct final message
-    if (parts.length > 0 && missing.length > 0) {
-      const progressPart = parts.slice(0, 2).join(' • ');
-      const missingPart = missing.length === 1 ? `Add ${missing[0]}` : `Add ${missing.join(' & ')}`;
-      return `${progressPart} • ${missingPart}`;
-    }
-
-    if (parts.length > 0) {
-      return parts.join(' • ');
-    }
-
-    // Only mood logged
-    if (hasMood && !hasMeals && !hasWater) {
-      return 'Mood logged! Now add meals & water';
-    }
-
-    return 'Keep logging to see your progress';
-  }, [today, goals, moodLogs, userName]);
+    const missingText = missing.length === 1
+      ? missing[0]
+      : `${missing.slice(0, -1).join(', ')} & ${missing[missing.length - 1]}`;
+    return `Add ${missingText} to complete today`;
+  }, [today, moodLogs, activityData]);
 
   // Entrance animation
   useEffect(() => {
