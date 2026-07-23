@@ -485,6 +485,17 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               ))}
             </View>
 
+            {/* Why these two matter — set once, not repeated per-slider, so it
+                explains real payoff (food/sleep correlation) without turning
+                a quick log into a wall of text. */}
+            {selectedMood && (
+              <Text style={styles.slidersContextHint}>
+                These two numbers are what let us find your real patterns —
+                like a mood dip tracking with low protein, or energy tracking
+                with hydration — not just averages.
+              </Text>
+            )}
+
             {/* Intensity Slider */}
             {selectedMood && (
               <View style={styles.section}>
@@ -506,7 +517,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                   onChange={setEnergyLevel}
                   moodColor={moodColors.base}
                   label="Energy Level"
-                  helperText="How much energy do you have?"
+                  helperText="Separate from mood — you can feel happy and drained, or stressed and wired"
                 />
               </View>
             )}
@@ -921,6 +932,14 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'right',
     fontStyle: 'italic',
+  },
+  slidersContextHint: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: SPACING[2],
   },
   ackCard: {
     marginHorizontal: SPACING[5],
