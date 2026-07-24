@@ -36,10 +36,10 @@ export default function GaugeChart({
 
   // Default zones: Poor (0-25), Fair (25-50), Good (50-75), Excellent (75-100)
   const defaultZones = [
-    { min: 0, max: 25, color: SEMANTIC.danger, label: 'Poor' },
-    { min: 25, max: 50, color: SEMANTIC.warning, label: 'Fair' },
-    { min: 50, max: 75, color: SEMANTIC.info, label: 'Good' },
-    { min: 75, max: 100, color: SEMANTIC.success, label: 'Excellent' },
+    { min: 0, max: 25, color: SEMANTIC.danger.base, label: 'Poor' },
+    { min: 25, max: 50, color: SEMANTIC.warning.base, label: 'Fair' },
+    { min: 50, max: 75, color: SEMANTIC.info.base, label: 'Good' },
+    { min: 75, max: 100, color: SEMANTIC.success.base, label: 'Excellent' },
   ];
 
   const zoneConfig = zones || defaultZones;
