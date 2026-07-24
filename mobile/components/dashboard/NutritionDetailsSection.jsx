@@ -18,6 +18,7 @@ import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { TEXT, SURFACES, CARD_SYSTEM, BRAND, SEMANTIC } from '../../constants/premiumTheme';
 import { MODERN_MACROS } from '../../constants/modernColorPalette';
 import { generateInsights } from '../../utils/healthCalculations';
+import { getCalorieFramingText } from '../../utils/goalFraming';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -341,9 +342,7 @@ export default function NutritionDetailsSection({
         <View style={styles.expandedContent}>
           <CalorieRing consumed={calories} goal={calorieGoal} />
           <Text style={styles.remainingLine}>
-            {calories > calorieGoal
-              ? `${Math.round(calories - calorieGoal)} kcal over your ${Math.round(calorieGoal)} kcal goal`
-              : `${Math.round(remaining)} kcal remaining of ${Math.round(calorieGoal)} kcal goal`}
+            {getCalorieFramingText(calories, calorieGoal, goals?.primaryGoal)}
           </Text>
 
           <TouchableOpacity

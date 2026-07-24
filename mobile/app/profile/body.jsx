@@ -29,6 +29,7 @@ import {
   GENDERS,
   GOALS as ONBOARDING_GOALS,
 } from "../../constants/onboardingConfig";
+import { calculateNutritionTargets, getGoalContext } from "../../utils/onboardingCalculations";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -311,6 +312,7 @@ export default function BodyMetricsScreen() {
   const [gender, setGender] = useState(null);
   const [activityLevel, setActivityLevel] = useState("moderate");
   const [primaryGoal, setPrimaryGoal] = useState("maintain");
+  const [savedGoals, setSavedGoals] = useState(null);
 
   // Weight history
   const [weightHistory, setWeightHistory] = useState([]);
@@ -349,6 +351,30 @@ export default function BodyMetricsScreen() {
     return list;
   }, [bmi, idealWeight, weight, tdee, primaryGoal]);
 
+  // Same calculation onboarding used to set the original goals — re-run here
+  // so a "recalculate" affordance is possible without any backend change.
+  const recalculatedGoals = useMemo(() => {
+    if (!age || !weight || !height || !activityLevel || !primaryGoal) return null;
+    try {
+      return calculateNutritionTargets({ age, weightKg: weight, heightCm: height, gender, activityLevel, primaryGoal });
+    } catch {
+      return null;
+    }
+  }, [age, weight, height, gender, activityLevel, primaryGoal]);
+
+  const goalContext = useMemo(() => {
+    if (!recalculatedGoals) return null;
+    return getGoalContext(recalculatedGoals, { age, weightKg: weight, heightCm: height, gender, activityLevel, primaryGoal });
+  }, [recalculatedGoals, age, weight, height, gender, activityLevel, primaryGoal]);
+
+  // Only nudge to recalculate when it would meaningfully change the number —
+  // goals are set once at onboarding and never auto-recalculated, so this is
+  // the only place in the app that can currently catch staleness.
+  const goalsAreStale = useMemo(() => {
+    if (!recalculatedGoals || !savedGoals?.dailyCalories) return false;
+    return Math.abs(recalculatedGoals.dailyCalories - savedGoals.dailyCalories) > 50;
+  }, [recalculatedGoals, savedGoals]);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
@@ -366,6 +392,13 @@ export default function BodyMetricsScreen() {
       setGender(data.basics?.gender || null);
       setActivityLevel(data.basics?.activityLevel || "moderate");
       setPrimaryGoal(data.goals?.primaryGoal || "maintain");
+      setSavedGoals(data.goals?.dailyCalories ? {
+        dailyCalories: data.goals.dailyCalories,
+        proteinG: data.goals.proteinG,
+        carbsG: data.goals.carbsG,
+        fatsG: data.goals.fatsG,
+        waterLiters: data.goals.waterLiters,
+      } : null);
 
       if (wh) {
         setWeightHistory(wh.entries || []);
@@ -472,6 +505,33 @@ export default function BodyMetricsScreen() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const saveRecalculatedGoals = async () => {
+    if (!recalculatedGoals) return;
+    setIsSaving(true);
+    try {
+      const { bmr, tdee, ...targets } = recalculatedGoals;
+      await apiClient.post("/profile/goals", { primaryGoal, ...targets });
+      setSavedGoals(targets);
+      showSuccessToast("Goals updated");
+    } catch (error) {
+      Alert.alert("Save Failed", "Could not update your goals.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const confirmRecalculateGoals = () => {
+    if (!recalculatedGoals || !savedGoals) return;
+    Alert.alert(
+      "Update your goals?",
+      `Based on your current stats: ${recalculatedGoals.dailyCalories} kcal, ${recalculatedGoals.proteinG}g protein, ${recalculatedGoals.carbsG}g carbs, ${recalculatedGoals.fatsG}g fat — currently set to ${savedGoals.dailyCalories} kcal.`,
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Update", onPress: saveRecalculatedGoals },
+      ]
+    );
   };
 
   if (isLoading) {
@@ -605,6 +665,54 @@ export default function BodyMetricsScreen() {
                 <Text style={[styles.goalLabel, primaryGoal === id && { color: config.color }]}>{config.label}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+
+        {/* Nutrition Goals — why the number is what it is, and a way to
+            recalculate it (goals are otherwise set once at onboarding and
+            never revisited, even after logging a new weight above). */}
+        <View style={styles.section}>
+          <SectionHeader title="Nutrition Goals" icon="calculator-outline" />
+          <View style={styles.card}>
+            {savedGoals?.dailyCalories ? (
+              <View style={styles.goalsSummaryRow}>
+                <View style={styles.goalsSummaryStat}>
+                  <Text style={styles.goalsSummaryValue}>{savedGoals.dailyCalories}</Text>
+                  <Text style={styles.goalsSummaryLabel}>kcal</Text>
+                </View>
+                <View style={styles.goalsSummaryStat}>
+                  <Text style={styles.goalsSummaryValue}>{savedGoals.proteinG}g</Text>
+                  <Text style={styles.goalsSummaryLabel}>Protein</Text>
+                </View>
+                <View style={styles.goalsSummaryStat}>
+                  <Text style={styles.goalsSummaryValue}>{savedGoals.carbsG}g</Text>
+                  <Text style={styles.goalsSummaryLabel}>Carbs</Text>
+                </View>
+                <View style={styles.goalsSummaryStat}>
+                  <Text style={styles.goalsSummaryValue}>{savedGoals.fatsG}g</Text>
+                  <Text style={styles.goalsSummaryLabel}>Fat</Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.goalsExplainer}>Set your body stats above to see your daily targets.</Text>
+            )}
+
+            {goalContext && (
+              <Text style={styles.goalsExplainer}>{goalContext.calorieContext}</Text>
+            )}
+
+            {goalsAreStale && (
+              <TouchableOpacity
+                style={[styles.recalculateBtn, isSaving && { opacity: 0.6 }]}
+                onPress={confirmRecalculateGoals}
+                disabled={isSaving}
+              >
+                <Ionicons name="refresh" size={16} color={BRAND.primary} />
+                <Text style={styles.recalculateBtnText}>
+                  Your stats suggest ~{recalculatedGoals.dailyCalories} kcal now — recalculate?
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -794,6 +902,15 @@ const styles = StyleSheet.create({
   metricUnit: { fontSize: 13, color: TEXT.tertiary },
   metricEditContainer: { flexDirection: "row", alignItems: "center" },
   metricInput: { fontSize: 15, fontWeight: "600", color: TEXT.primary, borderBottomWidth: 2, borderBottomColor: BRAND.primary, paddingVertical: 4, minWidth: 50, textAlign: "right" },
+
+  // Nutrition Goals
+  goalsSummaryRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  goalsSummaryStat: { flex: 1, alignItems: "center" },
+  goalsSummaryValue: { fontSize: 17, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.primary },
+  goalsSummaryLabel: { fontSize: 11, color: TEXT.tertiary, marginTop: 2 },
+  goalsExplainer: { fontSize: 13, fontFamily: TYPOGRAPHY.family.regular, color: TEXT.secondary, lineHeight: 18, padding: 16 },
+  recalculateBtn: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 16, padding: 12, borderRadius: 12, backgroundColor: `${BRAND.primary}10` },
+  recalculateBtnText: { flex: 1, fontSize: 13, fontFamily: TYPOGRAPHY.family.semibold, color: BRAND.primary },
 
   // Weight history
   weightLogRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },

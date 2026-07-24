@@ -16,6 +16,7 @@ import RecommendationCard, { RecommendationSection } from './RecommendationCard'
 import ProgressRing from './ProgressRing';
 import MiniBarChart from './MiniBarChart';
 import AnalyticsEmptyState from './AnalyticsEmptyState';
+import { getActivityEmptySubtitle } from '../../utils/emptyStateCopy';
 import {
   TEXT,
   SURFACES,
@@ -45,7 +46,7 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
     );
   }
 
-  const { totalMinutes, cdcGoalPercent, activeDays, weekData, streak } = data || {};
+  const { totalMinutes, cdcGoalPercent, activeDays, weekData, streak, primaryGoal } = data || {};
   const hasRealData = (totalMinutes || 0) > 0;
 
   // Separate recommendations by type
@@ -83,7 +84,7 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
           icon="fitness-outline"
           iconColor={VIBRANT_WELLNESS.activity.solid}
           title="No activity data yet"
-          subtitle="Log a workout to see your progress and get personalized insights"
+          subtitle={getActivityEmptySubtitle(primaryGoal) || 'Log a workout to see your progress and get personalized insights'}
         />
       )}
 

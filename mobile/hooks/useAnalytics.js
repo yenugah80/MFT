@@ -164,6 +164,9 @@ export function useAnalytics(period = 'week') {
       // (not the zero-filled weekData above) — same figures as the dashboard
       // would show if it exposed a weekly view, just not duplicated there today.
       weeklyAverages: dashData?.trends?.weeklyAverages || null,
+      // Raw nutritionGoalsTable row already includes this — no separate profile
+      // fetch needed to phrase numbers relative to the user's stated goal.
+      primaryGoal: dashData?.goals?.primaryGoal || null,
       // Add recommendations
       recommendations: recommendations?.nutrition || [],
     };
@@ -230,10 +233,13 @@ export function useAnalytics(period = 'week') {
       weekData,
       persona: data?.persona,
       streak: calculateStreak(weekData),
+      // General profile field (not nutrition-specific), sourced from the same
+      // already-fetched nutrition dashboard payload — no separate fetch needed.
+      primaryGoal: nutritionQuery.data?.goals?.primaryGoal || null,
       // Add recommendations
       recommendations: recommendations?.activity || [],
     };
-  }, [activityQuery.data, recommendationsQuery.data, recommendations]);
+  }, [activityQuery.data, recommendationsQuery.data, recommendations, nutritionQuery.data]);
 
   // Process hydration data
   const hydration = useMemo(() => {

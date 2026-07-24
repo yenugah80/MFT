@@ -37,6 +37,9 @@ import { SmartRecommendationsLoadingSkeleton } from './SkeletonLoader';
 import { useQuickLogCelebration } from './CelebrationAnimation';
 import MiniLineChart from './MiniLineChart';
 import AnalyticsEmptyState from './AnalyticsEmptyState';
+import GoalRealityCheckCard from './GoalRealityCheckCard';
+import { getGoalPaceLabel } from '../../utils/goalFraming';
+import { getNutritionEmptySubtitle } from '../../utils/emptyStateCopy';
 import { useSmartRecommendations } from '../../hooks/useRecommendations';
 import {
   TEXT,
@@ -122,9 +125,13 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
     );
   }
 
-  const { calories, macros, mealsLogged, weekData = [], weeklyAverages } = data || { calories: {}, macros: {}, mealsLogged: 0 };
+  const { calories, macros, mealsLogged, weekData = [], weeklyAverages, primaryGoal } = data || { calories: {}, macros: {}, mealsLogged: 0 };
   const hasWeekTrend = weekData.some((d) => d.calories > 0);
   const hasRealData = (calories.consumed || 0) > 0 || (mealsLogged || 0) > 0;
+  const goalPaceLabel = getGoalPaceLabel(calories.consumed || 0, calories.budget || 2000, primaryGoal);
+  const weeklyGoalPaceLabel = weeklyAverages
+    ? getGoalPaceLabel(weeklyAverages.avgCalories || 0, calories.budget || 2000, primaryGoal)
+    : '';
 
   // Separate recommendations by type for organized display
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -165,7 +172,7 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
             icon="nutrition-outline"
             iconColor={VIBRANT_WELLNESS.nutrition.solid}
             title="No nutrition data yet"
-            subtitle="Log your meals to see analytics and personalized insights"
+            subtitle={getNutritionEmptySubtitle(primaryGoal) || 'Log your meals to see analytics and personalized insights'}
           />
         )}
 
@@ -182,6 +189,7 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
             <MetricCard
               value={`${calories.percentage || 0}%`}
               label="of Goal"
+              subtitle={goalPaceLabel || undefined}
               icon="pie-chart"
               iconColor={(calories.percentage || 0) >= 100 ? '#10B981' : VIBRANT_WELLNESS.nutrition.solid}
             />
@@ -210,10 +218,17 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
               {weeklyAverages && (
                 <Text style={styles.trendSubtext}>
                   Averaging {Math.round(weeklyAverages.avgCalories).toLocaleString()} cal/day this week
+                  {weeklyGoalPaceLabel ? ` — ${weeklyGoalPaceLabel}` : ''}
                 </Text>
               )}
             </View>
           )}
+
+          <GoalRealityCheckCard
+            weeklyAverages={weeklyAverages}
+            primaryGoal={primaryGoal}
+            calorieGoal={calories.budget || 2000}
+          />
 
           {/* Weekly Macro Averages — same protein/carbs/fat the dashboard card
               tracks, but averaged across the week instead of restating today's
