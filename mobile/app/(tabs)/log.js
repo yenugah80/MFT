@@ -1684,9 +1684,25 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
   },
   analysisStatusText: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#6B4EFF',
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  analysisStopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+  },
+  analysisStopText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#DC2626',
     fontFamily: TYPOGRAPHY.family.semibold,
   },
 

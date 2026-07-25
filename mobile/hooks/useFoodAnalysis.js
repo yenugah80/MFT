@@ -1847,6 +1847,23 @@ export function useFoodAnalysis() {
   }, [setAnalysisResult]);
 
   /**
+   * Cancel an in-flight text/voice analysis. Reuses the AbortController
+   * analyzeTextUniversal already sets up for "cancel the previous request"
+   * — aborting it here rejects the in-flight fetch, which analyzeTextUniversal's
+   * own catch/finally already handles cleanly (AbortError is treated as
+   * expected, not shown as an error; isAnalyzing/progress get reset there
+   * too). We also reset them here directly so the Stop button feels instant
+   * instead of waiting a tick for that rejection to propagate.
+   */
+  const cancelAnalysis = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    isAnalyzingRef.current = false;
+    setIsAnalyzing(false);
+    setProgress(0);
+  }, []);
+
+  /**
    * Trigger manual analysis
    */
   const runAnalysis = useCallback(async () => {
@@ -2030,6 +2047,7 @@ export function useFoodAnalysis() {
     removeItem,
     removeIngredient,
     runAnalysis,
+    cancelAnalysis,
 
     // Shared state
     isAnalyzing,

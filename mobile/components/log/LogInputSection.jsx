@@ -186,6 +186,15 @@ export default function LogInputSection({
                 <Text style={styles.analysisStatusText}>
                   Analyzing nutrition...
                 </Text>
+                <TouchableOpacity
+                  style={styles.analysisStopButton}
+                  onPress={() => foodAnalysis.cancelAnalysis?.()}
+                  accessibilityLabel="Stop analyzing"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="stop-circle" size={16} color="#DC2626" />
+                  <Text style={styles.analysisStopText}>Stop</Text>
+                </TouchableOpacity>
               </View>
             )}
 
