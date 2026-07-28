@@ -25,6 +25,7 @@ import {
   TYPOGRAPHY,
   SPACING,
   RADIUS,
+  CARD_SYSTEM,
 } from '../../constants/premiumTheme';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -292,12 +293,7 @@ const MealComparisonCard = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
-    borderWidth: 1,
-    borderColor: SURFACES.card.border,
+    ...CARD_SYSTEM.standard,
   },
   header: {
     flexDirection: 'row',
@@ -335,9 +331,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   comparisonIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },

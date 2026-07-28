@@ -30,9 +30,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import Svg, { Circle } from 'react-native-svg';
 
-import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, MACRO_COLORS, NUTRISCORE, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SURFACES, NUTRISCORE, SEMANTIC_ACTIONS, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { MODERN_MACROS, BOLD_GRADIENTS } from '../../constants/modernColorPalette';
 import { NutriScoreGlow, HealthScoreBadge } from '../NutriScoreBadge';
+import { SuccessCheckmark } from '../analytics/CelebrationAnimation';
 
 // Smart Insights Components
 import SmartMealInsights from './SmartMealInsights';
@@ -104,52 +107,45 @@ const getSourceLabel = (source) => {
 // ============================================================================
 
 // Static version - no animation (prevents bridge overflow)
-const StaticMacroBar = ({ label, value, unit, color, goal, icon }) => {
+const StaticMacroTile = ({ label, value, unit, color, goal, icon }) => {
   // Guard against NaN: ensure goal > 0 and value is a valid number
   const safeValue = Number(value) || 0;
   const safeGoal = Number(goal) || 0;
   const percentage = safeGoal > 0 ? Math.min((safeValue / safeGoal) * 100, 100) : 0;
+  const isOverGoal = safeGoal > 0 && safeValue > safeGoal;
 
   return (
-    <View style={styles.macroBar}>
-      <View style={styles.macroHeader}>
-        <View style={styles.macroLabelContainer}>
-          <Ionicons name={icon} size={ICON_SIZES.sm} color={color} />
-          <Text style={styles.macroLabel}>{label}</Text>
+    <View style={[styles.macroTile, { backgroundColor: `${color}12` }]}>
+      <View style={styles.macroTileHeader}>
+        <View style={[styles.macroTileIcon, { backgroundColor: `${color}20` }]}>
+          <Ionicons name={icon} size={16} color={color} />
         </View>
-        <View style={styles.macroValueContainer}>
-          <Text style={styles.macroValue}>{formatMacro(value)}</Text>
-          <Text style={styles.macroUnit}>{unit}</Text>
-          {goal && (
-            <Text style={styles.macroGoal}>/ {formatMacro(goal)}</Text>
-          )}
-        </View>
+        <Text style={styles.macroTileLabel}>{label}</Text>
       </View>
-
-      {/* Progress Track - static fill */}
-      <View style={styles.macroTrack}>
+      <Text style={styles.macroTileValue}>
+        {formatMacro(value)}{unit}
+        {goal ? <Text style={styles.macroTileGoal}> / {formatMacro(goal)}{unit}</Text> : null}
+      </Text>
+      <View style={styles.macroTileBarTrack}>
         <View
           style={[
-            styles.macroFill,
-            {
-              backgroundColor: color,
-              flex: percentage / 100,
-            },
+            styles.macroTileBarFill,
+            { width: `${percentage}%`, backgroundColor: isOverGoal ? SEMANTIC.danger.base : color },
           ]}
         />
-        <View style={{ flex: (100 - percentage) / 100 }} />
       </View>
     </View>
   );
 };
 
 // Animated version - deferred rendering
-const MacroBar = ({ label, value, unit, color, goal, icon, delay = 0 }) => {
+const MacroTile = ({ label, value, unit, color, goal, icon, delay = 0 }) => {
   const fillAnim = useRef(new Animated.Value(0)).current;
   // Guard against NaN: ensure goal > 0 and value is a valid number
   const safeValue = Number(value) || 0;
   const safeGoal = Number(goal) || 0;
   const percentage = safeGoal > 0 ? Math.min((safeValue / safeGoal) * 100, 100) : 0;
+  const isOverGoal = safeGoal > 0 && safeValue > safeGoal;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -165,40 +161,30 @@ const MacroBar = ({ label, value, unit, color, goal, icon, delay = 0 }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentage, delay]);
 
-  const animatedFlex = fillAnim.interpolate({
+  const animatedWidth = fillAnim.interpolate({
     inputRange: [0, 100],
-    outputRange: [0, 1],
+    outputRange: ['0%', '100%'],
   });
 
   return (
-    <View style={styles.macroBar}>
-      <View style={styles.macroHeader}>
-        <View style={styles.macroLabelContainer}>
-          <Ionicons name={icon} size={ICON_SIZES.sm} color={color} />
-          <Text style={styles.macroLabel}>{label}</Text>
+    <View style={[styles.macroTile, { backgroundColor: `${color}12` }]}>
+      <View style={styles.macroTileHeader}>
+        <View style={[styles.macroTileIcon, { backgroundColor: `${color}20` }]}>
+          <Ionicons name={icon} size={16} color={color} />
         </View>
-        <View style={styles.macroValueContainer}>
-          <Text style={styles.macroValue}>{formatMacro(value)}</Text>
-          <Text style={styles.macroUnit}>{unit}</Text>
-          {goal && (
-            <Text style={styles.macroGoal}>/ {formatMacro(goal)}</Text>
-          )}
-        </View>
+        <Text style={styles.macroTileLabel}>{label}</Text>
       </View>
-
-      {/* Progress Track */}
-      <View style={styles.macroTrack}>
+      <Text style={styles.macroTileValue}>
+        {formatMacro(value)}{unit}
+        {goal ? <Text style={styles.macroTileGoal}> / {formatMacro(goal)}{unit}</Text> : null}
+      </Text>
+      <View style={styles.macroTileBarTrack}>
         <Animated.View
           style={[
-            styles.macroFill,
-            {
-              backgroundColor: color,
-              flex: animatedFlex,
-            },
+            styles.macroTileBarFill,
+            { width: animatedWidth, backgroundColor: isOverGoal ? SEMANTIC.danger.base : color },
           ]}
         />
-        {/* Empty space for remaining percentage */}
-        <View style={{ flex: (100 - percentage) / 100 }} />
       </View>
     </View>
   );
@@ -354,6 +340,63 @@ const MicroRow = ({ name, value, unit, dv }) => {
 };
 
 // ============================================================================
+// CALORIE PROGRESS RING - same ring math as the dashboard Nutrition card's
+// CalorieRing (components/dashboard/NutritionDetailsSection.jsx), reskinned
+// for a white-on-gradient hero context instead of a colored-ring-on-white-card
+// ============================================================================
+
+const CalorieProgressRing = ({ consumed, goal }) => {
+  const size = 168;
+  const strokeWidth = 14;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const isOverGoal = consumed > goal;
+  const progress = goal > 0 ? Math.min(consumed / goal, 1) : 0;
+  const strokeDashoffset = circumference * (1 - progress);
+  const percent = goal > 0 ? Math.round((consumed / goal) * 100) : 0;
+
+  return (
+    <View style={styles.ringWrapper}>
+      <Svg width={size} height={size}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#FFFFFF"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+          style={{
+            transformOrigin: `${size / 2}px ${size / 2}px`,
+            transform: [{ rotate: '-90deg' }],
+          }}
+        />
+      </Svg>
+      <View style={styles.ringCenter} pointerEvents="none">
+        <Text style={styles.caloriesLabel}>Calories</Text>
+        <Text style={styles.caloriesValue}>{formatCalories(consumed)}</Text>
+        <Text style={styles.caloriesUnit}>kcal</Text>
+      </View>
+      <View style={styles.ringBadge}>
+        <Text style={styles.ringBadgeText}>
+          {isOverGoal ? `${percent}% of goal` : `${percent}% of daily goal`}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -398,10 +441,22 @@ export default function MealLoggedCard({
   };
 
   useEffect(() => {
-    // Skip all animations to prevent bridge overflow
-    // Set values directly without animation
-    scaleAnim.setValue(1);
-    fadeAnim.setValue(1);
+    // Only the outer container animates eagerly (these two Animated.Values
+    // already exist regardless) — the per-item macro/comparison bars stay
+    // deferred below, which is what actually prevents bridge overflow.
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 60,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+    ]).start();
 
     // Delay animated children significantly to prevent bridge overflow
     // Use InteractionManager for safer deferral
@@ -466,7 +521,7 @@ export default function MealLoggedCard({
         {/* ──────────────────────────────────────────── */}
         <View style={styles.header}>
           <View style={styles.successBadge}>
-            <Ionicons name="checkmark-circle" size={ICON_SIZES['2xl']} color={SEMANTIC.success.base} />
+            <SuccessCheckmark visible size={64} color={SEMANTIC.success.base} />
           </View>
           <Text style={styles.headerTitle}>Meal Logged</Text>
           <Text style={styles.headerSubtitle}>{meal.foodName}</Text>
@@ -491,18 +546,25 @@ export default function MealLoggedCard({
         {/* ──────────────────────────────────────────── */}
         <View style={styles.primaryCard}>
           <LinearGradient
-            colors={SURFACES.gradient.primary}
+            colors={BOLD_GRADIENTS.cta}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.primaryGradient}
           >
-            <Text style={styles.caloriesLabel}>Calories</Text>
-            <Text style={styles.caloriesValue}>{formatCalories(meal.calories)}</Text>
-            <Text style={styles.caloriesUnit}>kcal</Text>
-            {dailyGoals?.dailyCalories && (
-              <Text style={styles.caloriesGoal}>
-                {Math.round((meal.calories / dailyGoals.dailyCalories) * 100)}% of daily goal
-              </Text>
+            <View style={styles.decorativeCircle} pointerEvents="none" />
+            <View style={styles.decorativeCircleSmall} pointerEvents="none" />
+
+            {dailyGoals?.dailyCalories ? (
+              <CalorieProgressRing
+                consumed={meal.calories}
+                goal={dailyGoals.dailyCalories}
+              />
+            ) : (
+              <>
+                <Text style={styles.caloriesLabel}>Calories</Text>
+                <Text style={styles.caloriesValue}>{formatCalories(meal.calories)}</Text>
+                <Text style={styles.caloriesUnit}>kcal</Text>
+              </>
             )}
           </LinearGradient>
         </View>
@@ -595,42 +657,42 @@ export default function MealLoggedCard({
         {/* ──────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Macronutrients</Text>
-          <View style={styles.macroContainer}>
+          <View style={styles.macroGrid}>
             {animatedComponentsReady ? (
               <>
-                <MacroBar
+                <MacroTile
                   label="Protein"
                   value={meal.protein}
                   unit="g"
-                  color={MACRO_COLORS.protein.base}
+                  color={MODERN_MACROS.protein.base}
                   goal={dailyGoals?.proteinG}
                   icon="barbell"
                   delay={0}
                 />
-                <MacroBar
+                <MacroTile
                   label="Carbs"
                   value={meal.carbs}
                   unit="g"
-                  color={MACRO_COLORS.carbs.base}
+                  color={MODERN_MACROS.carbs.base}
                   goal={dailyGoals?.carbsG}
                   icon="nutrition"
                   delay={50}
                 />
-                <MacroBar
+                <MacroTile
                   label="Fat"
                   value={meal.fat}
                   unit="g"
-                  color={MACRO_COLORS.fat.base}
+                  color={MODERN_MACROS.fat.base}
                   goal={dailyGoals?.fatG}
                   icon="flame"
                   delay={100}
                 />
                 {meal.fiber !== null && meal.fiber !== undefined && (
-                  <MacroBar
+                  <MacroTile
                     label="Fiber"
                     value={meal.fiber}
                     unit="g"
-                    color={MACRO_COLORS.fiber.base}
+                    color={MODERN_MACROS.fiber.base}
                     goal={dailyGoals?.fiberG}
                     icon="leaf"
                     delay={150}
@@ -639,36 +701,36 @@ export default function MealLoggedCard({
               </>
             ) : (
               <>
-                <StaticMacroBar
+                <StaticMacroTile
                   label="Protein"
                   value={meal.protein}
                   unit="g"
-                  color={MACRO_COLORS.protein.base}
+                  color={MODERN_MACROS.protein.base}
                   goal={dailyGoals?.proteinG}
                   icon="barbell"
                 />
-                <StaticMacroBar
+                <StaticMacroTile
                   label="Carbs"
                   value={meal.carbs}
                   unit="g"
-                  color={MACRO_COLORS.carbs.base}
+                  color={MODERN_MACROS.carbs.base}
                   goal={dailyGoals?.carbsG}
                   icon="nutrition"
                 />
-                <StaticMacroBar
+                <StaticMacroTile
                   label="Fat"
                   value={meal.fat}
                   unit="g"
-                  color={MACRO_COLORS.fat.base}
+                  color={MODERN_MACROS.fat.base}
                   goal={dailyGoals?.fatG}
                   icon="flame"
                 />
                 {meal.fiber !== null && meal.fiber !== undefined && (
-                  <StaticMacroBar
+                  <StaticMacroTile
                     label="Fiber"
                     value={meal.fiber}
                     unit="g"
-                    color={MACRO_COLORS.fiber.base}
+                    color={MODERN_MACROS.fiber.base}
                     goal={dailyGoals?.fiberG}
                     icon="leaf"
                   />
@@ -703,7 +765,7 @@ export default function MealLoggedCard({
                     dailyTotal={(dailyTotals.totalProtein || 0) - (meal.protein || 0)}
                     goal={dailyGoals.proteinG}
                     unit="g"
-                    color={MACRO_COLORS.protein.base}
+                    color={MODERN_MACROS.protein.base}
                     onViewTrends={() => onViewTrends && onViewTrends('protein')}
                     delay={250}
                   />
@@ -713,7 +775,7 @@ export default function MealLoggedCard({
                     dailyTotal={(dailyTotals.totalCarbs || 0) - (meal.carbs || 0)}
                     goal={dailyGoals.carbsG}
                     unit="g"
-                    color={MACRO_COLORS.carbs.base}
+                    color={MODERN_MACROS.carbs.base}
                     onViewTrends={() => onViewTrends && onViewTrends('carbs')}
                     delay={300}
                   />
@@ -723,7 +785,7 @@ export default function MealLoggedCard({
                     dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
                     goal={dailyGoals.fatG}
                     unit="g"
-                    color={MACRO_COLORS.fat.base}
+                    color={MODERN_MACROS.fat.base}
                     onViewTrends={() => onViewTrends && onViewTrends('fat')}
                     delay={350}
                   />
@@ -745,7 +807,7 @@ export default function MealLoggedCard({
                     dailyTotal={(dailyTotals.totalProtein || 0) - (meal.protein || 0)}
                     goal={dailyGoals.proteinG}
                     unit="g"
-                    color={MACRO_COLORS.protein.base}
+                    color={MODERN_MACROS.protein.base}
                     onViewTrends={() => onViewTrends && onViewTrends('protein')}
                   />
                   <StaticComparisonBar
@@ -754,7 +816,7 @@ export default function MealLoggedCard({
                     dailyTotal={(dailyTotals.totalCarbs || 0) - (meal.carbs || 0)}
                     goal={dailyGoals.carbsG}
                     unit="g"
-                    color={MACRO_COLORS.carbs.base}
+                    color={MODERN_MACROS.carbs.base}
                     onViewTrends={() => onViewTrends && onViewTrends('carbs')}
                   />
                   <StaticComparisonBar
@@ -763,7 +825,7 @@ export default function MealLoggedCard({
                     dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
                     goal={dailyGoals.fatG}
                     unit="g"
-                    color={MACRO_COLORS.fat.base}
+                    color={MODERN_MACROS.fat.base}
                     onViewTrends={() => onViewTrends && onViewTrends('fat')}
                   />
                 </>
@@ -863,41 +925,49 @@ export default function MealLoggedCard({
         {/* ACTIONS */}
         {/* ──────────────────────────────────────────── */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleViewDetails}>
-            <Ionicons name="nutrition-outline" size={ICON_SIZES.md} color={BRAND.primary} />
-            <Text style={styles.secondaryButtonText}>Details</Text>
+          <TouchableOpacity style={styles.iconActionButton} onPress={handleViewDetails} activeOpacity={0.7}>
+            <View style={styles.iconActionBadge}>
+              <Ionicons name="nutrition-outline" size={20} color={BRAND.primary} />
+            </View>
+            <Text style={styles.iconActionText}>Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={onEdit}>
-            <Ionicons name="create-outline" size={ICON_SIZES.md} color={BRAND.primary} />
-            <Text style={styles.secondaryButtonText}>Edit</Text>
+          <TouchableOpacity style={styles.iconActionButton} onPress={onEdit} activeOpacity={0.7}>
+            <View style={styles.iconActionBadge}>
+              <Ionicons name="create-outline" size={20} color={BRAND.primary} />
+            </View>
+            <Text style={styles.iconActionText}>Edit</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={onShare}>
-            <Ionicons name="share-outline" size={ICON_SIZES.md} color={BRAND.primary} />
-            <Text style={styles.secondaryButtonText}>Share</Text>
+          <TouchableOpacity style={styles.iconActionButton} onPress={onShare} activeOpacity={0.7}>
+            <View style={styles.iconActionBadge}>
+              <Ionicons name="share-outline" size={20} color={BRAND.primary} />
+            </View>
+            <Text style={styles.iconActionText}>Share</Text>
           </TouchableOpacity>
         </View>
 
         {/* Bottom Action Row - History & Done */}
         <View style={styles.bottomActions}>
           {onViewHistory && (
-            <TouchableOpacity style={styles.secondaryButton} onPress={onViewHistory}>
+            <TouchableOpacity style={styles.historyButton} onPress={onViewHistory} activeOpacity={0.7}>
               <Ionicons name="time-outline" size={ICON_SIZES.md} color={BRAND.primary} />
-              <Text style={styles.secondaryButtonText}>History</Text>
+              <Text style={styles.historyButtonText}>History</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
             style={[styles.primaryButton, onViewHistory && { flex: 1 }]}
             onPress={onClose}
+            activeOpacity={0.85}
           >
             <LinearGradient
-              colors={SURFACES.gradient.primary}
+              colors={BOLD_GRADIENTS.cta}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.primaryButtonGradient}
             >
+              <Ionicons name="checkmark-circle" size={20} color={TEXT.white} />
               <Text style={styles.primaryButtonText}>Done</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -972,15 +1042,35 @@ const styles = StyleSheet.create({
   // PRIMARY CARD - Calories (Maximum Visual Weight)
   // ──────────────────────────────────────────────
   primaryCard: {
-    borderRadius: RADIUS.xl,
+    ...CARD_SYSTEM.hero,
     marginBottom: SPACING[5],
     overflow: 'hidden',
-    ...SHADOWS.xl,
+    padding: 0,
   },
   primaryGradient: {
     paddingVertical: SPACING[8],
     paddingHorizontal: SPACING[6],
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  decorativeCircle: {
+    position: 'absolute',
+    right: -20,
+    top: -20,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  decorativeCircleSmall: {
+    position: 'absolute',
+    right: 40,
+    bottom: -10,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   caloriesLabel: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -1009,18 +1099,33 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: SPACING[2],
   },
+  ringWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  ringBadge: {
+    marginTop: SPACING[3],
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[1],
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  ringBadgeText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#FFFFFF',
+  },
 
   // ──────────────────────────────────────────────
   // HEALTH METRICS CARD
   // ──────────────────────────────────────────────
   healthMetricsCard: {
-    backgroundColor: SURFACES.card.glass,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[5],
-    marginBottom: SPACING[5],
-    borderWidth: 1,
-    borderColor: SURFACES.card.border,
-    ...SHADOWS.md,
+    ...CARD_SYSTEM.standard,
   },
   nutriScoreSection: {
     flexDirection: 'row',
@@ -1105,70 +1210,68 @@ const styles = StyleSheet.create({
   },
 
   // ──────────────────────────────────────────────
-  // MACRO BARS - Small Multiples (Tufte)
+  // MACRO TILES - 2x2 grid, same pattern as the dashboard
+  // Nutrition card's MacroTile (NutritionDetailsSection.jsx)
   // ──────────────────────────────────────────────
-  macroContainer: {
-    gap: SPACING[4],
-  },
-  macroBar: {
-    gap: SPACING[2],
-  },
-  macroHeader: {
+  macroGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING[3],
   },
-  macroLabelContainer: {
+  macroTile: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+  },
+  macroTileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING[2],
+    marginBottom: SPACING[2],
   },
-  macroLabel: {
+  macroTileIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  macroTileLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
+    color: TEXT.primary,
   },
-  macroValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: SPACING[1],
-  },
-  macroValue: {
-    fontSize: TYPOGRAPHY.size.xl,
+  macroTileValue: {
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
+    marginBottom: SPACING[2],
   },
-  macroUnit: {
+  macroTileGoal: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
     fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },
-  macroGoal: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.muted,
-  },
-  macroTrack: {
+  macroTileBarTrack: {
     height: 6,
+    borderRadius: RADIUS.sm,
     backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.full,
     overflow: 'hidden',
-    flexDirection: 'row',
   },
-  macroFill: {
+  macroTileBarFill: {
     height: '100%',
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.sm,
   },
 
   // ──────────────────────────────────────────────
   // COMPARISON BARS
   // ──────────────────────────────────────────────
   comparisonContainer: {
-    backgroundColor: SURFACES.card.glass,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[4],
+    ...CARD_SYSTEM.standard,
     gap: SPACING[4],
   },
   comparisonBar: {
@@ -1218,11 +1321,7 @@ const styles = StyleSheet.create({
   // NET CARBS CARD
   // ──────────────────────────────────────────────
   netCarbsCard: {
-    backgroundColor: SURFACES.card.glass,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[4],
-    marginBottom: SPACING[5],
-    borderWidth: 1,
+    ...CARD_SYSTEM.standard,
     borderColor: `${SEMANTIC_ACTIONS.success}1A`,
   },
   netCarbsContent: {
@@ -1253,9 +1352,7 @@ const styles = StyleSheet.create({
   // MICRONUTRIENTS - Compact Table
   // ──────────────────────────────────────────────
   microContainer: {
-    backgroundColor: SURFACES.card.glass,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[3],
+    ...CARD_SYSTEM.compact,
     gap: SPACING[2],
   },
   microRow: {
@@ -1311,9 +1408,7 @@ const styles = StyleSheet.create({
   // METADATA CARD
   // ──────────────────────────────────────────────
   metadataCard: {
-    backgroundColor: SURFACES.card.glass,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[4],
+    ...CARD_SYSTEM.standard,
     marginBottom: SPACING[6],
     gap: SPACING[3],
   },
@@ -1339,26 +1434,43 @@ const styles = StyleSheet.create({
   // ──────────────────────────────────────────────
   actions: {
     flexDirection: 'row',
-    gap: SPACING[3],
     marginBottom: SPACING[3],
   },
   bottomActions: {
     flexDirection: 'row',
     gap: SPACING[3],
   },
-  secondaryButton: {
+  iconActionButton: {
     flex: 1,
+    alignItems: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
+  },
+  iconActionBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${BRAND.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconActionText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
+  },
+  historyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING[2],
     paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
     borderRadius: RADIUS.lg,
-    backgroundColor: SURFACES.background.tertiary,
-    borderWidth: 1,
-    borderColor: BRAND.primary,
+    backgroundColor: `${BRAND.primary}12`,
   },
-  secondaryButtonText: {
+  historyButtonText: {
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
@@ -1368,15 +1480,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    ...SHADOWS.md,
+    shadowColor: '#3D3633',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
   primaryButtonGradient: {
-    paddingVertical: SPACING[3],
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[4],
   },
   primaryButtonText: {
-    fontSize: TYPOGRAPHY.size.md,
+    fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.white,

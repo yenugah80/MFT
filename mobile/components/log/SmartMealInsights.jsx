@@ -35,6 +35,7 @@ import {
   SPACING,
   RADIUS,
   SEMANTIC,
+  CARD_SYSTEM,
 } from '../../constants/premiumTheme';
 
 // Enable LayoutAnimation on Android
@@ -1357,7 +1358,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   insightCard: {
-    borderRadius: RADIUS.md,
+    ...CARD_SYSTEM.compact,
     padding: SPACING[3],
     borderWidth: 1,
   },
@@ -1367,9 +1368,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   insightIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1485,10 +1486,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   improvementsSection: {
+    ...CARD_SYSTEM.compact,
     marginTop: SPACING[4],
     padding: SPACING[3],
     backgroundColor: BRAND.primary + '08',
-    borderRadius: RADIUS.md,
   },
   improvementsTitle: {
     fontSize: 13,
@@ -1522,7 +1523,7 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.primary + '15',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.full,
   },
   improvementImpactText: {
     fontSize: 11,
