@@ -1186,38 +1186,45 @@ const SmartMealInsights = ({
 
   const displayInsights = showAllInsights ? insights : insights.slice(0, compact ? 2 : 3);
 
+  const hasTodaysContext = (showDailyProgress && dailyContext) || weeklyPatterns.length > 0;
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="bulb" size={20} color={BRAND.primary} />
-          <Text style={styles.headerTitle}>Smart Insights</Text>
+    <>
+      {/* ──────────────────────────────────────────── */}
+      {/* SMART INSIGHTS CARD */}
+      {/* ──────────────────────────────────────────── */}
+      <View style={styles.insightsCard}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Ionicons name="bulb" size={20} color={BRAND.primary} />
+            <Text style={styles.headerTitle}>Smart Insights</Text>
+          </View>
+          {insights.length > 3 && (
+            <TouchableOpacity onPress={toggleShowAll}>
+              <Text style={styles.headerAction}>
+                {showAllInsights ? 'Show less' : `+${insights.length - 3} more`}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {insights.length > 3 && (
-          <TouchableOpacity onPress={toggleShowAll}>
-            <Text style={styles.headerAction}>
-              {showAllInsights ? 'Show less' : `+${insights.length - 3} more`}
-            </Text>
-          </TouchableOpacity>
-        )}
+
+        <View style={styles.insightsList}>
+          {displayInsights.map((insight, index) => (
+            <InsightCard
+              key={`${insight.category}-${index}`}
+              insight={insight}
+              isExpanded={expandedInsight === index}
+              onToggle={() => toggleInsight(index)}
+            />
+          ))}
+        </View>
       </View>
 
-      {/* Insights List */}
-      <View style={styles.insightsList}>
-        {displayInsights.map((insight, index) => (
-          <InsightCard
-            key={`${insight.category}-${index}`}
-            insight={insight}
-            isExpanded={expandedInsight === index}
-            onToggle={() => toggleInsight(index)}
-          />
-        ))}
-      </View>
-
-      {/* Meal Score Breakdown */}
+      {/* ──────────────────────────────────────────── */}
+      {/* MEAL SCORE BREAKDOWN CARD */}
+      {/* ──────────────────────────────────────────── */}
       {showScoreBreakdown && (
-        <View style={styles.scoreSection}>
+        <View style={styles.scoreCard}>
           <TouchableOpacity style={styles.scoreSectionHeader} onPress={toggleBreakdown}>
             <View style={styles.scoreHeaderLeft}>
               <View style={styles.scoreCircle}>
@@ -1248,7 +1255,9 @@ const SmartMealInsights = ({
         </View>
       )}
 
-      {/* Improvement Suggestions */}
+      {/* ──────────────────────────────────────────── */}
+      {/* QUICK IMPROVEMENTS CARD */}
+      {/* ──────────────────────────────────────────── */}
       {showImprovements && improvements.length > 0 && (
         <View style={styles.improvementsSection}>
           <Text style={styles.improvementsTitle}>
@@ -1271,21 +1280,27 @@ const SmartMealInsights = ({
         </View>
       )}
 
-      {/* Daily Progress Bar */}
-      {showDailyProgress && dailyContext && (
-        <DailyProgressBar dailyContext={dailyContext} />
-      )}
-
-      {/* Weekly Pattern Recognition */}
-      {weeklyPatterns.length > 0 && (
-        <View style={styles.patternsSection}>
-          {weeklyPatterns.map((pattern, idx) => (
-            <WeeklyPatternBadge key={idx} pattern={pattern} />
-          ))}
+      {/* ──────────────────────────────────────────── */}
+      {/* TODAY'S CONTEXT CARD - daily progress + weekly patterns */}
+      {/* ──────────────────────────────────────────── */}
+      {hasTodaysContext && (
+        <View style={styles.todaysContextCard}>
+          {showDailyProgress && dailyContext && (
+            <DailyProgressBar dailyContext={dailyContext} />
+          )}
+          {weeklyPatterns.length > 0 && (
+            <View style={styles.patternsSection}>
+              {weeklyPatterns.map((pattern, idx) => (
+                <WeeklyPatternBadge key={idx} pattern={pattern} />
+              ))}
+            </View>
+          )}
         </View>
       )}
 
-      {/* Meal Pairing Suggestions */}
+      {/* ──────────────────────────────────────────── */}
+      {/* PAIR WITH CARD */}
+      {/* ──────────────────────────────────────────── */}
       {showPairings && mealPairings.length > 0 && (
         <View style={styles.pairingsSection}>
           <TouchableOpacity
@@ -1316,7 +1331,7 @@ const SmartMealInsights = ({
           )}
         </View>
       )}
-    </View>
+    </>
   );
 };
 
@@ -1325,13 +1340,8 @@ const SmartMealInsights = ({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.lg,
-    padding: SPACING[4],
-    marginBottom: SPACING[4],
-    borderWidth: 1,
-    borderColor: SURFACES.card.border,
+  insightsCard: {
+    ...CARD_SYSTEM.standard,
   },
   header: {
     flexDirection: 'row',
@@ -1400,11 +1410,8 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
     fontStyle: 'italic',
   },
-  scoreSection: {
-    marginTop: SPACING[4],
-    paddingTop: SPACING[4],
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
+  scoreCard: {
+    ...CARD_SYSTEM.compact,
   },
   scoreSectionHeader: {
     flexDirection: 'row',
@@ -1487,7 +1494,6 @@ const styles = StyleSheet.create({
   },
   improvementsSection: {
     ...CARD_SYSTEM.compact,
-    marginTop: SPACING[4],
     padding: SPACING[3],
     backgroundColor: BRAND.primary + '08',
   },
@@ -1568,11 +1574,13 @@ const styles = StyleSheet.create({
   // ═══════════════════════════════════════════════════════════════════════════
   // NEW STYLES: Daily Progress Bar
   // ═══════════════════════════════════════════════════════════════════════════
+  todaysContextCard: {
+    ...CARD_SYSTEM.compact,
+    gap: SPACING[3],
+  },
   dailyProgressContainer: {
-    marginTop: SPACING[4],
-    padding: SPACING[3],
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.md,
+    // No own background/border here — this now lives inside
+    // todaysContextCard, which already provides the card boundary.
   },
   dailyProgressHeader: {
     flexDirection: 'row',
@@ -1610,7 +1618,6 @@ const styles = StyleSheet.create({
   // NEW STYLES: Weekly Patterns
   // ═══════════════════════════════════════════════════════════════════════════
   patternsSection: {
-    marginTop: SPACING[3],
     gap: 8,
   },
   patternBadge: {
@@ -1631,10 +1638,7 @@ const styles = StyleSheet.create({
   // NEW STYLES: Meal Pairings
   // ═══════════════════════════════════════════════════════════════════════════
   pairingsSection: {
-    marginTop: SPACING[4],
-    paddingTop: SPACING[3],
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
+    ...CARD_SYSTEM.standard,
   },
   pairingsSectionHeader: {
     flexDirection: 'row',
