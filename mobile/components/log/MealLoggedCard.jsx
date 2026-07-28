@@ -25,6 +25,9 @@ import {
   TouchableOpacity,
   ScrollView,
   InteractionManager,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -32,9 +35,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
 
-import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SURFACES, NUTRISCORE, SEMANTIC_ACTIONS, CARD_SYSTEM } from '../../constants/premiumTheme';
+import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS, CARD_SYSTEM } from '../../constants/premiumTheme';
 import { MODERN_MACROS, BOLD_GRADIENTS } from '../../constants/modernColorPalette';
-import { NutriScoreGlow, HealthScoreBadge } from '../NutriScoreBadge';
+import { NutriScoreTag, HealthScoreBadge } from '../NutriScoreBadge';
 import { SuccessCheckmark } from '../analytics/CelebrationAnimation';
 
 // Smart Insights Components
@@ -44,6 +47,12 @@ import MealComparisonCard from './MealComparisonCard';
 
 // Data Hooks
 import { useHistoricalMealData, formatHistoricalDataForComparison } from '../../hooks/useHistoricalMealData';
+
+// Enable LayoutAnimation for Android (same incantation as
+// NutritionDetailsSection.jsx's expand/collapse)
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // ============================================================================
 // HELPER FUNCTIONS - Tufte-inspired Data Formatting
@@ -416,7 +425,13 @@ export default function MealLoggedCard({
   // Defer animated child components to prevent bridge overflow
   const [animatedComponentsReady, setAnimatedComponentsReady] = useState(false);
   const [showAllMicros, setShowAllMicros] = useState(false);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const interactionRef = useRef(null);
+
+  const toggleMoreDetails = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowMoreDetails((prev) => !prev);
+  };
 
   // Fetch real historical data for meal comparisons
   const { data: historyStats, isError: historyError, isLoading: historyLoading } = useHistoricalMealData({
@@ -501,6 +516,9 @@ export default function MealLoggedCard({
   const displayedMicros = showAllMicros ? allMicros : allMicros.slice(0, 6);
   const hasMoreMicros = allMicros.length > 6;
 
+  // The Metadata block (portion/source) always renders unconditionally, so
+  // "More Details" always has at least that — the toggle is never empty.
+
   return (
     <Animated.View
       style={[
@@ -570,90 +588,30 @@ export default function MealLoggedCard({
         </View>
 
         {/* ──────────────────────────────────────────── */}
-        {/* HEALTH METRICS - NutriScore & Health Score */}
+        {/* AT A GLANCE - Score chips (replaces the old standalone */}
+        {/* Health Metrics card - same data, denser presentation) */}
         {/* ──────────────────────────────────────────── */}
         {(meal.nutriScore || meal.healthScore) && (
-          <View style={styles.healthMetricsCard}>
-            {meal.nutriScore && (
-              <View style={styles.nutriScoreSection}>
-                <NutriScoreGlow grade={meal.nutriScore} size="lg" />
-                <View style={styles.nutriScoreInfo}>
-                  <Text style={styles.nutriScoreLabel}>Nutrition Grade</Text>
-                  <Text style={[styles.nutriScoreGrade, { color: NUTRISCORE[meal.nutriScore]?.text || TEXT.primary }]}>
-                    Grade {meal.nutriScore}
-                  </Text>
-                </View>
-              </View>
-            )}
-
+          <View style={styles.scoreChipRow}>
+            {meal.nutriScore && <NutriScoreTag grade={meal.nutriScore} />}
             {meal.healthScore !== null && meal.healthScore !== undefined && (
-              <View style={styles.healthScoreSection}>
-                <HealthScoreBadge score={meal.healthScore} size="lg" />
-                <View style={styles.healthScoreInfo}>
-                  <Text style={styles.healthScoreLabel}>Health Score</Text>
-                  <Text style={styles.healthScoreValue}>{meal.healthScore}/100</Text>
+              <View style={styles.healthChip}>
+                <HealthScoreBadge score={meal.healthScore} size="sm" />
+                <View>
+                  <Text style={styles.healthChipLabel}>Health Score</Text>
+                  <Text style={styles.healthChipValue}>{meal.healthScore}/100</Text>
                 </View>
               </View>
-            )}
-
-            {meal.healthAnalysis && (
-              <Text style={styles.healthAnalysis}>{meal.healthAnalysis}</Text>
             )}
           </View>
         )}
+        {meal.healthAnalysis && (
+          <Text style={styles.healthAnalysisInline}>{meal.healthAnalysis}</Text>
+        )}
 
         {/* ──────────────────────────────────────────── */}
-        {/* SMART INSIGHTS - AI-Powered Analysis */}
-        {/* ──────────────────────────────────────────── */}
-        <SmartMealInsights
-          meal={{
-            macros: {
-              calories_kcal: meal.calories,
-              protein_g: meal.protein,
-              carbs_g: meal.carbs,
-              fat_g: meal.fat,
-              fiber_g: meal.fiber,
-              sugar_g: meal.sugar,
-              sodium_mg: meal.sodium,
-            },
-            name: meal.foodName || meal.name,
-            healthScore: meal.healthScore,
-            nutriScore: meal.nutriScore,
-            micros: meal.micros,
-          }}
-          userGoals={dailyGoals}
-          historicalData={historicalData}
-          dailyTotals={dailyTotals}
-          showScoreBreakdown={false}
-          showImprovements={true}
-          showDailyProgress={!!dailyGoals?.dailyCalories}
-          showPairings={true}
-          isLoading={historyLoading}
-        />
-
-        {/* NOTE: NutrientDensityCard removed - redundant with Health Metrics above */}
-
-        {/* ──────────────────────────────────────────── */}
-        {/* MEAL COMPARISON - Historical Context */}
-        {/* ──────────────────────────────────────────── */}
-        <MealComparisonCard
-          meal={{
-            macros: {
-              calories_kcal: meal.calories,
-              protein_g: meal.protein,
-              carbs_g: meal.carbs,
-              fat_g: meal.fat,
-              fiber_g: meal.fiber,
-            },
-          }}
-          mealType={meal.mealType}
-          historicalData={historicalData}
-          showTrend={true}
-          isLoading={historyLoading}
-        />
-
-        {/* ──────────────────────────────────────────── */}
-        {/* SECONDARY DATA - Macronutrients */}
+        {/* SECONDARY DATA - Macronutrients (moved up next to the */}
+        {/* hero card so "your meal's numbers" reads as one zone) */}
         {/* ──────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Macronutrients</Text>
@@ -741,8 +699,77 @@ export default function MealLoggedCard({
         </View>
 
         {/* ──────────────────────────────────────────── */}
-        {/* IMPACT ON YOUR DAY - Comparison View */}
+        {/* SMART INSIGHTS - AI-Powered Analysis */}
         {/* ──────────────────────────────────────────── */}
+        <SmartMealInsights
+          meal={{
+            macros: {
+              calories_kcal: meal.calories,
+              protein_g: meal.protein,
+              carbs_g: meal.carbs,
+              fat_g: meal.fat,
+              fiber_g: meal.fiber,
+              sugar_g: meal.sugar,
+              sodium_mg: meal.sodium,
+            },
+            name: meal.foodName || meal.name,
+            healthScore: meal.healthScore,
+            nutriScore: meal.nutriScore,
+            micros: meal.micros,
+          }}
+          userGoals={dailyGoals}
+          historicalData={historicalData}
+          dailyTotals={dailyTotals}
+          showScoreBreakdown={false}
+          showImprovements={true}
+          showDailyProgress={!!dailyGoals?.dailyCalories}
+          showPairings={true}
+          isLoading={historyLoading}
+        />
+
+        {/* NOTE: NutrientDensityCard removed - redundant with Health Metrics above */}
+
+        {/* ──────────────────────────────────────────── */}
+        {/* MEAL COMPARISON - Historical Context */}
+        {/* ──────────────────────────────────────────── */}
+        <MealComparisonCard
+          meal={{
+            macros: {
+              calories_kcal: meal.calories,
+              protein_g: meal.protein,
+              carbs_g: meal.carbs,
+              fat_g: meal.fat,
+              fiber_g: meal.fiber,
+            },
+          }}
+          mealType={meal.mealType}
+          historicalData={historicalData}
+          showTrend={true}
+          isLoading={historyLoading}
+        />
+
+        {/* ──────────────────────────────────────────── */}
+        {/* MORE DETAILS - collapsed by default; contains Impact on */}
+        {/* Your Day, Net Carbs, Micronutrients, Metadata unchanged */}
+        {/* ──────────────────────────────────────────── */}
+        <TouchableOpacity
+          style={styles.moreDetailsToggle}
+          onPress={toggleMoreDetails}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="options-outline" size={18} color={TEXT.secondary} />
+          <Text style={styles.moreDetailsToggleText}>
+            {showMoreDetails ? 'Hide Details' : 'More Details'}
+          </Text>
+          <Ionicons
+            name={showMoreDetails ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={TEXT.tertiary}
+          />
+        </TouchableOpacity>
+
+        {showMoreDetails && (
+          <>
         {dailyTotals && dailyGoals && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Impact on Your Day</Text>
@@ -920,6 +947,8 @@ export default function MealLoggedCard({
             </View>
           )}
         </View>
+          </>
+        )}
 
         {/* ──────────────────────────────────────────── */}
         {/* ACTIONS */}
@@ -1122,66 +1151,60 @@ const styles = StyleSheet.create({
   },
 
   // ──────────────────────────────────────────────
-  // HEALTH METRICS CARD
+  // SCORE CHIP ROW - denser replacement for the old
+  // standalone Health Metrics card
   // ──────────────────────────────────────────────
-  healthMetricsCard: {
-    ...CARD_SYSTEM.standard,
-  },
-  nutriScoreSection: {
+  scoreChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[4],
-    marginBottom: SPACING[4],
-    paddingBottom: SPACING[4],
-    borderBottomWidth: 1,
-    borderBottomColor: `${SEMANTIC_ACTIONS.success}1A`,
+    flexWrap: 'wrap',
+    gap: SPACING[2],
+    marginBottom: SPACING[2],
   },
-  nutriScoreInfo: {
-    flex: 1,
-  },
-  nutriScoreLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.tertiary,
-    marginBottom: SPACING[1],
-  },
-  nutriScoreGrade: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-  healthScoreSection: {
+  healthChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[4],
-    marginBottom: SPACING[3],
+    gap: SPACING[2],
+    paddingVertical: SPACING[1],
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.lg,
+    backgroundColor: SURFACES.background.tertiary,
   },
-  healthScoreInfo: {
-    flex: 1,
-  },
-  healthScoreLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    fontFamily: TYPOGRAPHY.family.medium,
+  healthChipLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
-    marginBottom: SPACING[1],
   },
-  healthScoreValue: {
-    fontSize: TYPOGRAPHY.size.xl,
+  healthChipValue: {
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
-  healthAnalysis: {
+  healthAnalysisInline: {
     fontSize: TYPOGRAPHY.size.sm,
     fontStyle: 'italic',
     color: TEXT.secondary,
-    textAlign: 'center',
-    marginTop: SPACING[3],
-    paddingTop: SPACING[3],
-    borderTopWidth: 1,
-    borderTopColor: `${SEMANTIC_ACTIONS.success}1A`,
+    marginBottom: SPACING[4],
+  },
+
+  // ──────────────────────────────────────────────
+  // MORE DETAILS TOGGLE
+  // ──────────────────────────────────────────────
+  moreDetailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[3],
+    marginBottom: SPACING[4],
+    borderRadius: RADIUS.lg,
+    backgroundColor: SURFACES.background.tertiary,
+  },
+  moreDetailsToggleText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
   },
 
   // ──────────────────────────────────────────────
