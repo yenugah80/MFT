@@ -220,11 +220,6 @@ export default function HydrationAnalyticsScreen() {
     router.push('/(tabs)/log?focus=hydration');
   }, [router]);
 
-  const handleEnergyInsights = useCallback(() => {
-    Haptics.selectionAsync();
-    router.push('/insights/hydration-cognition');
-  }, [router]);
-
   return (
     <View style={styles.screen}>
       {/* Header */}
@@ -460,6 +455,18 @@ export default function HydrationAnalyticsScreen() {
                     Shares are of hydration counted, not raw volume — coffee and tea are
                     already discounted by their hydration factor.
                   </Text>
+
+                  {/* Ported from the old Hydration & Energy screen, which was
+                      otherwise a duplicate of this one. */}
+                  {(patterns?.coffeeToWaterRatio || 0) > 0.3 && (
+                    <View style={styles.caffeineNote}>
+                      <Ionicons name="cafe-outline" size={16} color="#B45309" />
+                      <Text style={styles.caffeineNoteText}>
+                        Your caffeine intake is high relative to water — this can affect
+                        focus later in the day.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -518,9 +525,13 @@ export default function HydrationAnalyticsScreen() {
                   <Text style={styles.predictionValue}>
                     {(prediction.predictedNeedLiters || 0).toFixed(1)}L
                   </Text>
+                  {/* Deliberately does not restate a daily average — the
+                      prediction uses a 14-day window while the stat tile above
+                      uses the selected range, and showing both put two
+                      different "typical day" numbers on one screen. */}
                   <Text style={styles.predictionCaption}>
-                    Based on your {formatVolume((prediction.typicalIntakeLiters || 0) * 1000)}{' '}
-                    typical day and your {(prediction.baseGoalLiters || 2).toFixed(1)}L goal.
+                    Your {(prediction.baseGoalLiters || 2).toFixed(1)}L goal, raised when
+                    your recent intake trends above it.
                   </Text>
                   {(prediction.factors || []).map((factor, index) => (
                     <View key={factor.type || index} style={styles.factorRow}>
@@ -531,23 +542,6 @@ export default function HydrationAnalyticsScreen() {
                 </View>
               )}
 
-              {/* DEEP DIVE LINK */}
-              <TouchableOpacity
-                style={styles.linkCard}
-                onPress={handleEnergyInsights}
-                activeOpacity={0.7}
-              >
-                <View style={styles.linkIcon}>
-                  <Ionicons name="flash-outline" size={18} color={HYDRATION_BLUE} />
-                </View>
-                <View style={styles.linkTextBlock}>
-                  <Text style={styles.linkTitle}>Hydration & Energy</Text>
-                  <Text style={styles.linkSubtitle}>
-                    How your water intake tracks with focus and mood
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-              </TouchableOpacity>
             </>
           )}
 
@@ -901,6 +895,21 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
+  caffeineNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[2],
+    marginTop: SPACING[3],
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    backgroundColor: '#FEF6E7',
+  },
+  caffeineNoteText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.xs,
+    lineHeight: 17,
+    color: '#7C4A03',
+  },
   beverageValue: {
     width: 38,
     textAlign: 'right',
@@ -1013,13 +1022,6 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
   },
 
-  // Link card
-  linkCard: {
-    ...CARD_SYSTEM.standard,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
   linkIcon: {
     width: 36,
     height: 36,
@@ -1027,19 +1029,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: `${HYDRATION_BLUE}12`,
-  },
-  linkTextBlock: {
-    flex: 1,
-  },
-  linkTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  linkSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 1,
   },
 
   // Empty

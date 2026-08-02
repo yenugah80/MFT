@@ -32,11 +32,6 @@ import {
 export default function HydrationTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
   const router = useRouter();
 
-  const handleViewInsights = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/hydration-cognition');
-  };
-
   const handleViewFullAnalytics = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/analytics/hydration');
@@ -266,12 +261,6 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
         </View>
       )}
 
-      <TouchableOpacity style={styles.patternsLink} onPress={handleViewInsights} activeOpacity={0.7}>
-        <Ionicons name="water-outline" size={18} color={TEXT.primary} />
-        <Text style={styles.patternsLinkText}>See Hydration & Energy Insights</Text>
-        <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-      </TouchableOpacity>
-
       <View style={styles.bottomPadding} />
     </ScrollView>
   );
@@ -360,19 +349,6 @@ const styles = StyleSheet.create({
   card: {
     ...CARD_SYSTEM.standard,
     marginBottom: SPACING[4],
-  },
-  patternsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    ...CARD_SYSTEM.standard,
-  },
-  patternsLinkText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
   },
   cardTitle: {
     fontSize: TYPOGRAPHY.size.md,

@@ -52,7 +52,7 @@ export default function HydrationCognitionCard({
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/hydration-cognition');
+    router.push('/analytics/hydration');
   };
 
   // Empty state
