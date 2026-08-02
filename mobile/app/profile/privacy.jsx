@@ -6,17 +6,24 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, VIBRANT_WELLNESS } from "../../constants/premiumTheme";
+import { useQueryClient } from "@tanstack/react-query";
+import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, SEMANTIC } from "../../constants/premiumTheme";
 import apiClient from "../../services/apiClient";
+import { deleteAccountAndPurgeDevice } from "../../services/accountDeletion";
 import { useAuth } from "@clerk/clerk-expo";
-import { HAS_SIGNED_IN_KEY } from "../(auth)/sign-in";
 
 export default function PrivacyScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const queryClient = useQueryClient();
   const [shareInsights, setShareInsights] = useState(false);
   const [analytics, setAnalytics] = useState(true);
+  // The Biometric lock switch was removed: it persisted a flag that nothing
+  // ever read — `expo-local-authentication` isn't installed and no code gates
+  // the app on it. Shipping a security control that does nothing is worse than
+  // not offering one. The state is kept purely so the stored value round-trips
+  // unchanged instead of being wiped on the next privacy save; restore the UI
+  // here once the feature is genuinely implemented.
   const [biometricLock, setBiometricLock] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,9 +122,9 @@ export default function PrivacyScreen() {
   const confirmDeleteAccount = async () => {
     setIsDeleting(true);
     try {
-      await apiClient.delete("/profile/delete-account");
-      await AsyncStorage.removeItem(HAS_SIGNED_IN_KEY);
-      await signOut();
+      // Deletes the account and Clerk identity server-side, purges every local
+      // cache, and ends the session. Only a server-side failure throws.
+      await deleteAccountAndPurgeDevice({ signOut, queryClient });
       router.replace("/(auth)/sign-in");
     } catch (error) {
       console.error("[PrivacyScreen] Delete account failed", error);
@@ -214,27 +221,6 @@ export default function PrivacyScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Security</Text>
-
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Biometric lock</Text>
-              <Text style={styles.rowSubtitle}>Require Face ID / Touch ID to open the app</Text>
-            </View>
-            <Switch
-              value={biometricLock}
-              onValueChange={(value) =>
-                persistPrivacy({
-                  shareInsights,
-                  analytics,
-                  biometricLock: value,
-                })
-              }
-              disabled={isSaving}
-            />
-          </View>
-        </View>
 
         {/* GDPR Data Rights */}
         <View style={styles.card}>
@@ -245,8 +231,8 @@ export default function PrivacyScreen() {
             onPress={handleExportData}
             disabled={isExporting}
           >
-            <View style={[styles.iconCircle, { backgroundColor: VIBRANT_WELLNESS.success.subtle }]}>
-              <Ionicons name="download-outline" size={18} color={VIBRANT_WELLNESS.success.base} />
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.success.bg }]}>
+              <Ionicons name="download-outline" size={18} color={SEMANTIC.success.base} />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Download My Data</Text>
@@ -264,15 +250,15 @@ export default function PrivacyScreen() {
             onPress={handleDeleteAccount}
             disabled={isDeleting}
           >
-            <View style={[styles.iconCircle, { backgroundColor: VIBRANT_WELLNESS.danger.subtle }]}>
-              <Ionicons name="trash-outline" size={18} color={VIBRANT_WELLNESS.danger.base} />
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.danger.bg }]}>
+              <Ionicons name="trash-outline" size={18} color={SEMANTIC.danger.base} />
             </View>
             <View style={styles.rowText}>
-              <Text style={[styles.rowTitle, { color: VIBRANT_WELLNESS.danger.base }]}>Delete Account</Text>
+              <Text style={[styles.rowTitle, { color: SEMANTIC.danger.base }]}>Delete Account</Text>
               <Text style={styles.rowSubtitle}>Permanently remove all your data</Text>
             </View>
             {isDeleting ? (
-              <ActivityIndicator size="small" color={VIBRANT_WELLNESS.danger.base} />
+              <ActivityIndicator size="small" color={SEMANTIC.danger.base} />
             ) : (
               <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
             )}

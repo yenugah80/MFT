@@ -8,7 +8,6 @@ export default function ProfileLayout() {
         animation: "slide_from_right",
       }}
     >
-      <Stack.Screen name="account" />
       <Stack.Screen name="body" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="preferences" />

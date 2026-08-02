@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { getAuth } from "@clerk/express";
+import { getAuth, clerkClient } from "@clerk/express";
 import {
   profilesTable,
   dietaryPreferencesTable,
@@ -1325,47 +1325,78 @@ export async function exportUserData(req, res) {
   }
 }
 
-// --- GDPR Account Deletion ---
+// --- GDPR Account Deletion / App Store Guideline 5.1.1(v) ---
+//
+// Deleting an account has TWO halves and both must complete:
+//   1. Application data — the `profiles` row, which cascades to every child table.
+//   2. Identity — the Clerk user. Without this the person can sign straight back
+//      in, which reads as "account not deleted" to an App Review tester and is a
+//      Guideline 5.1.1(v) rejection.
+//
+// Ordering is deliberate: data first, identity second. If we killed the Clerk user
+// first and the database delete then failed, the caller could never re-authenticate
+// to retry, stranding their personal data permanently. Data-first means a failure
+// leaves an account that can still call this endpoint again.
+//
+// Every step is idempotent so the client can safely retry: a retry that finds no
+// profile row still goes on to remove the Clerk user, and a Clerk user that is
+// already gone is treated as success.
 export async function deleteAccount(req, res) {
+  const { userId } = getAuth(req);
+
   try {
-    const { userId } = getAuth(req);
     console.log(`[deleteAccount] ⚠️ Deleting account for user ${userId}`);
 
-    // Check if profile exists
-    const [profile] = await req.db
-      .select({ id: profilesTable.id })
-      .from(profilesTable)
-      .where(eq(profilesTable.userId, userId));
+    // Step 1 — application data. Cascades to account_settings, dietary_preferences,
+    // nutrition_goals, gamification, food_log, water_log, mood_log, activity_log and
+    // every other table whose user_id references profiles.user_id ON DELETE CASCADE.
+    // A missing profile is NOT an error here: it means a previous attempt already got
+    // this far and we still owe the caller the identity delete below.
+    const deletedProfiles = await req.db
+      .delete(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .returning({ id: profilesTable.id });
 
-    if (!profile) {
-      return res.status(404).json({
-        error: "Profile not found",
-        message: "No account found to delete"
-      });
+    if (deletedProfiles.length === 0) {
+      console.warn(`[deleteAccount] No profile row for ${userId} — continuing to identity deletion (retry path)`);
     }
 
-    // Delete profile - cascade will delete all related data
-    // Tables with onDelete: "cascade" will automatically be cleaned up:
-    // - account_settings
-    // - dietary_preferences
-    // - nutrition_goals
-    // - gamification
-    // - food_log
-    // - water_log
-    // - mood_log
-    // - activity_log
-    await req.db
-      .delete(profilesTable)
-      .where(eq(profilesTable.userId, userId));
+    // Step 2 — identity. This is what actually prevents the account from working again.
+    await deleteClerkUser(userId);
 
-    console.log(`[deleteAccount] ✅ Account deleted for user ${userId}`);
+    console.log(`[deleteAccount] ✅ Account and identity deleted for user ${userId}`);
     res.status(200).json({
       success: true,
       message: "Account and all associated data have been permanently deleted",
       deletedAt: new Date().toISOString()
     });
   } catch (error) {
-    console.error("[deleteAccount] ❌ Error deleting account:", error);
+    // Loud, greppable log: if we get here after the profile delete succeeded, the
+    // user's data is gone but their login still works. They can retry, but this
+    // needs to be visible in Railway logs for manual reconciliation.
+    console.error(`[deleteAccount] ❌ CRITICAL: account deletion incomplete for user ${userId}:`, error);
     sendDevError(res, error);
+  }
+}
+
+/**
+ * Permanently removes the Clerk user. Idempotent — a user that is already gone
+ * resolves successfully so the client's retry path terminates.
+ */
+async function deleteClerkUser(userId) {
+  if (!process.env.CLERK_SECRET_KEY) {
+    // Fail loudly rather than silently leaving a working login behind.
+    throw new Error("CLERK_SECRET_KEY is not configured — cannot delete the user's identity");
+  }
+
+  try {
+    await clerkClient.users.deleteUser(userId);
+    console.log(`[deleteAccount] ✅ Clerk user ${userId} deleted`);
+  } catch (error) {
+    if (error?.status === 404 || error?.errors?.[0]?.code === "resource_not_found") {
+      console.log(`[deleteAccount] Clerk user ${userId} already absent — treating as deleted`);
+      return;
+    }
+    throw error;
   }
 }
