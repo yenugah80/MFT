@@ -538,6 +538,15 @@ export default function MealLoggedCard({
         {/* HEADER - Success Confirmation */}
         {/* ──────────────────────────────────────────── */}
         <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={22} color={TEXT.secondary} />
+          </TouchableOpacity>
           <View style={styles.successBadge}>
             <SuccessCheckmark visible size={64} color={SEMANTIC.success.base} />
           </View>
@@ -1029,6 +1038,19 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: SPACING[6],
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: SURFACES.background.tertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
   },
   successBadge: {
     marginBottom: SPACING[3],

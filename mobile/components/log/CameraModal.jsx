@@ -37,6 +37,7 @@ import {
   Platform,
   Alert,
   Animated,
+  Linking,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -232,7 +233,12 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
   // Request permissions on mount
   // ─────────────────────────────────────────────
   useEffect(() => {
-    if (visible && permission && !permission.granted) {
+    // Only auto-request while status is 'undetermined' (first open, no choice
+    // made yet) — never re-request after an explicit denial. The OS won't
+    // re-prompt once denied anyway, and `permission` getting a new object
+    // reference each resolution (even with an unchanged status) would otherwise
+    // make this effect fire again indefinitely since it's a dependency.
+    if (visible && permission?.status === 'undetermined') {
       requestPermission();
     }
   }, [visible, permission, requestPermission]);
@@ -270,6 +276,7 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
     if (!cameraRef.current) return;
 
     try {
+      setError(null);
       await triggerHaptic();
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
@@ -286,7 +293,11 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
 
   const handleRetake = async () => {
     await triggerHaptic();
+    // Retaking discards the photo the voice note was describing — carrying it
+    // over would attach a stale description to an unrelated new photo.
+    if (isRecordingVoice) cancelVoiceRecording();
     setCapturedPhoto(null);
+    setVoiceTranscript(null);
     setError(null);
   };
 
@@ -440,15 +451,18 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
           <Text style={styles.permissionHint}>
             Enable camera access in settings to take photos of your meals
           </Text>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <TouchableOpacity style={styles.closeButton} onPress={() => Linking.openSettings()}>
             <LinearGradient
               colors={SURFACES.gradient.primary}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.closeButtonGradient}
             >
-              <Text style={styles.closeButtonText}>Close</Text>
+              <Text style={styles.closeButtonText}>Open Settings</Text>
             </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dismissLink} onPress={handleClose}>
+            <Text style={styles.dismissLinkText}>Not Now</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -503,6 +517,15 @@ export default function CameraModal({ visible, onClose, onPhotoTaken }) {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Capture Error - previously only shown in Preview, so a failed
+                  capture (camera stays on live view) gave zero feedback */}
+              {error && (
+                <View style={styles.captureErrorBanner}>
+                  <Ionicons name="warning" size={ICON_SIZES.sm} color={TEXT.white} />
+                  <Text style={styles.errorBannerText}>{error}</Text>
+                </View>
+              )}
 
               {/* Grid Overlay */}
               {showGrid && (
@@ -728,6 +751,15 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
   },
+  dismissLink: {
+    marginTop: SPACING[4],
+    padding: SPACING[2],
+  },
+  dismissLinkText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.tertiary,
+  },
 
   // ─────────────────────────────────────────────
   // CAMERA VIEW
@@ -941,6 +973,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[4],
     marginHorizontal: SPACING[5],
     borderRadius: RADIUS.md,
+  },
+  captureErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    backgroundColor: SEMANTIC.danger.base,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    marginHorizontal: SPACING[5],
+    marginTop: SPACING[3],
+    borderRadius: RADIUS.md,
+    zIndex: 10,
   },
   errorBannerText: {
     fontSize: TYPOGRAPHY.size.sm,

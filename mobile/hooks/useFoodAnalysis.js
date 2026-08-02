@@ -1369,11 +1369,51 @@ export function useFoodAnalysis() {
 
       setProgress(95);
 
-      return buildFoodLog({
+      const foodLog = buildFoodLog({
         inputText: text,
         source: 'ai',
         raw: json.data || json,
       });
+
+      // This branch used to `return` without ever writing to shared analysisResult
+      // state — any caller that (like every other analyze* method) relies on the
+      // hook's shared state rather than the return value would see nothing, with
+      // no error surfaced. Populate it here too so this stays safe regardless of
+      // how the caller consumes it.
+      const aiItem = {
+        itemId: `${foodLog.foodName}-${Date.now()}`,
+        name: foodLog.foodName,
+        portion: {
+          amount: parseFloat(foodLog.servingSize?.match(/(\d+(\.\d+)?)/)?.[1] || 1),
+          unit: foodLog.servingSize?.match(/[a-zA-Z]+/)?.[0] || null,
+          gramsEquivalent: convertToGrams(
+            parseFloat(foodLog.servingSize?.match(/(\d+(\.\d+)?)/)?.[1] || 1),
+            foodLog.servingSize?.match(/[a-zA-Z]+/)?.[0] || 'g'
+          ),
+          servingText: foodLog.servingSize,
+        },
+        macros: {
+          calories_kcal: foodLog.calories ?? null,
+          protein_g: foodLog.protein ?? null,
+          carbs_g: foodLog.carbs ?? null,
+          fat_g: foodLog.fat ?? null,
+          fiber_g: foodLog.fiber ?? null,
+          sugar_g: foodLog.sugar ?? null,
+          sodium_mg: foodLog.micros?.sodium?.value || 0,
+        },
+        micros: foodLog.micros || {},
+        netCarbs: foodLog.netCarbs,
+        sourceEvidence: [{ source: 'AI', confidence: 0.7 }],
+        isEditing: false,
+        editedPortion: null,
+      };
+
+      _setResultInternal({
+        items: [aiItem],
+        totals: calculateTotals([aiItem]),
+      });
+
+      return foodLog;
     } catch (err) {
       const errorMsg = err.message || 'Analysis failed. Please try again.';
       setError(errorMsg);

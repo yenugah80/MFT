@@ -1086,6 +1086,11 @@ export default function LogScreen() {
           setShowCameraModal={setShowCameraModal}
           setShowBarcodeScannerModal={setShowBarcodeScannerModal}
           setShowVoiceModal={setShowVoiceModal}
+          // Only when there is genuinely no path to a transcript. An absent
+          // on-device recogniser no longer qualifies: the hook keeps recording
+          // and transcribes server-side instead, so voice still works. Only a
+          // missing native module leaves nothing to record with.
+          voiceUnavailable={voiceHook.isVoiceModuleMissing}
           handlePhotoFromLibrary={handlePhotoFromLibrary}
           onSelectRecentFood={handleSelectRecentFood}
           onQuickAdd={handleQuickAddRecent}
@@ -1425,6 +1430,9 @@ export default function LogScreen() {
   );
 }
 
+// Shared height for the three photo-mode action buttons so they stack evenly.
+const PHOTO_ACTION_HEIGHT = 60;
+
 /* Premium Modern Styles - 3D Icons & Gradients */
 const styles = StyleSheet.create({
   container: {
@@ -1607,10 +1615,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: TYPOGRAPHY.family.regular,
   },
+  textInputWrapper: {
+    position: 'relative',
+  },
   textInputLarge: {
     backgroundColor: '#F3F4F6',
     borderRadius: 14,
     padding: 18,
+    paddingRight: 46,
     fontSize: 16,
     color: '#1F2937',
     minHeight: 140,
@@ -1624,6 +1636,17 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
     fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  inputClearButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: SURFACES.background.tertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textInputFocused: {
     borderColor: '#6B4EFF',
@@ -1709,24 +1732,6 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
   },
 
-  /* Clear Button */
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#DC2626',
-    fontFamily: TYPOGRAPHY.family.semibold,
-  },
   analyzeButton: {
     marginTop: 12,
     borderRadius: 12,
@@ -1804,7 +1809,8 @@ const styles = StyleSheet.create({
   photoEmptyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 40,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -1813,49 +1819,52 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   photoIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   photoEmptyTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 10,
+    marginBottom: 4,
     fontFamily: TYPOGRAPHY.family.bold,
   },
   photoEmptySubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 28,
-    lineHeight: 22,
+    marginBottom: 18,
+    lineHeight: 20,
     fontFamily: TYPOGRAPHY.family.regular,
   },
   photoActions: {
     width: '100%',
-    gap: 12,
+    gap: 10,
   },
   photoPrimaryCard: {
     borderRadius: 16,
     overflow: 'hidden',
   },
+  // Primary and secondary actions share PHOTO_ACTION_HEIGHT so the three
+  // buttons form an even stack regardless of how their labels wrap.
   photoPrimaryGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    minHeight: PHOTO_ACTION_HEIGHT,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     gap: 12,
   },
   photoPrimaryCopy: {
     flex: 1,
   },
   photoButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: TYPOGRAPHY.family.bold,
@@ -1871,13 +1880,17 @@ const styles = StyleSheet.create({
   photoSecondaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
+    gap: 12,
+    minHeight: PHOTO_ACTION_HEIGHT,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  photoSecondaryCopy: {
+    flex: 1,
   },
   photoSecondaryText: {
     fontSize: 16,
@@ -1888,13 +1901,17 @@ const styles = StyleSheet.create({
   photoSecondarySub: {
     fontSize: 13,
     color: '#6B7280',
+    marginTop: 2,
   },
 
   /* Voice Mode */
+  // Voice mode mirrors the photo-mode empty-state scale so switching tabs
+  // doesn't shift the layout underneath the user.
   voiceEmptyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 40,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -1903,45 +1920,46 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   voiceIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   voiceEmptyTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 10,
+    marginBottom: 4,
     fontFamily: TYPOGRAPHY.family.bold,
   },
   voiceEmptySubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 22,
+    marginBottom: 18,
+    lineHeight: 20,
     fontFamily: TYPOGRAPHY.family.regular,
   },
   voicePrimaryButton: {
     borderRadius: 50,
     overflow: 'hidden',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   voiceButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    gap: 14,
+    minHeight: PHOTO_ACTION_HEIGHT,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    gap: 12,
   },
   voicePulse: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated, Image, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Animated, Image, TextInput, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,7 +42,12 @@ export default function BarcodeScannerModal({ visible, onClose, foodAnalysis, on
   const isValidProductName = useMemo(() => productName.trim().length >= 2, [productName]);
 
   useEffect(() => {
-    if (visible && permission && !permission.granted) {
+    // Only auto-request while status is 'undetermined' (first open, no choice
+    // made yet) — never re-request after an explicit denial. The OS won't
+    // re-prompt once denied anyway, and `permission` getting a new object
+    // reference each resolution (even with an unchanged status) would otherwise
+    // make this effect fire again indefinitely since it's a dependency.
+    if (visible && permission?.status === 'undetermined') {
       requestPermission();
     }
   }, [visible, permission, requestPermission]);
@@ -109,6 +114,12 @@ export default function BarcodeScannerModal({ visible, onClose, foodAnalysis, on
 
   const handlePhotoUpload = async () => {
     try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        notify.error('Please enable photo library access');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -163,8 +174,11 @@ export default function BarcodeScannerModal({ visible, onClose, foodAnalysis, on
 
     setIsFallbackAnalyzing(true);
     try {
-      // Use the AI text analysis as fallback
-      await foodAnalysis.analyzeText(name);
+      // Use the AI text analysis as fallback.
+      // IMPORTANT: analyzeTextUniversal (not the deprecated analyzeText) — analyzeText's
+      // AI-fallback branch never writes to analysisResult, so a barcode-miss product name
+      // that also misses the backend name lookup would silently vanish after this call.
+      await foodAnalysis.analyzeTextUniversal(name);
       if (onScanSuccess) {
         onScanSuccess('text'); // Mark as text analysis since we're using AI
       }
@@ -245,8 +259,11 @@ export default function BarcodeScannerModal({ visible, onClose, foodAnalysis, on
         <View style={styles.centered}>
           <Ionicons name="camera-off" size={64} color={SEMANTIC_ACTIONS.danger} />
           <Text style={styles.permissionText}>No access to camera. Please enable it in settings.</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Close</Text>
+          <TouchableOpacity style={styles.settingsButton} onPress={() => Linking.openSettings()}>
+            <Text style={styles.settingsButtonText}>Open Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dismissTextButton} onPress={onClose}>
+            <Text style={styles.dismissTextButtonText}>Not Now</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -618,6 +635,27 @@ const styles = StyleSheet.create({
   },
   header: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   closeButton: { position: 'absolute', left: 20, padding: 5 },
+  settingsButton: {
+    marginTop: 24,
+    backgroundColor: BRAND.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+  },
+  settingsButtonText: {
+    color: TEXT.white,
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  dismissTextButton: {
+    marginTop: 16,
+    padding: 8,
+  },
+  dismissTextButtonText: {
+    color: TEXT.tertiary,
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.family.medium,
+  },
   closeButtonText: { color: BRAND.primary, fontSize: 16, fontFamily: TYPOGRAPHY.family.bold },
   headerTitle: { fontSize: 24, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.white },
   scannerFrame: {

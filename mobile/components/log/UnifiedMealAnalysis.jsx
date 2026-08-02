@@ -441,13 +441,22 @@ const MacroDonutChart = ({ protein, carbs, fat, size = 140, strokeWidth = 20 }) 
  * Half Gauge Chart for Meal Score (Speedometer style)
  */
 const MealScoreGauge = ({ score, size = 120 }) => {
-  const scoreInfo = getScoreLabel(score);
+  // A meal logged by voice has no health score until analysis resolves, so
+  // `score` arrives undefined. `undefined / 100` is NaN, which flowed straight
+  // into every arc coordinate and produced paths like "M NaN 80" — react-native-svg
+  // throws InvalidNumber on those and takes the screen down. Clamp once, here,
+  // so no downstream maths can see a non-number.
+  const safeScore = Number.isFinite(Number(score))
+    ? Math.min(100, Math.max(0, Number(score)))
+    : 0;
+
+  const scoreInfo = getScoreLabel(safeScore);
   const cx = size / 2;
   const cy = size / 2;
   const radius = (size - 16) / 2;
 
   // Arc spans 180 degrees (semi-circle)
-  const scoreAngle = 180 - (score / 100) * 180;
+  const scoreAngle = 180 - (safeScore / 100) * 180;
 
   const polarToCartesian = (angle) => {
     const rad = (angle * Math.PI) / 180;
@@ -524,7 +533,7 @@ const MealScoreGauge = ({ score, size = 120 }) => {
 
       {/* Score value */}
       <View style={styles.gaugeValue}>
-        <Text style={[styles.gaugeScore, { color: scoreInfo.color }]}>{score}</Text>
+        <Text style={[styles.gaugeScore, { color: scoreInfo.color }]}>{Math.round(safeScore)}</Text>
         <Text style={styles.gaugeLabel}>{scoreInfo.label}</Text>
       </View>
     </View>
