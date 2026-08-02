@@ -4,9 +4,9 @@ import {
   useAudioRecorder,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
-  RecordingPresets,
 } from 'expo-audio';
 import apiClient from '../services/apiClient';
+import { SPEECH_RECORDING_PRESET, MIN_RECORDING_MS } from '../constants/voiceRecording';
 import { getSpeechLocale } from '../constants/languages';
 
 // Stub Voice module for Expo Go compatibility
@@ -16,6 +16,67 @@ try {
   Voice = require('@react-native-voice/voice').default;
 } catch (e) {
   console.warn('[useServerVoice] Voice module not available (native module requires development build)');
+}
+
+/**
+ * Turns a Voice.start() failure into something the user can act on.
+ *
+ * iOS surfaces genuinely different problems — permission denied, no recogniser
+ * for the chosen locale, speech recognition restricted by the device — and they
+ * need different responses from the user. Collapsing them all into "Failed to
+ * start recording" left people with no idea whether to open Settings, change
+ * language, or simply try again.
+ */
+/**
+ * True once this device has proven it cannot do speech recognition.
+ *
+ * Capability cannot be queried up front: `Voice.isAvailable()` on iOS only
+ * reports the *authorization* status, so it answers "yes" on a simulator whose
+ * recogniser then fails to initialise. The only reliable signal is an actual
+ * attempt, so we remember the outcome and let the UI stop offering voice.
+ *
+ * Module scope, not state: the answer is a property of the device, identical
+ * for every hook instance and stable for the whole session.
+ */
+let _voiceUnsupported = false;
+
+/** Failures that mean "this device will never do speech recognition". */
+function isPermanentVoiceFailure(code, detail) {
+  const text = String(detail || '').toLowerCase();
+  return (
+    String(code) === '300' ||
+    text.includes('failed to initialize recognizer') ||
+    text.includes('not supported') ||
+    text.includes('restricted')
+  );
+}
+
+function describeVoiceStartFailure(code, detail, locale) {
+  const text = String(detail || '').toLowerCase();
+
+  // kAFAssistantErrorDomain 300 — SFSpeechRecognizer could not be created.
+  // In practice this means the device has no on-device speech model for the
+  // locale, which is the permanent state of the iOS Simulator (it ships no
+  // speech assets). Retrying cannot fix it, so don't imply that it can.
+  if (String(code) === '300' || text.includes('failed to initialize recognizer')) {
+    return "Speech recognition isn't available on this device. Use text or photo logging instead.";
+  }
+
+  if (code === 'permissions' || text.includes('permission') || text.includes('denied')) {
+    return 'Microphone or speech access is off. Enable both in Settings to use voice logging.';
+  }
+  if (text.includes('not authorized') || text.includes('restricted')) {
+    return 'Speech recognition is restricted on this device.';
+  }
+  // SFSpeechRecognizer returns nil for locales it has no model for.
+  if (text.includes('locale') || text.includes('not supported') || text.includes('unavailable')) {
+    return `Voice input isn't available for ${locale} on this device. Try switching the voice language.`;
+  }
+  if (text.includes('recognizer') || text.includes('unavailable')) {
+    return 'Speech recognition is unavailable right now. Please try again in a moment.';
+  }
+  // Unknown: keep the underlying text visible rather than hiding it.
+  return `Couldn't start voice recording${detail ? ` — ${detail}` : ''}. Try text or photo logging instead.`;
 }
 
 // Cache for recent transcription requests (in-memory + persisted)
@@ -34,9 +95,20 @@ export const useServerVoice = (options = {}) => {
   const [liveItems, setLiveItems] = useState([]);
   const [processingState, setProcessingState] = useState({ step: 0, label: '' });
 
+  // Mirrors the module-level `_voiceUnsupported` into component state.
+  // Mutating a module variable cannot trigger a re-render on its own, so
+  // without this the UI would only notice the change if some *other* state
+  // update happened to follow it — which is exactly the kind of implicit
+  // coupling that breaks silently later.
+  const [voiceUnsupported, setVoiceUnsupported] = useState(_voiceUnsupported);
+  const markVoiceUnsupported = useCallback(() => {
+    _voiceUnsupported = true;   // device-level, shared by every hook instance
+    setVoiceUnsupported(true);  // instance-level, drives the re-render
+  }, []);
+
   // Audio file recording for playback (parallel with live transcription)
   const [recordingUri, setRecordingUri] = useState(null);
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorder = useAudioRecorder(SPEECH_RECORDING_PRESET);
 
   // Track volume for waveform visualization (simulated from speech activity)
   const [volume, setVolume] = useState(0);
@@ -56,18 +128,7 @@ export const useServerVoice = (options = {}) => {
   // Cleanup on unmount
   useEffect(() => {
     // Setup Voice listeners (only if Voice module is available)
-    if (Voice) {
-      Voice.onSpeechStart = () => setIsRecording(true);
-      Voice.onSpeechEnd = () => setIsRecording(false);
-      Voice.onSpeechError = (e) => {
-        // Ignore "No speech detected" error (code 7) to avoid UI noise
-        if (e.error?.message?.includes('7') || e.error?.code === '7') return;
-        setError(e.error?.message);
-        setIsRecording(false);
-      };
-      Voice.onSpeechResults = onSpeechResults;
-      Voice.onSpeechPartialResults = onSpeechResults;
-    }
+    attachVoiceListeners();
 
     return () => {
       isActiveRef.current = false;
@@ -85,6 +146,11 @@ export const useServerVoice = (options = {}) => {
         Voice.destroy().then(() => Voice.removeAllListeners());
       }
     };
+    // attachVoiceListeners is a plain (unmemoized) function recreated every
+    // render — intentionally omitted so this effect only runs once for this
+    // hook instance's lifetime, matching its "mount setup / unmount teardown"
+    // purpose. Adding it would re-run this on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounce live items parsing (avoid regex on every partial result)
@@ -110,6 +176,55 @@ export const useServerVoice = (options = {}) => {
         }
       }, 300); // Debounce 300ms (waits for user to pause speaking briefly)
     }
+  };
+
+  // Wires up the Voice module's event handlers. Called on mount, and again
+  // from cancelRecording after Voice.destroy() — destroy() tears down the
+  // native recognizer session, and re-attaching immediately guarantees a
+  // subsequent startRecording() in this same modal session (cancel, then try
+  // again) keeps working, since this hook instance's mount effect only runs
+  // once for the whole screen's lifetime (voiceHook is created once in the
+  // parent and VoiceModal is kept mounted, only `visible` toggles).
+  const attachVoiceListeners = () => {
+    if (!Voice) return;
+    Voice.onSpeechStart = () => setIsRecording(true);
+    Voice.onSpeechEnd = () => setIsRecording(false);
+    Voice.onSpeechError = (e) => {
+      const rawMessage = e?.error?.message ?? '';
+      // iOS reports "<code>/<description>", e.g. "300/Failed to initialize recognizer".
+      const code = e?.error?.code ?? rawMessage.split('/')[0];
+
+      // Ignore "no speech detected" (code 7) — it fires whenever a user pauses,
+      // and surfacing it makes normal use look broken. Matched on the parsed
+      // code rather than `message.includes('7')`, which also swallowed every
+      // other error whose text happened to contain a 7 (1007, 700, …).
+      if (String(code) === '7') return;
+
+      const permanent = isPermanentVoiceFailure(code, rawMessage);
+      if (permanent) markVoiceUnsupported();
+      console.warn(`[useServerVoice] Speech error (code=${code}):`, rawMessage);
+
+      // iOS delivers "300/Failed to initialize recognizer" through THIS callback
+      // rather than as a throw from Voice.start(), so the equivalent guard in
+      // start()'s catch never ran and the UI errored out while expo-audio was
+      // still happily recording.
+      //
+      // The recogniser being unavailable is not a recording failure. Stay in the
+      // recording state and let the user speak; stopRecording() finds an empty
+      // on-device transcript and uploads the captured audio instead.
+      if (permanent && audioRecorder.isRecording) {
+        console.log('[useServerVoice] Recogniser unavailable mid-session; continuing to record for server transcription');
+        setIsRecording(true);
+        return;
+      }
+
+      // Same classifier as Voice.start failures, so a given cause reads
+      // identically wherever it surfaces.
+      setError(describeVoiceStartFailure(code, rawMessage, speechLocale));
+      setIsRecording(false);
+    };
+    Voice.onSpeechResults = onSpeechResults;
+    Voice.onSpeechPartialResults = onSpeechResults;
   };
 
   // Simple client-side parser for immediate UI feedback (Pills)
@@ -170,9 +285,16 @@ export const useServerVoice = (options = {}) => {
           audioRecorder.record();
           console.log('[useServerVoice] Audio file recording started');
         } else if (!permission.canAskAgain) {
-          // User permanently denied - show helpful message
+          // Mic permission is a single OS-level grant shared by expo-audio's
+          // recorder AND Voice's native speech recognizer — if expo-audio
+          // reports it's permanently denied, Voice.start() below would fail
+          // too (with a less specific error). Stop here with an actionable
+          // message instead of a confusing native failure.
           console.warn('[useServerVoice] Microphone permission permanently denied');
-          // Continue without audio playback, but voice recognition may still work
+          setError('Microphone access is disabled. Enable it in Settings to record.');
+          if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+          if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+          return;
         }
       } catch (audioErr) {
         // Audio file recording is optional - continue with voice recognition
@@ -182,8 +304,36 @@ export const useServerVoice = (options = {}) => {
       await Voice.start(speechLocale);
       console.log(`[useServerVoice] Started voice recognition with locale: ${speechLocale}`);
     } catch (err) {
-      console.error(err);
-      setError('Failed to start recording');
+      // The previous handler logged the raw error and showed a flat "Failed to
+      // start recording", which made every distinct cause — a denied
+      // permission, an unsupported locale, no recogniser on this device —
+      // indistinguishable to both the user and anyone reading the logs.
+      const code = err?.code ?? err?.error?.code;
+      const detail = err?.message || err?.error?.message || String(err);
+      console.error(
+        `[useServerVoice] Voice.start failed (locale=${speechLocale}, code=${code ?? 'n/a'}):`,
+        detail
+      );
+
+      const permanent = isPermanentVoiceFailure(code, detail);
+      if (permanent) markVoiceUnsupported();
+
+      // The recogniser failing does NOT mean recording failed. expo-audio is
+      // already capturing to a file (started above, independently), and that
+      // file is exactly what the server transcription path needs.
+      //
+      // So when the on-device recogniser is simply absent, keep recording and
+      // let the user speak. stopRecording() finds an empty on-device transcript,
+      // uploads the audio instead, and the user never learns that the fast path
+      // was unavailable. Tearing the recorder down here — as this did before —
+      // guaranteed there was nothing to fall back to.
+      if (permanent && audioRecorder.isRecording) {
+        console.log('[useServerVoice] Recogniser unavailable; continuing to record for server transcription');
+        setIsRecording(true);
+        return;
+      }
+
+      setError(describeVoiceStartFailure(code, detail, speechLocale));
       // Clean up intervals on error
       if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
       if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
@@ -199,6 +349,57 @@ export const useServerVoice = (options = {}) => {
    * Stops recording and returns transcript with confidence
    * Does NOT analyze nutrition - use analyzeTranscript for that
    */
+  /**
+   * Uploads a finished recording to the server for transcription.
+   *
+   * The endpoint transcribes AND identifies foods in a single request, so this
+   * returns both — the caller does not need a second analysis round trip.
+   *
+   * Never throws: every failure resolves to a shape the caller can branch on,
+   * because this runs on the path where something has *already* gone wrong and
+   * a second error would just replace one dead end with another.
+   */
+  const transcribeViaServer = useCallback(async (uri) => {
+    if (!uri) return null;
+
+    try {
+      const durationMs = (audioRecorder.currentTime ?? 0) * 1000;
+      if (durationMs && durationMs < MIN_RECORDING_MS) {
+        console.log(`[useServerVoice] Skipping server transcription: ${Math.round(durationMs)}ms is below ${MIN_RECORDING_MS}ms`);
+        return null;
+      }
+
+      console.log('[useServerVoice] On-device transcript empty — falling back to server transcription');
+      setIsProcessing(true);
+
+      const formData = new FormData();
+      formData.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' });
+      formData.append('language', voiceLanguage);
+      formData.append('mealType', options.mealType || 'general');
+
+      // upload(), not post() — post() JSON.stringifies the body, which turns
+      // FormData into "{}" and silently drops the audio.
+      const response = await apiClient.upload('/voice/transcribe', formData);
+
+      return { transcript: response?.text || '', items: response?.data || [] };
+    } catch (err) {
+      const body = err?.response?.data;
+
+      if (body?.code === 'openai_consent_required') {
+        console.log('[useServerVoice] Server transcription blocked pending AI consent');
+        return {
+          needsConsent: true,
+          error: body.error || 'Voice transcription needs your AI consent. Enable it in Privacy & Data.',
+        };
+      }
+
+      console.error('[useServerVoice] Server transcription failed:', err?.message);
+      return null;
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [audioRecorder, voiceLanguage, options.mealType]);
+
   const stopRecording = useCallback(async () => {
     // Stop intervals
     if (durationIntervalRef.current) {
@@ -239,6 +440,37 @@ export const useServerVoice = (options = {}) => {
     // Return transcript with confidence for VoiceModal to display
     const finalTranscript = transcript || '';
 
+    // On-device produced nothing — either the recogniser never initialised on
+    // this device, or it heard nothing it could decode. Before giving up, send
+    // the audio we captured in parallel to the server for transcription.
+    //
+    // This is what makes voice work on hardware the on-device recogniser cannot
+    // serve (simulators, unsupported locales, restricted devices): the model is
+    // device-independent. It runs only when the free path has already failed, so
+    // the common case still costs nothing.
+    if (!finalTranscript.trim() && capturedUri) {
+      const remote = await transcribeViaServer(capturedUri);
+
+      if (remote?.transcript?.trim()) {
+        setTranscript(remote.transcript);
+        return {
+          transcript: remote.transcript,
+          confidence: 0.9, // server transcription is materially more accurate
+          recordingUri: capturedUri,
+          isEmpty: false,
+          source: 'server',
+          // The endpoint returns analysed foods alongside the text, so the
+          // caller can skip the separate analysis round trip entirely.
+          items: remote.items,
+        };
+      }
+
+      if (remote?.needsConsent) {
+        setError(remote.error);
+        return { transcript: '', confidence: 0, recordingUri: capturedUri, isEmpty: true, needsConsent: true };
+      }
+    }
+
     // Handle empty transcript case
     if (!finalTranscript.trim()) {
       setError('No speech detected. Please try again.');
@@ -260,7 +492,7 @@ export const useServerVoice = (options = {}) => {
       recordingUri: capturedUri,
       isEmpty: false,
     };
-  }, [transcript, audioRecorder]);
+  }, [transcript, audioRecorder, transcribeViaServer]);
 
   /**
    * analyzeTranscript - Step 2 of two-step flow
@@ -545,6 +777,8 @@ export const useServerVoice = (options = {}) => {
       try {
         await Voice.stop();
         await Voice.destroy();
+        // Re-attach listeners immediately — see attachVoiceListeners' comment.
+        attachVoiceListeners();
       } catch (e) {}
     }
 
@@ -565,6 +799,11 @@ export const useServerVoice = (options = {}) => {
     setVolume(0);
     setDuration(0);
     setRecordingUri(null);
+    // attachVoiceListeners is a plain (unmemoized) function recreated every
+    // render — including it here would make cancelRecording itself unstable
+    // across renders, cascading instability into every consumer that depends
+    // on it (VoiceModal's handleCancel, etc.).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioRecorder]);
 
   /**
@@ -596,5 +835,17 @@ export const useServerVoice = (options = {}) => {
     processingState,
     error,
     recordingUri,       // Audio file URI for playback
+
+    // True once this device has proven it cannot do speech recognition (see
+    // _voiceUnsupported). Lets the UI stop offering a control that can only
+    // fail, instead of showing a mic that errors on every tap.
+    isVoiceUnsupported: voiceUnsupported || _voiceUnsupported,
+
+    // No native module at all (Expo Go, or a build predating the package).
+    isVoiceModuleMissing: !Voice,
+
+    // Exposed so the modal can re-run transcription after the user grants
+    // consent, reusing the audio it already captured.
+    transcribeRecording: transcribeViaServer,
   };
 };

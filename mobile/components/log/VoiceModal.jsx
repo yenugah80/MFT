@@ -31,6 +31,8 @@ import {
   TextInput,
   Platform,
   AccessibilityInfo,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,6 +40,8 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { useRouter } from 'expo-router';
+import apiClient from '../../services/apiClient';
 import { useAudioPlayback } from '../../hooks/useAudioPlayback';
 import { getTTSCode } from '../../constants/languages';
 import {
@@ -217,6 +221,7 @@ export function VoiceModal({
   voiceLanguage = 'en', // Language for TTS guidance
 }) {
   const isElderly = accessibilityMode === 'elderly';
+  const router = useRouter();
 
   const {
     isRecording,
@@ -232,6 +237,8 @@ export function VoiceModal({
     clearError = () => {},
     recordingUri,
     clearRecordingUri = () => {},
+    transcribeRecording,
+    isVoiceUnsupported = false,
   } = voiceHook;
 
   // Audio playback for reviewing recording before confirm
@@ -247,6 +254,10 @@ export function VoiceModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
+  // Audio held across the consent prompt so agreeing resumes with the original
+  // recording instead of asking the user to say it all again.
+  const [pendingConsentUri, setPendingConsentUri] = useState(null);
+  const [isEnablingConsent, setIsEnablingConsent] = useState(false);
 
   // Refs for cleanup and guards
   const successTimeoutRef = useRef(null);
@@ -272,6 +283,7 @@ export function VoiceModal({
   // ─────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────
+
 
   const handleClose = useCallback(() => {
     isCancelledRef.current = true;
@@ -313,6 +325,33 @@ export function VoiceModal({
     stopCalledRef.current = false;
     setLocalError(null);
 
+    // If we already know this device can't transcribe on its own, the recording
+    // can only be completed server-side — which needs consent. Resolve that
+    // BEFORE recording rather than after.
+    //
+    // Otherwise the user describes a whole meal, taps stop, and only then meets
+    // a wall. Having spoken into a void is the single most frustrating version
+    // of this feature, and it would hit every user on a device without an
+    // on-device recogniser. Asking first costs one tap; asking last costs the
+    // recording and, quite reasonably, their trust in the feature.
+    if (isVoiceUnsupported) {
+      try {
+        const status = await apiClient.get('/consent/status');
+        if (status?.consent?.hasConsent !== true) {
+          setPendingConsentUri(null);
+          setState('consent');
+          await triggerHaptic('light');
+          announceForAccessibility('Voice transcription needs AI to be enabled.');
+          return;
+        }
+      } catch (err) {
+        // Can't reach the consent check — let the recording proceed rather than
+        // blocking on a network hiccup. The post-recording path still catches a
+        // 403 and keeps the audio.
+        console.warn('[VoiceModal] Consent pre-check failed, proceeding:', err?.message);
+      }
+    }
+
     // Track recording started
     trackVoiceRecordingStarted(isElderly ? 'elderly' : 'standard');
 
@@ -320,7 +359,51 @@ export function VoiceModal({
     await triggerHaptic(isElderly ? 'heavy' : 'light');
     announceForAccessibility('Recording started. Speak your meal now.');
     await startRecording();
-  }, [clearError, startRecording, isElderly]);
+  }, [clearError, startRecording, isElderly, isVoiceUnsupported]);
+
+  /**
+   * Grants AI consent, then transcribes the audio we already have.
+   * One tap, no lost recording, no trip through Settings.
+   */
+  const handleEnableAIConsent = useCallback(async () => {
+    setIsEnablingConsent(true);
+    try {
+      await apiClient.post('/consent/give-openai-consent', {
+        understand: true,
+        purpose: 'voice-transcription',
+      });
+
+      // Asked BEFORE recording (the common path): there is no audio yet, so
+      // start recording now that consent is in place. The user goes straight
+      // from agreeing to speaking.
+      if (!pendingConsentUri) {
+        setState('idle');
+        await handleStart();
+        return;
+      }
+
+      // Asked AFTER recording (first-time discovery only): transcribe the audio
+      // we held across the prompt, so nothing they said is lost.
+      const retry = await transcribeRecording?.(pendingConsentUri);
+      if (retry?.transcript?.trim()) {
+        setTranscription(retry.transcript);
+        setConfidence(retry.confidence ?? 0.9);
+        setState('transcribed');
+        await triggerHaptic('success');
+        return;
+      }
+
+      setLocalError('Transcription came back empty. Please try recording again.');
+      setState('error');
+    } catch (err) {
+      console.error('[VoiceModal] Enabling AI consent failed', err);
+      setLocalError('Could not enable AI transcription. Please try again.');
+      setState('error');
+    } finally {
+      setIsEnablingConsent(false);
+    }
+  }, [pendingConsentUri, transcribeRecording, handleStart]);
+
 
   const handleStop = useCallback(async () => {
     if (stopCalledRef.current) {
@@ -338,6 +421,18 @@ export function VoiceModal({
       trackVoiceRecordingCompleted(duration);
 
       if (isCancelledRef.current) {
+        return;
+      }
+
+      // The recording was fine — server transcription is simply gated behind a
+      // consent the user hasn't given yet. Ask for it here, in the flow, with
+      // their audio still held. Sending them to Settings to hunt for a toggle
+      // would lose the recording and almost certainly the user.
+      if (result.needsConsent) {
+        setPendingConsentUri(result.recordingUri || null);
+        setState('consent');
+        await triggerHaptic('light');
+        announceForAccessibility('Voice transcription needs AI to be enabled.');
         return;
       }
 
@@ -530,6 +625,14 @@ export function VoiceModal({
     // Track re-record
     trackVoiceRerecord();
 
+    // The isRecording->'listening' sync effect below early-returns while
+    // state is 'transcribed' (by design, so a stray isRecording flicker
+    // doesn't yank the user out of reviewing their transcript). Without this,
+    // starting a new recording here would leave the UI frozen on the old
+    // transcript screen — recording live in the background with no visible
+    // indication — until the 60s max-duration auto-stop kicked in.
+    setState('idle');
+
     // Reset playback and transcription state
     audioPlayback.reset();
     clearRecordingUri();
@@ -630,6 +733,16 @@ export function VoiceModal({
   });
 
   const displayError = localError || error;
+  // Matches the specific message useServerVoice sets when expo-audio reports
+  // mic permission as permanently denied — "Try Again" alone would just hit
+  // the same wall again, since the OS won't re-prompt after an explicit denial.
+  const isMicPermissionError = displayError === 'Microphone access is disabled. Enable it in Settings to record.';
+
+  // A recogniser that cannot initialise on this device will not initialise on
+  // the next tap either, so offering "Try Again" is a dead end — it was shown
+  // directly beneath a message telling the user to switch to text or photo.
+  const isUnrecoverable =
+    typeof displayError === 'string' && displayError.includes("isn't available on this device");
 
   // ─────────────────────────────────────────────
   // Dynamic styles based on mode
@@ -967,10 +1080,97 @@ export function VoiceModal({
           )}
 
           {/* ─────────────────────────────────────────── */}
+          {/* CONSENT STATE — transcription blocked, not broken */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'consent' && (
+            <>
+              <TouchableOpacity
+                style={styles.errorCloseButton}
+                onPress={handleClose}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close voice logging"
+              >
+                <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
+              </TouchableOpacity>
+
+              <View style={contentStyle}>
+                <View style={styles.consentIconWrap}>
+                  <Ionicons name="mic" size={isElderly ? 56 : 32} color={BRAND.primary} />
+                </View>
+
+                <Text style={[isElderly ? styles.messageElderly : styles.statusText]}>
+                  Turn on voice logging
+                </Text>
+
+                {/* One line, not a disclosure notice. Explaining that the device
+                    lacks a recogniser and naming the processor made a routine
+                    feature toggle read like a warning — users decline things
+                    that sound like a warning. Detail lives behind "Learn more",
+                    which is where informed consent needs it, not on the button. */}
+                <Text style={isElderly ? styles.errorMessageElderly : styles.consentNote}>
+                  Uses AI to turn speech into text. Your recordings are never used for training.
+                </Text>
+
+                <TouchableOpacity
+                  style={isElderly ? styles.retryButtonElderly : styles.retryButton}
+                  onPress={handleEnableAIConsent}
+                  disabled={isEnablingConsent}
+                  accessibilityRole="button"
+                  accessibilityLabel="Enable AI transcription and transcribe this recording"
+                >
+                  <LinearGradient
+                    colors={SURFACES.gradient.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.retryButtonGradient}
+                  >
+                    {isEnablingConsent ? (
+                      <ActivityIndicator size="small" color={TEXT.white} />
+                    ) : (
+                      <Ionicons name="sparkles" size={ICON_SIZES.md} color={TEXT.white} />
+                    )}
+                    <Text style={styles.retryButtonText}>
+                      {isEnablingConsent ? 'Enabling…' : pendingConsentUri ? 'Enable & Transcribe' : 'Enable & Record'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* For anyone who wants to read the full policy before deciding.
+                    Closes the sheet first so navigation isn't trapped behind a modal. */}
+                <TouchableOpacity
+                  style={styles.consentLearnMore}
+                  onPress={() => { handleClose(); router.push('/profile/privacy'); }}
+                  accessibilityRole="link"
+                  accessibilityLabel="Read more in Privacy and Data settings"
+                >
+                  <Text style={styles.consentLearnMoreText}>Learn more in Privacy &amp; Data</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {/* ─────────────────────────────────────────── */}
           {/* ERROR STATE */}
           {/* ─────────────────────────────────────────── */}
           {state === 'error' && (
             <>
+              {/* Dismiss. The error state previously offered only "Try Again",
+                  so a failure the user could not resolve — an unavailable
+                  recogniser, say — left them with no way out of the sheet
+                  except retrying it. Routes through handleClose so audio
+                  playback, the recording URI and analytics are all cleaned up
+                  exactly as they are on a normal close. */}
+              <TouchableOpacity
+                style={styles.errorCloseButton}
+                onPress={handleClose}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close voice logging"
+              >
+                <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
+              </TouchableOpacity>
+
               {isElderly && (
                 <View style={headerStyle}>
                   <Text style={[titleStyle, { color: SEMANTIC.danger.base }]}>Oops!</Text>
@@ -989,12 +1189,22 @@ export function VoiceModal({
 
                 <TouchableOpacity
                   style={isElderly ? styles.retryButtonElderly : styles.retryButton}
-                  onPress={handleStart}
+                  onPress={
+                    isUnrecoverable ? handleClose
+                    : isMicPermissionError ? () => Linking.openSettings()
+                    : handleStart
+                  }
                 >
                   {isElderly ? (
                     <>
-                      <Ionicons name="refresh" size={40} color={TEXT.white} />
-                      <Text style={styles.buttonTextElderly}>Try Again</Text>
+                      <Ionicons
+                        name={isUnrecoverable ? 'create-outline' : isMicPermissionError ? 'settings' : 'refresh'}
+                        size={40}
+                        color={TEXT.white}
+                      />
+                      <Text style={styles.buttonTextElderly}>
+                        {isUnrecoverable ? 'Use Text Instead' : isMicPermissionError ? 'Open Settings' : 'Try Again'}
+                      </Text>
                     </>
                   ) : (
                     <LinearGradient
@@ -1003,8 +1213,14 @@ export function VoiceModal({
                       end={{ x: 1, y: 1 }}
                       style={styles.retryButtonGradient}
                     >
-                      <Ionicons name="refresh" size={ICON_SIZES.md} color={TEXT.white} />
-                      <Text style={styles.retryButtonText}>Try Again</Text>
+                      <Ionicons
+                        name={isUnrecoverable ? 'create-outline' : isMicPermissionError ? 'settings-outline' : 'refresh'}
+                        size={ICON_SIZES.md}
+                        color={TEXT.white}
+                      />
+                      <Text style={styles.retryButtonText}>
+                        {isUnrecoverable ? 'Use Text Instead' : isMicPermissionError ? 'Open Settings' : 'Try Again'}
+                      </Text>
                     </LinearGradient>
                   )}
                 </TouchableOpacity>
@@ -1575,6 +1791,46 @@ const styles = StyleSheet.create({
   // ─────────────────────────────────────────────
   // ERROR STATE
   // ─────────────────────────────────────────────
+  consentIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(107,78,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING[3],
+  },
+  consentNote: {
+    fontSize: TYPOGRAPHY.size.sm,
+    lineHeight: 20,
+    color: TEXT.secondary,
+    textAlign: 'center',
+    paddingHorizontal: SPACING[4],
+    marginTop: SPACING[2],
+    marginBottom: SPACING[4],
+  },
+  consentLearnMore: {
+    marginTop: SPACING[3],
+    paddingVertical: SPACING[2],
+  },
+  consentLearnMoreText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: BRAND.primary,
+    textDecorationLine: 'underline',
+  },
+
+  errorCloseButton: {
+    position: 'absolute',
+    top: SPACING[3],
+    right: SPACING[3],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    zIndex: 10,
+  },
   errorIndicator: {
     marginVertical: SPACING[6],
   },

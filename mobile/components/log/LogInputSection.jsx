@@ -25,6 +25,7 @@ export default function LogInputSection({
   setShowCameraModal,
   setShowBarcodeScannerModal,
   setShowVoiceModal,
+  voiceUnavailable = false,
   handlePhotoFromLibrary,
 }) {
   // Handler for analyze/retry button - clears error first, then runs analysis
@@ -142,20 +143,37 @@ export default function LogInputSection({
               </View>
             </View>
 
-            <TextInput
-              style={[styles.textInputLarge, isTextFocused && styles.textInputFocused]}
-              placeholder="Describe your meal in your own words..."
-              placeholderTextColor="#9CA3AF"
-              value={foodAnalysis.inputText}
-              onChangeText={foodAnalysis.setInputText}
-              multiline
-              numberOfLines={4}
-              editable={!isAnalyzing}
-              autoFocus={false}
-              onFocus={() => setIsTextFocused(true)}
-              onBlur={() => setIsTextFocused(false)}
-              accessibilityLabel="Describe your meal"
-            />
+            <View style={styles.textInputWrapper}>
+              <TextInput
+                style={[styles.textInputLarge, isTextFocused && styles.textInputFocused]}
+                placeholder="Describe your meal in your own words..."
+                placeholderTextColor="#9CA3AF"
+                value={foodAnalysis.inputText}
+                onChangeText={foodAnalysis.setInputText}
+                multiline
+                numberOfLines={4}
+                editable={!isAnalyzing}
+                autoFocus={false}
+                onFocus={() => setIsTextFocused(true)}
+                onBlur={() => setIsTextFocused(false)}
+                accessibilityLabel="Describe your meal"
+              />
+
+              {foodAnalysis.inputText && !isAnalyzing && (
+                <TouchableOpacity
+                  style={styles.inputClearButton}
+                  onPress={() => {
+                    foodAnalysis.setInputText('');
+                    foodAnalysis.setAnalysisResult(null);
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear meal description"
+                >
+                  <Ionicons name="close" size={16} color="#6B7280" />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {!foodAnalysis.inputText && !isAnalyzing && (
               <View style={styles.infoBox}>
@@ -196,20 +214,6 @@ export default function LogInputSection({
                   <Text style={styles.analysisStopText}>Stop</Text>
                 </TouchableOpacity>
               </View>
-            )}
-
-            {foodAnalysis.inputText && !isAnalyzing && (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => {
-                  foodAnalysis.setInputText('');
-                  foodAnalysis.setAnalysisResult(null);
-                }}
-                accessibilityLabel="Clear meal description"
-              >
-                <Ionicons name="close-circle" size={18} color="#DC2626" />
-                <Text style={styles.clearButtonText}>Clear</Text>
-              </TouchableOpacity>
             )}
 
             <TouchableOpacity
@@ -275,7 +279,7 @@ export default function LogInputSection({
           ) : (
             <View style={styles.photoEmptyCard}>
               <View style={styles.photoIconContainer}>
-                <Ionicons name="camera" size={64} color="#6B4EFF" />
+                <Ionicons name="camera" size={28} color="#6B4EFF" />
               </View>
               <Text style={styles.photoEmptyTitle}>Camera-first logging</Text>
               <Text style={styles.photoEmptySubtitle}>
@@ -296,7 +300,7 @@ export default function LogInputSection({
                     end={{ x: 1, y: 1 }}
                     style={styles.photoPrimaryGradient}
                   >
-                    <Ionicons name="camera" size={24} color="#FFFFFF" />
+                    <Ionicons name="camera" size={22} color="#FFFFFF" />
                     <View style={styles.photoPrimaryCopy}>
                       <Text style={styles.photoButtonText}>Take Photo</Text>
                       <Text style={styles.photoButtonSub}>Best for cooked meals</Text>
@@ -313,7 +317,7 @@ export default function LogInputSection({
                     accessibilityLabel="Scan a product barcode"
                   >
                     <Ionicons name="barcode-outline" size={22} color="#6B4EFF" />
-                    <View>
+                    <View style={styles.photoSecondaryCopy}>
                       <Text style={styles.photoSecondaryText}>Scan Barcode</Text>
                       <Text style={styles.photoSecondarySub}>Packaged foods</Text>
                     </View>
@@ -327,7 +331,7 @@ export default function LogInputSection({
                     accessibilityLabel="Choose a meal photo from gallery"
                   >
                     <Ionicons name="images-outline" size={22} color="#6B4EFF" />
-                    <View>
+                    <View style={styles.photoSecondaryCopy}>
                       <Text style={styles.photoSecondaryText}>Choose from Gallery</Text>
                       <Text style={styles.photoSecondarySub}>Use an existing shot</Text>
                     </View>
@@ -343,13 +347,48 @@ export default function LogInputSection({
         <View style={styles.inputSection}>
           <View style={styles.voiceEmptyCard}>
             <View style={styles.voiceIconContainer}>
-              <Ionicons name="mic" size={64} color="#6B4EFF" />
+              <Ionicons name="mic" size={28} color="#6B4EFF" />
             </View>
-            <Text style={styles.voiceEmptyTitle}>Voice Logging</Text>
+            <Text style={styles.voiceEmptyTitle}>
+              {voiceUnavailable ? 'Voice Not Available' : 'Voice Logging'}
+            </Text>
             <Text style={styles.voiceEmptySubtitle}>
-              Speak naturally - we&apos;ll transcribe and analyze your meal
+              {voiceUnavailable
+                ? "This device can't do speech recognition. Log by text or photo instead."
+                : "Speak naturally - we'll transcribe and analyze your meal"}
             </Text>
 
+            {/* Once voice is known to be impossible on this device, offer the
+                two modes that do work rather than a mic that only errors. */}
+            {voiceUnavailable ? (
+              <View style={styles.photoSecondaryStack}>
+                <TouchableOpacity
+                  style={styles.photoSecondaryCard}
+                  onPress={() => { setInputMode('text'); setAnalysisSource('text'); }}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Switch to text logging"
+                >
+                  <Ionicons name="create-outline" size={22} color="#6B4EFF" />
+                  <View style={styles.photoSecondaryCopy}>
+                    <Text style={styles.photoSecondaryText}>Log with Text</Text>
+                    <Text style={styles.photoSecondarySub}>Describe your meal</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.photoSecondaryCard}
+                  onPress={() => { setInputMode('photo'); setAnalysisSource('photo'); }}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Switch to photo logging"
+                >
+                  <Ionicons name="camera-outline" size={22} color="#6B4EFF" />
+                  <View style={styles.photoSecondaryCopy}>
+                    <Text style={styles.photoSecondaryText}>Log with Photo</Text>
+                    <Text style={styles.photoSecondarySub}>Snap or scan your meal</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            ) : (
             <TouchableOpacity
               style={styles.voicePrimaryButton}
               onPress={() => setShowVoiceModal(true)}
@@ -364,21 +403,27 @@ export default function LogInputSection({
                 style={styles.voiceButtonGradient}
               >
                 <View style={styles.voicePulse}>
-                  <Ionicons name="mic" size={28} color="#FFFFFF" />
+                  <Ionicons name="mic" size={22} color="#FFFFFF" />
                 </View>
                 <Text style={styles.voiceButtonText}>Start Recording</Text>
               </LinearGradient>
             </TouchableOpacity>
+            )}
 
-            <View style={styles.voiceExamples}>
-              <Ionicons name="bulb-outline" size={18} color="#6B7280" />
-              <Text style={styles.voiceExamplesTitle}>Try saying:</Text>
-            </View>
-            <View style={styles.voiceExamplesList}>
-              <Text style={styles.voiceExample}>&quot;I had two eggs and whole wheat toast&quot;</Text>
-              <Text style={styles.voiceExample}>&quot;200 grams of grilled chicken with rice&quot;</Text>
-              <Text style={styles.voiceExample}>&quot;Large coffee with almond milk&quot;</Text>
-            </View>
+            {/* Example phrases only make sense when recording is possible. */}
+            {!voiceUnavailable && (
+              <>
+                <View style={styles.voiceExamples}>
+                  <Ionicons name="bulb-outline" size={18} color="#6B7280" />
+                  <Text style={styles.voiceExamplesTitle}>Try saying:</Text>
+                </View>
+                <View style={styles.voiceExamplesList}>
+                  <Text style={styles.voiceExample}>&quot;I had two eggs and whole wheat toast&quot;</Text>
+                  <Text style={styles.voiceExample}>&quot;200 grams of grilled chicken with rice&quot;</Text>
+                  <Text style={styles.voiceExample}>&quot;Large coffee with almond milk&quot;</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
       )}
