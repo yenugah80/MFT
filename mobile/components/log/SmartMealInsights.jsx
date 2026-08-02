@@ -13,6 +13,9 @@
  * - Ingredient quality analysis (NOVA, additives)
  */
 
+import { selectPairings } from '../../utils/pairingSelector';
+import { useProfileContext } from '../../providers/ProfileProvider';
+import { useMealPairings } from '../../hooks/useMealPairings';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -721,69 +724,6 @@ const generateImprovements = (meal) => {
  *
  * NOTE: dailyTotals already INCLUDES the current meal, so we use it directly.
  */
-const generateMealPairings = (meal, userGoals, dailyTotals) => {
-  const pairings = [];
-  const macros = meal.macros || meal.nutrition || {};
-  const protein = macros.protein_g || macros.protein || 0;
-  const fiber = macros.fiber_g || macros.fiber || 0;
-  const calories = macros.calories_kcal || macros.calories || 0;
-
-  // Calculate remaining daily targets
-  // dailyTotals already includes the current meal, so use directly
-  const dailyCaloriesGoal = userGoals?.dailyCalories || 2000;
-  const dailyProteinGoal = userGoals?.proteinG || 50;
-
-  const currentDayCalories = dailyTotals?.totalCalories || 0;
-  const currentDayProtein = dailyTotals?.totalProtein || 0;
-
-  const remainingCalories = dailyCaloriesGoal - currentDayCalories;
-  const remainingProtein = dailyProteinGoal - currentDayProtein;
-
-  // Suggest protein-rich pairings if below target
-  if (protein < 15 && remainingProtein > 15) {
-    pairings.push({
-      icon: 'fitness',
-      category: 'protein',
-      title: 'Boost Protein',
-      suggestions: [
-        { name: 'Greek yogurt', benefit: '+15g protein', calories: 100 },
-        { name: 'Hard-boiled egg', benefit: '+6g protein', calories: 78 },
-        { name: 'Handful of almonds', benefit: '+6g protein', calories: 164 },
-      ],
-    });
-  }
-
-  // Suggest fiber-rich pairings
-  if (fiber < 3 && calories > 200) {
-    pairings.push({
-      icon: 'leaf',
-      category: 'fiber',
-      title: 'Add Fiber',
-      suggestions: [
-        { name: 'Side salad', benefit: '+3g fiber', calories: 25 },
-        { name: 'Apple', benefit: '+4g fiber', calories: 95 },
-        { name: 'Raw carrots', benefit: '+3g fiber', calories: 35 },
-      ],
-    });
-  }
-
-  // Suggest hydration if heavy/salty meal
-  const sodium = macros.sodium_mg || macros.sodium || 0;
-  if (sodium > 600 || calories > 500) {
-    pairings.push({
-      icon: 'water',
-      category: 'hydration',
-      title: 'Stay Hydrated',
-      suggestions: [
-        { name: 'Glass of water', benefit: 'Aids digestion', calories: 0 },
-        { name: 'Herbal tea', benefit: 'Antioxidants', calories: 2 },
-        { name: 'Sparkling water', benefit: 'Refreshing', calories: 0 },
-      ],
-    });
-  }
-
-  return pairings.slice(0, 2);
-};
 
 /**
  * Generate cumulative daily context
@@ -1106,6 +1046,13 @@ const SmartMealInsights = ({
   compact = false,
   onPairingSelect,
 }) => {
+  // Allergies and diet come straight from the profile the user filled in at
+  // onboarding. Read from context rather than threaded through props so no
+  // future call site can render this component without the safety data.
+  const { profile } = useProfileContext();
+  // Memoised on the profile's own object so the pairings memo below has a
+  // stable dependency and actually recomputes when the profile arrives.
+  const dietary = useMemo(() => profile?.dietary ?? null, [profile?.dietary]);
   const [expandedInsight, setExpandedInsight] = useState(null);
   const [showAllInsights, setShowAllInsights] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -1130,10 +1077,17 @@ const SmartMealInsights = ({
   );
 
   // Generate meal pairings
-  const mealPairings = useMemo(
-    () => generateMealPairings(meal, userGoals, dailyTotals),
-    [meal, userGoals, dailyTotals]
-  );
+  // Backend engine first (history, rejections, correlations, food knowledge
+  // graph), local selector as the offline fallback. Both filter allergies and
+  // diet; neither can return an unscreened food.
+  const { pairings: enginePairings } = useMealPairings({
+    meal,
+    userGoals,
+    dailyTotals,
+    dietary,
+    enabled: showPairings,
+  });
+  const mealPairings = enginePairings ?? [];
 
   // Generate daily context
   const dailyContext = useMemo(

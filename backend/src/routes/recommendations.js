@@ -15,7 +15,7 @@ import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
-import { recommendationsHistoryTable, foodLogTable, profilesTable, dietaryPreferencesTable } from '../db/schema.js';
+import { recommendationsHistoryTable, foodLogTable, profilesTable, dietaryPreferencesTable, nutritionGoalsTable } from '../db/schema.js';
 import { errors } from '../utils/errorResponse.js';
 import { getUnifiedIntelligence, formatIntelligenceForPrompt } from '../services/unifiedIntelligenceService.js';
 import { generateRecommendationContext } from '../services/personalizedNarrativeEngine.js';
@@ -28,6 +28,7 @@ import { generateCandidates } from '../services/candidateGenerationService.js';
 import { getUserLaggedCorrelations } from '../services/laggedCorrelationService.js';
 import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens } from '../services/foodKnowledgeGraphService.js';
 import { invalidateCFCache } from '../services/collaborativeFilteringService.js';
+import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 
 const router = express.Router();
 
@@ -133,7 +134,7 @@ router.get('/smart', requireAuth(), aiLimiter, async (req, res) => {
  * Get personalized food recommendations with history awareness
  * Uses request deduplication to prevent duplicate concurrent API calls
  */
-router.get('/', requireAuth(), aiLimiter, async (req, res) => {
+router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res) => {
   try {
     const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
     const { limit = 5 } = req.query;
@@ -272,7 +273,11 @@ router.get('/', requireAuth(), aiLimiter, async (req, res) => {
         // AI-ranking failure case already uses, so the endpoint always
         // responds in time instead of hanging on a slow model response.
         const AI_RANKING_DEADLINE_MS = 18000;
-        let recommendations = await Promise.race([
+        // Without consent, skip the model and go straight to the deterministic
+        // grounded fallback that already exists below for deadline/failure
+        // cases. The user still gets recommendations, built from the same
+        // scored candidates — just not LLM-ranked.
+        let recommendations = req.hasOpenAIConsent === false ? null : await Promise.race([
           generateEnhancedRecommendations(
             recType,
             mealType,
@@ -2632,5 +2637,107 @@ function getConfidenceContext(rec) {
     label: aiConfidence >= 0.85 ? 'High confidence' : aiConfidence >= 0.7 ? 'Good confidence' : 'Estimated'
   };
 }
+
+/**
+ * POST /api/recommendations/pairings
+ *
+ * "What should I add to the meal I just logged?" — distinct from GET /, which
+ * answers "what should I eat next".
+ *
+ * Exists so the meal-logged screen stops maintaining its own parallel
+ * suggestion logic. That client-side copy had no access to allergies, diet,
+ * cuisine or food history, and cheerfully suggested almonds to users who had
+ * declared an anaphylactic nut allergy during onboarding.
+ *
+ * Deliberately NOT behind the OpenAI consent gate: candidate generation is
+ * entirely rule-based (zero model calls), so pairings work for every user
+ * whether or not they opted into AI processing.
+ */
+router.post('/pairings', requireAuth(), async (req, res) => {
+  try {
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { macros = {}, mealType = 'lunch', limit = 6 } = req.body || {};
+
+    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+    const [[profileRow], [dietaryRow], [goalsRow]] = await Promise.all([
+      db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
+      db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).limit(1),
+      db.select().from(nutritionGoalsTable).where(eq(nutritionGoalsTable.userId, userId)).limit(1),
+    ]);
+
+    const allergies = Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [];
+
+    // What today still needs, after this meal.
+    const gaps = {
+      protein: Math.max(num(goalsRow?.proteinG) - num(macros.consumedProtein_g) - num(macros.protein_g), 0),
+      fiber: Math.max(28 - num(macros.consumedFiber_g) - num(macros.fiber_g), 0),
+      calories: Math.max(num(goalsRow?.dailyCalories) - num(macros.consumedCalories_kcal) - num(macros.calories_kcal), 0),
+    };
+
+    const candidates = await generateCandidates(userId, {
+      signals: {
+        allergies,
+        cuisinePreference: Array.isArray(profileRow?.cuisinePreference) ? profileRow.cuisinePreference[0] : null,
+        nutritionalGaps: gaps,
+        mealType,
+      },
+      profile: {
+        cuisinePreference: Array.isArray(profileRow?.cuisinePreference) ? profileRow.cuisinePreference : [],
+        region: profileRow?.region || null,
+      },
+      mealType,
+      limit: 20,
+    }).catch((err) => {
+      console.warn('[Pairings] candidate generation failed:', err.message);
+      return [];
+    });
+
+    // Second, independent allergen pass. generateCandidates already eliminates
+    // risky foods, but this endpoint feeds a screen that shows food directly to
+    // someone who told us what could hospitalise them — worth being certain
+    // rather than trusting a single upstream filter.
+    const safe = candidates.filter((c) => !detectAllergenRisk(c.name || c.foodName || '', allergies).hasRisk);
+
+    // Keep only things that actually close a gap this meal left open.
+    const scored = safe
+      .map((c) => {
+        const p = num(c.nutrition?.protein_g ?? c.protein_g);
+        const f = num(c.nutrition?.fiber_g ?? c.fiber_g);
+        const kcal = num(c.nutrition?.calories_kcal ?? c.calories_kcal);
+
+        const closesProtein = gaps.protein > 0 ? Math.min(1, p / gaps.protein) : 0;
+        const closesFiber = gaps.fiber > 0 ? Math.min(1, f / gaps.fiber) : 0;
+
+        const goal = closesProtein >= closesFiber ? 'protein' : 'fiber';
+        const coverage = Math.max(closesProtein, closesFiber);
+        if (coverage <= 0) return null;
+
+        // Same urgency weighting as the client selector, so a 1g fiber gap
+        // can't outrank a 40g protein gap purely by being easier to close.
+        const urgency = goal === 'protein'
+          ? Math.min(1, gaps.protein / 120)
+          : Math.min(1, gaps.fiber / 28);
+
+        return {
+          goal,
+          score: urgency * coverage * 100,
+          name: c.name || c.foodName,
+          calories: Math.round(kcal),
+          benefit: goal === 'protein' ? `+${Math.round(p)}g protein` : `+${Math.round(f)}g fiber`,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    res.json({ success: true, gaps, pairings: scored });
+  } catch (error) {
+    console.error('[Pairings] Error:', error);
+    res.status(500).json({ success: false, error: 'Could not generate pairings' });
+  }
+});
 
 export default router;
