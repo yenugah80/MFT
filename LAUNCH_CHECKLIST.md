@@ -230,7 +230,7 @@ This ensures you know within 5 minutes if the backend goes down after launch.
 
 | # | Item | Status |
 |---|------|--------|
-| 0 | **Backend deployment working** | 🔴 BROKEN — token expired |
+| 0 | **Backend deployment working** | ✅ Live — api.my-food-tracker.com/health returns 200 |
 | 0b | Railway native GitHub integration | ❌ Not set up |
 | 0c | Uptime monitoring (UptimeRobot) | ❌ Not set up |
 | 1 | Google Play service account JSON | ❌ Missing |
@@ -242,7 +242,7 @@ This ensures you know within 5 minutes if the backend goes down after launch.
 | 7 | Store listing (description, screenshots, feature graphic) | ❌ Not done |
 | 8 | Successful production Android build | ❌ Last build errored |
 | 9 | EAS CLI upgrade | ✅ Upgraded to 20.3.0 |
-| 10 | iOS ascAppId in eas.json | ⚠️ Placeholder (iOS only, not Play Store) |
+| 10 | iOS ascAppId in eas.json | ✅ Set to 6783527114 (iOS only, not Play Store) |
 | 11 | Clerk live key | ✅ Done |
 | 12 | Firebase config (Android + iOS) | ✅ Done |
 | 13 | AuthKey.p8 in place | ✅ Done |

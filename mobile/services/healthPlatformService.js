@@ -11,6 +11,16 @@
  *   `react-native-health-connect` (Android), uncomment the platform
  *   blocks below, and the service will auto-activate.
  *
+ *   ⚠️ Phase 2 must ALSO restore the store permission declarations, which were
+ *   removed from app.json for the 1.0 release. Apple and Google both reject
+ *   apps that declare health data access they do not use, so these only go
+ *   back once the native SDKs above are actually wired up:
+ *     ios.infoPlist.NSHealthShareUsageDescription
+ *     ios.infoPlist.NSHealthUpdateUsageDescription
+ *     android.permissions: health.READ_STEPS, health.READ_ACTIVE_CALORIES_BURNED,
+ *       health.READ_DISTANCE, health.READ_HEART_RATE, health.READ_WEIGHT,
+ *       health.WRITE_NUTRITION, health.WRITE_HYDRATION
+ *
  * The backend accepts POST /api/health/sync with the payload this
  * service produces — that endpoint is fully implemented and ready.
  */

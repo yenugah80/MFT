@@ -23,6 +23,12 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_ENVIRONMENT": "production",
+        "EXPO_PUBLIC_LOG_LEVEL": "error",
+        "EXPO_PUBLIC_API_TIMEOUT_MS": "30000"
+      },
       "ios": {
         "resourceClass": "m-medium"
       },
@@ -35,6 +41,7 @@
     "production": {
       "ios": {
         "appleTeamId": "8R3UBMWJ2P",
+        "ascAppId": "6783527114",
         "ascApiKeyPath": "./AuthKey_XYN85P5666.p8",
         "ascApiKeyId": "XYN85P5666",
         "ascApiKeyIssuerId": "49aa0f0c-ae4c-4e7b-86f1-0e75917999ec"

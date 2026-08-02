@@ -46,3 +46,7 @@ app-example
 
 # Firebase service account (server secret — never commit)
 google-service-account.json
+
+# Build output logs
+build.log
+*.log

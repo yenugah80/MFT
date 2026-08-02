@@ -54,6 +54,30 @@ jobs:
       - name: Install all workspace packages
         run: npm install
 
+      # Resolves every design-token path (SPACING.md, SEMANTIC.danger.base, …)
+      # against the real theme objects. These are invisible to ESLint — property
+      # access on an imported object always type-checks — and only surface when
+      # the screen renders, so a rarely visited screen can ship broken. A missing
+      # intermediate segment crashes; this is what caught the Privacy & Data
+      # screen being unrenderable, which made account deletion unreachable.
+      - name: Validate design tokens
+        working-directory: mobile
+        run: npm run validate:tokens
+
+      # Guards the store-submission invariants: permission strings must match
+      # installed native SDKs (declaring health access without the SDK invites
+      # rejection; missing a camera usage string terminates the app on first
+      # use), ascAppId present, privacy manifest complete, no committed secrets.
+      - name: Validate release config
+        working-directory: mobile
+        run: npm run validate:release
+
+      # The job is named "Lint & Test" but never linted. Warnings are tolerated
+      # (the codebase carries many); errors are not.
+      - name: Lint
+        working-directory: mobile
+        run: npx eslint . --max-warnings=-1
+
       - name: Run tests
         working-directory: mobile
         run: npm test -- --passWithNoTests --watchAll=false
