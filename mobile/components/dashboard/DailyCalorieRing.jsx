@@ -5,11 +5,9 @@
  */
 
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Circle, G, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designSystem';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function DailyCalorieRing({
   consumed = 1250,
@@ -18,6 +16,8 @@ export default function DailyCalorieRing({
   showDetails = true,
   isDarkMode = false,
 }) {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const ringSize = Math.min(SCREEN_WIDTH - SPACING.lg * 4, 220);
   const radius = ringSize / 2;
   const circumference = 2 * Math.PI * (radius - 20); // Inner radius

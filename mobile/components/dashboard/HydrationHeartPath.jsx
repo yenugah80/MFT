@@ -11,15 +11,7 @@
  */
 
 import React, { useMemo, useRef, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Dimensions,
-  Animated,
-  AppState,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, AppState, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -40,8 +32,6 @@ import {
   SURFACES,
   BRAND,
 } from '../../constants/premiumTheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Animated SVG components
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -82,6 +72,8 @@ const safePercentage = (current, goal) => {
  * Heart Icon Component with optional pulse animation
  */
 const HeartIcon = ({ filled, size = 18, animated = false, delay = 0 }) => {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const scaleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

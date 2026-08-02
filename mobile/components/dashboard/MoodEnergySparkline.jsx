@@ -19,7 +19,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +28,6 @@ import * as Haptics from 'expo-haptics';
 import { PREMIUM_COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumDesignSystem';
 import GlassCard from './GlassCard';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
  * MoodEnergySparkline Component
@@ -41,6 +40,8 @@ export default function MoodEnergySparkline({
   onPress,
   style,
 }) {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = async () => {

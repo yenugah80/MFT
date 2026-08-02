@@ -7,14 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, SEMANTIC, TYPOGRAPHY } from '../../constants/premiumTheme';
@@ -23,8 +16,6 @@ import {
   SNOOZE_OPTIONS,
   getNotificationConfig,
 } from '../../constants/notificationTypes';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Build reminder config from unified NOTIFICATION_CONFIG
 // Adds gradient support for reminder cards
@@ -45,6 +36,8 @@ const ReminderNotification = ({
   showSnoozeOptions = false,
   style,
 }) => {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const [showSnooze, setShowSnooze] = useState(false);
   const config = REMINDER_CONFIG[reminder?.type] || REMINDER_CONFIG.default;
 

@@ -12,22 +12,12 @@
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { SPACING, RADIUS } from '../../constants/designTokens';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Domain colors for progress bars
 const DOMAIN_COLORS = {
@@ -50,6 +40,8 @@ const TIER_CONFIG = {
  * Progress bar for domain scores
  */
 function DomainProgressBar({ domain, score, maxScore = 25 }) {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
   const color = DOMAIN_COLORS[domain] || '#6B7280';
   const progress = Math.min(score / maxScore, 1);
   const labels = {

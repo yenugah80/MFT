@@ -1,16 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  TextInput,
-  Dimensions,
-  Animated,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, Animated, useWindowDimensions } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -30,8 +19,6 @@ import {
   GOALS as ONBOARDING_GOALS,
 } from "../../constants/onboardingConfig";
 import { calculateNutritionTargets, getGoalContext } from "../../utils/onboardingCalculations";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ============================================================================
 // CONSTANTS - Extended from onboarding config
@@ -121,6 +108,8 @@ const getLifecycleStage = (profile, gamification) => {
 
 // BMI Gauge Component
 const BMIGauge = ({ bmi, size = 160 }) => {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const zone = getBMIZone(bmi);
   const strokeWidth = 12;
   const radius = (size - strokeWidth) / 2;

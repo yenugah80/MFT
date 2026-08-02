@@ -13,13 +13,7 @@
  */
 
 import React, { useRef } from 'react';
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Dimensions,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Animated, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -27,8 +21,6 @@ import * as Haptics from 'expo-haptics';
 import { PREMIUM_COLORS, SPACING, RADIUS } from '../../constants/premiumDesignSystem';
 import MacroDonut from './MacroDonut';
 import GlassCard from './GlassCard';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
  * CompactMacroHydrationRow Component
@@ -41,6 +33,8 @@ export default function CompactMacroHydrationRow({
   onHydrationPress,
   style,
 }) {
+  // Reactive: follows iPad Split View / Slide Over window resizes.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const macroScaleAnim = useRef(new Animated.Value(1)).current;
   const hydrationScaleAnim = useRef(new Animated.Value(1)).current;
 

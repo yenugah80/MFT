@@ -15,7 +15,7 @@
  * - Consistent visual hierarchy across sizes
  */
 
-import { Dimensions, PixelRatio, Platform } from 'react-native';
+import { Dimensions, PixelRatio, Platform, useWindowDimensions } from 'react-native';
 
 // ============================================================================
 // DEVICE BREAKPOINTS
@@ -29,7 +29,18 @@ export const BREAKPOINTS = {
   STANDARD: 390, // iPhone 14/15
   LARGE: 414,    // iPhone Plus models
   XLARGE: 428,   // iPhone Pro Max
+  TABLET: 768,   // iPad and iPad Split View wide pane
 };
+
+/**
+ * Widest a single column of content should ever get.
+ *
+ * The app declares `supportsTablet: true`, so on a 1024pt+ iPad an unconstrained
+ * card stretches edge to edge and the app reads as an upscaled phone app. Text
+ * also becomes unreadable past roughly this measure. Screens wrap their content
+ * in a container capped at this width and centre it.
+ */
+export const MAX_CONTENT_WIDTH = 640;
 
 /**
  * Get current device size category
@@ -289,3 +300,46 @@ export default {
   getBottomSafeArea,
   getTopSafeArea,
 };
+
+// ============================================================================
+// LIVE LAYOUT HOOK
+// ============================================================================
+
+/**
+ * Reactive replacement for the module-scope `Dimensions.get('window')` capture
+ * used throughout this file and ~32 components.
+ *
+ * A module-scope capture is read once at import and never updates. That is fine
+ * for a portrait-locked phone, but the app declares `supportsTablet: true`, and
+ * on iPad the window resizes whenever the user enters Split View or Slide Over.
+ * Components holding the stale value then lay out against a width the window no
+ * longer has, and content overflows or leaves dead space.
+ *
+ * `useWindowDimensions` re-renders on every window change, so layout follows.
+ *
+ * @returns {{
+ *   width: number, height: number, deviceSize: string,
+ *   isSmallDevice: boolean, isTablet: boolean, contentWidth: number
+ * }}
+ */
+export function useResponsiveLayout() {
+  const { width, height } = useWindowDimensions();
+
+  const deviceSize =
+    width < BREAKPOINTS.COMPACT ? 'SMALL'
+    : width < BREAKPOINTS.STANDARD ? 'COMPACT'
+    : width < BREAKPOINTS.LARGE ? 'STANDARD'
+    : width < BREAKPOINTS.XLARGE ? 'LARGE'
+    : width < BREAKPOINTS.TABLET ? 'XLARGE'
+    : 'TABLET';
+
+  return {
+    width,
+    height,
+    deviceSize,
+    isSmallDevice: width < BREAKPOINTS.STANDARD,
+    isTablet: width >= BREAKPOINTS.TABLET,
+    // Never wider than the readable measure, never wider than the window.
+    contentWidth: Math.min(width, MAX_CONTENT_WIDTH),
+  };
+}
