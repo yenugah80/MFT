@@ -160,10 +160,99 @@ export const calculateCarbTarget = (dailyCalories, proteinGrams, fatGrams) => {
   return Math.round(carbCals / 4); // 4 calories per gram of carbs
 };
 
+// =============================================================================
+// HYDRATION TARGET
+// =============================================================================
+
+/**
+ * Safety band for the derived water goal.
+ *
+ * The formula is a population estimate, not a clinical prescription, so it is
+ * clamped at both ends: the floor keeps a very light or elderly user from being
+ * handed an implausibly low target, and the ceiling keeps a heavy, very active
+ * user from being nudged toward intakes where hyponatremia risk starts to
+ * matter. Anyone with a genuine reason to sit outside this band (medical
+ * advice, endurance training) can still set their own value by hand.
+ */
+export const WATER_GOAL_BOUNDS = { minLiters: 1.5, maxLiters: 4.0 };
+
+/** Share of total water that typically comes from food rather than drinks. */
+const FOOD_WATER_SHARE = 0.2;
+
+/** Fluid replacement per 30 minutes of exercise, in ml. */
+const ML_PER_30_MIN_EXERCISE = 350;
+
+/**
+ * Baseline total-water need per kg of body weight.
+ * Per-kilo needs fall with age, and thirst sensation blunts alongside them.
+ */
+const mlPerKgForAge = (age) => {
+  if (age >= 66) return 25;
+  if (age >= 56) return 30;
+  return 35;
+};
+
+/** Typical daily exercise minutes implied by each activity bucket. */
+const EXERCISE_MINUTES_BY_ACTIVITY = {
+  sedentary: 0,
+  lightly_active: 20,
+  moderate: 40,
+  very_active: 60,
+  extremely_active: 90,
+};
+
+/**
+ * Derive a personalized daily *beverage* target.
+ *
+ * Two things this deliberately does NOT do:
+ *
+ * 1. It does not hand back a total-water figure. Published adequate intakes
+ *    (EFSA 2.0 L women / 2.5 L men, IOM 2.7 / 3.7 L) are TOTAL water, ~20% of
+ *    which comes from food. MFT tracks drinks, so the food share is removed —
+ *    otherwise every user is told to drink about a fifth more than they need.
+ * 2. It does not discount the exercise component by that food share. Sweat
+ *    replacement is fluid you actually have to drink.
+ *
+ * @param {object} userData - { weightKg, age, activityLevel }
+ * @returns {{ waterLiters: number, rationale: object }}
+ */
+export const calculateWaterTarget = ({ weightKg, age, activityLevel }) => {
+  const baselineTotalMl = weightKg * mlPerKgForAge(age);
+  const baselineBeverageMl = baselineTotalMl * (1 - FOOD_WATER_SHARE);
+
+  const exerciseMinutes = EXERCISE_MINUTES_BY_ACTIVITY[activityLevel] ?? 40;
+  const exerciseMl = (exerciseMinutes / 30) * ML_PER_30_MIN_EXERCISE;
+
+  const rawLiters = (baselineBeverageMl + exerciseMl) / 1000;
+  const clamped = Math.min(
+    Math.max(rawLiters, WATER_GOAL_BOUNDS.minLiters),
+    WATER_GOAL_BOUNDS.maxLiters
+  );
+
+  // Round to 0.1 L — the granularity the goal is displayed and edited at
+  const waterLiters = Math.round(clamped * 10) / 10;
+
+  return {
+    waterLiters,
+    // Surfaced so the app can explain the number instead of asserting it.
+    rationale: {
+      baselineLiters: Math.round((baselineBeverageMl / 1000) * 10) / 10,
+      exerciseLiters: Math.round((exerciseMl / 1000) * 10) / 10,
+      mlPerKg: mlPerKgForAge(age),
+      exerciseMinutes,
+      wasClamped: Math.abs(rawLiters - clamped) > 0.05,
+      summary:
+        `${waterLiters}L/day — based on ${Math.round(weightKg)}kg body weight` +
+        (exerciseMinutes > 0 ? ` and ~${exerciseMinutes} min of daily activity` : '') +
+        `, excluding water you get from food.`,
+    },
+  };
+};
+
 /**
  * Calculate all nutrition targets based on user input
  * @param {object} userData - { age, weightKg, heightCm, gender, activityLevel, primaryGoal }
- * @returns {object} { dailyCalories, proteinG, carbsG, fatsG, waterLiters, bmr, tdee }
+ * @returns {object} { dailyCalories, proteinG, carbsG, fatsG, waterLiters, waterRationale, bmr, tdee }
  */
 export const calculateNutritionTargets = (userData) => {
   const {
@@ -190,8 +279,14 @@ export const calculateNutritionTargets = (userData) => {
   const fatsG = calculateFatTarget(dailyCalories);
   const carbsG = calculateCarbTarget(dailyCalories, proteinG, fatsG);
 
-  // Default water goal
-  const waterLiters = 2.0;
+  // Hydration target, derived from the same body metrics the calorie and
+  // protein targets already use. This was a hardcoded 2.0 L for every user —
+  // a 55 kg sedentary user and a 95 kg very active one got the same number.
+  const { waterLiters, rationale: waterRationale } = calculateWaterTarget({
+    weightKg,
+    age,
+    activityLevel,
+  });
 
   return {
     dailyCalories,
@@ -199,6 +294,7 @@ export const calculateNutritionTargets = (userData) => {
     carbsG,
     fatsG,
     waterLiters,
+    waterRationale,
     bmr,
     tdee,
   };

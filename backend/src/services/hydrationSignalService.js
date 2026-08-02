@@ -47,6 +47,7 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { getLocalDayRange } from '../utils/timezone.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 
 // ============================================================================
 // CONSTANTS
@@ -105,10 +106,8 @@ export const CAFFEINE_PER_250ML = {
  */
 export const CAFFEINE_DAILY_LIMIT_MG = 400;
 
-/**
- * Default daily water goal in litres when the user has no goals row.
- */
-const DEFAULT_WATER_GOAL_LITERS = 2.0;
+// Default daily water goal (DEFAULT_WATER_GOAL_LITERS) now comes from
+// utils/nutrition.js so every service agrees on the fallback — see imports.
 
 /**
  * Risk levels used in the hydration signal.

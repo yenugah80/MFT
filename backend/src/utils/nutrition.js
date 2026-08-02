@@ -4,6 +4,17 @@
  */
 
 /**
+ * Fallback daily water goal, in liters, for users with no stored goal.
+ *
+ * Single source of truth on purpose: services previously defaulted to 2.0, 2.5
+ * and 3.0 independently, so "your goal" — and every percentage, streak and
+ * recommendation derived from it — depended on which service answered the
+ * request. Real goals come from nutritionGoals.waterLiters, which onboarding
+ * now derives from body weight, age and activity level.
+ */
+export const DEFAULT_WATER_GOAL_LITERS = 2.0;
+
+/**
  * Scale nutrients from a base amount to a target amount.
  * @param {Object} nutrients - Object containing nutrient values (e.g., { calories: 100, protein: 5 })
  * @param {number} baseAmount - The amount the nutrients are currently based on (e.g., 100g)

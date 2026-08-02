@@ -89,6 +89,100 @@ export function useHydrationAnalytics(options = {}) {
 }
 
 // ============================================================================
+// DAILY HISTORY HOOK (for trend charts)
+// ============================================================================
+
+/**
+ * Hook for day-by-day hydration totals.
+ *
+ * /hydration/analytics/dashboard gives aggregate patterns but no per-day
+ * series, so the trend chart pulls /water/history and uses its
+ * dailyAggregates (already grouped in the client's timezone by the backend,
+ * and hydration-adjusted the same way /water/today computes totalLiters — so
+ * a bar and the "today" card can never disagree).
+ *
+ * Always fetches a fixed `days` window and lets callers slice it. Streaks and
+ * averages computed off a 7-day slice would silently understate a longer run,
+ * and re-fetching on every range toggle is wasted network for data we already
+ * hold. Missing days are zero-filled so the chart shows real gaps rather than
+ * compressing them away.
+ */
+export function useHydrationHistory(days = 30, options = {}) {
+  const { enabled = true } = options;
+
+  const range = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - (days - 1));
+    start.setHours(0, 0, 0, 0);
+    return {
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+    };
+  }, [days]);
+
+  const query = useQuery({
+    queryKey: [...HYDRATION_ANALYTICS_KEYS.all, 'history', days],
+    queryFn: async () => {
+      const empty = { logs: [], dailyAggregates: [], totalEntries: 0 };
+      try {
+        // The backend limits newest-first, so an undersized limit silently
+        // truncates the OLDEST days into looking like zero-intake days.
+        // 600 covers ~20 logs/day over a month.
+        const data = await apiClient.get('/water/history', {
+          params: { ...range, limit: Math.max(600, days * 20) },
+        });
+        return { ...empty, ...(data || {}), failed: false };
+      } catch {
+        // Kept non-throwing for graceful degradation, but the caller needs to
+        // tell "you have no logs" apart from "we couldn't load your logs" —
+        // showing a new-user empty state to someone with months of data is
+        // worse than showing a retry.
+        return { ...empty, failed: true };
+      }
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  // Build a continuous, zero-filled series ending today
+  const series = useMemo(() => {
+    const byDate = {};
+    (query.data?.dailyAggregates || []).forEach((day) => {
+      byDate[day.date] = day;
+    });
+
+    const out = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      // Local date key, matching the backend's timezone-aware grouping
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const agg = byDate[key];
+      out.push({
+        date: key,
+        dayOfWeek: d.getDay(),
+        ml: Math.round((agg?.hydrationLiters ?? 0) * 1000),
+        entries: agg?.count || 0,
+        isToday: i === 0,
+      });
+    }
+    return out;
+  }, [query.data, days]);
+
+  return useMemo(() => ({
+    series,
+    logs: query.data?.logs || [],
+    dailyAggregates: query.data?.dailyAggregates || [],
+    isLoading: query.isLoading,
+    hasFailed: query.data?.failed === true,
+    error: query.error,
+    refetch: query.refetch,
+  }), [series, query.data, query.isLoading, query.error, query.refetch]);
+}
+
+// ============================================================================
 // COLD START HOOK
 // ============================================================================
 

@@ -59,7 +59,11 @@ export default function HydrationCognitionScreen() {
   }, [refetch]);
 
   const patterns = analytics?.patterns;
-  const persona = analytics?.persona?.persona;
+  // /hydration/analytics/dashboard already flattens persona to the persona
+  // object itself (`persona: persona.persona` in getAnalyticsDashboard), so the
+  // old `analytics.persona.persona` was always undefined and this card never
+  // rendered. Kept the nested read as a fallback for the /persona endpoint shape.
+  const persona = analytics?.persona?.persona || analytics?.persona;
   const prediction = analytics?.prediction;
   const hasBasicData = !!patterns;
 

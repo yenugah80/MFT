@@ -37,6 +37,11 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
     router.push('/insights/hydration-cognition');
   };
 
+  const handleViewFullAnalytics = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/analytics/hydration');
+  };
+
   // Empty state when no data and no recommendations
   if (!data && recommendations.length === 0) {
     return (
@@ -79,6 +84,26 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
         />
       }
     >
+      {/* Hydration has a dedicated analytics screen (trend, timing, beverage
+          mix, persona, forecast). This tab stays as the at-a-glance summary
+          inside the cross-domain view and hands off to it. */}
+      <TouchableOpacity
+        style={styles.fullAnalyticsLink}
+        onPress={handleViewFullAnalytics}
+        activeOpacity={0.8}
+      >
+        <View style={styles.fullAnalyticsIcon}>
+          <Ionicons name="water" size={18} color={VIBRANT_WELLNESS.hydration.solid} />
+        </View>
+        <View style={styles.fullAnalyticsText}>
+          <Text style={styles.fullAnalyticsTitle}>Full hydration analytics</Text>
+          <Text style={styles.fullAnalyticsSubtitle}>
+            Daily trend, when &amp; what you drink, your hydration type
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+      </TouchableOpacity>
+
       {/* Priority Actions */}
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
@@ -112,7 +137,9 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
             <MetricCard
               value={`${goalPercent || 0}%`}
               label="of Goal"
-              icon="checkmark-circle"
+              // A checkmark below goal reads as "done" at 15% — only show it
+              // once the goal is actually met.
+              icon={(goalPercent || 0) >= 100 ? 'checkmark-circle' : 'ellipse-outline'}
               iconColor={(goalPercent || 0) >= 100 ? SEMANTIC.success.base : VIBRANT_WELLNESS.hydration.solid}
             />
             <MetricCard
@@ -296,6 +323,34 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     marginBottom: SPACING[2],
+  },
+  fullAnalyticsLink: {
+    ...CARD_SYSTEM.standard,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  fullAnalyticsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${VIBRANT_WELLNESS.hydration.solid}15`,
+  },
+  fullAnalyticsText: {
+    flex: 1,
+  },
+  fullAnalyticsTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  fullAnalyticsSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 1,
   },
   metricsRow: {
     flexDirection: 'row',

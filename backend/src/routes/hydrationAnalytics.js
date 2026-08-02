@@ -13,6 +13,7 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFlag, FLAG_NAMES } from '../middleware/featureFlags.js';
+import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
 import {
   getColdStartStage,
   analyzeHydrationPatterns,
@@ -58,7 +59,7 @@ router.get('/dashboard', async (req, res) => {
     }
 
     // Get full analytics dashboard
-    const dashboard = await getAnalyticsDashboard(userId);
+    const dashboard = await getAnalyticsDashboard(userId, parseTimezoneOffsetMinutes(req) ?? 0);
 
     // Try to get dismissed insight types (graceful if table doesn't exist)
     let dismissedTypes = [];
@@ -122,7 +123,7 @@ router.get('/patterns', async (req, res) => {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const days = parseInt(req.query.days) || 30;
 
-    const patterns = await analyzeHydrationPatterns(userId, days);
+    const patterns = await analyzeHydrationPatterns(userId, days, parseTimezoneOffsetMinutes(req) ?? 0);
 
     res.json(patterns);
   } catch (error) {
@@ -142,7 +143,7 @@ router.get('/patterns', async (req, res) => {
 router.get('/persona', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const persona = await classifyPersona(userId);
+    const persona = await classifyPersona(userId, parseTimezoneOffsetMinutes(req) ?? 0);
 
     res.json(persona);
   } catch (error) {
@@ -172,7 +173,7 @@ router.get('/prediction/tomorrow', async (req, res) => {
         meetingCount: req.query.meetingCount ? parseInt(req.query.meetingCount) : undefined,
       };
 
-      prediction = await generatePrediction(userId, context);
+      prediction = await generatePrediction(userId, context, parseTimezoneOffsetMinutes(req) ?? 0);
 
       // Save prediction if successful
       if (prediction.hasPrediction) {
@@ -197,7 +198,7 @@ router.post('/prediction/refresh', async (req, res) => {
     const { meetingCount } = req.body;
 
     const context = { meetingCount };
-    const prediction = await generatePrediction(userId, context);
+    const prediction = await generatePrediction(userId, context, parseTimezoneOffsetMinutes(req) ?? 0);
 
     if (prediction.hasPrediction) {
       await savePrediction(userId, prediction);

@@ -27,6 +27,7 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import WittyMessageEngine from './wittyMessageEngine.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 
 // ============================================================================
 // REMINDER TYPES & CONFIGURATION
@@ -609,7 +610,7 @@ function generateHydrationReminders(context) {
   const { currentHour, todayStats, goals, userName } = context;
   const reminders = [];
 
-  const waterGoal = parseFloat(goals?.waterLiters) || 2.0;
+  const waterGoal = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
   const waterLogged = todayStats.water.totalLiters;
   const percentage = Math.round((waterLogged / waterGoal) * 100);
   const remaining = Math.max(0, waterGoal - waterLogged);

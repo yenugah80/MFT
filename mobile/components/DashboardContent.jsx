@@ -1667,7 +1667,7 @@ export default function DashboardContent() {
           onOpenFullMoodLogger={() => setDashMoodModalVisible(true)}
           onViewMoodHistory={() => router.push('/analytics')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
-          onViewHydrationHistory={() => router.push('/analytics')}
+          onViewHydrationHistory={() => router.push('/analytics/hydration')}
           moodInsights={moodInsightsData}
           moodInsightsLoading={moodInsightsLoading}
           wellnessScore={wellnessScore}

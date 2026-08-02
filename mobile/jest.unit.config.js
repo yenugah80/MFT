@@ -5,6 +5,9 @@ module.exports = {
   testMatch: [
     '**/__tests__/**/analytics.test.js',
     '**/__tests__/**/foodAnalyticsCalculations.test.js',
+    '**/__tests__/**/profileCache.test.js',
+    '**/__tests__/**/pairingSelector.test.js',
+    '**/__tests__/**/waterTarget.test.js',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

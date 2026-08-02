@@ -28,6 +28,7 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { getUserPlattParams, getUserThresholds } from './outcomeVerificationService.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 
 // ============================================================================
 // CONSTANTS
@@ -932,7 +933,7 @@ export async function generateMorningPrediction(userId) {
 
     // Calculate today's hydration
     const todayHydration = todayWater.reduce((sum, w) => sum + parseFloat(w.hydrationLiters || 0), 0);
-    const hydrationGoal = goals[0]?.waterLiters || 2.5;
+    const hydrationGoal = goals[0]?.waterLiters || DEFAULT_WATER_GOAL_LITERS;
     const hydrationPercent = Math.min(100, Math.round((todayHydration / hydrationGoal) * 100));
 
     // Calculate today's protein

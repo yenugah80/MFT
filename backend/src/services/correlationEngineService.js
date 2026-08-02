@@ -24,6 +24,7 @@ import {
   profilesTable,
 } from '../db/schema.js';
 import { eq, and, gte, lte, between, desc, sql } from 'drizzle-orm';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 
 /**
  * ============================================
@@ -1691,7 +1692,7 @@ export async function computeUserCorrelations(userId, options = {}) {
       .limit(1);
 
     const goal = goalResult[0];
-    const hydrationGoal = goal ? parseFloat(goal.waterLiters) : 3.0;
+    const hydrationGoal = goal ? parseFloat(goal.waterLiters) : DEFAULT_WATER_GOAL_LITERS;
 
     const correlations = [];
 

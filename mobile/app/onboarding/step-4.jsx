@@ -189,6 +189,19 @@ const Step4Screen = () => {
   const carbsPct = Math.round(((step4Data.carbsG || 0) * 4 / totalCalories) * 100);
   const fatsPct = Math.round(((step4Data.fatsG || 0) * 9 / totalCalories) * 100);
 
+  // The water target is derived from body weight, age and activity rather than
+  // being a flat 2L, so say what it's based on — an unexplained number is
+  // exactly the thing users report not trusting. Falls back to generic copy
+  // once they've hand-edited it, since the rationale no longer describes it.
+  const waterRationale = calculatedGoals?.waterRationale;
+  const waterIsDerived =
+    waterRationale && Math.abs((step4Data.waterLiters || 0) - calculatedGoals.waterLiters) < 0.05;
+  const waterContext = waterIsDerived
+    ? (waterRationale.exerciseMinutes > 0
+        ? `Based on your body weight and ~${waterRationale.exerciseMinutes} min daily activity`
+        : 'Based on your body weight — excludes water you get from food')
+    : 'Stay hydrated throughout the day';
+
   const isHighActivity = step2Data?.activityLevel === 'very_active' || step2Data?.activityLevel === 'extremely_active';
   const carbsContext = isHighActivity
     ? 'Extra fuel for your training volume'
@@ -348,7 +361,7 @@ const Step4Screen = () => {
               iconName="water"
               color={TARGET_COLORS.water.base}
               lightColor={TARGET_COLORS.water.light}
-              caption="Stay hydrated throughout the day"
+              caption={waterContext}
               unit="L"
               onEdit={() => setEditingGoal('waterLiters')}
               isLast

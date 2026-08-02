@@ -30,7 +30,28 @@ import {
   insightFeedbackTable,
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
-import { toDateStr } from '../utils/timezone.js';
+import { toDateStr, getDayKey } from '../utils/timezone.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
+
+/**
+ * Hour of day as the USER experienced it, not as the server did.
+ *
+ * `new Date(x).getHours()` returns the hour in the server's timezone — UTC on
+ * Railway. Every time-of-day figure in this file (peak hour, the morning /
+ * afternoon / evening split, persona classification) was therefore computed in
+ * UTC, so an IST user's 8am glass was recorded as 2:30am and never counted
+ * toward "morning". offsetMinutes follows Date#getTimezoneOffset convention
+ * (IST = -330), the same value the client sends in X-Timezone-Offset.
+ */
+function getLocalHour(date, offsetMinutes = 0) {
+  const offsetMs = (Number.isFinite(offsetMinutes) ? offsetMinutes : 0) * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).getUTCHours();
+}
+
+/** Day of week (0=Sun) for a YYYY-MM-DD key, read back without re-shifting it. */
+function dayOfWeekForKey(dateKey) {
+  return new Date(`${dateKey}T00:00:00Z`).getUTCDay();
+}
 
 // ============================================================================
 // PERSONA DEFINITIONS
@@ -180,7 +201,11 @@ export async function getColdStartStage(userId) {
  * @param {number} days - Number of days to analyze (default: 30)
  * @returns {Promise<object>} - Pattern analysis with explainability
  */
-export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOOKBACK_DAYS) {
+export async function analyzeHydrationPatterns(
+  userId,
+  days = CONFIG.PATTERN_LOOKBACK_DAYS,
+  offsetMinutes = 0
+) {
   try {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -217,7 +242,7 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
     const hourlyDistribution = new Array(24).fill(0);
     const hourlyVolume = new Array(24).fill(0);
     logs.forEach((log) => {
-      const hour = new Date(log.loggedDate).getHours();
+      const hour = getLocalHour(new Date(log.loggedDate), offsetMinutes);
       hourlyDistribution[hour]++;
       hourlyVolume[hour] += parseFloat(log.hydrationLiters || log.amountLiters || 0);
     });
@@ -246,7 +271,7 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
     // Calculate daily aggregates
     const dailyTotals = {};
     logs.forEach((log) => {
-      const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+      const dateKey = getDayKey(new Date(log.loggedDate), offsetMinutes);
       const volume = parseFloat(log.hydrationLiters || log.amountLiters || 0);
       dailyTotals[dateKey] = (dailyTotals[dateKey] || 0) + volume;
     });
@@ -260,7 +285,7 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
     const weekdayTotals = [];
     const weekendTotals = [];
     Object.entries(dailyTotals).forEach(([dateKey, total]) => {
-      const dayOfWeek = new Date(dateKey).getDay();
+      const dayOfWeek = dayOfWeekForKey(dateKey);
       if (dayOfWeek === 0 || dayOfWeek === 6) {
         weekendTotals.push(total);
       } else {
@@ -299,20 +324,35 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
       .where(eq(nutritionGoalsTable.userId, userId))
       .limit(1);
 
-    const goalLiters = parseFloat(goals?.waterLiters) || 2.0;
+    const goalLiters = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
     const goalMl = Math.round(goalLiters * 1000);
 
     // Calculate avgMl and avgPercentage (what frontend expects)
     const avgMl = Math.round(avgDaily * 1000);
     const avgPercentage = goalLiters > 0 ? (avgDaily / goalLiters) * 100 : 0;
 
-    // Calculate streak - consecutive days meeting goal (most recent)
-    const sortedDates = Object.keys(dailyTotals).sort().reverse(); // Most recent first
+    // Calculate streak - consecutive days meeting 80% of goal.
+    //
+    // Walks back one calendar day at a time. The previous version iterated only
+    // over dates that HAD logs, so a day with no water at all was skipped
+    // instead of breaking the streak — someone who logged Monday and Friday and
+    // nothing in between was shown a 2-day streak.
+    //
+    // Today is allowed to fall short without breaking the run: a day still in
+    // progress is not a miss, otherwise every user's streak reads 0 each
+    // morning until they catch up.
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const todayKey = getDayKey(new Date(), offsetMinutes);
     let streak = 0;
-    for (const dateKey of sortedDates) {
-      const dailyLiters = dailyTotals[dateKey];
-      if (dailyLiters >= goalLiters * 0.8) { // 80% of goal counts for streak
+    for (let i = 0; i < days; i++) {
+      // Same key basis dailyTotals was built with above
+      const dateKey = getDayKey(new Date(Date.now() - i * DAY_MS), offsetMinutes);
+      const dailyLiters = dailyTotals[dateKey] || 0;
+
+      if (dailyLiters >= goalLiters * 0.8) {
         streak++;
+      } else if (dateKey === todayKey) {
+        continue; // in-progress day, not a miss
       } else {
         break; // Streak broken
       }
@@ -371,9 +411,13 @@ export async function analyzeHydrationPatterns(userId, days = CONFIG.PATTERN_LOO
  * @param {string} userId
  * @returns {Promise<object>} - Persona with confidence and explanation
  */
-export async function classifyPersona(userId) {
+export async function classifyPersona(userId, offsetMinutes = 0) {
   try {
-    const patterns = await analyzeHydrationPatterns(userId);
+    const patterns = await analyzeHydrationPatterns(
+      userId,
+      CONFIG.PATTERN_LOOKBACK_DAYS,
+      offsetMinutes
+    );
 
     if (!patterns.hasEnoughData) {
       return {
@@ -426,7 +470,7 @@ export async function classifyPersona(userId) {
       .where(eq(nutritionGoalsTable.userId, userId))
       .limit(1);
 
-    const waterGoal = parseFloat(goals?.waterLiters) || 2.0;
+    const waterGoal = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
 
     // Check for champion (HYDRATION_CHAMPION)
     if (avgDaily >= waterGoal * 0.9 && distributionVariance < 0.2) {
@@ -483,9 +527,9 @@ export async function classifyPersona(userId) {
  * @param {object} context - Optional context (calendar events, weather)
  * @returns {Promise<object>} - Prediction with factors and explanation
  */
-export async function generatePrediction(userId, context = {}) {
+export async function generatePrediction(userId, context = {}, offsetMinutes = 0) {
   try {
-    const patterns = await analyzeHydrationPatterns(userId, 14); // Use 14 days for predictions
+    const patterns = await analyzeHydrationPatterns(userId, 14, offsetMinutes); // Use 14 days for predictions
 
     if (!patterns.hasEnoughData) {
       return {
@@ -502,7 +546,7 @@ export async function generatePrediction(userId, context = {}) {
       .where(eq(nutritionGoalsTable.userId, userId))
       .limit(1);
 
-    const baseGoal = parseFloat(goals?.waterLiters) || 2.0;
+    const baseGoal = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
     const avgDaily = patterns.patterns.avgDaily;
 
     // Start with user's typical intake as base
@@ -510,9 +554,13 @@ export async function generatePrediction(userId, context = {}) {
     const factors = [];
 
     // Factor: Day of week adjustment
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayOfWeek = tomorrow.getDay();
+    // "Tomorrow" and whether it's a weekend must be read in the user's
+    // timezone — near midnight UTC the server and the user disagree on which
+    // day tomorrow even is, which flips the weekend adjustment.
+    const DAY_MS_PRED = 24 * 60 * 60 * 1000;
+    const dayOfWeek = dayOfWeekForKey(
+      getDayKey(new Date(Date.now() + DAY_MS_PRED), offsetMinutes)
+    );
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
     if (isWeekend && patterns.patterns.weekendDrop > 0.1) {
@@ -574,14 +622,14 @@ export async function generatePrediction(userId, context = {}) {
  * @param {string} userId
  * @returns {Promise<object>} - Complete analytics data
  */
-export async function getAnalyticsDashboard(userId) {
+export async function getAnalyticsDashboard(userId, offsetMinutes = 0) {
   try {
     // Use Promise.allSettled for resilience - partial data is better than no data
     const results = await Promise.allSettled([
       getColdStartStage(userId),
-      analyzeHydrationPatterns(userId),
-      classifyPersona(userId),
-      generatePrediction(userId),
+      analyzeHydrationPatterns(userId, CONFIG.PATTERN_LOOKBACK_DAYS, offsetMinutes),
+      classifyPersona(userId, offsetMinutes),
+      generatePrediction(userId, {}, offsetMinutes),
     ]);
 
     // Extract results, using fallbacks for rejected promises
@@ -920,7 +968,7 @@ export async function getDismissedInsightTypes(userId) {
  * @param {string} userId
  * @param {Date} date
  */
-export async function computeDailySummary(userId, date) {
+export async function computeDailySummary(userId, date, offsetMinutes = 0) {
   try {
     const dateStart = new Date(date);
     dateStart.setHours(0, 0, 0, 0);
@@ -953,7 +1001,7 @@ export async function computeDailySummary(userId, date) {
       const ml = parseFloat(log.amountLiters || 0) * 1000;
       const hydMl = parseFloat(log.hydrationLiters || log.amountLiters || 0) * 1000;
       const bevType = log.beverageType || 'water';
-      const hour = new Date(log.loggedDate).getHours();
+      const hour = getLocalHour(new Date(log.loggedDate), offsetMinutes);
 
       totalMl += ml;
       hydrationMl += hydMl;
@@ -968,12 +1016,14 @@ export async function computeDailySummary(userId, date) {
       .where(eq(nutritionGoalsTable.userId, userId))
       .limit(1);
 
-    const goalMl = (parseFloat(goals?.waterLiters) || 2.0) * 1000;
+    const goalMl = (parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS) * 1000;
     const goalPercent = (hydrationMl / goalMl) * 100;
 
     // Calculate pattern features
     const peakHour = hourlyVolume.indexOf(Math.max(...hourlyVolume));
-    const logHours = logs.map((l) => new Date(l.loggedDate).getHours()).sort((a, b) => a - b);
+    const logHours = logs
+      .map((l) => getLocalHour(new Date(l.loggedDate), offsetMinutes))
+      .sort((a, b) => a - b);
     const firstLogHour = logHours[0];
     const lastLogHour = logHours[logHours.length - 1];
 

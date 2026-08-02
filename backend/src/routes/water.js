@@ -11,6 +11,7 @@ import { nutritionGoalsTable } from "../db/schema.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
+import { DEFAULT_WATER_GOAL_LITERS } from "../utils/nutrition.js";
 import {
   BEVERAGE_FACTORS as _BEV_FACTORS,
   CAFFEINE_PER_250ML as _CAFF,
@@ -140,7 +141,7 @@ router.post("/log", async (req, res) => {
           .from(nutritionGoalsTable)
           .where(eq(nutritionGoalsTable.userId, userId))
           .limit(1);
-        const waterGoal = parseFloat(goals?.waterLiters) || 2.0;
+        const waterGoal = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
         const hitDailyGoal = totalToday >= waterGoal;
 
         const xpToAward = calculateLogXP('water', { hitDailyGoal });

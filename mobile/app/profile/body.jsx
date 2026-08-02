@@ -511,7 +511,9 @@ export default function BodyMetricsScreen() {
     if (!recalculatedGoals) return;
     setIsSaving(true);
     try {
-      const { bmr, tdee, ...targets } = recalculatedGoals;
+      // waterRationale is explanatory copy for the UI, not a stored goal —
+      // drop it alongside bmr/tdee so only real targets are persisted.
+      const { bmr, tdee, waterRationale, ...targets } = recalculatedGoals;
       await apiClient.post("/profile/goals", { primaryGoal, ...targets });
       setSavedGoals(targets);
       showSuccessToast("Goals updated");

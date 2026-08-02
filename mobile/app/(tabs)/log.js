@@ -1342,7 +1342,10 @@ export default function LogScreen() {
             totalCaffeine={totalCaffeine}
             onViewHistory={() => {
               setShowHydrationModal(false);
-              router.push('/analytics');
+              // Hydration has its own analytics screen — the unified /analytics
+              // screen opens on the Nutrition tab and buries hydration behind a
+              // tab bar, which isn't where a "History" tap should land.
+              router.push('/analytics/hydration');
             }}
           />
         </View>
