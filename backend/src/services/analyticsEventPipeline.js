@@ -510,7 +510,7 @@ export async function processEvent(eventName, properties, userId = null, device 
       INSERT INTO analytics_events (event_name, timestamp, properties, device, session_id, user_id)
       VALUES (
         ${eventName},
-        ${new Date()},
+        ${new Date().toISOString()},
         ${JSON.stringify(enrichedEvent.properties)},
         ${JSON.stringify(enrichedEvent.device)},
         ${properties.session_id || null},

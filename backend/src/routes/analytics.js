@@ -71,7 +71,7 @@ router.post("/crash-reports", async (req, res) => {
       INSERT INTO "crash_reports"
         ("timestamp", "error_message", "error_name", "error_stack", "component_stack", "context", "device", "environment", "user_id")
       VALUES
-        (${new Date(timestamp)}, ${error?.message || 'Unknown'}, ${error?.name || 'Error'}, ${error?.stack || null}, ${errorInfo?.componentStack || null}, ${JSON.stringify(context || {})}, ${JSON.stringify(device || {})}, ${environment || 'production'}, ${context?.userId || null})
+        (${new Date(timestamp).toISOString()}, ${error?.message || 'Unknown'}, ${error?.name || 'Error'}, ${error?.stack || null}, ${errorInfo?.componentStack || null}, ${JSON.stringify(context || {})}, ${JSON.stringify(device || {})}, ${environment || 'production'}, ${context?.userId || null})
     `);
 
     res.status(201).json({ success: true });
@@ -99,7 +99,7 @@ router.post("/analytics/events", async (req, res) => {
         INSERT INTO "analytics_events"
           ("event_name", "timestamp", "properties", "device", "session_id", "user_id")
         VALUES
-          (${event.event}, ${new Date(event.timestamp)}, ${JSON.stringify(event.properties || {})}, ${JSON.stringify(event.device || {})}, ${event.properties?.session_id || null}, ${event.properties?.user_id || null})
+          (${event.event}, ${new Date(event.timestamp).toISOString()}, ${JSON.stringify(event.properties || {})}, ${JSON.stringify(event.device || {})}, ${event.properties?.session_id || null}, ${event.properties?.user_id || null})
       `);
     }
 
