@@ -303,7 +303,14 @@
       "Bash(plutil -p \"/Users/harikay/Library/Developer/CoreSimulator/Devices/63B4F2C3-8A30-4708-A55D-D71DD850A02A/data/Containers/Bundle/Application/A22EFC82-BC6B-419A-950B-F00EDAB2AF9B/MFTMyFoodMoodTracker.app/Info.plist\")",
       "Bash(npx --no-install babel-parser)",
       "Bash(lsof -nP -iTCP:8081 -sTCP:LISTEN)",
-      "Bash(lsof -nP -iTCP:3000,5000,8080,4000 -sTCP:LISTEN)"
+      "Bash(lsof -nP -iTCP:3000,5000,8080,4000 -sTCP:LISTEN)",
+      "Bash(perl -pi -e 's/VIBRANT_WELLNESS\\\\.\\(success|danger\\)\\\\.subtle/SEMANTIC.$1.bg/g; s/VIBRANT_WELLNESS\\\\.\\(success|danger\\)\\\\.base/SEMANTIC.$1.base/g;' app/profile/privacy.jsx)",
+      "Bash(node scripts/validate-theme-tokens.mjs)",
+      "Bash(perl -pi -e 's/SURFACES\\\\.card\\\\.background\\\\.default, SURFACES\\\\.card\\\\.background\\\\.elevated/SURFACES.card.primary, SURFACES.background.tertiary/g' components/profile/ComplianceHistoryChart.jsx components/profile/CuisinePreferencesSection.jsx)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(perl -pi -e 's/backgroundColor: SURFACES\\\\.card\\\\.background,/backgroundColor: SURFACES.card.primary,/' components/dashboard/EnhancedGamificationCard.jsx components/dashboard/HydrationIntelligenceCard.jsx components/dashboard/MoodEnergyIntelligenceCard.jsx components/dashboard/NutritionIntelligenceCard.jsx components/log/HealthAnalysisModal.js)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(npx jest *)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-harikay-Desktop-MFT/4cc6f6b1-a61c-4994-be5e-ee90fe280657/scratchpad"
