@@ -16,8 +16,16 @@
  * CTAs and any deep link may still target this path.
  */
 
-import { Redirect } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 
 export default function HydrationCognitionScreen() {
-  return <Redirect href="/analytics/hydration" />;
+  return (
+    <>
+      {/* The insights layout shows a header by default, and this route no
+          longer sets a title — without this, the redirect frame renders a
+          header reading "hydration-cognition", the raw route slug. */}
+      <Stack.Screen options={{ headerShown: false }} />
+      <Redirect href="/analytics/hydration" />
+    </>
+  );
 }
