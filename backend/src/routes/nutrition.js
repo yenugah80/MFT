@@ -18,6 +18,7 @@ import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -609,7 +610,7 @@ router.post("/scale", (req, res) => {
  * POST /api/nutrition/voice-log
  * Transcribe audio and analyze food content.
  */
-router.post("/voice-log", upload.single("audio"), async (req, res) => {
+router.post("/voice-log", requireOpenAIConsent({ purpose: 'transcribe and log your voice note' }), upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) {
       return errors.badRequest(res, 'No audio file provided');

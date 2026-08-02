@@ -220,7 +220,7 @@ class PremiumFeaturesService {
         INSERT INTO analytics_events (event_name, timestamp, properties, user_id)
         VALUES (
           ${'feature_used'},
-          ${new Date()},
+          ${new Date().toISOString()},
           ${JSON.stringify({ feature, tier: userTier.tier, ...metadata })},
           ${userId}
         )
@@ -268,7 +268,7 @@ class PremiumFeaturesService {
         INSERT INTO analytics_events (event_name, timestamp, properties, user_id)
         VALUES (
           ${'premium_api_usage'},
-          ${new Date()},
+          ${new Date().toISOString()},
           ${JSON.stringify({ inputTokens, outputTokens, costUsd: cost })},
           ${userId}
         )
@@ -384,17 +384,27 @@ class PremiumFeaturesService {
         .limit(1);
 
       if (!user[0]) {
-        return { hasConsent: false, consentGivenAt: null };
+        return { hasConsent: false, consentGivenAt: null, revokedAt: null, hasBeenAsked: false };
       }
+
+      const givenAt = user[0].openaiConsentGivenAt;
+      const revokedAt = user[0].openaiConsentRevokedAt;
 
       return {
         hasConsent: user[0].openaiDataSharingConsent === true,
-        consentGivenAt: user[0].openaiConsentGivenAt,
+        consentGivenAt: givenAt,
+        revokedAt,
+        // Distinguishes "never answered" from "answered no". Both leave
+        // hasConsent false, but only the first should ever be prompted —
+        // re-asking someone who declined is nagging, not consent.
+        hasBeenAsked: Boolean(givenAt || revokedAt),
         tier: user[0].isPremium ? 'premium' : 'free',
       };
     } catch (err) {
       console.error('[PremiumFeatures] Error getting consent status:', err);
-      return { hasConsent: false, consentGivenAt: null };
+      // hasBeenAsked true on error so a transient DB failure never triggers a
+      // spurious prompt for someone who already answered.
+      return { hasConsent: false, consentGivenAt: null, revokedAt: null, hasBeenAsked: true };
     }
   }
 }

@@ -1,12 +1,19 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BRAND, TEXT, SURFACES, TYPOGRAPHY } from "../../constants/premiumTheme";
 import { useProfileContext } from "../../providers/ProfileProvider";
 import LoadingSpinner from "../../components/LoadingSpinner";
+import AIConsentPrompt from "../../components/consent/AIConsentPrompt";
+
+// Height of the bar's own content (icon + label + padding), excluding whatever
+// the device reserves at the bottom for the home indicator.
+const TAB_BAR_CONTENT_HEIGHT = 60;
 
 const TabsLayout = () => {
   const { isSignedIn, isLoaded } = useAuth();
+  const insets = useSafeAreaInsets();
   const { onboardingComplete, profile, isLoading } = useProfileContext();
 
   // Safety guards — index.jsx handles the happy-path routing;
@@ -21,18 +28,24 @@ const TabsLayout = () => {
   if (onboardingComplete === false) return <Redirect href="/onboarding" />;
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: BRAND.primary,
         tabBarInactiveTintColor: TEXT.tertiary,
+        // Height and bottom padding are derived from the device's safe-area
+        // inset rather than hardcoded. A fixed `height: 80, paddingBottom: 8`
+        // crowded the labels against the home indicator on iPhone X and later
+        // (~34pt inset), and made the bar needlessly tall on devices with no
+        // inset at all, like the SE.
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: SURFACES.divider,
           borderTopWidth: 1,
-          paddingBottom: 8,
           paddingTop: 8,
-          height: 80,
+          paddingBottom: Math.max(insets.bottom, 8),
+          height: TAB_BAR_CONTENT_HEIGHT + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -88,6 +101,12 @@ const TabsLayout = () => {
         }}
       />
     </Tabs>
+    {/* Mounted here rather than at the app root so it can only appear for a
+        signed-in, onboarded user — never over the auth or onboarding flow.
+        Self-gating: renders null unless the server says this account has never
+        been asked. */}
+    <AIConsentPrompt />
+    </>
   );
 };
 

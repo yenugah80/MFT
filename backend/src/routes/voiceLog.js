@@ -6,6 +6,7 @@ import { db } from '../config/db.js';
 import { aiEstimatedFoodsTable } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
+import { attachOpenAIConsent, requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import crypto from 'crypto';
 import { buildUnifiedResponse } from '../utils/unifiedResponseBuilder.js';
 
@@ -66,7 +67,11 @@ function generateItemId(name, normalizedQuery, index) {
     .slice(0, 12);
 }
 
-router.post('/process', requireAuth(), async (req, res) => {
+router.post(
+  '/process',
+  requireAuth(),
+  attachOpenAIConsent(),
+  async (req, res) => {
   try {
     const { text, isPartial, mealType, language } = req.body;
 
@@ -91,7 +96,11 @@ router.post('/process', requireAuth(), async (req, res) => {
 
     // FALLBACK: If local dictionary found nothing, try OpenAI
     // SKIP OpenAI for partial requests to ensure instant UI feedback
-    if ((detectedIngredients.length === 0 || isComplex) && !isPartial) {
+    // Skip the model entirely when the user has not consented. The local
+    // dictionary result above (and the shared DB cache below) still stand, which
+    // is the "regex-based food analysis" the revoke endpoint promises — degraded,
+    // but working, rather than an error the user cannot interpret.
+    if ((detectedIngredients.length === 0 || isComplex) && !isPartial && req.hasOpenAIConsent !== false) {
       console.log(`[VoiceLog] Local dictionary missed "${text}". Calling OpenAI...`);
 
       // 1. CHECK DB FIRST: Has anyone logged this before?
@@ -234,7 +243,14 @@ router.post('/process', requireAuth(), async (req, res) => {
  * Handle audio transcription + processing in one optimized request.
  * Accepts multipart/form-data with 'audio' file field.
  */
-router.post('/transcribe', requireAuth(), uploadMiddleware, async (req, res) => {
+// Consent gate sits BEFORE uploadMiddleware so a denied request is rejected
+// without the audio ever being read into memory.
+router.post(
+  '/transcribe',
+  requireAuth(),
+  requireOpenAIConsent({ purpose: 'transcribe your voice note and identify the foods in it' }),
+  uploadMiddleware,
+  async (req, res) => {
   try {
     // VALIDATION: Whitelist meal types to prevent prompt injection or confusion
     const VALID_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);

@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 
 // Macro/calorie self-consistency (Atwater), reconciled in place BEFORE totals are
 // built from it — same rule as the text-estimation and DB write-boundary paths (see
@@ -372,7 +373,7 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
  * Returns: { transcript: string, confidence: number }
  * Uses gpt-4o-mini-transcribe for speech-to-text ONLY
  */
-router.post("/transcribe-voice", upload.single('audio'), async (req, res) => {
+router.post("/transcribe-voice", requireOpenAIConsent({ purpose: 'transcribe your voice note' }), upload.single('audio'), async (req, res) => {
   try {
     // Check if file was uploaded
     if (!req.file) {
@@ -438,7 +439,7 @@ router.post("/transcribe-voice", upload.single('audio'), async (req, res) => {
  *
  * NOTE: Prefer using /transcribe-voice + /analyze-text for better UX (allows user to confirm/edit transcript)
  */
-router.post("/analyze-voice", upload.single('audio'), async (req, res) => {
+router.post("/analyze-voice", requireOpenAIConsent({ purpose: 'transcribe and analyse your voice note' }), upload.single('audio'), async (req, res) => {
   try {
     // Check if file was uploaded
     if (!req.file) {

@@ -21,6 +21,7 @@ import { getSpellingSuggestions, findSimilarFoods } from "../utils/fuzzyMatch.js
 import { buildDefaultPortion, getPortionAdjustmentOptions } from "../utils/portionDefaults.js";
 import { getIngredientBreakdown, hasIngredientData } from "../services/ingredientEstimator.js";
 import { ingredientBreakdownService } from "../services/ingredientBreakdownService.js";
+import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 
 const router = express.Router();
 router.use(requireAuth());
@@ -42,7 +43,7 @@ router.use(aiLimiter); // Strict rate limit for AI-powered endpoints
  *
  * Response: ResolvedMealDraft
  */
-router.post("/", async (req, res) => {
+router.post("/", attachOpenAIConsent(), async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { mode, query, barcode, imageBase64, mealType, userContext } = req.body;
@@ -76,6 +77,19 @@ router.post("/", async (req, res) => {
       case 'photo':
         if (!imageBase64) {
           return res.status(400).json({ error: "imageBase64 required for photo mode" });
+        }
+        // Photo analysis is the one mode with no local alternative — there is no
+        // offline image recogniser to fall back to — so it is the only mode that
+        // must refuse rather than degrade. Barcode and text both have local
+        // paths and keep working without consent.
+        if (req.hasOpenAIConsent === false) {
+          return res.status(403).json({
+            success: false,
+            code: 'openai_consent_required',
+            error: 'Photo analysis needs AI. Enable it in Privacy settings, or log by text or barcode.',
+            purpose: 'identify the foods in your meal photo',
+            consentEndpoint: '/api/consent/give-openai-consent',
+          });
         }
         resolvedDraft = await resolvePhotoMode(imageBase64, draftId, mealType);
         break;
