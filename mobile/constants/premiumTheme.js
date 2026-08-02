@@ -1182,6 +1182,60 @@ export const getMutedToVibrantSolid = (type = 'primary') => {
   return Array.isArray(gradient) ? gradient[0] : gradient;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPATIBILITY ALIASES
+//
+// Screens across the app were written against a t-shirt spacing scale
+// (SPACING.md) and weight names (TYPOGRAPHY.weight.black) that this file never
+// defined. Reading a missing key yields `undefined`, which React Native silently
+// drops — so the style just doesn't apply and nothing errors. That made ~186
+// styles no-ops with no visible failure.
+//
+// These aliases point at the canonical values above so both conventions work.
+// Prefer the canonical form in new code; run `npm run validate:tokens` to catch
+// any token path that doesn't resolve.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// t-shirt sizes → the numeric 4pt scale
+Object.assign(SPACING, {
+  xs: SPACING[1],   // 4
+  sm: SPACING[2],   // 8
+  md: SPACING[4],   // 16
+  lg: SPACING[6],   // 24
+  xl: SPACING[8],   // 32
+  '2xl': SPACING[12], // 48
+});
+
+Object.assign(TYPOGRAPHY.weight, {
+  normal: TYPOGRAPHY.weight.regular, // '400'
+  extrabold: '800',
+  black: '900',
+});
+
+// Text style presets referenced as `...TYPOGRAPHY.caption`
+Object.assign(TYPOGRAPHY, {
+  caption: TEXT_STYLES.caption,
+  overline: TEXT_STYLES.labelTiny,
+  bodySmall: TEXT_STYLES.bodySmall,
+  h4: TEXT_STYLES.headingSmall,
+});
+
+// `error` is the common name for the danger state
+SEMANTIC.error = SEMANTIC.danger;
+
+Object.assign(SURFACES, {
+  backgroundSecondary: SURFACES.background.secondary,
+  elevated: SURFACES.card.primary,
+  muted: SURFACES.background.tertiary,
+});
+SURFACES.card.secondary = SURFACES.background.tertiary;
+
+BRAND.emerald = '#10B981';
+TEXT.quaternary = '#9CA3AF';
+
+SHADOWS.card = SHADOWS.md;
+SHADOWS.medium = SHADOWS.md;
+
 // Export all
 export const PREMIUM_THEME = {
   BRAND,

@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     color: TEXT.white,
   },
   section: {
-    backgroundColor: SURFACES.card.background,
+    backgroundColor: SURFACES.card.primary,
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,

@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   card: {
-    backgroundColor: SURFACES.card.background,
+    backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,

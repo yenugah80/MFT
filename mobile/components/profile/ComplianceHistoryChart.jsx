@@ -96,7 +96,7 @@ export default function ComplianceHistoryChart() {
 
   return (
     <LinearGradient
-      colors={[SURFACES.card.background.default, SURFACES.card.background.elevated]}
+      colors={[SURFACES.card.primary, SURFACES.background.tertiary]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}

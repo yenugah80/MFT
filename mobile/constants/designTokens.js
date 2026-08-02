@@ -441,3 +441,47 @@ export const calculateMacroPercentages = (protein, carbs, fat) => {
     fat: (fatCals / totalCals) * 100,
   };
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPATIBILITY ALIASES
+//
+// Mirrors the aliases in premiumTheme.js. Screens reference a t-shirt spacing
+// scale (SPACING.md) and text presets (TYPOGRAPHY.caption) that this file does
+// not define; a missing key yields `undefined`, which React Native silently
+// drops, so the style quietly never applies.
+//
+// Run `npm run validate:tokens` to catch unresolvable token paths.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Object.assign(SPACING, {
+  xs: SPACING[1],     // 4
+  sm: SPACING[2],     // 8
+  md: SPACING[4],     // 16
+  lg: SPACING[6],     // 24
+  xl: SPACING[8],     // 32
+  '2xl': SPACING[12], // 48
+});
+
+Object.assign(TYPOGRAPHY, {
+  caption: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    lineHeight: TYPOGRAPHY.size.xs * 1.4,
+  },
+  overline: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  bodySmall: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    lineHeight: TYPOGRAPHY.size.sm * 1.5,
+  },
+  h4: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontFamily: TYPOGRAPHY.family.bold,
+    lineHeight: TYPOGRAPHY.size.lg * 1.3,
+  },
+});
