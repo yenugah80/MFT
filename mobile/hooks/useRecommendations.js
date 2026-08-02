@@ -102,7 +102,7 @@ export function useRecommendations({ enabled = false } = {}) {
       if (__DEV__) console.error('[useRecommendations] Track error:', err);
       return false;
     }
-  }, [trackInteractionMutation]);
+  }, [trackInteractionMutation.mutateAsync]);
 
   // ============================================================================
   // ACCEPT RECOMMENDATION (useMutation + cache invalidation)
@@ -151,7 +151,7 @@ export function useRecommendations({ enabled = false } = {}) {
         foodLog: null
       };
     }
-  }, [acceptRecommendationMutation, trackInteraction]);
+  }, [acceptRecommendationMutation.mutateAsync, trackInteraction]);
 
   // ============================================================================
   // REJECT RECOMMENDATION (useMutation)
@@ -176,7 +176,7 @@ export function useRecommendations({ enabled = false } = {}) {
         error: err?.response?.data?.error || 'Failed to record rejection'
       };
     }
-  }, [rejectRecommendationMutation, trackInteraction]);
+  }, [rejectRecommendationMutation.mutateAsync, trackInteraction]);
 
   // ============================================================================
   // GET HISTORY (useQuery)
