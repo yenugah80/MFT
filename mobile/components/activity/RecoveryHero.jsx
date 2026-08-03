@@ -12,8 +12,8 @@
  * half the model's weight the number is withheld entirely.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -25,6 +25,7 @@ import {
   BRAND,
 } from '../../constants/premiumTheme';
 import { Hero, Strip } from './layout';
+import * as Haptics from 'expo-haptics';
 
 /**
  * Mirror of RECOVERY_FACTOR_WEIGHTS in the backend engine.
@@ -118,7 +119,32 @@ function ContributionRow({ factor: raw }) {
   );
 }
 
+/** The single factor that moved the score most, in plain words */
+function headline(factors) {
+  const counted = factors.filter((f) => f.counted && Number.isFinite(f.contribution));
+  if (counted.length === 0) return null;
+
+  const biggest = counted.reduce((best, f) =>
+    Math.abs(f.contribution) > Math.abs(best.contribution) ? f : best
+  );
+  if (biggest.contribution === 0) return 'Everything logged sat near your baseline';
+
+  const label = (FACTOR_LABELS[biggest.factor] || biggest.factor).toLowerCase();
+  return biggest.contribution > 0
+    ? `${label.charAt(0).toUpperCase()}${label.slice(1)} carried it today`
+    : `${label.charAt(0).toUpperCase()}${label.slice(1)} held it back today`;
+}
+
 export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPlanSession }) {
+  // Detail is opt-in: the score and its main driver answer the daily question,
+  // the five contribution rows are evidence for when it is questioned.
+  const [showDetail, setShowDetail] = useState(false);
+  const toggleDetail = useCallback(() => {
+    Haptics.selectionAsync();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowDetail((v) => !v);
+  }, []);
+
   const { score, label, color, factors = [], coverage, baseline = 50 } = recovery || {};
 
   // Derive coverage locally when the server has not deployed the block yet
@@ -154,7 +180,14 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
     <Hero accent={accent}>
       <View style={styles.header}>
         <Text style={styles.title}>Recovery</Text>
-        <View style={styles.coveragePill}>
+        <TouchableOpacity
+          style={styles.coveragePill}
+          onPress={toggleDetail}
+          activeOpacity={0.7}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${counted} of ${total} signals, ${showDetail ? 'hide' : 'show'} detail`}
+        >
           <Ionicons
             name={reliable ? 'ellipse' : 'ellipse-outline'}
             size={9}
@@ -163,7 +196,12 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
           <Text style={styles.coverageText}>
             {counted} of {total} signals
           </Text>
-        </View>
+          <Ionicons
+            name={showDetail ? 'chevron-up' : 'chevron-down'}
+            size={13}
+            color={TEXT.tertiary}
+          />
+        </TouchableOpacity>
       </View>
 
       {!reliable ? (
@@ -198,23 +236,29 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
             />
           </View>
 
-          {missingWeight > 0 && (
+          {showDetail && missingWeight > 0 && (
             <Text style={styles.caveat}>
               {missingLabels} not logged — {missingWeight}% of the model had no data.
             </Text>
           )}
 
-          <Text style={styles.sectionLabel}>What moved it</Text>
-          {factors.map((factor) => (
-            <ContributionRow key={factor.factor} factor={factor} />
-          ))}
-          <Text style={styles.baseline}>
-            Baseline {baseline} → {score}
-          </Text>
+          {!showDetail ? (
+            !!headline(hydrated) && <Text style={styles.headline}>{headline(hydrated)}</Text>
+          ) : (
+            <>
+              <Text style={styles.sectionLabel}>What moved it</Text>
+              {factors.map((factor) => (
+                <ContributionRow key={factor.factor} factor={factor} />
+              ))}
+              <Text style={styles.baseline}>
+                Baseline {baseline} → {score}
+              </Text>
+            </>
+          )}
 
           {/* Readiness translated into a session length — a handoff, not a
               competing recommendation. The plan itself lives on Activity. */}
-          {!!strainTarget && (
+          {showDetail && !!strainTarget && (
             <Strip onPress={onPlanSession} actionLabel="Plan a session">
               Ready for a {strainTarget.zone?.name?.toLowerCase() || 'moderate'} session
               {strainTarget.target ? ` — target strain ${strainTarget.target}` : ''}.
@@ -296,6 +340,12 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
+  headline: {
+    marginTop: SPACING[2],
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+  },
   sectionLabel: {
     marginTop: SPACING[4],
     marginBottom: SPACING[2],

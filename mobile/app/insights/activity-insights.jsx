@@ -110,6 +110,7 @@ export default function ActivityInsightsScreen() {
     }
   }, [deleteActivity]);
 
+
   const handleLogSignal = useCallback(() => {
     Haptics.selectionAsync();
     // Sleep and stress carry 65% of the recovery score between them

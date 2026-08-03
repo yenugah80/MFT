@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY } from '../constants/premiumTheme';
@@ -19,7 +19,8 @@ import { getExerciseById } from '../services/exerciseDatabase';
 import SessionTimeline from './activity/SessionTimeline';
 import RecoveryHero from './activity/RecoveryHero';
 import RecoveryTrendCard from './activity/RecoveryTrendCard';
-import { SectionHeader, CollapsibleSection } from './activity/layout';
+import TrainingRibbon from './activity/TrainingRibbon';
+import { CollapsibleSection } from './activity/layout';
 import {
   getWeeklyPace,
   getActivityBreakdown,
@@ -71,38 +72,56 @@ export default function ActivityInsightsView({
   const moodLink = getMoodActivityLink(activities, moodTrend);
   const nextSession = getNextSessionSuggestion(pace, balance, backendRecommendation);
   const sessionGroups = groupSessionsByDay(activities, { limit: 15 });
+
+  // The ribbon summarises the week section, so tapping it opens that section
+  // rather than navigating away from the summary you just read.
+  const [weekOpen, setWeekOpen] = useState(false);
+  const handleOpenWeek = useCallback(() => setWeekOpen((v) => !v), []);
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
-  const recommendations = generateActivityRecommendations(activities, [], goalOptions);
+  // The goal recommendation restates the Next session card almost verbatim —
+  // same shortfall, same plan — so it is dropped rather than shown twice.
+  const recommendations = generateActivityRecommendations(activities, [], goalOptions)
+    .filter((rec) => rec.type !== 'goal');
 
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Readiness first — it is the input to every decision below, and used
           to sit behind an unlabelled icon in the nav bar where it was missed */}
+      {/* Three questions, one screenful: am I ready, what do I do, how is it
+          going. Each holds one number. The evidence behind each — contribution
+          rows, the ring and pace, the month grid — is one tap deeper, because
+          arriving is not the same as studying. */}
       {!!recovery && (
-        <>
-          <SectionHeader title="Readiness" />
-          <RecoveryHero
-            recovery={recovery}
-            strainTarget={strainTarget}
-            onLogSignal={onLogSignal}
-          />
-          <RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />
-        </>
+        <RecoveryHero
+          recovery={recovery}
+          strainTarget={strainTarget}
+          onLogSignal={onLogSignal}
+        />
       )}
 
-      <SectionHeader title="This week" />
-      {/* Weekly progress: stat band + ring + pace (wave 1) */}
-      <WeeklyProgressHero pace={pace} trend={trend} />
-
-      <SectionHeader title="Next" />
-      {/* Focus and next step (wave 4) — the one action, kept above the fold */}
       <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
+
+      <TrainingRibbon
+        consistency={consistency}
+        pace={pace}
+        onPress={handleOpenWeek}
+      />
 
       {/* Review lives behind a tap. These answer weekly and monthly questions,
           not daily ones, and scrolling past them every visit is what made the
           merged screen overwhelming. */}
+      <CollapsibleSection
+        title="This week"
+        subtitle={`${pace?.minutes || 0} of ${pace?.targetMinutes || 150} min`}
+        open={weekOpen}
+        onToggle={setWeekOpen}
+      >
+        <WeeklyProgressHero pace={pace} trend={trend} />
+        <RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />
+      </CollapsibleSection>
+
       <CollapsibleSection
         title="Patterns"
         subtitle={
@@ -128,6 +147,37 @@ export default function ActivityInsightsView({
         <PersonalBestsCard bests={bests} streak={streak} />
         <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
         <MoodActivityCard link={moodLink} />
+        {/* Smart Recommendations */}
+        {recommendations.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="bulb" size={24} color="#F59E0B" />
+                <Text style={styles.cardTitle}>Personalized Insights</Text>
+              </View>
+            </View>
+            <View style={styles.recommendationsList}>
+              {recommendations.map((rec, index) => (
+                <View key={index} style={[styles.recommendationCard, { borderLeftColor: rec.color || '#6366F1' }]}>
+                  <View style={styles.recommendationHeader}>
+                    <Ionicons name={rec.icon} size={20} color={rec.color || '#6366F1'} />
+                    <Text style={styles.recommendationTitle}>{rec.title}</Text>
+                  </View>
+                  <Text style={styles.recommendationMessage}>{rec.message}</Text>
+                  {rec.action && onLogWorkout && (
+                    <TouchableOpacity
+                      style={styles.recommendationButton}
+                      onPress={onLogWorkout}
+                    >
+                      <Text style={styles.recommendationButtonText}>{rec.action}</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#6366F1" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
         {/* By activity type — works for rows without exercise identity */}
         {Object.keys(breakdown).length > 0 && (
           <View style={styles.card}>
@@ -180,37 +230,6 @@ export default function ActivityInsightsView({
 
 
 
-      {/* Smart Recommendations */}
-      {recommendations.length > 0 && (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleRow}>
-              <Ionicons name="bulb" size={24} color="#F59E0B" />
-              <Text style={styles.cardTitle}>Personalized Insights</Text>
-            </View>
-          </View>
-          <View style={styles.recommendationsList}>
-            {recommendations.map((rec, index) => (
-              <View key={index} style={[styles.recommendationCard, { borderLeftColor: rec.color || '#6366F1' }]}>
-                <View style={styles.recommendationHeader}>
-                  <Ionicons name={rec.icon} size={20} color={rec.color || '#6366F1'} />
-                  <Text style={styles.recommendationTitle}>{rec.title}</Text>
-                </View>
-                <Text style={styles.recommendationMessage}>{rec.message}</Text>
-                {rec.action && onLogWorkout && (
-                  <TouchableOpacity
-                    style={styles.recommendationButton}
-                    onPress={onLogWorkout}
-                  >
-                    <Text style={styles.recommendationButtonText}>{rec.action}</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#6366F1" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
 
       <CollapsibleSection
         title="History"

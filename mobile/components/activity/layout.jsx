@@ -126,14 +126,20 @@ export function Strip({ children, onPress, actionLabel }) {
  * ("am I ready", "how is the week", "what next"); the rest are review, and
  * review should be opt-in rather than scrolled past every time.
  */
-export function CollapsibleSection({ title, subtitle, defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen);
+export function CollapsibleSection({ title, subtitle, defaultOpen = false, open: openProp, onToggle, children }) {
+  const [openState, setOpenState] = useState(defaultOpen);
+
+  // Controlled when a parent passes `open` — lets a summary elsewhere on the
+  // screen reveal the section it summarises.
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : openState;
 
   const toggle = useCallback(() => {
     Haptics.selectionAsync();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpen((value) => !value);
-  }, []);
+    if (isControlled) onToggle?.(!openProp);
+    else setOpenState((value) => !value);
+  }, [isControlled, onToggle, openProp]);
 
   return (
     <View style={styles.collapsible}>
