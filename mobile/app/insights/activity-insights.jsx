@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -53,6 +53,8 @@ function adaptActivity(row) {
   };
 }
 
+const CHART_WIDTH = Dimensions.get('window').width - 32 * 2 - 16;
+
 export default function ActivityInsightsScreen() {
   const router = useRouter();
   const { fetchHistory, weeklyProgress, deleteActivity, isDeleting } = useActivityLog();
@@ -65,6 +67,15 @@ export default function ActivityInsightsScreen() {
   const { data: intelligence } = useQuery({
     queryKey: ['activityIntelligence'],
     queryFn: () => apiClient.get('/activity/intelligence'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Stored daily scores for the readiness trend. Runs after the intelligence
+  // call so today's snapshot exists by the time this reads it.
+  const { data: recoveryHistory } = useQuery({
+    queryKey: ['recoveryHistory', 30],
+    queryFn: () => apiClient.get('/activity/recovery-history', { params: { days: 30 } }),
+    enabled: !!intelligence,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -99,6 +110,12 @@ export default function ActivityInsightsScreen() {
     }
   }, [deleteActivity]);
 
+  const handleLogSignal = useCallback(() => {
+    Haptics.selectionAsync();
+    // Sleep and stress carry 65% of the recovery score between them
+    router.push('/(tabs)/dashboard');
+  }, [router]);
+
   const handleLogWorkout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/activity');
@@ -109,10 +126,6 @@ export default function ActivityInsightsScreen() {
     refetch();
   }, [refetch]);
 
-  const handleViewRecovery = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/activity-recovery');
-  }, [router]);
 
   return (
     <View style={styles.container}>
@@ -134,16 +147,6 @@ export default function ActivityInsightsScreen() {
               accessibilityLabel="Go back"
             >
               <Ionicons name="arrow-back" size={24} color={TEXT.primary} />
-            </TouchableOpacity>
-          ),
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={handleViewRecovery}
-              style={styles.headerButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="View recovery"
-            >
-              <Ionicons name="pulse-outline" size={22} color={TEXT.primary} />
             </TouchableOpacity>
           ),
         }}
@@ -170,6 +173,11 @@ export default function ActivityInsightsScreen() {
           targetMinutes={weeklyProgress?.target}
           moodTrend={moodData?.trendData}
           backendRecommendation={intelligence?.recommendations?.[0]}
+          recovery={intelligence?.recovery}
+          strainTarget={intelligence?.strainTarget}
+          recoveryHistory={recoveryHistory}
+          chartWidth={CHART_WIDTH}
+          onLogSignal={handleLogSignal}
           onDeleteActivity={handleDeleteActivity}
           isDeleting={isDeleting}
         />

@@ -17,6 +17,9 @@ import {
 } from './activity/TrainingFocusCards';
 import { getExerciseById } from '../services/exerciseDatabase';
 import SessionTimeline from './activity/SessionTimeline';
+import RecoveryHero from './activity/RecoveryHero';
+import RecoveryTrendCard from './activity/RecoveryTrendCard';
+import { SectionHeader } from './activity/layout';
 import {
   getWeeklyPace,
   getActivityBreakdown,
@@ -39,7 +42,20 @@ import {
  * Activity Insights View
  * Shows comprehensive analytics, trends, and recommendations for activities
  */
-export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes, moodTrend, onDeleteActivity, isDeleting, backendRecommendation }) {
+export default function ActivityInsightsView({
+  activities,
+  onLogWorkout,
+  targetMinutes,
+  moodTrend,
+  onDeleteActivity,
+  isDeleting,
+  backendRecommendation,
+  recovery,
+  strainTarget,
+  recoveryHistory,
+  onLogSignal,
+  chartWidth,
+}) {
   // Prefer the target the backend reports over the CDC default, so the screen
   // follows if that ever changes server-side.
   const goalOptions = { targetMinutes };
@@ -62,13 +78,30 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Readiness first — it is the input to every decision below, and used
+          to sit behind an unlabelled icon in the nav bar where it was missed */}
+      {!!recovery && (
+        <>
+          <SectionHeader title="Readiness" />
+          <RecoveryHero
+            recovery={recovery}
+            strainTarget={strainTarget}
+            onLogSignal={onLogSignal}
+          />
+          <RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />
+        </>
+      )}
+
+      <SectionHeader title="This week" />
       {/* Weekly progress: stat band + ring + pace (wave 1) */}
       <WeeklyProgressHero pace={pace} trend={trend} />
 
+      <SectionHeader title="Patterns" />
       {/* Week over week + consistency (wave 2) */}
       <WeekComparisonCard trend={trend} />
       <ConsistencyHeatmap consistency={consistency} />
 
+      <SectionHeader title="Next" />
       {/* Focus and next step (wave 4) */}
       <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
       <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
@@ -161,6 +194,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
         </View>
       )}
 
+      <SectionHeader title="History" />
       {/* Recent sessions (wave 5) */}
       <SessionTimeline groups={sessionGroups} onDelete={onDeleteActivity} isDeleting={isDeleting} />
 
