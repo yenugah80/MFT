@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,9 @@ import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../consta
 import apiClient from '../../services/apiClient';
 import { toDisplayText } from '../../utils/displayText';
 import RecoveryHero from '../../components/activity/RecoveryHero';
+import RecoveryTrendCard from '../../components/activity/RecoveryTrendCard';
+
+const CHART_WIDTH = Dimensions.get('window').width - 32 * 2 - 16;
 
 export default function ActivityRecoveryScreen() {
   const router = useRouter();
@@ -36,6 +40,15 @@ export default function ActivityRecoveryScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['activityIntelligence'],
     queryFn: () => apiClient.get('/activity/intelligence'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Stored daily scores. Fetched after the intelligence call so today's
+  // snapshot has been written by the time this reads it.
+  const { data: history } = useQuery({
+    queryKey: ['recoveryHistory', 30],
+    queryFn: () => apiClient.get('/activity/recovery-history', { params: { days: 30 } }),
+    enabled: !!data,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -132,6 +145,8 @@ export default function ActivityRecoveryScreen() {
             onLogSignal={handleLogSignal}
             onPlanSession={handlePlanSession}
           />
+
+          <RecoveryTrendCard history={history} chartWidth={CHART_WIDTH} />
 
           {/* Top recommendation */}
           {topRecommendation && (

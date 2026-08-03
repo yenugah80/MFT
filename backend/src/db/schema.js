@@ -1,5 +1,5 @@
 // Existing imports already include text, integer, timestamp, etc.
-import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, jsonb, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // User profiles table - stores personal information
@@ -1237,6 +1237,44 @@ export const laggedCorrelationsTable = pgTable(
 // ACTIVITY TRACKING TABLE
 // Full MET-based activity logging with idempotency
 // ============================================================================
+
+/**
+ * Daily recovery snapshots.
+ *
+ * The recovery score is computed on demand and was never stored, so it could
+ * only ever be shown as a single number with no history — no trend, no
+ * "versus yesterday", and no way to learn how much each signal actually
+ * matters for a given person. One row per user per local day.
+ */
+export const recoverySnapshotsTable = pgTable(
+  "recovery_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+
+    dayKey: text("day_key").notNull(), // YYYY-MM-DD in the user's timezone
+    score: integer("score").notNull(),
+    label: text("label"),
+
+    // Per-signal detail: [{ factor, value, weight, counted, contribution }]
+    factors: jsonb("factors"),
+    // How much of the model had data: { counted, total, countedWeight, missing }
+    coverage: jsonb("coverage"),
+    // Portion of the model's weight that had data, 0-1, for filtering later
+    countedWeight: decimal("counted_weight", { precision: 4, scale: 3 }),
+
+    timezoneOffset: integer("timezone_offset"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userDayIdx: index("recovery_snapshots_user_day_idx").on(table.userId, table.dayKey),
+    userDayUnique: unique("recovery_snapshots_user_day_unique").on(table.userId, table.dayKey),
+    scoreCheck: check("recovery_score_check", sql`${table.score} >= 0 AND ${table.score} <= 100`),
+  })
+);
 
 export const activityLogTable = pgTable(
   "activity_log",

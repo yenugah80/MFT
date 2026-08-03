@@ -18,7 +18,7 @@ import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { eq, and, gte, lte, desc, sql, count, sum } from 'drizzle-orm';
 import { db } from '../config/db.js';
-import { activityLogTable, profilesTable } from '../db/schema.js';
+import { activityLogTable, profilesTable, recoverySnapshotsTable } from '../db/schema.js';
 import {
   calculateCaloriesFromMET,
   calculateActivityXP,
@@ -32,7 +32,7 @@ import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
-import { ensureActivityLogTableShape } from '../utils/schemaGuards.js';
+import { ensureActivityLogTableShape, ensureRecoverySnapshotsTable } from '../utils/schemaGuards.js';
 import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
 
@@ -759,10 +759,105 @@ router.get('/intelligence', async (req, res) => {
       return res.status(500).json({ error: intelligence.error });
     }
 
+    // Persist today's score so the app can show a trend. Best effort: a
+    // failure here must not cost the user their recommendations.
+    if (Number.isFinite(intelligence.recovery?.score)) {
+      try {
+        await ensureRecoverySnapshotsTable();
+        const offsetMinutes = parseTimezoneOffsetMinutes(req);
+        const dayKey = getDayKey(new Date(), offsetMinutes);
+        const countedWeight = intelligence.recovery.coverage
+          ? intelligence.recovery.coverage.countedWeight / 100
+          : null;
+
+        await db
+          .insert(recoverySnapshotsTable)
+          .values({
+            userId,
+            dayKey,
+            score: intelligence.recovery.score,
+            label: intelligence.recovery.label || null,
+            factors: intelligence.recovery.factors || null,
+            coverage: intelligence.recovery.coverage || null,
+            countedWeight: countedWeight != null ? String(countedWeight) : null,
+            timezoneOffset: offsetMinutes,
+          })
+          .onConflictDoUpdate({
+            target: [recoverySnapshotsTable.userId, recoverySnapshotsTable.dayKey],
+            set: {
+              score: intelligence.recovery.score,
+              label: intelligence.recovery.label || null,
+              factors: intelligence.recovery.factors || null,
+              coverage: intelligence.recovery.coverage || null,
+              countedWeight: countedWeight != null ? String(countedWeight) : null,
+              updatedAt: new Date(),
+            },
+          });
+      } catch (snapshotError) {
+        console.error('[Activity] Failed to persist recovery snapshot:', snapshotError.message);
+      }
+    }
+
     res.json(intelligence);
   } catch (error) {
     console.error('[Activity] GET /intelligence error:', error);
     res.status(500).json({ error: 'Failed to generate activity intelligence' });
+  }
+});
+
+/**
+ * GET /activity/recovery-history?days=N
+ *
+ * Stored daily recovery scores, oldest first. Only days that were actually
+ * computed appear — gaps are real and the client renders them as gaps rather
+ * than interpolating a number nobody measured.
+ */
+router.get('/recovery-history', async (req, res) => {
+  try {
+    const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
+    const requested = parseInt(req.query.days, 10);
+    const days = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 90) : 30;
+
+    await ensureRecoverySnapshotsTable();
+
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const from = new Date();
+    from.setDate(from.getDate() - (days - 1));
+    const fromKey = getDayKey(from, offsetMinutes);
+
+    const snapshots = await db
+      .select({
+        dayKey: recoverySnapshotsTable.dayKey,
+        score: recoverySnapshotsTable.score,
+        label: recoverySnapshotsTable.label,
+        coverage: recoverySnapshotsTable.coverage,
+        countedWeight: recoverySnapshotsTable.countedWeight,
+      })
+      .from(recoverySnapshotsTable)
+      .where(
+        and(
+          eq(recoverySnapshotsTable.userId, userId),
+          gte(recoverySnapshotsTable.dayKey, fromKey)
+        )
+      )
+      .orderBy(recoverySnapshotsTable.dayKey);
+
+    const scores = snapshots.map((s) => s.score);
+    const average = scores.length
+      ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
+      : null;
+
+    res.json({
+      success: true,
+      days,
+      snapshots,
+      average,
+      // A trend needs at least two measured days to be a trend
+      hasTrend: snapshots.length >= 2,
+    });
+  } catch (error) {
+    console.error('[Activity] GET /recovery-history error:', error);
+    res.status(500).json({ error: 'Failed to get recovery history' });
   }
 });
 

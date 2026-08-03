@@ -186,3 +186,37 @@ export async function ensureActivityLogTableShape() {
     console.error("❌ Failed to ensure activity_log table shape:", err);
   }
 }
+
+// Recovery snapshots arrived after the activity feature shipped. Guard the
+// table so the API works whether or not migration 0042 has been applied.
+let recoverySnapshotsEnsured = false;
+export async function ensureRecoverySnapshotsTable() {
+  if (recoverySnapshotsEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "recovery_snapshots" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "user_id" text NOT NULL REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+        "day_key" text NOT NULL,
+        "score" integer NOT NULL,
+        "label" text,
+        "factors" jsonb,
+        "coverage" jsonb,
+        "counted_weight" numeric(4,3),
+        "timezone_offset" integer,
+        "created_at" timestamp DEFAULT now(),
+        "updated_at" timestamp DEFAULT now(),
+        CONSTRAINT "recovery_snapshots_user_day_unique" UNIQUE ("user_id", "day_key"),
+        CONSTRAINT "recovery_score_check" CHECK ("score" >= 0 AND "score" <= 100)
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS "recovery_snapshots_user_day_idx"
+      ON "recovery_snapshots" ("user_id", "day_key");
+    `);
+    recoverySnapshotsEnsured = true;
+    console.log("✅ Recovery snapshots table verified");
+  } catch (err) {
+    console.error("❌ Failed to ensure recovery_snapshots table:", err);
+  }
+}
