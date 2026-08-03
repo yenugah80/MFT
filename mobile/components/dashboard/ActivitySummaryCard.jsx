@@ -25,7 +25,7 @@ export default function ActivitySummaryCard() {
 
   const handleViewInsights = () => {
     Haptics.selectionAsync();
-    router.push('/insights');
+    router.push('/insights/activity-insights');
   };
 
   // Get today's stats from the hook
@@ -50,7 +50,9 @@ export default function ActivitySummaryCard() {
   }, [activities]);
 
   // Calculate weekly progress percentage (minutes-based)
-  const weeklyProgressPercent = Math.round((weeklyProgress.progress || 0));
+  // `progress` is a 0-1 fraction (backend: min(weeklyMinutes / target, 1)), so
+  // rounding it directly rendered 35/150 min as "0%".
+  const weeklyProgressPercent = Math.round((weeklyProgress.progress || 0) * 100);
   const weeklyMinutes = weeklyProgress.weeklyMinutes || 0;
   const weeklyTarget = weeklyProgress.target || 150;
 
@@ -120,7 +122,7 @@ export default function ActivitySummaryCard() {
                 +{calorieAdjustment.extraCaloriesEarned} cal earned
               </Text>
               <Text style={styles.earnedCaloriesSubtitle}>
-                Extra food calories from today's activity
+                Extra food calories from today&apos;s activity
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={TEXT.tertiary} />
@@ -179,30 +181,18 @@ export default function ActivitySummaryCard() {
           )}
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actionButtonsRow}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleViewInsights}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="analytics-outline" size={16} color={BRAND.primary} />
-            <Text style={styles.actionButtonText}>Insights</Text>
-            <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push('/insights/activity-insights');
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="time-outline" size={16} color={BRAND.primary} />
-            <Text style={styles.actionButtonText}>History</Text>
-            <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
-          </TouchableOpacity>
-        </View>
+        {/* Single entry point into the activity deep-dive */}
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={handleViewInsights}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Open activity insights"
+        >
+          <Ionicons name="analytics-outline" size={16} color={BRAND.primary} />
+          <Text style={styles.actionButtonText}>Activity insights</Text>
+          <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
+        </TouchableOpacity>
 
       </LinearGradient>
     </View>
@@ -386,12 +376,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   // Action Buttons
-  actionButtonsRow: {
-    flexDirection: 'row',
-    gap: SPACING[2],
-  },
   actionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

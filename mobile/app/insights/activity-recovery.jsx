@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
 import apiClient from '../../services/apiClient';
+import { toDisplayText } from '../../utils/displayText';
 
 const FACTOR_LABELS = {
   sleep: 'Sleep',
@@ -134,10 +135,11 @@ export default function ActivityRecoveryScreen() {
             <View style={[styles.scoreRing, { borderColor: recovery.color }]}>
               <Text style={[styles.scoreValue, { color: recovery.color }]}>{recovery.score}</Text>
             </View>
-            <Text style={styles.scoreLabel}>{recovery.label} Recovery</Text>
+            <Text style={styles.scoreLabel}>{toDisplayText(recovery.label)} Recovery</Text>
             {strainTarget && (
               <Text style={styles.strainText}>
-                Today's target strain: {strainTarget.target} ({strainTarget.zone})
+                Today&apos;s target strain: {strainTarget.target}
+                {strainTarget.zone?.name ? ` (${strainTarget.zone.name})` : ''}
               </Text>
             )}
           </View>
@@ -147,7 +149,7 @@ export default function ActivityRecoveryScreen() {
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Ionicons name="pulse-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>What's Affecting Your Recovery</Text>
+                <Text style={styles.cardTitle}>What&apos;s Affecting Your Recovery</Text>
               </View>
               <View style={styles.factorList}>
                 {recovery.factors.map((factor) => (
@@ -177,19 +179,28 @@ export default function ActivityRecoveryScreen() {
                 <Ionicons name="fitness-outline" size={20} color={BRAND.primary} />
                 <Text style={styles.cardTitle}>Recommended for Today</Text>
               </View>
-              <Text style={styles.recName}>{topRecommendation.name || topRecommendation.label}</Text>
+              <Text style={styles.recName}>
+                {toDisplayText(topRecommendation.name || topRecommendation.label, 'Recommended activity')}
+              </Text>
               {topRecommendation.reasons?.length > 0 && (
-                <Text style={styles.recReason}>{topRecommendation.reasons[0]}</Text>
+                // generateReasons() emits { type, text, icon } objects, not strings
+                <Text style={styles.recReason}>
+                  {toDisplayText(topRecommendation.reasons[0]?.text ?? topRecommendation.reasons[0])}
+                </Text>
               )}
               <View style={styles.recStatsRow}>
                 {topRecommendation.duration && (
-                  <Text style={styles.recStat}>{topRecommendation.duration} min</Text>
+                  <Text style={styles.recStat}>
+                    {topRecommendation.duration?.minutes ?? topRecommendation.duration} min
+                  </Text>
                 )}
                 {topRecommendation.intensity && (
                   <Text style={styles.recStat}>{topRecommendation.intensity} intensity</Text>
                 )}
                 {topRecommendation.calories && (
-                  <Text style={styles.recStat}>~{topRecommendation.calories} kcal</Text>
+                  <Text style={styles.recStat}>
+                    ~{topRecommendation.calories?.estimated ?? topRecommendation.calories} kcal
+                  </Text>
                 )}
               </View>
               <TouchableOpacity style={styles.logButton} onPress={handleLogWorkout}>
@@ -209,8 +220,8 @@ export default function ActivityRecoveryScreen() {
                 <View key={idx} style={styles.insightRow}>
                   <Ionicons name={insight.icon || 'information-circle'} size={18} color={insight.color || BRAND.primary} />
                   <View style={styles.insightInfo}>
-                    <Text style={styles.insightTitle}>{insight.title}</Text>
-                    <Text style={styles.insightMessage}>{insight.message}</Text>
+                    <Text style={styles.insightTitle}>{toDisplayText(insight.title)}</Text>
+                    <Text style={styles.insightMessage}>{toDisplayText(insight.message)}</Text>
                   </View>
                 </View>
               ))}
