@@ -1030,3 +1030,42 @@ export const groupSessionsByDay = (activities, options = {}) => {
 
   return [...buckets.values()].sort((a, b) => a.daysAgo - b.daysAgo);
 };
+
+/**
+ * Group adapted rows by the specific exercise they recorded.
+ *
+ * Only rows carrying exercise identity (migration 0041) appear — a row that
+ * only knows it was "cardio" cannot be attributed to a movement, and guessing
+ * would be worse than omitting it. Callers fall back to the coarse type
+ * breakdown when this comes back empty.
+ */
+export const getExerciseBreakdown = (activities, limit = 5) => {
+  const rows = Array.isArray(activities) ? activities : [];
+  const totals = new Map();
+
+  rows.forEach((activity) => {
+    const key = activity?.exerciseId || activity?.exerciseName;
+    if (!key) return;
+
+    const entry = totals.get(key) || {
+      exerciseId: activity.exerciseId || null,
+      name: activity.exerciseName || activity.exerciseId,
+      minutes: 0,
+      calories: 0,
+      count: 0,
+    };
+    entry.minutes += Number(activity.duration) || 0;
+    entry.calories += Number(activity.calories) || 0;
+    entry.count += 1;
+    totals.set(key, entry);
+  });
+
+  return [...totals.values()]
+    .map((entry) => ({
+      ...entry,
+      minutes: Math.round(entry.minutes),
+      calories: Math.round(entry.calories),
+    }))
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, Math.max(1, limit));
+};

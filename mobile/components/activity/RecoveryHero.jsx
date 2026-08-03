@@ -135,7 +135,7 @@ function headline(factors) {
     : `${label.charAt(0).toUpperCase()}${label.slice(1)} held it back today`;
 }
 
-export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPlanSession }) {
+export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPlanSession, trend }) {
   // Detail is opt-in: the score and its main driver answer the daily question,
   // the five contribution rows are evidence for when it is questioned.
   const [showDetail, setShowDetail] = useState(false);
@@ -253,6 +253,9 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
               <Text style={styles.baseline}>
                 Baseline {baseline} → {score}
               </Text>
+              {/* Recovery history extends the score, so it sits with it rather
+                  than under weekly training volume */}
+              {!!trend && <View style={styles.trendSlot}>{trend}</View>}
             </>
           )}
 
@@ -345,6 +348,10 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
+  },
+  trendSlot: {
+    marginTop: SPACING[3],
+    marginHorizontal: -SPACING[2],
   },
   sectionLabel: {
     marginTop: SPACING[4],

@@ -675,3 +675,48 @@ describe('next session merges both engines', () => {
     expect(suggestion.reasons.join(' ')).not.toMatch(/object/);
   });
 });
+
+describe('exercise breakdown', () => {
+  const { getExerciseBreakdown } = require('../utils/activityAnalytics');
+  const withExercise = (daysAgo, exerciseId, exerciseName, duration = 30) => ({
+    ...session(daysAgo, { duration }),
+    exerciseId,
+    exerciseName,
+  });
+
+  it('groups by exercise and ranks by minutes', () => {
+    const rows = getExerciseBreakdown([
+      withExercise(0, 'leg-press', 'Leg Press', 20),
+      withExercise(1, 'leg-press', 'Leg Press', 25),
+      withExercise(2, 'lat-pulldown', 'Lat Pulldown', 60),
+    ]);
+
+    expect(rows.map((r) => r.name)).toEqual(['Lat Pulldown', 'Leg Press']);
+    expect(rows[1]).toMatchObject({ minutes: 45, count: 2 });
+  });
+
+  it('omits rows without exercise identity rather than guessing', () => {
+    // A "cardio" row cannot be attributed to a movement
+    expect(getExerciseBreakdown([session(0, { duration: 45 })])).toEqual([]);
+  });
+
+  it('keeps identified rows when mixed with legacy ones', () => {
+    const rows = getExerciseBreakdown([
+      withExercise(0, 'plank', 'Plank', 10),
+      session(1, { duration: 50 }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Plank');
+  });
+
+  it('falls back to the id when no name was stored', () => {
+    expect(getExerciseBreakdown([withExercise(0, 'hack-squat', null)])[0].name).toBe('hack-squat');
+  });
+
+  it('respects the limit and survives malformed input', () => {
+    const many = Array.from({ length: 9 }, (_, i) => withExercise(i, `ex-${i}`, `Ex ${i}`, 10 + i));
+    expect(getExerciseBreakdown(many, 3)).toHaveLength(3);
+    expect(getExerciseBreakdown(undefined)).toEqual([]);
+    expect(getExerciseBreakdown([{}])).toEqual([]);
+  });
+});

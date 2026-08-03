@@ -20,12 +20,14 @@ import SessionTimeline from './activity/SessionTimeline';
 import RecoveryHero from './activity/RecoveryHero';
 import RecoveryTrendCard from './activity/RecoveryTrendCard';
 import TrainingRibbon from './activity/TrainingRibbon';
+import WhatYouTrainedCard from './activity/WhatYouTrainedCard';
 import { CollapsibleSection } from './activity/layout';
 import {
   getWeeklyPace,
   getActivityBreakdown,
   getSevenDayTrend,
   getConsistencyGrid,
+  getExerciseBreakdown,
   getIntensityMix,
   getTimeOfDayPattern,
   getPersonalBests,
@@ -33,7 +35,6 @@ import {
   getMoodActivityLink,
   getNextSessionSuggestion,
   groupSessionsByDay,
-  getTopExercises,
   generateActivityRecommendations,
   calculateActivityStreak,
 } from '../utils/activityAnalytics';
@@ -63,6 +64,7 @@ export default function ActivityInsightsView({
   // Calculate all insights
   const pace = getWeeklyPace(activities, goalOptions);
   const breakdown = getActivityBreakdown(activities);
+  const exerciseBreakdown = getExerciseBreakdown(activities);
   const trend = getSevenDayTrend(activities);
   const consistency = getConsistencyGrid(activities, { weeks: 5 });
   const intensityMix = getIntensityMix(activities);
@@ -77,7 +79,6 @@ export default function ActivityInsightsView({
   // rather than navigating away from the summary you just read.
   const [weekOpen, setWeekOpen] = useState(false);
   const handleOpenWeek = useCallback(() => setWeekOpen((v) => !v), []);
-  const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
   // The goal recommendation restates the Next session card almost verbatim —
   // same shortfall, same plan — so it is dropped rather than shown twice.
@@ -98,6 +99,7 @@ export default function ActivityInsightsView({
           recovery={recovery}
           strainTarget={strainTarget}
           onLogSignal={onLogSignal}
+          trend={<RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />}
         />
       )}
 
@@ -119,16 +121,11 @@ export default function ActivityInsightsView({
         onToggle={setWeekOpen}
       >
         <WeeklyProgressHero pace={pace} trend={trend} />
-        <RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />
       </CollapsibleSection>
 
       <CollapsibleSection
         title="Patterns"
-        subtitle={
-          consistency?.trainedDays
-            ? `${consistency.trainedDays} of last ${consistency.elapsedDays} days trained`
-            : 'Consistency, intensity and timing'
-        }
+        subtitle="Consistency, intensity and timing"
       >
         <WeekComparisonCard trend={trend} />
         <ConsistencyHeatmap consistency={consistency} />
@@ -145,6 +142,7 @@ export default function ActivityInsightsView({
         }
       >
         <PersonalBestsCard bests={bests} streak={streak} />
+        <WhatYouTrainedCard byExercise={exerciseBreakdown} byType={breakdown} />
         <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
         <MoodActivityCard link={moodLink} />
         {/* Smart Recommendations */}
@@ -173,54 +171,6 @@ export default function ActivityInsightsView({
                       <Ionicons name="arrow-forward" size={16} color="#6366F1" />
                     </TouchableOpacity>
                   )}
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-        {/* By activity type — works for rows without exercise identity */}
-        {Object.keys(breakdown).length > 0 && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>By activity type</Text>
-            </View>
-            <View style={styles.breakdownList}>
-              {Object.entries(breakdown).map(([category, data], index) => (
-                <View key={category} style={styles.breakdownItem}>
-                  <View style={styles.breakdownLeft}>
-                    <View style={[styles.breakdownDot, { backgroundColor: getCategoryColor(index) }]} />
-                    <Text style={styles.breakdownCategory}>{category}</Text>
-                  </View>
-                  <View style={styles.breakdownRight}>
-                    <Text style={styles.breakdownCalories}>{Math.round(data.duration)} min</Text>
-                    <Text style={styles.breakdownPercentage}>{Math.round(data.calories)} kcal</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-        {/* Top Exercises */}
-        {topExercises.length > 0 && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Top Exercises</Text>
-            </View>
-            <View style={styles.exerciseList}>
-              {topExercises.map((exercise, index) => (
-                <View key={index} style={styles.exerciseItem}>
-                  <View style={styles.exerciseRank}>
-                    <Text style={styles.exerciseRankText}>{index + 1}</Text>
-                  </View>
-                  <View style={styles.exerciseIconContainer}>
-                    <Ionicons name={exercise.icon} size={20} color="#6366F1" />
-                  </View>
-                  <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseName}>{exercise.name}</Text>
-                    <Text style={styles.exerciseStats}>
-                      {exercise.count}x • {Math.round(exercise.totalDuration)} min • {Math.round(exercise.totalCalories)} kcal
-                    </Text>
-                  </View>
                 </View>
               ))}
             </View>
@@ -265,17 +215,6 @@ export default function ActivityInsightsView({
 }
 
 // Helper function to get category colors - vibrant fitness palette
-const getCategoryColor = (index) => {
-  const colors = [
-    '#10B981', // Emerald Green - Cardio
-    '#F59E0B', // Amber - Strength
-    '#8B5CF6', // Purple - Yoga
-    '#EC4899', // Pink - Sports
-    '#3B82F6', // Blue - Swimming
-    '#EF4444', // Red - HIIT
-  ];
-  return colors[index % colors.length];
-};
 
 const styles = StyleSheet.create({
   container: {
@@ -309,89 +248,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
-  },
-  breakdownList: {
-    gap: 12,
-  },
-  breakdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  breakdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  breakdownDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  breakdownCategory: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#1E293B',
-  },
-  breakdownRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  breakdownCalories: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#1E293B',
-  },
-  breakdownPercentage: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    width: 40,
-    textAlign: 'right',
-  },
-  exerciseList: {
-    gap: 12,
-  },
-  exerciseItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  exerciseRank: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: SURFACES.background.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exerciseRankText: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#6366F1',
-  },
-  exerciseIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: SURFACES.background.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exerciseInfo: {
-    flex: 1,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#1E293B',
-  },
-  exerciseStats: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: 2,
   },
   recommendationsList: {
     gap: 12,
