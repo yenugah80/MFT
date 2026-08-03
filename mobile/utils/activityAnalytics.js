@@ -959,3 +959,56 @@ export const getNextSessionSuggestion = (pace, balance) => {
     hasSuggestion: reasons.length > 0,
   };
 };
+
+/**
+ * Group sessions into day buckets, newest first, for the session timeline.
+ *
+ * Labels are relative near today ("Today", "Yesterday", weekday inside the
+ * last week) and absolute beyond that, so recent entries read naturally
+ * without dates crowding the list.
+ *
+ * @param {Array} activities - adapted rows
+ * @param {{ limit?: number }} [options] - max sessions to include
+ */
+export const groupSessionsByDay = (activities, options = {}) => {
+  const limit = Number.isFinite(options.limit) && options.limit > 0 ? options.limit : 20;
+  const rows = (Array.isArray(activities) ? activities : [])
+    .filter((activity) => !Number.isNaN(new Date(activity?.timestamp).getTime()))
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, limit);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const buckets = new Map();
+
+  rows.forEach((activity) => {
+    const date = new Date(activity.timestamp);
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const key = dayStart.toDateString();
+
+    if (!buckets.has(key)) {
+      const daysAgo = Math.round((today - dayStart) / 86400000);
+      let label;
+      if (daysAgo <= 0) label = 'Today';
+      else if (daysAgo === 1) label = 'Yesterday';
+      else if (daysAgo < 7) label = dayStart.toLocaleDateString('en-US', { weekday: 'long' });
+      else {
+        label = dayStart.toLocaleDateString('en-US', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        });
+      }
+
+      buckets.set(key, { dayKey: key, date: dayStart, daysAgo, label, sessions: [], minutes: 0 });
+    }
+
+    const bucket = buckets.get(key);
+    bucket.sessions.push(activity);
+    bucket.minutes += Number(activity.duration) || 0;
+  });
+
+  return [...buckets.values()].sort((a, b) => a.daysAgo - b.daysAgo);
+};

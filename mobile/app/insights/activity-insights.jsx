@@ -54,7 +54,7 @@ function adaptActivity(row) {
 
 export default function ActivityInsightsScreen() {
   const router = useRouter();
-  const { fetchHistory, weeklyProgress } = useActivityLog();
+  const { fetchHistory, weeklyProgress, deleteActivity, isDeleting } = useActivityLog();
   // Per-day mood ratings for the movement/mood comparison
   const { data: moodData } = useMoodInsights({ windowDays: 30, trendDays: 30 });
 
@@ -77,6 +77,17 @@ export default function ActivityInsightsScreen() {
       router.replace('/(tabs)/dashboard');
     }
   }, [router]);
+
+  const handleDeleteActivity = useCallback(async (activityId) => {
+    try {
+      // deleteActivity invalidates ['activityHistory'], so this list refreshes
+      await deleteActivity(activityId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      console.error('[ActivityInsights] delete failed:', err);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [deleteActivity]);
 
   const handleLogWorkout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -148,6 +159,8 @@ export default function ActivityInsightsScreen() {
           onLogWorkout={handleLogWorkout}
           targetMinutes={weeklyProgress?.target}
           moodTrend={moodData?.trendData}
+          onDeleteActivity={handleDeleteActivity}
+          isDeleting={isDeleting}
         />
       )}
     </View>

@@ -580,3 +580,44 @@ describe('next session suggestion', () => {
     expect(suggestion.reasons.join(' ')).not.toMatch(/NaN|undefined/);
   });
 });
+
+describe('session timeline grouping', () => {
+  const { groupSessionsByDay } = require('../utils/activityAnalytics');
+
+  it('groups by day, newest first, and sums minutes', () => {
+    const groups = groupSessionsByDay([
+      session(0, { duration: 20 }),
+      session(0, { duration: 25 }),
+      session(1, { duration: 30 }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0].label).toBe('Today');
+    expect(groups[0].sessions).toHaveLength(2);
+    expect(groups[0].minutes).toBe(45);
+    expect(groups[1].label).toBe('Yesterday');
+  });
+
+  it('uses weekday names inside the last week and dates beyond it', () => {
+    const recent = groupSessionsByDay([session(3)])[0];
+    expect(recent.label).toMatch(/^(Sun|Mon|Tues|Wednes|Thurs|Fri|Satur)day$/);
+
+    const old = groupSessionsByDay([session(20)])[0];
+    expect(old.label).toMatch(/\d/);
+  });
+
+  it('orders sessions within the newest bucket first overall', () => {
+    const groups = groupSessionsByDay([session(5), session(0), session(2)]);
+    expect(groups.map((g) => g.daysAgo)).toEqual([0, 2, 5]);
+  });
+
+  it('respects the limit', () => {
+    const many = Array.from({ length: 30 }, (_, i) => session(i));
+    expect(groupSessionsByDay(many, { limit: 5 }).length).toBeLessThanOrEqual(5);
+  });
+
+  it('drops rows with unparseable timestamps', () => {
+    expect(groupSessionsByDay([{ timestamp: 'nope' }, {}])).toEqual([]);
+    expect(groupSessionsByDay(undefined)).toEqual([]);
+  });
+});

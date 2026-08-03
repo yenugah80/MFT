@@ -16,6 +16,7 @@ import {
   NextSessionCard,
 } from './activity/TrainingFocusCards';
 import { getExerciseById } from '../services/exerciseDatabase';
+import SessionTimeline from './activity/SessionTimeline';
 import {
   getWeeklyPace,
   getActivityBreakdown,
@@ -27,6 +28,7 @@ import {
   getMuscleBalance,
   getMoodActivityLink,
   getNextSessionSuggestion,
+  groupSessionsByDay,
   getTopExercises,
   generateActivityRecommendations,
   calculateActivityStreak,
@@ -37,7 +39,7 @@ import {
  * Activity Insights View
  * Shows comprehensive analytics, trends, and recommendations for activities
  */
-export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes, moodTrend }) {
+export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes, moodTrend, onDeleteActivity, isDeleting }) {
   // Prefer the target the backend reports over the CDC default, so the screen
   // follows if that ever changes server-side.
   const goalOptions = { targetMinutes };
@@ -52,6 +54,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
   const balance = getMuscleBalance(activities, getExerciseById);
   const moodLink = getMoodActivityLink(activities, moodTrend);
   const nextSession = getNextSessionSuggestion(pace, balance);
+  const sessionGroups = groupSessionsByDay(activities, { limit: 15 });
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
   const recommendations = generateActivityRecommendations(activities, [], goalOptions);
@@ -76,11 +79,11 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
       <PersonalBestsCard bests={bests} streak={streak} />
       <MoodActivityCard link={moodLink} />
 
-      {/* Activity Breakdown */}
+      {/* By activity type — works for rows without exercise identity */}
       {Object.keys(breakdown).length > 0 && (
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Calories by Category</Text>
+            <Text style={styles.cardTitle}>By activity type</Text>
           </View>
           <View style={styles.breakdownList}>
             {Object.entries(breakdown).map(([category, data], index) => (
@@ -90,8 +93,8 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
                   <Text style={styles.breakdownCategory}>{category}</Text>
                 </View>
                 <View style={styles.breakdownRight}>
-                  <Text style={styles.breakdownCalories}>{Math.round(data.calories)} kcal</Text>
-                  <Text style={styles.breakdownPercentage}>{data.percentage}%</Text>
+                  <Text style={styles.breakdownCalories}>{Math.round(data.duration)} min</Text>
+                  <Text style={styles.breakdownPercentage}>{Math.round(data.calories)} kcal</Text>
                 </View>
               </View>
             ))}
@@ -157,6 +160,9 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
           </View>
         </View>
       )}
+
+      {/* Recent sessions (wave 5) */}
+      <SessionTimeline groups={sessionGroups} onDelete={onDeleteActivity} isDeleting={isDeleting} />
 
       {/* Empty State */}
       {activities.length === 0 && (
