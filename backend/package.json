@@ -11,9 +11,11 @@
     "harness:nutrition": "node scripts/nutritionPlausibilityHarness.mjs && node scripts/nutritionMacroReconciliationHarness.mjs",
     "eval:nutrition": "node scripts/nutritionAccuracyEval.mjs",
     "drizzle:generate": "drizzle-kit generate",
-    "drizzle:migrate": "drizzle-kit migrate",
+    "drizzle:migrate": "node -e \"console.error('drizzle-kit migrate is not used here \u2014 its journal stops at 0012 while migrations run to 0042. Use: npm run db:migrate'); process.exit(1)\"",
     "backfill:gamification": "node backfill-gamification.js",
-    "backfill:mood-day-key": "node backfill-mood-day-key.js"
+    "backfill:mood-day-key": "node backfill-mood-day-key.js",
+    "db:migrate": "node scripts/applyMigrations.mjs",
+    "db:migrate:dry": "node scripts/applyMigrations.mjs --dry-run"
   },
   "keywords": [],
   "author": "",
