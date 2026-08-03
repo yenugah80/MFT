@@ -11,6 +11,12 @@ import {
   PersonalBestsCard,
 } from './activity/TrainingPatternCards';
 import {
+  MuscleBalanceCard,
+  MoodActivityCard,
+  NextSessionCard,
+} from './activity/TrainingFocusCards';
+import { getExerciseById } from '../services/exerciseDatabase';
+import {
   getWeeklyPace,
   getActivityBreakdown,
   getSevenDayTrend,
@@ -18,6 +24,9 @@ import {
   getIntensityMix,
   getTimeOfDayPattern,
   getPersonalBests,
+  getMuscleBalance,
+  getMoodActivityLink,
+  getNextSessionSuggestion,
   getTopExercises,
   generateActivityRecommendations,
   calculateActivityStreak,
@@ -28,7 +37,7 @@ import {
  * Activity Insights View
  * Shows comprehensive analytics, trends, and recommendations for activities
  */
-export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes }) {
+export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes, moodTrend }) {
   // Prefer the target the backend reports over the CDC default, so the screen
   // follows if that ever changes server-side.
   const goalOptions = { targetMinutes };
@@ -40,6 +49,9 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
   const intensityMix = getIntensityMix(activities);
   const timeOfDay = getTimeOfDayPattern(activities);
   const bests = getPersonalBests(activities);
+  const balance = getMuscleBalance(activities, getExerciseById);
+  const moodLink = getMoodActivityLink(activities, moodTrend);
+  const nextSession = getNextSessionSuggestion(pace, balance);
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
   const recommendations = generateActivityRecommendations(activities, [], goalOptions);
@@ -54,10 +66,15 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
       <WeekComparisonCard trend={trend} />
       <ConsistencyHeatmap consistency={consistency} />
 
+      {/* Focus and next step (wave 4) */}
+      <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
+      <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
+
       {/* Training patterns (wave 3) */}
       <IntensityMixCard mix={intensityMix} />
       <TimeOfDayCard pattern={timeOfDay} />
       <PersonalBestsCard bests={bests} streak={streak} />
+      <MoodActivityCard link={moodLink} />
 
       {/* Activity Breakdown */}
       {Object.keys(breakdown).length > 0 && (

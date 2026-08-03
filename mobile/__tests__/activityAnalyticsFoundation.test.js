@@ -421,3 +421,162 @@ describe('personal bests', () => {
     expect(getPersonalBests([{ timestamp: 'nope', duration: 99 }]).totalSessions).toBe(0);
   });
 });
+
+describe('muscle balance', () => {
+  const { getMuscleBalance } = require('../utils/activityAnalytics');
+  const CATALOGUE = {
+    'leg-press': { muscleGroup: 'Lower Body' },
+    'lat-pulldown': { muscleGroup: 'Upper Body' },
+    plank: { muscleGroup: 'Core' },
+  };
+  const resolve = (id) => CATALOGUE[id];
+  const withExercise = (daysAgo, exerciseId, duration = 30) => ({
+    ...session(daysAgo, { duration }),
+    exerciseId,
+  });
+
+  it('groups minutes by muscle group and ranks them', () => {
+    const balance = getMuscleBalance(
+      [
+        withExercise(0, 'leg-press', 40),
+        withExercise(1, 'lat-pulldown', 20),
+        withExercise(2, 'lat-pulldown', 30),
+      ],
+      resolve
+    );
+
+    expect(balance.groups.map((g) => g.group)).toEqual(['Upper Body', 'Lower Body']);
+    expect(balance.groups[0]).toMatchObject({ minutes: 50, sessions: 2 });
+    expect(balance.attributedMinutes).toBe(90);
+    expect(balance.hasData).toBe(true);
+  });
+
+  it('does not guess a muscle group for rows without exercise identity', () => {
+    // Everything logged before migration 0041
+    const balance = getMuscleBalance([session(0, { duration: 45 })], resolve);
+
+    expect(balance.hasData).toBe(false);
+    expect(balance.groups).toEqual([]);
+    expect(balance.unattributedMinutes).toBe(45);
+  });
+
+  it('keeps identified and legacy rows separate', () => {
+    const balance = getMuscleBalance(
+      [withExercise(0, 'plank', 10), session(1, { duration: 50 })],
+      resolve
+    );
+
+    expect(balance.attributedMinutes).toBe(10);
+    expect(balance.unattributedMinutes).toBe(50);
+  });
+
+  it('reports days since each group was last trained', () => {
+    const balance = getMuscleBalance(
+      [withExercise(0, 'leg-press'), withExercise(9, 'lat-pulldown')],
+      resolve
+    );
+
+    const upper = balance.groups.find((g) => g.group === 'Upper Body');
+    expect(upper.daysSince).toBe(9);
+    expect(balance.stalest.group).toBe('Upper Body');
+  });
+
+  it('handles an unknown exercise id and malformed input', () => {
+    expect(getMuscleBalance([withExercise(0, 'not-real')], resolve).hasData).toBe(false);
+    expect(getMuscleBalance(undefined, resolve).hasData).toBe(false);
+    expect(getMuscleBalance([withExercise(0, 'plank')], undefined).hasData).toBe(false);
+  });
+});
+
+describe('mood and activity link', () => {
+  const { getMoodActivityLink } = require('../utils/activityAnalytics');
+  const dayKey = (daysAgo) => {
+    const d = new Date(Date.now() - daysAgo * DAY_MS);
+    return d.toISOString().slice(0, 10);
+  };
+  const rated = (daysAgo, intensity) => ({ dayKey: dayKey(daysAgo), intensity, hasData: true });
+
+  it('compares mood on active days against rest days', () => {
+    const activities = [0, 1, 2].map((d) => session(d, { duration: 30 }));
+    const trend = [
+      rated(0, 8), rated(1, 8), rated(2, 8),
+      rated(3, 5), rated(4, 5), rated(5, 5),
+    ];
+
+    const link = getMoodActivityLink(activities, trend);
+    expect(link.activeDays).toBe(3);
+    expect(link.restDays).toBe(3);
+    expect(link.activeMean).toBe(8);
+    expect(link.restMean).toBe(5);
+    expect(link.difference).toBe(3);
+    expect(link.hasComparison).toBe(true);
+  });
+
+  it('refuses a comparison when either side is too thin', () => {
+    const link = getMoodActivityLink([session(0)], [rated(0, 7), rated(1, 5)]);
+    expect(link.hasComparison).toBe(false);
+  });
+
+  it('ignores unrated days', () => {
+    const link = getMoodActivityLink([], [
+      { dayKey: dayKey(0), intensity: null, hasData: false },
+      rated(1, 6),
+    ]);
+    expect(link.sampleSize).toBe(1);
+    expect(link.restDays).toBe(1);
+  });
+
+  it('survives malformed input', () => {
+    expect(getMoodActivityLink(undefined, undefined).sampleSize).toBe(0);
+    expect(getMoodActivityLink([{ timestamp: 'nope' }], [rated(0, 5)]).restDays).toBe(1);
+  });
+});
+
+describe('next session suggestion', () => {
+  const { getNextSessionSuggestion } = require('../utils/activityAnalytics');
+
+  it('suggests a session sized to the remaining days', () => {
+    const suggestion = getNextSessionSuggestion(
+      { remainingMinutes: 90, daysLeft: 3, percentage: 40 },
+      { stalest: null }
+    );
+
+    expect(suggestion.hasSuggestion).toBe(true);
+    expect(suggestion.minutes).toBeGreaterThanOrEqual(15);
+    expect(suggestion.minutes).toBeLessThanOrEqual(60);
+    expect(suggestion.reasons[0]).toMatch(/90 min from your weekly target/);
+  });
+
+  it('names a stale muscle group as the focus', () => {
+    const suggestion = getNextSessionSuggestion(
+      { remainingMinutes: 60, daysLeft: 2, percentage: 60 },
+      { stalest: { group: 'Lower Body', daysSince: 9 } }
+    );
+
+    expect(suggestion.focus).toBe('Lower Body');
+    expect(suggestion.reasons.join(' ')).toMatch(/lower body last trained 9 days ago/);
+  });
+
+  it('does not call a group stale after a single rest day', () => {
+    const suggestion = getNextSessionSuggestion(
+      { remainingMinutes: 30, daysLeft: 2, percentage: 80 },
+      { stalest: { group: 'Core', daysSince: 1 } }
+    );
+    expect(suggestion.focus).toBeNull();
+  });
+
+  it('says nothing when the target is met and nothing is stale', () => {
+    const suggestion = getNextSessionSuggestion(
+      { remainingMinutes: 0, daysLeft: 1, percentage: 100 },
+      { stalest: { group: 'Core', daysSince: 1 } }
+    );
+    expect(suggestion.hasSuggestion).toBe(false);
+    expect(suggestion.reasons).toEqual([]);
+  });
+
+  it('never emits NaN for missing inputs', () => {
+    const suggestion = getNextSessionSuggestion(undefined, undefined);
+    expect(Number.isFinite(suggestion.minutes)).toBe(true);
+    expect(suggestion.reasons.join(' ')).not.toMatch(/NaN|undefined/);
+  });
+});

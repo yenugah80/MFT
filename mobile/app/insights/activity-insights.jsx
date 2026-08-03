@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND } from '../../constants/premiumTheme';
 import { useActivityLog, ACTIVITY_TYPES } from '../../hooks/useActivityLog';
+import { useMoodInsights } from '../../hooks/useMoodInsights';
 import ActivityInsightsView from '../../components/ActivityInsightsView';
 
 // activityAnalytics.js (consumed by ActivityInsightsView) expects
@@ -54,6 +55,8 @@ function adaptActivity(row) {
 export default function ActivityInsightsScreen() {
   const router = useRouter();
   const { fetchHistory, weeklyProgress } = useActivityLog();
+  // Per-day mood ratings for the movement/mood comparison
+  const { data: moodData } = useMoodInsights({ windowDays: 30, trendDays: 30 });
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['activityHistory', 'insights', 90],
@@ -144,6 +147,7 @@ export default function ActivityInsightsScreen() {
           activities={activities}
           onLogWorkout={handleLogWorkout}
           targetMinutes={weeklyProgress?.target}
+          moodTrend={moodData?.trendData}
         />
       )}
     </View>

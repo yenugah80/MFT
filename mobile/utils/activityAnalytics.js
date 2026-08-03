@@ -793,3 +793,169 @@ export const getPersonalBests = (activities) => {
     totalSessions: rows.length,
   };
 };
+
+/**
+ * Volume per muscle group, and how stale each one is.
+ *
+ * Requires exercise identity on the row (migration 0041). Rows logged before
+ * that carry no exerciseId, so they are counted as `unattributed` rather than
+ * guessed at — a cardio session says nothing about which muscles were worked.
+ *
+ * @param {Array} activities - adapted rows carrying exerciseId
+ * @param {(id: string) => ({ muscleGroup?: string })} resolveExercise
+ */
+export const getMuscleBalance = (activities, resolveExercise) => {
+  const rows = Array.isArray(activities) ? activities : [];
+  const groups = new Map();
+  let attributedMinutes = 0;
+  let unattributedMinutes = 0;
+
+  rows.forEach((activity) => {
+    const minutes = Number(activity?.duration) || 0;
+    if (minutes <= 0) return;
+
+    const exercise = activity?.exerciseId && typeof resolveExercise === 'function'
+      ? resolveExercise(activity.exerciseId)
+      : null;
+    const group = exercise?.muscleGroup;
+
+    if (!group) {
+      unattributedMinutes += minutes;
+      return;
+    }
+
+    const stamp = new Date(activity.timestamp);
+    const entry = groups.get(group) || { group, minutes: 0, sessions: 0, lastTrained: null };
+    entry.minutes += minutes;
+    entry.sessions += 1;
+    if (!Number.isNaN(stamp.getTime()) && (!entry.lastTrained || stamp > entry.lastTrained)) {
+      entry.lastTrained = stamp;
+    }
+    groups.set(group, entry);
+    attributedMinutes += minutes;
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const ranked = [...groups.values()]
+    .map((entry) => {
+      const last = entry.lastTrained ? new Date(entry.lastTrained) : null;
+      if (last) last.setHours(0, 0, 0, 0);
+      return {
+        ...entry,
+        share: attributedMinutes > 0 ? Math.round((entry.minutes / attributedMinutes) * 100) : 0,
+        daysSince: last ? Math.round((today - last) / 86400000) : null,
+      };
+    })
+    .sort((a, b) => b.minutes - a.minutes);
+
+  // The group trained least recently, among those trained at all
+  const stalest = ranked
+    .filter((entry) => Number.isFinite(entry.daysSince))
+    .sort((a, b) => b.daysSince - a.daysSince)[0] || null;
+
+  return {
+    groups: ranked,
+    attributedMinutes,
+    unattributedMinutes,
+    stalest,
+    // Nothing to show until at least one identified exercise is logged
+    hasData: ranked.length > 0,
+  };
+};
+
+/**
+ * Does moving change how the day feels?
+ *
+ * Joins per-day mood ratings to per-day activity minutes and compares rated
+ * days that had movement against rated days that did not. Correlation is not
+ * causation and the sample is tiny, so the result carries its own n and the
+ * card is expected to say so.
+ *
+ * @param {Array} activities - adapted rows
+ * @param {Array} moodTrend - moodAggregation trendData ({ dayKey, intensity, hasData })
+ */
+export const getMoodActivityLink = (activities, moodTrend) => {
+  const rows = Array.isArray(activities) ? activities : [];
+  const trend = Array.isArray(moodTrend) ? moodTrend : [];
+
+  // Minutes per day, keyed in UTC to match moodAggregation's toDayKey(date, 0).
+  // Both sides of this join MUST use the same convention — switching this to a
+  // local date would silently produce zero matches on either side of midnight.
+  const minutesByDay = new Map();
+  rows.forEach((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    if (Number.isNaN(stamp.getTime())) return;
+    const key = stamp.toISOString().slice(0, 10);
+    minutesByDay.set(key, (minutesByDay.get(key) || 0) + (Number(activity.duration) || 0));
+  });
+
+  const points = [];
+  trend.forEach((day) => {
+    if (!day || day.hasData === false) return;
+    const intensity = Number(day.intensity);
+    if (!Number.isFinite(intensity)) return;
+    const key = String(day.dayKey || '').slice(0, 10);
+    points.push({ dayKey: key, mood: intensity, minutes: minutesByDay.get(key) || 0 });
+  });
+
+  const active = points.filter((p) => p.minutes > 0);
+  const rest = points.filter((p) => p.minutes === 0);
+  const mean = (list) => (list.length ? list.reduce((sum, p) => sum + p.mood, 0) / list.length : null);
+
+  const activeMean = mean(active);
+  const restMean = mean(rest);
+
+  return {
+    points,
+    activeDays: active.length,
+    restDays: rest.length,
+    activeMean: activeMean !== null ? Number(activeMean.toFixed(1)) : null,
+    restMean: restMean !== null ? Number(restMean.toFixed(1)) : null,
+    difference:
+      activeMean !== null && restMean !== null ? Number((activeMean - restMean).toFixed(1)) : null,
+    // Both sides need enough days before a comparison means anything
+    hasComparison: active.length >= 3 && rest.length >= 3,
+    sampleSize: points.length,
+  };
+};
+
+/**
+ * What to do next, derived only from gaps that actually exist: minutes left
+ * against the weekly target, and which muscle group has gone longest untrained.
+ */
+export const getNextSessionSuggestion = (pace, balance) => {
+  const reasons = [];
+
+  const remaining = Number(pace?.remainingMinutes) || 0;
+  const daysLeft = Number(pace?.daysLeft) || 0;
+  const targetMet = (pace?.percentage || 0) >= 100;
+
+  let suggestedMinutes = null;
+
+  if (!targetMet && remaining > 0) {
+    // Spread what is left over the days that remain, clamped to a session
+    // length someone will actually do
+    const sessions = Math.min(Math.max(daysLeft, 1), Math.max(1, Math.ceil(remaining / 30)));
+    suggestedMinutes = Math.min(60, Math.max(15, Math.ceil(remaining / sessions)));
+    reasons.push(
+      `${remaining} min from your weekly target${daysLeft > 0 ? ` with ${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : ''}`
+    );
+  }
+
+  const stale = balance?.stalest;
+  if (stale && Number.isFinite(stale.daysSince) && stale.daysSince >= 4) {
+    reasons.push(`${stale.group.toLowerCase()} last trained ${stale.daysSince} days ago`);
+  }
+
+  const focus = stale && stale.daysSince >= 4 ? stale.group : null;
+
+  return {
+    focus,
+    minutes: Number.isFinite(suggestedMinutes) ? suggestedMinutes : 30,
+    reasons,
+    // Nothing worth suggesting when the target is met and nothing is stale
+    hasSuggestion: reasons.length > 0,
+  };
+};
