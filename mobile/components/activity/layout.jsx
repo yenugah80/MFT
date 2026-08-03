@@ -17,9 +17,10 @@
  * same visual family as Dashboard, Log and Profile.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
 import {
   TEXT,
@@ -30,6 +31,11 @@ import {
   SHADOWS,
   BRAND,
 } from '../../constants/premiumTheme';
+
+// LayoutAnimation needs opting into on Android; on iOS it is on by default
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 /** Groups cards without adding another container around them */
 export function SectionHeader({ title, action, onAction }) {
@@ -112,7 +118,68 @@ export function Strip({ children, onPress, actionLabel }) {
   );
 }
 
+/**
+ * A section that stays out of the way until asked for.
+ *
+ * Merging Recovery into this screen made it six sections and roughly eighteen
+ * cards — organised, but a wall on open. Only a handful are daily questions
+ * ("am I ready", "how is the week", "what next"); the rest are review, and
+ * review should be opt-in rather than scrolled past every time.
+ */
+export function CollapsibleSection({ title, subtitle, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  const toggle = useCallback(() => {
+    Haptics.selectionAsync();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((value) => !value);
+  }, []);
+
+  return (
+    <View style={styles.collapsible}>
+      <TouchableOpacity
+        onPress={toggle}
+        activeOpacity={0.7}
+        style={styles.collapsibleHeader}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${title}, ${open ? 'expanded' : 'collapsed'}`}
+      >
+        <View style={styles.collapsibleTitleWrap}>
+          <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
+          {!!subtitle && !open && <Text style={styles.collapsibleSubtitle}>{subtitle}</Text>}
+        </View>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={TEXT.tertiary}
+        />
+      </TouchableOpacity>
+      {open && <View>{children}</View>}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  collapsible: {
+    marginBottom: SPACING[1],
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[1],
+  },
+  collapsibleTitleWrap: {
+    flex: 1,
+  },
+  collapsibleSubtitle: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.muted,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,4 +298,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default { SectionHeader, Card, Hero, StatTile, TileRow, Strip };
+export default { SectionHeader, CollapsibleSection, Card, Hero, StatTile, TileRow, Strip };

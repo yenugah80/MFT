@@ -19,7 +19,7 @@ import { getExerciseById } from '../services/exerciseDatabase';
 import SessionTimeline from './activity/SessionTimeline';
 import RecoveryHero from './activity/RecoveryHero';
 import RecoveryTrendCard from './activity/RecoveryTrendCard';
-import { SectionHeader } from './activity/layout';
+import { SectionHeader, CollapsibleSection } from './activity/layout';
 import {
   getWeeklyPace,
   getActivityBreakdown,
@@ -96,71 +96,89 @@ export default function ActivityInsightsView({
       {/* Weekly progress: stat band + ring + pace (wave 1) */}
       <WeeklyProgressHero pace={pace} trend={trend} />
 
-      <SectionHeader title="Patterns" />
-      {/* Week over week + consistency (wave 2) */}
-      <WeekComparisonCard trend={trend} />
-      <ConsistencyHeatmap consistency={consistency} />
-
       <SectionHeader title="Next" />
-      {/* Focus and next step (wave 4) */}
+      {/* Focus and next step (wave 4) — the one action, kept above the fold */}
       <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
-      <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
 
-      {/* Training patterns (wave 3) */}
-      <IntensityMixCard mix={intensityMix} />
-      <TimeOfDayCard pattern={timeOfDay} />
-      <PersonalBestsCard bests={bests} streak={streak} />
-      <MoodActivityCard link={moodLink} />
+      {/* Review lives behind a tap. These answer weekly and monthly questions,
+          not daily ones, and scrolling past them every visit is what made the
+          merged screen overwhelming. */}
+      <CollapsibleSection
+        title="Patterns"
+        subtitle={
+          consistency?.trainedDays
+            ? `${consistency.trainedDays} of last ${consistency.elapsedDays} days trained`
+            : 'Consistency, intensity and timing'
+        }
+      >
+        <WeekComparisonCard trend={trend} />
+        <ConsistencyHeatmap consistency={consistency} />
+        <IntensityMixCard mix={intensityMix} />
+        <TimeOfDayCard pattern={timeOfDay} />
+      </CollapsibleSection>
 
-      {/* By activity type — works for rows without exercise identity */}
-      {Object.keys(breakdown).length > 0 && (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>By activity type</Text>
-          </View>
-          <View style={styles.breakdownList}>
-            {Object.entries(breakdown).map(([category, data], index) => (
-              <View key={category} style={styles.breakdownItem}>
-                <View style={styles.breakdownLeft}>
-                  <View style={[styles.breakdownDot, { backgroundColor: getCategoryColor(index) }]} />
-                  <Text style={styles.breakdownCategory}>{category}</Text>
+      <CollapsibleSection
+        title="Progress"
+        subtitle={
+          streak?.current
+            ? `${streak.current} day streak · bests, balance and mood`
+            : 'Bests, balance and mood'
+        }
+      >
+        <PersonalBestsCard bests={bests} streak={streak} />
+        <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
+        <MoodActivityCard link={moodLink} />
+        {/* By activity type — works for rows without exercise identity */}
+        {Object.keys(breakdown).length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>By activity type</Text>
+            </View>
+            <View style={styles.breakdownList}>
+              {Object.entries(breakdown).map(([category, data], index) => (
+                <View key={category} style={styles.breakdownItem}>
+                  <View style={styles.breakdownLeft}>
+                    <View style={[styles.breakdownDot, { backgroundColor: getCategoryColor(index) }]} />
+                    <Text style={styles.breakdownCategory}>{category}</Text>
+                  </View>
+                  <View style={styles.breakdownRight}>
+                    <Text style={styles.breakdownCalories}>{Math.round(data.duration)} min</Text>
+                    <Text style={styles.breakdownPercentage}>{Math.round(data.calories)} kcal</Text>
+                  </View>
                 </View>
-                <View style={styles.breakdownRight}>
-                  <Text style={styles.breakdownCalories}>{Math.round(data.duration)} min</Text>
-                  <Text style={styles.breakdownPercentage}>{Math.round(data.calories)} kcal</Text>
-                </View>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
-        </View>
-      )}
+        )}
+        {/* Top Exercises */}
+        {topExercises.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Top Exercises</Text>
+            </View>
+            <View style={styles.exerciseList}>
+              {topExercises.map((exercise, index) => (
+                <View key={index} style={styles.exerciseItem}>
+                  <View style={styles.exerciseRank}>
+                    <Text style={styles.exerciseRankText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.exerciseIconContainer}>
+                    <Ionicons name={exercise.icon} size={20} color="#6366F1" />
+                  </View>
+                  <View style={styles.exerciseInfo}>
+                    <Text style={styles.exerciseName}>{exercise.name}</Text>
+                    <Text style={styles.exerciseStats}>
+                      {exercise.count}x • {Math.round(exercise.totalDuration)} min • {Math.round(exercise.totalCalories)} kcal
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </CollapsibleSection>
 
-      {/* Top Exercises */}
-      {topExercises.length > 0 && (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Top Exercises</Text>
-          </View>
-          <View style={styles.exerciseList}>
-            {topExercises.map((exercise, index) => (
-              <View key={index} style={styles.exerciseItem}>
-                <View style={styles.exerciseRank}>
-                  <Text style={styles.exerciseRankText}>{index + 1}</Text>
-                </View>
-                <View style={styles.exerciseIconContainer}>
-                  <Ionicons name={exercise.icon} size={20} color="#6366F1" />
-                </View>
-                <View style={styles.exerciseInfo}>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <Text style={styles.exerciseStats}>
-                    {exercise.count}x • {Math.round(exercise.totalDuration)} min • {Math.round(exercise.totalCalories)} kcal
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
+
 
       {/* Smart Recommendations */}
       {recommendations.length > 0 && (
@@ -194,9 +212,16 @@ export default function ActivityInsightsView({
         </View>
       )}
 
-      <SectionHeader title="History" />
-      {/* Recent sessions (wave 5) */}
-      <SessionTimeline groups={sessionGroups} onDelete={onDeleteActivity} isDeleting={isDeleting} />
+      <CollapsibleSection
+        title="History"
+        subtitle={
+          sessionGroups.length
+            ? `${sessionGroups.reduce((n, g) => n + g.sessions.length, 0)} recent sessions`
+            : 'Recent sessions'
+        }
+      >
+        <SessionTimeline groups={sessionGroups} onDelete={onDeleteActivity} isDeleting={isDeleting} />
+      </CollapsibleSection>
 
       {/* Empty State */}
       {activities.length === 0 && (
