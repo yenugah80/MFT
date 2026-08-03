@@ -3,10 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY } from '../constants/premiumTheme';
 import WeeklyProgressHero from './activity/WeeklyProgressHero';
+import WeekComparisonCard from './activity/WeekComparisonCard';
+import ConsistencyHeatmap from './activity/ConsistencyHeatmap';
 import {
   getWeeklyPace,
   getActivityBreakdown,
   getSevenDayTrend,
+  getConsistencyGrid,
   getTopExercises,
   generateActivityRecommendations,
   calculateActivityStreak,
@@ -25,6 +28,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
   const pace = getWeeklyPace(activities, goalOptions);
   const breakdown = getActivityBreakdown(activities);
   const trend = getSevenDayTrend(activities);
+  const consistency = getConsistencyGrid(activities, { weeks: 5 });
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
   const recommendations = generateActivityRecommendations(activities, [], goalOptions);
@@ -86,71 +90,9 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
         </View>
       )}
 
-      {/* 7-Day Trend */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>7-Day Activity Trend</Text>
-          <View style={[styles.trendBadge, { backgroundColor: trend.trend === 'up' ? '#10B98120' : trend.trend === 'down' ? '#EF444420' : `${TEXT.secondary}20` }]}>
-            <Ionicons
-              name={trend.trend === 'up' ? 'trending-up' : trend.trend === 'down' ? 'trending-down' : 'remove'}
-              size={16}
-              color={trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : TEXT.secondary}
-            />
-            <Text style={[styles.trendText, { color: trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : TEXT.secondary }]}>
-              {/* null means no previous week to compare against — rendering it
-                  produced a bare "%" next to a neutral dash */}
-              {trend.changePercentage === null
-                ? 'no baseline'
-                : `${trend.changePercentage > 0 ? '+' : ''}${trend.changePercentage}%`}
-            </Text>
-          </View>
-        </View>
-
-        {/* Simple Bar Chart */}
-        <View style={styles.chartContainer}>
-          {trend.days.map((day, index) => {
-            const maxCalories = Math.max(...trend.days.map(d => d.calories), 1);
-            const heightPercentage = (day.calories / maxCalories) * 100;
-            // Vibrant color coding based on activity level
-            const barColor = day.isToday
-              ? '#3B82F6' // Today - Electric Blue (universal energy)
-              : day.calories > 300
-              ? '#10B981' // High - Green
-              : day.calories > 150
-              ? '#F59E0B' // Medium - Orange
-              : day.calories > 0
-              ? '#8B5CF6' // Light - Purple
-              : SURFACES.divider; // Rest - Light divider
-
-            return (
-              <View key={index} style={styles.chartBar}>
-                <View style={styles.chartBarInner}>
-                  <View
-                    style={[
-                      styles.chartBarFill,
-                      {
-                        height: `${heightPercentage}%`,
-                        backgroundColor: barColor,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={[
-                  styles.chartBarLabel,
-                  day.isToday && { color: '#3B82F6', fontFamily: TYPOGRAPHY.family.bold }
-                ]}>
-                  {day.dayName}
-                </Text>
-                <Text style={styles.chartBarValue}>{day.calories}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <Text style={styles.trendComparison}>
-          {trend.thisWeekTotal} kcal this week vs {trend.prevWeekTotal} kcal last week
-        </Text>
-      </View>
+      {/* Week over week + consistency (wave 2) */}
+      <WeekComparisonCard trend={trend} />
+      <ConsistencyHeatmap consistency={consistency} />
 
       {/* Top Exercises */}
       {topExercises.length > 0 && (
@@ -353,62 +295,6 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     width: 40,
     textAlign: 'right',
-  },
-  trendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  trendText: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-  chartContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 150,
-    marginBottom: 16,
-  },
-  chartBar: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  chartBarInner: {
-    flex: 1,
-    width: '70%',
-    justifyContent: 'flex-end',
-    backgroundColor: SURFACES.background.secondary,
-    borderRadius: 4,
-  },
-  chartBarFill: {
-    width: '100%',
-    borderRadius: 4,
-    minHeight: 4,
-  },
-  chartBarLabel: {
-    fontSize: 11,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-  },
-  chartBarValue: {
-    fontSize: 10,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.tertiary,
-  },
-  trendComparison: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    textAlign: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
   },
   exerciseList: {
     gap: 12,

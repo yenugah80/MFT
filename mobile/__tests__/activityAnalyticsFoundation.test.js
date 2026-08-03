@@ -199,3 +199,83 @@ describe('recommendations are grounded in real numbers', () => {
     });
   });
 });
+
+describe('consistency grid', () => {
+  const { getConsistencyGrid } = require('../utils/activityAnalytics');
+
+  it('returns weeks x 7 cells, Sunday first', () => {
+    const { grid } = getConsistencyGrid([], { weeks: 5 });
+    expect(grid).toHaveLength(5);
+    grid.forEach((week) => expect(week).toHaveLength(7));
+    expect(grid[0][0].date.getDay()).toBe(0); // Sunday
+  });
+
+  it('ends on the current week and marks today', () => {
+    const { grid } = getConsistencyGrid([], { weeks: 3 });
+    const flat = grid.flat();
+    const todayCells = flat.filter((d) => d.isToday);
+    expect(todayCells).toHaveLength(1);
+  });
+
+  it('does not count days that have not happened as rest days', () => {
+    const { grid, elapsedDays } = getConsistencyGrid([], { weeks: 1 });
+    const future = grid.flat().filter((d) => d.isFuture);
+    // A week has 7 cells; only the elapsed ones count
+    expect(elapsedDays + future.length).toBe(7);
+    expect(elapsedDays).toBe(new Date().getDay() + 1);
+  });
+
+  it('marks a day with logged minutes as trained', () => {
+    const result = getConsistencyGrid([session(0, { duration: 30 })], { weeks: 2 });
+    const today = result.grid.flat().find((d) => d.isToday);
+
+    expect(today.trained).toBe(true);
+    expect(today.minutes).toBe(30);
+    expect(today.sessions).toBe(1);
+    expect(result.trainedDays).toBe(1);
+    expect(result.totalMinutes).toBe(30);
+  });
+
+  it('sums multiple sessions on the same day', () => {
+    const result = getConsistencyGrid(
+      [session(0, { duration: 20 }), session(0, { duration: 25 })],
+      { weeks: 1 }
+    );
+    const today = result.grid.flat().find((d) => d.isToday);
+    expect(today.minutes).toBe(45);
+    expect(today.sessions).toBe(2);
+    expect(result.trainedDays).toBe(1);
+  });
+
+  it('does not count a zero-minute row as trained', () => {
+    const result = getConsistencyGrid([session(0, { duration: 0 })], { weeks: 1 });
+    expect(result.trainedDays).toBe(0);
+  });
+
+  it('measures the longest rest gap over elapsed days only', () => {
+    // Trained today and 5 days ago -> a 4 day gap between them
+    const result = getConsistencyGrid(
+      [session(0, { duration: 30 }), session(5, { duration: 30 })],
+      { weeks: 3 }
+    );
+    expect(result.longestGap).toBeGreaterThanOrEqual(4);
+    expect(result.longestGapStart).toBeInstanceOf(Date);
+  });
+
+  it('reports no gap when every elapsed day was trained', () => {
+    const everyDay = Array.from({ length: 40 }, (_, i) => session(i, { duration: 20 }));
+    const result = getConsistencyGrid(everyDay, { weeks: 5 });
+    expect(result.longestGap).toBe(0);
+    expect(result.trainedDays).toBe(result.elapsedDays);
+  });
+
+  it('survives malformed input', () => {
+    expect(getConsistencyGrid(undefined).grid).toHaveLength(5);
+    expect(getConsistencyGrid(null).trainedDays).toBe(0);
+    expect(getConsistencyGrid([{ timestamp: 'nope' }, {}]).trainedDays).toBe(0);
+    // Nonsensical widths fall back to the 5-week default, not a 1-row grid
+    expect(getConsistencyGrid([], { weeks: 0 }).weeks).toBe(5);
+    expect(getConsistencyGrid([], { weeks: -3 }).weeks).toBe(5);
+    expect(getConsistencyGrid([], { weeks: 'abc' }).weeks).toBe(5);
+  });
+});

@@ -531,3 +531,109 @@ export const getMonthlyCalendarData = (activities) => {
 
   return calendarData;
 };
+
+/**
+ * Build a calendar grid of trained / rest days, newest week last.
+ *
+ * Rows are weeks running Sunday-Saturday (matching getWeekStart and the
+ * backend), so the final row is the current week with any days after today
+ * flagged `isFuture` rather than drawn as rest days.
+ *
+ * @param {Array} activities - adapted rows ({ timestamp, duration, calories })
+ * @param {{ weeks?: number }} [options]
+ */
+export const getConsistencyGrid = (activities, options = {}) => {
+  // A zero or nonsensical width falls back to the default rather than
+  // collapsing the grid to a single row
+  const requested = Number(options.weeks);
+  const weeks = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 5;
+  const rows = Array.isArray(activities) ? activities : [];
+
+  // Minutes and session count per calendar day
+  const byDay = new Map();
+  rows.forEach((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    if (Number.isNaN(stamp.getTime())) return;
+    const key = stamp.toDateString();
+    const entry = byDay.get(key) || { minutes: 0, sessions: 0 };
+    entry.minutes += activity.duration || 0;
+    entry.sessions += 1;
+    byDay.set(key, entry);
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Start at the Sunday of the week that is `weeks - 1` weeks back
+  const gridStart = getWeekStart(today);
+  gridStart.setDate(gridStart.getDate() - (weeks - 1) * 7);
+
+  const grid = [];
+  let trainedDays = 0;
+  let totalMinutes = 0;
+
+  for (let week = 0; week < weeks; week += 1) {
+    const days = [];
+    for (let dow = 0; dow < 7; dow += 1) {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + week * 7 + dow);
+
+      const entry = byDay.get(date.toDateString());
+      const isFuture = date > today;
+      const trained = !isFuture && !!entry && entry.minutes > 0;
+
+      if (trained) {
+        trainedDays += 1;
+        totalMinutes += entry.minutes;
+      }
+
+      days.push({
+        date,
+        dayKey: date.toDateString(),
+        minutes: entry?.minutes || 0,
+        sessions: entry?.sessions || 0,
+        trained,
+        isToday: date.getTime() === today.getTime(),
+        isFuture,
+        monthLabel: date.getDate() <= 7 ? date.toLocaleDateString('en-US', { month: 'short' }) : null,
+      });
+    }
+    grid.push(days);
+  }
+
+  // Elapsed days only — an unreached day is neither trained nor rest
+  const elapsed = grid.flat().filter((d) => !d.isFuture);
+
+  // Longest run of consecutive rest days inside the window
+  let longestGap = 0;
+  let gapStart = null;
+  let gapEnd = null;
+  let currentGap = 0;
+  let currentStart = null;
+
+  elapsed.forEach((day) => {
+    if (day.trained) {
+      currentGap = 0;
+      currentStart = null;
+      return;
+    }
+    currentGap += 1;
+    if (!currentStart) currentStart = day.date;
+    if (currentGap > longestGap) {
+      longestGap = currentGap;
+      gapStart = currentStart;
+      gapEnd = day.date;
+    }
+  });
+
+  return {
+    grid,
+    weeks,
+    trainedDays,
+    elapsedDays: elapsed.length,
+    totalMinutes,
+    longestGap,
+    longestGapStart: gapStart,
+    longestGapEnd: gapEnd,
+  };
+};
