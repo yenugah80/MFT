@@ -32,6 +32,7 @@ import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
+import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import { ensureActivityLogTableShape, ensureRecoverySnapshotsTable } from '../utils/schemaGuards.js';
 import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
@@ -537,7 +538,13 @@ router.get('/analytics/recommendations', async (req, res) => {
 // AI-POWERED INSIGHTS (POST for cache control)
 // ============================================================================
 
-router.post('/insights', async (req, res) => {
+// This path sends activity patterns to OpenAI, so it must be gated like every
+// other AI path in the app. It was not — an oversight, since the endpoint
+// predates the consent work.
+router.post(
+  '/insights',
+  requireOpenAIConsent({ purpose: 'analyse your training patterns' }),
+  async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 30 } = req.body;
@@ -584,10 +591,11 @@ router.post('/insights', async (req, res) => {
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[Activity] POST /insights error:', error);
-    res.status(500).json({ error: 'Failed to generate insights' });
+      console.error('[Activity] POST /insights error:', error);
+      res.status(500).json({ error: 'Failed to generate insights' });
+    }
   }
-});
+);
 
 // ============================================================================
 // FEEDBACK

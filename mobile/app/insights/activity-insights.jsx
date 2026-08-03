@@ -11,7 +11,7 @@ import React, { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND } from '../../constants/premiumTheme';
@@ -111,6 +111,20 @@ export default function ActivityInsightsScreen() {
   }, [deleteActivity]);
 
 
+  // On demand only: this costs a model call and sends data to a third party
+  const smartInsights = useMutation({
+    mutationFn: () => apiClient.post('/activity/insights', { days: 30 }),
+  });
+
+  const consentRequired =
+    smartInsights.error?.response?.data?.code === 'OPENAI_CONSENT_REQUIRED' ||
+    smartInsights.error?.response?.status === 403;
+
+  const handleGiveConsent = useCallback(() => {
+    Haptics.selectionAsync();
+    router.push('/profile/privacy');
+  }, [router]);
+
   const handleLogSignal = useCallback(() => {
     Haptics.selectionAsync();
     // Sleep and stress carry 65% of the recovery score between them
@@ -179,6 +193,20 @@ export default function ActivityInsightsScreen() {
           recoveryHistory={recoveryHistory}
           chartWidth={CHART_WIDTH}
           onLogSignal={handleLogSignal}
+          smartInsights={{
+            insights: smartInsights.data?.insights,
+            message: smartInsights.data?.message,
+            dataPoints: smartInsights.data?.dataPoints,
+            minDataRequired: smartInsights.data?.minDataRequired,
+            needsConsent: consentRequired,
+            isLoading: smartInsights.isPending,
+            error:
+              smartInsights.isError && !consentRequired
+                ? 'Could not generate insights just now.'
+                : null,
+            onGenerate: () => smartInsights.mutate(),
+            onGiveConsent: handleGiveConsent,
+          }}
           onDeleteActivity={handleDeleteActivity}
           isDeleting={isDeleting}
         />

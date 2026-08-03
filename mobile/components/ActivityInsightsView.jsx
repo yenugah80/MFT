@@ -11,6 +11,7 @@ import {
 } from './activity/TrainingFocusCards';
 import { getExerciseById } from '../services/exerciseDatabase';
 import TrainingCalendar from './activity/TrainingCalendar';
+import SmartInsightsCard from './activity/SmartInsightsCard';
 import RecoveryHero from './activity/RecoveryHero';
 import RecoveryTrendCard from './activity/RecoveryTrendCard';
 import { CollapsibleSection } from './activity/layout';
@@ -44,6 +45,7 @@ export default function ActivityInsightsView({
   recoveryHistory,
   onLogSignal,
   chartWidth,
+  smartInsights,
 }) {
   // Prefer the target the backend reports over the CDC default, so the screen
   // follows if that ever changes server-side.
@@ -146,6 +148,8 @@ export default function ActivityInsightsView({
       </CollapsibleSection>
 
       <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
+
+      {!!smartInsights && <SmartInsightsCard {...smartInsights} />}
 
       {/* Three questions, one screenful: am I ready, what do I do, how is it
           going. Each holds one number. The evidence behind each — contribution
