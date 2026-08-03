@@ -18,14 +18,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import {
   TEXT,
-  SURFACES,
   TYPOGRAPHY,
   SPACING,
   RADIUS,
-  SHADOWS,
   SEMANTIC,
   BRAND,
 } from '../../constants/premiumTheme';
+import { Hero, Strip } from './layout';
 
 /**
  * Mirror of RECOVERY_FACTOR_WEIGHTS in the backend engine.
@@ -147,8 +146,12 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
     .map((key) => FACTOR_LABELS[key] || key)
     .join(' and ');
 
+  // Tint the hero with the score's own colour, so readiness is legible before
+  // a single number is read
+  const accent = color || BRAND.primary;
+
   return (
-    <View style={styles.card}>
+    <Hero accent={accent}>
       <View style={styles.header}>
         <Text style={styles.title}>Recovery</Text>
         <View style={styles.coveragePill}>
@@ -212,33 +215,18 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
           {/* Readiness translated into a session length — a handoff, not a
               competing recommendation. The plan itself lives on Activity. */}
           {!!strainTarget && (
-            <View style={styles.handoff}>
-              <Text style={styles.handoffText}>
-                Ready for a {strainTarget.zone?.name?.toLowerCase() || 'moderate'} session
-                {strainTarget.target ? ` — target strain ${strainTarget.target}` : ''}.
-              </Text>
-              {!!onPlanSession && (
-                <TouchableOpacity onPress={onPlanSession} activeOpacity={0.85} style={styles.handoffLink}>
-                  <Text style={styles.handoffLinkText}>Plan a session</Text>
-                  <Ionicons name="arrow-forward" size={13} color={BRAND.primary} />
-                </TouchableOpacity>
-              )}
-            </View>
+            <Strip onPress={onPlanSession} actionLabel="Plan a session">
+              Ready for a {strainTarget.zone?.name?.toLowerCase() || 'moderate'} session
+              {strainTarget.target ? ` — target strain ${strainTarget.target}` : ''}.
+            </Strip>
           )}
         </>
       )}
-    </View>
+    </Hero>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[3],
-    ...SHADOWS.sm,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -382,29 +370,6 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
   },
 
-  handoff: {
-    marginTop: SPACING[4],
-    paddingTop: SPACING[3],
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
-    gap: SPACING[2],
-  },
-  handoffText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-    lineHeight: 19,
-  },
-  handoffLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[1],
-  },
-  handoffLinkText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: BRAND.primary,
-  },
 
   ghostButton: {
     flexDirection: 'row',

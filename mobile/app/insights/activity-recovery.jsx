@@ -29,6 +29,7 @@ import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../consta
 import apiClient from '../../services/apiClient';
 import { toDisplayText } from '../../utils/displayText';
 import RecoveryHero from '../../components/activity/RecoveryHero';
+import { SectionHeader } from '../../components/activity/layout';
 import RecoveryTrendCard from '../../components/activity/RecoveryTrendCard';
 
 const CHART_WIDTH = Dimensions.get('window').width - 32 * 2 - 16;
@@ -134,6 +135,7 @@ export default function ActivityRecoveryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
           }
         >
+          <SectionHeader title="Today" />
           <RecoveryHero
             recovery={recovery}
             strainTarget={strainTarget}
@@ -141,15 +143,13 @@ export default function ActivityRecoveryScreen() {
             onPlanSession={handlePlanSession}
           />
 
+          <SectionHeader title="Trend" />
           <RecoveryTrendCard history={history} chartWidth={CHART_WIDTH} />
 
+          <SectionHeader title="This week" />
           {/* Weekly insights */}
           {weeklyInsights.length > 0 && (
             <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="calendar-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>This Week</Text>
-              </View>
               {weeklyInsights.map((insight, idx) => (
                 <View key={idx} style={styles.insightRow}>
                   <Ionicons name={insight.icon || 'information-circle'} size={18} color={insight.color || BRAND.primary} />
