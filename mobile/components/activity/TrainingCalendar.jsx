@@ -279,7 +279,30 @@ export default function TrainingCalendar({
                 },
               ]}
             />
+            {/* Where the period should stand by now — without it "35 of 150"
+                reads the same on a Monday as on a Saturday */}
+            {!stats.isComplete && stats.expectedByNow > 0 && stats.percentage < 100 && (
+              <View
+                style={[
+                  styles.paceMarker,
+                  { left: `${Math.min((stats.expectedByNow / stats.target) * 100, 100)}%` },
+                ]}
+              />
+            )}
           </View>
+
+          {!stats.isComplete && stats.percentage < 100 && (
+            <Text
+              style={[
+                styles.pace,
+                { color: stats.onPace ? SEMANTIC.success.base : SEMANTIC.warning.base },
+              ]}
+            >
+              {stats.onPace
+                ? `On pace · ${stats.expectedByNow} min expected by now`
+                : `${Math.abs(stats.deltaMinutes)} min behind pace · ${stats.expectedByNow} min expected by now`}
+            </Text>
+          )}
 
           <Text style={styles.factLine}>
             {stats.sessions} session{stats.sessions === 1 ? '' : 's'} · {stats.calories} kcal ·{' '}
@@ -523,12 +546,25 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.06)',
-    overflow: 'hidden',
     marginTop: SPACING[2],
+    justifyContent: 'center',
   },
   fill: {
     height: '100%',
     borderRadius: 4,
+  },
+  paceMarker: {
+    position: 'absolute',
+    top: -3,
+    width: 2,
+    height: 13,
+    borderRadius: 1,
+    backgroundColor: TEXT.secondary,
+  },
+  pace: {
+    marginTop: SPACING[2],
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   factLine: {
     marginTop: SPACING[2],

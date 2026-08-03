@@ -1314,10 +1314,18 @@ export const getPeriodStats = (activities, options = {}) => {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
   const elapsedEnd = end > today ? today : end;
-  const elapsedDays = Math.max(
-    1,
-    Math.round((elapsedEnd - start) / 86400000) + 1
-  );
+  // The window ends at 23:59:59, so the span is (n-1) days plus a few hours.
+  // Math.round would carry that up to n and the +1 would make it n+1 — a
+  // single day counted as two, which is what "1 of 2 days" on the day panel
+  // was reporting.
+  const elapsedDays = Math.max(1, Math.floor((elapsedEnd - start) / 86400000) + 1);
+
+  // Where the period should stand by now. Without this the panel can say
+  // "35 of 150" but not whether that is on track on a Monday versus a
+  // Saturday — the pace read that the weekly hero used to carry.
+  const totalDays = Math.floor((end - start) / 86400000) + 1;
+  const expectedByNow = Math.round((target / totalDays) * Math.min(elapsedDays, totalDays));
+  const isComplete = end <= today;
 
   return {
     scope,
@@ -1325,6 +1333,13 @@ export const getPeriodStats = (activities, options = {}) => {
     end,
     minutes,
     target,
+    totalDays,
+    expectedByNow,
+    deltaMinutes: minutes - expectedByNow,
+    onPace: minutes >= expectedByNow,
+    // A finished period is not "behind pace", it simply is what it was
+    isComplete,
+    daysLeft: Math.max(0, totalDays - elapsedDays),
     percentage: target > 0 ? Math.min(Math.round((minutes / target) * 100), 100) : 0,
     remainingMinutes: Math.max(0, target - minutes),
     calories,

@@ -720,3 +720,75 @@ describe('exercise breakdown', () => {
     expect(getExerciseBreakdown([{}])).toEqual([]);
   });
 });
+
+describe('session journal helpers', () => {
+  const {
+    groupSessionsByDay,
+    getSessionHighlights,
+    getSessionComparison,
+  } = require('../utils/activityAnalytics');
+  const withId = (id, daysAgo, extra = {}) => ({ id, ...session(daysAgo, extra) });
+
+  it('reports the rest days between sessions', () => {
+    // Trained today and 4 days ago -> 3 rest days between
+    const groups = groupSessionsByDay([withId(1, 0), withId(2, 4)]);
+    expect(groups[0].gapAfter).toBe(0);
+    expect(groups[1].gapAfter).toBe(3);
+  });
+
+  it('reports no gap between consecutive days', () => {
+    const groups = groupSessionsByDay([withId(1, 0), withId(2, 1)]);
+    expect(groups[1].gapAfter).toBe(0);
+  });
+
+  it('badges the longest session and the biggest burn', () => {
+    const highlights = getSessionHighlights([
+      withId(1, 0, { duration: 20, calories: 100 }),
+      withId(2, 1, { duration: 75, calories: 150 }),
+      withId(3, 2, { duration: 30, calories: 520 }),
+    ]);
+
+    expect(highlights.get(2)).toBe('Longest session');
+    expect(highlights.get(3)).toBe('Biggest burn');
+    expect(highlights.get(1)).toBeUndefined();
+  });
+
+  it('badges a movement on the session that actually was the first', () => {
+    const highlights = getSessionHighlights([
+      { ...withId(1, 0, { duration: 10 }), exerciseId: 'leg-press', exerciseName: 'Leg Press' },
+      { ...withId(2, 5, { duration: 20 }), exerciseId: 'leg-press', exerciseName: 'Leg Press' },
+      // Longest and biggest, so it takes those badges and cannot mask the test
+      { ...withId(3, 8, { duration: 99, calories: 900 }), exerciseId: 'plank', exerciseName: 'Plank' },
+    ]);
+
+    // The older of the two Leg Press sessions, not the most recent
+    expect(highlights.get(2)).toBe('First Leg Press');
+    expect(highlights.get(3)).toBe('Longest session');
+  });
+
+  it('produces no badges from a single session', () => {
+    expect(getSessionHighlights([withId(1, 0)]).size).toBe(0);
+    expect(getSessionHighlights([]).size).toBe(0);
+  });
+
+  it('compares against your usual effort only with enough peers', () => {
+    const peers = [1, 2, 3].map((i) => ({ ...withId(i, i, { duration: 30 }), type: 'cardio' }));
+    const outlier = { ...withId(9, 0, { duration: 60 }), type: 'cardio' };
+
+    expect(getSessionComparison(outlier, [...peers, outlier])).toMatch(/100% longer than usual/);
+    // Two peers cannot establish what is usual
+    expect(getSessionComparison(outlier, [peers[0], peers[1], outlier])).toBeNull();
+  });
+
+  it('stays silent when a session is close to typical', () => {
+    const peers = [1, 2, 3].map((i) => ({ ...withId(i, i, { duration: 30 }), type: 'cardio' }));
+    const normal = { ...withId(9, 0, { duration: 32 }), type: 'cardio' };
+    expect(getSessionComparison(normal, [...peers, normal])).toBeNull();
+  });
+
+  it('survives malformed input', () => {
+    expect(getSessionHighlights(undefined).size).toBe(0);
+    expect(getSessionComparison(undefined, [])).toBeNull();
+    expect(getSessionComparison({ type: 'cardio' }, undefined)).toBeNull();
+  });
+});
