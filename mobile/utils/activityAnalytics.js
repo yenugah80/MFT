@@ -1028,7 +1028,92 @@ export const groupSessionsByDay = (activities, options = {}) => {
     bucket.minutes += Number(activity.duration) || 0;
   });
 
-  return [...buckets.values()].sort((a, b) => a.daysAgo - b.daysAgo);
+  const ordered = [...buckets.values()].sort((a, b) => a.daysAgo - b.daysAgo);
+
+  // Rest days between sessions are the shape of the habit. A flat list hides
+  // them: two entries look identical whether they were consecutive days or
+  // three weeks apart.
+  ordered.forEach((bucket, index) => {
+    const newer = ordered[index - 1];
+    bucket.gapAfter = newer ? bucket.daysAgo - newer.daysAgo - 1 : 0;
+  });
+
+  return ordered;
+};
+
+/**
+ * Notable moments across the history, keyed by activity id.
+ *
+ * Only facts that are true of the whole record — a personal best, the first
+ * time a movement appears — so a quiet week produces no badges rather than
+ * manufactured ones.
+ */
+export const getSessionHighlights = (activities) => {
+  const rows = (Array.isArray(activities) ? activities : []).filter(
+    (a) => a && !Number.isNaN(new Date(a.timestamp).getTime())
+  );
+  const highlights = new Map();
+  if (rows.length === 0) return highlights;
+
+  const add = (id, label) => {
+    if (id === undefined || id === null) return;
+    if (!highlights.has(id)) highlights.set(id, label);
+  };
+
+  const longest = rows.reduce((best, a) =>
+    (Number(a.duration) || 0) > (Number(best.duration) || 0) ? a : best
+  );
+  if ((Number(longest.duration) || 0) > 0 && rows.length > 1) {
+    add(longest.id, 'Longest session');
+  }
+
+  const hardest = rows.reduce((best, a) =>
+    (Number(a.calories) || 0) > (Number(best.calories) || 0) ? a : best
+  );
+  if ((Number(hardest.calories) || 0) > 0 && rows.length > 1) {
+    add(hardest.id, 'Biggest burn');
+  }
+
+  // First appearance of a movement, oldest first so the badge lands on the
+  // session that actually was the first
+  const seen = new Set();
+  [...rows]
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .forEach((activity) => {
+      const key = activity.exerciseId || activity.exerciseName;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      // Only interesting once there is a history to be new against
+      if (rows.length > 2) add(activity.id, `First ${activity.exerciseName || key}`);
+    });
+
+  return highlights;
+};
+
+/**
+ * How a session compares to the user's own typical effort for that movement.
+ * Needs three prior sessions of the same kind before it will say anything.
+ */
+export const getSessionComparison = (activity, activities) => {
+  const key = activity?.exerciseId || activity?.exerciseName || activity?.type;
+  if (!key) return null;
+
+  const peers = (Array.isArray(activities) ? activities : []).filter((other) => {
+    if (other === activity) return false;
+    const otherKey = other?.exerciseId || other?.exerciseName || other?.type;
+    return otherKey === key && (Number(other.duration) || 0) > 0;
+  });
+
+  if (peers.length < 3) return null;
+
+  const mean = peers.reduce((sum, p) => sum + (Number(p.duration) || 0), 0) / peers.length;
+  if (mean <= 0) return null;
+
+  const delta = ((Number(activity.duration) || 0) - mean) / mean;
+  if (Math.abs(delta) < 0.15) return null;
+
+  const percent = Math.round(Math.abs(delta) * 100);
+  return `${percent}% ${delta > 0 ? 'longer' : 'shorter'} than usual`;
 };
 
 /**
@@ -1068,4 +1153,93 @@ export const getExerciseBreakdown = (activities, limit = 5) => {
     }))
     .sort((a, b) => b.minutes - a.minutes)
     .slice(0, Math.max(1, limit));
+};
+
+/**
+ * A calendar month of training, one entry per day, Sunday-first rows.
+ *
+ * Each day carries its minutes so a cell can show volume rather than a binary
+ * trained/rest mark, and the sessions themselves so tapping a day needs no
+ * second lookup. Days outside the month are included as padding so the grid
+ * stays rectangular, and days in the future are flagged rather than drawn as
+ * rest.
+ *
+ * @param {Array} activities - adapted rows
+ * @param {{ monthsAgo?: number, dailyTargetMinutes?: number }} [options]
+ */
+export const getMonthGrid = (activities, options = {}) => {
+  const monthsAgo = Number.isFinite(options.monthsAgo) ? options.monthsAgo : 0;
+  const dailyTarget =
+    Number(options.dailyTargetMinutes) > 0
+      ? Number(options.dailyTargetMinutes)
+      : DEFAULT_WEEKLY_MINUTES_TARGET / 7;
+
+  const rows = Array.isArray(activities) ? activities : [];
+
+  const byDay = new Map();
+  rows.forEach((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    if (Number.isNaN(stamp.getTime())) return;
+    const key = stamp.toDateString();
+    const entry = byDay.get(key) || { minutes: 0, calories: 0, sessions: [] };
+    entry.minutes += Number(activity.duration) || 0;
+    entry.calories += Number(activity.calories) || 0;
+    entry.sessions.push(activity);
+    byDay.set(key, entry);
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const anchor = new Date(today.getFullYear(), today.getMonth() - monthsAgo, 1);
+  const monthIndex = anchor.getMonth();
+  const daysInMonth = new Date(anchor.getFullYear(), monthIndex + 1, 0).getDate();
+
+  // Pad back to the Sunday that starts the first week
+  const gridStart = new Date(anchor);
+  gridStart.setDate(1 - anchor.getDay());
+
+  const cells = [];
+  const totalCells = Math.ceil((anchor.getDay() + daysInMonth) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i += 1) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + i);
+
+    const entry = byDay.get(date.toDateString());
+    const inMonth = date.getMonth() === monthIndex;
+    const isFuture = date > today;
+
+    cells.push({
+      date,
+      dayKey: date.toDateString(),
+      dayOfMonth: date.getDate(),
+      inMonth,
+      isFuture,
+      isToday: date.getTime() === today.getTime(),
+      minutes: entry?.minutes || 0,
+      calories: entry?.calories || 0,
+      sessions: entry?.sessions || [],
+      trained: !isFuture && (entry?.minutes || 0) > 0,
+      // 0-1 of a day's share of the weekly target, for a ring's fill
+      progress: Math.min((entry?.minutes || 0) / dailyTarget, 1),
+    });
+  }
+
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+  const monthCells = cells.filter((c) => c.inMonth && !c.isFuture);
+
+  return {
+    weeks,
+    monthLabel: anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    monthsAgo,
+    trainedDays: monthCells.filter((c) => c.trained).length,
+    elapsedDays: monthCells.length,
+    totalMinutes: monthCells.reduce((sum, c) => sum + c.minutes, 0),
+    dailyTarget: Math.round(dailyTarget),
+    // Cannot look into a month that has not started
+    canGoForward: monthsAgo > 0,
+  };
 };

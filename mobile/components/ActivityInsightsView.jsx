@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY, VIBRANT_WELLNESS } from '../constants/premiumTheme';
 import WeeklyProgressHero from './activity/WeeklyProgressHero';
 import WeekComparisonCard from './activity/WeekComparisonCard';
-import ConsistencyHeatmap from './activity/ConsistencyHeatmap';
 import {
   IntensityMixCard,
   TimeOfDayCard,
@@ -16,7 +15,7 @@ import {
   NextSessionCard,
 } from './activity/TrainingFocusCards';
 import { getExerciseById } from '../services/exerciseDatabase';
-import SessionTimeline from './activity/SessionTimeline';
+import TrainingCalendar from './activity/TrainingCalendar';
 import RecoveryHero from './activity/RecoveryHero';
 import RecoveryTrendCard from './activity/RecoveryTrendCard';
 import TrainingRibbon from './activity/TrainingRibbon';
@@ -27,14 +26,15 @@ import {
   getActivityBreakdown,
   getSevenDayTrend,
   getConsistencyGrid,
+  getMonthGrid,
   getExerciseBreakdown,
+  getSessionHighlights,
   getIntensityMix,
   getTimeOfDayPattern,
   getPersonalBests,
   getMuscleBalance,
   getMoodActivityLink,
   getNextSessionSuggestion,
-  groupSessionsByDay,
   generateActivityRecommendations,
   calculateActivityStreak,
 } from '../utils/activityAnalytics';
@@ -73,7 +73,15 @@ export default function ActivityInsightsView({
   const balance = getMuscleBalance(activities, getExerciseById);
   const moodLink = getMoodActivityLink(activities, moodTrend);
   const nextSession = getNextSessionSuggestion(pace, balance, backendRecommendation);
-  const sessionGroups = groupSessionsByDay(activities, { limit: 15 });
+  const sessionHighlights = getSessionHighlights(activities);
+  const sessionCount = Array.isArray(activities) ? activities.length : 0;
+
+  // The calendar owns its month navigation; it asks for whichever month it
+  // needs rather than the screen guessing.
+  const buildMonth = useCallback(
+    (monthsAgo) => getMonthGrid(activities, { monthsAgo, dailyTargetMinutes: (targetMinutes || 150) / 7 }),
+    [activities, targetMinutes]
+  );
 
   // The ribbon summarises the week section, so tapping it opens that section
   // rather than navigating away from the summary you just read.
@@ -134,7 +142,6 @@ export default function ActivityInsightsView({
         badge={intensityMix?.dominant ? intensityMix.dominant : undefined}
       >
         <WeekComparisonCard trend={trend} />
-        <ConsistencyHeatmap consistency={consistency} />
         <IntensityMixCard mix={intensityMix} />
         <TimeOfDayCard pattern={timeOfDay} />
       </CollapsibleSection>
@@ -187,17 +194,20 @@ export default function ActivityInsightsView({
 
 
       <CollapsibleSection
-        title="History"
-        subtitle="Every session, newest first"
-        icon="time-outline"
+        title="Calendar"
+        subtitle="Every day, and what you did"
+        icon="calendar-number-outline"
         accent={VIBRANT_WELLNESS.hydration.solid}
         badge={
-          sessionGroups.length
-            ? `${sessionGroups.reduce((n, g) => n + g.sessions.length, 0)}`
-            : undefined
+          sessionCount ? `${sessionCount}` : undefined
         }
       >
-        <SessionTimeline groups={sessionGroups} onDelete={onDeleteActivity} isDeleting={isDeleting} />
+        <TrainingCalendar
+          buildMonth={buildMonth}
+          highlights={sessionHighlights}
+          onDelete={onDeleteActivity}
+          isDeleting={isDeleting}
+        />
       </CollapsibleSection>
 
       {/* Empty State */}

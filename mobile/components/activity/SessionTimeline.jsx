@@ -29,7 +29,7 @@ import {
 const typeLabel = (type) =>
   ACTIVITY_TYPES.find((t) => t.key === type)?.label || type || 'Activity';
 
-export default function SessionTimeline({ groups = [], onDelete, isDeleting }) {
+export default function SessionTimeline({ groups = [], highlights, comparisonFor, onDelete, isDeleting }) {
   const handleDelete = useCallback(
     (id) => {
       if (!onDelete || !id) return;
@@ -75,6 +75,15 @@ export default function SessionTimeline({ groups = [], onDelete, isDeleting }) {
                       {activity.duration || 0} min · {intensity.label.toLowerCase()}
                       {activity.calories ? ` · ${Math.round(activity.calories)} kcal` : ''}
                     </Text>
+                    {!!highlights?.get?.(activity.id) && (
+                      <View style={styles.badge}>
+                        <Ionicons name="trophy" size={11} color={SEMANTIC.warning.base} />
+                        <Text style={styles.badgeText}>{highlights.get(activity.id)}</Text>
+                      </View>
+                    )}
+                    {!!comparisonFor?.(activity) && (
+                      <Text style={styles.comparison}>{comparisonFor(activity)}</Text>
+                    )}
                   </View>
 
                   {!!onDelete && (
@@ -91,6 +100,18 @@ export default function SessionTimeline({ groups = [], onDelete, isDeleting }) {
                 </View>
               );
             })}
+
+            {/* The gap is the habit: two entries look identical whether they
+                were consecutive days or three weeks apart */}
+            {group.gapAfter > 0 && (
+              <View style={styles.gap}>
+                <View style={styles.gapLine} />
+                <Text style={styles.gapText}>
+                  {group.gapAfter} rest day{group.gapAfter === 1 ? '' : 's'}
+                </Text>
+                <View style={styles.gapLine} />
+              </View>
+            )}
           </View>
         ))
       )}
@@ -178,5 +199,45 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 4,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    backgroundColor: `${SEMANTIC.warning.base}18`,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: SEMANTIC.warning.base,
+  },
+  comparison: {
+    marginTop: 3,
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+    fontStyle: 'italic',
+  },
+  gap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    paddingVertical: SPACING[2],
+    marginLeft: 22,
+  },
+  gapLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  gapText: {
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.muted,
   },
 });
