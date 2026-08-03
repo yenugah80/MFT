@@ -41,7 +41,6 @@ function ActivityScreen() {
   // Real API hook - replaces AsyncStorage
   const {
     activities,
-    todaySummary,
     weeklyProgress,
     isLoading,
     refetch,
@@ -80,11 +79,6 @@ function ActivityScreen() {
     category: selectedCategory,
     focusKey: selectedFocus,
   });
-
-  // Use real data from API, fallback to 0 during loading
-  const totalCalories = todaySummary?.totalCalories || 0;
-  const totalDuration = todaySummary?.totalMinutes || 0;
-  const activityCount = todaySummary?.activityCount || 0;
 
   // Get today's date formatted
   const getTodayFormatted = () => {
@@ -273,24 +267,6 @@ function ActivityScreen() {
             )}
           </View>
 
-          {/* Stats Summary */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Ionicons name="flame" size={24} color="#fff" />
-              <Text style={styles.statValue}>{totalCalories}</Text>
-              <Text style={styles.statLabel}>Calories</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Ionicons name="time" size={24} color="#fff" />
-              <Text style={styles.statValue}>{totalDuration}</Text>
-              <Text style={styles.statLabel}>Minutes</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Ionicons name="fitness" size={24} color="#fff" />
-              <Text style={styles.statValue}>{activityCount}</Text>
-              <Text style={styles.statLabel}>Activities</Text>
-            </View>
-          </View>
         </LinearGradient>
       </Animated.View>
 
@@ -474,14 +450,13 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
   },
   headerGradient: {
-    paddingVertical: 24,
+    paddingVertical: 18,
     paddingHorizontal: 20,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
+    alignItems: 'center',
   },
   screenTitle: {
     fontSize: 32,
@@ -511,29 +486,6 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#fff',
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
   },
   searchSection: {
     paddingHorizontal: 20,
