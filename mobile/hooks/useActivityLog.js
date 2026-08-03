@@ -8,6 +8,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 import apiClient from '../services/apiClient';
+import { deriveTodaySnapshot } from '../utils/activitySnapshot';
 
 /**
  * Activity types with icons and labels
@@ -76,6 +77,7 @@ export function useActivityLog() {
   const {
     data: todayData,
     isLoading: isTodayLoading,
+    isFetching: isTodayFetching,
     error: todayError,
     refetch: refetchToday,
   } = useQuery({
@@ -174,6 +176,10 @@ export function useActivityLog() {
       // Invalidate to get fresh data from server
       queryClient.invalidateQueries({ queryKey: ['activityToday'] });
       queryClient.invalidateQueries({ queryKey: ['activityWeek'] });
+      // Prefix match: covers every ['activityHistory', ...] query (Insights
+      // summary card and the activity-insights deep dive) so they don't serve
+      // stale data after a log or delete.
+      queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
@@ -282,6 +288,10 @@ export function useActivityLog() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activityToday'] });
       queryClient.invalidateQueries({ queryKey: ['activityWeek'] });
+      // Prefix match: covers every ['activityHistory', ...] query (Insights
+      // summary card and the activity-insights deep dive) so they don't serve
+      // stale data after a log or delete.
+      queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
@@ -307,6 +317,7 @@ export function useActivityLog() {
         // Already deleted, just refresh
         queryClient.invalidateQueries({ queryKey: ['activityToday'] });
         queryClient.invalidateQueries({ queryKey: ['activityWeek'] });
+        queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
         return null;
       }
       console.error('[useActivityLog] Failed to delete activity:', err);
@@ -340,8 +351,21 @@ export function useActivityLog() {
 
   /**
    * Get today's activities list
+   *
+   * Already scoped to today by the API (GET /activity/today filters on the
+   * user's timezone-aware dayKey) — consumers must not re-filter by device
+   * date, which disagrees near midnight.
    */
   const activities = useMemo(() => todayData?.activities || [], [todayData]);
+
+  /**
+   * Today's activity in the shape scoring/summary cards consume:
+   * minutes, calories, the distinct types trained, and the dominant intensity.
+   */
+  const todaySnapshot = useMemo(
+    () => deriveTodaySnapshot(todaySummary, activities),
+    [todaySummary, activities]
+  );
 
   /**
    * Refetch all data
@@ -361,13 +385,21 @@ export function useActivityLog() {
 
     // State
     isLogging,
+    isDeleting: deleteActivityMutation.isPending,
     error,
 
     // Today's data
     todaySummary,
+    todaySnapshot,
     activities,
     isTodayLoading,
     todayError,
+    // Aliases for the conventional React Query names. Several screens already
+    // destructured `isLoading`/`isFetching` from this hook and silently got
+    // undefined (dead loading gates); these keep those call sites working
+    // without changing the existing names anything else depends on.
+    isLoading: isTodayLoading,
+    isFetching: isTodayFetching,
 
     // Weekly data
     weeklyProgress,

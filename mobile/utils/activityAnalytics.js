@@ -5,24 +5,37 @@
  */
 
 /**
- * Get activities from the current week (Monday - Sunday)
+ * Start of the current week, Sunday 00:00 local.
+ *
+ * This MUST match the backend, which anchors weekly progress to Sunday
+ * (backend/src/routes/activity.js: `weekStart.setDate(date - date.getDay())`).
+ * This used to anchor to Monday, so on a Monday the two disagreed by a full
+ * day: the Activity tab header (backend) counted Sunday's workout while this
+ * screen (client) did not, and the same screen showed "0 / 1500 kcal" above
+ * "Cardio 35 kcal" from the very same rows.
+ */
+export const getWeekStart = (reference = new Date()) => {
+  const weekStart = new Date(reference);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
+  weekStart.setHours(0, 0, 0, 0);
+  return weekStart;
+};
+
+/**
+ * Get activities from the current week (Sunday - Saturday)
  */
 export const getThisWeekActivities = (activities) => {
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Get to Monday
+  if (!Array.isArray(activities)) return [];
 
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
+  const weekStart = getWeekStart();
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
 
   return activities.filter(activity => {
-    const timestamp = new Date(activity.timestamp);
-    return timestamp >= monday && timestamp <= sunday;
+    const timestamp = new Date(activity?.timestamp);
+    if (Number.isNaN(timestamp.getTime())) return false;
+    return timestamp >= weekStart && timestamp <= weekEnd;
   });
 };
 

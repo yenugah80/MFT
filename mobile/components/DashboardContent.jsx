@@ -300,7 +300,10 @@ export default function DashboardContent() {
   const { markHydrationCelebration } = useWaterLog();
 
   // Activity tracking hook - for wellness score calculation
-  const { todayData: activityTodayData } = useActivityLog();
+  // `todayData` is not part of this hook's surface — reading it left the
+  // wellness score's activity dimension permanently at 0 minutes. todaySnapshot
+  // is the derived { minutes, calories, count, types, intensity } shape.
+  const { todaySnapshot: activityTodaySnapshot } = useActivityLog();
 
   // Calendar data with complete historical water/mood/activity data
   // Request 90 days to support 30D/60D/90D views in calendar modal
@@ -1499,9 +1502,9 @@ export default function DashboardContent() {
             goals={goals}
             moodLogs={data.today?.moodLogs || []}
             activityData={{
-              minutes: activityTodayData?.totalMinutes || 0,
-              intensity: activityTodayData?.primaryIntensity || 'moderate',
-              types: activityTodayData?.activityTypes || [],
+              minutes: activityTodaySnapshot?.minutes || 0,
+              intensity: activityTodaySnapshot?.intensity || 'moderate',
+              types: activityTodaySnapshot?.types || [],
             }}
             userName={user?.firstName || user?.fullName || ''}
             historicalScores={[]}

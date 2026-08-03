@@ -6,21 +6,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useUser } from '@clerk/clerk-expo';
 import * as Haptics from 'expo-haptics';
 import useProfileForm from '../../hooks/useProfileForm';
-import {
-  useActivityLog,
-  ACTIVITY_TYPES,
-  INTENSITY_LEVELS as API_INTENSITY_LEVELS,
-} from '../../hooks/useActivityLog';
+import { useActivityLog } from '../../hooks/useActivityLog';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import {
-  EXERCISES,
   EXERCISE_CATEGORIES,
+  FOCUS_FILTERS,
   INTENSITY_LEVELS,
-  searchExercises,
-  getExercisesByCategory,
+  filterExercises,
   calculateCalories
 } from '../../services/exerciseDatabase';
-import ActivityInsightsView from '../../components/ActivityInsightsView';
 import {
   TEXT,
   SURFACES,
@@ -34,7 +28,10 @@ import {
 
 /**
  * Activity & Fitness Tracker
- * Track exercises with real-time backend sync and MET-based calorie calculation
+ *
+ * Logging surface only: pick an exercise, set duration and intensity, log it.
+ * Analytics (today's log, trends, recommendations) live on the Insights screen
+ * reached from the Dashboard.
  */
 function ActivityScreen() {
   // Hooks - Get user profile for weight calculation
@@ -47,13 +44,9 @@ function ActivityScreen() {
     todaySummary,
     weeklyProgress,
     isLoading,
-    isFetching,
-    error,
     refetch,
     logActivity,
-    deleteActivity,
     isLogging,
-    isDeleting,
   } = useActivityLog();
 
   // Get user's weight from profile, default to 70kg if not set
@@ -62,9 +55,9 @@ function ActivityScreen() {
     : 70;
 
   // State
-  const [viewMode, setViewMode] = useState('log'); // 'log' or 'insights'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedFocus, setSelectedFocus] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [duration, setDuration] = useState('30');
@@ -81,29 +74,17 @@ function ActivityScreen() {
     }).start();
   }, [fadeAnim]);
 
-  // Get filtered exercises
-  const getFilteredExercises = () => {
-    if (searchQuery) {
-      return searchExercises(searchQuery);
-    }
-    if (selectedCategory) {
-      return getExercisesByCategory(selectedCategory);
-    }
-    return EXERCISES;
-  };
-
-  const filteredExercises = getFilteredExercises();
+  // Search text, modality category and focus (muscle group / equipment) all stack
+  const filteredExercises = filterExercises({
+    query: searchQuery,
+    category: selectedCategory,
+    focusKey: selectedFocus,
+  });
 
   // Use real data from API, fallback to 0 during loading
   const totalCalories = todaySummary?.totalCalories || 0;
   const totalDuration = todaySummary?.totalMinutes || 0;
   const activityCount = todaySummary?.activityCount || 0;
-
-  // Get today's activities from API data
-  const todayActivities = activities?.filter(a => {
-    const today = new Date().toDateString();
-    return new Date(a.loggedAt || a.createdAt).toDateString() === today;
-  }) || [];
 
   // Get today's date formatted
   const getTodayFormatted = () => {
@@ -149,16 +130,6 @@ function ActivityScreen() {
     }
   };
 
-  const handleDeleteActivity = async (activityId) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await deleteActivity(activityId);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error('Error deleting activity:', error);
-    }
-  };
-
   const handleRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -169,44 +140,12 @@ function ActivityScreen() {
   const handleClearSearch = () => {
     setSearchQuery('');
     setSelectedCategory(null);
+    setSelectedFocus(null);
   };
 
-  // Map local exercise database to API activity types
-  const mapExerciseToApiType = (exercise) => {
-    const typeMap = {
-      'Running': 'running',
-      'Jogging': 'running',
-      'Cycling': 'cycling',
-      'Indoor Cycling': 'cycling',
-      'Walking': 'walking',
-      'Power Walking': 'walking',
-      'Swimming': 'swimming',
-      'Yoga': 'yoga',
-      'Pilates': 'yoga',
-      'Weight Training': 'strength',
-      'Strength Training': 'strength',
-      'Resistance Training': 'strength',
-      'HIIT': 'hiit',
-      'CrossFit': 'hiit',
-      'Circuit Training': 'hiit',
-      'Stretching': 'flexibility',
-      'Flexibility': 'flexibility',
-      'Dance': 'dancing',
-      'Zumba': 'dancing',
-      'Hiking': 'hiking',
-      'Trail Running': 'hiking',
-      'Basketball': 'sports',
-      'Soccer': 'sports',
-      'Tennis': 'sports',
-      'Volleyball': 'sports',
-      'Gym Workout': 'gym',
-      'Elliptical': 'cardio',
-      'Stair Climber': 'cardio',
-      'Rowing': 'cardio',
-    };
-
-    return typeMap[exercise.name] || 'general';
-  };
+  // Every exercise carries its own backend activity type; 'general' is only a
+  // guard for entries added without one.
+  const mapExerciseToApiType = (exercise) => exercise.apiType || 'general';
 
   // Render functions
   const renderCategory = useCallback(({ item }) => {
@@ -227,6 +166,24 @@ function ActivityScreen() {
     );
   }, [selectedCategory]);
 
+  const renderFocus = useCallback(({ item }) => {
+    const isSelected = selectedFocus === item.key;
+    return (
+      <TouchableOpacity
+        style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setSelectedFocus(isSelected ? null : item.key);
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.categoryText, isSelected && styles.categoryTextSelected]}>
+          {item.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selectedFocus]);
+
   const renderExercise = useCallback(({ item }) => (
     <TouchableOpacity
       style={styles.exerciseCard}
@@ -243,73 +200,16 @@ function ActivityScreen() {
           <Ionicons name="flame" size={14} color={SEMANTIC.warning.base} />
           <Text style={styles.exerciseCalories}>~{item.caloriesPer30Min} cal</Text>
           <Text style={styles.exerciseDuration}> / 30 min</Text>
+          {!!item.muscleGroup && (
+            <Text style={styles.exerciseTag} numberOfLines={1}>
+              • {item.muscleGroup} • {item.equipment}
+            </Text>
+          )}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
     </TouchableOpacity>
   ), []);
-
-  const renderActivity = useCallback(({ item }) => {
-    const intensityKey = item.intensity?.toUpperCase() || 'MODERATE';
-    const intensityInfo = INTENSITY_LEVELS[intensityKey] || INTENSITY_LEVELS.MODERATE;
-
-    // Get icon based on activity type
-    const getActivityIcon = (type) => {
-      const iconMap = {
-        running: 'walk',
-        cycling: 'bicycle',
-        walking: 'footsteps',
-        swimming: 'water',
-        yoga: 'leaf',
-        strength: 'barbell',
-        hiit: 'flash',
-        flexibility: 'body',
-        dancing: 'musical-notes',
-        hiking: 'trail-sign',
-        sports: 'football',
-        gym: 'fitness',
-        cardio: 'pulse',
-        general: 'fitness',
-      };
-      return iconMap[type] || 'fitness';
-    };
-
-    return (
-      <View style={styles.activityCard}>
-        <View style={styles.activityLeft}>
-          <View style={[styles.activityIcon, { backgroundColor: `${intensityInfo.color}20` }]}>
-            <Ionicons
-              name={getActivityIcon(item.type)}
-              size={20}
-              color={intensityInfo.color}
-            />
-          </View>
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityName}>
-              {ACTIVITY_TYPES.find(t => t.id === item.type)?.name || item.type}
-            </Text>
-            <Text style={styles.activityDetails}>
-              {item.durationMinutes} min • {intensityInfo.label}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.activityRight}>
-          <View style={styles.caloriesBadge}>
-            <Ionicons name="flame" size={16} color={SEMANTIC.warning.base} />
-            <Text style={styles.activityCalories}>{item.caloriesBurned || 0}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => handleDeleteActivity(item.id)}
-            style={styles.deleteButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={isDeleting}
-          >
-            <Ionicons name="trash-outline" size={18} color={SEMANTIC.danger.base} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }, [isDeleting]);
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -360,7 +260,7 @@ function ActivityScreen() {
             {weeklyProgress && (
               <View style={styles.weeklyBadge}>
                 <Text style={styles.weeklyBadgeText}>
-                  {weeklyProgress.currentMinutes}/{weeklyProgress.targetMinutes} min
+                  {weeklyProgress.weeklyMinutes}/{weeklyProgress.target} min
                 </Text>
                 <Text style={styles.weeklyBadgeLabel}>This Week</Text>
               </View>
@@ -388,124 +288,64 @@ function ActivityScreen() {
         </LinearGradient>
       </Animated.View>
 
-      {/* Mode Selector Pills */}
-      <View style={styles.modeSelector}>
-        <TouchableOpacity
-          style={[styles.modePill, viewMode === 'log' && styles.modePillActive]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setViewMode('log');
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={viewMode === 'log' ? 'barbell' : 'barbell-outline'}
-            size={18}
-            color={viewMode === 'log' ? '#fff' : TEXT.secondary}
+      {/* Search Bar */}
+      <View style={styles.searchSection}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color={TEXT.tertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search exercises..."
+            placeholderTextColor={TEXT.tertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
           />
-          <Text style={[styles.modePillText, viewMode === 'log' && styles.modePillTextActive]}>
-            Log Workout
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.modePill, viewMode === 'insights' && styles.modePillActive]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setViewMode('insights');
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={viewMode === 'insights' ? 'analytics' : 'analytics-outline'}
-            size={18}
-            color={viewMode === 'insights' ? '#fff' : TEXT.secondary}
-          />
-          <Text style={[styles.modePillText, viewMode === 'insights' && styles.modePillTextActive]}>
-            Insights
-          </Text>
-        </TouchableOpacity>
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={TEXT.tertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* Conditional Rendering Based on View Mode */}
-      {viewMode === 'log' ? (
-        <>
-          {/* Today's Activities */}
-          {todayActivities.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Today&apos;s Activities</Text>
-                {isFetching && <ActivityIndicator size="small" color={BRAND.primary} />}
-              </View>
-              <FlatList
-                data={todayActivities}
-                renderItem={renderActivity}
-                keyExtractor={(item) => item.id?.toString() || item.clientEventId}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.activitiesList}
-              />
-            </View>
-          )}
-
-          {/* Search Bar */}
-          <View style={styles.searchSection}>
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color={TEXT.tertiary} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search exercises..."
-                placeholderTextColor={TEXT.tertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchQuery !== '' && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={20} color={TEXT.tertiary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* Category Filters */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterTitle}>Categories</Text>
-            <FlatList
-              data={Object.values(EXERCISE_CATEGORIES)}
-              renderItem={renderCategory}
-              keyExtractor={(item) => item}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterList}
-            />
-          </View>
-
-          {/* Exercise List */}
-          <FlatList
-            data={filteredExercises}
-            renderItem={renderExercise}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.exerciseList}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor={BRAND.primary}
-                colors={[BRAND.primary]}
-              />
-            }
-            ListEmptyComponent={renderEmptyState}
-          />
-        </>
-      ) : (
-        <ActivityInsightsView
-          activities={activities || []}
-          onLogWorkout={() => setViewMode('log')}
+      {/* Filters: modality categories + muscle group / equipment focus */}
+      <View style={styles.filterSection}>
+        <FlatList
+          data={Object.values(EXERCISE_CATEGORIES)}
+          renderItem={renderCategory}
+          keyExtractor={(item) => item}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterList}
         />
-      )}
+        <FlatList
+          data={FOCUS_FILTERS}
+          renderItem={renderFocus}
+          keyExtractor={(item) => item.key}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.filterList, styles.focusList]}
+        />
+      </View>
+
+      {/* Exercise List */}
+      <FlatList
+        data={filteredExercises}
+        renderItem={renderExercise}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.exerciseList}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={BRAND.primary}
+            colors={[BRAND.primary]}
+          />
+        }
+        ListEmptyComponent={renderEmptyState}
+      />
 
       {/* Log Exercise Modal */}
       <Modal
@@ -689,83 +529,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     marginTop: 4,
   },
-  section: {
-    marginTop: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-  },
-  activitiesList: {
-    paddingHorizontal: 20,
-  },
-  activityCard: {
-    backgroundColor: SURFACES.card.primary,
-    borderRadius: 16,
-    padding: 16,
-    marginRight: 12,
-    width: 300,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    ...SHADOWS.md,
-  },
-  activityLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityInfo: {
-    flex: 1,
-  },
-  activityName: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-  },
-  activityDetails: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-    marginTop: 2,
-  },
-  activityRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  caloriesBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: `${SEMANTIC.warning.base}20`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  activityCalories: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: SEMANTIC.warning.base,
-  },
-  deleteButton: {
-    padding: 4,
-  },
   searchSection: {
     paddingHorizontal: 20,
     marginTop: 16,
@@ -788,17 +551,14 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   filterSection: {
-    marginTop: 16,
-  },
-  filterTitle: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginBottom: 12,
-    paddingHorizontal: 20,
+    marginTop: 12,
+    gap: 8,
   },
   filterList: {
     paddingHorizontal: 20,
+  },
+  focusList: {
+    paddingBottom: 2,
   },
   categoryChip: {
     paddingHorizontal: 16,
@@ -868,6 +628,12 @@ const styles = StyleSheet.create({
   },
   exerciseDuration: {
     fontSize: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+  },
+  exerciseTag: {
+    flex: 1,
+    fontSize: 11,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
@@ -1027,38 +793,6 @@ const styles = StyleSheet.create({
   logButtonText: {
     fontSize: 16,
     fontFamily: TYPOGRAPHY.family.bold,
-    color: '#fff',
-  },
-  // Mode Selector Styles
-  modeSelector: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  modePill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: SURFACES.background.secondary,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  modePillActive: {
-    backgroundColor: BRAND.primary,
-    borderColor: BRAND.primary,
-  },
-  modePillText: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-  },
-  modePillTextActive: {
     color: '#fff',
   },
 });

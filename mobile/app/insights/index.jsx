@@ -31,6 +31,8 @@ import {
 
 import { useInsightsSummary } from '../../hooks/useInsightsSummary';
 import InsightSummaryCard from '../../components/insights/InsightSummaryCard';
+import ActivityInsightCard from '../../components/insights/ActivityInsightCard';
+import TodayActivityList from '../../components/activity/TodayActivityList';
 
 // Period options
 const PERIODS = [
@@ -113,6 +115,22 @@ export default function InsightsIndex() {
     setPeriod(newPeriod);
   }, []);
 
+  // Each card opens the screen that can actually explain the number
+  const openDeepDive = useCallback((path) => {
+    Haptics.selectionAsync();
+    router.push(path);
+  }, [router]);
+
+  const handleActivityDeepDive = useCallback(
+    () => openDeepDive('/insights/activity-insights'),
+    [openDeepDive]
+  );
+
+  const handleLogWorkout = useCallback(() => {
+    Haptics.selectionAsync();
+    router.push('/(tabs)/activity');
+  }, [router]);
+
   return (
     <View style={styles.container}>
       <Stack.Screen
@@ -173,6 +191,7 @@ export default function InsightsIndex() {
               metric="nutrition"
               data={nutrition}
               period={period}
+              onPress={() => openDeepDive('/history')}
             />
 
             {/* Mood Card */}
@@ -180,6 +199,7 @@ export default function InsightsIndex() {
               metric="mood"
               data={mood}
               period={period}
+              onPress={() => openDeepDive('/insights/mood-food-patterns')}
             />
 
             {/* Hydration Card */}
@@ -187,16 +207,30 @@ export default function InsightsIndex() {
               metric="hydration"
               data={hydration}
               period={period}
+              onPress={() => openDeepDive('/insights/hydration-cognition')}
             />
 
-            {/* Activity Card */}
-            <InsightSummaryCard
-              metric="activity"
+            {/* Activity gets its own card: what was trained, not an average */}
+            <ActivityInsightCard
               data={activity}
               period={period}
+              onPress={handleActivityDeepDive}
             />
           </View>
         )}
+
+        {/* Today's workouts, with the deep-dive entry point */}
+        <TodayActivityList onLogWorkout={handleLogWorkout} />
+
+        <TouchableOpacity
+          style={styles.deepDiveButton}
+          onPress={handleActivityDeepDive}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="analytics-outline" size={18} color={BRAND.primary} />
+          <Text style={styles.deepDiveText}>Activity trends & recommendations</Text>
+          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+        </TouchableOpacity>
 
         {/* Footer Disclaimer */}
         <View style={styles.footer}>
@@ -290,6 +324,25 @@ const styles = StyleSheet.create({
   // Cards
   cardsContainer: {
     paddingTop: SPACING[2],
+  },
+
+  // Activity deep-dive entry point
+  deepDiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[2],
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    borderRadius: RADIUS.lg,
+    backgroundColor: `${BRAND.primary}12`,
+  },
+  deepDiveText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
   },
 
   // Loading

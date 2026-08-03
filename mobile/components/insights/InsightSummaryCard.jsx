@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sparkline } from '../dashboard/Sparkline';
 import {
@@ -86,7 +86,7 @@ function TrendIndicator({ change }) {
 /**
  * Main InsightSummaryCard component
  */
-export default function InsightSummaryCard({ metric, data, period }) {
+export default function InsightSummaryCard({ metric, data, period, onPress }) {
   const config = METRIC_CONFIG[metric];
 
   if (!config) {
@@ -94,32 +94,53 @@ export default function InsightSummaryCard({ metric, data, period }) {
     return null;
   }
 
-  const { average, dailyValues, changePercent, unit } = data || {};
-  const hasData = dailyValues && dailyValues.length > 0 && dailyValues.some(v => v > 0);
+  const {
+    average,
+    dailyValues,
+    changePercent,
+    unit,
+    daysWithData = 0,
+    periodDays = period === 'week' ? 7 : 30,
+    hasComparison = false,
+    scopeNote,
+  } = data || {};
+
+  // A single logged day draws a straight diagonal that reads as a trend it
+  // isn't — two points of real data is the floor for showing a chart.
+  const canChart = daysWithData >= 2 && Array.isArray(dailyValues) && dailyValues.length > 1;
+  const hasTrend = hasComparison && Number.isFinite(changePercent);
+  const periodWord = period === 'week' ? 'week' : 'month';
+
+  const Card = onPress ? TouchableOpacity : View;
+  const cardProps = onPress
+    ? { onPress, activeOpacity: 0.85, accessibilityRole: 'button' }
+    : {};
 
   return (
-    <View style={styles.card}>
+    <Card style={styles.card} {...cardProps}>
       {/* Header Row */}
       <View style={styles.header}>
         <View style={[styles.iconCircle, { backgroundColor: config.bgColor }]}>
           <Ionicons name={config.icon} size={22} color={config.color} />
         </View>
         <Text style={styles.title}>{config.label}</Text>
+        {!!scopeNote && <Text style={styles.scopeNote}>{scopeNote}</Text>}
+        {!!onPress && <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />}
       </View>
 
-      {/* Value Row */}
+      {/* Value Row — "--" when nothing was logged, never a hollow 0 */}
       <View style={styles.valueRow}>
         <Text style={styles.mainValue}>
           {average !== undefined && average !== null ? average.toLocaleString() : '--'}
         </Text>
         <Text style={styles.unit}>{unit} avg</Text>
         <View style={styles.trendWrapper}>
-          <TrendIndicator change={changePercent} />
+          {hasTrend && <TrendIndicator change={changePercent} />}
         </View>
       </View>
 
       {/* Chart */}
-      {hasData ? (
+      {canChart ? (
         <View style={styles.chartContainer}>
           <Sparkline
             data={dailyValues}
@@ -132,18 +153,26 @@ export default function InsightSummaryCard({ metric, data, period }) {
       ) : (
         <View style={styles.emptyChart}>
           <Ionicons name="analytics-outline" size={24} color={TEXT.muted} />
-          <Text style={styles.emptyText}>No data yet</Text>
+          <Text style={styles.emptyText}>
+            {daysWithData === 0
+              ? 'Nothing logged yet'
+              : 'Log another day to see a trend'}
+          </Text>
         </View>
       )}
 
-      {/* Period Comparison */}
-      <Text style={styles.comparison}>
-        {changePercent !== 0 && !isNaN(changePercent)
-          ? `${changePercent > 0 ? '+' : ''}${changePercent}% vs previous ${period}`
-          : `Track more to see trends`
-        }
-      </Text>
-    </View>
+      {/* Coverage — what the average is actually based on */}
+      <View style={styles.footerRow}>
+        <Text style={styles.coverage}>
+          {daysWithData} of {periodDays} days logged
+        </Text>
+        <Text style={styles.comparison}>
+          {hasTrend
+            ? `${changePercent > 0 ? '+' : ''}${changePercent}% vs previous ${periodWord}`
+            : 'No comparison yet'}
+        </Text>
+      </View>
+    </Card>
   );
 }
 
@@ -172,6 +201,7 @@ const styles = StyleSheet.create({
     marginRight: SPACING[3],
   },
   title: {
+    flex: 1,
     fontSize: TYPOGRAPHY.size.lg,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
@@ -238,11 +268,26 @@ const styles = StyleSheet.create({
     color: TEXT.muted,
   },
 
-  // Comparison
+  // Footer
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  coverage: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
+  },
   comparison: {
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
-    textAlign: 'center',
+  },
+  scopeNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
   },
 });
