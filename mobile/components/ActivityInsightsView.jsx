@@ -86,21 +86,6 @@ export default function ActivityInsightsView({
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Readiness first — it is the input to every decision below, and used
           to sit behind an unlabelled icon in the nav bar where it was missed */}
-      {/* Three questions, one screenful: am I ready, what do I do, how is it
-          going. Each holds one number. The evidence behind each — contribution
-          rows, the ring and pace, the month grid — is one tap deeper, because
-          arriving is not the same as studying. */}
-      {!!recovery && (
-        <RecoveryHero
-          recovery={recovery}
-          strainTarget={strainTarget}
-          onLogSignal={onLogSignal}
-          trend={<RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />}
-        />
-      )}
-
-      <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
-
 
       {/* Review lives behind a tap. These answer weekly and monthly questions,
           not daily ones, and scrolling past them every visit is what made the
@@ -110,6 +95,25 @@ export default function ActivityInsightsView({
 
 
 
+
+      {/* Empty State */}
+      {activities.length === 0 && (
+        <View style={styles.emptyState}>
+          <Ionicons name="fitness-outline" size={64} color={TEXT.tertiary} />
+          <Text style={styles.emptyTitle}>No Activity Data Yet</Text>
+          <Text style={styles.emptyText}>
+            Start logging your workouts to see insights and trends!
+          </Text>
+          {onLogWorkout && (
+            <TouchableOpacity style={styles.emptyButton} onPress={onLogWorkout}>
+              <Text style={styles.emptyButtonText}>Log Your First Workout</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Bottom Padding */}
+      <View style={styles.bottomPadding} />
 
       <CollapsibleSection
         title="Milestones"
@@ -141,24 +145,20 @@ export default function ActivityInsightsView({
         />
       </CollapsibleSection>
 
-      {/* Empty State */}
-      {activities.length === 0 && (
-        <View style={styles.emptyState}>
-          <Ionicons name="fitness-outline" size={64} color={TEXT.tertiary} />
-          <Text style={styles.emptyTitle}>No Activity Data Yet</Text>
-          <Text style={styles.emptyText}>
-            Start logging your workouts to see insights and trends!
-          </Text>
-          {onLogWorkout && (
-            <TouchableOpacity style={styles.emptyButton} onPress={onLogWorkout}>
-              <Text style={styles.emptyButtonText}>Log Your First Workout</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
 
-      {/* Bottom Padding */}
-      <View style={styles.bottomPadding} />
+      {/* Three questions, one screenful: am I ready, what do I do, how is it
+          going. Each holds one number. The evidence behind each — contribution
+          rows, the ring and pace, the month grid — is one tap deeper, because
+          arriving is not the same as studying. */}
+      {!!recovery && (
+        <RecoveryHero
+          recovery={recovery}
+          strainTarget={strainTarget}
+          onLogSignal={onLogSignal}
+          trend={<RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />}
+        />
+      )}
     </ScrollView>
   );
 }
