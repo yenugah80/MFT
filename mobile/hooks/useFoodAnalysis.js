@@ -28,6 +28,7 @@ import Constants from 'expo-constants';
 import { API_URL } from '../constants/api';
 import { calculateNetCarbs } from '../types/foodLog';
 import { normalizeNutritionData, detectAggregatedData } from '../utils/nutritionNormalizer';
+import { normalizeFoodName } from '../utils/displayText';
 
 // Module-level cache to persist analysis result across component remounts
 // This prevents loss of analysis data when the tabs layout re-renders
@@ -371,7 +372,13 @@ function buildFoodLog({ inputText, source, raw }) {
     timestamp: Date.now(),
     status: 'pending',
     source,
-    foodName: raw.foodName || raw.title || raw.name || fallbackName || null,
+    // Producers have emitted objects here ({ name, description }), which crash
+    // any <Text> that renders them. Coerce at the boundary so nothing objecty
+    // reaches state, SQLite or the history screen.
+    foodName: normalizeFoodName(
+      raw.foodName || raw.title || raw.name || fallbackName,
+      null
+    ),
     servingSize: raw.servingSize || null,
     calories: normalized.calories ?? null,
     protein: normalized.protein ?? null,

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { toDisplayText } from '../../utils/displayText';
 
 /**
  * Format timestamp to readable date
@@ -88,7 +89,7 @@ function HistoryItem({ log, isSelected, onPress }) {
       onPress={() => onPress(log)}
       activeOpacity={0.7}
       accessible
-      accessibilityLabel={`${log.foodName || 'Food log'}, ${calories} calories`}
+      accessibilityLabel={`${toDisplayText(log.foodName, 'Food log')}, ${calories} calories`}
     >
       {/* Left: Icon */}
       <View style={[styles.mealIconWrapper, { backgroundColor: mealIcon.bg }]}>
@@ -98,7 +99,7 @@ function HistoryItem({ log, isSelected, onPress }) {
       {/* Center: Food info */}
       <View style={styles.foodInfo}>
         <Text style={styles.foodName} numberOfLines={1}>
-          {log.foodName || 'Unknown item'}
+          {toDisplayText(log.foodName, 'Unknown item')}
         </Text>
 
         <View style={styles.macroRow}>
@@ -188,8 +189,8 @@ function generateRecommendations(log1, log2) {
 
   const winner = score1 >= score2 ? log1 : log2;
   const loser = score1 >= score2 ? log2 : log1;
-  const winnerName = winner.foodName || 'First option';
-  const loserName = loser.foodName || 'Second option';
+  const winnerName = toDisplayText(winner.foodName, 'First option');
+  const loserName = toDisplayText(loser.foodName, 'Second option');
 
   // Protein comparison
   const protein1 = log1.protein || 0;
@@ -200,7 +201,7 @@ function generateRecommendations(log1, log2) {
       icon: 'fitness',
       color: '#3B82F6',
       title: 'Better for muscle',
-      text: `${higherProtein.foodName || 'This meal'} has ${Math.round(Math.max(protein1, protein2))}g protein vs ${Math.round(Math.min(protein1, protein2))}g`,
+      text: `${toDisplayText(higherProtein.foodName, 'This meal')} has ${Math.round(Math.max(protein1, protein2))}g protein vs ${Math.round(Math.min(protein1, protein2))}g`,
       winner: higherProtein === winner,
     });
   }
@@ -214,7 +215,7 @@ function generateRecommendations(log1, log2) {
       icon: 'flame',
       color: '#F59E0B',
       title: 'Lower calorie',
-      text: `${lowerCal.foodName || 'This meal'} saves you ${Math.round(Math.abs(cal1 - cal2))} calories`,
+      text: `${toDisplayText(lowerCal.foodName, 'This meal')} saves you ${Math.round(Math.abs(cal1 - cal2))} calories`,
       winner: lowerCal === winner,
     });
   }
@@ -228,7 +229,7 @@ function generateRecommendations(log1, log2) {
       icon: 'trending-up',
       color: '#10B981',
       title: 'More protein per calorie',
-      text: `${denser.foodName || 'This meal'} is more protein-dense (${Math.round(Math.max(proteinDensity1, proteinDensity2))}g per 100cal)`,
+      text: `${toDisplayText(denser.foodName, 'This meal')} is more protein-dense (${Math.round(Math.max(proteinDensity1, proteinDensity2))}g per 100cal)`,
       winner: denser === winner,
     });
   }
@@ -242,7 +243,7 @@ function generateRecommendations(log1, log2) {
       icon: 'leaf',
       color: '#8B5CF6',
       title: 'Lower carbs',
-      text: `${lowerCarb.foodName || 'This meal'} has ${Math.round(Math.abs(carbs1 - carbs2))}g fewer carbs`,
+      text: `${toDisplayText(lowerCarb.foodName, 'This meal')} has ${Math.round(Math.abs(carbs1 - carbs2))}g fewer carbs`,
       winner: lowerCarb === winner,
     });
   }
@@ -285,7 +286,7 @@ function ComparisonModal({ visible, onClose, logs }) {
                 </View>
                 <View style={styles.winnerTextWrap}>
                   <Text style={styles.winnerTitle}>Recommended Choice</Text>
-                  <Text style={styles.winnerName}>{winner.foodName || 'Better option'}</Text>
+                  <Text style={styles.winnerName}>{toDisplayText(winner.foodName, 'Better option')}</Text>
                   <Text style={styles.winnerReason}>
                     {scoreDiff >= 20 ? 'Significantly healthier' : 'Slightly better overall'}
                   </Text>
@@ -301,7 +302,7 @@ function ComparisonModal({ visible, onClose, logs }) {
             {/* Score Cards */}
             <View style={styles.scoreCardsWrap}>
               <View style={[styles.scoreCardCompare, winner === log1 && hasWinner && styles.scoreCardWinner]}>
-                <Text style={styles.scoreCardName} numberOfLines={1}>{log1.foodName || 'Meal 1'}</Text>
+                <Text style={styles.scoreCardName} numberOfLines={1}>{toDisplayText(log1.foodName, 'Meal 1')}</Text>
                 <Text style={[styles.scoreCardScore, winner === log1 && hasWinner && styles.scoreCardScoreWinner]}>{score1}</Text>
                 <Text style={styles.scoreCardLabel}>score</Text>
               </View>
@@ -309,7 +310,7 @@ function ComparisonModal({ visible, onClose, logs }) {
                 <Text style={styles.vsText}>VS</Text>
               </View>
               <View style={[styles.scoreCardCompare, winner === log2 && hasWinner && styles.scoreCardWinner]}>
-                <Text style={styles.scoreCardName} numberOfLines={1}>{log2.foodName || 'Meal 2'}</Text>
+                <Text style={styles.scoreCardName} numberOfLines={1}>{toDisplayText(log2.foodName, 'Meal 2')}</Text>
                 <Text style={[styles.scoreCardScore, winner === log2 && hasWinner && styles.scoreCardScoreWinner]}>{score2}</Text>
                 <Text style={styles.scoreCardLabel}>score</Text>
               </View>
@@ -509,7 +510,7 @@ export function HistoryDrawer({ visible, onClose, logs, onSelectLog, isLoading =
         <View style={styles.detailSheet}>
           <View style={styles.detailHeader}>
             <View>
-              <Text style={styles.detailTitle}>{detailLog?.foodName || 'Food log'}</Text>
+              <Text style={styles.detailTitle}>{toDisplayText(detailLog?.foodName, 'Food log')}</Text>
               <Text style={styles.detailMeta}>
                 {formatDate(detailLog?.timestamp)} · {formatTime(detailLog?.timestamp)}
               </Text>

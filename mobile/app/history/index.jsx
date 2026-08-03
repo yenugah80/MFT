@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useFoodLog } from '../../hooks/useFoodLog';
 import { HistoryItem } from '../../components/log/HistoryDrawer';
+import { toDisplayText } from '../../utils/displayText';
 
 /**
  * Format date for section headers
@@ -206,7 +207,7 @@ export default function HistoryScreen() {
   const keyExtractor = useCallback((item, index) => {
     const key = logKey(item);
     if (key) return key.toString();
-    return `${item?.foodName || 'item'}-${item?.timestamp || 0}-${item?.calories || 0}-${index}`;
+    return `${toDisplayText(item?.foodName, 'item')}-${item?.timestamp || 0}-${item?.calories || 0}-${index}`;
   }, []);
 
   const renderItem = useCallback(({ item }) => (
@@ -359,7 +360,7 @@ export default function HistoryScreen() {
         <View style={styles.detailSheet}>
           <View style={styles.detailHeader}>
             <View>
-              <Text style={styles.detailTitle}>{detailLog?.foodName || 'Food log'}</Text>
+              <Text style={styles.detailTitle}>{toDisplayText(detailLog?.foodName, 'Food log')}</Text>
               <Text style={styles.detailMeta}>
                 {detailLog?.timestamp ? new Date(detailLog.timestamp).toLocaleString() : ''}
               </Text>
