@@ -86,7 +86,10 @@ export default function TodayActivityList({ onLogWorkout }) {
       ) : (
         todayActivities.map((item) => {
           const intensityInfo = resolveIntensity(item.intensity);
-          const label = ACTIVITY_TYPES.find((t) => t.key === item.type)?.label || item.type;
+          // Prefer the specific movement ("Leg Press") over the coarse type
+          // ("Strength"); older rows have no exerciseName and fall back.
+          const typeLabel = ACTIVITY_TYPES.find((t) => t.key === item.type)?.label || item.type;
+          const label = item.exerciseName || typeLabel;
 
           return (
             <View key={item.id?.toString() || item.clientEventId} style={styles.card}>
@@ -99,9 +102,9 @@ export default function TodayActivityList({ onLogWorkout }) {
                   />
                 </View>
                 <View style={styles.info}>
-                  <Text style={styles.name}>{label}</Text>
+                  <Text style={styles.name} numberOfLines={1}>{label}</Text>
                   <Text style={styles.details}>
-                    {item.durationMinutes} min • {intensityInfo.label}
+                    {item.exerciseName ? `${typeLabel} • ` : ''}{item.durationMinutes} min • {intensityInfo.label}
                   </Text>
                 </View>
               </View>

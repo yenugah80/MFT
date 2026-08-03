@@ -198,3 +198,66 @@ describe('activity: GET /activity/history rows -> summariseActivityHistory', () 
     expect(summary.byType).toEqual([]);
   });
 });
+
+describe('exercise identity (migration 0041)', () => {
+  const withExercise = (daysAgo, exerciseId, exerciseName, overrides = {}) => ({
+    id: daysAgo + 500,
+    type: 'strength',
+    durationMinutes: 30,
+    caloriesBurned: 175,
+    intensity: 'moderate',
+    exerciseId,
+    exerciseName,
+    loggedAt: isoDaysAgo(daysAgo),
+    ...overrides,
+  });
+
+  it('groups by the specific exercise when rows carry one', () => {
+    const summary = summariseActivityHistory(
+      [
+        withExercise(0, 'leg-press', 'Leg Press', { durationMinutes: 20 }),
+        withExercise(1, 'leg-press', 'Leg Press', { durationMinutes: 25 }),
+        withExercise(2, 'lat-pulldown', 'Lat Pulldown', { durationMinutes: 15 }),
+      ],
+      7,
+      {}
+    );
+
+    expect(summary.byExercise.map((e) => e.name)).toEqual(['Leg Press', 'Lat Pulldown']);
+    expect(summary.byExercise[0]).toMatchObject({ exerciseId: 'leg-press', minutes: 45, count: 2 });
+    expect(summary.byExercise[0].lastLoggedAt).toBeTruthy();
+  });
+
+  it('stays empty for legacy rows without identity, without breaking byType', () => {
+    // Every row logged before the column existed
+    const summary = summariseActivityHistory(
+      [{ type: 'cardio', durationMinutes: 30, caloriesBurned: 200, loggedAt: isoDaysAgo(1) }],
+      7,
+      {}
+    );
+
+    expect(summary.byExercise).toEqual([]);
+    expect(summary.byType[0]).toMatchObject({ type: 'cardio', minutes: 30 });
+  });
+
+  it('mixes legacy and identified rows without dropping either', () => {
+    const summary = summariseActivityHistory(
+      [
+        withExercise(0, 'goblet-squat', 'Goblet Squat', { durationMinutes: 20 }),
+        { type: 'strength', durationMinutes: 40, caloriesBurned: 230, loggedAt: isoDaysAgo(1) },
+      ],
+      7,
+      {}
+    );
+
+    expect(summary.totalMinutes).toBe(60);
+    expect(summary.byType[0]).toMatchObject({ type: 'strength', minutes: 60 });
+    expect(summary.byExercise).toHaveLength(1);
+    expect(summary.byExercise[0].name).toBe('Goblet Squat');
+  });
+
+  it('falls back to the id when only an id was sent', () => {
+    const summary = summariseActivityHistory([withExercise(0, 'hack-squat', null)], 7, {});
+    expect(summary.byExercise[0].name).toBe('hack-squat');
+  });
+});

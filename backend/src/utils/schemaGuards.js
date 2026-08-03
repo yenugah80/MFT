@@ -165,3 +165,24 @@ export async function ensureDailyNutritionSummaryTableShape() {
     console.error("❌ Failed to ensure daily_nutrition_summary table shape:", err);
   }
 }
+
+// Activity logs gained exercise identity (which catalogue movement was logged)
+// after the table shipped. Guard it the same way as water_log so the API works
+// whether or not migration 0041 has been applied yet — the mobile release and
+// the backend deploy do not land at the same moment.
+let activityLogTableEnsured = false;
+export async function ensureActivityLogTableShape() {
+  if (activityLogTableEnsured) return;
+  try {
+    await db.execute(
+      sql`ALTER TABLE "activity_log" ADD COLUMN IF NOT EXISTS "exercise_id" text;`
+    );
+    await db.execute(
+      sql`ALTER TABLE "activity_log" ADD COLUMN IF NOT EXISTS "exercise_name" text;`
+    );
+    activityLogTableEnsured = true;
+    console.log("✅ Activity log table schema verified and updated");
+  } catch (err) {
+    console.error("❌ Failed to ensure activity_log table shape:", err);
+  }
+}

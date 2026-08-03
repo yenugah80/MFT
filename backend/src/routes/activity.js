@@ -32,18 +32,28 @@ import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
+import { ensureActivityLogTableShape } from '../utils/schemaGuards.js';
 import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
 
 const router = express.Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EXERCISE_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 // ============================================================================
 // AUTH MIDDLEWARE
 // ============================================================================
 
 router.use(requireAuth());
+
+// Additive columns (exercise_id / exercise_name) may not exist yet on a
+// database that has not run migration 0041. Ensure them once per process so a
+// mobile release can ship ahead of the migration without failing writes.
+router.use(async (req, res, next) => {
+  await ensureActivityLogTableShape();
+  next();
+});
 
 // ============================================================================
 // CONSTANTS
@@ -74,6 +84,8 @@ router.post('/log', async (req, res) => {
       steps,
       loggedAt,
       clientEventId,
+      exerciseId,
+      exerciseName,
     } = req.body;
 
     // Validation
@@ -99,6 +111,16 @@ router.post('/log', async (req, res) => {
 
     if (clientEventId && !UUID_RE.test(clientEventId)) {
       return res.status(400).json({ error: 'clientEventId must be a valid UUID v4' });
+    }
+
+    // Exercise identity is optional and free-form enough to come from a future
+    // catalogue entry, so validate shape and length rather than membership.
+    if (exerciseId !== undefined && exerciseId !== null && !EXERCISE_ID_RE.test(String(exerciseId))) {
+      return res.status(400).json({ error: 'exerciseId must be a slug of up to 64 characters' });
+    }
+    if (exerciseName !== undefined && exerciseName !== null &&
+        (typeof exerciseName !== 'string' || exerciseName.trim().length === 0 || exerciseName.length > 120)) {
+      return res.status(400).json({ error: 'exerciseName must be a non-empty string of up to 120 characters' });
     }
 
     // Idempotency check
@@ -155,6 +177,8 @@ router.post('/log', async (req, res) => {
         distanceKm: distanceKm ? distanceKm.toString() : null,
         steps: steps != null ? Math.round(steps) : null,
         notes: notes || null,
+        exerciseId: exerciseId ? String(exerciseId) : null,
+        exerciseName: exerciseName ? String(exerciseName).trim() : null,
         clientEventId: clientEventId || null,
         dayKey,
         timezoneOffset: offsetMinutes,

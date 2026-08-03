@@ -195,14 +195,38 @@ export function summariseActivityHistory(rows = [], days = 7, weeklyProgress = {
 
   // Minutes and calories per activity type, biggest first
   const typeTotals = new Map();
+  // ...and per specific exercise, for rows that carry one (see migration 0041)
+  const exerciseTotals = new Map();
   let totalCalories = 0;
   currentRows.forEach((row) => {
     totalCalories += row.caloriesBurned || 0;
+
     const entry = typeTotals.get(row.type) || { type: row.type, minutes: 0, calories: 0, count: 0 };
     entry.minutes += row.durationMinutes || 0;
     entry.calories += row.caloriesBurned || 0;
     entry.count += 1;
     typeTotals.set(row.type, entry);
+
+    const exerciseKey = row.exerciseId || row.exerciseName;
+    if (exerciseKey) {
+      const exercise = exerciseTotals.get(exerciseKey) || {
+        exerciseId: row.exerciseId || null,
+        name: row.exerciseName || row.exerciseId,
+        type: row.type,
+        minutes: 0,
+        calories: 0,
+        count: 0,
+        lastLoggedAt: null,
+      };
+      exercise.minutes += row.durationMinutes || 0;
+      exercise.calories += row.caloriesBurned || 0;
+      exercise.count += 1;
+      const stamp = stampOf(row);
+      if (stamp && (!exercise.lastLoggedAt || new Date(stamp) > new Date(exercise.lastLoggedAt))) {
+        exercise.lastLoggedAt = stamp;
+      }
+      exerciseTotals.set(exerciseKey, exercise);
+    }
   });
 
   return {
@@ -213,6 +237,8 @@ export function summariseActivityHistory(rows = [], days = 7, weeklyProgress = {
     workoutCount: currentRows.length,
     activeDays: base.daysWithData,
     byType: [...typeTotals.values()].sort((a, b) => b.minutes - a.minutes),
+    // Empty until rows carry exercise identity; callers fall back to byType
+    byExercise: [...exerciseTotals.values()].sort((a, b) => b.minutes - a.minutes),
     lastWorkout: currentRows[0] || null,
     target: weeklyProgress?.target || 150,
     weeklyMinutes: weeklyProgress?.weeklyMinutes || 0,

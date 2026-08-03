@@ -343,6 +343,14 @@ export const waterLogTable = pgTable(
     hydrationFactor: decimal("hydration_factor", { precision: 3, scale: 2 }).default("1.0"),
     hydrationLiters: decimal("hydration_liters", { precision: 5, scale: 3 }),
 
+    // Which exercise from the mobile catalogue produced this log. `type` is one
+    // of 14 coarse buckets, so without this the app can only ever report
+    // "Strength", never "Leg Press" — and cannot tell which muscle group was
+    // trained. Nullable: rows predating this, and any client that does not send
+    // it, remain valid.
+    exerciseId: text("exercise_id"),
+    exerciseName: text("exercise_name"),
+
     // Idempotency support
     clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
 

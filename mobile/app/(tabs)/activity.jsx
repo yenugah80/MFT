@@ -115,6 +115,12 @@ function ActivityScreen() {
         minutes: durationNum,
         intensity: intensity.toLowerCase(),
         notes: selectedExercise.description,
+        // Which catalogue movement this was. `type` is one of 14 coarse
+        // buckets, so without these the insights can only ever say "Strength",
+        // never "Leg Press", and cannot tell which muscle group was trained.
+        // Ignored by a backend that has not deployed support yet.
+        exerciseId: selectedExercise.id,
+        exerciseName: selectedExercise.name,
         // Optional fields
         distanceKm: null,
         heartRateAvg: null,
