@@ -39,21 +39,69 @@ export const getThisWeekActivities = (activities) => {
   });
 };
 
+/** CDC recommendation, and the target the backend tracks against */
+export const DEFAULT_WEEKLY_MINUTES_TARGET = 150;
+
 /**
- * Calculate weekly goal progress
+ * Calculate weekly progress against the ONLY target this product actually has:
+ * minutes of activity per week.
+ *
+ * The previous version scored progress against 1500 kcal/week and 5
+ * workouts/week — neither of which the user set, the backend tracks, or any
+ * guideline specifies. Those invented denominators drove the ring, the
+ * headline and the recommendations, so a real 35 kcal session read as "2% of
+ * your goal" and produced advice to "try a 733 kcal workout" (half the
+ * remaining fiction).
+ *
+ * Calories and session count are still reported, as facts rather than as
+ * progress toward a number nobody chose.
+ *
+ * @param {Array} activities - adapted rows ({ timestamp, duration, calories })
+ * @param {{ targetMinutes?: number }} [options] - pass the backend's target
  */
-export const calculateWeeklyGoalProgress = (activities, weeklyGoal = 1500) => {
+export const calculateWeeklyGoalProgress = (activities, options = {}) => {
+  const targetMinutes = Number(options.targetMinutes) > 0
+    ? Math.round(Number(options.targetMinutes))
+    : DEFAULT_WEEKLY_MINUTES_TARGET;
+
   const thisWeek = getThisWeekActivities(activities);
-  const totalCalories = thisWeek.reduce((sum, a) => sum + (a.calories || 0), 0);
+  const minutes = Math.round(thisWeek.reduce((sum, a) => sum + (a.duration || 0), 0));
+  const calories = Math.round(thisWeek.reduce((sum, a) => sum + (a.calories || 0), 0));
   const workoutCount = thisWeek.length;
 
+  const percentage = targetMinutes > 0
+    ? Math.min(Math.round((minutes / targetMinutes) * 100), 100)
+    : 0;
+
   return {
-    calories: Math.round(totalCalories),
-    goal: weeklyGoal,
-    percentage: Math.round((totalCalories / weeklyGoal) * 100),
-    remaining: Math.max(0, Math.round(weeklyGoal - totalCalories)),
+    // Primary: minutes against the real target
+    minutes,
+    targetMinutes,
+    percentage,
+    remainingMinutes: Math.max(0, targetMinutes - minutes),
+    // Secondary facts, no invented denominator
+    calories,
     workoutCount,
-    workoutGoal: 5, // Default: 5 workouts per week
+    activeDays: new Set(thisWeek.map((a) => new Date(a.timestamp).toDateString())).size,
+  };
+};
+
+/**
+ * Where the user should be by now to finish the week on target, and how far
+ * off that pace they are. Sunday counts as one elapsed day, not zero.
+ */
+export const getWeeklyPace = (activities, options = {}) => {
+  const progress = calculateWeeklyGoalProgress(activities, options);
+  const elapsedDays = Math.min(7, new Date().getDay() + 1);
+  const expectedByNow = Math.round((progress.targetMinutes / 7) * elapsedDays);
+
+  return {
+    ...progress,
+    elapsedDays,
+    expectedByNow,
+    deltaMinutes: progress.minutes - expectedByNow,
+    onPace: progress.minutes >= expectedByNow,
+    daysLeft: 7 - elapsedDays,
   };
 };
 
@@ -96,62 +144,75 @@ export const getActivityBreakdown = (activities) => {
 };
 
 /**
- * Get 7-day activity trend
+ * Get 7-day activity trend, with the previous 7 days as the comparison.
+ *
+ * `changePercentage` is null — never 0 — when the previous week is empty.
+ * Reporting 0% there claimed "no change" and rendered a neutral badge reading
+ * "0%" directly above the caption "35 kcal this week vs 0 kcal last week".
  */
 export const getSevenDayTrend = (activities) => {
-  const last7Days = [];
+  const rows = Array.isArray(activities) ? activities : [];
 
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dayStart = new Date(date.setHours(0, 0, 0, 0));
-    const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+  const bucketFor = (daysAgo) => {
+    const dayStart = new Date();
+    dayStart.setDate(dayStart.getDate() - daysAgo);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
 
-    const dayActivities = activities.filter(a => {
-      const timestamp = new Date(a.timestamp);
+    const dayActivities = rows.filter((a) => {
+      const timestamp = new Date(a?.timestamp);
+      if (Number.isNaN(timestamp.getTime())) return false;
       return timestamp >= dayStart && timestamp <= dayEnd;
     });
 
-    const totalCalories = dayActivities.reduce((sum, a) => sum + (a.calories || 0), 0);
-
-    last7Days.push({
+    return {
       date: dayStart,
       dayName: dayStart.toLocaleDateString('en-US', { weekday: 'short' }),
-      calories: Math.round(totalCalories),
+      calories: Math.round(dayActivities.reduce((sum, a) => sum + (a.calories || 0), 0)),
+      minutes: Math.round(dayActivities.reduce((sum, a) => sum + (a.duration || 0), 0)),
       workouts: dayActivities.length,
-      isToday: dayStart.toDateString() === new Date().toDateString(),
-    });
-  }
+      isToday: daysAgo === 0,
+    };
+  };
 
-  // Calculate comparison with previous week
-  const thisWeekTotal = last7Days.reduce((sum, d) => sum + d.calories, 0);
+  const last7Days = [];
+  for (let i = 6; i >= 0; i -= 1) last7Days.push(bucketFor(i));
 
-  // Get previous week (days -13 to -7)
-  let prevWeekTotal = 0;
-  for (let i = 13; i >= 7; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dayStart = new Date(date.setHours(0, 0, 0, 0));
-    const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+  const previous7Days = [];
+  for (let i = 13; i >= 7; i -= 1) previous7Days.push(bucketFor(i));
 
-    const dayActivities = activities.filter(a => {
-      const timestamp = new Date(a.timestamp);
-      return timestamp >= dayStart && timestamp <= dayEnd;
-    });
+  const sum = (days, key) => days.reduce((total, d) => total + d[key], 0);
+  const thisWeekTotal = sum(last7Days, 'calories');
+  const prevWeekTotal = sum(previous7Days, 'calories');
+  const thisWeekMinutes = sum(last7Days, 'minutes');
+  const prevWeekMinutes = sum(previous7Days, 'minutes');
 
-    prevWeekTotal += dayActivities.reduce((sum, a) => sum + (a.calories || 0), 0);
-  }
+  const pctChange = (current, previous) =>
+    previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 
-  const changePercentage = prevWeekTotal > 0
-    ? Math.round(((thisWeekTotal - prevWeekTotal) / prevWeekTotal) * 100)
-    : 0;
+  const changePercentage = pctChange(thisWeekTotal, prevWeekTotal);
+  const minutesChangePercentage = pctChange(thisWeekMinutes, prevWeekMinutes);
 
   return {
     days: last7Days,
-    thisWeekTotal: Math.round(thisWeekTotal),
-    prevWeekTotal: Math.round(prevWeekTotal),
+    previousDays: previous7Days,
+    thisWeekTotal,
+    prevWeekTotal,
+    thisWeekMinutes,
+    prevWeekMinutes,
     changePercentage,
-    trend: changePercentage > 0 ? 'up' : changePercentage < 0 ? 'down' : 'stable',
+    minutesChangePercentage,
+    // Explicit so callers do not have to infer intent from a null
+    hasComparison: prevWeekTotal > 0 || prevWeekMinutes > 0,
+    trend:
+      changePercentage === null
+        ? 'insufficient'
+        : changePercentage > 0
+        ? 'up'
+        : changePercentage < 0
+        ? 'down'
+        : 'stable',
   };
 };
 
@@ -279,40 +340,55 @@ export const calculateActivityStreak = (activities) => {
 /**
  * Generate smart activity recommendations
  */
-export const generateActivityRecommendations = (activities, moodData = []) => {
+export const generateActivityRecommendations = (activities, moodData = [], options = {}) => {
   const recommendations = [];
 
-  // 1. Weekly Goal Progress
-  const weeklyProgress = calculateWeeklyGoalProgress(activities);
-  if (weeklyProgress.percentage < 50) {
-    recommendations.push({
-      type: 'goal',
-      icon: 'target',
-      color: '#F59E0B',
-      title: 'Boost Your Week',
-      message: `You're ${weeklyProgress.percentage}% to your goal. Try a ${Math.round(weeklyProgress.remaining / 2)} kcal workout!`,
-      action: 'Log Workout',
-      priority: 1,
-    });
-  } else if (weeklyProgress.percentage >= 80 && weeklyProgress.percentage < 100) {
-    recommendations.push({
-      type: 'goal',
-      icon: 'flame',
-      color: '#F59E0B',
-      title: 'Almost There!',
-      message: `Just ${weeklyProgress.remaining} kcal to hit your weekly goal!`,
-      action: 'Log Workout',
-      priority: 2,
-    });
-  } else if (weeklyProgress.percentage >= 100) {
+  // 1. Weekly pace — against minutes, the only target that exists
+  const pace = getWeeklyPace(activities, options);
+
+  if (pace.percentage >= 100) {
     recommendations.push({
       type: 'goal',
       icon: 'trophy',
       color: '#10B981',
-      title: 'Goal Achieved!',
-      message: 'Amazing! You hit your weekly target. Keep the momentum going!',
+      title: 'Weekly target hit',
+      message: `${pace.minutes} of ${pace.targetMinutes} minutes done. Anything more is a bonus.`,
       action: null,
       priority: 3,
+    });
+  } else if (pace.daysLeft === 0) {
+    recommendations.push({
+      type: 'goal',
+      icon: 'flag',
+      color: '#F59E0B',
+      title: 'Last day of the week',
+      message: `${pace.remainingMinutes} min short of ${pace.targetMinutes}. Even a walk closes part of it.`,
+      action: 'Log Workout',
+      priority: 1,
+    });
+  } else if (!pace.onPace) {
+    // Concrete and checkable: how many sessions of what length, in the days
+    // that are actually left. No invented calorie figure.
+    const sessions = Math.min(pace.daysLeft, Math.max(1, Math.ceil(pace.remainingMinutes / 30)));
+    const perSession = Math.ceil(pace.remainingMinutes / sessions);
+    recommendations.push({
+      type: 'goal',
+      icon: 'trending-up',
+      color: '#F59E0B',
+      title: 'Behind pace',
+      message: `${pace.remainingMinutes} min left with ${pace.daysLeft} day${pace.daysLeft === 1 ? '' : 's'} to go — ${sessions} x ${perSession} min gets you there.`,
+      action: 'Log Workout',
+      priority: 1,
+    });
+  } else if (pace.percentage >= 80) {
+    recommendations.push({
+      type: 'goal',
+      icon: 'flame',
+      color: '#F59E0B',
+      title: 'Almost there',
+      message: `${pace.remainingMinutes} min to hit ${pace.targetMinutes} for the week.`,
+      action: 'Log Workout',
+      priority: 2,
     });
   }
 

@@ -17,14 +17,17 @@ import {
  * Activity Insights View
  * Shows comprehensive analytics, trends, and recommendations for activities
  */
-export default function ActivityInsightsView({ activities, onLogWorkout }) {
+export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes }) {
+  // Prefer the target the backend reports over the CDC default, so the screen
+  // follows if that ever changes server-side.
+  const goalOptions = { targetMinutes };
   // Calculate all insights
-  const weeklyProgress = calculateWeeklyGoalProgress(activities);
+  const weeklyProgress = calculateWeeklyGoalProgress(activities, goalOptions);
   const breakdown = getActivityBreakdown(activities);
   const trend = getSevenDayTrend(activities);
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
-  const recommendations = generateActivityRecommendations(activities);
+  const recommendations = generateActivityRecommendations(activities, [], goalOptions);
 
   // Helper to get percentage color
   const getProgressColor = (percentage) => {
@@ -53,18 +56,19 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
           </View>
         </View>
 
-        {/* Stats */}
+        {/* Stats — minutes carry the target, the rest are plain facts */}
         <View style={styles.summaryStats}>
           <View style={styles.summaryStatRow}>
-            <Ionicons name="flame" size={20} color="#fff" />
+            <Ionicons name="time" size={20} color="#fff" />
             <Text style={styles.summaryStatText}>
-              {weeklyProgress.calories} / {weeklyProgress.goal} kcal
+              {weeklyProgress.minutes} / {weeklyProgress.targetMinutes} min
             </Text>
           </View>
           <View style={styles.summaryStatRow}>
             <Ionicons name="fitness" size={20} color="#fff" />
             <Text style={styles.summaryStatText}>
-              {weeklyProgress.workoutCount} / {weeklyProgress.workoutGoal} workouts
+              {weeklyProgress.workoutCount} {weeklyProgress.workoutCount === 1 ? 'session' : 'sessions'}
+              {weeklyProgress.calories > 0 ? ` · ${weeklyProgress.calories} kcal` : ''}
             </Text>
           </View>
         </View>
@@ -78,12 +82,10 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
           />
           <Text style={styles.motivationText}>
             {weeklyProgress.percentage >= 100
-              ? 'Amazing! Goal achieved! 🎉'
-              : weeklyProgress.percentage >= 80
-              ? 'Almost there! Keep pushing!'
-              : weeklyProgress.percentage >= 50
-              ? 'Great progress this week!'
-              : 'Let\'s boost your activity!'}
+              ? 'Weekly target hit 🎉'
+              : weeklyProgress.minutes === 0
+              ? `${weeklyProgress.targetMinutes} min to go this week`
+              : `${weeklyProgress.remainingMinutes} min to go this week`}
           </Text>
         </View>
       </LinearGradient>
@@ -150,7 +152,11 @@ export default function ActivityInsightsView({ activities, onLogWorkout }) {
               color={trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : TEXT.secondary}
             />
             <Text style={[styles.trendText, { color: trend.trend === 'up' ? '#10B981' : trend.trend === 'down' ? '#EF4444' : TEXT.secondary }]}>
-              {trend.changePercentage > 0 ? '+' : ''}{trend.changePercentage}%
+              {/* null means no previous week to compare against — rendering it
+                  produced a bare "%" next to a neutral dash */}
+              {trend.changePercentage === null
+                ? 'no baseline'
+                : `${trend.changePercentage > 0 ? '+' : ''}${trend.changePercentage}%`}
             </Text>
           </View>
         </View>

@@ -53,7 +53,7 @@ function adaptActivity(row) {
 
 export default function ActivityInsightsScreen() {
   const router = useRouter();
-  const { fetchHistory } = useActivityLog();
+  const { fetchHistory, weeklyProgress } = useActivityLog();
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['activityHistory', 'insights', 90],
@@ -140,7 +140,11 @@ export default function ActivityInsightsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ActivityInsightsView activities={activities} onLogWorkout={handleLogWorkout} />
+        <ActivityInsightsView
+          activities={activities}
+          onLogWorkout={handleLogWorkout}
+          targetMinutes={weeklyProgress?.target}
+        />
       )}
     </View>
   );
