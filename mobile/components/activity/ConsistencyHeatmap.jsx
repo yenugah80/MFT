@@ -28,7 +28,10 @@ const formatRange = (start, end) => {
   const opts = { month: 'short', day: 'numeric' };
   const from = start.toLocaleDateString('en-US', opts);
   if (!end || start.toDateString() === end.toDateString()) return from;
-  return `${from}–${end.toLocaleDateString('en-US', { day: 'numeric' })}`;
+  // Repeat the month when the range crosses one, so it does not read "Jul 5–4"
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const to = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric' } : opts);
+  return `${from} – ${to}`;
 };
 
 /** Deeper fill for a harder session, so volume reads at a glance */
@@ -80,7 +83,7 @@ export default function ConsistencyHeatmap({ consistency }) {
                     backgroundColor: BRAND.primary,
                     opacity: intensityFor(day.minutes),
                   },
-                  day.isToday && styles.cellToday,
+                  day.isToday && (day.trained ? styles.cellTodayTrained : styles.cellToday),
                 ]}
               />
             </View>
@@ -173,6 +176,12 @@ const styles = StyleSheet.create({
   cellToday: {
     borderWidth: 2,
     borderColor: BRAND.primary,
+  },
+  // On a trained day the fill is already brand purple, so the ring has to
+  // contrast with it rather than disappear into it
+  cellTodayTrained: {
+    borderWidth: 2,
+    borderColor: TEXT.primary,
   },
 
   legend: {

@@ -279,3 +279,145 @@ describe('consistency grid', () => {
     expect(getConsistencyGrid([], { weeks: 'abc' }).weeks).toBe(5);
   });
 });
+
+describe('intensity mix', () => {
+  const { getIntensityMix, normaliseIntensity } = require('../utils/activityAnalytics');
+  const at = (intensity, duration) => ({ ...session(0, { duration }), intensity });
+
+  it('maps legacy values instead of lumping them into moderate', () => {
+    // Rows predating the picker change still hold low / high / very_high
+    expect(normaliseIntensity('low')).toBe('light');
+    expect(normaliseIntensity('high')).toBe('vigorous');
+    expect(normaliseIntensity('very_high')).toBe('vigorous');
+    expect(normaliseIntensity('VIGOROUS')).toBe('vigorous');
+    expect(normaliseIntensity(undefined)).toBe('moderate');
+    expect(normaliseIntensity('sideways')).toBe('moderate');
+  });
+
+  it('splits minutes by bucket and shares to 100', () => {
+    const mix = getIntensityMix([at('light', 20), at('moderate', 30), at('vigorous', 50)]);
+
+    expect(mix.minutes).toEqual({ light: 20, moderate: 30, vigorous: 50 });
+    expect(mix.total).toBe(100);
+    expect(mix.shares.light + mix.shares.moderate + mix.shares.vigorous).toBe(100);
+    expect(mix.dominant).toBe('vigorous');
+  });
+
+  it('folds legacy rows into the right bucket', () => {
+    const mix = getIntensityMix([at('low', 10), at('very_high', 10)]);
+    expect(mix.minutes.light).toBe(10);
+    expect(mix.minutes.vigorous).toBe(10);
+    expect(mix.minutes.moderate).toBe(0);
+  });
+
+  it('counts vigorous minutes double toward the guideline', () => {
+    const mix = getIntensityMix([at('moderate', 30), at('vigorous', 30)]);
+    expect(mix.guidelineMinutes).toBe(30 + 60);
+  });
+
+  it('reports no data rather than a fake split', () => {
+    const mix = getIntensityMix([]);
+    expect(mix.hasData).toBe(false);
+    expect(mix.dominant).toBeNull();
+    expect(mix.shares).toEqual({ light: 0, moderate: 0, vigorous: 0 });
+  });
+
+  it('ignores zero-length and malformed rows', () => {
+    expect(getIntensityMix([at('light', 0)]).hasData).toBe(false);
+    expect(getIntensityMix(undefined).total).toBe(0);
+    expect(getIntensityMix([{}]).total).toBe(0);
+  });
+});
+
+describe('time of day pattern', () => {
+  const { getTimeOfDayPattern } = require('../utils/activityAnalytics');
+  const atHour = (hour, duration = 30) => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    d.setHours(hour, 0, 0, 0);
+    return { timestamp: d.toISOString(), duration, calories: 100 };
+  };
+
+  it('buckets sessions by local hour', () => {
+    const pattern = getTimeOfDayPattern([atHour(6), atHour(9), atHour(13), atHour(19), atHour(22)]);
+    const byKey = Object.fromEntries(pattern.buckets.map((b) => [b.key, b.sessions]));
+
+    expect(byKey).toEqual({ early: 1, morning: 1, midday: 1, evening: 1, night: 1 });
+    expect(pattern.totalSessions).toBe(5);
+  });
+
+  it('handles the night bucket wrapping past midnight', () => {
+    const pattern = getTimeOfDayPattern([atHour(23), atHour(2)]);
+    const night = pattern.buckets.find((b) => b.key === 'night');
+    expect(night.sessions).toBe(2);
+  });
+
+  it('reports the dominant slot and its average length', () => {
+    const pattern = getTimeOfDayPattern([atHour(9, 20), atHour(9, 40), atHour(19, 10)]);
+    expect(pattern.dominant.key).toBe('morning');
+    expect(pattern.dominant.averageMinutes).toBe(30);
+  });
+
+  it('refuses to claim a pattern from too few sessions', () => {
+    expect(getTimeOfDayPattern([atHour(9), atHour(9)]).hasPattern).toBe(false);
+    expect(getTimeOfDayPattern([]).hasPattern).toBe(false);
+    expect(getTimeOfDayPattern([]).dominant).toBeNull();
+  });
+
+  it('survives malformed timestamps', () => {
+    expect(getTimeOfDayPattern([{ timestamp: 'nope' }, {}]).totalSessions).toBe(0);
+    expect(getTimeOfDayPattern(undefined).totalSessions).toBe(0);
+  });
+});
+
+describe('personal bests', () => {
+  const { getPersonalBests } = require('../utils/activityAnalytics');
+
+  it('finds the longest session and biggest burn', () => {
+    const bests = getPersonalBests([
+      session(1, { duration: 30, calories: 200 }),
+      session(9, { duration: 75, calories: 150 }),
+      session(20, { duration: 20, calories: 520 }),
+    ]);
+
+    expect(bests.longestSession.duration).toBe(75);
+    expect(bests.biggestBurn.calories).toBe(520);
+    expect(bests.totalSessions).toBe(3);
+  });
+
+  it('finds the best week by minutes, grouped from Sunday', () => {
+    const bests = getPersonalBests([
+      session(1, { duration: 20 }),
+      session(2, { duration: 25 }),
+      session(30, { duration: 90 }),
+    ]);
+
+    expect(bests.bestWeek.minutes).toBe(90);
+    expect(bests.bestWeek.weekStart.getDay()).toBe(0);
+  });
+
+  it('reports a single session as the best rather than inventing a record', () => {
+    const bests = getPersonalBests([session(0, { duration: 12, calories: 60 })]);
+    expect(bests.longestSession.duration).toBe(12);
+    expect(bests.bestWeek.sessions).toBe(1);
+  });
+
+  it('returns nulls for an empty history', () => {
+    expect(getPersonalBests([])).toEqual({
+      longestSession: null,
+      biggestBurn: null,
+      bestWeek: null,
+      totalSessions: 0,
+    });
+  });
+
+  it('does not report a zero-duration or zero-calorie best', () => {
+    const bests = getPersonalBests([session(0, { duration: 0, calories: 0 })]);
+    expect(bests.longestSession).toBeNull();
+    expect(bests.biggestBurn).toBeNull();
+  });
+
+  it('ignores rows with unparseable timestamps', () => {
+    expect(getPersonalBests([{ timestamp: 'nope', duration: 99 }]).totalSessions).toBe(0);
+  });
+});

@@ -637,3 +637,159 @@ export const getConsistencyGrid = (activities, options = {}) => {
     longestGapEnd: gapEnd,
   };
 };
+
+/**
+ * Normalise any stored intensity to the backend's three buckets.
+ *
+ * Rows logged before the picker matched the API still hold low / high /
+ * very_high, and lumping those into "moderate" would misreport the mix.
+ */
+const INTENSITY_ALIASES = {
+  low: 'light',
+  light: 'light',
+  moderate: 'moderate',
+  medium: 'moderate',
+  high: 'vigorous',
+  very_high: 'vigorous',
+  vigorous: 'vigorous',
+};
+
+export const normaliseIntensity = (value) =>
+  INTENSITY_ALIASES[String(value || '').toLowerCase()] || 'moderate';
+
+/**
+ * How hard the training was, by share of minutes.
+ *
+ * CDC counts a vigorous minute as two moderate minutes, which is why the
+ * split is worth showing rather than a single average.
+ */
+export const getIntensityMix = (activities) => {
+  const rows = Array.isArray(activities) ? activities : [];
+  const minutes = { light: 0, moderate: 0, vigorous: 0 };
+  let total = 0;
+
+  rows.forEach((activity) => {
+    const bucket = normaliseIntensity(activity?.intensity);
+    const value = Number(activity?.duration) || 0;
+    if (value <= 0) return;
+    minutes[bucket] += value;
+    total += value;
+  });
+
+  const share = (value) => (total > 0 ? Math.round((value / total) * 100) : 0);
+  const dominant = total > 0
+    ? Object.entries(minutes).sort((a, b) => b[1] - a[1])[0][0]
+    : null;
+
+  return {
+    minutes,
+    total,
+    shares: {
+      light: share(minutes.light),
+      moderate: share(minutes.moderate),
+      vigorous: share(minutes.vigorous),
+    },
+    dominant,
+    // Vigorous minutes count double toward the guideline
+    guidelineMinutes: minutes.light + minutes.moderate + minutes.vigorous * 2,
+    hasData: total > 0,
+  };
+};
+
+const TIME_BUCKETS = [
+  { key: 'early', label: 'Early', from: 4, to: 8 },
+  { key: 'morning', label: 'Morning', from: 8, to: 12 },
+  { key: 'midday', label: 'Midday', from: 12, to: 17 },
+  { key: 'evening', label: 'Evening', from: 17, to: 21 },
+  { key: 'night', label: 'Night', from: 21, to: 4 },
+];
+
+/**
+ * When training actually happens, by session count and minutes.
+ */
+export const getTimeOfDayPattern = (activities) => {
+  const rows = Array.isArray(activities) ? activities : [];
+
+  const buckets = TIME_BUCKETS.map((bucket) => ({
+    ...bucket,
+    sessions: 0,
+    minutes: 0,
+  }));
+
+  let totalSessions = 0;
+
+  rows.forEach((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    if (Number.isNaN(stamp.getTime())) return;
+    const hour = stamp.getHours();
+
+    const bucket = buckets.find(({ from, to }) =>
+      from < to ? hour >= from && hour < to : hour >= from || hour < to
+    );
+    if (!bucket) return;
+
+    bucket.sessions += 1;
+    bucket.minutes += Number(activity?.duration) || 0;
+    totalSessions += 1;
+  });
+
+  const withShares = buckets.map((bucket) => ({
+    ...bucket,
+    share: totalSessions > 0 ? Math.round((bucket.sessions / totalSessions) * 100) : 0,
+    averageMinutes: bucket.sessions > 0 ? Math.round(bucket.minutes / bucket.sessions) : 0,
+  }));
+
+  const ranked = [...withShares].sort((a, b) => b.sessions - a.sessions);
+  const dominant = totalSessions > 0 && ranked[0].sessions > 0 ? ranked[0] : null;
+
+  return {
+    buckets: withShares,
+    totalSessions,
+    dominant,
+    // Only claim a pattern once there is enough to claim it with
+    hasPattern: totalSessions >= 5 && dominant !== null,
+  };
+};
+
+/**
+ * Personal bests. Degrades honestly: with a single session it reports that
+ * session rather than inventing a record.
+ */
+export const getPersonalBests = (activities) => {
+  const rows = (Array.isArray(activities) ? activities : []).filter((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    return !Number.isNaN(stamp.getTime());
+  });
+
+  if (rows.length === 0) {
+    return { longestSession: null, biggestBurn: null, bestWeek: null, totalSessions: 0 };
+  }
+
+  const longestSession = rows.reduce((best, activity) =>
+    (Number(activity.duration) || 0) > (Number(best.duration) || 0) ? activity : best
+  );
+
+  const biggestBurn = rows.reduce((best, activity) =>
+    (Number(activity.calories) || 0) > (Number(best.calories) || 0) ? activity : best
+  );
+
+  // Group by the Sunday that starts each week
+  const weekTotals = new Map();
+  rows.forEach((activity) => {
+    const weekStart = getWeekStart(new Date(activity.timestamp));
+    const key = weekStart.toDateString();
+    const entry = weekTotals.get(key) || { weekStart, minutes: 0, sessions: 0 };
+    entry.minutes += Number(activity.duration) || 0;
+    entry.sessions += 1;
+    weekTotals.set(key, entry);
+  });
+
+  const bestWeek = [...weekTotals.values()].sort((a, b) => b.minutes - a.minutes)[0] || null;
+
+  return {
+    longestSession: (Number(longestSession.duration) || 0) > 0 ? longestSession : null,
+    biggestBurn: (Number(biggestBurn.calories) || 0) > 0 ? biggestBurn : null,
+    bestWeek,
+    totalSessions: rows.length,
+  };
+};

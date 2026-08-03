@@ -6,10 +6,18 @@ import WeeklyProgressHero from './activity/WeeklyProgressHero';
 import WeekComparisonCard from './activity/WeekComparisonCard';
 import ConsistencyHeatmap from './activity/ConsistencyHeatmap';
 import {
+  IntensityMixCard,
+  TimeOfDayCard,
+  PersonalBestsCard,
+} from './activity/TrainingPatternCards';
+import {
   getWeeklyPace,
   getActivityBreakdown,
   getSevenDayTrend,
   getConsistencyGrid,
+  getIntensityMix,
+  getTimeOfDayPattern,
+  getPersonalBests,
   getTopExercises,
   generateActivityRecommendations,
   calculateActivityStreak,
@@ -29,6 +37,9 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
   const breakdown = getActivityBreakdown(activities);
   const trend = getSevenDayTrend(activities);
   const consistency = getConsistencyGrid(activities, { weeks: 5 });
+  const intensityMix = getIntensityMix(activities);
+  const timeOfDay = getTimeOfDayPattern(activities);
+  const bests = getPersonalBests(activities);
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
   const recommendations = generateActivityRecommendations(activities, [], goalOptions);
@@ -39,33 +50,14 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
       {/* Weekly progress: stat band + ring + pace (wave 1) */}
       <WeeklyProgressHero pace={pace} trend={trend} />
 
-      {/* Activity Streak */}
-      {streak.current > 0 && (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleRow}>
-              <Ionicons name="flame" size={24} color="#EF4444" />
-              <Text style={styles.cardTitle}>Activity Streak</Text>
-            </View>
-          </View>
-          <View style={styles.streakContent}>
-            <View style={styles.streakBox}>
-              <Text style={styles.streakNumber}>{streak.current}</Text>
-              <Text style={styles.streakLabel}>Current Streak</Text>
-            </View>
-            <View style={styles.streakDivider} />
-            <View style={styles.streakBox}>
-              <Text style={styles.streakNumber}>{streak.longest}</Text>
-              <Text style={styles.streakLabel}>Best Streak</Text>
-            </View>
-          </View>
-          {streak.current >= 3 && (
-            <Text style={styles.streakCongrats}>
-              🔥 {streak.current} days in a row! Keep it up!
-            </Text>
-          )}
-        </View>
-      )}
+      {/* Week over week + consistency (wave 2) */}
+      <WeekComparisonCard trend={trend} />
+      <ConsistencyHeatmap consistency={consistency} />
+
+      {/* Training patterns (wave 3) */}
+      <IntensityMixCard mix={intensityMix} />
+      <TimeOfDayCard pattern={timeOfDay} />
+      <PersonalBestsCard bests={bests} streak={streak} />
 
       {/* Activity Breakdown */}
       {Object.keys(breakdown).length > 0 && (
@@ -89,10 +81,6 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
           </View>
         </View>
       )}
-
-      {/* Week over week + consistency (wave 2) */}
-      <WeekComparisonCard trend={trend} />
-      <ConsistencyHeatmap consistency={consistency} />
 
       {/* Top Exercises */}
       {topExercises.length > 0 && (
@@ -220,41 +208,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#1E293B',
-  },
-  streakContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  streakBox: {
-    alignItems: 'center',
-  },
-  streakNumber: {
-    fontSize: 40,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#EF4444',
-  },
-  streakLabel: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: 4,
-  },
-  streakDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: SURFACES.background.tertiary,
-  },
-  streakCongrats: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#10B981',
-    textAlign: 'center',
-    backgroundColor: '#10B98110',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
   },
   breakdownList: {
     gap: 12,
