@@ -1,16 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY, VIBRANT_WELLNESS } from '../constants/premiumTheme';
-import WeeklyProgressHero from './activity/WeeklyProgressHero';
-import WeekComparisonCard from './activity/WeekComparisonCard';
 import {
-  IntensityMixCard,
-  TimeOfDayCard,
   PersonalBestsCard,
 } from './activity/TrainingPatternCards';
 import {
-  MuscleBalanceCard,
   MoodActivityCard,
   NextSessionCard,
 } from './activity/TrainingFocusCards';
@@ -18,24 +13,16 @@ import { getExerciseById } from '../services/exerciseDatabase';
 import TrainingCalendar from './activity/TrainingCalendar';
 import RecoveryHero from './activity/RecoveryHero';
 import RecoveryTrendCard from './activity/RecoveryTrendCard';
-import TrainingRibbon from './activity/TrainingRibbon';
-import WhatYouTrainedCard from './activity/WhatYouTrainedCard';
 import { CollapsibleSection } from './activity/layout';
 import {
   getWeeklyPace,
-  getActivityBreakdown,
-  getSevenDayTrend,
-  getConsistencyGrid,
   getMonthGrid,
-  getExerciseBreakdown,
+  getPeriodStats,
   getSessionHighlights,
-  getIntensityMix,
-  getTimeOfDayPattern,
   getPersonalBests,
   getMuscleBalance,
   getMoodActivityLink,
   getNextSessionSuggestion,
-  generateActivityRecommendations,
   calculateActivityStreak,
 } from '../utils/activityAnalytics';
 
@@ -63,14 +50,10 @@ export default function ActivityInsightsView({
   const goalOptions = { targetMinutes };
   // Calculate all insights
   const pace = getWeeklyPace(activities, goalOptions);
-  const breakdown = getActivityBreakdown(activities);
-  const exerciseBreakdown = getExerciseBreakdown(activities);
-  const trend = getSevenDayTrend(activities);
-  const consistency = getConsistencyGrid(activities, { weeks: 5 });
-  const intensityMix = getIntensityMix(activities);
-  const timeOfDay = getTimeOfDayPattern(activities);
-  const bests = getPersonalBests(activities);
+  // Staleness is a standing fact ("legs untrained 9 days"), not a property of
+  // whichever period happens to be selected
   const balance = getMuscleBalance(activities, getExerciseById);
+  const bests = getPersonalBests(activities);
   const moodLink = getMoodActivityLink(activities, moodTrend);
   const nextSession = getNextSessionSuggestion(pace, balance, backendRecommendation);
   const sessionHighlights = getSessionHighlights(activities);
@@ -83,15 +66,20 @@ export default function ActivityInsightsView({
     [activities, targetMinutes]
   );
 
-  // The ribbon summarises the week section, so tapping it opens that section
-  // rather than navigating away from the summary you just read.
-  const [weekOpen, setWeekOpen] = useState(false);
-  const handleOpenWeek = useCallback(() => setWeekOpen((v) => !v), []);
+  const buildStats = useCallback(
+    ({ scope, anchor }) =>
+      getPeriodStats(activities, {
+        scope,
+        anchor,
+        targetMinutes,
+        resolveExercise: getExerciseById,
+      }),
+    [activities, targetMinutes]
+  );
+
   const streak = calculateActivityStreak(activities);
   // The goal recommendation restates the Next session card almost verbatim —
   // same shortfall, same plan — so it is dropped rather than shown twice.
-  const recommendations = generateActivityRecommendations(activities, [], goalOptions)
-    .filter((rec) => rec.type !== 'goal');
 
 
   return (
@@ -113,89 +101,31 @@ export default function ActivityInsightsView({
 
       <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
 
-      <TrainingRibbon
-        consistency={consistency}
-        pace={pace}
-        onPress={handleOpenWeek}
-      />
 
       {/* Review lives behind a tap. These answer weekly and monthly questions,
           not daily ones, and scrolling past them every visit is what made the
           merged screen overwhelming. */}
-      <CollapsibleSection
-        title="This week"
-        subtitle={pace?.onPace ? 'On pace for your target' : `${pace?.remainingMinutes || 0} min to go`}
-        icon="calendar-outline"
-        accent={VIBRANT_WELLNESS.activity.solid}
-        badge={`${pace?.percentage || 0}%`}
-        open={weekOpen}
-        onToggle={setWeekOpen}
-      >
-        <WeeklyProgressHero pace={pace} trend={trend} />
-      </CollapsibleSection>
+
+
+
+
+
 
       <CollapsibleSection
-        title="Patterns"
-        subtitle="Consistency, intensity and timing"
-        icon="pulse-outline"
-        accent={VIBRANT_WELLNESS.mood.solid}
-        badge={intensityMix?.dominant ? intensityMix.dominant : undefined}
-      >
-        <WeekComparisonCard trend={trend} />
-        <IntensityMixCard mix={intensityMix} />
-        <TimeOfDayCard pattern={timeOfDay} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Progress"
-        subtitle="Bests, balance and mood"
+        title="Milestones"
+        subtitle="Records and how movement affects mood"
         icon="trophy-outline"
         accent={VIBRANT_WELLNESS.nutrition.solid}
         badge={streak?.current ? `${streak.current}d streak` : undefined}
       >
         <PersonalBestsCard bests={bests} streak={streak} />
-        <WhatYouTrainedCard byExercise={exerciseBreakdown} byType={breakdown} />
-        <MuscleBalanceCard balance={balance} onLogWorkout={onLogWorkout} />
         <MoodActivityCard link={moodLink} />
-        {/* Smart Recommendations */}
-        {recommendations.length > 0 && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleRow}>
-                <Ionicons name="bulb" size={24} color="#F59E0B" />
-                <Text style={styles.cardTitle}>Personalized Insights</Text>
-              </View>
-            </View>
-            <View style={styles.recommendationsList}>
-              {recommendations.map((rec, index) => (
-                <View key={index} style={[styles.recommendationCard, { borderLeftColor: rec.color || '#6366F1' }]}>
-                  <View style={styles.recommendationHeader}>
-                    <Ionicons name={rec.icon} size={20} color={rec.color || '#6366F1'} />
-                    <Text style={styles.recommendationTitle}>{rec.title}</Text>
-                  </View>
-                  <Text style={styles.recommendationMessage}>{rec.message}</Text>
-                  {rec.action && onLogWorkout && (
-                    <TouchableOpacity
-                      style={styles.recommendationButton}
-                      onPress={onLogWorkout}
-                    >
-                      <Text style={styles.recommendationButtonText}>{rec.action}</Text>
-                      <Ionicons name="arrow-forward" size={16} color="#6366F1" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
       </CollapsibleSection>
 
-
-
-
       <CollapsibleSection
-        title="Calendar"
-        subtitle="Every day, and what you did"
+        title="Your training"
+        defaultOpen
+        subtitle="Calendar, patterns and progress"
         icon="calendar-number-outline"
         accent={VIBRANT_WELLNESS.hydration.solid}
         badge={
@@ -204,6 +134,7 @@ export default function ActivityInsightsView({
       >
         <TrainingCalendar
           buildMonth={buildMonth}
+          buildStats={buildStats}
           highlights={sessionHighlights}
           onDelete={onDeleteActivity}
           isDeleting={isDeleting}

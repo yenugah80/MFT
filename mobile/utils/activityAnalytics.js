@@ -1243,3 +1243,109 @@ export const getMonthGrid = (activities, options = {}) => {
     canGoForward: monthsAgo > 0,
   };
 };
+
+/**
+ * Everything worth knowing about a selected day, week or month.
+ *
+ * The analyses already exist and all take a list of activities, so scoping is
+ * just filtering: pick the window, hand the subset to the same functions the
+ * screen used to call on the whole history. That keeps one implementation per
+ * question rather than a windowed variant of each.
+ *
+ * @param {Array} activities - adapted rows
+ * @param {{ scope: 'day'|'week'|'month', anchor: Date, targetMinutes?: number }} options
+ */
+export const getPeriodStats = (activities, options = {}) => {
+  const rows = Array.isArray(activities) ? activities : [];
+  const scope = ['day', 'week', 'month'].includes(options.scope) ? options.scope : 'week';
+  const anchor = options.anchor instanceof Date ? new Date(options.anchor) : new Date();
+  anchor.setHours(0, 0, 0, 0);
+
+  const weeklyTarget =
+    Number(options.targetMinutes) > 0 ? Number(options.targetMinutes) : DEFAULT_WEEKLY_MINUTES_TARGET;
+
+  // Window bounds, and how much of the weekly target applies to it
+  let start;
+  let end;
+  let target;
+
+  if (scope === 'day') {
+    start = new Date(anchor);
+    end = new Date(anchor);
+    target = Math.round(weeklyTarget / 7);
+  } else if (scope === 'week') {
+    start = getWeekStart(anchor);
+    end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    target = weeklyTarget;
+  } else {
+    start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    target = Math.round((weeklyTarget / 7) * end.getDate());
+  }
+  end.setHours(23, 59, 59, 999);
+
+  const inWindow = rows.filter((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    if (Number.isNaN(stamp.getTime())) return false;
+    return stamp >= start && stamp <= end;
+  });
+
+  // The equivalent window immediately before, for a like-for-like comparison
+  const span = end.getTime() - start.getTime();
+  const prevEnd = new Date(start.getTime() - 1);
+  const prevStart = new Date(prevEnd.getTime() - span);
+  const inPrevious = rows.filter((activity) => {
+    const stamp = new Date(activity?.timestamp);
+    if (Number.isNaN(stamp.getTime())) return false;
+    return stamp >= prevStart && stamp <= prevEnd;
+  });
+
+  const minutes = Math.round(inWindow.reduce((sum, a) => sum + (Number(a.duration) || 0), 0));
+  const previousMinutes = Math.round(
+    inPrevious.reduce((sum, a) => sum + (Number(a.duration) || 0), 0)
+  );
+  const calories = Math.round(inWindow.reduce((sum, a) => sum + (Number(a.calories) || 0), 0));
+
+  const activeDays = new Set(
+    inWindow.map((a) => new Date(a.timestamp).toDateString())
+  ).size;
+
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const elapsedEnd = end > today ? today : end;
+  const elapsedDays = Math.max(
+    1,
+    Math.round((elapsedEnd - start) / 86400000) + 1
+  );
+
+  return {
+    scope,
+    start,
+    end,
+    minutes,
+    target,
+    percentage: target > 0 ? Math.min(Math.round((minutes / target) * 100), 100) : 0,
+    remainingMinutes: Math.max(0, target - minutes),
+    calories,
+    sessions: inWindow.length,
+    activeDays,
+    elapsedDays,
+    // null, not 0, when the previous window had nothing to compare against
+    changePercent:
+      previousMinutes > 0
+        ? Math.round(((minutes - previousMinutes) / previousMinutes) * 100)
+        : null,
+    previousMinutes,
+    // The same analyses, scoped to this window
+    intensity: getIntensityMix(inWindow),
+    timeOfDay: getTimeOfDayPattern(inWindow),
+    byExercise: getExerciseBreakdown(inWindow, 3),
+    // Balance is a period question — "did I neglect legs this month" — so it
+    // is scoped like everything else here
+    balance: options.resolveExercise
+      ? getMuscleBalance(inWindow, options.resolveExercise)
+      : null,
+    activities: inWindow,
+  };
+};
