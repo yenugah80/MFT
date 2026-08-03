@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY } from '../constants/premiumTheme';
+import WeeklyProgressHero from './activity/WeeklyProgressHero';
 import {
-  calculateWeeklyGoalProgress,
+  getWeeklyPace,
   getActivityBreakdown,
   getSevenDayTrend,
   getTopExercises,
@@ -22,73 +22,18 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
   // follows if that ever changes server-side.
   const goalOptions = { targetMinutes };
   // Calculate all insights
-  const weeklyProgress = calculateWeeklyGoalProgress(activities, goalOptions);
+  const pace = getWeeklyPace(activities, goalOptions);
   const breakdown = getActivityBreakdown(activities);
   const trend = getSevenDayTrend(activities);
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);
   const recommendations = generateActivityRecommendations(activities, [], goalOptions);
 
-  // Helper to get percentage color
-  const getProgressColor = (percentage) => {
-    if (percentage >= 100) return '#10B981'; // Success Green
-    if (percentage >= 80) return '#F59E0B'; // Almost There Orange
-    if (percentage >= 50) return '#8B5CF6'; // Motivated Purple
-    return '#3B82F6'; // Let's Go Blue - Universal energy
-  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Weekly Summary Card */}
-      <LinearGradient
-        colors={[getProgressColor(weeklyProgress.percentage), getProgressColor(weeklyProgress.percentage) + 'DD']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.summaryCard}
-      >
-        <Text style={styles.summaryTitle}>This Week&apos;s Performance</Text>
-
-        {/* Progress Ring */}
-        <View style={styles.progressRing}>
-          <View style={styles.progressRingInner}>
-            <Text style={styles.progressPercentage}>{Math.round(weeklyProgress.percentage)}%</Text>
-            <Text style={styles.progressLabel}>Complete</Text>
-          </View>
-        </View>
-
-        {/* Stats — minutes carry the target, the rest are plain facts */}
-        <View style={styles.summaryStats}>
-          <View style={styles.summaryStatRow}>
-            <Ionicons name="time" size={20} color="#fff" />
-            <Text style={styles.summaryStatText}>
-              {weeklyProgress.minutes} / {weeklyProgress.targetMinutes} min
-            </Text>
-          </View>
-          <View style={styles.summaryStatRow}>
-            <Ionicons name="fitness" size={20} color="#fff" />
-            <Text style={styles.summaryStatText}>
-              {weeklyProgress.workoutCount} {weeklyProgress.workoutCount === 1 ? 'session' : 'sessions'}
-              {weeklyProgress.calories > 0 ? ` · ${weeklyProgress.calories} kcal` : ''}
-            </Text>
-          </View>
-        </View>
-
-        {/* Motivational Message */}
-        <View style={styles.motivationBadge}>
-          <Ionicons
-            name={weeklyProgress.percentage >= 100 ? 'trophy' : weeklyProgress.percentage >= 80 ? 'flame' : 'trending-up'}
-            size={16}
-            color="#fff"
-          />
-          <Text style={styles.motivationText}>
-            {weeklyProgress.percentage >= 100
-              ? 'Weekly target hit 🎉'
-              : weeklyProgress.minutes === 0
-              ? `${weeklyProgress.targetMinutes} min to go this week`
-              : `${weeklyProgress.remainingMinutes} min to go this week`}
-          </Text>
-        </View>
-      </LinearGradient>
+      {/* Weekly progress: stat band + ring + pace (wave 1) */}
+      <WeeklyProgressHero pace={pace} trend={trend} />
 
       {/* Activity Streak */}
       {streak.current > 0 && (
@@ -305,78 +250,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: SURFACES.background.secondary, // Lighter, brighter background
-  },
-  summaryCard: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-  },
-  summaryTitle: {
-    fontSize: 20,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#fff',
-    marginBottom: 20,
-  },
-  progressRing: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  progressRingInner: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressPercentage: {
-    fontSize: 36,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#1E293B',
-  },
-  progressLabel: {
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: 4,
-  },
-  summaryStats: {
-    width: '100%',
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryStatRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  summaryStatText: {
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#fff',
-  },
-  motivationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  motivationText: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#fff',
   },
   card: {
     backgroundColor: '#fff',

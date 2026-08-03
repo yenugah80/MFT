@@ -1072,15 +1072,24 @@ async function generateWeeklyInsights(userId, activityStats) {
     });
   }
 
-  // Weekly minutes vs recommended target (150 min/week)
+  // Typical weekly volume vs the recommended target (150 min/week).
+  //
+  // activityStats.weeklyMinutes is an AVERAGE weekly rate over the 30-day
+  // window (totalMinutes / (days / 7)) — not minutes logged this week. It was
+  // captioned "Weekly Progress ... N min to go", which reads as the current
+  // week and contradicted the Activity tab: 35 minutes logged this week showed
+  // here as "8/150 min (5%)" because 35 / (30/7) = 8.
+  //
+  // The label now says what the number is. GET /activity/today remains the
+  // source of truth for this week's progress.
   const weeklyTarget = 150;
   const weeklyPct = Math.round((activityStats.weeklyMinutes / weeklyTarget) * 100);
 
   if (weeklyPct >= 100) {
     insights.push({
       type: 'goal_met',
-      title: 'Weekly Goal Achieved!',
-      message: `${activityStats.weeklyMinutes} min this week - you've exceeded your 150 min target!`,
+      title: 'Above the guideline',
+      message: `You average ${activityStats.weeklyMinutes} min a week - above the 150 min guideline.`,
       icon: 'checkmark-circle',
       color: '#10B981',
     });
@@ -1088,8 +1097,8 @@ async function generateWeeklyInsights(userId, activityStats) {
     const remaining = weeklyTarget - activityStats.weeklyMinutes;
     insights.push({
       type: 'progress',
-      title: 'Weekly Progress',
-      message: `${activityStats.weeklyMinutes}/${weeklyTarget} min (${weeklyPct}%). ${remaining} min to go!`,
+      title: 'Typical week',
+      message: `You average ${activityStats.weeklyMinutes}/${weeklyTarget} min a week (${weeklyPct}%) over the last 30 days - ${remaining} min short of the guideline.`,
       icon: 'bar-chart',
       color: '#3B82F6',
     });
