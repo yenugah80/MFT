@@ -27,22 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
 import apiClient from '../../services/apiClient';
 import { toDisplayText } from '../../utils/displayText';
-
-const FACTOR_LABELS = {
-  sleep: 'Sleep',
-  stress: 'Stress',
-  activity_load: 'Prior Activity',
-  hydration: 'Hydration',
-  mood: 'Mood',
-};
-
-const IMPACT_COLOR = {
-  positive: '#10B981',
-  neutral: '#F59E0B',
-  negative: '#EF4444',
-  caution: '#F59E0B',
-  unknown: TEXT.tertiary,
-};
+import RecoveryHero from '../../components/activity/RecoveryHero';
 
 export default function ActivityRecoveryScreen() {
   const router = useRouter();
@@ -72,6 +57,17 @@ export default function ActivityRecoveryScreen() {
       setRefreshing(false);
     }
   }, [refetch]);
+
+  const handleLogSignal = useCallback(() => {
+    Haptics.selectionAsync();
+    // Sleep and stress carry 65% of the score between them
+    router.push('/(tabs)/dashboard');
+  }, [router]);
+
+  const handlePlanSession = useCallback(() => {
+    Haptics.selectionAsync();
+    router.push('/insights/activity-insights');
+  }, [router]);
 
   const handleLogWorkout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -130,47 +126,12 @@ export default function ActivityRecoveryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
           }
         >
-          {/* Recovery score */}
-          <View style={[styles.card, styles.scoreCard]}>
-            <View style={[styles.scoreRing, { borderColor: recovery.color }]}>
-              <Text style={[styles.scoreValue, { color: recovery.color }]}>{recovery.score}</Text>
-            </View>
-            <Text style={styles.scoreLabel}>{toDisplayText(recovery.label)} Recovery</Text>
-            {strainTarget && (
-              <Text style={styles.strainText}>
-                Today&apos;s target strain: {strainTarget.target}
-                {strainTarget.zone?.name ? ` (${strainTarget.zone.name})` : ''}
-              </Text>
-            )}
-          </View>
-
-          {/* Factor breakdown */}
-          {recovery.factors?.length > 0 && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="pulse-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>What&apos;s Affecting Your Recovery</Text>
-              </View>
-              <View style={styles.factorList}>
-                {recovery.factors.map((factor) => (
-                  <View key={factor.factor} style={styles.factorRow}>
-                    <View
-                      style={[
-                        styles.factorDot,
-                        { backgroundColor: IMPACT_COLOR[factor.impact] || TEXT.tertiary },
-                      ]}
-                    />
-                    <View style={styles.factorInfo}>
-                      <Text style={styles.factorLabel}>
-                        {FACTOR_LABELS[factor.factor] || factor.factor}
-                      </Text>
-                      <Text style={styles.factorDetail}>{factor.detail}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          <RecoveryHero
+            recovery={recovery}
+            strainTarget={strainTarget}
+            onLogSignal={handleLogSignal}
+            onPlanSession={handlePlanSession}
+          />
 
           {/* Top recommendation */}
           {topRecommendation && (
@@ -286,33 +247,6 @@ const styles = StyleSheet.create({
     padding: SPACING[4],
     marginBottom: SPACING[4],
   },
-  scoreCard: {
-    alignItems: 'center',
-  },
-  scoreRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING[3],
-  },
-  scoreValue: {
-    fontSize: TYPOGRAPHY.size['3xl'],
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-  scoreLabel: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  strainText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    marginTop: 4,
-  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,34 +257,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-  },
-  factorList: {
-    gap: SPACING[3],
-  },
-  factorRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING[3],
-  },
-  factorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 4,
-  },
-  factorInfo: {
-    flex: 1,
-  },
-  factorLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  factorDetail: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-    marginTop: 2,
   },
   recName: {
     fontSize: TYPOGRAPHY.size.lg,

@@ -523,8 +523,23 @@ async function getCurrentHealthSignals(userId) {
  * Calculate recovery score (0-100) based on health signals
  * Inspired by WHOOP's recovery algorithm
  */
+/**
+ * Weight each signal carries in the recovery score. Must stay in step with the
+ * `score += (x - 50) * w` lines below — they are the same numbers.
+ */
+export const RECOVERY_FACTOR_WEIGHTS = {
+  sleep: 0.4,
+  stress: 0.25,
+  activity_load: 0.2,
+  hydration: 0.1,
+  mood: 0.05,
+};
+
+/** Score with no signals at all — deliberately not presented as a measurement */
+export const RECOVERY_BASELINE = 50;
+
 function calculateRecoveryScore(healthSignals, activityStats) {
-  let score = 50; // Baseline
+  let score = RECOVERY_BASELINE; // Baseline
   const factors = [];
 
   // Sleep Quality (40% weight)
@@ -631,11 +646,42 @@ function calculateRecoveryScore(healthSignals, activityStats) {
   // Clamp score between 0-100
   score = Math.max(0, Math.min(100, Math.round(score)));
 
+  // Attach the weight each factor carries and the points it actually
+  // contributed, so the client can show the arithmetic rather than a bare
+  // number. Without this the score is unexplainable: a factor with no data
+  // contributes nothing, which drags the result toward the 50 baseline while
+  // still presenting as a precise measurement.
+  const weighted = factors.map((factor) => {
+    const weight = RECOVERY_FACTOR_WEIGHTS[factor.factor] ?? 0;
+    const counted = Number.isFinite(factor.value);
+    return {
+      ...factor,
+      weight,
+      counted,
+      contribution: counted ? Math.round((factor.value - 50) * weight) : null,
+    };
+  });
+
+  const counted = weighted.filter((factor) => factor.counted);
+  const missing = weighted.filter((factor) => !factor.counted);
+  const countedWeight = counted.reduce((sum, factor) => sum + factor.weight, 0);
+
   return {
     score,
     label: getRecoveryLabel(score),
     color: getRecoveryColor(score),
-    factors,
+    factors: weighted,
+    baseline: RECOVERY_BASELINE,
+    // How much of the model actually had data behind it
+    coverage: {
+      counted: counted.length,
+      total: weighted.length,
+      countedWeight: Math.round(countedWeight * 100),
+      missingWeight: Math.round((1 - countedWeight) * 100),
+      missing: missing.map((factor) => factor.factor),
+      // Below this the number is mostly baseline, not measurement
+      isReliable: countedWeight >= 0.5,
+    },
     timestamp: new Date().toISOString(),
   };
 }
