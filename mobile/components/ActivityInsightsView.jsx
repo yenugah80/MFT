@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, TYPOGRAPHY } from '../constants/premiumTheme';
+import { TEXT, SURFACES, TYPOGRAPHY, VIBRANT_WELLNESS } from '../constants/premiumTheme';
 import WeeklyProgressHero from './activity/WeeklyProgressHero';
 import WeekComparisonCard from './activity/WeekComparisonCard';
 import ConsistencyHeatmap from './activity/ConsistencyHeatmap';
@@ -116,7 +116,10 @@ export default function ActivityInsightsView({
           merged screen overwhelming. */}
       <CollapsibleSection
         title="This week"
-        subtitle={`${pace?.minutes || 0} of ${pace?.targetMinutes || 150} min`}
+        subtitle={pace?.onPace ? 'On pace for your target' : `${pace?.remainingMinutes || 0} min to go`}
+        icon="calendar-outline"
+        accent={VIBRANT_WELLNESS.activity.solid}
+        badge={`${pace?.percentage || 0}%`}
         open={weekOpen}
         onToggle={setWeekOpen}
       >
@@ -126,6 +129,9 @@ export default function ActivityInsightsView({
       <CollapsibleSection
         title="Patterns"
         subtitle="Consistency, intensity and timing"
+        icon="pulse-outline"
+        accent={VIBRANT_WELLNESS.mood.solid}
+        badge={intensityMix?.dominant ? intensityMix.dominant : undefined}
       >
         <WeekComparisonCard trend={trend} />
         <ConsistencyHeatmap consistency={consistency} />
@@ -135,11 +141,10 @@ export default function ActivityInsightsView({
 
       <CollapsibleSection
         title="Progress"
-        subtitle={
-          streak?.current
-            ? `${streak.current} day streak · bests, balance and mood`
-            : 'Bests, balance and mood'
-        }
+        subtitle="Bests, balance and mood"
+        icon="trophy-outline"
+        accent={VIBRANT_WELLNESS.nutrition.solid}
+        badge={streak?.current ? `${streak.current}d streak` : undefined}
       >
         <PersonalBestsCard bests={bests} streak={streak} />
         <WhatYouTrainedCard byExercise={exerciseBreakdown} byType={breakdown} />
@@ -183,10 +188,13 @@ export default function ActivityInsightsView({
 
       <CollapsibleSection
         title="History"
-        subtitle={
+        subtitle="Every session, newest first"
+        icon="time-outline"
+        accent={VIBRANT_WELLNESS.hydration.solid}
+        badge={
           sessionGroups.length
-            ? `${sessionGroups.reduce((n, g) => n + g.sessions.length, 0)} recent sessions`
-            : 'Recent sessions'
+            ? `${sessionGroups.reduce((n, g) => n + g.sessions.length, 0)}`
+            : undefined
         }
       >
         <SessionTimeline groups={sessionGroups} onDelete={onDeleteActivity} isDeleting={isDeleting} />

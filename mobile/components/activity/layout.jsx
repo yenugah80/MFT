@@ -20,6 +20,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -80,10 +81,17 @@ export function Card({ title, icon, accent = BRAND.primary, meta, children, styl
  * clashes with every other screen.
  */
 export function Hero({ accent = BRAND.primary, children, style }) {
+  // A wash rather than a flat fill: the gradient gives the card depth without
+  // forcing white text the way a saturated gradient would.
   return (
-    <View style={[styles.hero, { backgroundColor: `${accent}0F`, borderColor: `${accent}22` }, style]}>
+    <LinearGradient
+      colors={[`${accent}1F`, `${accent}08`]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.hero, { borderColor: `${accent}2A` }, style]}
+    >
       {children}
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -126,7 +134,17 @@ export function Strip({ children, onPress, actionLabel }) {
  * ("am I ready", "how is the week", "what next"); the rest are review, and
  * review should be opt-in rather than scrolled past every time.
  */
-export function CollapsibleSection({ title, subtitle, defaultOpen = false, open: openProp, onToggle, children }) {
+export function CollapsibleSection({
+  title,
+  subtitle,
+  icon,
+  accent = BRAND.primary,
+  badge,
+  defaultOpen = false,
+  open: openProp,
+  onToggle,
+  children,
+}) {
   const [openState, setOpenState] = useState(defaultOpen);
 
   // Controlled when a parent passes `open` — lets a summary elsewhere on the
@@ -145,16 +163,26 @@ export function CollapsibleSection({ title, subtitle, defaultOpen = false, open:
     <View style={styles.collapsible}>
       <TouchableOpacity
         onPress={toggle}
-        activeOpacity={0.7}
-        style={styles.collapsibleHeader}
+        activeOpacity={0.8}
+        style={[styles.collapsibleHeader, open && styles.collapsibleHeaderOpen]}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         accessibilityLabel={`${title}, ${open ? 'expanded' : 'collapsed'}`}
       >
+        {!!icon && (
+          <View style={[styles.collapsibleChip, { backgroundColor: `${accent}18` }]}>
+            <Ionicons name={icon} size={17} color={accent} />
+          </View>
+        )}
         <View style={styles.collapsibleTitleWrap}>
-          <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
-          {!!subtitle && !open && <Text style={styles.collapsibleSubtitle}>{subtitle}</Text>}
+          <Text style={styles.collapsibleTitle}>{title}</Text>
+          {!!subtitle && <Text style={styles.collapsibleSubtitle}>{subtitle}</Text>}
         </View>
+        {!!badge && (
+          <View style={[styles.collapsibleBadge, { backgroundColor: `${accent}14` }]}>
+            <Text style={[styles.collapsibleBadgeText, { color: accent }]}>{badge}</Text>
+          </View>
+        )}
         <Ionicons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={16}
@@ -168,23 +196,54 @@ export function CollapsibleSection({ title, subtitle, defaultOpen = false, open:
 
 const styles = StyleSheet.create({
   collapsible: {
-    marginBottom: SPACING[1],
+    marginBottom: SPACING[3],
   },
+  // A tappable row deserves to look tappable: a card, not text on background
   collapsibleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: SPACING[3],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
     paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[1],
+    paddingHorizontal: SPACING[4],
+    ...SHADOWS.sm,
+  },
+  collapsibleHeaderOpen: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: SPACING[2],
+  },
+  collapsibleChip: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   collapsibleTitleWrap: {
     flex: 1,
+    minWidth: 0,
+  },
+  collapsibleTitle: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
   },
   collapsibleSubtitle: {
-    marginTop: 2,
+    marginTop: 1,
     fontSize: TYPOGRAPHY.size.xs,
     fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.muted,
+    color: TEXT.tertiary,
+  },
+  collapsibleBadge: {
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  collapsibleBadgeText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -243,6 +302,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: SPACING[4],
     marginBottom: SPACING[3],
+    overflow: 'hidden',
   },
 
   tileRow: {

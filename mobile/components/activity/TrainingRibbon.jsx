@@ -81,6 +81,9 @@ export default function TrainingRibbon({ consistency, pace, onPress }) {
       </View>
 
       <View style={styles.footer}>
+        <View style={[styles.chip, { backgroundColor: `${BRAND.primary}18` }]}>
+          <Ionicons name="flame-outline" size={15} color={BRAND.primary} />
+        </View>
         <Text style={styles.summary}>
           {trainedDays} of last {elapsedDays} days
           {consequence ? ` · ${consequence}` : ''}
@@ -106,13 +109,14 @@ const styles = StyleSheet.create({
   },
   cell: {
     flex: 1,
-    height: 22,
-    borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    height: 34,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   today: {
-    borderWidth: 1.5,
-    borderColor: TEXT.primary,
+    borderWidth: 2,
+    borderColor: BRAND.primary,
+    backgroundColor: `${BRAND.primary}22`,
   },
   footer: {
     flexDirection: 'row',
@@ -120,6 +124,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: SPACING[2],
     marginTop: SPACING[3],
+  },
+  chip: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   summary: {
     flex: 1,
