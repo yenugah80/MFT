@@ -180,6 +180,10 @@ export async function ensureActivityLogTableShape() {
     await db.execute(
       sql`ALTER TABLE "activity_log" ADD COLUMN IF NOT EXISTS "exercise_name" text;`
     );
+    // Parity with migration 0041 — "when did I last train legs" without a scan
+    await db.execute(
+      sql`CREATE INDEX IF NOT EXISTS "activity_log_user_exercise_idx" ON "activity_log" ("user_id", "exercise_id");`
+    );
     activityLogTableEnsured = true;
     console.log("✅ Activity log table schema verified and updated");
   } catch (err) {
