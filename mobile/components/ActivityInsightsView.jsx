@@ -39,7 +39,7 @@ import {
  * Activity Insights View
  * Shows comprehensive analytics, trends, and recommendations for activities
  */
-export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes, moodTrend, onDeleteActivity, isDeleting }) {
+export default function ActivityInsightsView({ activities, onLogWorkout, targetMinutes, moodTrend, onDeleteActivity, isDeleting, backendRecommendation }) {
   // Prefer the target the backend reports over the CDC default, so the screen
   // follows if that ever changes server-side.
   const goalOptions = { targetMinutes };
@@ -53,7 +53,7 @@ export default function ActivityInsightsView({ activities, onLogWorkout, targetM
   const bests = getPersonalBests(activities);
   const balance = getMuscleBalance(activities, getExerciseById);
   const moodLink = getMoodActivityLink(activities, moodTrend);
-  const nextSession = getNextSessionSuggestion(pace, balance);
+  const nextSession = getNextSessionSuggestion(pace, balance, backendRecommendation);
   const sessionGroups = groupSessionsByDay(activities, { limit: 15 });
   const topExercises = getTopExercises(activities, 5);
   const streak = calculateActivityStreak(activities);

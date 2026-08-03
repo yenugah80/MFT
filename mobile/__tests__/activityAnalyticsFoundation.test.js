@@ -621,3 +621,57 @@ describe('session timeline grouping', () => {
     expect(groupSessionsByDay(undefined)).toEqual([]);
   });
 });
+
+describe('next session merges both engines', () => {
+  const { getNextSessionSuggestion } = require('../utils/activityAnalytics');
+  const pace = { remainingMinutes: 90, daysLeft: 3, percentage: 40 };
+
+  it('prefers the backend pick for what to do', () => {
+    const suggestion = getNextSessionSuggestion(pace, { stalest: null }, {
+      name: 'Walking',
+      type: 'walking',
+      duration: { minutes: 30 },
+      reasons: [{ type: 'goal', text: 'Low impact while hydration is down', icon: 'water' }],
+    });
+
+    expect(suggestion.activity).toBe('Walking');
+    expect(suggestion.exerciseType).toBe('walking');
+    expect(suggestion.reasons.join(' ')).toMatch(/hydration is down/);
+  });
+
+  it('keeps the local reasoning alongside it', () => {
+    const suggestion = getNextSessionSuggestion(
+      pace,
+      { stalest: { group: 'Lower Body', daysSince: 9 } },
+      { name: 'Cycling', reasons: [{ text: 'Matches your recovery today' }] }
+    );
+
+    expect(suggestion.activity).toBe('Cycling');
+    expect(suggestion.focus).toBe('Lower Body');
+    // Weekly gap, staleness and the backend reason all survive
+    expect(suggestion.reasons).toHaveLength(3);
+  });
+
+  it('falls back to the local rule with no backend payload', () => {
+    const suggestion = getNextSessionSuggestion(pace, { stalest: null }, undefined);
+    expect(suggestion.activity).toBeNull();
+    expect(suggestion.hasSuggestion).toBe(true);
+  });
+
+  it('tolerates a string reason and a plain duration', () => {
+    const suggestion = getNextSessionSuggestion({ percentage: 100, remainingMinutes: 0 }, {}, {
+      name: 'Yoga',
+      duration: 25,
+      reasons: ['Gentle on a low recovery day'],
+    });
+
+    expect(suggestion.minutes).toBe(25);
+    expect(suggestion.reasons).toContain('Gentle on a low recovery day');
+  });
+
+  it('ignores a malformed backend payload', () => {
+    const suggestion = getNextSessionSuggestion(pace, {}, { name: { bad: 'object' }, reasons: [{}] });
+    expect(suggestion.activity).toBeNull();
+    expect(suggestion.reasons.join(' ')).not.toMatch(/object/);
+  });
+});

@@ -925,7 +925,7 @@ export const getMoodActivityLink = (activities, moodTrend) => {
  * What to do next, derived only from gaps that actually exist: minutes left
  * against the weekly target, and which muscle group has gone longest untrained.
  */
-export const getNextSessionSuggestion = (pace, balance) => {
+export const getNextSessionSuggestion = (pace, balance, backendRecommendation) => {
   const reasons = [];
 
   const remaining = Number(pace?.remainingMinutes) || 0;
@@ -951,11 +951,29 @@ export const getNextSessionSuggestion = (pace, balance) => {
 
   const focus = stale && stale.daysSince >= 4 ? stale.group : null;
 
+  // The backend engine sees things this rule cannot — recovery score, strain
+  // target, time of day, fitness level. Prefer its pick for WHAT to do, and
+  // keep the local reasoning for WHY and HOW LONG. Two engines answering the
+  // same question separately is how the Recovery and Activity screens ended up
+  // recommending different sessions.
+  const suggested = backendRecommendation || null;
+  if (suggested?.reasons?.length) {
+    const text = suggested.reasons[0]?.text ?? suggested.reasons[0];
+    if (typeof text === 'string' && text.trim()) reasons.push(text.trim());
+  }
+
+  const backendMinutes = Number(suggested?.duration?.minutes ?? suggested?.duration);
+
   return {
     focus,
-    minutes: Number.isFinite(suggestedMinutes) ? suggestedMinutes : 30,
+    activity: typeof suggested?.name === 'string' ? suggested.name : null,
+    exerciseType: suggested?.type || null,
+    minutes: Number.isFinite(suggestedMinutes)
+      ? suggestedMinutes
+      : Number.isFinite(backendMinutes)
+      ? backendMinutes
+      : 30,
     reasons,
-    // Nothing worth suggesting when the target is met and nothing is stale
     hasSuggestion: reasons.length > 0,
   };
 };

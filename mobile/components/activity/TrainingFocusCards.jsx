@@ -139,7 +139,7 @@ export function MoodActivityCard({ link }) {
 }
 
 export function NextSessionCard({ suggestion, onLogWorkout }) {
-  const { focus, minutes = 30, reasons = [], hasSuggestion } = suggestion || {};
+  const { focus, activity, minutes = 30, reasons = [], hasSuggestion } = suggestion || {};
 
   if (!hasSuggestion) {
     return (
@@ -157,9 +157,12 @@ export function NextSessionCard({ suggestion, onLogWorkout }) {
       <Text style={styles.title}>Next session</Text>
 
       <Text style={styles.suggestion}>
-        {focus ? `${focus} · ` : ''}
+        {activity ? `${activity} · ` : focus ? `${focus} · ` : ''}
         {minutes} min
       </Text>
+      {!!activity && !!focus && (
+        <Text style={styles.suggestionMeta}>{focus} is the gap worth closing</Text>
+      )}
 
       {reasons.map((reason) => (
         <View key={reason} style={styles.reasonRow}>
@@ -285,6 +288,13 @@ const styles = StyleSheet.create({
   },
 
   // Next session
+  suggestionMeta: {
+    marginTop: -SPACING[1],
+    marginBottom: SPACING[2],
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+  },
   suggestion: {
     fontSize: TYPOGRAPHY.size.xl,
     fontFamily: TYPOGRAPHY.family.bold,

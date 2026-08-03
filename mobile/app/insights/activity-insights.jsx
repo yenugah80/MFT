@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND } from '../../constants/premiumTheme';
 import { useActivityLog, ACTIVITY_TYPES } from '../../hooks/useActivityLog';
 import { useMoodInsights } from '../../hooks/useMoodInsights';
+import apiClient from '../../services/apiClient';
 import ActivityInsightsView from '../../components/ActivityInsightsView';
 
 // activityAnalytics.js (consumed by ActivityInsightsView) expects
@@ -57,6 +58,15 @@ export default function ActivityInsightsScreen() {
   const { fetchHistory, weeklyProgress, deleteActivity, isDeleting } = useActivityLog();
   // Per-day mood ratings for the movement/mood comparison
   const { data: moodData } = useMoodInsights({ windowDays: 30, trendDays: 30 });
+
+  // The backend engine ranks activities using recovery, strain, timing and
+  // fitness level — signals the client rule cannot see. Shared cache key with
+  // the Recovery screen, so both read one answer rather than computing two.
+  const { data: intelligence } = useQuery({
+    queryKey: ['activityIntelligence'],
+    queryFn: () => apiClient.get('/activity/intelligence'),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['activityHistory', 'insights', 90],
@@ -159,6 +169,7 @@ export default function ActivityInsightsScreen() {
           onLogWorkout={handleLogWorkout}
           targetMinutes={weeklyProgress?.target}
           moodTrend={moodData?.trendData}
+          backendRecommendation={intelligence?.recommendations?.[0]}
           onDeleteActivity={handleDeleteActivity}
           isDeleting={isDeleting}
         />

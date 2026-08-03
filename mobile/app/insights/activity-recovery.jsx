@@ -82,14 +82,9 @@ export default function ActivityRecoveryScreen() {
     router.push('/insights/activity-insights');
   }, [router]);
 
-  const handleLogWorkout = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/activity');
-  }, [router]);
 
   const recovery = data?.recovery;
   const strainTarget = data?.strainTarget;
-  const topRecommendation = data?.recommendations?.[0];
   const weeklyInsights = data?.weeklyInsights || [];
 
   return (
@@ -147,43 +142,6 @@ export default function ActivityRecoveryScreen() {
           />
 
           <RecoveryTrendCard history={history} chartWidth={CHART_WIDTH} />
-
-          {/* Top recommendation */}
-          {topRecommendation && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="fitness-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>Recommended for Today</Text>
-              </View>
-              <Text style={styles.recName}>
-                {toDisplayText(topRecommendation.name || topRecommendation.label, 'Recommended activity')}
-              </Text>
-              {topRecommendation.reasons?.length > 0 && (
-                // generateReasons() emits { type, text, icon } objects, not strings
-                <Text style={styles.recReason}>
-                  {toDisplayText(topRecommendation.reasons[0]?.text ?? topRecommendation.reasons[0])}
-                </Text>
-              )}
-              <View style={styles.recStatsRow}>
-                {topRecommendation.duration && (
-                  <Text style={styles.recStat}>
-                    {topRecommendation.duration?.minutes ?? topRecommendation.duration} min
-                  </Text>
-                )}
-                {topRecommendation.intensity && (
-                  <Text style={styles.recStat}>{topRecommendation.intensity} intensity</Text>
-                )}
-                {topRecommendation.calories && (
-                  <Text style={styles.recStat}>
-                    ~{topRecommendation.calories?.estimated ?? topRecommendation.calories} kcal
-                  </Text>
-                )}
-              </View>
-              <TouchableOpacity style={styles.logButton} onPress={handleLogWorkout}>
-                <Text style={styles.logButtonText}>Log This Activity</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* Weekly insights */}
           {weeklyInsights.length > 0 && (
@@ -272,43 +230,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.base,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-  },
-  recName: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginBottom: 4,
-  },
-  recReason: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-    marginBottom: SPACING[3],
-  },
-  recStatsRow: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
-  },
-  recStat: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.tertiary,
-    backgroundColor: SURFACES.background.tertiary,
-    paddingHorizontal: SPACING[2],
-    paddingVertical: 4,
-    borderRadius: RADIUS.sm,
-  },
-  logButton: {
-    backgroundColor: BRAND.primary,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING[3],
-    alignItems: 'center',
-  },
-  logButtonText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#FFFFFF',
   },
   insightRow: {
     flexDirection: 'row',
