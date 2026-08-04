@@ -68,12 +68,10 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
   // clear of the SVG edge. Label geometry must use THIS, not outerRadius,
   // or every label sits a pixel proud of the band's true centre.
   const ringOuterRadius = outerRadius - 2;
-  const innerRadius = size / 2 - 38; // Donut hole for score
+  const innerRadius = size / 2 - 35; // Donut hole for score
   const center = size / 2;
   const totalMax = 100; // 4 × 25 = 100
-  // 11px over a 36px band leaves ~4px clearance even for the widest label
-  // ("100%") once the 2.5px white segment stroke is accounted for.
-  const labelFontSize = 11;
+  const labelFontSize = 12;
 
   // Calculate wedge path (filled pie slice) with validation
   const getWedgePath = (startAngle, endAngle, outerR, innerR) => {
@@ -195,7 +193,12 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
                   fontWeight="700"
                   textAnchor="middle"
                 >
-                  {seg.displayPercent}%
+                  {/* Single string child, NOT `{value}%`. Two children make
+                      react-native-svg emit two separate <TSpan> runs, each
+                      measured and positioned independently — which is what put
+                      a stray gap before the % on multi-digit values ("20 %")
+                      but not on single digits ("0%"). */}
+                  {`${seg.displayPercent}%`}
                 </SvgText>
               );
             })}
