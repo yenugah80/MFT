@@ -188,10 +188,19 @@ npm run android        # Run on Android emulator
 ### Backend
 ```bash
 cd backend
-npm run dev            # Start with nodemon (hot reload)
-npm start              # Production start
-npm run drizzle:migrate # Run database migrations
+npm run dev             # Start with nodemon (hot reload)
+npm start               # Production start
+npm run db:migrate      # Apply pending SQL migrations (drizzle:migrate does NOT — see below)
+npm run db:migrate:dry  # Show what db:migrate would apply, without writing anything
+
+# Deploy — manual, from repo root, not triggered by git push (see Git Workflow)
+railway up
 ```
+
+`npm run drizzle:migrate` is a trap: drizzle-kit's journal stops at migration
+0012, so on this repo it silently applies nothing and exits 0. Everything
+from 0013 onward is hand-written SQL applied by `scripts/applyMigrations.mjs`
+via `db:migrate` — that's the one that actually works.
 
 ### Worker
 ```bash
@@ -240,7 +249,12 @@ When testing food analysis with complex meals like "rice with chicken curry":
 
 ## Git Workflow
 
-- Backend deploys on Railway (auto-deploy from main branch)
+- Backend deploy is **manual, not git-triggered**: the Railway service has no
+  GitHub connection (`source.repo` is null). Pushing to `main` does nothing on
+  its own. Ship the backend with `railway up` from the repo root (needs
+  `railway login` once; check `railway status` first to confirm you're linked
+  to the `caring-emotion` service / `production` environment). Apply pending
+  SQL migrations first with `cd backend && npm run db:migrate`.
 - Commit messages should follow conventional commits format
 - Always include the Claude Code co-author attribution
 
