@@ -64,9 +64,16 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
   ];
 
   const outerRadius = size / 2;
-  const innerRadius = size / 2 - 35; // Donut hole for score
+  // Radius the wedges are actually painted to — the 2px inset keeps the ring
+  // clear of the SVG edge. Label geometry must use THIS, not outerRadius,
+  // or every label sits a pixel proud of the band's true centre.
+  const ringOuterRadius = outerRadius - 2;
+  const innerRadius = size / 2 - 38; // Donut hole for score
   const center = size / 2;
   const totalMax = 100; // 4 × 25 = 100
+  // 11px over a 36px band leaves ~4px clearance even for the widest label
+  // ("100%") once the 2.5px white segment stroke is accounted for.
+  const labelFontSize = 11;
 
   // Calculate wedge path (filled pie slice) with validation
   const getWedgePath = (startAngle, endAngle, outerR, innerR) => {
@@ -115,15 +122,17 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
     const fillPercent = factor.max > 0 ? Math.min(1, value / factor.max) : 0;
     const displayPercent = Math.round(fillPercent * 100);
 
-    // Calculate label position - center of the FILLED portion, not full segment
-    // Only position meaningfully if fill is substantial (>30%)
-    const fillEndAngle = startAngle + segmentAngle * fillPercent;
-    const labelAngle = fillPercent >= 0.3
-      ? (startAngle + fillEndAngle) / 2  // Middle of filled area
-      : (startAngle + endAngle) / 2;     // Middle of full segment (for legend reference)
+    // Label sits at the geometric centre of its segment, never at the centre of
+    // the filled portion. Anchoring to fill made each label land at a different
+    // angle (and so a different visual gap from its neighbours) purely because
+    // the domains had different values — the four labels must stay evenly
+    // spaced 90° apart so the ring reads as symmetrical.
+    const labelAngle = (startAngle + endAngle) / 2;
 
-    // Position label closer to inner edge for better visibility
-    const labelRadius = innerRadius + (outerRadius - innerRadius) * 0.45;
+    // Same radius for every label: the mid-line of the painted band, so all
+    // four are equidistant from the centre and each label's box clears both
+    // the inner hole and the outer edge.
+    const labelRadius = (innerRadius + ringOuterRadius) / 2;
     const labelRad = (labelAngle - 90) * (Math.PI / 180);
     const labelX = center + labelRadius * Math.cos(labelRad);
     const labelY = center + labelRadius * Math.sin(labelRad);
@@ -152,7 +161,7 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
           <G>
             {/* 4 domain segments - always visible with clear boundaries */}
             {segments.map((seg) => {
-              const path = getWedgePath(seg.startAngle, seg.endAngle, outerRadius - 2, innerRadius);
+              const path = getWedgePath(seg.startAngle, seg.endAngle, ringOuterRadius, innerRadius);
               if (!path) return null;
               // FIXED: Higher minimum opacity (50%) so empty segments are always visible
               // Fill level: 50% base + up to 50% more based on fill
@@ -178,9 +187,11 @@ function PieChartScore({ score, tier, breakdown, size = 160 }) {
                 <SvgText
                   key={`label-${seg.key}`}
                   x={seg.labelX}
-                  y={seg.labelY + 4}
+                  // Nudge down by ~1/3 of the cap height so the digits are
+                  // optically centred on the ring mid-line, not sitting on it.
+                  y={seg.labelY + labelFontSize * 0.35}
                   fill={textColor}
-                  fontSize={12}
+                  fontSize={labelFontSize}
                   fontWeight="700"
                   textAnchor="middle"
                 >
