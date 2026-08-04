@@ -343,14 +343,6 @@ export const waterLogTable = pgTable(
     hydrationFactor: decimal("hydration_factor", { precision: 3, scale: 2 }).default("1.0"),
     hydrationLiters: decimal("hydration_liters", { precision: 5, scale: 3 }),
 
-    // Which exercise from the mobile catalogue produced this log. `type` is one
-    // of 14 coarse buckets, so without this the app can only ever report
-    // "Strength", never "Leg Press" — and cannot tell which muscle group was
-    // trained. Nullable: rows predating this, and any client that does not send
-    // it, remain valid.
-    exerciseId: text("exercise_id"),
-    exerciseName: text("exercise_name"),
-
     // Idempotency support
     clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
 
@@ -1299,6 +1291,16 @@ export const activityLogTable = pgTable(
     steps: integer("steps"),
     notes: text("notes"),
 
+    // Which exercise from the mobile catalogue produced this log. `type` is one
+    // of 14 coarse buckets, so without this the app can only ever report
+    // "Strength", never "Leg Press" — and cannot tell which muscle group was
+    // trained. Nullable: rows predating this, and any client that does not send
+    // it, remain valid. (Migration 0041 / ensureActivityLogTableShape add these
+    // columns to activity_log — this declaration was previously misplaced on
+    // waterLogTable, which broke every water log insert.)
+    exerciseId: text("exercise_id"),
+    exerciseName: text("exercise_name"),
+
     // Idempotency support
     clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
 
@@ -1315,6 +1317,7 @@ export const activityLogTable = pgTable(
     userDateIdx: index("activity_log_user_date_idx").on(table.userId, table.loggedAt),
     userDayKeyIdx: index("activity_log_user_day_key_idx").on(table.userId, table.dayKey),
     userTypeIdx: index("activity_log_user_type_idx").on(table.userId, table.type),
+    userExerciseIdx: index("activity_log_user_exercise_idx").on(table.userId, table.exerciseId),
     // Unique constraint for idempotency
     userClientEventIdUnique: unique("activity_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
     // CHECK constraints
