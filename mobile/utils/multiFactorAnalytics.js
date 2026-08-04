@@ -752,7 +752,18 @@ function alignDataByDate({ foodLogs, moodLogs, waterLogs, activityLogs, sleepLog
     if (!dateMap.has(dateKey)) {
       dateMap.set(dateKey, { date: dateKey, meals: [], moods: [], water: 0, activities: [], sleep: null });
     }
-    dateMap.get(dateKey).water += log.amount || 0;
+    // Water logs carry `amountLiters` / `hydrationLiters` — there is no `amount`
+    // field, so this read always yielded 0. Every downstream hydration analysis
+    // filters on `day.water > 0`, which meant analyzeHydrationMoodCorrelation
+    // has never produced a result for any user: it returned canAnalyze:false
+    // no matter how much they logged.
+    //
+    // Units matter here. CONFIG's thresholds (DEHYDRATION 1500, OPTIMAL 2000-3000,
+    // OVERHYDRATION 4000) are ml/day, while the logs store litres — so convert.
+    // Prefer hydrationLiters (beverage-adjusted, e.g. coffee discounted) with a
+    // fallback to amountLiters, matching /water/today and hydrationAnalyticsService.
+    const litres = parseFloat(log.hydrationLiters ?? log.amountLiters ?? 0);
+    dateMap.get(dateKey).water += Number.isFinite(litres) ? litres * 1000 : 0;
   });
 
   // Process activity logs

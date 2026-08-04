@@ -59,6 +59,17 @@ const RANGES = [
 const HYDRATION_BLUE = VIBRANT_WELLNESS.hydration.solid; // #0891B2
 const HYDRATION_LIGHT = '#7DD3EF';
 
+/**
+ * Persona types whose classification uses only volume and beverage mix.
+ *
+ * The remaining four (CONSISTENT_SIPPER, MORNING_DEHYDRATOR, EVENING_CATCHUP,
+ * MEAL_ANCHORED) are scored from periodDistribution, which is derived from
+ * log timestamps — and those record when the user tapped, not when they drank.
+ * Presenting them states a drinking habit the data cannot support, so they stay
+ * suppressed until water logs carry a consumption time.
+ */
+const VOLUME_DERIVED_PERSONAS = new Set(['CAFFEINE_COMPENSATOR', 'HYDRATION_CHAMPION']);
+
 const PERIODS = [
   { key: 'morning', label: 'Morning', hint: '6am–12pm', icon: 'sunny-outline' },
   { key: 'afternoon', label: 'Afternoon', hint: '12pm–6pm', icon: 'partly-sunny-outline' },
@@ -183,6 +194,7 @@ export default function HydrationAnalyticsScreen() {
   }, [patterns]);
 
   const peakHourLabel = formatHour(patterns?.peakHour);
+  const isPersonaSound = Boolean(persona?.title) && VOLUME_DERIVED_PERSONAS.has(persona?.type);
   const hasAnyLogs =
     (coldStart?.totalLogs || 0) > 0 ||
     todayMl > 0 ||
@@ -372,11 +384,21 @@ export default function HydrationAnalyticsScreen() {
                 />
               </View>
 
-              {/* WHEN YOU DRINK */}
+              {/* WHEN YOU LOG
+                  Not "when you drink". The client sends loggedDate = new Date()
+                  at tap time and there is no consumption-time picker anywhere in
+                  the hydration UI, so every timestamp is when the user opened
+                  the app, not when they drank. Labelling this "when you drink"
+                  asserted a behaviour the data cannot show. Kept — logging
+                  rhythm is genuinely useful for reminder timing — but named for
+                  what it actually measures. */}
               {patterns?.periodDistribution && (
                 <View style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>When you drink</Text>
+                    <View style={styles.cardTitleBlock}>
+                      <Text style={styles.cardTitle}>When you log</Text>
+                      <Text style={styles.cardSubtitle}>Times you recorded a drink</Text>
+                    </View>
                     {peakHourLabel && (
                       <View style={styles.peakChip}>
                         <Ionicons name="time-outline" size={12} color={HYDRATION_BLUE} />
@@ -409,10 +431,16 @@ export default function HydrationAnalyticsScreen() {
                       );
                     })}
                   </View>
+                  {/* The previous copy here advised front-loading water to
+                      "hold energy steadier" — a causal claim about drinking
+                      behaviour, sitting under a chart of logging times, with no
+                      energy data anywhere in this payload. Replaced with a
+                      statement of what the chart is. */}
                   <Text style={styles.cardFooterNote}>
-                    Front-loading water before mid-afternoon tends to hold energy steadier
-                    than catching up at night.
+                    These are the times you opened the app to log, which may differ
+                    from when you actually drank.
                   </Text>
+                  <EvidenceFooter days={patterns?.daysLogged} />
                 </View>
               )}
 
@@ -467,11 +495,20 @@ export default function HydrationAnalyticsScreen() {
                       </Text>
                     </View>
                   )}
+                  <EvidenceFooter days={patterns?.daysLogged} />
                 </View>
               )}
 
-              {/* PERSONA */}
-              {persona?.title ? (
+              {/* PERSONA — gated by what the classifier actually measures.
+                  classifyPersona scores six types. Four of them
+                  (CONSISTENT_SIPPER, MORNING_DEHYDRATOR, EVENING_CATCHUP,
+                  MEAL_ANCHORED) are scored purely off periodDistribution, which
+                  is built from logging hours — so "you underhydrate in the
+                  morning" is really "you don't open the app in the morning".
+                  Those are suppressed until consumption time is captured.
+                  CAFFEINE_COMPENSATOR (beverage mix) and HYDRATION_CHAMPION
+                  (goal attainment) use volume only and remain sound. */}
+              {isPersonaSound ? (
                 <LinearGradient
                   colors={VIBRANT_WELLNESS.hydration.gradient}
                   start={{ x: 0, y: 0 }}
@@ -499,12 +536,19 @@ export default function HydrationAnalyticsScreen() {
                     </View>
                   )}
                 </LinearGradient>
-              ) : (
+              ) : persona?.title ? null : (
+                /* Only shown when no type has been determined at all. When a
+                   type exists but is timing-derived we render nothing rather
+                   than explaining our data model to the user.
+                   The old copy promised a "morning dehydrator / evening
+                   catch-up" verdict — precisely the classifications that are
+                   now suppressed — so it advertised something undeliverable. */
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Your hydration type</Text>
                   <Text style={styles.progressiveText}>
-                    Keep logging — after about a week of data we can tell whether you're a
-                    steady sipper, a morning dehydrator, or an evening catch-up drinker.
+                    Keep logging. Once there's about a week of data we can describe
+                    how steady your intake is and how much of it comes from water
+                    rather than caffeinated drinks.
                   </Text>
                   <ProgressTrack
                     current={coldStart?.distinctDays || rangeStats.daysLogged}
@@ -548,6 +592,24 @@ export default function HydrationAnalyticsScreen() {
           <View style={styles.bottomPadding} />
         </ScrollView>
       )}
+    </View>
+  );
+}
+
+/**
+ * Sample-size disclosure. Every card that aggregates across days states how
+ * many days it is built from, so a figure from 3 days is never presented with
+ * the same authority as one from 30.
+ */
+function EvidenceFooter({ days, unit = 'days' }) {
+  if (!days || days < 1) return null;
+  return (
+    <View style={styles.evidenceRow}>
+      <Ionicons name="information-circle-outline" size={13} color={TEXT.tertiary} />
+      <Text style={styles.evidenceText}>
+        Based on {days} logged {days === 1 ? unit.replace(/s$/, '') : unit}
+        {days < 7 ? ' — still early' : ''}
+      </Text>
     </View>
   );
 }
@@ -758,10 +820,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SPACING[3],
   },
+  cardTitleBlock: {
+    flex: 1,
+    paddingRight: SPACING[2],
+  },
   cardTitle: {
     fontSize: TYPOGRAPHY.size.md,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
+  },
+  cardSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 1,
+  },
+  evidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[1.5],
+    marginTop: SPACING[3],
+    paddingTop: SPACING[3],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
+  evidenceText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
   },
   cardMeta: {
     fontSize: TYPOGRAPHY.size.xs,
