@@ -239,6 +239,7 @@ export function VoiceModal({
     clearRecordingUri = () => {},
     transcribeRecording,
     isVoiceUnsupported = false,
+    needsAnalysisConsent = false,
   } = voiceHook;
 
   // Audio playback for reviewing recording before confirm
@@ -257,6 +258,10 @@ export function VoiceModal({
   // Audio held across the consent prompt so agreeing resumes with the original
   // recording instead of asking the user to say it all again.
   const [pendingConsentUri, setPendingConsentUri] = useState(null);
+  // Reviewed transcript held across the consent prompt when the *analysis*
+  // step (not transcription) is the one that needed consent — agreeing
+  // re-runs analysis on this text rather than discarding it and re-recording.
+  const [pendingAnalyzeText, setPendingAnalyzeText] = useState(null);
   const [isEnablingConsent, setIsEnablingConsent] = useState(false);
 
   // Refs for cleanup and guards
@@ -312,6 +317,8 @@ export function VoiceModal({
     setConfidence(null);
     setIsEditing(false);
     setIsSubmitting(false);
+    setPendingConsentUri(null);
+    setPendingAnalyzeText(null);
     stopCalledRef.current = false;
 
     if (successTimeoutRef.current) {
@@ -373,6 +380,28 @@ export function VoiceModal({
         purpose: 'voice-transcription',
       });
 
+      // Asked at the analysis step (transcript already reviewed/edited): re-run
+      // analysis on that text rather than discarding it and re-recording.
+      if (pendingAnalyzeText) {
+        const nutritionResult = await analyzeTranscript(pendingAnalyzeText);
+        if (nutritionResult && !nutritionResult.needsConsent) {
+          setPendingAnalyzeText(null);
+          setState('success');
+          await triggerHaptic('success');
+          announceForAccessibility('Success! Food logged successfully.');
+          successTimeoutRef.current = setTimeout(() => {
+            if (!isCancelledRef.current) {
+              onComplete(nutritionResult);
+              handleClose();
+            }
+          }, 800);
+          return;
+        }
+        setLocalError('Could not analyze your meal. Please try again.');
+        setState('error');
+        return;
+      }
+
       // Asked BEFORE recording (the common path): there is no audio yet, so
       // start recording now that consent is in place. The user goes straight
       // from agreeing to speaking.
@@ -402,7 +431,7 @@ export function VoiceModal({
     } finally {
       setIsEnablingConsent(false);
     }
-  }, [pendingConsentUri, transcribeRecording, handleStart]);
+  }, [pendingConsentUri, pendingAnalyzeText, transcribeRecording, handleStart, analyzeTranscript, onComplete, handleClose]);
 
 
   const handleStop = useCallback(async () => {
@@ -468,6 +497,19 @@ export function VoiceModal({
         const nutritionResult = await analyzeTranscript(transcript);
 
         if (isCancelledRef.current) {
+          return;
+        }
+
+        // Blocked pending AI consent — same graceful screen as everywhere else,
+        // not a dead end (see the standard-mode handleConfirm for the full
+        // explanation).
+        if (nutritionResult?.needsConsent) {
+          setPendingAnalyzeText(transcript);
+          setPendingConsentUri(null);
+          setState('consent');
+          await triggerHaptic('light');
+          announceForAccessibility('Voice logging needs AI to be enabled.');
+          stopCalledRef.current = false;
           return;
         }
 
@@ -565,6 +607,19 @@ export function VoiceModal({
       const nutritionResult = await analyzeTranscript(transcription);
 
       if (isCancelledRef.current) {
+        return;
+      }
+
+      // Blocked pending AI consent — hold the reviewed transcript and route to
+      // the same consent screen used elsewhere, instead of a dead-end error
+      // whose only action ("Try Again") would just repeat this failure.
+      if (nutritionResult?.needsConsent) {
+        setPendingAnalyzeText(transcription);
+        setPendingConsentUri(null);
+        setState('consent');
+        await triggerHaptic('light');
+        announceForAccessibility('AI analysis needs your consent.');
+        setIsSubmitting(false);
         return;
       }
 
@@ -1117,7 +1172,13 @@ export function VoiceModal({
                   onPress={handleEnableAIConsent}
                   disabled={isEnablingConsent}
                   accessibilityRole="button"
-                  accessibilityLabel="Enable AI transcription and transcribe this recording"
+                  accessibilityLabel={
+                    pendingAnalyzeText
+                      ? 'Enable AI and analyze this meal'
+                      : pendingConsentUri
+                        ? 'Enable AI transcription and transcribe this recording'
+                        : 'Enable AI and start recording'
+                  }
                 >
                   <LinearGradient
                     colors={SURFACES.gradient.primary}
@@ -1131,7 +1192,13 @@ export function VoiceModal({
                       <Ionicons name="sparkles" size={ICON_SIZES.md} color={TEXT.white} />
                     )}
                     <Text style={styles.retryButtonText}>
-                      {isEnablingConsent ? 'Enabling…' : pendingConsentUri ? 'Enable & Transcribe' : 'Enable & Record'}
+                      {isEnablingConsent
+                        ? 'Enabling…'
+                        : pendingAnalyzeText
+                          ? 'Enable & Analyze'
+                          : pendingConsentUri
+                            ? 'Enable & Transcribe'
+                            : 'Enable & Record'}
                     </Text>
                   </LinearGradient>
                 </TouchableOpacity>

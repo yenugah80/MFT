@@ -94,6 +94,10 @@ export const useServerVoice = (options = {}) => {
   const [transcript, setTranscript] = useState('');
   const [liveItems, setLiveItems] = useState([]);
   const [processingState, setProcessingState] = useState({ step: 0, label: '' });
+  // Set when the nutrition-analysis step (as opposed to transcription) is
+  // blocked pending OpenAI consent, so the caller can route to the same
+  // consent screen instead of surfacing a raw, unactionable error message.
+  const [needsAnalysisConsent, setNeedsAnalysisConsent] = useState(false);
 
   // Mirrors the module-level `_voiceUnsupported` into component state.
   // Mutating a module variable cannot trigger a re-render on its own, so
@@ -508,6 +512,7 @@ export const useServerVoice = (options = {}) => {
 
     setIsProcessing(true);
     setError(null);
+    setNeedsAnalysisConsent(false);
     isActiveRef.current = true;
 
     try {
@@ -544,7 +549,17 @@ export const useServerVoice = (options = {}) => {
       let msg = 'Failed to analyze nutrition';
 
       // Provide specific error messages based on status
-      if (err.response?.status === 404) {
+      if (err.response?.data?.code === 'openai_consent_required') {
+        msg = err.response.data.error || 'AI analysis needs your consent. Enable it in Privacy & Data.';
+        if (isActiveRef.current) {
+          setNeedsAnalysisConsent(true);
+          setError(msg);
+        }
+        // Truthy and distinguishable from other failures (which return null),
+        // so the caller can route to the consent screen instead of a dead-end
+        // error with no path forward.
+        return { needsConsent: true, error: msg };
+      } else if (err.response?.status === 404) {
         msg = 'Voice analysis service unavailable. Please try again later.';
       } else if (err.response?.status === 401) {
         msg = 'Session expired. Please sign in again.';
@@ -834,6 +849,7 @@ export const useServerVoice = (options = {}) => {
     liveItems,          // Live parsed items for UI Pills
     processingState,
     error,
+    needsAnalysisConsent, // True when analyzeTranscript was blocked pending OpenAI consent
     recordingUri,       // Audio file URI for playback
 
     // True once this device has proven it cannot do speech recognition (see
