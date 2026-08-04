@@ -9,3 +9,4 @@ export * from "./welcomeSubheadlineContent";
 export * from "./welcomeCreateAccountAction";
 export * from "./welcomeSignInAction";
 export * from "./welcomePrivacyAction";
+export * from "./termsConsent";

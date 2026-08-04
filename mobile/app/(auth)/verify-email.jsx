@@ -15,6 +15,7 @@ import {
   AUTH_COLORS,
 } from "../../components/auth/LaunchAuthDesign";
 import { saveProfileBasics } from "../../services/profileAPI";
+import apiClient from "../../services/apiClient";
 
 const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
   const router = useRouter();
@@ -57,6 +58,19 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
       fullName: `${firstName} ${lastName}`.trim(),
       email,
     });
+
+    // Reaching this point requires having checked the bundled Terms/Privacy/AI
+    // consent box on the sign-up form, so this just records that agreement now
+    // that the account (and auth token) actually exist. Best-effort — a failed
+    // write here must not block onboarding.
+    try {
+      await apiClient.post("/consent/give-openai-consent", {
+        understand: true,
+        purpose: "signup-terms-privacy-ai",
+      });
+    } catch (err) {
+      console.warn("[Auth] Could not record bundled consent:", err?.message);
+    }
 
     try {
       await AsyncStorage.removeItem("@onboarding_draft");

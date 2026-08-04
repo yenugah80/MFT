@@ -18,6 +18,7 @@ import {
   GoogleButton,
   Notice,
   PrimaryButton,
+  TermsConsentCheckbox,
   WelcomeBrand,
   WelcomeCreateAccountAction,
   WelcomeFeatureChips,
@@ -27,7 +28,23 @@ import {
   AUTH_COLORS,
 } from "../../components/auth/LaunchAuthDesign";
 import { parseClerkError } from "../../utils/errors";
+import apiClient from "../../services/apiClient";
 import VerifyEmail from "./verify-email";
+
+// Best-effort: the checkbox is what legally establishes consent, so a failed
+// network call here must not block navigation — Privacy & Data can grant it
+// later. Shared by both OAuth paths, which complete immediately (unlike
+// email/password, which grants consent after verification in VerifyEmail).
+async function grantBundledConsent() {
+  try {
+    await apiClient.post("/consent/give-openai-consent", {
+      understand: true,
+      purpose: "signup-terms-privacy-ai",
+    });
+  } catch (err) {
+    console.warn("[Auth] Could not record bundled consent:", err?.message);
+  }
+}
 
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
@@ -56,6 +73,9 @@ export default function SignUpScreen() {
   const [focusedField, setFocusedField] = useState(null);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("error");
+  // Unticked by default — this single checkbox is what grants Terms, Privacy
+  // Policy, and AI-assisted analysis consent together at account creation.
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const setNotice = (type, text) => {
     setMessageType(type);
@@ -69,6 +89,10 @@ export default function SignUpScreen() {
   );
 
   const handleGoogleSignUp = async () => {
+    if (!agreedToTerms) {
+      setNotice("error", "Please agree to the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
     setGoogleLoading(true);
     setMessage(null);
     try {
@@ -78,6 +102,7 @@ export default function SignUpScreen() {
       });
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
+        await grantBundledConsent();
         router.replace("/onboarding/step-1");
       }
     } catch (err) {
@@ -89,6 +114,11 @@ export default function SignUpScreen() {
   };
 
   const handleAppleSignUp = async () => {
+    if (!agreedToTerms) {
+      setNotice("error", "Please agree to the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
+
     const available = await AppleAuthentication.isAvailableAsync();
     if (!available) {
       setNotice("error", "Sign in with Apple is not available on this device.");
@@ -114,6 +144,7 @@ export default function SignUpScreen() {
       });
 
       if (attempt.status === "complete" || attempt.status === "missing_requirements") {
+        await grantBundledConsent();
         router.replace("/onboarding/step-1");
       }
     } catch (err) {
@@ -134,6 +165,10 @@ export default function SignUpScreen() {
   const handleSignUp = async () => {
     if (!email.trim() || !password) {
       setNotice("error", "Email and password are required.");
+      return;
+    }
+    if (!agreedToTerms) {
+      setNotice("error", "Please agree to the Terms of Service and Privacy Policy to continue.");
       return;
     }
     if (!isLoaded) return;
@@ -307,9 +342,12 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </AuthField>
 
+        <TermsConsentCheckbox checked={agreedToTerms} onToggle={setAgreedToTerms} />
+
         <PrimaryButton
           title={loading ? "Creating account…" : "Continue"}
           loading={loading}
+          disabled={!agreedToTerms}
           onPress={handleSignUp}
         />
 
@@ -320,12 +358,14 @@ export default function SignUpScreen() {
           <AppleButton
             onPress={handleAppleSignUp}
             loading={appleLoading}
+            disabled={!agreedToTerms}
             title="Apple"
             style={[styles.socialOption, styles.socialOptionApple]}
           />
           <GoogleButton
             onPress={handleGoogleSignUp}
             loading={googleLoading}
+            disabled={!agreedToTerms}
             title="Google"
             style={styles.socialOption}
           />

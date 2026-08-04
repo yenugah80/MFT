@@ -3,9 +3,9 @@
  * Handles GDPR-compliant data sharing consent for OpenAI features
  *
  * Strategic Implementation:
- * - Premium users must explicitly consent to share meal data with OpenAI
+ * - Any authenticated user must explicitly consent to share meal data with OpenAI
  * - Consent is optional, tracked, and can be revoked anytime
- * - Without consent, premium users get regex-based parsing (fully compliant)
+ * - Without consent, users get regex-based parsing (fully compliant)
  */
 
 import express from 'express';
@@ -66,7 +66,7 @@ router.get('/status', requireAuth(), async (req, res) => {
 
 /**
  * POST /api/consent/give-openai-consent
- * User gives explicit consent to share data with OpenAI for premium features
+ * User gives explicit consent to share data with OpenAI for AI-assisted features
  *
  * Request body:
  * {
@@ -93,15 +93,6 @@ router.post('/give-openai-consent', requireAuth(), consentLimiter, async (req, r
       return res.status(400).json({
         success: false,
         error: 'You must explicitly acknowledge understanding of data sharing (understand must be exactly true)',
-      });
-    }
-
-    // Check user is premium
-    const userTier = await premiumFeaturesService.getUserTier(userId);
-    if (userTier.tier !== 'premium') {
-      return res.status(403).json({
-        success: false,
-        error: 'Only premium users can enable OpenAI features',
       });
     }
 

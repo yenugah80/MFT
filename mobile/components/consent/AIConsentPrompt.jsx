@@ -1,8 +1,8 @@
 /**
  * AIConsentPrompt
  *
- * One-time prompt for users who signed up before the onboarding consent card
- * existed and therefore have never been asked.
+ * One-time prompt for users who signed up before the bundled Terms/Privacy/AI
+ * checkbox existed on sign-up and therefore have never been asked.
  *
  * Without this they meet a consent request at whichever AI feature they happen
  * to touch first — voice, photo, or recommendations — which is both confusing
@@ -66,7 +66,7 @@ export default function AIConsentPrompt() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await apiClient.post('/consent/give-openai-consent', {
         understand: true,
-        purpose: 'ai-food-analysis',
+        purpose: 'signup-terms-privacy-ai',
       });
       await dismiss();
     } catch (err) {
@@ -96,14 +96,24 @@ export default function AIConsentPrompt() {
             <Ionicons name="sparkles" size={26} color={BRAND.primary} />
           </View>
 
-          <Text style={styles.title}>Smart food analysis</Text>
+          <Text style={styles.title}>Terms, Privacy &amp; Smart Analysis</Text>
           <Text style={styles.body}>
-            Snap or describe a meal and let MFT fill in the nutrition for you.
+            Our Terms of Service and Privacy Policy now cover AI-assisted meal
+            analysis — snap or describe a meal and let MFT fill in the
+            nutrition for you.
           </Text>
 
           {/* Brief by design — the detail is a tap away, not on the card. */}
           <Text style={styles.fine}>
-            Powered by AI. Your data is never used for training.
+            Powered by AI. Your data is never used for training. Read the{' '}
+            <Text style={styles.fineLink} onPress={() => router.push('/terms')}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.fineLink} onPress={() => router.push('/privacy')}>
+              Privacy Policy
+            </Text>
+            .
           </Text>
 
           <TouchableOpacity
@@ -111,7 +121,7 @@ export default function AIConsentPrompt() {
             onPress={handleEnable}
             disabled={isSaving}
             accessibilityRole="button"
-            accessibilityLabel="Turn on smart food analysis"
+            accessibilityLabel="Agree to Terms, Privacy Policy, and turn on smart food analysis"
           >
             <LinearGradient
               colors={SURFACES.gradient.primary}
@@ -121,7 +131,7 @@ export default function AIConsentPrompt() {
             >
               {isSaving
                 ? <ActivityIndicator size="small" color="#FFFFFF" />
-                : <Text style={styles.primaryText}>Turn on</Text>}
+                : <Text style={styles.primaryText}>Agree &amp; Turn On</Text>}
             </LinearGradient>
           </TouchableOpacity>
 
@@ -185,6 +195,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: SPACING[3],
     marginBottom: SPACING[4],
+  },
+  fineLink: {
+    color: BRAND.primary,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   primaryBtn: {
     width: '100%',

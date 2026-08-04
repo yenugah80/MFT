@@ -13,7 +13,6 @@ import {
   Alert,
   AccessibilityInfo,
   Animated,
-  Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +23,6 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useRouter } from 'expo-router';
 import { ONBOARDING_COPY, A11Y_LABELS, ACTIVITY_LEVELS, GENDERS } from '../../constants/onboardingConfig';
 import { getGoalContext } from '../../utils/onboardingCalculations';
-import apiClient from '../../services/apiClient';
 import { AUTH_COLORS } from '../../components/auth/constants';
 
 const DS = {
@@ -166,12 +164,6 @@ const Step4Screen = () => {
     AccessibilityInfo.announceForAccessibility(A11Y_LABELS.step4);
   }, []);
 
-  // Explicit consent under GDPR Art. 9 must be an affirmative action, so this
-  // starts OFF and is never pre-ticked. Declining is fully supported — the app
-  // falls back to local food matching rather than blocking, so this screen is a
-  // choice, not a gate.
-  const [aiConsent, setAiConsent] = useState(false);
-
   const handleSaveGoalEdit = (newValue) => {
     updateGoals({ ...step4Data, [editingGoal]: newValue });
     setEditingGoal(null);
@@ -180,20 +172,8 @@ const Step4Screen = () => {
   const handleGetStarted = async () => {
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (_) {}
 
-    // Record consent before completing, but never let it block onboarding — a
-    // failed consent write must not trap the user on the last step. They can
-    // still enable it later from Privacy & Data.
-    if (aiConsent) {
-      try {
-        await apiClient.post('/consent/give-openai-consent', {
-          understand: true,
-          purpose: 'ai-food-analysis',
-        });
-      } catch (err) {
-        console.warn('[Onboarding] Could not record AI consent:', err?.message);
-      }
-    }
-
+    // AI/OpenAI consent is now captured once, at sign-up, via the bundled
+    // Terms/Privacy checkbox — nothing to ask again here.
     // completeOnboarding handles errors internally via SAVE_ERROR dispatch.
     // The useEffect above shows the Alert when state.error is set.
     await completeOnboarding();
@@ -397,48 +377,6 @@ const Step4Screen = () => {
       <Text style={styles.finetuneHint}>
         Tap any target to fine-tune it — you can always adjust later in Settings.
       </Text>
-
-      {/* ── AI analysis consent ──
-          Asked here, once, framed by what it does — not as a legal wall the
-          user hits later mid-task. Copy is specific about what actually happens
-          (OpenAI's API does not train on submitted data and deletes it within
-          ~30 days) because vague "we share your data" phrasing reads as far
-          worse than the reality and drives people to decline a feature they
-          would otherwise want. Declining is safe: food matching still works
-          locally, so this is a choice rather than a gate. */}
-      <View style={styles.consentCard}>
-        <View style={styles.consentRow}>
-          <View style={styles.consentIcon}>
-            <Ionicons name="sparkles" size={18} color="#6B4EFF" />
-          </View>
-          <View style={styles.consentCopy}>
-            <Text style={styles.consentTitle}>Smart food analysis</Text>
-            <Text style={styles.consentSubtitle}>
-              Snap or describe a meal — nutrition filled in for you.
-            </Text>
-          </View>
-          <Switch
-            value={aiConsent}
-            onValueChange={(v) => {
-              try { Haptics.selectionAsync(); } catch (_) {}
-              setAiConsent(v);
-            }}
-            accessibilityLabel="Enable AI food analysis"
-          />
-        </View>
-        {/* Deliberately brief. Naming a processor and reciting retention terms on
-            the face of an onboarding card reads as a warning and makes people
-            decline a feature they want — the same reason Apple's "Improve Siri &
-            Dictation" is one line with a link rather than a policy excerpt. The
-            full detail stays one tap away, which is what informed consent
-            actually requires. */}
-        <Text style={styles.consentFinePrint}>
-          Powered by AI. Your data is never used for training.{' '}
-          <Text style={styles.consentLink} onPress={() => router.push('/profile/privacy')}>
-            Learn more
-          </Text>
-        </Text>
-      </View>
 
       {/* ── Get Started pill ── */}
       <Animated.View style={[styles.btnContainer, { transform: [{ translateY: btnSlideAnim }, { scale: btnScale }] }]}>
@@ -828,53 +766,6 @@ const styles = StyleSheet.create({
   },
 
   /* Fine-tune hint — plain caption, no card */
-  consentCard: {
-    marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 4,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(107,78,255,0.18)',
-  },
-  consentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  consentIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(107,78,255,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  consentCopy: {
-    flex: 1,
-  },
-  consentTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  consentSubtitle: {
-    fontSize: 13,
-    color: '#4B5563',
-    marginTop: 2,
-  },
-  consentLink: {
-    color: '#6B4EFF',
-    textDecorationLine: 'underline',
-  },
-  consentFinePrint: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#6B7280',
-    marginTop: 12,
-  },
-
   finetuneHint: {
     fontSize: 12,
     fontFamily: 'DMSans_400Regular',

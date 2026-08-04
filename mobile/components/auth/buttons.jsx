@@ -53,17 +53,17 @@ export function PrimaryButton({ title, loading, onPress, disabled, style }) {
   );
 }
 
-export function AppleButton({ onPress, loading, title = "Continue with Apple", style }) {
+export function AppleButton({ onPress, loading, disabled, title = "Continue with Apple", style }) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={loading}
+      disabled={disabled || loading}
       style={({ pressed }) => [
         styles.socialButton,
         styles.socialButtonApple,
         style,
         pressed && styles.socialButtonPressed,
-        loading && styles.disabled,
+        (disabled || loading) && styles.disabled,
       ]}
     >
       <View style={[styles.socialIconBadge, styles.appleIconBadge]}>
@@ -79,17 +79,17 @@ export function AppleButton({ onPress, loading, title = "Continue with Apple", s
   );
 }
 
-export function GoogleButton({ onPress, loading, title = "Continue with Google", style }) {
+export function GoogleButton({ onPress, loading, disabled, title = "Continue with Google", style }) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={loading}
+      disabled={disabled || loading}
       style={({ pressed }) => [
         styles.socialButton,
         styles.socialButtonGoogle,
         style,
         pressed && styles.socialButtonPressed,
-        loading && styles.disabled,
+        (disabled || loading) && styles.disabled,
       ]}
     >
       <View style={styles.socialIconBadge}>
