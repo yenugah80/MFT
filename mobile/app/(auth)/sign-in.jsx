@@ -120,13 +120,19 @@ export default function SignInScreen() {
     setGoogleLoading(true);
     setMessage(null);
     try {
-      const { createdSessionId, setActive: oauthSetActive } = await startGoogleOAuthFlow({
-        redirectUrl: OAUTH_REDIRECT_URL,
-      });
+      const { createdSessionId, setActive: oauthSetActive, authSessionResult } =
+        await startGoogleOAuthFlow({ redirectUrl: OAUTH_REDIRECT_URL });
       if (createdSessionId && oauthSetActive) {
         await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
         await oauthSetActive({ session: createdSessionId });
+        router.replace("/");
+        return;
       }
+      // Dismissing the browser is a normal choice, not a failure — stay quiet.
+      if (authSessionResult?.type === "cancel" || authSessionResult?.type === "dismiss") return;
+      // Anything else means the flow genuinely stalled. Previously this fell
+      // through to nothing: no session, no error, no navigation.
+      setNotice("error", "Google sign-in didn't complete. Please try again.");
     } catch (err) {
       console.warn("[Auth] Google sign-in failed:", err);
       // Always show Clerk's own message, not just in __DEV__: it's already a
@@ -171,7 +177,17 @@ export default function SignInScreen() {
         if (attempt.status === "complete") {
           await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
           await setActive({ session: attempt.createdSessionId });
+          // Navigate explicitly, exactly as the email/password path does.
+          // Relying on the (auth) layout's isSignedIn redirect alone left the
+          // user staring at the sign-in screen after a *successful* Apple
+          // authentication.
+          router.replace("/");
+          return;
         }
+        // Any other status (needs_identifier, needs_second_factor, transferable…)
+        // previously fell through to nothing at all: Apple would authenticate,
+        // then the screen would just sit there with no error and no navigation.
+        throw new Error(`Apple sign-in did not complete (status: ${attempt.status}).`);
       } catch (clerkErr) {
         if (clerkErr?.errors?.[0]?.code === "external_account_not_found") {
           const attempt = await signUp.create({
@@ -184,7 +200,10 @@ export default function SignInScreen() {
           if (attempt.status === "complete" || attempt.status === "missing_requirements") {
             await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
             await setSignUpActive({ session: attempt.createdSessionId });
+            router.replace("/");
+            return;
           }
+          throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);
         } else {
           throw clerkErr;
         }

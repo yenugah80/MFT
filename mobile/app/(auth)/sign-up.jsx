@@ -97,14 +97,17 @@ export default function SignUpScreen() {
     setMessage(null);
     try {
       console.warn("[Auth] Google OAuth redirectUrl:", OAUTH_REDIRECT_URL);
-      const { createdSessionId, setActive } = await startGoogleOAuthFlow({
-        redirectUrl: OAUTH_REDIRECT_URL,
-      });
+      const { createdSessionId, setActive, authSessionResult } =
+        await startGoogleOAuthFlow({ redirectUrl: OAUTH_REDIRECT_URL });
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
         await grantBundledConsent();
         router.replace("/onboarding/step-1");
+        return;
       }
+      // Dismissing the browser is a normal choice, not a failure — stay quiet.
+      if (authSessionResult?.type === "cancel" || authSessionResult?.type === "dismiss") return;
+      setNotice("error", "Google sign-up didn't complete. Please try again.");
     } catch (err) {
       console.warn("[Auth] Google sign-up failed:", err);
       // Always show Clerk's own message — see the matching comment in
@@ -152,7 +155,11 @@ export default function SignUpScreen() {
       if (attempt.status === "complete" || attempt.status === "missing_requirements") {
         await grantBundledConsent();
         router.replace("/onboarding/step-1");
+        return;
       }
+      // Previously fell through to nothing — Apple would authenticate, then the
+      // screen sat there with no error and no navigation.
+      throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);
     } catch (err) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
       console.warn("[Auth] Apple sign-up failed:", err);
