@@ -148,9 +148,11 @@ export default function SignUpScreen() {
         ],
       });
 
+      // `oauth_token_apple` is the native token strategy; `oauth_apple` is the
+      // browser-redirect one and silently ignores the token (see the matching
+      // comment in sign-in.jsx).
       const attempt = await signUp.create({
-        strategy: "oauth_apple",
-        redirectUrl: OAUTH_REDIRECT_URL,
+        strategy: "oauth_token_apple",
         token: credential.identityToken,
         ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
         ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),

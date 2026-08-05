@@ -175,9 +175,14 @@ export default function SignInScreen() {
       };
 
       try {
+        // `oauth_token_apple`, NOT `oauth_apple`. The latter is Clerk's
+        // browser-redirect flow and ignores a supplied token entirely, which
+        // is why the attempt came back `needs_identifier` — Clerk never saw
+        // an identity at all. `oauth_token_apple` is the native strategy that
+        // accepts the identityToken from expo-apple-authentication. The
+        // instance advertises both in supported_first_factors.
         const attempt = await signIn.create({
-          strategy: "oauth_apple",
-          redirectUrl: OAUTH_REDIRECT_URL,
+          strategy: "oauth_token_apple",
           token: credential.identityToken,
         });
 
@@ -205,8 +210,7 @@ export default function SignInScreen() {
       } catch (clerkErr) {
         if (clerkErr?.errors?.[0]?.code === "external_account_not_found") {
           const attempt = await signUp.create({
-            strategy: "oauth_apple",
-            redirectUrl: OAUTH_REDIRECT_URL,
+            strategy: "oauth_token_apple",
             token: credential.identityToken,
             ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
             ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
