@@ -1,4 +1,4 @@
-import { useOAuth, useSignUp } from "@clerk/clerk-expo";
+import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Ionicons } from "@expo/vector-icons";
 import { makeRedirectUri } from "expo-auth-session";
@@ -53,7 +53,11 @@ const OAUTH_REDIRECT_URL = makeRedirectUri({ native: "my-food-tracker://oauth-na
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const { isLoaded, signUp } = useSignUp();
+  const { isLoaded, signUp, setActive: setSignUpActive } = useSignUp();
+  // Needed only for the OAuth transfer case, where Clerk reports that the
+  // identity already belongs to an existing account and the sign-up must be
+  // handed back to a sign-in.
+  const { signIn, setActive: setSignInActive } = useSignIn();
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const lastNameRef = useRef(null);
@@ -153,10 +157,29 @@ export default function SignUpScreen() {
       });
 
       if (attempt.status === "complete" || attempt.status === "missing_requirements") {
+        // The session was never activated here, so even a "successful" Apple
+        // sign-up left the user unauthenticated. Only `complete` carries a
+        // session id; `missing_requirements` still needs the onboarding step.
+        if (attempt.createdSessionId) {
+          await setSignUpActive({ session: attempt.createdSessionId });
+        }
         await grantBundledConsent();
         router.replace("/onboarding/step-1");
         return;
       }
+
+      // Clerk found an existing account for this identity — hand the attempt
+      // back to sign-in instead of dead-ending on a status we don't handle.
+      if (attempt.verifications?.externalAccount?.status === "transferable") {
+        const transferred = await signIn.create({ transfer: true });
+        if (transferred.status === "complete") {
+          await setSignInActive({ session: transferred.createdSessionId });
+          router.replace("/");
+          return;
+        }
+        throw new Error(`Apple account link did not complete (status: ${transferred.status}).`);
+      }
+
       // Previously fell through to nothing — Apple would authenticate, then the
       // screen sat there with no error and no navigation.
       throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);

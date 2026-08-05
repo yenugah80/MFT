@@ -168,25 +168,39 @@ export default function SignInScreen() {
         ],
       });
 
+      const finishSignIn = async (sessionId, activate) => {
+        await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+        await activate({ session: sessionId });
+        router.replace("/");
+      };
+
       try {
         const attempt = await signIn.create({
           strategy: "oauth_apple",
           redirectUrl: OAUTH_REDIRECT_URL,
           token: credential.identityToken,
         });
+
         if (attempt.status === "complete") {
-          await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
-          await setActive({ session: attempt.createdSessionId });
-          // Navigate explicitly, exactly as the email/password path does.
-          // Relying on the (auth) layout's isSignedIn redirect alone left the
-          // user staring at the sign-in screen after a *successful* Apple
-          // authentication.
-          router.replace("/");
+          await finishSignIn(attempt.createdSessionId, setActive);
           return;
         }
-        // Any other status (needs_identifier, needs_second_factor, transferable…)
-        // previously fell through to nothing at all: Apple would authenticate,
-        // then the screen would just sit there with no error and no navigation.
+
+        // `transferable` means Clerk recognises this person (an account with
+        // this email already exists) but has no Apple identity attached to it
+        // yet — e.g. an account created with Google or email/password. Clerk
+        // will not return `complete` until the identity is explicitly linked
+        // via a transfer. Without this branch the user authenticates with
+        // Face ID and then nothing happens at all, which is exactly the bug.
+        if (attempt.firstFactorVerification?.status === "transferable") {
+          const transferred = await signUp.create({ transfer: true });
+          if (transferred.status === "complete") {
+            await finishSignIn(transferred.createdSessionId, setSignUpActive);
+            return;
+          }
+          throw new Error(`Apple account link did not complete (status: ${transferred.status}).`);
+        }
+
         throw new Error(`Apple sign-in did not complete (status: ${attempt.status}).`);
       } catch (clerkErr) {
         if (clerkErr?.errors?.[0]?.code === "external_account_not_found") {
@@ -197,12 +211,23 @@ export default function SignInScreen() {
             ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
             ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
           });
+
           if (attempt.status === "complete" || attempt.status === "missing_requirements") {
-            await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
-            await setSignUpActive({ session: attempt.createdSessionId });
-            router.replace("/");
+            await finishSignIn(attempt.createdSessionId, setSignUpActive);
             return;
           }
+
+          // Mirror image of the case above: signing *up* discovered the
+          // identity already belongs to an existing user, so transfer back
+          // into a sign-in rather than dead-ending.
+          if (attempt.verifications?.externalAccount?.status === "transferable") {
+            const transferred = await signIn.create({ transfer: true });
+            if (transferred.status === "complete") {
+              await finishSignIn(transferred.createdSessionId, setActive);
+              return;
+            }
+          }
+
           throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);
         } else {
           throw clerkErr;
