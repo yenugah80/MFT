@@ -53,9 +53,9 @@
 <br/>
 
 <h1 align="center">
-  <img src="mobile/assets/images/app-logo.png" alt="MFT : My Food & Mood Tracker" width="140">
+  <img src="mobile/assets/images/app-logo.png" alt="MFT : My Flow Tracker" width="140">
   <br/>
-  <b>MFT : My Food & Mood Tracker</b>
+  <b>MFT : My Flow Tracker</b>
 </h1>
 
 <p align="center">

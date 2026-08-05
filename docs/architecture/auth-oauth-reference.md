@@ -16,7 +16,7 @@ Read the **Pre-flight checklist** before touching anything under
 
 | Thing | Value |
 |---|---|
-| Clerk application | **MFT : My Food & Mood Tracker** |
+| Clerk application | **MFT : My Food & Mood Tracker** — the pre-rename name, still what the Clerk dashboard shows. Identify the instance by its ID or domain below, not by name. |
 | Clerk instance | `ins_3F9LvprZICPk7qas8IPVxpHkNWY` |
 | Frontend API domain | `clerk.app.my-food-tracker.com` |
 | Publishable key decodes to | `clerk.app.my-food-tracker.com$` |

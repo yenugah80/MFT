@@ -1,6 +1,6 @@
 # Brand Rename Todos
 
-Target public name: `MFT : My Food & Mood Tracker`
+Target public name: `MFT : My Flow Tracker`
 
 ## Done
 
@@ -20,8 +20,8 @@ Target public name: `MFT : My Food & Mood Tracker`
 
 ## Queued
 
-- Set App Store Connect app name to `MFT : My Food & Mood Tracker`.
-- Set Google Play Console app name to `MFT : My Food & Mood Tracker`.
+- Set App Store Connect app name to `MFT : My Flow Tracker`.
+- Set Google Play Console app name to `MFT : My Flow Tracker`.
 
 ## Keep Stable
 

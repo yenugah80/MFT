@@ -2,8 +2,8 @@
 
 ## Public Brand
 
-- Full brand: `MFT (My Food & Mood Tracker)`
-- Store-safe display name: `MFT : My Food & Mood Tracker`
+- Full brand: `MFT (My Flow Tracker)`
+- Store-safe display name: `MFT : My Flow Tracker`
 - Launcher label: `MFT`
 
 The store-safe display name is 28 characters, so it fits Apple and Google store name limits. Use this exact name in App Store Connect and Google Play Console, and use the full brand with parentheses in long-form copy when useful.

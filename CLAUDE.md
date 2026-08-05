@@ -1,8 +1,8 @@
-# MFT : My Food & Mood Tracker - Project Guide for Claude
+# MFT : My Flow Tracker - Project Guide for Claude
 
 ## Project Overview
 
-MFT (My Food & Mood Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.
+MFT (My Flow Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.
 
 ## Tech Stack
 

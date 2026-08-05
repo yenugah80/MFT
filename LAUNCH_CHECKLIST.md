@@ -1,4 +1,4 @@
-# MFT : My Food & Mood Tracker — Store Launch Checklist
+# MFT : My Flow Tracker — Store Launch Checklist
 
 Last updated: 2026-06-18
 
@@ -8,8 +8,8 @@ Last updated: 2026-06-18
 
 | Item | Detail |
 |------|--------|
-| Store display name | `MFT : My Food & Mood Tracker` (28 chars; fits Apple/Google 30-char name limit) |
-| Full brand expansion | `MFT (My Food & Mood Tracker)` for long-form copy where length is not constrained |
+| Store display name | `MFT : My Flow Tracker` (28 chars; fits Apple/Google 30-char name limit) |
+| Full brand expansion | `MFT (My Flow Tracker)` for long-form copy where length is not constrained |
 | `app.json` package name | `com.zennxt.myfoodtracker` (Android + iOS) |
 | Firebase Android app registered | App ID `...e16a24b90d74dcf3702159`, package `com.zennxt.myfoodtracker` |
 | Firebase iOS app registered | App ID `...786b9d351d8d532a702159`, bundle `com.zennxt.myfoodtracker` |
@@ -65,7 +65,7 @@ ls mobile/google-service-account.json
 
 Steps:
 1. Go to [Google Play Console](https://play.google.com/console) → **Create app**
-2. App name: `MFT : My Food & Mood Tracker`
+2. App name: `MFT : My Flow Tracker`
 3. Default language: English (United States)
 4. App or game: **App**
 5. Free or paid: **Free**
@@ -135,7 +135,7 @@ Expected result: **Everyone** or **Teen**
 
 Go to Play Console → your app → **Main store listing**:
 
-- [ ] **App name** — `MFT : My Food & Mood Tracker` (28 chars; max 30 chars)
+- [ ] **App name** — `MFT : My Flow Tracker` (28 chars; max 30 chars)
 - [ ] **Short description** — max 80 chars (e.g. `AI-powered nutrition & wellness tracker`)
 - [ ] **Full description** — max 4000 chars
 - [ ] **App icon** — 512×512 PNG (already have 1024×1024, resize it)
