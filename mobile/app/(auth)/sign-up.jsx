@@ -107,7 +107,9 @@ export default function SignUpScreen() {
       }
     } catch (err) {
       console.warn("[Auth] Google sign-up failed:", err);
-      setNotice("error", __DEV__ ? parseClerkError(err) : "Google sign-up failed. Please try again or use email.");
+      // Always show Clerk's own message — see the matching comment in
+      // sign-in.jsx's handleGoogleSignIn for why the __DEV__ gate was removed.
+      setNotice("error", parseClerkError(err) || "Google sign-up failed. Please try again or use email.");
     } finally {
       setGoogleLoading(false);
     }
@@ -119,15 +121,19 @@ export default function SignUpScreen() {
       return;
     }
 
-    const available = await AppleAuthentication.isAvailableAsync();
-    if (!available) {
-      setNotice("error", "Sign in with Apple is not available on this device.");
-      return;
-    }
-
     setAppleLoading(true);
     setMessage(null);
     try {
+      // isAvailableAsync must be inside the try: on some devices/builds it can
+      // itself reject, and with no catch around it that left the button
+      // appearing to do nothing at all — no notice, no loading state, no
+      // console trace visible outside a debugger.
+      const available = await AppleAuthentication.isAvailableAsync();
+      if (!available) {
+        setNotice("error", "Sign in with Apple is not available on this device.");
+        return;
+      }
+
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -344,10 +350,14 @@ export default function SignUpScreen() {
 
         <TermsConsentCheckbox checked={agreedToTerms} onToggle={setAgreedToTerms} />
 
+        {/* Deliberately NOT `disabled` when the terms box is unticked. A
+            disabled Pressable never fires onPress, which meant the handler's
+            "Please agree to the Terms…" notice could never run — the button
+            just dimmed slightly and did nothing, with no explanation. Let the
+            press through so the handler explains what's needed. */}
         <PrimaryButton
           title={loading ? "Creating account…" : "Continue"}
           loading={loading}
-          disabled={!agreedToTerms}
           onPress={handleSignUp}
         />
 
@@ -355,17 +365,18 @@ export default function SignUpScreen() {
 
         {/* Social SSO — compact row keeps create-account within one viewport */}
         <View style={styles.socialRow}>
+          {/* Same reasoning as the Continue button above — the consent check
+              lives in the handler so it can explain itself, not in `disabled`
+              which silently swallows the tap. */}
           <AppleButton
             onPress={handleAppleSignUp}
             loading={appleLoading}
-            disabled={!agreedToTerms}
             title="Apple"
             style={[styles.socialOption, styles.socialOptionApple]}
           />
           <GoogleButton
             onPress={handleGoogleSignUp}
             loading={googleLoading}
-            disabled={!agreedToTerms}
             title="Google"
             style={styles.socialOption}
           />

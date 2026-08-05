@@ -129,22 +129,32 @@ export default function SignInScreen() {
       }
     } catch (err) {
       console.warn("[Auth] Google sign-in failed:", err);
-      setNotice("error", __DEV__ ? parseClerkError(err) : "Google sign-in failed. Please try again or use email.");
+      // Always show Clerk's own message, not just in __DEV__: it's already a
+      // human-safe string Clerk generates specifically to be user-facing (e.g.
+      // "redirect url... not authorized"), and hiding it behind a generic
+      // fallback in production made every real failure indistinguishable from
+      // every other one — impossible to diagnose from a device we don't have
+      // console access to.
+      setNotice("error", parseClerkError(err) || "Google sign-in failed. Please try again or use email.");
     } finally {
       setGoogleLoading(false);
     }
   };
 
   const handleAppleSignIn = async () => {
-    const available = await AppleAuthentication.isAvailableAsync();
-    if (!available) {
-      setNotice("error", "Sign in with Apple is not available on this device.");
-      return;
-    }
-
     setAppleLoading(true);
     setMessage(null);
     try {
+      // isAvailableAsync must be inside the try: on some devices/builds it can
+      // itself reject, and with no catch around it that left the button
+      // appearing to do nothing at all — no notice, no loading state, no
+      // console trace visible outside a debugger.
+      const available = await AppleAuthentication.isAvailableAsync();
+      if (!available) {
+        setNotice("error", "Sign in with Apple is not available on this device.");
+        return;
+      }
+
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
