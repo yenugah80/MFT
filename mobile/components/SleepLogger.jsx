@@ -44,6 +44,21 @@ import { useSleepLog, SLEEP_QUALITY_LABELS, SLEEP_CONTEXT_TAGS } from '../hooks/
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_NOTE_LENGTH = 200;
 
+/**
+ * Place the bed time on whichever calendar day makes it the most recent instant
+ * before waking. The picker only edits a clock time, so "1:30 AM" must resolve
+ * to the same night as the wake time, not the previous evening (which would
+ * produce a >24h window and block saving).
+ */
+function alignBedTime(bed, wake) {
+  const aligned = new Date(wake);
+  aligned.setHours(bed.getHours(), bed.getMinutes(), 0, 0);
+  if (aligned >= wake) {
+    aligned.setDate(aligned.getDate() - 1);
+  }
+  return aligned;
+}
+
 export default function SleepLogger({ visible, onClose, initialData = null }) {
   const { logSleep, isLogging } = useSleepLog();
 
@@ -155,13 +170,7 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
       setShowBedPicker(false);
     }
     if (selectedDate) {
-      setBedTime(selectedDate);
-      // Ensure wake time is after bed time
-      if (selectedDate >= wakeTime) {
-        const newWake = new Date(selectedDate);
-        newWake.setHours(newWake.getHours() + 8);
-        setWakeTime(newWake);
-      }
+      setBedTime(alignBedTime(selectedDate, wakeTime));
     }
   };
 
@@ -170,7 +179,11 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
       setShowWakePicker(false);
     }
     if (selectedDate) {
-      setWakeTime(selectedDate);
+      // Keep the wake date anchored; the picker only edits the clock time
+      const newWake = new Date(wakeTime);
+      newWake.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
+      setWakeTime(newWake);
+      setBedTime(alignBedTime(bedTime, newWake));
     }
   };
 
@@ -491,7 +504,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.primary,
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
-    maxHeight: SCREEN_HEIGHT * 0.9,
+    height: SCREEN_HEIGHT * 0.9,
+    overflow: 'hidden',
     ...SHADOWS.lg,
   },
 
@@ -553,11 +567,12 @@ const styles = StyleSheet.create({
 
   // Time Section
   timeRow: {
-    flexDirection: 'row',
+    // Stacked, not side-by-side: the iOS wheel picker needs the full width for
+    // its hour / minute / AM-PM columns to be readable and draggable.
+    flexDirection: 'column',
     gap: SPACING[3],
   },
   timeBlock: {
-    flex: 1,
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.md,
     padding: SPACING[3],
@@ -586,7 +601,8 @@ const styles = StyleSheet.create({
     color: TEXT.primary,
   },
   timePicker: {
-    height: 100,
+    // The iOS spinner clips its selection band below ~180px
+    height: Platform.OS === 'ios' ? 180 : undefined,
   },
   durationCard: {
     flexDirection: 'row',

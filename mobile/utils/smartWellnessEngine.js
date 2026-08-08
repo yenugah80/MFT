@@ -11,6 +11,8 @@
  * 5. CELEBRATES micro-wins to build habits
  */
 
+import { DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
+
 // ============================================
 // CORRELATION ANALYSIS ENGINE
 // ============================================
@@ -235,7 +237,7 @@ export function calculatePersonalizedWellnessScore({
 
   const calorieGoal = goals.dailyCalories || 2000;
   const proteinGoal = goals.proteinG || 150;
-  const waterGoal = goals.waterLiters || 2.5;
+  const waterGoal = goals.waterLiters || DEFAULT_WATER_GOAL_LITERS;
 
   // ============================================
   // DYNAMIC SCORING (learns from your data)
@@ -551,7 +553,7 @@ export function generateCelebrations(today, goals, yesterday = null) {
   const moodLogs = today.moodLogs || [];
 
   // Water goal
-  if (water >= (goals.waterLiters || 2.5)) {
+  if (water >= (goals.waterLiters || DEFAULT_WATER_GOAL_LITERS)) {
     celebrations.push({
       type: 'goal',
       icon: '💧',
@@ -652,7 +654,7 @@ export function generateSmartRecommendations(today, goals, correlations = null) 
   const protein = nutrition.totalProtein || 0;
   const calorieGoal = goals.dailyCalories || 2000;
   const proteinGoal = goals.proteinG || 150;
-  const waterGoal = goals.waterLiters || 2.5;
+  const waterGoal = goals.waterLiters || DEFAULT_WATER_GOAL_LITERS;
 
   const remainingCalories = Math.max(0, calorieGoal - calories);
   const remainingProtein = Math.max(0, proteinGoal - protein);

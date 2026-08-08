@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { TEXT, TYPOGRAPHY } from '../constants/premiumTheme';
+import { DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
 import {
   View,
   Text,
@@ -275,7 +276,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
 
   const dashboardData = queryClient.getQueryData(['dashboard']);
   const todayTotal = dashboardData?.today?.waterIntakeLiters || 0;
-  const dailyGoal = parseFloat(dashboardData?.goals?.waterLiters || 2.0);
+  const dailyGoal = parseFloat(dashboardData?.goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS);
 
   return (
     <Modal

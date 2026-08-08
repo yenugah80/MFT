@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -26,7 +26,7 @@ import SleepLogger from '../SleepLogger';
 
 export default function SleepSummaryCard({ compact = true }) {
   const router = useRouter();
-  const { lastSleep, isLoading } = useSleepLog();
+  const { lastSleep, isLastSleepLoading } = useSleepLog();
   const [showLogger, setShowLogger] = useState(false);
 
   const handlePress = () => {
@@ -56,8 +56,26 @@ export default function SleepSummaryCard({ compact = true }) {
     return `${hours}h ${mins}m`;
   };
 
+  // Loading state — never render placeholder numbers as if they were logged data
+  if (isLastSleepLoading && !lastSleep) {
+    return (
+      <View style={styles.card} accessibilityLabel="Sleep summary loading">
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
+            <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Sleep</Text>
+            <Text style={styles.subtitle}>Loading…</Text>
+          </View>
+          <ActivityIndicator size="small" color={VIBRANT_WELLNESS.sleep.solid} />
+        </View>
+      </View>
+    );
+  }
+
   // No data state
-  if (!lastSleep && !isLoading) {
+  if (!lastSleep && !isLastSleepLoading) {
     return (
       <>
         <TouchableOpacity

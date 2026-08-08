@@ -463,7 +463,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.primary,
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
-    maxHeight: SCREEN_HEIGHT * 0.9,
+    height: SCREEN_HEIGHT * 0.9,
+    overflow: 'hidden',
     ...SHADOWS.lg,
   },
 

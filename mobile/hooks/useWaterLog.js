@@ -17,7 +17,7 @@ import {
  * Quick add presets (in liters)
  */
 // Import from single source of truth
-import { WATER_PRESETS } from '../constants/beverageConstants';
+import { WATER_PRESETS, DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
 
 // Re-export for backwards compatibility
 export { WATER_PRESETS };
@@ -157,7 +157,7 @@ export function useWaterLog() {
   const getProgress = useCallback(() => {
     const data = queryClient.getQueryData(['dashboard']);
     const total = data?.today?.waterIntakeLiters || 0;
-    const goal = parseFloat(data?.goals?.waterLiters || 2.0);
+    const goal = parseFloat(data?.goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS);
     return Math.min(100, Math.round((total / goal) * 100));
   }, [queryClient]);
 

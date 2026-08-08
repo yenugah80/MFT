@@ -12,6 +12,8 @@
  * Output: Enriched context object that informs downstream layers
  */
 
+import { DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
+
 // ============================================================================
 // TIME CONSTANTS
 // ============================================================================
@@ -221,7 +223,7 @@ export class ContextBuilder {
     // Calculate progress percentages
     const calorieGoal = goals.dailyCalories || 2000;
     const proteinGoal = goals.proteinG || 120;
-    const waterGoal = goals.waterLiters || 2.0;
+    const waterGoal = goals.waterLiters || DEFAULT_WATER_GOAL_LITERS;
     const activityGoal = goals.activityMinutes || 30;
 
     const calorieProgress = Math.min((nutrition.calories || 0) / calorieGoal * 100, 150);

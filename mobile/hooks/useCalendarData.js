@@ -29,6 +29,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from './useDashboard';
 import apiClient from '../services/apiClient';
 import { calculateWellnessScore, generateStoryLine } from '../utils/healthCalculations';
+import { DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
 
 // ============================================================================
 // HELPERS - ALL USE DEVICE LOCAL TIMEZONE (never UTC)
@@ -197,7 +198,7 @@ export function useCalendarData(options = {}) {
       proteinGoal: g.proteinG || 150,
       carbsGoal: g.carbsG || 250,
       fatGoal: g.fatsG || 65,
-      waterGoal: parseFloat(g.waterLiters) || 2.0,
+      waterGoal: parseFloat(g.waterLiters) || DEFAULT_WATER_GOAL_LITERS,
     };
   }, [dashboard?.goals]);
 

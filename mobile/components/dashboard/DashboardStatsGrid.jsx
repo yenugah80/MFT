@@ -10,6 +10,7 @@ import CircularProgress from './CircularProgress';
 import { SPACING, RADIUS, TYPOGRAPHY } from '../../constants/designTokens';
 import { TEXT, SURFACES, CARD_SYSTEM } from '../../constants/premiumTheme';
 import { MODERN_MACROS, WELLNESS_COLORS } from '../../constants/modernColorPalette';
+import { DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 
 export default function DashboardStatsGrid({ today = {}, goals = {}, onTapStat }) {
   // Parse nutrition data
@@ -25,7 +26,7 @@ export default function DashboardStatsGrid({ today = {}, goals = {}, onTapStat }
   const proteinGoal = goals?.proteinG || 150;
   const carbsGoal = goals?.carbsG || 250;
   const fatGoal = goals?.fatsG || 65;
-  const waterGoal = goals?.waterLiters || 2.5;
+  const waterGoal = goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS;
 
   // Use semantic MODERN_MACROS colors for consistency
   const stats = [

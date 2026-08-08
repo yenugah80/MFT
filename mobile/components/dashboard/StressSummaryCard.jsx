@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -20,7 +20,7 @@ import {
   RADIUS,
   SEMANTIC,
 } from '../../constants/premiumTheme';
-import { useStressLog, STRESS_LEVELS } from '../../hooks/useStressLog';
+import { useStressLog, STRESS_LEVELS, STRESS_TRIGGERS } from '../../hooks/useStressLog';
 import StressLogger from '../StressLogger';
 
 // Stress color gradient
@@ -31,7 +31,7 @@ const STRESS_COLORS = [
 
 export default function StressSummaryCard({ compact = true }) {
   const router = useRouter();
-  const { todaySummary, isLoading } = useStressLog();
+  const { todaySummary, isTodayLoading } = useStressLog();
   const [showLogger, setShowLogger] = useState(false);
 
   const handlePress = () => {
@@ -54,8 +54,26 @@ export default function StressSummaryCard({ compact = true }) {
     return info || STRESS_LEVELS[4]; // Default to level 5
   };
 
+  // Loading state — never render the level-5 fallback as if it were a real check-in
+  if (isTodayLoading && !todaySummary?.avgLevel) {
+    return (
+      <View style={styles.card} accessibilityLabel="Stress summary loading">
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${SEMANTIC.warning.base}20` }]}>
+            <Ionicons name="pulse" size={24} color={SEMANTIC.warning.base} />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Stress</Text>
+            <Text style={styles.subtitle}>Loading…</Text>
+          </View>
+          <ActivityIndicator size="small" color={SEMANTIC.warning.base} />
+        </View>
+      </View>
+    );
+  }
+
   // No data state
-  if (!todaySummary?.avgLevel && !isLoading) {
+  if (!todaySummary?.avgLevel && !isTodayLoading) {
     return (
       <>
         <TouchableOpacity
@@ -87,8 +105,13 @@ export default function StressSummaryCard({ compact = true }) {
   const avgLevel = Math.round(todaySummary?.avgLevel || 5);
   const stressInfo = getStressInfo(avgLevel);
   const stressColor = STRESS_COLORS[avgLevel - 1] || STRESS_COLORS[4];
-  const checkInCount = todaySummary?.checkInCount || 0;
-  const topTrigger = todaySummary?.topTriggers?.[0];
+  const checkInCount = todaySummary?.count || 0;
+  // Backend returns triggers as a { key: count } map — pick the most frequent
+  const topTriggerKey = Object.entries(todaySummary?.triggers || {})
+    .sort((a, b) => b[1] - a[1])[0]?.[0];
+  const topTrigger = topTriggerKey
+    ? (STRESS_TRIGGERS.find(t => t.key === topTriggerKey)?.label || topTriggerKey)
+    : null;
 
   // Get status based on level
   const getStressStatus = () => {

@@ -14,6 +14,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import MomentumCard from './MomentumCard';
 import { shouldShowMomentumCard, getLastMomentumShown } from './MomentumEngine';
 import { getItem, setItem } from '../../../utils/storage';
+import { DEFAULT_WATER_GOAL_LITERS } from '../../../constants/beverageConstants';
 
 const DISMISSED_KEY = 'momentumCardDismissed';
 const DISMISS_DURATION_HOURS = 24;
@@ -128,7 +129,7 @@ export default function MomentumCardWrapper({
 
     const todayData = dashboardData.today || dashboardData;
     const trends = dashboardData.trends || {};
-    const waterGoal = parseFloat(goals?.waterLiters || '2.0');
+    const waterGoal = parseFloat(goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS);
 
     return {
       // Gamification

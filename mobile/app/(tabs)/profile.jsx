@@ -254,7 +254,18 @@ export default function ProfileScreen() {
   const gamification = dashboardData?.gamification;
   const userLifecycle = dashboardData?.userLifecycle;
   const level = gamification?.level || 1;
-  const totalMeals = gamification?.totalMealsLogged || 0;
+  // Meal count, cross-checked against the logs themselves rather than trusting
+  // one counter. `gamification.totalMealsLogged` used to be the only source and
+  // it read 0 for everyone — the column behind it is written once at signup and
+  // never incremented — which pinned the "Log your first meal" prompt on screen
+  // permanently, even for users several meals in. Today's logs and the weekly
+  // summaries are both subsets of the lifetime total, so the largest of the
+  // three is a safe lower bound that can never overstate.
+  const reportedMeals = gamification?.totalMealsLogged || 0;
+  const todayMealCount = dashboardData?.today?.foodLogs?.length || 0;
+  const weekMealCount = (dashboardData?.trends?.weekSummaries || [])
+    .reduce((sum, day) => sum + (day?.mealCount || 0), 0);
+  const totalMeals = Math.max(reportedMeals, todayMealCount, weekMealCount);
   const streak = gamification?.streak || 0;
   const daysLogged = userLifecycle?.totalDaysWithLogs || Math.floor(totalMeals / 3) || 0;
   // Keyed on meals alone, deliberately. `daysLogged` falls back to a derived

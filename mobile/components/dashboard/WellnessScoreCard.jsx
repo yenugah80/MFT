@@ -33,6 +33,7 @@
  */
 
 import React, { useEffect, useRef, useMemo } from 'react';
+import { DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import {
   View,
   Text,
@@ -363,7 +364,7 @@ export default function WellnessScoreCard({
       fiberGoal: 30,
       // Hydration
       waterIntake: water,
-      waterGoal: goals?.waterLiters || 2.5,
+      waterGoal: goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS,
       // Mood
       moodLogs,
       meals,
