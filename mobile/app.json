@@ -23,8 +23,10 @@
         "NSPhotoLibraryUsageDescription": "MFT needs photo library access to select food photos for analysis.",
         "NSPhotoLibraryAddUsageDescription": "MFT needs permission to save meal photos to your library.",
         "CFBundleAllowMixedLocalizations": true,
+        "CFBundleDisplayName": "MFT",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSSpeechRecognitionUsageDescription": "MFT uses speech recognition to transcribe your voice meal logs."
+        "NSSpeechRecognitionUsageDescription": "MFT uses speech recognition to transcribe your voice meal logs.",
+        "NSFaceIDUsageDescription": "MFT uses Face ID to unlock the app so your health data stays private."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -105,6 +107,12 @@
         {
           "microphonePermission": "Allow MFT to access your microphone for voice logging.",
           "speechRecognitionPermission": "Allow MFT to transcribe your speech for food logging."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "MFT uses Face ID to unlock the app so your health data stays private."
         }
       ],
       [
