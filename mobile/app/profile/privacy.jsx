@@ -11,6 +11,7 @@ import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, SEMANTIC }
 import apiClient from "../../services/apiClient";
 import { deleteAccountAndPurgeDevice } from "../../services/accountDeletion";
 import { useAuth } from "@clerk/clerk-expo";
+import { useBiometricLock } from "../../providers/BiometricLockProvider";
 
 export default function PrivacyScreen() {
   const router = useRouter();
@@ -18,13 +19,13 @@ export default function PrivacyScreen() {
   const queryClient = useQueryClient();
   const [shareInsights, setShareInsights] = useState(false);
   const [analytics, setAnalytics] = useState(true);
-  // The Biometric lock switch was removed: it persisted a flag that nothing
-  // ever read — `expo-local-authentication` isn't installed and no code gates
-  // the app on it. Shipping a security control that does nothing is worse than
-  // not offering one. The state is kept purely so the stored value round-trips
-  // unchanged instead of being wiped on the next privacy save; restore the UI
-  // here once the feature is genuinely implemented.
-  const [biometricLock, setBiometricLock] = useState(false);
+  // App lock is enforced by BiometricLockProvider. The device (SecureStore) is
+  // the source of truth for whether this phone is gated — a server flag can't
+  // be trusted to gate a cold start, and a device that can't authenticate must
+  // not inherit "on" from another one. The server copy is written alongside so
+  // the setting is visible across devices, but it never drives the gate.
+  const { isEnabled: biometricLock, isReady: isLockReady, method, enable, disable } = useBiometricLock();
+  const [isTogglingLock, setIsTogglingLock] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -38,7 +39,6 @@ export default function PrivacyScreen() {
       const data = await apiClient.get("/profile/privacy");
       setShareInsights(Boolean(data?.shareInsights));
       setAnalytics(data?.analytics !== false);
-      setBiometricLock(Boolean(data?.biometricLock));
     } catch (error) {
       console.error("[PrivacyScreen] Failed to load settings", error);
       setLoadError("Failed to load privacy settings");
@@ -53,13 +53,12 @@ export default function PrivacyScreen() {
 
   const persistPrivacy = async (nextState) => {
     // Store old state for rollback on error
-    const oldState = { shareInsights, analytics, biometricLock };
+    const oldState = { shareInsights, analytics };
 
     // Optimistic update
     setIsSaving(true);
     setShareInsights(nextState.shareInsights);
     setAnalytics(nextState.analytics);
-    setBiometricLock(nextState.biometricLock);
 
     try {
       await apiClient.post("/profile/privacy", { privacy: nextState });
@@ -69,10 +68,50 @@ export default function PrivacyScreen() {
       // Rollback on error
       setShareInsights(oldState.shareInsights);
       setAnalytics(oldState.analytics);
-      setBiometricLock(oldState.biometricLock);
       Alert.alert("Save Failed", "Could not save your privacy settings. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const LOCK_FAILURE_COPY = {
+    no_hardware: "This device doesn't support biometric unlock.",
+    not_enrolled:
+      "Set up Face ID, Touch ID, or a fingerprint in your device settings first.",
+    storage_failed: "Could not save the setting securely on this device.",
+    lockout: "Too many failed attempts. Try again later.",
+    user_cancel: null, // A deliberate cancel needs no alert.
+    busy: null,
+  };
+
+  const handleToggleBiometricLock = async (value) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsTogglingLock(true);
+    try {
+      const result = value ? await enable() : await disable();
+
+      if (!result.ok) {
+        const message =
+          result.reason in LOCK_FAILURE_COPY
+            ? LOCK_FAILURE_COPY[result.reason]
+            : "Authentication failed. The setting was not changed.";
+        if (message) {
+          Alert.alert(value ? "Couldn't Turn On App Lock" : "Couldn't Turn Off App Lock", message);
+        }
+        return;
+      }
+
+      // Mirror to the server so the choice is visible on the account. A failure
+      // here must not revert the device gate, which is already applied.
+      try {
+        await apiClient.post("/profile/privacy", {
+          privacy: { shareInsights, analytics, biometricLock: value },
+        });
+      } catch (syncError) {
+        console.warn("[PrivacyScreen] Lock setting saved locally but not synced", syncError);
+      }
+    } finally {
+      setIsTogglingLock(false);
     }
   };
 
@@ -218,6 +257,29 @@ export default function PrivacyScreen() {
               }
               disabled={isSaving}
             />
+          </View>
+        </View>
+
+        {/* Security */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Security</Text>
+
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>App lock</Text>
+              <Text style={styles.rowSubtitle}>
+                Require {method} to open MFT
+              </Text>
+            </View>
+            {isTogglingLock ? (
+              <ActivityIndicator size="small" color={BRAND.primary} />
+            ) : (
+              <Switch
+                value={biometricLock}
+                onValueChange={handleToggleBiometricLock}
+                disabled={!isLockReady}
+              />
+            )}
           </View>
         </View>
 

@@ -26,6 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import apiClient from './apiClient';
 import { clearDatabase } from './database';
+import { setEnabledStored as setBiometricLockEnabled } from './biometricLock';
 
 /**
  * Deletes the account server-side, then purges every trace of it from this device.
@@ -79,6 +80,16 @@ export async function purgeDeviceData(queryClient) {
     console.log(`[accountDeletion] Cleared ${keys.length} local storage keys`);
   } catch (error) {
     console.error('[accountDeletion] Failed to clear local storage', error);
+  }
+
+  try {
+    // The app-lock flag lives in SecureStore, not AsyncStorage, so the sweep
+    // above misses it. Left behind, the deleted account's lock would apply to
+    // whoever signs in on this device next — and their Privacy screen would
+    // show a lock they never enabled.
+    await setBiometricLockEnabled(false);
+  } catch (error) {
+    console.error('[accountDeletion] Failed to clear app lock setting', error);
   }
 }
 

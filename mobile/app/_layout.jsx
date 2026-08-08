@@ -26,6 +26,7 @@ import { ProfileProvider } from "@/providers/ProfileProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { BiometricLockProvider } from "@/providers/BiometricLockProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
@@ -187,6 +188,9 @@ export default function RootLayout() {
           <QueryProvider>
             <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
               {/* NotificationProvider & ProfileProvider must be INSIDE ClerkProvider to access useAuth */}
+              {/* BiometricLockProvider sits directly under ClerkProvider so its lock
+                  overlay renders above every screen in the tree below it */}
+              <BiometricLockProvider>
               <SubscriptionProvider>
                 <NotificationProvider>
                   <ProfileProvider>
@@ -205,6 +209,7 @@ export default function RootLayout() {
                 </ProfileProvider>
               </NotificationProvider>
               </SubscriptionProvider>
+              </BiometricLockProvider>
             </ClerkProvider>
           </QueryProvider>
         </DatabaseInitializer>
