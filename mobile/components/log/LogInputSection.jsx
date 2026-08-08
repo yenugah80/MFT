@@ -27,6 +27,7 @@ export default function LogInputSection({
   setShowVoiceModal,
   voiceUnavailable = false,
   handlePhotoFromLibrary,
+  analysisSource,
 }) {
   // Handler for analyze/retry button - clears error first, then runs analysis
   const handleAnalyze = useCallback(() => {
@@ -345,6 +346,42 @@ export default function LogInputSection({
 
       {inputMode === 'voice' && (
         <View style={styles.inputSection}>
+          {/* Once a voice log is confirmed, this pill must show that — not the
+              same "Start Recording" prompt it showed before anything happened.
+              Without this, the confirmed result only appears in the item list
+              further down the screen (or in a full-screen modal that's already
+              closed), and the pill itself looks like nothing was logged. */}
+          {analysisSource === 'voice' && foodAnalysis.analysisResult?.items?.length > 0 ? (
+            <View style={styles.voiceResultCard}>
+              <View style={styles.voiceResultHeader}>
+                <View style={styles.voiceResultIcon}>
+                  <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
+                </View>
+                <View style={styles.voiceResultCopy}>
+                  <Text style={styles.voiceResultTitle}>Logged from voice</Text>
+                  {!!foodAnalysis.inputText && (
+                    <Text style={styles.voiceResultTranscript} numberOfLines={2}>
+                      &quot;{foodAnalysis.inputText}&quot;
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.voiceResultAgain}
+                onPress={() => {
+                  foodAnalysis.setAnalysisResult(null);
+                  foodAnalysis.setInputText('');
+                  setShowVoiceModal(true);
+                }}
+                activeOpacity={0.85}
+                accessibilityLabel="Record another meal by voice"
+              >
+                <Ionicons name="mic-outline" size={18} color="#6B4EFF" />
+                <Text style={styles.voiceResultAgainText}>Record Another</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
           <View style={styles.voiceEmptyCard}>
             <View style={styles.voiceIconContainer}>
               <Ionicons name="mic" size={28} color="#6B4EFF" />
@@ -425,6 +462,7 @@ export default function LogInputSection({
               </>
             )}
           </View>
+          )}
         </View>
       )}
     </>

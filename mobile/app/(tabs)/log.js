@@ -33,7 +33,7 @@ import { useNotification } from '../../providers/NotificationProvider';
 import { useWaterLog } from '../../hooks/useWaterLog';
 import { usePreferences } from '../../hooks/usePreferences';
 import { announceFoodLogged, announceMealLogged } from '../../services/audioFeedback';
-import { calculateCaffeine } from '../../constants/beverageConstants';
+import { calculateCaffeine, DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { useTheme } from '../../providers/ThemeProvider';
@@ -68,6 +68,75 @@ import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 // Import centralized typography from premium theme
 import { TYPOGRAPHY, TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 
+/**
+ * Maps a VoiceModal analysis result (backend items shape, from /voice/process)
+ * into the { items, totals } shape the rest of the screen expects. Shared by
+ * handleVoiceComplete (stages a result for review) and handleSaveVoiceResult
+ * (saves one directly from inside VoiceModal) so the two never drift apart.
+ * Returns null when there is nothing to log.
+ */
+function mapVoiceResultToAnalysis(voiceResult) {
+  const { items, totals } = voiceResult || {};
+  if (!items || items.length === 0) return null;
+
+  const mappedItems = items.map((item, idx) => ({
+    itemId: item.itemId || `voice-${idx}`,
+    name: item.name || item.foodName,
+    portion: item.portion || { amount: 1, unit: 'serving' },
+    macros: item.macros || {
+      calories_kcal: item.calories || 0,
+      protein_g: item.protein || 0,
+      carbs_g: item.carbs || 0,
+      fat_g: item.fat || item.fats || 0,
+      fiber_g: item.fiber || 0,
+      sugar_g: item.sugar || 0,
+      sodium_mg: item.sodium || 0,
+    },
+    micros: item.micros || {},
+    confidence: item.confidence || 0.9,
+    source: item.source || 'voice',
+  }));
+
+  const calculatedTotals = {
+    macros: {
+      calories_kcal: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: 0,
+      sugar_g: 0,
+      sodium_mg: 0,
+    },
+    micros: {},
+  };
+
+  mappedItems.forEach((item) => {
+    const m = item.macros || {};
+    calculatedTotals.macros.calories_kcal += m.calories_kcal || 0;
+    calculatedTotals.macros.protein_g += m.protein_g || 0;
+    calculatedTotals.macros.carbs_g += m.carbs_g || 0;
+    calculatedTotals.macros.fat_g += m.fat_g || 0;
+    calculatedTotals.macros.fiber_g += m.fiber_g || 0;
+    calculatedTotals.macros.sugar_g += m.sugar_g || 0;
+    calculatedTotals.macros.sodium_mg += m.sodium_mg || 0;
+
+    if (item.micros) {
+      Object.entries(item.micros).forEach(([key, value]) => {
+        if (!calculatedTotals.micros[key]) {
+          calculatedTotals.micros[key] = { value: 0, unit: value?.unit || '' };
+        }
+        calculatedTotals.micros[key].value += value?.value || 0;
+      });
+    }
+  });
+
+  const finalTotals = (totals?.macros && Object.keys(totals.macros).length > 0)
+    ? totals
+    : calculatedTotals;
+
+  return { items: mappedItems, totals: finalTotals, source: 'voice' };
+}
+
 export default function LogScreen() {
   // Hooks - Get user profile for personalized nutrition targets
   const { user } = useUser();
@@ -99,6 +168,9 @@ export default function LogScreen() {
   const [healthModalData, setHealthModalData] = useState(null);
   const [showTrendsModal, setShowTrendsModal] = useState(false);
   const [selectedTrendNutrient, setSelectedTrendNutrient] = useState(null);
+  // Meals whose upload can never succeed as-is, so the user can discard them
+  const [blockedSyncs, setBlockedSyncs] = useState([]);
+  const [showBlockedSyncs, setShowBlockedSyncs] = useState(false);
 
   // Hooks
   const router = useRouter();
@@ -142,6 +214,51 @@ export default function LogScreen() {
     setShowHealthModal(false);
     setShowTrendsModal(false);
   }, []);
+
+  // Pulled out of foodLog so the effect below can depend on stable values —
+  // the hook returns a fresh object every render.
+  const { blockedSyncCount, getBlockedSyncs, discardBlockedSync } = foodLog;
+
+  // Load the details of permanently-stuck meals whenever that set changes.
+  // Only the count lives in the hook's state; the rows are read on demand.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (blockedSyncCount === 0) {
+      setBlockedSyncs([]);
+      setShowBlockedSyncs(false);
+      return;
+    }
+
+    (async () => {
+      const rows = await getBlockedSyncs();
+      if (!cancelled) setBlockedSyncs(rows);
+    })();
+
+    return () => { cancelled = true; };
+  }, [blockedSyncCount, getBlockedSyncs]);
+
+  /**
+   * Discard a meal that can never sync. Destructive and unrecoverable, so it
+   * always confirms first.
+   */
+  const handleDiscardBlockedSync = useCallback((item) => {
+    Alert.alert(
+      'Discard this meal?',
+      `"${item.foodName}" couldn't be saved and will be removed from your log. This can't be undone.`,
+      [
+        { text: 'Keep trying', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await discardBlockedSync(item.clientEventId);
+            notify.info(`Removed "${item.foodName}"`, { domain: 'food' });
+          },
+        },
+      ]
+    );
+  }, [discardBlockedSync, notify]);
 
   useEffect(() => {
     if (!focus) return;
@@ -324,75 +441,13 @@ export default function LogScreen() {
 
       // Use the nutrition result directly from VoiceModal
       // No need to re-analyze - VoiceModal already did it!
-      if (items && items.length > 0) {
-        // Map items to expected format (backend items already have correct structure)
-        const mappedItems = items.map((item, idx) => ({
-          itemId: item.itemId || `voice-${idx}`,
-          name: item.name || item.foodName,
-          portion: item.portion || { amount: 1, unit: 'serving' },
-          macros: item.macros || {
-            calories_kcal: item.calories || 0,
-            protein_g: item.protein || 0,
-            carbs_g: item.carbs || 0,
-            fat_g: item.fat || item.fats || 0,
-            fiber_g: item.fiber || 0,
-            sugar_g: item.sugar || 0,
-            sodium_mg: item.sodium || 0,
-          },
-          micros: item.micros || {},
-          confidence: item.confidence || 0.9,
-          source: item.source || 'voice',
-        }));
-
-        // Calculate totals from items (backend returns empty totals)
-        const calculatedTotals = {
-          macros: {
-            calories_kcal: 0,
-            protein_g: 0,
-            carbs_g: 0,
-            fat_g: 0,
-            fiber_g: 0,
-            sugar_g: 0,
-            sodium_mg: 0,
-          },
-          micros: {},
-        };
-
-        mappedItems.forEach((item) => {
-          const m = item.macros || {};
-          calculatedTotals.macros.calories_kcal += m.calories_kcal || 0;
-          calculatedTotals.macros.protein_g += m.protein_g || 0;
-          calculatedTotals.macros.carbs_g += m.carbs_g || 0;
-          calculatedTotals.macros.fat_g += m.fat_g || 0;
-          calculatedTotals.macros.fiber_g += m.fiber_g || 0;
-          calculatedTotals.macros.sugar_g += m.sugar_g || 0;
-          calculatedTotals.macros.sodium_mg += m.sodium_mg || 0;
-
-          // Aggregate micros
-          if (item.micros) {
-            Object.entries(item.micros).forEach(([key, value]) => {
-              if (!calculatedTotals.micros[key]) {
-                calculatedTotals.micros[key] = { value: 0, unit: value?.unit || '' };
-              }
-              calculatedTotals.micros[key].value += value?.value || 0;
-            });
-          }
-        });
-
-        // Use provided totals if they have data, otherwise use calculated
-        const finalTotals = (totals?.macros && Object.keys(totals.macros).length > 0)
-          ? totals
-          : calculatedTotals;
-
-        foodAnalysis.setAnalysisResult({
-          items: mappedItems,
-          totals: finalTotals,
-          source: 'voice',
-        });
+      const mapped = mapVoiceResultToAnalysis({ items, totals });
+      if (mapped) {
+        foodAnalysis.setAnalysisResult(mapped);
 
         console.log('[log] Voice analysis result set:', {
-          itemCount: mappedItems.length,
-          totalCalories: finalTotals.macros.calories_kcal,
+          itemCount: mapped.items.length,
+          totalCalories: mapped.totals.macros.calories_kcal,
         });
       } else if (nutrition?.data) {
         // Handle legacy format where nutrition data is nested
@@ -586,14 +641,24 @@ export default function LogScreen() {
   /**
    * Save multi-item meal
    */
-  const handleSaveMeal = async () => {
-    if (isSavingLog || !foodAnalysis.analysisResult) return;
+  /**
+   * Persists every item in an analysis result and shows the MealLoggedCard
+   * confirmation. Takes the result as a parameter (rather than reading
+   * foodAnalysis.analysisResult directly) so it can be called either from the
+   * existing inline "Save" button (which has staged the result into that
+   * state already) or directly from inside VoiceModal with a result that was
+   * never staged there — e.g. because the user saved without leaving the
+   * modal. Reading from a parameter avoids relying on state having propagated
+   * into this closure by the time the caller runs.
+   */
+  const saveMealItems = async (analysisResult) => {
+    if (isSavingLog || !analysisResult?.items?.length) return;
 
     // ALLERGEN GATE: scan all items before saving anything
     const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
     if (userAllergies.length > 0) {
       const allAllergens = new Set();
-      foodAnalysis.analysisResult.items.forEach(item => {
+      analysisResult.items.forEach(item => {
         const check = getAllergenSeverity(item.allergens || [], userAllergies, item.name || '');
         if (check?.hasAllergen) check.allergens.forEach(a => allAllergens.add(a));
       });
@@ -623,7 +688,7 @@ export default function LogScreen() {
       let totalCarbs = 0;
       let totalFat = 0;
 
-      const savePromises = foodAnalysis.analysisResult.items.map((item, index) => {
+      const savePromises = analysisResult.items.map((item, index) => {
         const servingText = item.portion?.amount && item.portion?.unit
           ? `${item.portion.amount}${item.portion.unit}`
           : '1 serving';
@@ -632,10 +697,10 @@ export default function LogScreen() {
           id: `${mealEventId}-${index}`,
           timestamp: baseTimestamp + index,
           status: 'pending',
-          source: 'text',
+          source: analysisResult.source || 'text',
           mealType: effectiveMealType,
           sourceMeta: {
-            source: 'text',
+            source: analysisResult.source || 'text',
             type: 'multi',
             timestamp: new Date().toISOString(),
           },
@@ -665,34 +730,48 @@ export default function LogScreen() {
 
       await Promise.all(savePromises);
 
-      const itemCount = foodAnalysis.analysisResult.items.length;
+      const itemCount = analysisResult.items.length;
       announceMealLogged(itemCount, totalCalories, effectiveMealType);
-
-      const capturedResult = foodAnalysis.analysisResult;
-      const capturedItemCount = capturedResult.items.length;
 
       foodAnalysis.setInputText('');
       foodAnalysis.setAnalysisResult(null);
 
       setLoggedMeal({
-        foodName: `Meal (${capturedItemCount} items)`,
+        foodName: `Meal (${itemCount} items)`,
         calories: totalCalories,
         protein: totalProtein,
         carbs: totalCarbs,
         fats: totalFat,
         mealId: mealEventId,
-        originalAnalysis: capturedResult
+        originalAnalysis: analysisResult
       });
 
       InteractionManager.runAfterInteractions(() => {
         setTimeout(() => setShowMealLogged(true), 100);
       });
+      return true;
     } catch (error) {
       console.error('[LogScreen] Multi-item save error:', error);
       notify.error(generalMessages.error());
+      return false;
     } finally {
       setIsSavingLog(false);
     }
+  };
+
+  const handleSaveMeal = () => saveMealItems(foodAnalysis.analysisResult);
+
+  /**
+   * Saves a voice analysis result directly from inside VoiceModal, without
+   * requiring the user to close the modal and tap Save again on a separate
+   * screen. Returns false (rather than throwing, unlike a version that would
+   * affect the two existing callers above) so VoiceModal's own review screen
+   * can show an error instead of silently closing.
+   */
+  const handleSaveVoiceResult = async (voiceResult) => {
+    const mapped = mapVoiceResultToAnalysis(voiceResult);
+    if (!mapped) return false;
+    return saveMealItems(mapped);
   };
 
   /**
@@ -1086,6 +1165,7 @@ export default function LogScreen() {
           setShowCameraModal={setShowCameraModal}
           setShowBarcodeScannerModal={setShowBarcodeScannerModal}
           setShowVoiceModal={setShowVoiceModal}
+          analysisSource={analysisSource}
           // Only when there is genuinely no path to a transcript. An absent
           // on-device recogniser no longer qualifies: the hook keeps recording
           // and transcribes server-side instead, so voice still works. Only a
@@ -1244,28 +1324,86 @@ export default function LogScreen() {
           </View>
         )}
 
-        {/* Sync Status Footer */}
-        {foodLog.pendingSyncCount > 0 && (
-          <View style={styles.syncCard}>
-            <View style={styles.syncIconWrapper}>
-              <Ionicons name="cloud-upload-outline" size={24} color="#6B4EFF" />
+        {/* Sync Status Footer
+            Only shown once a sync has actually failed. A meal that is merely
+            queued syncs within a second, so surfacing that would be noise. */}
+        {foodLog.hasSyncFailure && (
+          <View style={styles.syncBlock}>
+            <View style={styles.syncCard}>
+              <View style={styles.syncIconWrapper}>
+                <Ionicons
+                  name={foodLog.blockedSyncCount > 0 ? 'alert-circle-outline' : 'cloud-offline-outline'}
+                  size={24}
+                  color="#6B4EFF"
+                />
+              </View>
+              <View style={styles.syncContent}>
+                <Text style={styles.syncTitle}>
+                  {foodLog.isSyncing
+                    ? 'Saving...'
+                    : foodLog.blockedSyncCount > 0
+                      ? "Couldn't save some meals"
+                      : 'Waiting to save'}
+                </Text>
+                <Text style={styles.syncSubtitle}>
+                  {foodLog.blockedSyncCount > 0
+                    ? `${foodLog.blockedSyncCount} ${foodLog.blockedSyncCount === 1 ? 'meal needs' : 'meals need'} your attention`
+                    : `${foodLog.pendingSyncCount} ${foodLog.pendingSyncCount === 1 ? 'meal' : 'meals'} will save automatically`}
+                </Text>
+              </View>
+              {!foodLog.isSyncing && (
+                <TouchableOpacity
+                  style={styles.syncRetry}
+                  onPress={foodLog.retryFailedSyncs}
+                >
+                  <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                  <Text style={styles.syncRetryText}>Retry</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.syncContent}>
-              <Text style={styles.syncTitle}>
-                {foodLog.isSyncing ? 'Syncing...' : 'Pending Sync'}
-              </Text>
-              <Text style={styles.syncSubtitle}>
-                {foodLog.pendingSyncCount} items waiting
-              </Text>
-            </View>
-            {!foodLog.isSyncing && (
-              <TouchableOpacity
-                style={styles.syncRetry}
-                onPress={foodLog.retryFailedSyncs}
-              >
-                <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                <Text style={styles.syncRetryText}>Retry All</Text>
-              </TouchableOpacity>
+
+            {/* Stuck meals are listed individually so the user has a way out:
+                retry above revives them, discard removes them for good. */}
+            {foodLog.blockedSyncCount > 0 && (
+              <>
+                <TouchableOpacity
+                  style={styles.blockedToggle}
+                  onPress={() => setShowBlockedSyncs(prev => !prev)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.blockedToggleText}>
+                    {showBlockedSyncs ? 'Hide details' : 'Review meals'}
+                  </Text>
+                  <Ionicons
+                    name={showBlockedSyncs ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color="#4F46E5"
+                  />
+                </TouchableOpacity>
+
+                {showBlockedSyncs && blockedSyncs.map(item => (
+                  <View key={item.clientEventId} style={styles.blockedRow}>
+                    <View style={styles.blockedRowContent}>
+                      <Text style={styles.blockedName} numberOfLines={1}>
+                        {item.foodName}
+                      </Text>
+                      {!!item.lastError && (
+                        <Text style={styles.blockedError} numberOfLines={2}>
+                          {item.lastError}
+                        </Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.blockedDiscard}
+                      onPress={() => handleDiscardBlockedSync(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                      <Text style={styles.blockedDiscardText}>Discard</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </>
             )}
           </View>
         )}
@@ -1276,6 +1414,7 @@ export default function LogScreen() {
         visible={showVoiceModal}
         onClose={() => setShowVoiceModal(false)}
         onComplete={handleVoiceComplete}
+        onSaveNow={handleSaveVoiceResult}
         voiceHook={voiceHook}
         accessibilityMode={preferences?.accessibility?.assistedVoiceMode ? 'elderly' : 'standard'}
         voiceLanguage={preferences?.voiceLanguage || 'en'}
@@ -1340,7 +1479,7 @@ export default function LogScreen() {
           </View>
           <HydrationTracker
             currentIntake={waterTodayData?.totalLiters || 0}
-            dailyGoal={dashboardData?.goals?.waterLiters || 2.0}
+            dailyGoal={dashboardData?.goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS}
             onLogWater={handleLogWater}
             onRemoveWater={handleRemoveWater}
             beverageHistory={beverageHistory}
@@ -1970,6 +2109,64 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: TYPOGRAPHY.family.bold,
   },
+  voiceResultCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  voiceResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  voiceResultIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voiceResultCopy: {
+    flex: 1,
+  },
+  voiceResultTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  voiceResultTranscript: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+    fontStyle: 'italic',
+    lineHeight: 19,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
+  voiceResultAgain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  voiceResultAgainText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#6B4EFF',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
   voiceExamples: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2154,6 +2351,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+
+  /* Blocked (permanently stuck) meals */
+  syncBlock: {
+    marginBottom: 8,
+  },
+  blockedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
+  blockedToggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4F46E5',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  blockedRowContent: {
+    flex: 1,
+  },
+  blockedName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEXT.primary,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  blockedError: {
+    fontSize: 12,
+    color: TEXT.tertiary,
+    marginTop: 3,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
+  blockedDiscard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+  },
+  blockedDiscardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
     fontFamily: TYPOGRAPHY.family.bold,
   },
 

@@ -33,6 +33,7 @@ import {
   AccessibilityInfo,
   Linking,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -216,6 +217,7 @@ export function VoiceModal({
   visible,
   onClose,
   onComplete,
+  onSaveNow,
   voiceHook,
   accessibilityMode = 'standard', // 'standard' | 'elderly'
   voiceLanguage = 'en', // Language for TTS guidance
@@ -239,7 +241,6 @@ export function VoiceModal({
     clearRecordingUri = () => {},
     transcribeRecording,
     isVoiceUnsupported = false,
-    needsAnalysisConsent = false,
   } = voiceHook;
 
   // Audio playback for reviewing recording before confirm
@@ -263,6 +264,11 @@ export function VoiceModal({
   // re-runs analysis on this text rather than discarding it and re-recording.
   const [pendingAnalyzeText, setPendingAnalyzeText] = useState(null);
   const [isEnablingConsent, setIsEnablingConsent] = useState(false);
+  // The analyzed { transcription, nutrition, items, totals } once analysis
+  // succeeds — held here so the 'reviewing' screen can render it and Save can
+  // send it straight to the backend without leaving the modal.
+  const [reviewResult, setReviewResult] = useState(null);
+  const [isSavingResult, setIsSavingResult] = useState(false);
 
   // Refs for cleanup and guards
   const successTimeoutRef = useRef(null);
@@ -319,6 +325,8 @@ export function VoiceModal({
     setIsSubmitting(false);
     setPendingConsentUri(null);
     setPendingAnalyzeText(null);
+    setReviewResult(null);
+    setIsSavingResult(false);
     stopCalledRef.current = false;
 
     if (successTimeoutRef.current) {
@@ -369,6 +377,55 @@ export function VoiceModal({
   }, [clearError, startRecording, isElderly, isVoiceUnsupported]);
 
   /**
+   * Elderly mode's whole design is auto-confirm, minimal interaction — so
+   * unlike standard mode (which stops at a review screen for an explicit
+   * Save), a successful analysis here saves immediately via onSaveNow and
+   * only then announces "logged successfully". Speaking that promise before
+   * the save actually happens (the old behavior) meant it could be false.
+   * Shared by both places elderly mode can land on a successful result: the
+   * direct auto-analyze-after-recording path, and the post-consent retry.
+   * Returns whether it actually succeeded, so callers can decide whether to
+   * reset their own retry guards.
+   */
+  const finalizeElderlyLog = useCallback(async (nutritionResult) => {
+    try {
+      if (onSaveNow) {
+        const saved = await onSaveNow(nutritionResult);
+        if (saved === false) {
+          setLocalError('Could not save this meal. Please try again.');
+          setState('error');
+          await triggerHaptic('error');
+          announceForAccessibility('Could not save this meal.');
+          await speakInstruction('Sorry, I could not save that. Please try again.', true, voiceLanguage);
+          return false;
+        }
+      } else {
+        // No save wired up by the host screen — fall back to staging the
+        // result for review elsewhere, same as before this change.
+        onComplete(nutritionResult);
+      }
+
+      setState('success');
+      await triggerHaptic('success');
+      await speakInstruction('Food logged successfully', true, voiceLanguage);
+
+      successTimeoutRef.current = setTimeout(() => {
+        if (!isCancelledRef.current) {
+          handleClose();
+        }
+      }, 2000);
+      return true;
+    } catch (err) {
+      console.error('[VoiceModal] Elderly save failed:', err);
+      setLocalError('Could not save this meal. Please try again.');
+      setState('error');
+      await triggerHaptic('error');
+      await speakInstruction('Sorry, I could not save that. Please try again.', true, voiceLanguage);
+      return false;
+    }
+  }, [onSaveNow, onComplete, handleClose, voiceLanguage]);
+
+  /**
    * Grants AI consent, then transcribes the audio we already have.
    * One tap, no lost recording, no trip through Settings.
    */
@@ -384,17 +441,19 @@ export function VoiceModal({
       // analysis on that text rather than discarding it and re-recording.
       if (pendingAnalyzeText) {
         const nutritionResult = await analyzeTranscript(pendingAnalyzeText);
-        if (nutritionResult && !nutritionResult.needsConsent) {
+        const itemCount = nutritionResult?.needsConsent ? 0 : (nutritionResult?.items?.length || 0);
+        if (itemCount > 0) {
           setPendingAnalyzeText(null);
-          setState('success');
+          // Elderly mode never shows the review screen — auto-save and speak
+          // the result, same as its direct (non-consent-blocked) path.
+          if (isElderly) {
+            await finalizeElderlyLog(nutritionResult);
+            return;
+          }
+          setReviewResult(nutritionResult);
+          setState('reviewing');
           await triggerHaptic('success');
-          announceForAccessibility('Success! Food logged successfully.');
-          successTimeoutRef.current = setTimeout(() => {
-            if (!isCancelledRef.current) {
-              onComplete(nutritionResult);
-              handleClose();
-            }
-          }, 800);
+          announceForAccessibility(`Found ${itemCount} item${itemCount === 1 ? '' : 's'}. Review and save.`);
           return;
         }
         setLocalError('Could not analyze your meal. Please try again.');
@@ -431,7 +490,7 @@ export function VoiceModal({
     } finally {
       setIsEnablingConsent(false);
     }
-  }, [pendingConsentUri, pendingAnalyzeText, transcribeRecording, handleStart, analyzeTranscript, onComplete, handleClose]);
+  }, [pendingConsentUri, pendingAnalyzeText, transcribeRecording, handleStart, analyzeTranscript, isElderly, finalizeElderlyLog]);
 
 
   const handleStop = useCallback(async () => {
@@ -529,21 +588,29 @@ export function VoiceModal({
           return;
         }
 
-        // Track analysis completed
         const itemCount = nutritionResult.items?.length || 0;
         const totalCalories = nutritionResult.totals?.macros?.calories_kcal || 0;
+
+        // Same rule as standard mode: zero items is not success, it's nothing
+        // to log, and saying "logged successfully" over TTS would be false.
+        if (itemCount === 0) {
+          trackVoiceAnalysisFailed('empty_result', 'No food identified in transcript');
+          setLocalError("Couldn't identify any food in that. Try recording again with more detail.");
+          setState('error');
+          await triggerHaptic('error');
+          announceForAccessibility("Couldn't identify any food in that.");
+          await speakInstruction('I could not identify any food in that. Please try again.', true, voiceLanguage);
+          stopCalledRef.current = false;
+          return;
+        }
+
+        // Track analysis completed
         trackVoiceAnalysisCompleted(itemCount, totalCalories);
 
-        setState('success');
-        await triggerHaptic('success');
-        await speakInstruction('Food logged successfully', true, voiceLanguage);
-
-        successTimeoutRef.current = setTimeout(() => {
-          if (!isCancelledRef.current) {
-            onComplete(nutritionResult);
-            handleClose();
-          }
-        }, 2000);
+        const saved = await finalizeElderlyLog(nutritionResult);
+        if (!saved) {
+          stopCalledRef.current = false;
+        }
       } else {
         // Standard mode: Show transcribed state with playback option
         // User can review recording, edit transcription, then confirm to analyze
@@ -573,7 +640,7 @@ export function VoiceModal({
       }
       stopCalledRef.current = false;
     }
-  }, [stopRecording, analyzeTranscript, onComplete, handleClose, isElderly, error, audioPlayback, duration, voiceLanguage]);
+  }, [stopRecording, analyzeTranscript, finalizeElderlyLog, isElderly, error, audioPlayback, duration, voiceLanguage]);
 
   const handleCancel = useCallback(async () => {
     // Track recording cancelled
@@ -636,21 +703,37 @@ export function VoiceModal({
         return;
       }
 
-      // Track analysis completed
       const itemCount = nutritionResult.items?.length || 0;
       const totalCalories = nutritionResult.totals?.macros?.calories_kcal || 0;
+
+      // A call that resolves with zero items is not success — nothing was
+      // identified in the transcript, so there is nothing to log. Closing the
+      // modal here (as the code used to) told the user "Food logged
+      // successfully" while silently logging nothing, leaving them to
+      // discover the untouched transcript sitting in the Text tab with no
+      // idea why. Keep them in the voice flow so they can edit or re-record.
+      if (itemCount === 0) {
+        trackVoiceAnalysisFailed('empty_result', 'No food identified in transcript');
+        setLocalError("Couldn't identify any food in that. Try recording again with more detail.");
+        setState('error');
+        await triggerHaptic('error');
+        announceForAccessibility("Couldn't identify any food in that. Try recording again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Track analysis completed
       trackVoiceAnalysisCompleted(itemCount, totalCalories);
 
-      setState('success');
+      // Show the analyzed items right here instead of closing on a bare
+      // "Success!" flash — that told the user the meal was logged while the
+      // items were only ever staged into a screen they'd have to go find (see
+      // handleSaveReviewed for where the actual save now happens).
+      setReviewResult(nutritionResult);
+      setState('reviewing');
       await triggerHaptic('success');
-      announceForAccessibility('Success! Food logged successfully.');
-
-      successTimeoutRef.current = setTimeout(() => {
-        if (!isCancelledRef.current) {
-          onComplete(nutritionResult);
-          handleClose();
-        }
-      }, 800);
+      announceForAccessibility(`Found ${itemCount} item${itemCount === 1 ? '' : 's'}. Review and save.`);
+      setIsSubmitting(false);
     } catch (err) {
       console.error('[VoiceModal] Analysis failed:', err);
       // Track analysis failed
@@ -664,7 +747,46 @@ export function VoiceModal({
       }
       setIsSubmitting(false);
     }
-  }, [analyzeTranscript, transcription, originalTranscription, onComplete, handleClose, isSubmitting, error]);
+  }, [analyzeTranscript, transcription, originalTranscription, isSubmitting, error]);
+
+  /**
+   * Saves the reviewed result directly from the modal via onSaveNow (the
+   * real backend save — see log.js's handleSaveVoiceResult), rather than
+   * handing it to onComplete to stage on a screen the user has to go find.
+   * Falls back to the old stage-and-close behavior if the host screen hasn't
+   * wired up onSaveNow, so this never becomes a dead end.
+   */
+  const handleSaveReviewed = useCallback(async () => {
+    if (!reviewResult || isSavingResult) return;
+
+    if (!onSaveNow) {
+      onComplete(reviewResult);
+      handleClose();
+      return;
+    }
+
+    setIsSavingResult(true);
+    try {
+      const saved = await onSaveNow(reviewResult);
+      if (saved === false) {
+        // onSaveNow already surfaced its own error (toast) — this just keeps
+        // the user on the review screen so Save can be retried, instead of
+        // closing on a save that didn't actually happen.
+        return;
+      }
+      handleClose();
+    } catch (err) {
+      console.error('[VoiceModal] Save failed:', err);
+      setLocalError('Could not save this meal. Please try again.');
+      setState('error');
+    } finally {
+      setIsSavingResult(false);
+    }
+  }, [reviewResult, isSavingResult, onSaveNow, onComplete, handleClose]);
+
+  const handleDiscardReview = useCallback(() => {
+    handleClose();
+  }, [handleClose]);
 
   const handleEditTranscription = useCallback(() => {
     setIsEditing(true);
@@ -716,7 +838,7 @@ export function VoiceModal({
   // ─────────────────────────────────────────────
 
   useEffect(() => {
-    if (state === 'transcribed' || state === 'analyzing' || state === 'success') {
+    if (state === 'transcribed' || state === 'analyzing' || state === 'success' || state === 'reviewing') {
       return;
     }
 
@@ -1103,6 +1225,92 @@ export function VoiceModal({
                 <Text style={isElderly ? styles.hintElderly : styles.hint}>
                   Calculating calories, protein, carbs, and more...
                 </Text>
+              </View>
+            </>
+          )}
+
+          {/* ─────────────────────────────────────────── */}
+          {/* REVIEWING STATE — analyzed items, shown right here */}
+          {/* ─────────────────────────────────────────── */}
+          {state === 'reviewing' && reviewResult && (
+            <>
+              <View style={headerStyle}>
+                <Ionicons name="mic" size={ICON_SIZES.md} color={BRAND.primary} />
+                <Text style={titleStyle}>Voice Logging</Text>
+                <TouchableOpacity onPress={handleDiscardReview} style={styles.closeButton} accessibilityLabel="Discard and close">
+                  <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.reviewContent}>
+                <Text style={styles.statusText}>
+                  Found {reviewResult.items.length} item{reviewResult.items.length === 1 ? '' : 's'}
+                </Text>
+
+                <ScrollView style={styles.reviewList} showsVerticalScrollIndicator={false}>
+                  {reviewResult.items.map((item, idx) => (
+                    <View key={item.itemId || idx} style={styles.reviewItemRow}>
+                      <View style={styles.reviewItemCopy}>
+                        <Text style={styles.reviewItemName} numberOfLines={1}>{item.name}</Text>
+                        {!!(item.portion?.servingText || item.portion?.amount) && (
+                          <Text style={styles.reviewItemPortion}>
+                            {item.portion?.servingText || `${item.portion.amount} ${item.portion.unit || ''}`}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={styles.reviewItemCalories}>
+                        {Math.round(item.nutrition?.calories ?? item.macros?.calories_kcal ?? 0)} kcal
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+
+                <View style={styles.reviewTotalsRow}>
+                  {[
+                    { label: 'Calories', value: Math.round(reviewResult.totals?.calories || 0), unit: '' },
+                    { label: 'Protein', value: Math.round(reviewResult.totals?.protein || 0), unit: 'g' },
+                    { label: 'Carbs', value: Math.round(reviewResult.totals?.carbs || 0), unit: 'g' },
+                    { label: 'Fat', value: Math.round(reviewResult.totals?.fat || 0), unit: 'g' },
+                  ].map((stat) => (
+                    <View key={stat.label} style={styles.reviewTotalStat}>
+                      <Text style={styles.reviewTotalValue}>{stat.value}{stat.unit}</Text>
+                      <Text style={styles.reviewTotalLabel}>{stat.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.transcriptionActions}>
+                  <TouchableOpacity
+                    style={styles.reRecordButton}
+                    onPress={handleDiscardReview}
+                    disabled={isSavingResult}
+                    accessibilityLabel="Discard this result"
+                  >
+                    <Ionicons name="trash-outline" size={ICON_SIZES.md} color={TEXT.tertiary} />
+                    <Text style={styles.reRecordButtonText}>Discard</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={handleSaveReviewed}
+                    disabled={isSavingResult}
+                    accessibilityLabel="Save this meal to your log"
+                  >
+                    <LinearGradient
+                      colors={SURFACES.gradient.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.primaryButtonGradient}
+                    >
+                      {isSavingResult ? (
+                        <ActivityIndicator size="small" color={TEXT.white} />
+                      ) : (
+                        <Ionicons name="checkmark-circle" size={ICON_SIZES.md} color={TEXT.white} />
+                      )}
+                      <Text style={styles.primaryButtonText}>{isSavingResult ? 'Saving…' : 'Save to Log'}</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
               </View>
             </>
           )}
@@ -1838,6 +2046,71 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.white,
+  },
+
+  // ─────────────────────────────────────────────
+  // REVIEWING STATE
+  // ─────────────────────────────────────────────
+  reviewContent: {
+    width: '100%',
+    padding: SPACING[6],
+  },
+  reviewList: {
+    maxHeight: 220,
+    width: '100%',
+    marginTop: SPACING[4],
+  },
+  reviewItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING[3],
+    borderBottomWidth: 1,
+    borderBottomColor: SURFACES.background.tertiary,
+    gap: SPACING[3],
+  },
+  reviewItemCopy: {
+    flex: 1,
+  },
+  reviewItemName: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  reviewItemPortion: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+    marginTop: 2,
+  },
+  reviewItemCalories: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: BRAND.primary,
+  },
+  reviewTotalsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING[4],
+    paddingTop: SPACING[4],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.background.tertiary,
+  },
+  reviewTotalStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  reviewTotalValue: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  reviewTotalLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 2,
   },
 
   // ─────────────────────────────────────────────

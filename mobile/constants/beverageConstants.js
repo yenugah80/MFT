@@ -24,6 +24,24 @@
  */
 
 // ============================================================================
+// DEFAULT WATER GOAL
+// ============================================================================
+/**
+ * Fallback daily water goal, in liters, when goals?.waterLiters is missing.
+ *
+ * Mirrors backend/src/utils/nutrition.js's DEFAULT_WATER_GOAL_LITERS. Before
+ * this constant existed, the mobile app had 14 separate hardcoded fallbacks
+ * across dashboard cards, hooks, and services — a mix of 2.0, 2.5, '2.0'
+ * (string), and bare 2 — so which fallback a screen used depended on which
+ * file happened to render it, not on any real user data.
+ *
+ * A real user has a personalized goal from onboarding (see
+ * utils/onboardingCalculations.js's calculateWaterTarget), so this only
+ * matters for brand-new users before that completes, or error states.
+ */
+export const DEFAULT_WATER_GOAL_LITERS = 2.0;
+
+// ============================================================================
 // HYDRATION FACTORS (Research-backed)
 // ============================================================================
 export const BEVERAGE_FACTORS = {

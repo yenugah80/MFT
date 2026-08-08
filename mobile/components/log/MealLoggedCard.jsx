@@ -33,6 +33,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS, CARD_SYSTEM } from '../../constants/premiumTheme';
@@ -420,6 +421,7 @@ export default function MealLoggedCard({
   onViewHistory,
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [scaleAnim] = useState(new Animated.Value(0.9));
   const [fadeAnim] = useState(new Animated.Value(0));
   // Defer animated child components to prevent bridge overflow
@@ -524,6 +526,13 @@ export default function MealLoggedCard({
       style={[
         styles.container,
         {
+          // This screen is presented in a plain, non-pageSheet full-screen
+          // Modal (see log.js), which renders content edge-to-edge with no
+          // OS-provided inset — unlike MealSummaryScreen's pageSheet Modal.
+          // Without this, the close button (positioned at the very top of
+          // the header) sits under the status bar / Dynamic Island, where
+          // touches aren't reliably delivered.
+          paddingTop: insets.top,
           opacity: fadeAnim,
           transform: [{ scale: scaleAnim }],
         },
