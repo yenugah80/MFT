@@ -2,11 +2,16 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 function getApiUrl() {
+  // Dev-only override so a local/mock backend can be exercised without ever
+  // pointing a production build at anything but Railway.
+  if (__DEV__ && process.env.EXPO_PUBLIC_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_API_BASE_URL;
+  }
   return 'https://api.my-food-tracker.com/api';
 }
 
 // Base API URL
-// Use Railway backend in both development and production
+// Uses EXPO_PUBLIC_API_BASE_URL in development when set, Railway backend otherwise
 export const API_URL = getApiUrl();
 
 // Legacy export for backwards compatibility (profileAPI uses this without /api)

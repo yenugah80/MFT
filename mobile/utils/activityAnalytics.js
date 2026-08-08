@@ -1311,7 +1311,8 @@ export const getPeriodStats = (activities, options = {}) => {
     inWindow.map((a) => new Date(a.timestamp).toDateString())
   ).size;
 
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now);
   today.setHours(23, 59, 59, 999);
   const elapsedEnd = end > today ? today : end;
   // The window ends at 23:59:59, so the span is (n-1) days plus a few hours.
@@ -1325,7 +1326,10 @@ export const getPeriodStats = (activities, options = {}) => {
   // Saturday — the pace read that the weekly hero used to carry.
   const totalDays = Math.floor((end - start) / 86400000) + 1;
   const expectedByNow = Math.round((target / totalDays) * Math.min(elapsedDays, totalDays));
-  const isComplete = end <= today;
+  // Must compare against the actual moment, not end-of-today: `today` above is
+  // clamped to 23:59:59.999 so a period ending today would always read
+  // complete, even at 9am on that day.
+  const isComplete = end < now;
 
   return {
     scope,
