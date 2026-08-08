@@ -32,9 +32,10 @@
  * - Monthly: Feature interaction analysis, Model recalibration
  */
 
+import { CronJob } from 'cron';
 import { db } from '../db/index.js';
-import { profilesTable, gamificationTable } from '../db/schema.js';
-import { eq, gte, desc, sql } from 'drizzle-orm';
+import { foodLogTable } from '../db/schema.js';
+import { sql } from 'drizzle-orm';
 
 // Import ML services
 import { orchestrateAllUsersML } from '../services/mlEnhancedOrchestratorService.js';
@@ -63,6 +64,31 @@ const CONFIG = {
   // Logging
   LOG_PROGRESS_INTERVAL: 50,         // Log progress every N users
 };
+
+/**
+ * Users with at least `minMeals` food logs to their name.
+ *
+ * Eligibility used to be a join against gamification.total_meals_logged. That
+ * column is written once at signup (0) and never incremented by any of the four
+ * food-log insert paths, so every threshold here compared against 0 and each of
+ * these jobs quietly selected an empty user set and did nothing — for as long as
+ * the column has existed. Counting food_log directly is derived from the rows
+ * themselves, so there is no counter left to drift out of sync the next time a
+ * fifth insert path shows up.
+ *
+ * food_log.user_id is a foreign key onto profiles.user_id, so every row counted
+ * here belongs to a real profile — the old join added no filtering of its own.
+ *
+ * @param {number} minMeals - Inclusive lower bound on lifetime food logs
+ * @returns {Promise<Array<{userId: string}>>}
+ */
+async function getUsersWithMinMeals(minMeals) {
+  return db
+    .select({ userId: foodLogTable.userId })
+    .from(foodLogTable)
+    .groupBy(foodLogTable.userId)
+    .having(sql`count(*) >= ${minMeals}`);
+}
 
 /**
  * ============================================
@@ -142,15 +168,8 @@ export async function runWeeklyDriftDetection() {
 
   try {
     // Get eligible users (minimum data threshold)
-    const eligibleUsers = await db
-      .select({
-        userId: profilesTable.userId,
-      })
-      .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(
-        gte(gamificationTable.totalMealsLogged, CONFIG.MIN_DAYS_FOR_DRIFT * 2) // Rough estimate: 2 meals/day
-      );
+    // Rough estimate: 2 meals/day
+    const eligibleUsers = await getUsersWithMinMeals(CONFIG.MIN_DAYS_FOR_DRIFT * 2);
 
     console.log(`[ML Job] Eligible users for drift detection: ${eligibleUsers.length}`);
 
@@ -254,15 +273,7 @@ export async function runWeeklyLaggedCorrelations() {
 
   try {
     // Get eligible users
-    const eligibleUsers = await db
-      .select({
-        userId: profilesTable.userId,
-      })
-      .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(
-        gte(gamificationTable.totalMealsLogged, CONFIG.MIN_DAYS_FOR_LAG * 2)
-      );
+    const eligibleUsers = await getUsersWithMinMeals(CONFIG.MIN_DAYS_FOR_LAG * 2);
 
     console.log(`[ML Job] Eligible users for lagged analysis: ${eligibleUsers.length}`);
 
@@ -364,15 +375,7 @@ export async function runMonthlyInteractionAnalysis() {
 
   try {
     // Get eligible users
-    const eligibleUsers = await db
-      .select({
-        userId: profilesTable.userId,
-      })
-      .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(
-        gte(gamificationTable.totalMealsLogged, CONFIG.MIN_DAYS_FOR_INTERACTIONS * 2)
-      );
+    const eligibleUsers = await getUsersWithMinMeals(CONFIG.MIN_DAYS_FOR_INTERACTIONS * 2);
 
     console.log(`[ML Job] Eligible users for interaction analysis: ${eligibleUsers.length}`);
 
@@ -540,59 +543,55 @@ export async function generateMonthlyHealthReport() {
  *
  * @param {Object} cron - node-cron instance (optional, for external scheduling)
  */
-export function initMLBatchJobs(cron = null) {
-  console.log('[ML Job] Initializing batch job scheduler');
-
-  if (!cron) {
-    console.log('[ML Job] No cron scheduler provided - jobs will run manually via API');
-    return {
-      message: 'Jobs initialized for manual execution',
-      endpoints: {
-        daily: 'POST /api/ml/admin/jobs/daily',
-        weeklyDrift: 'POST /api/ml/admin/jobs/weekly-drift',
-        weeklyLag: 'POST /api/ml/admin/jobs/weekly-lag',
-        monthlyInteractions: 'POST /api/ml/admin/jobs/monthly-interactions',
-        monthlyReport: 'POST /api/ml/admin/jobs/monthly-report',
+export function initMLBatchJobs() {
+  // Uses CronJob from the `cron` package — the same scheduler initStreakCronJob,
+  // initNutrientDeficitJob and initSmartReminderCronJob run on.
+  //
+  // This function used to take an injected scheduler and call `cron.schedule()`,
+  // which is node-cron's API. node-cron is not a dependency of this project, so
+  // there was no object that could be passed in to make it work; called with no
+  // argument it returned a "jobs will run manually" notice and scheduled nothing.
+  // Nothing ever called it either way, so none of these jobs have ever run on a
+  // schedule — only by hand via POST /api/ml/admin/jobs/*.
+  const scheduleJob = (expression, task, label) =>
+    new CronJob(
+      expression,
+      async () => {
+        console.log(`[MLBatchJobs] Running scheduled ${label}`);
+        try {
+          await task();
+        } catch (error) {
+          // Each job traps its own failures and returns a result object, so this
+          // is only a backstop — but without it an unexpected throw becomes an
+          // unhandled rejection that can take the whole server process down.
+          console.error(`[MLBatchJobs] Scheduled ${label} threw:`, error);
+        }
       },
-    };
-  }
+      null,   // onComplete
+      true,   // start immediately
+      'UTC'
+    );
 
-  // Schedule daily orchestration at 4:00 AM
-  cron.schedule('0 4 * * *', async () => {
-    console.log('[ML Job] Running scheduled daily orchestration');
-    await runDailyOrchestration();
-  });
+  const jobs = [
+    scheduleJob('0 4 * * *', runDailyOrchestration, 'daily orchestration'),
+    scheduleJob('0 3 * * 0', runWeeklyDriftDetection, 'weekly drift detection'),
+    // Sunday 06:00 rather than the 04:00 in the original schedule, which
+    // collided head-on with the daily orchestration every Sunday. Both sweep
+    // every eligible user, so overlapping them doubles peak database load for
+    // no reason.
+    scheduleJob('0 6 * * 0', runWeeklyLaggedCorrelations, 'weekly lagged correlations'),
+    scheduleJob('0 2 1 * *', runMonthlyInteractionAnalysis, 'monthly interaction analysis'),
+    scheduleJob('0 5 1 * *', generateMonthlyHealthReport, 'monthly health report'),
+  ];
 
-  // Schedule weekly drift detection on Sundays at 3:00 AM
-  cron.schedule('0 3 * * 0', async () => {
-    console.log('[ML Job] Running scheduled weekly drift detection');
-    await runWeeklyDriftDetection();
-  });
+  console.log('[MLBatchJobs] Scheduled (UTC):');
+  console.log('  - Daily orchestration: 04:00 daily');
+  console.log('  - Weekly drift detection: Sunday 03:00');
+  console.log('  - Weekly lagged correlations: Sunday 06:00');
+  console.log('  - Monthly interaction analysis: 1st of month 02:00');
+  console.log('  - Monthly health report: 1st of month 05:00');
 
-  // Schedule weekly lagged correlations on Sundays at 4:00 AM
-  cron.schedule('0 4 * * 0', async () => {
-    console.log('[ML Job] Running scheduled weekly lagged correlations');
-    await runWeeklyLaggedCorrelations();
-  });
-
-  // Schedule monthly interaction analysis on 1st of each month at 2:00 AM
-  cron.schedule('0 2 1 * *', async () => {
-    console.log('[ML Job] Running scheduled monthly interaction analysis');
-    await runMonthlyInteractionAnalysis();
-  });
-
-  // Schedule monthly health report on 1st of each month at 5:00 AM
-  cron.schedule('0 5 1 * *', async () => {
-    console.log('[ML Job] Running scheduled monthly health report');
-    await generateMonthlyHealthReport();
-  });
-
-  console.log('[ML Job] Batch jobs scheduled:');
-  console.log('  - Daily orchestration: 4:00 AM');
-  console.log('  - Weekly drift detection: Sunday 3:00 AM');
-  console.log('  - Weekly lagged correlations: Sunday 4:00 AM');
-  console.log('  - Monthly interaction analysis: 1st of month 2:00 AM');
-  console.log('  - Monthly health report: 1st of month 5:00 AM');
+  return jobs;
 }
 
 /**

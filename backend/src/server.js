@@ -60,6 +60,7 @@ import mealPlanRouter from "./routes/mealPlan.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartReminderJob.js";
 import { initNutrientDeficitJob } from "./jobs/nutrientDeficitJob.js";
+import { initMLBatchJobs } from "./jobs/mlBatchAnalysisJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 import { initializeFirebase, isFirebaseReady } from "./config/firebase.js";
 import { globalLimiter, aiLimiter, burstLimiter } from "./middleware/rateLimiter.js";
@@ -1227,6 +1228,18 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   // Initialize proactive nutrient deficit push notification job
   initNutrientDeficitJob();
+
+  // Initialize the ML batch analysis jobs (drift detection, lagged
+  // correlations, feature interactions, monthly reports). On by default; set
+  // ML_BATCH_JOBS_ENABLED=false to stop them scheduling without a code change,
+  // since these are the first scheduled runs they have ever had in production.
+  // The POST /api/ml/admin/jobs/* endpoints remain available for manual runs
+  // either way.
+  if (process.env.ML_BATCH_JOBS_ENABLED === 'false') {
+    console.log('[Server] ML batch jobs disabled via ML_BATCH_JOBS_ENABLED=false');
+  } else {
+    initMLBatchJobs();
+  }
 
   // Initialize smart reminder push notification cron job
   // Only start if Firebase is configured (FCM available)

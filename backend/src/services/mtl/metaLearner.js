@@ -25,8 +25,8 @@
  */
 
 import { db } from '../../db/index.js';
-import { profilesTable, gamificationTable } from '../../db/schema.js';
-import { eq, gte, sql } from 'drizzle-orm';
+import { profilesTable } from '../../db/schema.js';
+import { sql } from 'drizzle-orm';
 import { MultiTaskModel, createModel, MODEL_CONFIG } from './multiTaskModel.js';
 import { encodeUserDay, batchEncodeUserDays } from './featureEncoder.js';
 
@@ -82,8 +82,13 @@ async function clusterUsers() {
         activityLevel: profilesTable.activityLevel,
       })
       .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(gte(gamificationTable.totalMealsLogged, 14)); // Minimum 14 days
+      // Minimum 14 meals. Counts food_log rows rather than reading
+      // gamification.total_meals_logged, which is never incremented after signup
+      // and so held every user below any threshold — clustering always saw zero
+      // eligible users and bailed out.
+      .where(sql`(
+        SELECT count(*) FROM food_log WHERE food_log.user_id = ${profilesTable.userId}
+      ) >= 14`);
 
     if (users.length < META_CONFIG.minUsersPerCluster * META_CONFIG.numClusters) {
       console.log('[Meta-Learner] Insufficient users for clustering');
@@ -490,8 +495,10 @@ export async function metaTrain(options = {}) {
     const eligibleUsers = await db
       .select({ userId: profilesTable.userId })
       .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(gte(gamificationTable.totalMealsLogged, minDaysPerUser * 2));
+      // Real food_log count, not the never-incremented gamification counter.
+      .where(sql`(
+        SELECT count(*) FROM food_log WHERE food_log.user_id = ${profilesTable.userId}
+      ) >= ${minDaysPerUser * 2}`);
 
     if (eligibleUsers.length < META_CONFIG.metaBatchSize) {
       console.log('[Meta-Learner] Insufficient users for meta-training');

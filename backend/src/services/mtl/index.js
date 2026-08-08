@@ -80,20 +80,28 @@ async function getUserModel(userId) {
  */
 async function getUserDataStats(userId) {
   try {
-    const stats = await db
-      .select({
-        totalMeals: gamificationTable.totalMealsLogged,
-        streak: gamificationTable.streak,
-      })
-      .from(gamificationTable)
-      .where(eq(gamificationTable.userId, userId))
-      .limit(1);
+    // Streak comes from gamification, but the meal count does not:
+    // gamification.total_meals_logged is never incremented after signup, so it
+    // reported 0 meals for every user and every caller downstream treated
+    // established users as having no data at all.
+    const [stats, mealCount] = await Promise.all([
+      db
+        .select({ streak: gamificationTable.streak })
+        .from(gamificationTable)
+        .where(eq(gamificationTable.userId, userId))
+        .limit(1),
+      db
+        .select({ count: sql`count(*)::int` })
+        .from(foodLogTable)
+        .where(eq(foodLogTable.userId, userId)),
+    ]);
 
     const gamStats = stats[0] || {};
+    const totalMeals = mealCount[0]?.count || 0;
 
     return {
-      totalMeals: gamStats.totalMeals || 0,
-      daysWithLogs: gamStats.totalMeals ? Math.ceil(gamStats.totalMeals / 2.5) : 0,
+      totalMeals,
+      daysWithLogs: totalMeals ? Math.ceil(totalMeals / 2.5) : 0,
       streak: gamStats.streak || 0,
     };
   } catch (error) {

@@ -13,6 +13,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimiter.js';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
 import { recommendationsHistoryTable, foodLogTable, profilesTable, dietaryPreferencesTable, nutritionGoalsTable } from '../db/schema.js';
@@ -200,7 +201,7 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
           protein: Math.max(0, (goals.proteinG || 150) - (nutrition.totalProtein || 0)),
           carbs: Math.max(0, (goals.carbsG || 225) - (nutrition.totalCarbs || 0)),
           fats: Math.max(0, (goals.fatsG || 65) - (nutrition.totalFats || 0)),
-          water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
+          water: Math.max(0, (goals.waterLiters || DEFAULT_WATER_GOAL_LITERS) - (today.waterIntakeLiters || 0)),
         };
         logDebug(`Wellness Score: ${holisticIntelligence?.wellnessScore}, Recovery: ${holisticIntelligence?.recoveryScore}`);
         logDebug(`Personalized Patterns: ${personalizedContext.hasPatterns ? 'Available' : 'Building'} (${personalizedContext.goodFoods?.length || 0} good foods, ${personalizedContext.avoidFoods?.length || 0} watch foods)`);

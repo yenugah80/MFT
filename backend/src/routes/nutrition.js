@@ -905,6 +905,7 @@ router.get("/dashboard", async (req, res) => {
       yesterdayFoodLogs,
       yesterdayWaterLogs,
       yesterdayMoodLogs,
+      lifetimeMealCountResult,
     ] = await Promise.all([
       // Today's nutrition summary
       db.select()
@@ -1081,7 +1082,19 @@ router.get("/dashboard", async (req, res) => {
           )
         )
         .orderBy(desc(moodLogTable.loggedDate)),
+
+      // Lifetime meal count. The gamification.total_meals_logged column is
+      // written once at signup (0) and never incremented by any code path, so
+      // reading it reported "0 meals" for every user forever — which is what
+      // kept the profile screen's "Log your first meal" prompt up permanently.
+      // Count the food_log rows instead; client_event_id is UNIQUE, so there
+      // are no duplicates to dedupe here.
+      db.select({ count: sql`count(*)::int` })
+        .from(foodLogTable)
+        .where(eq(foodLogTable.userId, userId)),
     ]);
+
+    const lifetimeMealsLogged = lifetimeMealCountResult?.[0]?.count || 0;
 
     // Extract today's activity logs from raw SQL result
     const todayActivityLogs = todayActivityLogsResult?.rows || [];
@@ -1282,6 +1295,7 @@ router.get("/dashboard", async (req, res) => {
 
     const gamificationWithLevel = {
       ...gamificationRow,
+      totalMealsLogged: lifetimeMealsLogged,  // Real count; the DB column is never incremented
       streak: currentStreak,            // CRITICAL: Use calculated streak, not stale DB value
       level: levelInfo.level,           // Override DB level with calculated level
       levelName: levelInfo.levelName,
@@ -1379,8 +1393,8 @@ router.get("/dashboard", async (req, res) => {
         hasLoggedToday,                  // Any activity today
         daysSinceLastLog,                // Gap in days (null if brand new)
         totalDaysWithLogs,               // Distinct days with any activity (lifetime)
-        totalMealsLogged: gamificationRow?.totalMealsLogged || 0,
-        reachedFirstMilestone: (gamificationRow?.totalMealsLogged || 0) >= 3,
+        totalMealsLogged: lifetimeMealsLogged,
+        reachedFirstMilestone: lifetimeMealsLogged >= 3,
         hoursSinceLastMeal,              // Hours since last food log (for personalized nudges)
       },
     };

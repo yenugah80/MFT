@@ -32,6 +32,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { and, eq, gte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { toDateStr } from '../utils/timezone.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 import {
   foodLogTable,
   moodLogTable,
@@ -790,7 +791,7 @@ function prepareDataForAI(foodLogs, moodLogs, waterLogs, goals) {
   const waterStats = {
     totalLogs: waterLogs.length,
     avgDailyIntake: calculateAvgDailyWater(waterLogs),
-    goalProgress: calculateWaterGoalProgress(waterLogs, goals.waterLiters || 2.0),
+    goalProgress: calculateWaterGoalProgress(waterLogs, goals.waterLiters || DEFAULT_WATER_GOAL_LITERS),
     hydrationPattern: analyzeHydrationPattern(waterLogs),
   };
 
@@ -857,7 +858,7 @@ INSIGHT STRUCTURE RULES:
 **USER GOALS:**
 - Daily calories: ${goals.dailyCalories || 2000}
 - Daily protein: ${goals.dailyProtein || 100}g
-- Water target: ${goals.waterLiters || 2.0}L
+- Water target: ${goals.waterLiters || DEFAULT_WATER_GOAL_LITERS}L
 
 Provide analysis in this JSON format:
 {
@@ -1272,7 +1273,7 @@ function generateWeeklyNarrative(foodLogs, moodLogs, waterLogs, summaries, goals
     const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
     waterByDay[dateKey] = (waterByDay[dateKey] || 0) + parseFloat(log.amountLiters || log.hydrationLiters || 0);
   });
-  const waterGoalDays = Object.values(waterByDay).filter(l => l >= (goals.waterLiters || 2.0)).length;
+  const waterGoalDays = Object.values(waterByDay).filter(l => l >= (goals.waterLiters || DEFAULT_WATER_GOAL_LITERS)).length;
 
   // Calculate average mood
   const avgMood = moodLogs.length > 0
@@ -1376,13 +1377,13 @@ function generateWhatToChange(foodLogs, moodLogs, waterLogs, goals) {
   });
   const avgWater = Object.values(waterByDay).reduce((sum, v) => sum + v, 0) / Math.max(Object.keys(waterByDay).length, 1);
 
-  if (avgWater < (goals.waterLiters || 2.0) * 0.8) {
+  if (avgWater < (goals.waterLiters || DEFAULT_WATER_GOAL_LITERS) * 0.8) {
     issues.push({
       type: 'hydration',
       severity: 2,
       title: 'Improve hydration',
       whyMatters: [
-        `You're averaging ${avgWater.toFixed(1)}L/day, below your ${goals.waterLiters || 2.0}L goal`,
+        `You're averaging ${avgWater.toFixed(1)}L/day, below your ${goals.waterLiters || DEFAULT_WATER_GOAL_LITERS}L goal`,
         'Proper hydration supports energy and cognitive function',
         'Many of your lower energy days correlate with low water intake',
       ],
