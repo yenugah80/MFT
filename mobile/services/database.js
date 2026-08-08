@@ -17,7 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Database version for migration tracking
 // Version 2: Added sodium column
-const DB_VERSION = 2;
+// Version 3: Added sync_queue retry bookkeeping (attempts, backoff, terminal state)
+const DB_VERSION = 3;
 const DB_VERSION_KEY = '@db_version';
 
 // Singleton database instance
@@ -77,7 +78,14 @@ export async function initDatabase() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         clientEventId TEXT UNIQUE,
         log_data TEXT,
-        timestamp INTEGER
+        timestamp INTEGER,
+        -- Retry bookkeeping. 'state' is 'pending' while the item is still
+        -- worth retrying and 'blocked' once it is terminally stuck, so a
+        -- poison-pill payload stops being retried forever.
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        state TEXT NOT NULL DEFAULT 'pending'
       );
     `);
 
@@ -95,6 +103,18 @@ export async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_sync_queue_timestamp
         ON sync_queue(timestamp ASC);
     `);
+
+    // Index for "which queued items are due now" lookups.
+    // Created after runMigrations() below on upgrades — see note there.
+    try {
+      db.execSync(`
+        CREATE INDEX IF NOT EXISTS idx_sync_queue_due
+          ON sync_queue(state, next_attempt_at ASC);
+      `);
+    } catch {
+      // Columns not present yet on a pre-v3 database; runMigrations adds them
+      // and recreates this index.
+    }
 
     // Check and run migrations if needed
     await runMigrations(db);
@@ -126,6 +146,38 @@ async function runMigrations(db) {
           // Column might already exist - ignore error
           console.log('[Database] sodium column may already exist');
         }
+      }
+
+      // Migration v3: sync_queue retry bookkeeping.
+      // Existing installs already have a sync_queue table, so CREATE TABLE
+      // IF NOT EXISTS above is a no-op for them — the columns have to be added
+      // here or every queued item on an upgraded device stays unreadable.
+      if (currentVersion < 3) {
+        const v3Columns = [
+          `ALTER TABLE sync_queue ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;`,
+          `ALTER TABLE sync_queue ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0;`,
+          `ALTER TABLE sync_queue ADD COLUMN last_error TEXT;`,
+          `ALTER TABLE sync_queue ADD COLUMN state TEXT NOT NULL DEFAULT 'pending';`,
+        ];
+
+        for (const stmt of v3Columns) {
+          try {
+            db.execSync(stmt);
+          } catch {
+            // Column already exists - ignore
+          }
+        }
+
+        try {
+          db.execSync(`
+            CREATE INDEX IF NOT EXISTS idx_sync_queue_due
+              ON sync_queue(state, next_attempt_at ASC);
+          `);
+        } catch (indexErr) {
+          console.warn('[Database] Could not create sync queue due-index:', indexErr);
+        }
+
+        console.log('[Database] ✅ Added sync_queue retry columns');
       }
 
       await AsyncStorage.setItem(DB_VERSION_KEY, DB_VERSION.toString());
@@ -163,12 +215,20 @@ export async function getDatabaseStats() {
 
   try {
     const foodLogsCount = await db.getFirstAsync('SELECT COUNT(*) as count FROM food_logs');
-    const syncQueueCount = await db.getFirstAsync('SELECT COUNT(*) as count FROM sync_queue');
+    const syncQueueCount = await db.getFirstAsync(
+      `SELECT
+         COUNT(*) AS count,
+         SUM(CASE WHEN state = 'blocked' THEN 1 ELSE 0 END) AS blocked
+       FROM sync_queue`
+    );
     const dbSize = await db.getFirstAsync("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()");
 
     return {
       foodLogs: foodLogsCount.count,
       syncQueue: syncQueueCount.count,
+      // Split out so the startup log distinguishes "waiting to upload" from
+      // "will never upload without user action"
+      syncQueueBlocked: syncQueueCount.blocked || 0,
       sizeBytes: dbSize.size,
       sizeMB: (dbSize.size / 1024 / 1024).toFixed(2),
     };
@@ -202,16 +262,27 @@ export async function exportDatabase() {
     const foodLogs = await db.getAllAsync('SELECT * FROM food_logs ORDER BY timestamp DESC');
     const syncQueue = await db.getAllAsync('SELECT * FROM sync_queue ORDER BY timestamp ASC');
 
+    // Corrupt payloads are deliberately retained in the queue as 'blocked'
+    // rows so the user can discard them, so export has to tolerate unparseable
+    // JSON rather than throwing the whole backup away.
+    const safeParse = (raw) => {
+      try {
+        return JSON.parse(raw || '{}');
+      } catch {
+        return { _unparseable: raw ?? null };
+      }
+    };
+
     return {
       version: DB_VERSION,
       exportedAt: new Date().toISOString(),
       foodLogs: foodLogs.map(row => ({
         ...row,
-        data_json: JSON.parse(row.data_json || '{}'),
+        data_json: safeParse(row.data_json),
       })),
       syncQueue: syncQueue.map(row => ({
         ...row,
-        log_data: JSON.parse(row.log_data || '{}'),
+        log_data: safeParse(row.log_data),
       })),
     };
   } catch (error) {
