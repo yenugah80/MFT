@@ -15,7 +15,8 @@
     "backfill:gamification": "node backfill-gamification.js",
     "backfill:mood-day-key": "node backfill-mood-day-key.js",
     "db:migrate": "node scripts/applyMigrations.mjs",
-    "db:migrate:dry": "node scripts/applyMigrations.mjs --dry-run"
+    "db:migrate:dry": "node scripts/applyMigrations.mjs --dry-run",
+    "check:schema-drift": "node scripts/checkSchemaDrift.mjs"
   },
   "keywords": [],
   "author": "",

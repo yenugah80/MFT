@@ -1010,9 +1010,13 @@ export const recommendationArmsTable = pgTable(
     alpha: decimal("alpha", { precision: 10, scale: 4 }).notNull().default("1.0"), // Successes + prior
     beta: decimal("beta", { precision: 10, scale: 4 }).notNull().default("1.0"),   // Failures + prior
 
-    // Trial counts
-    trials: integer("trials").default(0),
-    successes: integer("successes").default(0),
+    // Trial counts. NOT NULL matches the live column (and matches reality —
+    // these are counters compared and summed in Thompson Sampling arithmetic,
+    // where a NULL would corrupt the calculation rather than mean anything
+    // valid). schema.js previously under-declared this; the database was
+    // already correct.
+    trials: integer("trials").notNull().default(0),
+    successes: integer("successes").notNull().default(0),
 
     // Temporal tracking
     lastUpdated: timestamp("last_updated").defaultNow(),
@@ -1301,8 +1305,12 @@ export const activityLogTable = pgTable(
     exerciseId: text("exercise_id"),
     exerciseName: text("exercise_name"),
 
-    // Idempotency support
-    clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
+    // Idempotency support. Nullable, no default — matches the real column
+    // (migration 0031). The route inserts `clientEventId || null` for any
+    // client that doesn't send one; a NOT NULL + generated default here
+    // never reflected production and would break exactly that insert the
+    // moment this schema were ever pushed for real.
+    clientEventId: text("client_event_id"),
 
     // Timezone normalization
     dayKey: text("day_key"), // YYYY-MM-DD at log time
@@ -1318,7 +1326,8 @@ export const activityLogTable = pgTable(
     userDayKeyIdx: index("activity_log_user_day_key_idx").on(table.userId, table.dayKey),
     userTypeIdx: index("activity_log_user_type_idx").on(table.userId, table.type),
     userExerciseIdx: index("activity_log_user_exercise_idx").on(table.userId, table.exerciseId),
-    // Unique constraint for idempotency
+    // Unique constraint for idempotency. Postgres treats each NULL as distinct,
+    // so rows with no clientEventId never collide against each other or the DB.
     userClientEventIdUnique: unique("activity_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
     // CHECK constraints
     durationCheck: check("activity_duration_check", sql`${table.durationMinutes} > 0 AND ${table.durationMinutes} <= 1440`),

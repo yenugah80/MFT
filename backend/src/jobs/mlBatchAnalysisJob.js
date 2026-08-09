@@ -574,7 +574,14 @@ export function initMLBatchJobs() {
 
   const jobs = [
     scheduleJob('0 4 * * *', runDailyOrchestration, 'daily orchestration'),
-    scheduleJob('0 3 * * 0', runWeeklyDriftDetection, 'weekly drift detection'),
+    // Sunday 01:00 rather than 03:00. At 03:00 this sat only an hour ahead of
+    // the 04:00 daily orchestration below — both sweep every eligible user,
+    // so a drift-detection run that overran by more than an hour (plausible
+    // once this scans the real user table instead of never having run) would
+    // still collide with it, the exact problem the lagged-correlations move
+    // to 06:00 was meant to solve. 01:00 gives a full 3-hour buffer and keeps
+    // clear of the monthly jobs at 02:00/05:00 on the 1st.
+    scheduleJob('0 1 * * 0', runWeeklyDriftDetection, 'weekly drift detection'),
     // Sunday 06:00 rather than the 04:00 in the original schedule, which
     // collided head-on with the daily orchestration every Sunday. Both sweep
     // every eligible user, so overlapping them doubles peak database load for
@@ -586,7 +593,7 @@ export function initMLBatchJobs() {
 
   console.log('[MLBatchJobs] Scheduled (UTC):');
   console.log('  - Daily orchestration: 04:00 daily');
-  console.log('  - Weekly drift detection: Sunday 03:00');
+  console.log('  - Weekly drift detection: Sunday 01:00');
   console.log('  - Weekly lagged correlations: Sunday 06:00');
   console.log('  - Monthly interaction analysis: 1st of month 02:00');
   console.log('  - Monthly health report: 1st of month 05:00');
