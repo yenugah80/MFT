@@ -514,8 +514,8 @@ async function checkActualPreviousStreakBreak(userId, dbConn) {
     // Also check if there's historical evidence of breaks
     // by looking at gaps in food log dates
     const logDates = await dbConn.execute(sql`
-      SELECT DISTINCT DATE(logged_at) as log_date
-      FROM food_logs
+      SELECT DISTINCT DATE(logged_date) as log_date
+      FROM food_log
       WHERE user_id = ${userId}
       ORDER BY log_date ASC
     `);
@@ -591,11 +591,11 @@ async function checkConsecutiveWaterGoalDays(userId, targetDays, dbConn) {
   try {
     // Get water logs with goal completion status
     const result = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date,
+      SELECT DATE(logged_date) as log_date,
              SUM(amount_ml) as total_ml
-      FROM water_logs
+      FROM water_log
       WHERE user_id = ${userId}
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
       HAVING SUM(amount_ml) >= 2000
       ORDER BY log_date DESC
       LIMIT ${targetDays + 7}
@@ -612,11 +612,11 @@ async function checkConsecutiveHighProteinDays(userId, targetDays, dbConn) {
   try {
     // Check days with >= 50g protein logged
     const result = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date,
+      SELECT DATE(logged_date) as log_date,
              SUM(COALESCE((nutrition->>'protein')::numeric, 0)) as total_protein
-      FROM food_logs
+      FROM food_log
       WHERE user_id = ${userId}
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
       HAVING SUM(COALESCE((nutrition->>'protein')::numeric, 0)) >= 50
       ORDER BY log_date DESC
       LIMIT ${targetDays + 7}
@@ -633,10 +633,10 @@ async function checkConsecutiveBalancedDays(userId, targetDays, dbConn) {
   try {
     // Balanced = protein 15-35%, carbs 45-65%, fat 20-35% of calories
     const result = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date
-      FROM food_logs
+      SELECT DATE(logged_date) as log_date
+      FROM food_log
       WHERE user_id = ${userId}
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
       HAVING COUNT(*) >= 2
       ORDER BY log_date DESC
       LIMIT ${targetDays + 7}
@@ -653,11 +653,11 @@ async function checkConsecutiveCalorieGoalDays(userId, targetDays, dbConn) {
   try {
     // Check days within 1800-2500 calorie range (reasonable default)
     const result = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date,
+      SELECT DATE(logged_date) as log_date,
              SUM(COALESCE((nutrition->>'calories')::numeric, 0)) as total_cals
-      FROM food_logs
+      FROM food_log
       WHERE user_id = ${userId}
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
       HAVING SUM(COALESCE((nutrition->>'calories')::numeric, 0)) BETWEEN 1200 AND 3000
       ORDER BY log_date DESC
       LIMIT ${targetDays + 14}
@@ -674,8 +674,8 @@ async function checkConsecutiveVeggieDays(userId, targetDays, dbConn) {
   try {
     // Check days with veggie-related food logged
     const result = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date
-      FROM food_logs
+      SELECT DATE(logged_date) as log_date
+      FROM food_log
       WHERE user_id = ${userId}
         AND (
           LOWER(food_name) LIKE '%salad%' OR
@@ -689,7 +689,7 @@ async function checkConsecutiveVeggieDays(userId, targetDays, dbConn) {
           LOWER(food_name) LIKE '%cucumber%' OR
           LOWER(food_name) LIKE '%pepper%'
         )
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
       ORDER BY log_date DESC
       LIMIT ${targetDays + 7}
     `);
@@ -704,10 +704,10 @@ async function checkConsecutiveVeggieDays(userId, targetDays, dbConn) {
 async function checkEarlyBreakfastLogs(userId, dbConn) {
   try {
     const result = await dbConn.execute(sql`
-      SELECT COUNT(DISTINCT DATE(logged_at)) as count
-      FROM food_logs
+      SELECT COUNT(DISTINCT DATE(logged_date)) as count
+      FROM food_log
       WHERE user_id = ${userId}
-        AND EXTRACT(HOUR FROM logged_at) < 9
+        AND EXTRACT(HOUR FROM logged_date) < 9
         AND (meal_type = 'breakfast' OR LOWER(food_name) LIKE '%breakfast%')
     `);
 
@@ -721,10 +721,10 @@ async function checkEarlyBreakfastLogs(userId, dbConn) {
 async function checkLateDinnerLogs(userId, dbConn) {
   try {
     const result = await dbConn.execute(sql`
-      SELECT COUNT(DISTINCT DATE(logged_at)) as count
-      FROM food_logs
+      SELECT COUNT(DISTINCT DATE(logged_date)) as count
+      FROM food_log
       WHERE user_id = ${userId}
-        AND EXTRACT(HOUR FROM logged_at) >= 20
+        AND EXTRACT(HOUR FROM logged_date) >= 20
         AND (meal_type = 'dinner' OR meal_type = 'snack')
     `);
 

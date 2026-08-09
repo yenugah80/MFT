@@ -490,10 +490,10 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
 
     // Count food logs (10 XP for first 3 per day, 5 XP for rest)
     const foodLogsResult = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date, COUNT(*) as count
-      FROM food_logs
+      SELECT DATE(logged_date) as log_date, COUNT(*) as count
+      FROM food_log
       WHERE user_id = ${userId}
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
     `);
     const foodLogsByDay = foodLogsResult.rows || [];
     let foodXP = 0;
@@ -507,14 +507,14 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
 
     // Count water logs (5 XP each)
     const waterLogsResult = await dbConn.execute(sql`
-      SELECT COUNT(*) as count FROM water_logs WHERE user_id = ${userId}
+      SELECT COUNT(*) as count FROM water_log WHERE user_id = ${userId}
     `);
     const waterCount = parseInt(waterLogsResult.rows?.[0]?.count) || 0;
     const waterXP = waterCount * 5;
 
     // Count mood logs (8 XP each)
     const moodLogsResult = await dbConn.execute(sql`
-      SELECT COUNT(*) as count FROM mood_logs WHERE user_id = ${userId}
+      SELECT COUNT(*) as count FROM mood_log WHERE user_id = ${userId}
     `);
     const moodCount = parseInt(moodLogsResult.rows?.[0]?.count) || 0;
     const moodXP = moodCount * 8;
