@@ -7,6 +7,8 @@ export { width, height };
 export const CONTENT_MAX_WIDTH = width >= 768 ? 500 : 460;
 export const IS_COMPACT = height <= 760;
 
+// NOTE: AUTH_COLORS is imported by every onboarding screen as well as auth, so
+// treat it as append-only — changing a value here silently restyles onboarding.
 export const AUTH_COLORS = {
   canvas: "#FFFDF8",
   canvasWarm: "#FFF5E9",

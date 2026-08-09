@@ -14,6 +14,7 @@ import {
   AuthDivider,
   AuthField,
   AuthHeading,
+  AuthHeroHeading,
   BackButton,
   FooterLink,
   GoogleButton,
@@ -91,6 +92,14 @@ export default function SignInScreen() {
 
     return {
       title: isReturningUser ? "Welcome back" : "Sign in",
+      // Only set once isReturningUser resolves from AsyncStorage, so the hero
+      // never flashes the wrong lead line on first render.
+      lead:
+        isReturningUser === null
+          ? null
+          : isReturningUser
+          ? "Good to see you again."
+          : "Enter your details to continue.",
       subtitle: isReturningUser
         ? "Your wellness dashboard is ready."
         : "Sign in to continue your journey.",
@@ -399,13 +408,21 @@ export default function SignInScreen() {
         <BackButton onPress={handleBack} />
       </View>
 
-      <AuthHeading compact title={screenCopy.title} subtitle={screenCopy.subtitle} />
+      {showSignIn ? (
+        <AuthHeroHeading
+          title={screenCopy.title}
+          lead={screenCopy.lead}
+          subtitle={screenCopy.subtitle}
+        />
+      ) : (
+        <AuthHeading compact title={screenCopy.title} subtitle={screenCopy.subtitle} />
+      )}
 
       <View>
         <Notice type={messageType} text={message} onDismiss={() => setMessage(null)} />
 
         <AuthField
-          label="Email Address"
+          label="Email"
           icon="mail-outline"
           value={email}
           onChangeText={setEmail}
@@ -435,7 +452,7 @@ export default function SignInScreen() {
               icon="lock-closed-outline"
               value={password}
               onChangeText={setPassword}
-              placeholder="Your password"
+              placeholder="Enter your password"
               focused={focusedField === "password"}
               onFocus={() => setFocusedField("password")}
               onBlur={() => setFocusedField(null)}
@@ -558,7 +575,8 @@ export default function SignInScreen() {
           {showSignIn ? (
             <FooterLink
               prompt="Don't have an account?"
-              action="Create Account"
+              action="Create account"
+              showArrow
               onPress={() => router.replace("/(auth)/sign-up")}
             />
           ) : (

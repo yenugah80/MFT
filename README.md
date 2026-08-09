@@ -53,9 +53,9 @@
 <br/>
 
 <h1 align="center">
-  <img src="mobile/assets/images/app-logo.png" alt="MFT : My Flow Tracker" width="140">
+  <img src="mobile/assets/images/app-logo.png" alt="MFT : My Flourish Tracker" width="140">
   <br/>
-  <b>MFT : My Flow Tracker</b>
+  <b>MFT : My Flourish Tracker</b>
 </h1>
 
 <p align="center">

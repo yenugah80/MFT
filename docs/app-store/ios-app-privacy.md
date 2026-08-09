@@ -4,7 +4,7 @@ Fill this into **App Store Connect → MFT → App Privacy** before submitting.
 Every answer below is derived from what the code actually does; the source is
 cited so the form can be re-verified after future changes.
 
-- **App:** MFT : My Flow Tracker
+- **App:** MFT : My Flourish Tracker
 - **Bundle ID:** `com.zennxt.myfoodtracker`
 - **ASC App ID:** `6783527114`
 - **Privacy policy URL:** https://my-food-tracker.com/privacy

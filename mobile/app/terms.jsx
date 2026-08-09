@@ -32,7 +32,7 @@ export default function TermsOfServiceScreen() {
 
         <Section title="Acceptance of Terms">
           <Text style={styles.text}>
-            By accessing and using MFT (&quot;the App&quot;), you accept and agree to be
+            By accessing and using MFT : My Flourish Tracker (&quot;MFT&quot; or &quot;the App&quot;), you accept and agree to be
             bound by these Terms of Service. If you do not agree to these terms, please
             do not use the App.
           </Text>

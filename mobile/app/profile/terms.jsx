@@ -33,7 +33,7 @@ export default function TermsScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
           <Text style={styles.text}>
-            By using MFT, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use our app.
+            By using MFT : My Flourish Tracker (&quot;MFT&quot;), you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use our app.
           </Text>
         </View>
 

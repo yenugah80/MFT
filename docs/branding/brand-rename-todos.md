@@ -1,6 +1,14 @@
 # Brand Rename Todos
 
-Target public name: `MFT : My Flow Tracker`
+Target public name: `MFT : My Flourish Tracker`
+
+**2026-08-09:** Changed from `MFT : My Flow Tracker` to `MFT : My Flourish Tracker`.
+"Flow" reads too easily as menstrual/period tracking in the Health & Fitness
+category (see e.g. the Flo app) — this app has nothing to do with that.
+"Flourish" keeps the same shape and still starts with F, but actually
+describes the product: food, mood, water, and activity as one wellbeing
+story. Everything below that referenced "Flow" has been updated to
+"Flourish"; nothing else about the rename scope changed.
 
 ## Done
 
@@ -20,8 +28,8 @@ Target public name: `MFT : My Flow Tracker`
 
 ## Queued
 
-- Set App Store Connect app name to `MFT : My Flow Tracker`.
-- Set Google Play Console app name to `MFT : My Flow Tracker`.
+- Set App Store Connect app name to `MFT : My Flourish Tracker`.
+- Set Google Play Console app name to `MFT : My Flourish Tracker`.
 
 ## Keep Stable
 

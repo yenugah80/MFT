@@ -12,18 +12,20 @@ import {
   AuthCanvas,
   AuthDivider,
   AuthField,
-  AuthHeading,
+  AuthHeroHeading,
   BackButton,
   FooterLink,
   GoogleButton,
   Notice,
   PrimaryButton,
   TermsConsentCheckbox,
+  WelcomeBenefitChips,
   WelcomeBrand,
   WelcomeCreateAccountAction,
   WelcomeFeatureChips,
   WelcomeHeadlineContent,
   WelcomePrivacyNote,
+  WelcomeStoryDivider,
   WelcomeSubheadlineContent,
   AUTH_COLORS,
 } from "../../components/auth/LaunchAuthDesign";
@@ -267,8 +269,10 @@ export default function SignUpScreen() {
           <WelcomeBrand />
           <WelcomeHeadlineContent />
           <View style={styles.welcomeMiddle}>
-            <WelcomeFeatureChips />
             <WelcomeSubheadlineContent />
+            <WelcomeFeatureChips />
+            <WelcomeStoryDivider />
+            <WelcomeBenefitChips />
           </View>
           <View style={styles.welcomeBottom}>
             <WelcomeCreateAccountAction onPress={() => setStep("details")} />
@@ -291,12 +295,12 @@ export default function SignUpScreen() {
         <BackButton onPress={() => setStep("welcome")} />
       </View>
 
-      {/* Centered heading — no SmallBrand, matches screenshot */}
-      <AuthHeading
-        compact
-        centered
-        title="Create your account"
-        subtitle="Let's get started."
+      {/* Same two-tone hero as sign-in — "Create" in ink, "account" in the
+          accent, so both entry points read as one screen family. */}
+      <AuthHeroHeading
+        title="Create account"
+        lead="A few details and you're in."
+        subtitle="Start tracking food, mood, water and activity."
       />
 
       <View style={styles.detailsForm}>
@@ -336,7 +340,7 @@ export default function SignUpScreen() {
         </View>
 
         <AuthField
-          label="Email Address"
+          label="Email"
           icon="mail-outline"
           value={email}
           onChangeText={setEmail}
@@ -395,22 +399,29 @@ export default function SignUpScreen() {
 
         <AuthDivider />
 
-        {/* Social SSO — compact row keeps create-account within one viewport */}
-        <View style={styles.socialRow}>
-          {/* Same reasoning as the Continue button above — the consent check
-              lives in the handler so it can explain itself, not in `disabled`
-              which silently swallows the tap. */}
-          <AppleButton
-            onPress={handleAppleSignUp}
-            loading={appleLoading}
-            title="Apple"
-            style={[styles.socialOption, styles.socialOptionApple]}
-          />
-          <GoogleButton
-            onPress={handleGoogleSignUp}
-            loading={googleLoading}
-            title="Google"
-            style={styles.socialOption}
+        {/* Full-width and stacked, matching sign-in. The old side-by-side pair
+            forced a 46pt override that fought the pill height, and centred
+            labels collided with the chevron pinned to the right edge. */}
+        {/* Same reasoning as the Continue button above — the consent check
+            lives in the handler so it can explain itself, not in `disabled`
+            which silently swallows the tap. */}
+        <AppleButton
+          onPress={handleAppleSignUp}
+          loading={appleLoading}
+          title="Continue with Apple"
+        />
+        <GoogleButton
+          onPress={handleGoogleSignUp}
+          loading={googleLoading}
+          title="Continue with Google"
+        />
+
+        <View style={styles.detailsFooter}>
+          <FooterLink
+            prompt="Already have an account?"
+            action="Sign in"
+            showArrow
+            onPress={() => router.replace("/(auth)/sign-in")}
           />
         </View>
       </View>
@@ -425,20 +436,21 @@ const styles = StyleSheet.create({
   },
   welcomeMiddle: {
     alignItems: "center",
-    marginTop: 14,
-    gap: 14,
+    marginTop: 18,
+    gap: 18,
   },
   welcomeBottom: {
     marginTop: "auto",
-    gap: 6,
+    paddingTop: 24,
+    gap: 14,
   },
   topRow: {
     minHeight: 46,
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 4,
   },
   detailsForm: {
-    marginTop: 30,
+    marginTop: 4,
   },
   nameRow: {
     flexDirection: "row",
@@ -447,18 +459,7 @@ const styles = StyleSheet.create({
   nameField: {
     flex: 1,
   },
-  socialRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 10,
-  },
-  socialOption: {
-    flex: 1,
-    marginTop: 0,
-    height: 46,
-    paddingHorizontal: 10,
-  },
-  socialOptionApple: {
-    marginTop: 0,
+  detailsFooter: {
+    marginTop: 26,
   },
 });

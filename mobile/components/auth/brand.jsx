@@ -25,7 +25,11 @@ export function SmallBrand({ style }) {
 export function WelcomeValueHero() {
   return (
     <View style={[styles.welcomeValueHero, styles.welcomeHeadlineWrap]}>
-      <Text style={styles.welcomeHeadline}>Know Yourself Better</Text>
+      <Text style={styles.welcomeHeadline}>
+        Know Yourself{"\n"}
+        <Text style={styles.welcomeHeadlineAccent}>Better</Text>
+        <Text style={styles.heroSparkle}>  ✦</Text>
+      </Text>
     </View>
   );
 }
@@ -33,7 +37,78 @@ export function WelcomeValueHero() {
 export function WelcomeSubcopy() {
   return (
     <View style={styles.welcomeValueHero}>
-      <Text style={styles.welcomeSubcopy}>Every habit tells a story</Text>
+      <Text style={styles.welcomeSubcopy}>
+        Track your food, mood, water and activity. Build better habits.
+        Live a healthier, happier you.
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Large two-tone heading for the sign-in screen. Splits the final word into
+ * the accent colour ("Welcome back" → "Welcome" + "back ✦"); a single-word
+ * title simply renders plain, so any string is safe.
+ */
+export function AuthHeroHeading({ title, lead, subtitle }) {
+  const words = String(title || "").trim().split(" ");
+  const accent = words.pop();
+  const leading = words.join(" ");
+
+  return (
+    <View style={styles.heroHeadingWrap}>
+      <Text style={styles.heroTitle}>
+        {leading ? `${leading}\n` : ""}
+        <Text style={styles.heroTitleAccent}>{accent}</Text>
+        <Text style={styles.heroSparkle}>  ✦</Text>
+      </Text>
+      <View style={styles.heroIndicator}>
+        <View style={styles.heroIndicatorBar} />
+        <View style={styles.heroIndicatorDot} />
+      </View>
+      {lead ? <Text style={styles.heroLead}>{lead}</Text> : null}
+      {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
+    </View>
+  );
+}
+
+/** Small-caps rule between the feature icons and the benefit chips. */
+export function WelcomeStoryDivider() {
+  return (
+    <View style={styles.storyDivider}>
+      <View style={styles.storyDividerLine} />
+      <View style={styles.storyDividerDot} />
+      <Text style={styles.storyDividerText}>Every habit tells a story</Text>
+      <View style={styles.storyDividerDot} />
+      <View style={styles.storyDividerLine} />
+    </View>
+  );
+}
+
+/** Three-up "what this gets you" row under the feature icons. */
+export function WelcomeBenefitChips() {
+  const benefits = useMemo(
+    () => [
+      { lead: "See",   rest: "Your Progress",    icon: "bar-chart",  color: "#5B4B8A", bg: "rgba(91, 75, 138, 0.10)" },
+      { lead: "Feel",  rest: "Your Best",        icon: "heart",      color: "#D45A83", bg: "rgba(212, 90, 131, 0.12)" },
+      { lead: "Build", rest: "Healthier Habits", icon: "leaf",       color: "#2E7D4F", bg: "rgba(46, 125, 79, 0.12)" },
+    ],
+    []
+  );
+
+  return (
+    <View style={styles.benefitRow}>
+      {benefits.map((b, i) => (
+        <View key={b.rest} style={[styles.benefitChip, i < benefits.length - 1 && styles.benefitChipDivider]}>
+          <View style={[styles.benefitIcon, { backgroundColor: b.bg }]}>
+            <Ionicons name={b.icon} size={15} color={b.color} />
+          </View>
+          <View style={styles.benefitTextWrap}>
+            <Text style={styles.benefitLead}>{b.lead}</Text>
+            <Text style={styles.benefitRest}>{b.rest}</Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -131,22 +206,131 @@ const styles = StyleSheet.create({
     marginBottom: IS_COMPACT ? 8 : 12,
   },
   welcomeHeadline: {
-    maxWidth: 360,
-    fontSize: IS_COMPACT ? 26 : 32,
-    lineHeight: IS_COMPACT ? 32 : 40,
+    maxWidth: 380,
+    fontSize: IS_COMPACT ? 34 : 42,
+    lineHeight: IS_COMPACT ? 40 : 48,
     color: AUTH_COLORS.ink,
-    fontFamily: "TenorSans_400Regular",
+    fontFamily: "DMSans_700Bold",
     textAlign: "center",
-    letterSpacing: 0.5,
+    letterSpacing: -0.8,
   },
+  welcomeHeadlineAccent: { color: AUTH_COLORS.primary },
   welcomeSubcopy: {
-    maxWidth: 320,
-    fontSize: IS_COMPACT ? 13 : 15,
-    lineHeight: IS_COMPACT ? 19 : 23,
+    maxWidth: 340,
+    fontSize: IS_COMPACT ? 14 : 15,
+    lineHeight: IS_COMPACT ? 20 : 23,
     color: AUTH_COLORS.muted,
     fontFamily: "DMSans_500Medium",
     textAlign: "center",
     letterSpacing: 0,
+  },
+  heroHeadingWrap: {
+    marginTop: IS_COMPACT ? 20 : 34,
+    marginBottom: 26,
+  },
+  heroTitle: {
+    fontSize: IS_COMPACT ? 38 : 46,
+    lineHeight: IS_COMPACT ? 44 : 52,
+    color: AUTH_COLORS.ink,
+    fontFamily: "DMSans_700Bold",
+    letterSpacing: -1.2,
+  },
+  heroTitleAccent: { color: AUTH_COLORS.primary },
+  heroSparkle: {
+    fontSize: IS_COMPACT ? 19 : 22,
+    color: AUTH_COLORS.primaryLight,
+  },
+  heroIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  heroIndicatorBar: {
+    width: 44,
+    height: 4,
+    borderRadius: 10,
+    backgroundColor: AUTH_COLORS.primary,
+  },
+  heroIndicatorDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginLeft: 7,
+    backgroundColor: AUTH_COLORS.primaryLight,
+  },
+  heroLead: {
+    fontSize: IS_COMPACT ? 16 : 17,
+    lineHeight: 24,
+    color: AUTH_COLORS.text,
+    fontFamily: "DMSans_500Medium",
+  },
+  heroSubtitle: {
+    marginTop: 2,
+    fontSize: IS_COMPACT ? 15 : 16,
+    lineHeight: 23,
+    color: AUTH_COLORS.muted,
+    fontFamily: "DMSans_500Medium",
+  },
+  storyDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    width: "100%",
+    paddingHorizontal: 2,
+  },
+  storyDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "rgba(107, 78, 255, 0.16)",
+  },
+  storyDividerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: AUTH_COLORS.primaryLight,
+  },
+  storyDividerText: {
+    fontSize: 11,
+    color: AUTH_COLORS.muted,
+    fontFamily: "DMSans_700Bold",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  benefitRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  benefitChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingRight: 6,
+  },
+  benefitChipDivider: {
+    borderRightWidth: 1,
+    borderRightColor: "rgba(15, 36, 31, 0.08)",
+  },
+  benefitIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  benefitTextWrap: { flexShrink: 1 },
+  benefitLead: {
+    fontSize: 11,
+    color: AUTH_COLORS.muted,
+    fontFamily: "DMSans_500Medium",
+  },
+  benefitRest: {
+    fontSize: 11.5,
+    color: AUTH_COLORS.text,
+    fontFamily: "DMSans_700Bold",
   },
   featureSystem: {
     width: "105%",
@@ -203,15 +387,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   privacyNote: {
-    marginTop: 26,
+    marginTop: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 8,
   },
   privacyNoteText: {
     fontSize: 12,
-    lineHeight: 99,
+    // Was 99 — a typo that padded this row to ~99pt tall and pushed the whole
+    // welcome layout up. The lock icon and label are meant to sit tight.
+    lineHeight: 16,
     color: AUTH_COLORS.muted,
     fontFamily: "DMSans_500Medium",
     letterSpacing: 0.1,

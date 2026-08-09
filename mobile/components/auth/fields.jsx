@@ -51,7 +51,7 @@ export function AuthField({
         <Ionicons
           name={icon}
           size={22}
-          color={focused ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+          color={AUTH_COLORS.primary}
           style={styles.inputIcon}
         />
         <TextInput
@@ -172,26 +172,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   inputShell: {
-    height: IS_COMPACT ? 46 : 50,
-    borderRadius: 14,
+    height: IS_COMPACT ? 54 : 58,
+    borderRadius: 18,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.68)",
+    backgroundColor: "rgba(255, 255, 255, 0.80)",
     borderWidth: 1,
-    borderColor: AUTH_COLORS.line,
+    borderColor: "rgba(107, 78, 255, 0.17)",
     shadowColor: "rgba(22, 33, 30, 0.08)",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.09,
     shadowRadius: 14,
     elevation: 2,
   },
   inputShellFilled: {
-    backgroundColor: "rgba(255, 255, 255, 0.84)",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
   },
   inputShellFocused: {
-    borderColor: "rgba(107, 78, 255, 0.42)",
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderColor: "rgba(107, 78, 255, 0.5)",
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
     shadowOpacity: 0.14,
     shadowRadius: 18,
     elevation: 4,

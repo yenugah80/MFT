@@ -11,8 +11,7 @@ export function WelcomeFeatureChips() {
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: 10,
-    marginBottom: 10,
-    transform: [{ translateY: 14 }],
+    width: "100%",
+    alignItems: "center",
   },
 });

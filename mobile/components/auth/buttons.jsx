@@ -37,17 +37,18 @@ export function PrimaryButton({ title, loading, onPress, disabled, style }) {
     >
       <LinearGradient
         colors={[AUTH_COLORS.primaryLight, AUTH_COLORS.primary, AUTH_COLORS.primaryDeep]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
         style={styles.primaryButton}
       >
-        <Text style={styles.primaryText}>{title}</Text>
-        <Ionicons
-          name={loading ? "time-outline" : "arrow-forward"}
-          size={24}
-          color={AUTH_COLORS.white}
-          style={styles.primaryIcon}
-        />
+        {loading ? (
+          <ActivityIndicator size="small" color={AUTH_COLORS.white} />
+        ) : (
+          <>
+            <Text style={styles.primaryText}>{title}</Text>
+            <Ionicons name="arrow-forward" size={22} color={AUTH_COLORS.white} style={styles.primaryIcon} />
+          </>
+        )}
       </LinearGradient>
     </Pressable>
   );
@@ -66,15 +67,15 @@ export function AppleButton({ onPress, loading, disabled, title = "Continue with
         (disabled || loading) && styles.disabled,
       ]}
     >
-      <View style={[styles.socialIconBadge, styles.appleIconBadge]}>
-        {loading ? (
-          <ActivityIndicator size="small" color={AUTH_COLORS.ink} />
-        ) : (
-          <Ionicons name="logo-apple" size={23} color="#000" />
-        )}
-      </View>
+      {loading ? (
+        <ActivityIndicator size="small" color={AUTH_COLORS.ink} />
+      ) : (
+        <Ionicons name="logo-apple" size={22} color="#000" />
+      )}
       <Text style={styles.socialButtonText}>{loading ? "Connecting…" : title}</Text>
-      <Ionicons name="arrow-forward" size={20} color="rgba(7, 19, 30, 0.34)" style={styles.socialArrow} />
+      {!loading && (
+        <Ionicons name="chevron-forward" size={18} color="rgba(7, 19, 30, 0.28)" style={styles.socialChevron} />
+      )}
     </Pressable>
   );
 }
@@ -92,21 +93,22 @@ export function GoogleButton({ onPress, loading, disabled, title = "Continue wit
         (disabled || loading) && styles.disabled,
       ]}
     >
-      <View style={styles.socialIconBadge}>
-        {loading ? <ActivityIndicator size="small" color="#4285F4" /> : <GoogleIconSVG size={21} />}
-      </View>
+      {loading ? <ActivityIndicator size="small" color="#4285F4" /> : <GoogleIconSVG size={20} />}
       <Text style={styles.socialButtonText}>{loading ? "Connecting…" : title}</Text>
-      <Ionicons name="arrow-forward" size={20} color="rgba(7, 19, 30, 0.34)" style={styles.socialArrow} />
+      {!loading && (
+        <Ionicons name="chevron-forward" size={18} color="rgba(7, 19, 30, 0.28)" style={styles.socialChevron} />
+      )}
     </Pressable>
   );
 }
 
-export function FooterLink({ prompt, action, onPress }) {
+export function FooterLink({ prompt, action, onPress, showArrow = false }) {
   return (
     <View style={styles.footerRow}>
-      <Text style={styles.footerPrompt}>{prompt}</Text>
-      <Pressable onPress={onPress} hitSlop={10}>
+      {prompt ? <Text style={styles.footerPrompt}>{prompt}</Text> : null}
+      <Pressable onPress={onPress} hitSlop={10} style={styles.footerActionRow}>
         <Text style={styles.footerAction}>{action}</Text>
+        {showArrow ? <Ionicons name="arrow-forward" size={16} color={AUTH_COLORS.primary} /> : null}
       </Pressable>
     </View>
   );
@@ -145,71 +147,59 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
   primaryButton: {
-    height: IS_COMPACT ? 50 : 52,
-    borderRadius: 26,
+    height: IS_COMPACT ? 52 : 54,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 22,
   },
   primaryText: {
     fontSize: IS_COMPACT ? 16 : 17,
     color: AUTH_COLORS.white,
     fontFamily: "DMSans_700Bold",
-    letterSpacing: 0,
+    letterSpacing: 0.1,
   },
   primaryIcon: {
     position: "absolute",
     right: 24,
   },
   socialButton: {
-    height: IS_COMPACT ? 44 : 48,
-    borderRadius: 15,
+    height: IS_COMPACT ? 50 : 54,
+    borderRadius: 27,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingHorizontal: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.94)",
+    borderColor: "rgba(31, 27, 61, 0.07)",
     shadowColor: "rgba(7, 19, 30, 0.12)",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 4,
-    marginTop: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    elevation: 3,
+    marginTop: 10,
   },
   socialButtonApple: {
     marginTop: 0,
   },
   socialButtonGoogle: {
-    shadowOpacity: 0.11,
+    shadowOpacity: 0.08,
   },
   socialButtonPressed: {
     transform: [{ scale: 0.985 }],
-    backgroundColor: "rgba(255, 255, 255, 0.72)",
-  },
-  socialIconBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderWidth: 1,
-    borderColor: "rgba(7, 19, 30, 0.06)",
-    marginRight: 10,
-  },
-  appleIconBadge: {
-    backgroundColor: "rgba(7, 19, 30, 0.04)",
+    backgroundColor: "rgba(242, 238, 255, 0.95)",
   },
   socialButtonText: {
-    flex: 1,
-    fontSize: IS_COMPACT ? 13 : 14,
+    fontSize: IS_COMPACT ? 15 : 16,
     fontFamily: "DMSans_700Bold",
     color: AUTH_COLORS.text,
     letterSpacing: 0,
   },
-  socialArrow: {
-    marginLeft: 8,
+  socialChevron: {
+    position: "absolute",
+    right: 18,
   },
   footerRow: {
     flexDirection: "row",
@@ -217,6 +207,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexWrap: "wrap",
     gap: 8,
+  },
+  footerActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   footerPrompt: {
     fontSize: 14,
