@@ -39,13 +39,32 @@ const buildUrlWithParams = (url, params) => {
   return resolvedUrl.toString();
 };
 
+const DEFAULT_TIMEOUT_MS = 10000;
+
+/**
+ * Default request budget, honouring EXPO_PUBLIC_API_TIMEOUT_MS.
+ *
+ * eas.json sets that variable to 30000 for production builds, and
+ * environmentValidation.js validates it — but nothing ever read it, so every
+ * production build has run on the hardcoded 10s regardless of what the build
+ * profile said. Configuration that is validated and then ignored is worse than
+ * no configuration: it reads as deliberate.
+ *
+ * Falls back to 10s when unset or unparseable, which keeps development and any
+ * build without the variable behaving exactly as before.
+ */
+const resolveDefaultTimeout = () => {
+  const parsed = parseInt(process.env.EXPO_PUBLIC_API_TIMEOUT_MS, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+};
+
 /**
  * Production-optimized retry config
  */
 const RETRY_CONFIG = {
   maxRetries: 3,
   delays: [200, 500, 1000], // Fast progressive retries
-  timeout: 10000, // 10s timeout
+  timeout: resolveDefaultTimeout(),
   retryableStatuses: [408, 429, 500, 502, 503, 504],
 };
 

@@ -83,6 +83,23 @@ function describeVoiceStartFailure(code, detail, locale) {
 const TRANSCRIPTION_CACHE_KEY = 'voice_transcription_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
+// apiClient's default budget is 10s, which is fine for ordinary CRUD but far too
+// short for these two calls — and it applies to the whole round trip, not just
+// the server's own work.
+//
+// /voice/transcribe has to upload the audio over a mobile connection, run it
+// through OpenAI transcription, then usually make a second model call to
+// identify the foods, then write to the database. /voice/process skips the
+// upload but still makes the model call. Either can pass 10s on a slow network
+// or a cold backend, at which point the client gave up on a request the server
+// went on to complete successfully — the user saw a bare error after speaking a
+// whole meal, on every device, while the backend logs showed nothing wrong.
+//
+// Timeouts are deliberately not retried (see isRetryableError in apiClient), so
+// a longer budget cannot multiply into repeated model calls.
+const TRANSCRIBE_TIMEOUT_MS = 60000;
+const ANALYZE_TIMEOUT_MS = 30000;
+
 export const useServerVoice = (options = {}) => {
   const { voiceLanguage = 'en' } = options;
   const speechLocale = getSpeechLocale(voiceLanguage);
@@ -379,7 +396,9 @@ export const useServerVoice = (options = {}) => {
 
       // upload(), not post() — post() JSON.stringifies the body, which turns
       // FormData into "{}" and silently drops the audio.
-      const response = await apiClient.upload('/voice/transcribe', formData);
+      const response = await apiClient.upload('/voice/transcribe', formData, {
+        _timeout: TRANSCRIBE_TIMEOUT_MS,
+      });
 
       return { transcript: response?.text || '', items: response?.data || [] };
     } catch (err) {
@@ -520,7 +539,7 @@ export const useServerVoice = (options = {}) => {
         language: voiceLanguage, // Pass language for multi-language nutrition analysis
       };
 
-      const response = await apiClient.post('/voice/process', payload);
+      const response = await apiClient.post('/voice/process', payload, { _timeout: ANALYZE_TIMEOUT_MS });
 
       if (!isActiveRef.current) return null;
 
@@ -694,7 +713,7 @@ export const useServerVoice = (options = {}) => {
             language: voiceLanguage, // Pass language for multi-language nutrition analysis
           };
 
-          const response = await apiClient.post('/voice/process', payload);
+          const response = await apiClient.post('/voice/process', payload, { _timeout: ANALYZE_TIMEOUT_MS });
 
           // OPTIMIZATION 3: Calculate real progress based on actual API timing
           const apiDuration = Date.now() - apiStartTimeRef.current;
