@@ -20,8 +20,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MOBILE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const THEME_MODULES = ['constants/premiumTheme.js', 'constants/designTokens.js'];
-const SCAN_DIRS = ['app', 'components', 'hooks', 'services', 'utils', 'providers', 'constants'];
+// Every module that exports token objects. The first two were the original
+// pair; the other three also export SPACING/COLORS under different scales, and
+// files importing from them were going unchecked entirely.
+const THEME_MODULES = [
+  'constants/premiumTheme.js',
+  'constants/designTokens.js',
+  'constants/premiumDesignSystem.js',
+  'constants/designSystem.js',
+  'constants/darkPremiumTheme.js',
+];
+const SCAN_DIRS = ['app', 'components', 'hooks', 'services', 'utils', 'providers', 'constants', 'contexts'];
 
 // Keep modules separate. Several names (ANIMATION, SURFACES, COLORS…) are
 // exported by BOTH theme files with different shapes, so a merged lookup would
@@ -57,7 +66,12 @@ for (const dir of SCAN_DIRS) {
 const findings = [];
 
 for (const file of files) {
-  const text = fs.readFileSync(file, 'utf8');
+  // Blank out comments before matching, but keep every character position so
+  // reported line numbers stay accurate. Without this the checker flags prose
+  // that merely mentions a token — including the comment recording a past fix.
+  const text = fs
+    .readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (c) => c.replace(/[^\n]/g, ' '));
 
   // Only check tokens this file actually imports, so a local variable that
   // happens to share a name with a token export is not misread as one — and so
@@ -76,10 +90,17 @@ for (const file of files) {
   const names = Object.keys(themes).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   if (names.length === 0) continue;
 
-  const re = new RegExp(`\\b(${names.join('|')})((?:\\.\\w+)+)`, 'g');
+  // Bracket access as well as dots. SPACING is keyed entirely by number, so
+  // every one of its usages looks like SPACING[4] — a dot-only pattern never
+  // checked the most-used token object in the codebase, and SPACING[28] (the
+  // scale stops at 20) shipped as a silently undefined paddingBottom.
+  const SEGMENT = String.raw`\.\w+|\[\s*(?:\d+(?:\.\d+)?|'[^']*'|"[^"]*")\s*\]`;
+  const re = new RegExp(`\\b(${names.join('|')})((?:${SEGMENT})+)`, 'g');
   for (const m of text.matchAll(re)) {
     const [full, root, chain] = m;
-    const segments = chain.slice(1).split('.');
+    const segments = [
+      ...chain.matchAll(/\.(\w+)|\[\s*(?:'([^']*)'|"([^"]*)"|([\d.]+))\s*\]/g),
+    ].map((s) => s[1] ?? s[2] ?? s[3] ?? s[4]);
 
     let cursor = themes[root];
     const walked = [root];

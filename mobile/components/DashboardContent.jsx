@@ -2071,7 +2071,11 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING[5],
-    paddingBottom: SPACING[28],
+    // Clears the 64pt floating action button and the tab bar. Was SPACING[28],
+    // which does not exist on this scale (it stops at 20), so paddingBottom was
+    // undefined and the last card sat permanently under the FAB with no way to
+    // scroll it clear. Literal, matching meal-plan.jsx — the other FAB screen.
+    paddingBottom: 120,
   },
   // View Your Progress - Prominent link to Analytics
   progressLinkCard: {
