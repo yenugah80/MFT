@@ -73,3 +73,25 @@ export function isTerminalStatus(status) {
 export function isRetryableStatus(status) {
   return !isTerminalStatus(status);
 }
+
+/**
+ * Whether a network state is worth attempting requests on.
+ *
+ * Lives here rather than beside the expo-network plumbing because it is the
+ * other half of the same policy question — "is it worth talking to the server
+ * right now?" — and because keeping it pure is what makes it testable without
+ * the native module.
+ *
+ * `isInternetReachable` is the stronger signal but is undefined on some
+ * platforms and momentarily undefined right after a change, so it only vetoes
+ * when explicitly false. Treating undefined as offline would swallow real
+ * reconnects while a captive-portal probe is still resolving.
+ *
+ * @param {{isConnected?: boolean, isInternetReachable?: boolean}|null} state
+ * @returns {boolean} True if requests are worth attempting
+ */
+export function isUsableConnection(state) {
+  if (!state) return false;
+  if (state.isConnected !== true) return false;
+  return state.isInternetReachable !== false;
+}

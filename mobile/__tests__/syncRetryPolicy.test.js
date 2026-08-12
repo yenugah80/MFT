@@ -13,6 +13,7 @@ import {
   getSyncBackoffMs,
   isRetryableStatus,
   isTerminalStatus,
+  isUsableConnection,
 } from '../utils/syncRetryPolicy';
 
 describe('getSyncBackoffMs', () => {
@@ -100,11 +101,89 @@ describe('isRetryableStatus', () => {
   });
 });
 
+describe('isUsableConnection', () => {
+  it('accepts a fully connected state', () => {
+    expect(isUsableConnection({ isConnected: true, isInternetReachable: true })).toBe(true);
+  });
+
+  it('rejects a disconnected state', () => {
+    expect(isUsableConnection({ isConnected: false, isInternetReachable: false })).toBe(false);
+    expect(isUsableConnection({ isConnected: false, isInternetReachable: true })).toBe(false);
+  });
+
+  it('rejects an explicitly unreachable connection', () => {
+    // Connected to a wifi network that has no route out (captive portal)
+    expect(isUsableConnection({ isConnected: true, isInternetReachable: false })).toBe(false);
+  });
+
+  it('accepts a connection whose reachability is still unknown', () => {
+    // The critical case: reachability is undefined on some platforms and
+    // momentarily undefined right after a change. Treating that as offline
+    // would swallow real reconnects and leave meals queued.
+    expect(isUsableConnection({ isConnected: true })).toBe(true);
+    expect(isUsableConnection({ isConnected: true, isInternetReachable: undefined })).toBe(true);
+  });
+
+  it('rejects missing or malformed state instead of throwing', () => {
+    expect(isUsableConnection(null)).toBe(false);
+    expect(isUsableConnection(undefined)).toBe(false);
+    expect(isUsableConnection({})).toBe(false);
+  });
+
+  it('requires isConnected to be exactly true, not merely truthy', () => {
+    // Guards against a native bridge handing back a non-boolean
+    expect(isUsableConnection({ isConnected: 1 })).toBe(false);
+    expect(isUsableConnection({ isConnected: 'yes' })).toBe(false);
+  });
+});
+
+describe('reconnect edge detection', () => {
+  // Mirrors the listener logic in useFoodLog.js: drain only on a genuine
+  // unusable -> usable transition, never on every network event.
+  const drainsOn = (states, startUsable = true) => {
+    let wasUsable = startUsable;
+    let drains = 0;
+    for (const s of states) {
+      const usable = isUsableConnection(s);
+      if (usable && !wasUsable) drains++;
+      wasUsable = usable;
+    }
+    return drains;
+  };
+
+  const OFFLINE = { isConnected: false };
+  const WIFI = { isConnected: true, isInternetReachable: true };
+  const CELL = { isConnected: true, isInternetReachable: true };
+
+  it('drains once when connectivity returns', () => {
+    expect(drainsOn([OFFLINE, WIFI])).toBe(1);
+  });
+
+  it('does not drain on a wifi-to-cellular handoff', () => {
+    // Both states are usable, so there is no edge — this is the case that
+    // would otherwise fire a sync every time a user walks between cells.
+    expect(drainsOn([WIFI, CELL, WIFI])).toBe(0);
+  });
+
+  it('drains once per outage, not once per event', () => {
+    expect(drainsOn([WIFI, OFFLINE, OFFLINE, OFFLINE, WIFI])).toBe(1);
+  });
+
+  it('drains for each separate outage', () => {
+    expect(drainsOn([WIFI, OFFLINE, WIFI, OFFLINE, WIFI])).toBe(2);
+  });
+
+  it('drains when an app launched offline first gets a connection', () => {
+    // Requires seeding wasUsable from the real state; an optimistic default
+    // would treat this as no transition and never drain.
+    expect(drainsOn([WIFI], /* startUsable */ false)).toBe(1);
+  });
+});
+
 describe('retry budget', () => {
   it('has no attempt ceiling for transient failures', () => {
     // The policy exposes no max-attempts constant on purpose: a long flight or
     // a long outage must not cause the queue to give up on a valid meal.
-    // eslint-disable-next-line global-require
     const policy = require('../utils/syncRetryPolicy');
     const names = Object.keys(policy);
     expect(names).not.toContain('MAX_SYNC_ATTEMPTS');

@@ -26,7 +26,22 @@ import {
   SYNC_BACKOFF_MAX_MS,
   getSyncBackoffMs,
   isRetryableStatus,
+  isUsableConnection,
 } from '../utils/syncRetryPolicy';
+
+/**
+ * expo-network is a native module, so a JS bundle running on a binary built
+ * before it was added would throw at import and take the whole app down.
+ * Requiring it defensively degrades to "no reconnect detection" instead:
+ * AppState resume and the capped backoff timer still drain the queue, just
+ * less promptly.
+ */
+let Network = null;
+try {
+  Network = require('expo-network');
+} catch {
+  console.warn('[useFoodLog] expo-network unavailable - reconnect detection disabled');
+}
 
 // ============================================================================
 // CONSTANTS
@@ -489,7 +504,11 @@ export function useFoodLog() {
       const next = await db.getFirstAsync(
         `SELECT MIN(next_attempt_at) AS due FROM sync_queue WHERE state != 'blocked'`
       );
-      if (!next?.due) return;
+      // MIN() over an empty set gives NULL — that's "nothing queued", the only
+      // case to bail on. A due-right-now item has next_attempt_at = 0, which
+      // `!next?.due` was treating the same as "nothing queued" and silently
+      // skipping — the item then never got its wake-up timer armed.
+      if (next?.due == null) return;
 
       const delay = Math.max(1000, next.due - Date.now());
       if (delay > SYNC_BACKOFF_MAX_MS) return;
@@ -584,12 +603,16 @@ export function useFoodLog() {
             continue;
           }
 
+          // Offset from when the meal was logged, not now — see addLog. Legacy
+          // rows queued before this was recorded fall back to the current offset.
+          const tzHeaders = getTimezoneOffsetHeaders(log.tzOffsetMinutes);
+
           let response = await fetch(`${API_URL}/nutrition/log`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
-              ...getTimezoneOffsetHeaders(),
+              ...tzHeaders,
             },
             body: JSON.stringify(payload),
           });
@@ -606,7 +629,7 @@ export function useFoodLog() {
                 headers: {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${token}`,
-                  ...getTimezoneOffsetHeaders(),
+                  ...tzHeaders,
                 },
                 body: JSON.stringify(payload),
               });
@@ -700,6 +723,37 @@ export function useFoodLog() {
   processSyncQueueRef.current = processSyncQueue;
 
   /**
+   * Clear pending backoff and drain immediately.
+   *
+   * Backoff exists to avoid hammering a network that just proved unreachable.
+   * When something gives positive evidence the network is usable again — a
+   * reconnect event, or the user foregrounding the app expecting their data to
+   * be there — that assumption no longer holds, and waiting out a timer that
+   * could be up to SYNC_BACKOFF_MAX_MS long defeats the point of noticing at
+   * all. Without this, a device that reconnects two seconds into a five-second
+   * backoff window would sit idle for the remaining three.
+   *
+   * Blocked items are untouched: a reconnect does not fix a rejected payload.
+   * `attempts` is preserved so the backoff curve and the UI's failure signal
+   * both survive.
+   *
+   * @returns {Promise<void>}
+   */
+  const syncNow = useCallback(async () => {
+    try {
+      await db.runAsync(
+        `UPDATE sync_queue SET next_attempt_at = 0 WHERE state != 'blocked'`
+      );
+    } catch (err) {
+      console.error('[useFoodLog] Failed to clear sync backoff:', err);
+    }
+    await processSyncQueueRef.current?.();
+  }, []);
+
+  const syncNowRef = useRef(null);
+  syncNowRef.current = syncNow;
+
+  /**
    * Debounced sync trigger
    * Prevents rapid-fire sync requests
    */
@@ -741,6 +795,13 @@ export function useFoodLog() {
         userId,
         status: 'pending',
         clientEventId: foodLog.clientEventId || generateClientEventId(userId),
+        // Captured now, not at sync time. The backend derives the user's local
+        // day from this (daily summary, meal XP tier, streak), and a meal logged
+        // offline can upload hours or days later — after travel or a DST change
+        // the device's current offset would put the meal on the wrong day.
+        tzOffsetMinutes: Number.isFinite(foodLog.tzOffsetMinutes)
+          ? foodLog.tzOffsetMinutes
+          : new Date().getTimezoneOffset(),
       };
 
       // Insert into SQLite (including fiber, sugar, sodium)
@@ -796,11 +857,14 @@ export function useFoodLog() {
    */
   const deleteLog = useCallback(async (logId) => {
     try {
+      // Remove from sync queue first — the lookup joins on food_logs, so it
+      // must run before that row is gone or it always matches nothing,
+      // leaving an orphaned queue entry that retries a meal that no longer
+      // exists locally.
+      await db.runAsync('DELETE FROM sync_queue WHERE clientEventId IN (SELECT clientEventId FROM food_logs WHERE id = ? OR timestamp = ?)', [logId, logId]);
+
       // Delete from local DB
       await db.runAsync('DELETE FROM food_logs WHERE id = ? OR timestamp = ?', [logId, logId]);
-
-      // Also remove from sync queue if pending
-      await db.runAsync('DELETE FROM sync_queue WHERE clientEventId IN (SELECT clientEventId FROM food_logs WHERE id = ? OR timestamp = ?)', [logId, logId]);
 
       await loadLocalLogs();
       await updateSyncCount();
@@ -984,27 +1048,29 @@ export function useFoodLog() {
 
   /**
    * Retry failed syncs.
-   * User-initiated, so it clears backoff and revives blocked items too —
-   * an explicit tap should try everything immediately, not wait out a timer.
+   *
+   * Differs from the automatic paths (reconnect, resume) in exactly one way: it
+   * also revives 'blocked' items. Only an explicit user action should re-attempt
+   * a payload the server already rejected — automatic retries would spin on it
+   * forever. Clearing the backoff and draining is then delegated to syncNow so
+   * there is one code path for that, not two that can drift.
    *
    * `attempts` is intentionally preserved. It no longer gates anything (only a
-   * real rejection parks an item), and zeroing it would make hasSyncFailure
-   * flip to false, hiding the card for the second or two the retry is in flight
-   * and then flashing it back on failure.
+   * real rejection parks an item), and zeroing it would make hasSyncFailure flip
+   * to false, hiding the card for the second or two the retry is in flight and
+   * then flashing it back on failure.
    */
   const retryFailedSyncs = useCallback(async () => {
     try {
       authPausedRef.current = false;
       setError(null);
-      await db.runAsync(
-        `UPDATE sync_queue SET state = 'pending', next_attempt_at = 0`
-      );
+      await db.runAsync(`UPDATE sync_queue SET state = 'pending' WHERE state = 'blocked'`);
       await updateSyncCount();
     } catch (err) {
-      console.error('[useFoodLog] Failed to reset sync queue:', err);
+      console.error('[useFoodLog] Failed to revive blocked syncs:', err);
     }
-    await processSyncQueue();
-  }, [processSyncQueue, updateSyncCount]);
+    await syncNow();
+  }, [syncNow, updateSyncCount]);
 
   /**
    * Discard a queued log that can never sync, removing it locally too.
@@ -1078,8 +1144,11 @@ export function useFoodLog() {
       // Load sync count
       await updateSyncCount();
 
-      // Trigger initial sync (debounced)
-      setTimeout(() => processSyncQueueRef.current?.(), 1000);
+      // Trigger initial sync. syncNow rather than a raw drain because AppState
+      // never fires 'active' on a cold launch — the app starts active — so this
+      // is the only place that can treat "the user just opened the app" as
+      // reason enough to ignore a backoff persisted from the last session.
+      setTimeout(() => syncNowRef.current?.(), 1000);
     })();
 
     return () => {
@@ -1104,10 +1173,58 @@ export function useFoodLog() {
       if (nextState !== 'active') return;
 
       authPausedRef.current = false;
-      processSyncQueueRef.current?.();
+      // syncNow, not processSyncQueue: the user is looking at the app now, so
+      // waiting out a backoff timer before even trying is the wrong trade.
+      syncNowRef.current?.();
     });
 
     return () => subscription.remove();
+  }, []);
+
+  // Drain the queue the moment connectivity comes back, without waiting for the
+  // user to foreground the app or for the backoff timer to come due.
+  //
+  // Edge-triggered on purpose. expo-network emits on every network change —
+  // wifi to cellular, IP reassignment, signal flapping — and syncing on each of
+  // those would hammer the backend while someone walks between cells. Only a
+  // genuine unusable -> usable transition drains.
+  useEffect(() => {
+    if (!Network?.addNetworkStateListener) return;
+
+    // Seeded from the real current state, not an optimistic default: an app
+    // launched while offline would otherwise start as "was online", making the
+    // first real reconnect look like no transition at all.
+    let wasUsable = true;
+    let cancelled = false;
+
+    Network.getNetworkStateAsync?.()
+      .then(state => { if (!cancelled) wasUsable = isUsableConnection(state); })
+      .catch(() => { /* keep the optimistic default */ });
+
+    let subscription;
+    try {
+      subscription = Network.addNetworkStateListener(state => {
+        const usable = isUsableConnection(state);
+        const reconnected = usable && !wasUsable;
+        wasUsable = usable;
+
+        if (reconnected) {
+          console.log('[useFoodLog] Reconnected - draining sync queue');
+          // Clears backoff first: the reconnect IS the evidence that the
+          // network is worth trying again, so honouring a timer set while
+          // offline would waste the signal entirely.
+          syncNowRef.current?.();
+        }
+      });
+    } catch (err) {
+      console.warn('[useFoodLog] Could not attach network listener:', err?.message);
+      return;
+    }
+
+    return () => {
+      cancelled = true;
+      subscription?.remove?.();
+    };
   }, []);
 
   // A new signed-in user means a usable token again. Without this, signing out
@@ -1118,7 +1235,7 @@ export function useFoodLog() {
 
     authPausedRef.current = false;
     setError(null);
-    processSyncQueueRef.current?.();
+    syncNowRef.current?.();
   }, [userId]);
 
   // ============================================================================
