@@ -7,7 +7,7 @@
  * The endpoint has four meaningful outcomes and this card handles all four
  * explicitly, because each needs a different thing from the user:
  *
- *   403 + OPENAI_CONSENT_REQUIRED  — the user has not agreed to AI processing
+ *   403 + openai_consent_required — the user has not agreed to AI processing
  *   insights: [] + message         — fewer than 7 sessions, nothing to analyse
  *   insights: [...]                — observations
  *   error                          — retry

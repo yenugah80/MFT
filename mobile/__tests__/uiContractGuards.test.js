@@ -131,6 +131,31 @@ describe('hook destructures match what the hook returns', () => {
   });
 });
 
+describe('API response codes match the server exactly', () => {
+  // The client reacts to these; a case or spelling drift makes the branch dead
+  // code that fails silently, which is how the activity-insights consent prompt
+  // stopped working.
+  const CANONICAL = ['openai_consent_required'];
+
+  it('no source compares against a mis-cased variant of a known code', () => {
+    const violations = [];
+    const variants = CANONICAL.map((c) => ({ canonical: c, upper: c.toUpperCase() }));
+
+    for (const file of dirs('app', 'components', 'hooks', 'services', 'providers', 'contexts')) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      for (const { canonical, upper } of variants) {
+        // Only a quoted string literal is a real comparison; the bare
+        // identifier is how the constant itself is legitimately named.
+        if (new RegExp(`['"\`]${upper}['"\`]`).test(src)) {
+          violations.push(`${rel(file)}: compares against '${upper}' — the server sends '${canonical}'`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
 describe('scroll areas are not nested in content-hugging containers', () => {
   /**
    * Files where a hug-container and a flex:1 scroll style coexist but are in

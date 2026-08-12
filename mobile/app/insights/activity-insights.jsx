@@ -19,6 +19,7 @@ import { useActivityLog, ACTIVITY_TYPES } from '../../hooks/useActivityLog';
 import { useMoodInsights } from '../../hooks/useMoodInsights';
 import apiClient from '../../services/apiClient';
 import ActivityInsightsView from '../../components/ActivityInsightsView';
+import { isOpenAIConsentError } from '../../constants/apiCodes';
 
 // activityAnalytics.js (consumed by ActivityInsightsView) expects
 // { timestamp, calories, duration, category, name } — the API returns
@@ -116,9 +117,11 @@ export default function ActivityInsightsScreen() {
     mutationFn: () => apiClient.post('/activity/insights', { days: 30 }),
   });
 
-  const consentRequired =
-    smartInsights.error?.response?.data?.code === 'OPENAI_CONSENT_REQUIRED' ||
-    smartInsights.error?.response?.status === 403;
+  // Was comparing against 'OPENAI_CONSENT_REQUIRED'; the server sends
+  // 'openai_consent_required', so that branch never matched and only the bare
+  // 403 fallback carried it — which also mislabelled any other 403 as a consent
+  // problem. POST /activity/insights has no other 403, so match the code alone.
+  const consentRequired = isOpenAIConsentError(smartInsights.error);
 
   const handleGiveConsent = useCallback(() => {
     Haptics.selectionAsync();
