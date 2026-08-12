@@ -40,24 +40,15 @@ import {
   VIBRANT_WELLNESS,
 } from '../constants/premiumTheme';
 import { useSleepLog, SLEEP_QUALITY_LABELS, SLEEP_CONTEXT_TAGS } from '../hooks/useSleepLog';
+import {
+  alignBedTime,
+  applyWakeTime,
+  sleepDurationMinutes,
+  isValidSleepDuration,
+} from '../utils/sleepWindow';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_NOTE_LENGTH = 200;
-
-/**
- * Place the bed time on whichever calendar day makes it the most recent instant
- * before waking. The picker only edits a clock time, so "1:30 AM" must resolve
- * to the same night as the wake time, not the previous evening (which would
- * produce a >24h window and block saving).
- */
-function alignBedTime(bed, wake) {
-  const aligned = new Date(wake);
-  aligned.setHours(bed.getHours(), bed.getMinutes(), 0, 0);
-  if (aligned >= wake) {
-    aligned.setDate(aligned.getDate() - 1);
-  }
-  return aligned;
-}
 
 export default function SleepLogger({ visible, onClose, initialData = null }) {
   const { logSleep, isLogging } = useSleepLog();
@@ -87,7 +78,7 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
   const [showWakePicker, setShowWakePicker] = useState(Platform.OS === 'ios');
 
   // Calculate duration
-  const durationMinutes = Math.round((wakeTime - bedTime) / (1000 * 60));
+  const durationMinutes = sleepDurationMinutes(bedTime, wakeTime);
   const durationHours = Math.floor(durationMinutes / 60);
   const durationMins = durationMinutes % 60;
 
@@ -179,11 +170,11 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
       setShowWakePicker(false);
     }
     if (selectedDate) {
-      // Keep the wake date anchored; the picker only edits the clock time
-      const newWake = new Date(wakeTime);
-      newWake.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
-      setWakeTime(newWake);
-      setBedTime(alignBedTime(bedTime, newWake));
+      // Keeps the wake date anchored (the picker only edits a clock time) and
+      // re-anchors bed so the window stays positive and under 24h.
+      const next = applyWakeTime(bedTime, wakeTime, selectedDate);
+      setWakeTime(next.wakeTime);
+      setBedTime(next.bedTime);
     }
   };
 
@@ -225,7 +216,7 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
   };
 
   const qualityLabel = getQualityLabel();
-  const isValidDuration = durationMinutes > 0 && durationMinutes <= 24 * 60;
+  const isValidDuration = isValidSleepDuration(durationMinutes);
 
   return (
     <Modal
