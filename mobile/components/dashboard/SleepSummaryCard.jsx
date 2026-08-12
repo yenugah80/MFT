@@ -29,15 +29,6 @@ export default function SleepSummaryCard({ compact = true }) {
   const { lastSleep, isLastSleepLoading } = useSleepLog();
   const [showLogger, setShowLogger] = useState(false);
 
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!lastSleep) {
-      setShowLogger(true);
-    } else {
-      router.push('/insights/sleep-analytics');
-    }
-  };
-
   const handleLogSleep = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowLogger(true);
@@ -64,11 +55,11 @@ export default function SleepSummaryCard({ compact = true }) {
           <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
             <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
           </View>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Sleep</Text>
-            <Text style={styles.subtitle}>Loading…</Text>
-          </View>
           <ActivityIndicator size="small" color={VIBRANT_WELLNESS.sleep.solid} />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Sleep</Text>
+          <Text style={styles.subtitle}>Loading…</Text>
         </View>
       </View>
     );
@@ -87,13 +78,13 @@ export default function SleepSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
               <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Sleep</Text>
-              <Text style={styles.subtitle}>Track your rest</Text>
-            </View>
             <View style={styles.logButton}>
               <Ionicons name="add" size={20} color={VIBRANT_WELLNESS.sleep.solid} />
             </View>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Sleep</Text>
+            <Text style={styles.subtitle}>Track your rest</Text>
           </View>
           <Text style={styles.emptyText}>
             Log last night's sleep to see how it affects your day
@@ -128,13 +119,13 @@ export default function SleepSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
               <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Sleep</Text>
-              <Text style={styles.subtitle}>Last night</Text>
-            </View>
             <TouchableOpacity onPress={handleLogSleep} style={styles.logButton}>
               <Ionicons name="add" size={20} color={VIBRANT_WELLNESS.sleep.solid} />
             </TouchableOpacity>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Sleep</Text>
+            <Text style={styles.subtitle}>Last night</Text>
           </View>
 
           {/* Stats Row */}
@@ -195,16 +186,23 @@ export default function SleepSummaryCard({ compact = true }) {
 
 const styles = StyleSheet.create({
   card: {
+    // Fills its grid cell so the Sleep and Stress cards are the same height
+    // regardless of which state each is in.
+    flex: 1,
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.lg,
     padding: SPACING[4],
     ...SHADOWS.sm,
   },
+  // Icon and action only. In the half-width dashboard grid the card is ~139pt
+  // wide inside its padding; a 44pt icon plus a 32pt button and gaps left the
+  // title about 39pt, which broke "Sleep" mid-word. The text sits on its own
+  // full-width row below so it never competes with the controls.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
+    justifyContent: 'space-between',
+    marginBottom: SPACING[2],
   },
   iconBg: {
     width: 44,
@@ -214,7 +212,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: {
-    flex: 1,
+    marginBottom: SPACING[3],
   },
   title: {
     fontSize: TYPOGRAPHY.size.base,

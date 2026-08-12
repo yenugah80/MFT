@@ -167,6 +167,7 @@ const EnhancedMoodCard = ({
     ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']
     : getPastelGradient(latestMood?.mood);
   const lastLoggedLabel = useMemo(() => formatLastLogged(latestMood?.loggedDate), [latestMood?.loggedDate]);
+  const moodIsRecent = useMemo(() => isRecentMood(latestMood?.loggedDate), [latestMood?.loggedDate]);
   const trendSummary = insights?.trendSummary || { direction: 'flat', delta: null, lastIntensity: null };
 
   // Empty State - also check if mood field is missing
@@ -237,7 +238,9 @@ const EnhancedMoodCard = ({
             onSelect={() => {}}
           />
           <View style={styles.moodMeta}>
-            <Text style={[styles.currentMoodLabel, { color: textTertiary }]}>Current Mood</Text>
+            <Text style={[styles.currentMoodLabel, { color: textTertiary }]}>
+              {moodIsRecent ? 'Current Mood' : 'Last Mood'}
+            </Text>
             <Text style={[styles.currentMoodValue, { color: textPrimary }]}>
               {latestMood?.mood ? latestMood.mood.charAt(0).toUpperCase() + latestMood.mood.slice(1) : 'Unknown'}
             </Text>
@@ -417,6 +420,19 @@ const getPastelGradient = (moodKey) => {
   };
 
   return gradients[moodKey] || PASTEL_NEUTRAL_GRADIENT;
+};
+
+/**
+ * Whether the newest entry is recent enough to call "current".
+ *
+ * The card used to label whatever it had as "Current Mood", so an entry from
+ * three days ago read as how the user feels right now.
+ */
+const isRecentMood = (loggedDate) => {
+  if (!loggedDate) return false;
+  const date = new Date(loggedDate);
+  if (Number.isNaN(date.getTime())) return false;
+  return Date.now() - date.getTime() < 24 * 60 * 60 * 1000;
 };
 
 const formatLastLogged = (loggedDate) => {

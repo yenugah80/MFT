@@ -34,15 +34,6 @@ export default function StressSummaryCard({ compact = true }) {
   const { todaySummary, isTodayLoading } = useStressLog();
   const [showLogger, setShowLogger] = useState(false);
 
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!todaySummary?.avgLevel) {
-      setShowLogger(true);
-    } else {
-      router.push('/insights/stress-patterns');
-    }
-  };
-
   const handleLogStress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowLogger(true);
@@ -62,11 +53,11 @@ export default function StressSummaryCard({ compact = true }) {
           <View style={[styles.iconBg, { backgroundColor: `${SEMANTIC.warning.base}20` }]}>
             <Ionicons name="pulse" size={24} color={SEMANTIC.warning.base} />
           </View>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Stress</Text>
-            <Text style={styles.subtitle}>Loading…</Text>
-          </View>
           <ActivityIndicator size="small" color={SEMANTIC.warning.base} />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Stress</Text>
+          <Text style={styles.subtitle}>Loading…</Text>
         </View>
       </View>
     );
@@ -85,13 +76,13 @@ export default function StressSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${SEMANTIC.warning.base}20` }]}>
               <Ionicons name="pulse" size={24} color={SEMANTIC.warning.base} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Stress</Text>
-              <Text style={styles.subtitle}>Check in</Text>
-            </View>
             <View style={styles.logButton}>
               <Ionicons name="add" size={20} color={SEMANTIC.warning.base} />
             </View>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Stress</Text>
+            <Text style={styles.subtitle}>Check in</Text>
           </View>
           <Text style={styles.emptyText}>
             Track stress to understand what helps you stay calm
@@ -134,15 +125,15 @@ export default function StressSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${stressColor}20` }]}>
               <Ionicons name="pulse" size={24} color={stressColor} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Stress</Text>
-              <Text style={styles.subtitle}>
-                {checkInCount} check-in{checkInCount !== 1 ? 's' : ''} today
-              </Text>
-            </View>
             <TouchableOpacity onPress={handleLogStress} style={styles.logButton}>
               <Ionicons name="add" size={20} color={stressColor} />
             </TouchableOpacity>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Stress</Text>
+            <Text style={styles.subtitle}>
+              {checkInCount} check-in{checkInCount !== 1 ? 's' : ''} today
+            </Text>
           </View>
 
           {/* Level Display */}
@@ -203,16 +194,21 @@ export default function StressSummaryCard({ compact = true }) {
 
 const styles = StyleSheet.create({
   card: {
+    // Fills its grid cell so the Sleep and Stress cards are the same height
+    // regardless of which state each is in.
+    flex: 1,
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.lg,
     padding: SPACING[4],
     ...SHADOWS.sm,
   },
+  // Icon and action only — see SleepSummaryCard. At half width the title had
+  // roughly 39pt beside these controls and broke "Stress" mid-word.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
+    justifyContent: 'space-between',
+    marginBottom: SPACING[2],
   },
   iconBg: {
     width: 44,
@@ -222,7 +218,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: {
-    flex: 1,
+    marginBottom: SPACING[3],
   },
   title: {
     fontSize: TYPOGRAPHY.size.base,
