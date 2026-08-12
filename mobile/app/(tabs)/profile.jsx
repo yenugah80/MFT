@@ -226,7 +226,9 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   // Tracks live window size, so iPad Split View / Slide Over re-lays out
   // instead of using a width captured once at import.
-  const { isTablet, contentWidth } = useResponsiveLayout();
+  // The hook returns `maxCardWidth` (600 on tablet, undefined otherwise);
+  // destructuring `contentWidth` gave undefined, so iPad content never centered.
+  const { isTablet, maxCardWidth: contentWidth } = useResponsiveLayout();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const { data: dashboardData } = useDashboard();

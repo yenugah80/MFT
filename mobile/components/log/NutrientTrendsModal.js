@@ -294,7 +294,9 @@ const styles = StyleSheet.create({
   tabTextActive: { color: TEXT.primary },
   badge: { backgroundColor: '#EF4444', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { fontSize: 10, color: '#fff', fontFamily: TYPOGRAPHY.family.bold },
-  scroll: { flex: 1 },
+  // No flex:1 — `container` has maxHeight but no height, so a flex:1 child
+  // would collapse to zero and render an empty sheet.
+  scroll: {},
 
   // Macro chart
   subtitle: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.secondary, marginBottom: 16 },

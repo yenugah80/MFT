@@ -741,7 +741,8 @@ const styles = StyleSheet.create({
 
   // Scroll View
   scrollView: {
-    flex: 1,
+    // No flex:1 — `sheet` is absolutely positioned with maxHeight and no
+    // height, so it sizes to content and a flex:1 child resolves to zero.
   },
   scrollContent: {
     paddingHorizontal: SPACING[5],

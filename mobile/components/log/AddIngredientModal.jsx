@@ -558,7 +558,8 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   ingredientsList: {
-    flex: 1,
+    // No flex:1 — `container` has maxHeight but no height, so it sizes to
+    // content and a flex:1 child would collapse to zero.
     marginTop: SPACING[3],
   },
   ingredientsListContent: {
@@ -629,7 +630,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   customContent: {
-    flex: 1,
+    // See ingredientsList — same content-hugging parent.
     marginTop: SPACING[3],
   },
   customContentContainer: {

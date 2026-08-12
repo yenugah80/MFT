@@ -146,9 +146,12 @@ export default function RecommendationsScreen() {
   // Fetch real recommendations from API
   const {
     recommendations: apiRecommendations,
-    isLoading,
+    // The hook exposes `loading` and `fetchRecommendations`; destructuring
+    // `isLoading`/`refetch` silently yielded undefined — the spinner never
+    // rendered and every `refetch()` call threw, leaving pull-to-refresh spinning.
+    loading: isLoading,
     error,
-    refetch,
+    fetchRecommendations: refetch,
     trackInteraction,
   } = useRecommendations({ enabled: isPremium });
 

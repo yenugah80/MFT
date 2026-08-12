@@ -403,7 +403,9 @@ const styles = StyleSheet.create({
 
   // Scroll
   scrollView: {
-    flex: 1,
+    // No flex:1 — `container` sets min/maxHeight but no height, so it sizes to
+    // content. A flex:1 child collapsed to zero, pinning the sheet at its 40%
+    // minHeight and stopping it ever growing toward the 85% max.
   },
   scrollContent: {
     paddingBottom: SPACING[4],

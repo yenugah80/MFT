@@ -10,6 +10,7 @@ module.exports = {
     '**/__tests__/**/waterTarget.test.js',
     '**/__tests__/**/hydrationCorrelationInput.test.js',
     '**/__tests__/**/syncRetryPolicy.test.js',
+    '**/__tests__/**/uiContractGuards.test.js',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

@@ -645,7 +645,8 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   historyList: {
-    flex: 1,
+    // No flex:1 — `drawer` has maxHeight '80%' but no height, so it sizes to
+    // content and a flex:1 child would collapse the list to zero height.
     padding: 16,
   },
   // Modern card-style history item
@@ -800,7 +801,8 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   comparisonContent: {
-    flex: 1,
+    // Same as historyList — `comparisonModal` caps with maxHeight '90%' but
+    // sets no height, so it hugs content.
     padding: 20,
   },
   healthierBanner: {
