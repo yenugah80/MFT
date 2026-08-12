@@ -112,7 +112,7 @@ router.get('/predictive', async (req, res) => {
     const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS };
 
     // Calculate predictions
-    const predictions = generatePredictiveInsights(foodLogs, moodLogs, waterLogs, userGoals);
+    const predictions = generatePredictiveInsights(foodLogs, moodLogs, waterLogs, userGoals, parseTimezoneOffsetMinutes(req) ?? 0);
 
     res.json({
       success: true,
@@ -154,7 +154,7 @@ router.get('/correlations', async (req, res) => {
           .where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, startDate))),
       ]);
 
-      const generatedCorrelations = generateBehavioralCorrelations(moods, foods);
+      const generatedCorrelations = generateBehavioralCorrelations(moods, foods, parseTimezoneOffsetMinutes(req) ?? 0);
       return res.json({
         success: true,
         correlations: generatedCorrelations,
@@ -1069,7 +1069,7 @@ function analyzeTemporalPatterns(foodLogs, moodLogs, waterLogs) {
  * Generate predictive insights based on historical patterns
  * Returns predictions from Day 2 onwards with early-stage insights
  */
-function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals) {
+function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals, offsetMinutes = 0) {
   const predictions = {};
   const totalDataDays = new Set([
     ...foodLogs.map(f => new Date(f.loggedDate).toDateString()),
@@ -1082,7 +1082,7 @@ function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals) {
   const hasMinimumData = totalDataDays >= MIN_DAYS;
 
   // Energy Prediction
-  const hourlyEnergy = analyzeEnergyPatterns(foodLogs, moodLogs);
+  const hourlyEnergy = analyzeEnergyPatterns(foodLogs, moodLogs, offsetMinutes);
   const energyDipHour = findEnergyDip(hourlyEnergy);
 
   if (energyDipHour) {
@@ -1190,17 +1190,24 @@ function generatePredictiveInsights(foodLogs, moodLogs, waterLogs, goals) {
 /**
  * Generate behavioral correlations from mood and food data
  */
-function generateBehavioralCorrelations(moods, foods) {
+function generateBehavioralCorrelations(moods, foods, offsetMinutes = 0) {
   const correlations = [];
+  const offsetMs = offsetMinutes * 60 * 1000;
+  const localHour = (loggedDate) => new Date(new Date(loggedDate).getTime() - offsetMs).getUTCHours();
 
   // Analyze breakfast timing correlation
+  // getHours() below used to read the SERVER's timezone (UTC on Railway) —
+  // same bug already fixed for analyzeHydrationPatterns/analyzeEnergyPatterns
+  // in this file. An 8am IST breakfast landed at hour 2 UTC, outside the
+  // 5-10 window, so it was silently never counted — this only affects the
+  // fallback path (users without accumulated stored correlations yet).
   const breakfastLogs = foods.filter(f => {
-    const hour = new Date(f.loggedDate).getHours();
+    const hour = localHour(f.loggedDate);
     return hour >= 5 && hour < 10;
   });
 
   if (breakfastLogs.length > 5) {
-    const earlyBreakfastDays = breakfastLogs.filter(f => new Date(f.loggedDate).getHours() < 8);
+    const earlyBreakfastDays = breakfastLogs.filter(f => localHour(f.loggedDate) < 8);
     const waterOnEarlyDays = earlyBreakfastDays.length; // Simplified correlation
 
     if (earlyBreakfastDays.length / breakfastLogs.length > 0.5) {
@@ -1436,12 +1443,15 @@ function generateWhatToChange(foodLogs, moodLogs, waterLogs, goals) {
 }
 
 // Helper functions
-function analyzeEnergyPatterns(foodLogs, moodLogs) {
+function analyzeEnergyPatterns(foodLogs, moodLogs, offsetMinutes = 0) {
   const hourlyEnergy = new Array(24).fill(0);
   const hourlyCounts = new Array(24).fill(0);
+  const offsetMs = offsetMinutes * 60 * 1000;
 
+  // Same server-timezone bug as generateBehavioralCorrelations above —
+  // getHours() read Railway's UTC clock, not the user's.
   moodLogs.forEach(m => {
-    const hour = new Date(m.loggedDate).getHours();
+    const hour = new Date(new Date(m.loggedDate).getTime() - offsetMs).getUTCHours();
     hourlyEnergy[hour] += m.energyLevel || 5;
     hourlyCounts[hour]++;
   });
@@ -1609,6 +1619,7 @@ router.get('/combined', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 14 } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
@@ -1669,7 +1680,7 @@ router.get('/combined', async (req, res) => {
     // Generate all insights in parallel
     const [predictions, correlations, narrative, recommendation] = await Promise.all([
       // Predictive insights
-      Promise.resolve(generatePredictiveInsights(foodLogs, moodLogs, waterLogs, userGoals)),
+      Promise.resolve(generatePredictiveInsights(foodLogs, moodLogs, waterLogs, userGoals, offsetMinutes)),
 
       // Correlations (use stored or generate)
       Promise.resolve(
@@ -1686,7 +1697,7 @@ router.get('/combined', async (req, res) => {
               explanation: generateExplanation(corr.mealPattern, corr.moodPattern),
               suggestion: generateSuggestion(corr.mealPattern, corr.moodPattern),
             }))
-          : generateBehavioralCorrelations(moodLogs, foodLogs)
+          : generateBehavioralCorrelations(moodLogs, foodLogs, offsetMinutes)
       ),
 
       // Weekly narrative
