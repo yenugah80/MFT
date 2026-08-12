@@ -3,8 +3,8 @@
 
 import { db } from "../config/db.js";
 import { gamificationTable } from "../db/schema.js";
-import { eq, and, sql } from "drizzle-orm";
-import { normalizeDateUTC, addDaysUTC, getLocalDateUTC } from "../utils/timezone.js";
+import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { normalizeDateUTC, addDaysUTC, getLocalDateUTC, getLocalDayRange } from "../utils/timezone.js";
 import { calculateLevel, checkLevelUp } from "../utils/levelCalculator.js";
 import {
   sendStreakCelebration,
@@ -71,35 +71,39 @@ export function calculateLogXP(logType, context = {}) {
 /**
  * Calculate XP to award for a meal log
  * Rules: First 3 meals = 10 XP each, meals 4+ = 5 XP each
+ *
+ * "Today" is the user's LOCAL day, matching how the same request bounds the
+ * daily nutrition summary. Bounding it by the UTC day instead made meal
+ * numbering disagree with the summary and reset at UTC midnight — for a user at
+ * UTC-4, dinner at 21:00 local is 01:00 UTC, so it counted as meal 1 of a fresh
+ * day and earned 10 XP instead of 5.
+ *
  * @param {string} userId - User ID
- * @param {Date} date - Date of the meal (will be normalized)
- * @param {Object} db - Database connection (can be transaction)
+ * @param {Date} date - Date of the meal
+ * @param {Object} dbConn - Database connection (can be transaction)
+ * @param {number} [offsetMinutes] - User's timezone offset; falls back to the
+ *   server's local day when absent, same as the other timezone helpers
  * @returns {Promise<Object>} { xp, mealNumber, dailyTotal }
  */
-export async function calculateMealXP(userId, date, dbConn = db) {
-  const normalizedDate = normalizeDateUTC(date);
-
-  // Note: dailyMealCountsTable will be created in migration
-  // For now, we'll query foodLogTable to count meals for the day
-  // This is a temporary implementation until migration is run
-
+export async function calculateMealXP(userId, date, dbConn = db, offsetMinutes) {
   try {
     // Import foodLogTable dynamically to avoid circular dependencies
     const { foodLogTable } = await import("../db/schema.js");
 
-    // Count existing meals for today
-    const startOfDay = new Date(normalizedDate);
-    const endOfDay = new Date(normalizedDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Count existing meals in the user's local day
+    const { start: startOfDay, end: endOfDay } = getLocalDayRange(offsetMinutes, new Date(date));
 
+    // gte/lte, not sql`${col} >= ${date}`: a raw template bypasses Drizzle's
+    // column type mapping, so the Date was handed to postgres.js unserialized
+    // and every call threw ERR_INVALID_ARG_TYPE into the catch below.
     const existingMeals = await dbConn
       .select({ count: sql`count(*)::int` })
       .from(foodLogTable)
       .where(
         and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${startOfDay}`,
-          sql`${foodLogTable.loggedDate} <= ${endOfDay}`
+          gte(foodLogTable.loggedDate, startOfDay),
+          lte(foodLogTable.loggedDate, endOfDay)
         )
       );
 
@@ -118,12 +122,17 @@ export async function calculateMealXP(userId, date, dbConn = db) {
       dailyTotal,
     };
   } catch (error) {
+    // Non-fatal on purpose: an XP miscalculation must not fail the meal log.
+    // But award the MINIMUM tier, not the maximum. This previously returned 10
+    // — the best case — so a query that threw on every single call still looked
+    // like normal operation, and the only symptom was silently inflated XP for
+    // anyone logging more than three meals a day. Under-awarding surfaces as a
+    // complaint; over-awarding hides forever and cannot be taken back.
     console.error("[GamificationReward] Error calculating meal XP:", error);
-    // Fallback: award 10 XP if calculation fails
     return {
-      xp: 10,
-      mealNumber: 1,
-      dailyTotal: 10,
+      xp: 5,
+      mealNumber: null,
+      dailyTotal: 5,
     };
   }
 }
@@ -230,9 +239,13 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
       ? getLocalDateUTC(timezoneOffset, date)
       : normalizeDateUTC(date);
 
-    // PRODUCTION FIX: Remove transaction for Neon HTTP driver compatibility
-    // Neon HTTP driver doesn't support transactions, so we use simple queries
-    // Race conditions are unlikely for single-user streak updates
+    // NOTE: these are separate queries rather than one transaction. The original
+    // reason no longer holds — that was the Neon HTTP driver, which had no real
+    // transactions; config/db.js now uses postgres-js over a TCP pool, which
+    // does. Left as-is because wrapping it is a behaviour change, not a comment
+    // fix: concurrent logs for one user are rare (the offline queue drains
+    // serially behind a single lock) so the race is narrow, but it is real and
+    // this is the place to fix it if streaks are ever seen double-incrementing.
 
     // Get current gamification data
     const selectQuery = sql`

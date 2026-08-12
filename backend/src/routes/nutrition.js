@@ -211,7 +211,10 @@ router.post("/log", async (req, res) => {
     if (isNewEntry) {
       try {
         // 1. Calculate and award XP
-        const { xp, mealNumber, dailyTotal } = await calculateMealXP(userId, safeLoggedDate, db);
+        // offsetMinutes so meal numbering uses the same local day as the daily
+        // summary above — without it XP counts a UTC day and resets mid-evening
+        // for anyone west of UTC.
+        const { xp, mealNumber, dailyTotal } = await calculateMealXP(userId, safeLoggedDate, db, offsetMinutes);
         const { newXP, newLevel, leveledUp, currentLevelXP, nextLevelXP, progressPercent } = await awardXP(userId, xp, 'meal_log', db);
 
         // 2. Update streak
