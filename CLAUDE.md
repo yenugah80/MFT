@@ -17,7 +17,13 @@ MFT (My Flourish Tracker) is a comprehensive nutrition and wellness tracking mob
 ### Backend (`/backend`)
 - **Runtime**: Node.js with ES Modules
 - **Framework**: Express 5
-- **Database**: PostgreSQL via Neon (@neondatabase/serverless)
+- **Database**: PostgreSQL hosted on Neon, over `postgres-js` on a TCP pool
+  (`backend/src/config/db.js`). NOT `@neondatabase/serverless` — the Neon HTTP
+  driver was deliberately dropped because it has no real transactions and opens
+  a new HTTP request per query. This matters when writing queries: raw
+  ``sql`...` `` templates bypass Drizzle's column type mapping, so a JS `Date`
+  interpolated into one reaches the driver unserialized and throws. Use the
+  `gte`/`lte`/`eq` operators for typed columns.
 - **ORM**: Drizzle ORM
 - **AI**: OpenAI API for food analysis and recommendations
 - **Authentication**: Clerk middleware (@clerk/express)
