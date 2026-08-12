@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
 import {
   calculateNutritionTargets,
   validateNutritionTargets,
@@ -65,7 +66,7 @@ const initialState = {
       proteinG: null,
       carbsG: null,
       fatsG: null,
-      waterLiters: 2.0,
+      waterLiters: DEFAULT_WATER_GOAL_LITERS,
     },
   },
   calculatedGoals: null,

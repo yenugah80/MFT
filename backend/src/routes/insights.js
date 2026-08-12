@@ -31,7 +31,7 @@ import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { and, eq, gte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
-import { toDateStr } from '../utils/timezone.js';
+import { toDateStr, getDayKey, parseTimezoneOffsetMinutes } from '../utils/timezone.js';
 import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 import {
   foodLogTable,
@@ -109,7 +109,7 @@ router.get('/predictive', async (req, res) => {
         .limit(1),
     ]);
 
-    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0 };
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS };
 
     // Calculate predictions
     const predictions = generatePredictiveInsights(foodLogs, moodLogs, waterLogs, userGoals);
@@ -239,7 +239,7 @@ router.get('/weekly-narrative', async (req, res) => {
         .limit(1),
     ]);
 
-    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0 };
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS };
 
     // Generate the weekly narrative
     const narrative = generateWeeklyNarrative(foodLogs, moodLogs, waterLogs, summaries, userGoals, weekStart, weekEnd);
@@ -278,7 +278,7 @@ router.get('/what-to-change', async (req, res) => {
         .limit(1),
     ]);
 
-    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0, dailyProtein: 100 };
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS, dailyProtein: 100 };
 
     // Generate the priority recommendation
     const recommendation = generateWhatToChange(foodLogs, moodLogs, waterLogs, userGoals);
@@ -366,7 +366,7 @@ router.get('/ai-analysis', async (req, res) => {
       });
     }
 
-    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0, dailyProtein: 100 };
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS, dailyProtein: 100 };
 
     // Prepare data summaries for AI
     const dataSummary = prepareDataForAI(foodLogs, moodLogs, waterLogs, userGoals);
@@ -1662,7 +1662,7 @@ router.get('/combined', async (req, res) => {
         .limit(5),
     ]);
 
-    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0, dailyProtein: 100 };
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS, dailyProtein: 100 };
 
     console.log(`[Insights] Combined data fetched in ${Date.now() - fetchStart}ms`);
 
@@ -1779,10 +1779,10 @@ router.get('/user-patterns', async (req, res) => {
         .limit(1),
     ]);
 
-    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: 2.0 };
+    const userGoals = goals[0] || { dailyCalories: 2000, waterLiters: DEFAULT_WATER_GOAL_LITERS };
 
     // Calculate hydration patterns
-    const hydrationPatterns = analyzeHydrationPatterns(waterLogs);
+    const hydrationPatterns = analyzeHydrationPatterns(waterLogs, parseTimezoneOffsetMinutes(req) ?? 0);
 
     // Calculate meal timing patterns
     const mealPatterns = analyzeMealTimingPatterns(foodLogs);
@@ -1850,7 +1850,7 @@ router.get('/user-patterns', async (req, res) => {
 /**
  * Analyze hydration patterns from water logs
  */
-function analyzeHydrationPatterns(waterLogs) {
+function analyzeHydrationPatterns(waterLogs, offsetMinutes = 0) {
   if (!waterLogs.length) {
     return {
       peakHours: [],
@@ -1865,11 +1865,15 @@ function analyzeHydrationPatterns(waterLogs) {
   const hourCounts = new Array(24).fill(0);
   const beverageCounts = {};
   const dailyTotals = {};
+  const offsetMs = offsetMinutes * 60 * 1000;
 
   waterLogs.forEach(log => {
     const date = new Date(log.loggedDate);
-    const hour = date.getHours();
-    const dateKey = date.toISOString().split('T')[0];
+    // date.getHours()/toISOString() below used to read the SERVER's timezone
+    // (UTC on Railway), same class of bug already fixed in
+    // hydrationAnalyticsService.js — an 8am IST log was bucketed as 2:30am.
+    const hour = new Date(date.getTime() - offsetMs).getUTCHours();
+    const dateKey = getDayKey(date, offsetMinutes);
 
     hourCounts[hour]++;
 

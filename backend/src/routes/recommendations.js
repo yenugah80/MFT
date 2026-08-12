@@ -161,7 +161,7 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
           db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
           db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).limit(1),
           analyzeRecommendationHistory(db, userId),
-          getUnifiedIntelligence(userId, { lookbackDays: 7 }),
+          getUnifiedIntelligence(userId, { lookbackDays: 7, offsetMinutes: timezoneOffset ?? 0 }),
           generateRecommendationContext(userId),
           getUserSignals(userId, { timezoneOffset }),
           getUserLaggedCorrelations(userId).catch(() => []),

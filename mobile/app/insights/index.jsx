@@ -207,7 +207,7 @@ export default function InsightsIndex() {
               metric="hydration"
               data={hydration}
               period={period}
-              onPress={() => openDeepDive('/insights/hydration-cognition')}
+              onPress={() => openDeepDive('/analytics/hydration')}
             />
 
             {/* Activity gets its own card: what was trained, not an average */}

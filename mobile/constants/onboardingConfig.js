@@ -3,6 +3,8 @@
  * Constants and defaults for the onboarding flow
  */
 
+import { DEFAULT_WATER_GOAL_LITERS } from './beverageConstants';
+
 export const GOALS = [
   {
     id: 'lose',
@@ -199,7 +201,7 @@ export const VALIDATION_RANGES = {
 export const ONBOARDING_DEFAULTS = {
   weightUnit: 'kg',
   heightUnit: 'cm',
-  waterLiters: 2.0,
+  waterLiters: DEFAULT_WATER_GOAL_LITERS,
   dietaryPreferences: ['balanced'],
   allergies: [],
   cuisinePreferences: ['mediterranean', 'american'],
