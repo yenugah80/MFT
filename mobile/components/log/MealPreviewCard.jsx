@@ -54,8 +54,11 @@ export default function MealPreviewCard({
     return count + ingredientCount;
   }, 0);
 
-  // Get confidence
-  const avgConfidence = items.reduce((sum, item) => sum + (item.confidence || 0.75), 0) / items.length;
+  // Get confidence. Photo/barcode results (useFoodAnalysis.js) never set a
+  // top-level item.confidence — the real value lives in sourceEvidence[0],
+  // so reading item.confidence alone silently shows a flat 75% for every result.
+  const itemConfidence = (item) => item.confidence ?? item.sourceEvidence?.[0]?.confidence ?? 0.75;
+  const avgConfidence = items.reduce((sum, item) => sum + itemConfidence(item), 0) / items.length;
   const confidencePercent = Math.round(avgConfidence * 100);
 
   // Confidence color

@@ -1187,7 +1187,6 @@ export default function LogScreen() {
           setShowCameraModal={setShowCameraModal}
           setShowBarcodeScannerModal={setShowBarcodeScannerModal}
           setShowVoiceModal={setShowVoiceModal}
-          analysisSource={analysisSource}
           // Only when there is genuinely no path to a transcript. An absent
           // on-device recogniser no longer qualifies: the hook keeps recording
           // and transcribes server-side instead, so voice still works. Only a
@@ -1216,74 +1215,92 @@ export default function LogScreen() {
           </View>
         ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 && !showAnalysisDetails ? (
           <View style={styles.resultsContainer}>
-            {/* UNIFIED DISPLAY: Same component for ALL input modes (text, photo, voice, barcode) */}
-            {/* Hidden when MealSummaryScreen modal is open to avoid duplicate displays */}
-            <UnifiedMealAnalysis
-              items={foodAnalysis.analysisResult.items}
-              totals={foodAnalysis.analysisResult.totals}
-              mealSummary={foodAnalysis.analysisResult.mealSummary}
-              onSave={handleSaveMeal}
-              onEdit={handleCancel}
-              saving={isSavingLog}
-              analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
-              analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
-              analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
-            />
-
-            {/* "Did you mean?" Suggestions - Only for text input */}
-            {analysisSource === 'text' && foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
-              <View style={styles.suggestionsContainer}>
-                <View style={styles.suggestionsHeader}>
-                  <Ionicons name="help-buoy-outline" size={18} color="#F59E0B" />
-                  <Text style={styles.suggestionsTitle}>Did you mean?</Text>
-                </View>
-                {foodAnalysis.analysisResult.items.map(item => (
-                  item.suggestions?.length > 0 && (
-                    <View key={item.itemId} style={styles.suggestionGroup}>
-                      <Text style={styles.suggestionLabel}>For &quot;{item.name}&quot;:</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
-                        {item.suggestions.map((suggestion, idx) => (
-                          <TouchableOpacity
-                            key={idx}
-                            style={styles.suggestionChip}
-                            onPress={() => handleApplySuggestion(item.itemId, suggestion)}
-                          >
-                            <Text style={styles.suggestionChipText}>{suggestion.canonical}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )
-                ))}
-              </View>
-            )}
-
-            {/* View Details Button - Manual trigger for text input only (photo/barcode use MealPreviewCard) */}
-            {foodAnalysis.analysisResult && analysisSource === 'text' && (
-              <TouchableOpacity
-                style={styles.viewDetailsButton}
-                onPress={() => {
-                  setHasManuallyClosedDetails(false); // Reset flag
-                  setShowAnalysisDetails(true); // Show details screen
+            {(analysisSource === 'photo' || analysisSource === 'barcode') ? (
+              /* Compact confirmation card, not the full editor — thumbnail, macro
+                 breakdown, and a food-ID confidence badge (explicitly not a
+                 nutrition-accuracy claim). Tap through for the full item-by-item
+                 editor, or log directly. Matches how MyFitnessPal/Cronometer
+                 confirm a photo scan before it's built into a full editor. */
+              <MealPreviewCard
+                analysisResult={foodAnalysis.analysisResult}
+                imageUri={selectedImage}
+                onTapDetails={() => {
+                  setHasManuallyClosedDetails(false);
+                  setShowAnalysisDetails(true);
                 }}
-                activeOpacity={0.8}
-                accessibilityLabel="View detailed nutrition analysis"
-              >
-                <LinearGradient
-                  colors={['#6B4EFF', '#8B6EFF']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.viewDetailsGradient}
-                >
-                  <Ionicons name="analytics" size={20} color="#FFFFFF" />
-                  <Text style={styles.viewDetailsText}>View Detailed Analysis</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
+                onQuickSave={handleSaveMeal}
+                isSaving={isSavingLog}
+              />
+            ) : (
+              <>
+                {/* UNIFIED DISPLAY: text and voice (manually-closed-details case) */}
+                {/* Hidden when MealSummaryScreen modal is open to avoid duplicate displays */}
+                <UnifiedMealAnalysis
+                  items={foodAnalysis.analysisResult.items}
+                  totals={foodAnalysis.analysisResult.totals}
+                  mealSummary={foodAnalysis.analysisResult.mealSummary}
+                  onSave={handleSaveMeal}
+                  onEdit={handleCancel}
+                  saving={isSavingLog}
+                  analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
+                  analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
+                  analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
+                />
 
-            {/* Actions Footer - Only for text input (photo/barcode have actions in MealPreviewCard) */}
-            {foodAnalysis.analysisResult && analysisSource === 'text' && (
+                {/* "Did you mean?" Suggestions - Only for text input */}
+                {analysisSource === 'text' && foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
+                  <View style={styles.suggestionsContainer}>
+                    <View style={styles.suggestionsHeader}>
+                      <Ionicons name="help-buoy-outline" size={18} color="#F59E0B" />
+                      <Text style={styles.suggestionsTitle}>Did you mean?</Text>
+                    </View>
+                    {foodAnalysis.analysisResult.items.map(item => (
+                      item.suggestions?.length > 0 && (
+                        <View key={item.itemId} style={styles.suggestionGroup}>
+                          <Text style={styles.suggestionLabel}>For &quot;{item.name}&quot;:</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
+                            {item.suggestions.map((suggestion, idx) => (
+                              <TouchableOpacity
+                                key={idx}
+                                style={styles.suggestionChip}
+                                onPress={() => handleApplySuggestion(item.itemId, suggestion)}
+                              >
+                                <Text style={styles.suggestionChipText}>{suggestion.canonical}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )
+                    ))}
+                  </View>
+                )}
+
+                {/* View Details Button - Manual trigger for text input only (photo/barcode use MealPreviewCard) */}
+                {foodAnalysis.analysisResult && analysisSource === 'text' && (
+                  <TouchableOpacity
+                    style={styles.viewDetailsButton}
+                    onPress={() => {
+                      setHasManuallyClosedDetails(false); // Reset flag
+                      setShowAnalysisDetails(true); // Show details screen
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityLabel="View detailed nutrition analysis"
+                  >
+                    <LinearGradient
+                      colors={['#6B4EFF', '#8B6EFF']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.viewDetailsGradient}
+                    >
+                      <Ionicons name="analytics" size={20} color="#FFFFFF" />
+                      <Text style={styles.viewDetailsText}>View Detailed Analysis</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+
+                {/* Actions Footer - Only for text input (photo/barcode have actions in MealPreviewCard) */}
+                {foodAnalysis.analysisResult && analysisSource === 'text' && (
               <View style={styles.resultsActions}>
                 <TouchableOpacity
                   style={styles.shareButton}
@@ -1305,6 +1322,8 @@ export default function LogScreen() {
                   <Text style={styles.reportButtonText}>Report Issue</Text>
                 </TouchableOpacity>
               </View>
+                )}
+              </>
             )}
           </View>
         ) : null}
@@ -2172,64 +2191,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-  voiceResultCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  voiceResultHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  voiceResultIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0FDF4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  voiceResultCopy: {
-    flex: 1,
-  },
-  voiceResultTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-  voiceResultTranscript: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-    fontStyle: 'italic',
-    lineHeight: 19,
-    fontFamily: TYPOGRAPHY.family.regular,
-  },
-  voiceResultAgain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  voiceResultAgainText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#6B4EFF',
     fontFamily: TYPOGRAPHY.family.bold,
   },
   voiceExamples: {
