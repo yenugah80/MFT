@@ -18,9 +18,12 @@ export const API_URL = getApiUrl();
 // Derive from API_URL by removing /api suffix
 export const API_BASE_URL = API_URL.replace(/\/api$/, '');
 
-// Web requests must avoid custom headers that trigger CORS preflights the backend
-// does not currently allow. Native clients can still send the timezone offset.
-export const shouldSendTimezoneOffsetHeader = Platform.OS !== 'web';
+// X-Timezone-Offset is now in the backend's CORS allowedHeaders (server.js),
+// so every platform can send it — web is no longer the one client
+// permanently stuck computing local days in UTC. Kept as a named export
+// rather than inlining `true` since other code may still branch on it and a
+// platform-specific exception is one line away if a future client needs one.
+export const shouldSendTimezoneOffsetHeader = true;
 
 /**
  * Timezone offset header for the device's current location.
@@ -32,7 +35,8 @@ export const shouldSendTimezoneOffsetHeader = Platform.OS !== 'web';
  *   the one in effect when the network came back. They differ after travel or a
  *   DST transition, and the backend derives the user's local day (daily
  *   summary, meal XP tiers, streaks) from whatever this header says.
- * @returns {Object} Header object, empty on web to avoid a CORS preflight
+ * @returns {Object} Header object — sent on every platform now that
+ *   X-Timezone-Offset is in the backend's CORS allowedHeaders.
  */
 export function getTimezoneOffsetHeaders(offsetMinutes) {
   if (!shouldSendTimezoneOffsetHeader) {

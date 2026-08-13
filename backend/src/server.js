@@ -756,7 +756,13 @@ app.use(
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    // X-Timezone-Offset carries a small integer (minutes from UTC, same as
+    // Date.prototype.getTimezoneOffset()) used only for local-day bucketing —
+    // streaks, meal-XP tiers, correlation hour-of-day. It's exactly as
+    // unverified/spoofable here as it already is for native clients, which
+    // bypass CORS entirely and always sent it. Allowing it here is what lets
+    // web stop being the one platform permanently stuck on UTC.
+    allowedHeaders: ["Content-Type", "Authorization", "X-Timezone-Offset"],
     credentials: true,
     maxAge: 3600,
   })
