@@ -1671,12 +1671,20 @@ export function useFoodAnalysis() {
       });
 
       // Nothing recognizable in the photo. The backend doesn't error in this
-      // case — it synthesizes a zero-calorie "Unknown Food" placeholder
-      // (backend/src/routes/food.js) — so it has to be caught here, or a
-      // blurry/non-food photo would sail through as a real, loggable meal.
-      // Gated on calories too: a genuinely zero-calorie food (e.g. water)
-      // must not be mistaken for a failed read.
-      if (foodLog.foodName === 'Unknown Food' && !foodLog.calories) {
+      // case — the vision model returns an empty items array, which food.js
+      // turns into a zero-item response (e.g. title "Unknown Meal (0 items)")
+      // rather than an HTTP error — so it has to be caught here, or a blurry
+      // or non-food photo would sail through as a real, loggable meal.
+      // `rawAIData.items` (the actual identified-item array from the unified
+      // response) is the authoritative signal — checked instead of matching
+      // any particular placeholder name/text, which is backend-copy-dependent
+      // and, for the multi-item path most photos now take, isn't even what
+      // gets used (verified against a live zero-item response: it was
+      // "Unknown Meal (0 items)", not "Unknown Food"). A genuinely
+      // zero-calorie food (e.g. water) still has one real identified item,
+      // so this doesn't misfire on it the way a calories-only check would.
+      const identifiedItems = rawAIData.items;
+      if (!Array.isArray(identifiedItems) || identifiedItems.length === 0) {
         setError("Couldn't identify any food in this photo. Try a clearer, well-lit shot.");
         return;
       }

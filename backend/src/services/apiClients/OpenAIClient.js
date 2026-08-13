@@ -780,7 +780,14 @@ Return JSON:
           {
             type: 'image_url',
             image_url: {
-              url: `data:image/jpeg;base64,${base64Image}`,
+              // Every current caller already sends a full `data:image/...;base64,`
+              // URI — imageAnalysisSchema (middleware/validation.js) enforces that
+              // prefix on the way in. Re-wrapping it here doubled the prefix
+              // (`data:image/jpeg;base64,data:image/jpeg;base64,...`), which OpenAI
+              // rejects as a malformed image_url with a bare HTTP 400 — silently
+              // breaking every real photo analysis since the schema started
+              // requiring the prefix.
+              url: base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`,
             },
           },
         ],

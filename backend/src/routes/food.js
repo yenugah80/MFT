@@ -325,7 +325,9 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
         ingredients: rawItems[0]?.ingredients || [],
         // Enhanced analysis fields
         isMultiItem: result.isMultiItem || false,
-        itemCount: result.itemCount || 1,
+        // `|| 1` previously coerced a genuine 0 (nothing identified) up to 1,
+        // masking the exact case rawItems.length below exists to catch.
+        itemCount: rawItems.length,
         cookingMethod: result.cookingMethod || rawItems[0]?.cookingMethod || null,
         cuisine: result.cuisine || rawItems[0]?.cuisine || null,
         healthScore: result.healthScore || null,
