@@ -355,7 +355,7 @@ const MicroRow = ({ name, value, unit, dv }) => {
 // for a white-on-gradient hero context instead of a colored-ring-on-white-card
 // ============================================================================
 
-const CalorieProgressRing = ({ consumed, goal }) => {
+export const CalorieProgressRing = ({ consumed, goal }) => {
   const size = 168;
   const strokeWidth = 14;
   const radius = (size - strokeWidth) / 2;
@@ -366,43 +366,51 @@ const CalorieProgressRing = ({ consumed, goal }) => {
   const percent = goal > 0 ? Math.round((consumed / goal) * 100) : 0;
 
   return (
-    <View style={styles.ringWrapper}>
-      <Svg width={size} height={size}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="rgba(255,255,255,0.25)"
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#FFFFFF"
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          fill="none"
-          style={{
-            transformOrigin: `${size / 2}px ${size / 2}px`,
-            transform: [{ rotate: '-90deg' }],
-          }}
-        />
-      </Svg>
-      <View style={styles.ringCenter} pointerEvents="none">
-        <Text style={styles.caloriesLabel}>Calories</Text>
-        <Text style={styles.caloriesValue}>{formatCalories(consumed)}</Text>
-        <Text style={styles.caloriesUnit}>kcal</Text>
+    <>
+      {/* Label lives above the ring, not inside it — at a 168px diameter, a
+          three-line stack (label + 64px value + unit) is taller than the
+          circle stays wide enough for: at the label's vertical offset the
+          ring has already narrowed to ~80px, so "CALORIES" (with letter-
+          spacing) collided with the stroke instead of sitting inside it.
+          Two lines (value + unit) comfortably clear that same narrowing. */}
+      <Text style={styles.caloriesLabel}>Calories</Text>
+      <View style={styles.ringWrapper}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="rgba(255,255,255,0.25)"
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#FFFFFF"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            style={{
+              transformOrigin: `${size / 2}px ${size / 2}px`,
+              transform: [{ rotate: '-90deg' }],
+            }}
+          />
+        </Svg>
+        <View style={styles.ringCenter} pointerEvents="none">
+          <Text style={styles.caloriesValue}>{formatCalories(consumed)}</Text>
+          <Text style={styles.caloriesUnit}>kcal</Text>
+        </View>
+        <View style={styles.ringBadge}>
+          <Text style={styles.ringBadgeText}>
+            {isOverGoal ? `${percent}% of goal` : `${percent}% of daily goal`}
+          </Text>
+        </View>
       </View>
-      <View style={styles.ringBadge}>
-        <Text style={styles.ringBadgeText}>
-          {isOverGoal ? `${percent}% of goal` : `${percent}% of daily goal`}
-        </Text>
-      </View>
-    </View>
+    </>
   );
 };
 

@@ -82,24 +82,26 @@ export default function MealPreviewCard({
         >
           {/* Top Section: Image + Info */}
           <View style={styles.topSection}>
-            {/* Photo Thumbnail */}
-            {imageUri ? (
-              <View style={styles.thumbnailContainer}>
+            {/* Photo Thumbnail. The confidence badge sits on this container
+                regardless of branch — it's food-ID confidence, not a claim
+                about the photo, so a barcode scan (no captured photo, but
+                often the highest-confidence source of any of them) still
+                needs to show it rather than silently having none. */}
+            <View style={[styles.thumbnailContainer, !imageUri && styles.placeholderThumbnail]}>
+              {imageUri ? (
                 <Image
                   source={{ uri: imageUri }}
                   style={styles.thumbnail}
                   resizeMode="cover"
                 />
-                {/* Confidence Badge - clarifies this is food ID confidence, not nutrition accuracy */}
-                <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor() }]}>
-                  <Text style={styles.confidenceText}>ID {confidencePercent}%</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.thumbnailContainer, styles.placeholderThumbnail]}>
+              ) : (
                 <Ionicons name="restaurant" size={32} color={TEXT.tertiary} />
+              )}
+              {/* Confidence Badge - clarifies this is food ID confidence, not nutrition accuracy */}
+              <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor() }]}>
+                <Text style={styles.confidenceText}>ID {confidencePercent}%</Text>
               </View>
-            )}
+            </View>
 
             {/* Food Info */}
             <View style={styles.infoSection}>

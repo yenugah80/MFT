@@ -68,9 +68,6 @@ function barcodeItem(overrides = {}) {
 // `analysisResult.totals?.macros` is truthy-checked by the component, so an
 // empty placeholder object there (rather than omitting totals) would silently
 // short-circuit its own reduce-based fallback and render NaN.
-// The confidence badge is drawn as an overlay on the thumbnail image, so it
-// only renders when imageUri is truthy (see "no imageUri" tests below) —
-// tests that check its text must supply one.
 const PHOTO_URI = "file:///test-photo.jpg";
 
 function buildResult(items) {
@@ -133,9 +130,10 @@ describe("single-item photo result (the real shape from analyzePhoto)", () => {
     expect(screen.getByText("ID 75%")).toBeOnTheScreen();
   });
 
-  test("no imageUri shows the placeholder icon instead of a broken Image", () => {
+  test("no imageUri shows the placeholder icon instead of a broken Image, badge still shown", () => {
     render(<MealPreviewCard analysisResult={buildResult([photoItem()])} imageUri={null} />);
     expect(screen.getByTestId("icon-restaurant")).toBeOnTheScreen();
+    expect(screen.getByText("ID 62%")).toBeOnTheScreen();
   });
 });
 
@@ -148,18 +146,19 @@ describe("single-item barcode result", () => {
   });
 
   // log.js never sets selectedImage for a barcode scan (there is no captured
-  // photo), so in the real app this branch always takes the placeholder path
-  // below — meaning a barcode result's 0.9 exact-match confidence is
-  // computed but never actually shown to the user. Not fixed here; worth
-  // knowing before treating the badge as "always there for AI results."
-  test("without a captured photo, shows the placeholder icon and no confidence badge", () => {
+  // photo) — the badge previously lived only inside the imageUri branch, so
+  // a barcode result's 0.9 exact-match confidence was computed but never
+  // shown. Fixed: the badge now overlays the thumbnail container in both
+  // branches, since it's food-ID confidence, not a claim about the photo.
+  test("without a captured photo, still shows the placeholder icon AND its real confidence", () => {
     render(<MealPreviewCard analysisResult={buildResult([barcodeItem()])} />);
     expect(screen.getByTestId("icon-restaurant")).toBeOnTheScreen();
-    expect(screen.queryByText(/^ID \d+%$/)).not.toBeOnTheScreen();
+    expect(screen.getByText("ID 90%")).toBeOnTheScreen();
   });
 
-  test("if a thumbnail were provided, its own confidence (0.9) would still compute correctly", () => {
+  test("with a thumbnail, the badge overlays the photo instead of the placeholder", () => {
     render(<MealPreviewCard analysisResult={buildResult([barcodeItem()])} imageUri={PHOTO_URI} />);
+    expect(screen.queryByTestId("icon-restaurant")).not.toBeOnTheScreen();
     expect(screen.getByText("ID 90%")).toBeOnTheScreen();
   });
 });
