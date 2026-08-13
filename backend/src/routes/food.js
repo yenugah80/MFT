@@ -141,7 +141,7 @@ router.get("/barcode/:code", async (req, res) => {
  *
  * Returns: UNIFIED RESPONSE STRUCTURE (same as voice/text/barcode)
  */
-router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
+router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'analyze your meal photo' }), validate(imageAnalysisSchema), async (req, res) => {
   try {
     const { image, highAccuracy = false, includeIngredients = false, mealType = 'snack' } = req.body;
     if (!image) return res.status(400).json({ error: "Image required" });
@@ -507,7 +507,7 @@ router.post("/analyze-voice", requireOpenAIConsent({ purpose: 'transcribe and an
  *
  * Returns: UNIFIED RESPONSE STRUCTURE with multimodal metadata
  */
-router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
+router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose: 'analyze your photo with voice notes' }), validate(imageAnalysisSchema), async (req, res) => {
   try {
     const {
       image,

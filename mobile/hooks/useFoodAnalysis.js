@@ -786,6 +786,7 @@ async function compressImage(uri, skipManipulation = false) {
  *   isAnalyzing: boolean,
  *   progress: number,
  *   error: string|null,
+ *   needsConsent: boolean,
  *   clearError: () => void
  * }}
  */
@@ -800,6 +801,10 @@ export function useFoodAnalysis() {
   const isAnalyzingRef = useRef(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  // True when the last photo analysis was blocked on the OpenAI consent gate
+  // (403 + code 'openai_consent_required') rather than a genuine failure —
+  // callers use this to offer an "Enable AI" action instead of a dead-end retry.
+  const [needsConsent, setNeedsConsent] = useState(false);
 
   // Multi-item analysis state (initialize from cache only if valid)
   const [analysisResult, setAnalysisResultState] = useState(() => {
@@ -1459,6 +1464,7 @@ export function useFoodAnalysis() {
 
     setIsAnalyzing(true);
     setError(null);
+    setNeedsConsent(false);
     setProgress(10);
 
     try {
@@ -1619,6 +1625,16 @@ export function useFoodAnalysis() {
         const rawError = json?.error || json?.message || '';
         console.error(`[useFoodAnalysis] Image API error: ${res.status} - ${rawError}`);
 
+        // Blocked by the OpenAI consent gate, not a real failure — the photo is
+        // fine, the user just hasn't opted into AI processing yet. Surfaced
+        // separately so the caller can offer "Enable AI" instead of a Retry
+        // that would just 403 again.
+        if (res.status === 403 && json?.code === 'openai_consent_required') {
+          setNeedsConsent(true);
+          setError(rawError || 'AI processing requires your consent to analyze this photo.');
+          return;
+        }
+
         // Provide user-friendly error messages based on status and error type
         let userMessage;
         if (res.status === 504 || res.status === 524) {
@@ -1653,6 +1669,17 @@ export function useFoodAnalysis() {
         source: 'photo',
         raw: rawAIData,
       });
+
+      // Nothing recognizable in the photo. The backend doesn't error in this
+      // case — it synthesizes a zero-calorie "Unknown Food" placeholder
+      // (backend/src/routes/food.js) — so it has to be caught here, or a
+      // blurry/non-food photo would sail through as a real, loggable meal.
+      // Gated on calories too: a genuinely zero-calorie food (e.g. water)
+      // must not be mistaken for a failed read.
+      if (foodLog.foodName === 'Unknown Food' && !foodLog.calories) {
+        setError("Couldn't identify any food in this photo. Try a clearer, well-lit shot.");
+        return;
+      }
 
       foodLog.imageUrl = uri;
       // These are computed by this analysis call but previously never made it onto
@@ -1721,6 +1748,14 @@ export function useFoodAnalysis() {
     } catch (err) {
       if (err?.name === 'AbortError') {
         const errorMsg = 'Photo analysis timed out. Try again on a faster connection.';
+        setError(errorMsg);
+        return;
+      }
+      // A dropped connection throws here as a bare TypeError from fetch itself
+      // ("Network request failed") — no response, no status, nothing for the
+      // res.ok branch above to have already turned into a specific message.
+      if (err instanceof TypeError || /network request failed/i.test(err?.message || '')) {
+        const errorMsg = "You're offline. Check your connection and try again.";
         setError(errorMsg);
         return;
       }
@@ -1975,6 +2010,7 @@ export function useFoodAnalysis() {
    */
   const clearError = useCallback(() => {
     setError(null);
+    setNeedsConsent(false);
   }, []);
 
   // ============================================================================
@@ -2100,6 +2136,7 @@ export function useFoodAnalysis() {
     isAnalyzing,
     progress,
     error,
+    needsConsent,
     clearError,
   };
 }

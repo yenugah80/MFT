@@ -17,6 +17,7 @@ import {
   Alert,
   Platform,
   InteractionManager,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -155,6 +156,7 @@ export default function LogScreen() {
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
+  const [isEnablingConsent, setIsEnablingConsent] = useState(false);
   const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
   const [inputMode, setInputMode] = useState('text'); // 'text', 'photo', 'voice', 'recent'
   const [analysisSource, setAnalysisSource] = useState('text');
@@ -855,7 +857,7 @@ export default function LogScreen() {
 
   const handleRetry = async () => {
     foodAnalysis.clearError();
-    
+
     if (analysisSource === 'photo' && selectedImage) {
       try {
         await foodAnalysis.analyzePhoto(selectedImage);
@@ -870,6 +872,26 @@ export default function LogScreen() {
       }
     } else {
       notify.info('Cannot retry: input missing');
+    }
+  };
+
+  /**
+   * Grants OpenAI consent, then re-runs the photo analysis that was blocked on
+   * it — one tap, photo still in hand, no trip through Settings.
+   */
+  const handleEnablePhotoConsent = async () => {
+    setIsEnablingConsent(true);
+    try {
+      await apiClient.post('/consent/give-openai-consent', {
+        understand: true,
+        purpose: 'photo-analysis',
+      });
+      await handleRetry();
+    } catch (err) {
+      console.error('[LogScreen] Enabling AI consent failed:', err);
+      notify.error('Could not enable AI. Please try again.');
+    } finally {
+      setIsEnablingConsent(false);
     }
   };
 
@@ -1288,8 +1310,51 @@ export default function LogScreen() {
         ) : null}
 
 
-        {/* Error Display */}
-        {(foodAnalysis.error || foodLog.error) && (
+        {/* Consent Display — blocked pending AI opt-in, not a failure. Neutral
+            tone on purpose: a routine privacy toggle shouldn't read like an error. */}
+        {foodAnalysis.needsConsent ? (
+          <View style={styles.consentCard}>
+            <View style={styles.errorHeader}>
+              <Ionicons name="sparkles" size={28} color={BRAND.primary} />
+              <Text style={styles.consentTitle}>Turn on AI photo analysis</Text>
+            </View>
+            <Text style={styles.consentMessage}>
+              Uses AI to identify food and estimate nutrition from your photo. Your photos are never used for training.
+            </Text>
+
+            <View style={styles.errorActions}>
+              <TouchableOpacity
+                style={styles.consentDismiss}
+                onPress={() => foodAnalysis.clearError()}
+                disabled={isEnablingConsent}
+              >
+                <Text style={styles.consentDismissText}>Not now</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.consentEnable}
+                onPress={handleEnablePhotoConsent}
+                disabled={isEnablingConsent}
+              >
+                {isEnablingConsent ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                )}
+                <Text style={styles.errorRetryText}>
+                  {isEnablingConsent ? 'Enabling…' : 'Enable & Analyze'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.consentLearnMore}
+              onPress={() => router.push('/profile/privacy')}
+            >
+              <Text style={styles.consentLearnMoreText}>Learn more in Privacy &amp; Data</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (foodAnalysis.error || foodLog.error) && (
           <View style={styles.errorCard}>
             <View style={styles.errorHeader}>
               <Ionicons name="warning" size={28} color="#DC2626" />
@@ -1298,7 +1363,7 @@ export default function LogScreen() {
               </Text>
             </View>
             <Text style={styles.errorMessage}>{foodAnalysis.error || foodLog.error}</Text>
-            
+
             <View style={styles.errorActions}>
               <TouchableOpacity
                 style={styles.errorDismiss}
@@ -2303,6 +2368,61 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: TYPOGRAPHY.family.bold,
+  },
+
+  /* Consent Card — same layout as errorCard, neutral/brand tone instead of danger red */
+  consentCard: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: 18,
+    padding: 22,
+    marginTop: 20,
+    borderWidth: 2,
+    borderColor: SURFACES.divider,
+  },
+  consentTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT.primary,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  consentMessage: {
+    fontSize: 14,
+    color: TEXT.secondary,
+    marginBottom: 14,
+    lineHeight: 21,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
+  consentEnable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: BRAND.primary,
+    borderRadius: 10,
+  },
+  consentDismiss: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: SURFACES.background.primary,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: SURFACES.divider,
+  },
+  consentDismissText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: TEXT.secondary,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  consentLearnMore: {
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  consentLearnMoreText: {
+    fontSize: 13,
+    color: BRAND.primary,
+    fontFamily: TYPOGRAPHY.family.medium,
   },
 
   /* Sync Card */
