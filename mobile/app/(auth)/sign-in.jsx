@@ -21,8 +21,9 @@ import {
   Notice,
   PrimaryButton,
   AUTH_COLORS,
+  IS_COMPACT,
 } from "../../components/auth/LaunchAuthDesign";
-import { parseClerkError } from "../../utils/errors";
+import { mapAppleAuthErrorCode, parseClerkError } from "../../utils/errors";
 
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
@@ -38,6 +39,7 @@ export default function SignInScreen() {
   const newPasswordRef = useRef(null);
   const confirmPasswordRef = useRef(null);
   const resetAttemptRef = useRef(null);
+  const secondFactorAttemptRef = useRef(null);
   const { signIn, setActive, isLoaded } = useSignIn();
   const { signUp, setActive: setSignUpActive } = useSignUp();
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: "oauth_google" });
@@ -90,6 +92,14 @@ export default function SignInScreen() {
       };
     }
 
+    if (mode === "secondFactor") {
+      return {
+        title: "Verify it's you",
+        subtitle: "Enter the security code we just emailed you.",
+        cta: loading ? "Verifying…" : "Verify & continue",
+      };
+    }
+
     return {
       title: isReturningUser ? "Welcome back" : "Sign in",
       // Only set once isReturningUser resolves from AsyncStorage, so the hero
@@ -115,6 +125,7 @@ export default function SignInScreen() {
     setMessage(null);
     setFocusedField(null);
     resetAttemptRef.current = null;
+    secondFactorAttemptRef.current = null;
   };
 
   const handleBack = () => {
@@ -249,12 +260,7 @@ export default function SignInScreen() {
     } catch (err) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
       console.warn("[Auth] Apple sign-in failed:", err);
-      const appleMsg = {
-        ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
-        ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
-        ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
-        ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
-      }[err.code];
+      const appleMsg = mapAppleAuthErrorCode(err.code);
       setNotice("error", appleMsg || parseClerkError(err) || "Apple sign-in failed. Please try again or use email.");
     } finally {
       setAppleLoading(false);
@@ -266,7 +272,10 @@ export default function SignInScreen() {
       setNotice("error", "Please enter your email and password.");
       return;
     }
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
 
     setLoading(true);
     setMessage(null);
@@ -278,6 +287,27 @@ export default function SignInScreen() {
         router.replace("/");
         return;
       }
+
+      // Verified directly against Clerk's API that this happens for every
+      // account on this instance — including brand-new ones with no MFA
+      // enrollment — despite the instance's own config reporting no second
+      // factor is required. Handle it for real rather than showing a
+      // misleading "check your credentials" for a password that Clerk
+      // itself just reported as `first_factor_verification: verified`.
+      if (attempt.status === "needs_second_factor") {
+        const emailFactor = attempt.supportedSecondFactors?.find(
+          (factor) => factor.strategy === "email_code"
+        );
+        if (emailFactor) {
+          secondFactorAttemptRef.current = attempt;
+          await attempt.prepareSecondFactor({ strategy: "email_code" });
+          setMode("secondFactor");
+          setNotice("success", "Code sent — check your inbox.");
+          setTimeout(() => codeRef.current?.focus(), 250);
+          return;
+        }
+      }
+
       setNotice("error", "Please check your credentials and try again.");
     } catch (err) {
       setNotice("error", parseClerkError(err));
@@ -291,7 +321,10 @@ export default function SignInScreen() {
       setNotice("error", "Enter the email linked to your account.");
       return;
     }
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
 
     setLoading(true);
     setMessage(null);
@@ -325,7 +358,14 @@ export default function SignInScreen() {
   };
 
   const resendResetCode = async () => {
-    if (!email.trim() || !isLoaded) return;
+    if (!email.trim()) {
+      setNotice("error", "Enter the email linked to your account.");
+      return;
+    }
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
 
     setResending(true);
     try {
@@ -363,7 +403,10 @@ export default function SignInScreen() {
       setNotice("error", "Your new passwords do not match.");
       return;
     }
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
 
     setLoading(true);
     setMessage(null);
@@ -398,9 +441,61 @@ export default function SignInScreen() {
     }
   };
 
+  const completeSecondFactor = async () => {
+    if (!code.trim()) {
+      setNotice("error", "Enter the security code from your email.");
+      return;
+    }
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+    try {
+      const attempt = await (secondFactorAttemptRef.current || signIn).attemptSecondFactor({
+        strategy: "email_code",
+        code: code.trim(),
+      });
+      secondFactorAttemptRef.current = attempt;
+
+      if (attempt.status === "complete") {
+        await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+        await setActive({ session: attempt.createdSessionId });
+        router.replace("/");
+        return;
+      }
+
+      setNotice("error", "That code didn't work. Please check it and try again.");
+    } catch (err) {
+      setNotice("error", parseClerkError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendSecondFactorCode = async () => {
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
+
+    setResending(true);
+    try {
+      await (secondFactorAttemptRef.current || signIn).prepareSecondFactor({ strategy: "email_code" });
+      setNotice("success", "A fresh code is on the way.");
+    } catch (err) {
+      setNotice("error", parseClerkError(err));
+    } finally {
+      setResending(false);
+    }
+  };
+
   const showSignIn = mode === "signIn";
   const showResetRequest = mode === "resetRequest";
   const showResetVerify = mode === "resetVerify";
+  const showSecondFactor = mode === "secondFactor";
 
   return (
     <AuthCanvas>
@@ -436,7 +531,7 @@ export default function SignInScreen() {
           autoCorrect={false}
           autoComplete="email"
           textContentType="emailAddress"
-          editable={!showResetVerify}
+          editable={!showResetVerify && !showSecondFactor}
           returnKeyType={showSignIn ? "next" : showResetRequest ? "done" : "next"}
           onSubmitEditing={() => {
             if (showSignIn) return passwordRef.current?.focus();
@@ -556,10 +651,43 @@ export default function SignInScreen() {
           </>
         ) : null}
 
+        {showSecondFactor ? (
+          <>
+            <AuthField
+              label="Security Code"
+              icon="key-outline"
+              value={code}
+              onChangeText={setCode}
+              placeholder="Enter the code from your email"
+              focused={focusedField === "code"}
+              onFocus={() => setFocusedField("code")}
+              onBlur={() => setFocusedField(null)}
+              inputRef={codeRef}
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoCapitalize="none"
+              returnKeyType="done"
+              onSubmitEditing={completeSecondFactor}
+            />
+
+            <Pressable onPress={resendSecondFactorCode} disabled={resending} hitSlop={12} style={styles.resendWrap}>
+              <Text style={styles.forgot}>{resending ? "Sending again…" : "Resend code"}</Text>
+            </Pressable>
+          </>
+        ) : null}
+
         <PrimaryButton
           title={screenCopy.cta}
           loading={loading}
-          onPress={showSignIn ? handleSignIn : showResetRequest ? startResetFlow : completeReset}
+          onPress={
+            showSignIn
+              ? handleSignIn
+              : showResetRequest
+              ? startResetFlow
+              : showSecondFactor
+              ? completeSecondFactor
+              : completeReset
+          }
         />
 
         {/* Social SSO — only shown on the main sign-in mode, below the credentials form */}
@@ -590,13 +718,13 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   topRow: {
-    minHeight: 54,
+    minHeight: IS_COMPACT ? 44 : 48,
     justifyContent: "center",
   },
   forgotWrap: {
     alignSelf: "flex-end",
     marginTop: -6,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   resendWrap: {
     alignSelf: "center",
@@ -609,6 +737,6 @@ const styles = StyleSheet.create({
     fontFamily: "DMSans_700Bold",
   },
   footer: {
-    marginTop: 32,
+    marginTop: 16,
   },
 });

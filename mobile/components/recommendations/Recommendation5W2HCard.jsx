@@ -192,9 +192,13 @@ export default function Recommendation5W2HCard({
   const urgencyConfig = URGENCY_CONFIG[when?.urgency] || URGENCY_CONFIG.low;
 
   // Build summary sentence (What + Why fused) - the "one clear explanation"
+  // typeof guards throughout: `recommendation` can arrive already in 5W2H
+  // shape (this card renders whatever transformTo5W2H — or a future caller —
+  // produces), and a non-string field here previously crashed the whole
+  // screen on first render (see transformTo5W2H in app/recommendations.jsx).
   const summary = useMemo(() => {
-    const action = what?.action || 'Take action';
-    const reason = why?.primaryReason || '';
+    const action = typeof what?.action === 'string' ? what.action : 'Take action';
+    const reason = typeof why?.primaryReason === 'string' ? why.primaryReason : '';
 
     // Create a natural-sounding fused sentence
     if (reason) {
@@ -209,21 +213,23 @@ export default function Recommendation5W2HCard({
   // Build narrative paragraph - the story, not the framework
   const narrative = useMemo(() => {
     const parts = [];
+    const actionText = typeof what?.action === 'string' ? what.action : null;
+    const firstInstruction = typeof how?.instructions?.[0] === 'string' ? how.instructions[0] : null;
 
     // Lead with the observation/problem (Why)
-    if (why?.primaryReason) {
+    if (typeof why?.primaryReason === 'string') {
       parts.push(why.primaryReason);
     }
 
     // Add the proposed solution (What + How)
-    if (what?.action && how?.instructions?.[0]) {
-      parts.push(`${what.action} ${how.instructions[0].toLowerCase()}`);
-    } else if (what?.action) {
-      parts.push(what.action);
+    if (actionText && firstInstruction) {
+      parts.push(`${actionText} ${firstInstruction.toLowerCase()}`);
+    } else if (actionText) {
+      parts.push(actionText);
     }
 
     // Add expected outcome (Health benefit)
-    if (why?.healthBenefit) {
+    if (typeof why?.healthBenefit === 'string') {
       parts.push(`This ${why.healthBenefit.toLowerCase()}.`);
     }
 
@@ -402,7 +408,12 @@ export default function Recommendation5W2HCard({
 // ============================================================================
 
 function truncateChip(text, maxLength) {
-  if (!text) return null;
+  // Guards against a caller passing a nested object instead of a string (this
+  // shipped once already — see transformTo5W2H in app/recommendations.jsx).
+  // A plain object has no .length, so `text.length > maxLength` was `false`
+  // and this returned the object unchanged, which React Native then threw on
+  // rendering directly inside a <Text>.
+  if (!text || typeof text !== 'string') return null;
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 

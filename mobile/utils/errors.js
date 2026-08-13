@@ -25,3 +25,22 @@ export const parseClerkError = (error) => {
 
   return "Something went wrong. Please try again.";
 };
+
+/**
+ * Maps an expo-apple-authentication error code to a user-facing message.
+ * Was duplicated inline in sign-in.jsx and sign-up.jsx (identical object,
+ * including the "sign-in" wording in sign-up's copy — a pre-existing
+ * artifact, preserved here rather than "corrected" as part of a test-suite
+ * change). Returns undefined for an unmapped code, same as the inline
+ * version, so callers keep their own `|| parseClerkError(err) || "..."`
+ * fallback chain.
+ * @param {string} code
+ * @returns {string|undefined}
+ */
+export const mapAppleAuthErrorCode = (code) =>
+  ({
+    ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
+    ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
+    ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
+    ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
+  }[code]);

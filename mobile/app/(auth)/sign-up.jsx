@@ -18,7 +18,7 @@ import {
   GoogleButton,
   Notice,
   PrimaryButton,
-  TermsConsentCheckbox,
+  ConsentDisclaimer,
   WelcomeBenefitChips,
   WelcomeBrand,
   WelcomeCreateAccountAction,
@@ -28,25 +28,10 @@ import {
   WelcomeStoryDivider,
   WelcomeSubheadlineContent,
   AUTH_COLORS,
+  IS_COMPACT,
 } from "../../components/auth/LaunchAuthDesign";
-import { parseClerkError } from "../../utils/errors";
-import apiClient from "../../services/apiClient";
+import { mapAppleAuthErrorCode, parseClerkError } from "../../utils/errors";
 import VerifyEmail from "./verify-email";
-
-// Best-effort: the checkbox is what legally establishes consent, so a failed
-// network call here must not block navigation — Privacy & Data can grant it
-// later. Shared by both OAuth paths, which complete immediately (unlike
-// email/password, which grants consent after verification in VerifyEmail).
-async function grantBundledConsent() {
-  try {
-    await apiClient.post("/consent/give-openai-consent", {
-      understand: true,
-      purpose: "signup-terms-privacy-ai",
-    });
-  } catch (err) {
-    console.warn("[Auth] Could not record bundled consent:", err?.message);
-  }
-}
 
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
@@ -79,9 +64,6 @@ export default function SignUpScreen() {
   const [focusedField, setFocusedField] = useState(null);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("error");
-  // Unticked by default — this single checkbox is what grants Terms, Privacy
-  // Policy, and AI-assisted analysis consent together at account creation.
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const setNotice = (type, text) => {
     setMessageType(type);
@@ -95,10 +77,6 @@ export default function SignUpScreen() {
   );
 
   const handleGoogleSignUp = async () => {
-    if (!agreedToTerms) {
-      setNotice("error", "Please agree to the Terms of Service and Privacy Policy to continue.");
-      return;
-    }
     setGoogleLoading(true);
     setMessage(null);
     try {
@@ -107,7 +85,6 @@ export default function SignUpScreen() {
         await startGoogleOAuthFlow({ redirectUrl: OAUTH_REDIRECT_URL });
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
-        await grantBundledConsent();
         router.replace("/onboarding/step-1");
         return;
       }
@@ -125,11 +102,6 @@ export default function SignUpScreen() {
   };
 
   const handleAppleSignUp = async () => {
-    if (!agreedToTerms) {
-      setNotice("error", "Please agree to the Terms of Service and Privacy Policy to continue.");
-      return;
-    }
-
     setAppleLoading(true);
     setMessage(null);
     try {
@@ -167,7 +139,6 @@ export default function SignUpScreen() {
         if (attempt.createdSessionId) {
           await setSignUpActive({ session: attempt.createdSessionId });
         }
-        await grantBundledConsent();
         router.replace("/onboarding/step-1");
         return;
       }
@@ -190,12 +161,7 @@ export default function SignUpScreen() {
     } catch (err) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
       console.warn("[Auth] Apple sign-up failed:", err);
-      const appleMsg = {
-        ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
-        ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
-        ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
-        ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
-      }[err.code];
+      const appleMsg = mapAppleAuthErrorCode(err.code);
       setNotice("error", appleMsg || parseClerkError(err) || "Apple sign-up failed. Please try again or use email.");
     } finally {
       setAppleLoading(false);
@@ -207,11 +173,10 @@ export default function SignUpScreen() {
       setNotice("error", "Email and password are required.");
       return;
     }
-    if (!agreedToTerms) {
-      setNotice("error", "Please agree to the Terms of Service and Privacy Policy to continue.");
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
       return;
     }
-    if (!isLoaded) return;
 
     setLoading(true);
     setMessage(null);
@@ -384,17 +349,11 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </AuthField>
 
-        <TermsConsentCheckbox checked={agreedToTerms} onToggle={setAgreedToTerms} />
-
-        {/* Deliberately NOT `disabled` when the terms box is unticked. A
-            disabled Pressable never fires onPress, which meant the handler's
-            "Please agree to the Terms…" notice could never run — the button
-            just dimmed slightly and did nothing, with no explanation. Let the
-            press through so the handler explains what's needed. */}
         <PrimaryButton
           title={loading ? "Creating account…" : "Continue"}
           loading={loading}
           onPress={handleSignUp}
+          testID="signup-continue-button"
         />
 
         <AuthDivider />
@@ -402,19 +361,23 @@ export default function SignUpScreen() {
         {/* Full-width and stacked, matching sign-in. The old side-by-side pair
             forced a 46pt override that fought the pill height, and centred
             labels collided with the chevron pinned to the right edge. */}
-        {/* Same reasoning as the Continue button above — the consent check
-            lives in the handler so it can explain itself, not in `disabled`
-            which silently swallows the tap. */}
         <AppleButton
           onPress={handleAppleSignUp}
           loading={appleLoading}
           title="Continue with Apple"
+          testID="signup-apple-button"
         />
         <GoogleButton
           onPress={handleGoogleSignUp}
           loading={googleLoading}
           title="Continue with Google"
+          testID="signup-google-button"
         />
+
+        {/* Clickwrap, not a checkbox — tapping any button above is the
+            agreement, same pattern as DoorDash/Yelp. Covers all three
+            methods explicitly so the scope is never ambiguous. */}
+        <ConsentDisclaimer />
 
         <View style={styles.detailsFooter}>
           <FooterLink
@@ -439,15 +402,18 @@ const styles = StyleSheet.create({
     marginTop: 18,
     gap: 18,
   },
+  // Was marginTop: "auto", which pins this to the very bottom of the flex-1
+  // shell — fine on compact screens, but on taller devices (iPhone Pro Max)
+  // it left a large empty gap below the benefit chips instead of the button
+  // following them at a normal reading distance.
   welcomeBottom: {
-    marginTop: "auto",
-    paddingTop: 24,
+    marginTop: 48,
     gap: 14,
   },
   topRow: {
-    minHeight: 46,
+    minHeight: IS_COMPACT ? 44 : 48,
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   detailsForm: {
     marginTop: 4,
@@ -460,6 +426,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailsFooter: {
-    marginTop: 26,
+    marginTop: 14,
   },
 });

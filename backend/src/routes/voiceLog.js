@@ -213,8 +213,14 @@ router.post(
       rawItems: detectedIngredients
     });
 
+    // Zero items with AI available-but-skipped-for-consent is a different
+    // situation from zero items after AI genuinely tried and found nothing:
+    // the client's "try recording again" recovery can't fix a consent gap,
+    // so it needs to know which case this is to say something useful instead.
+    const aiSkippedForConsent = detectedIngredients.length === 0 && req.hasOpenAIConsent === false;
+
     console.log(`[VoiceLog] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}, nutriScore=${unifiedResponse.nutriScore}`);
-    res.json({ success: true, data: unifiedResponse });
+    res.json({ success: true, data: unifiedResponse, aiSkippedForConsent });
   } catch (error) {
     console.error("Voice processing error:", error);
 

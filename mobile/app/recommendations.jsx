@@ -37,6 +37,31 @@ import {
 
 /**
  * Transform API recommendation to 5W2H format for UI display
+ *
+ * The real shape returned by GET /api/recommendations (see
+ * buildDeterministicRecommendationsFromCandidates and
+ * generateEnhancedRecommendationsCore in backend/src/routes/recommendations.js
+ * — both paths return this identically) is flat:
+ *   { id, title, foodName, portion, reason, tips,
+ *     personalization: { score, label, emoji, level, reasoning },
+ *     preparation: { timeMinutes, confidence, difficulty, tips }, ... }
+ *
+ * There has never been a `who`/`what`/`why`/`confidence` (as a bare number)
+ * on any real recommendation object. Every field below used to read one of
+ * those nonexistent names and silently fall through to a hardcoded default —
+ * `confidence` was a fixed 70% for every recommendation regardless of the
+ * real personalization.score, `how.tips` sliced a full sentence string as an
+ * array (rendering only its first character), and `what.action` never showed
+ * the actual food name.
+ *
+ * The most severe consequence: `who.personalization` was assigned the raw
+ * `personalization` OBJECT (truthy, so it always won this `||` chain), and
+ * every consumer — Recommendation5W2HCard's chip builder, InsightDetailsSheet's
+ * narrative — calls `.toLowerCase()`/`.length` on it or renders it directly
+ * inside a `<Text>`. React Native throws "Objects are not valid as a React
+ * child" the instant a `<Text>` is given a plain object, which crashed the
+ * Recommendations screen on the very first card of any real recommendation
+ * list — confirmed by reading the render path, not assumed.
  */
 function transformTo5W2H(rec) {
   if (!rec) return null;
@@ -52,48 +77,69 @@ function transformTo5W2H(rec) {
     who: {
       userId: rec.userId || 'user',
       persona: rec.persona || 'health-conscious',
-      relevanceScore: rec.relevanceScore || Math.round((rec.confidence || 0.7) * 100),
-      personalization: rec.personalization || rec.why || 'Based on your patterns',
+      // personalization.score is already 0-100; rec.confidence never exists.
+      relevanceScore: rec.personalization?.score ?? Math.round((rec.confidence || 0.7) * 100),
+      // Must be a string — every downstream consumer calls .toLowerCase()/.length
+      // on this. rec.personalization is an object; .reasoning is its string field.
+      personalization: rec.personalization?.reasoning || rec.reason || 'Based on your patterns',
     },
     what: {
       type: rec.type || 'food',
-      action: rec.title || rec.action || rec.name || 'Recommendation',
-      specifics: rec.specifics || (rec.name ? [rec.name] : []),
+      // rec.title is a generic per-type label ("Balanced Meal"); foodName is
+      // the actual, specific recommendation and should lead when present.
+      action: rec.foodName || rec.title || rec.action || rec.name || 'Recommendation',
+      specifics: rec.specifics || (rec.foodName ? [rec.foodName] : []),
       alternatives: rec.alternatives || [],
     },
     when: {
-      timing: rec.timing || 'today',
+      timing: rec.timing || rec.mealType || 'today',
       specificTime: rec.specificTime || rec.when || 'Any time',
       frequency: rec.frequency || 'As needed',
-      urgency: rec.urgency || 'medium',
+      urgency: rec.warning?.severity === 'high' ? 'high' : (rec.urgency || 'medium'),
     },
     where: {
       context: rec.context || 'any',
-      preparation: rec.preparation || rec.how || '',
+      // rec.preparation is an object ({timeMinutes, confidence, difficulty,
+      // tips}) — .tips is its string field. Same object-into-<Text> hazard as
+      // who.personalization above; this one feeds InsightDetailsSheet's
+      // "where" chip.
+      preparation: rec.preparation?.tips || rec.how || '',
       purchaseHint: rec.purchaseHint || null,
     },
     why: {
-      primaryReason: rec.why || rec.reason || 'Based on your health patterns',
+      primaryReason: rec.reason || rec.why || 'Based on your health patterns',
       dataPoints: rec.dataPoints || [],
-      healthBenefit: rec.healthBenefit || rec.benefit || '',
-      scienceSource: rec.source || 'Your logged patterns',
+      healthBenefit: rec.personalization?.reasoning || rec.healthBenefit || rec.benefit || '',
+      scienceSource: rec.nutritionSource || rec.source || 'Your logged patterns',
     },
     how: {
-      instructions: rec.instructions || (rec.how ? [rec.how] : []),
-      difficulty: rec.difficulty || 'easy',
-      timeRequired: rec.timeRequired || '5 minutes',
-      tips: rec.tips || [],
+      // No step-by-step instructions array exists on the real API; `tips` is
+      // the closest equivalent — a single actionable sentence — so it becomes
+      // a one-item list rather than being dropped (instructions.length === 0
+      // hid the entire "What To Do" section on every real recommendation).
+      instructions: rec.instructions || (rec.tips ? [rec.tips] : (rec.preparation?.tips ? [rec.preparation.tips] : [])),
+      difficulty: rec.preparation?.difficulty || rec.difficulty || 'easy',
+      timeRequired: rec.preparation?.timeMinutes ? `${rec.preparation.timeMinutes} minutes` : (rec.timeRequired || '5 minutes'),
+      // No secondary tips list on the real API — the one tip already lives in
+      // `instructions` above. rec.tips is a single string, not an array:
+      // `tips: rec.tips || []` previously assigned that string directly, and
+      // `how.tips[0]` in InsightDetailsSheet then read its first CHARACTER.
+      tips: [],
     },
     howMuch: {
-      quantity: rec.quantity || rec.servingSize || '',
+      // rec.quantity/servingSize never exist; portion is the real field name.
+      quantity: rec.portion || rec.quantity || rec.servingSize || '',
       metricAmount: rec.metricAmount || 0,
       metricUnit: rec.metricUnit || 'g',
       nutritionImpact: rec.nutritionImpact || [],
     },
     confidence: {
-      score: Math.round((rec.confidence || 0.7) * 100),
+      // Real per-recommendation signal, not a hardcoded 70% for every item.
+      score: rec.personalization?.score ?? Math.round((rec.confidence || 0.7) * 100),
+      // No real analogue for "supporting data point count" exists on the API;
+      // left as the pre-existing fallback rather than inventing a number.
       dataPoints: rec.dataPointsCount || 14,
-      source: rec.source || 'Your patterns + Nutrition science',
+      source: rec.nutritionSource || rec.source || 'Your patterns + Nutrition science',
     },
     status: rec.status || 'pending',
   };

@@ -490,8 +490,13 @@ describe('muscle balance', () => {
 
 describe('mood and activity link', () => {
   const { getMoodActivityLink } = require('../utils/activityAnalytics');
+  // Must normalize to noon local the same way session() does — otherwise the
+  // two helpers can disagree on which calendar day `daysAgo` lands on when
+  // the suite runs close to a local-timezone midnight, silently reclassifying
+  // an active day as a rest day (or vice versa) via a dayKey join miss.
   const dayKey = (daysAgo) => {
     const d = new Date(Date.now() - daysAgo * DAY_MS);
+    d.setHours(12, 0, 0, 0);
     return d.toISOString().slice(0, 10);
   };
   const rated = (daysAgo, intensity) => ({ dayKey: dayKey(daysAgo), intensity, hasData: true });

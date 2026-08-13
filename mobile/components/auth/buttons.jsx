@@ -17,15 +17,21 @@ function GoogleIconSVG({ size = 22 }) {
 
 export function BackButton({ onPress }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.backButton, pressed && styles.surfacePressed]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={({ pressed }) => [styles.backButton, pressed && styles.surfacePressed]}
+    >
       <Ionicons name="chevron-back" size={24} color={AUTH_COLORS.ink} />
     </Pressable>
   );
 }
 
-export function PrimaryButton({ title, loading, onPress, disabled, style }) {
+export function PrimaryButton({ title, loading, onPress, disabled, style, testID }) {
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -54,9 +60,10 @@ export function PrimaryButton({ title, loading, onPress, disabled, style }) {
   );
 }
 
-export function AppleButton({ onPress, loading, disabled, title = "Continue with Apple", style }) {
+export function AppleButton({ onPress, loading, disabled, title = "Continue with Apple", style, testID }) {
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -80,9 +87,10 @@ export function AppleButton({ onPress, loading, disabled, title = "Continue with
   );
 }
 
-export function GoogleButton({ onPress, loading, disabled, title = "Continue with Google", style }) {
+export function GoogleButton({ onPress, loading, disabled, title = "Continue with Google", style, testID }) {
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -136,7 +144,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   primaryWrap: {
-    marginTop: IS_COMPACT ? 10 : 16,
+    marginTop: IS_COMPACT ? 8 : 10,
     shadowColor: AUTH_COLORS.primary,
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.38,
@@ -147,8 +155,8 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
   primaryButton: {
-    height: IS_COMPACT ? 52 : 54,
-    borderRadius: 27,
+    height: IS_COMPACT ? 46 : 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 22,
@@ -164,8 +172,8 @@ const styles = StyleSheet.create({
     right: 24,
   },
   socialButton: {
-    height: IS_COMPACT ? 50 : 54,
-    borderRadius: 27,
+    height: IS_COMPACT ? 44 : 48,
+    borderRadius: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -179,7 +187,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.09,
     shadowRadius: 14,
     elevation: 3,
-    marginTop: 10,
+    marginTop: 8,
   },
   socialButtonApple: {
     marginTop: 0,

@@ -79,8 +79,10 @@ export function BiometricLockProvider({ children }) {
     isLockedRef.current = isLocked;
   }, [isLocked]);
 
-  // Load the persisted flag once. Locked starts true if the lock is on, so no
-  // frame of real content is ever painted before the first auth.
+  // Load the persisted flag once. `isLocked` itself starts false — the
+  // guarantee that no frame of real content paints before this resolves
+  // comes from `showLockScreen` covering while `!isReady`, not from this
+  // state's initial value.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -269,7 +271,18 @@ export function BiometricLockProvider({ children }) {
   // window too, otherwise a locked app can paint a frame of cached content
   // before the session is known. Once Clerk reports signed out, uncover — the
   // sign-in screen must never be trapped behind a lock.
-  const showLockScreen = (isLocked || isObscured) && (isSignedIn || !isLoaded);
+  //
+  // `!isReady` covers the same gap for the lock check itself: children render
+  // unconditionally below, so until the persisted enabled flag has actually
+  // been read, `isLocked` is still its initial `false` and nothing was
+  // stopping a frame of real content from painting first. Failing closed here
+  // (cover first, reveal only once we know) is what the "no frame is ever
+  // painted" guarantee above actually depends on — `isLocked` alone doesn't
+  // enforce it. `requiresAuth={isLocked}` still governs whether this shows an
+  // unlock prompt or a plain cover, and `isLocked`/`isReady` are set together
+  // in the same effect, so this never flashes an unlock prompt for a user who
+  // turns out to have the lock disabled.
+  const showLockScreen = (isLocked || isObscured || !isReady) && (isSignedIn || !isLoaded);
 
   const value = {
     isEnabled,

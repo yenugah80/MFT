@@ -308,7 +308,7 @@ export function VoiceModal({
 
     // Track abandoned sessions (user closed without completing)
     // Only track if they were in the middle of the flow (not idle or success)
-    if (state === 'listening' || state === 'processing' || state === 'transcribed' || state === 'analyzing') {
+    if (state === 'listening' || state === 'processing' || state === 'transcribed' || state === 'analyzing' || state === 'reviewing') {
       trackVoiceSessionAbandoned(state);
     } else {
       // Clear session without tracking (for idle/success/error states)
@@ -548,44 +548,57 @@ export function VoiceModal({
 
       if (isElderly) {
         // Elderly mode: Auto-analyze immediately
-        setState('analyzing');
 
-        // Track analysis started
-        trackVoiceAnalysisStarted();
+        // Server-side transcription (the simulator/unsupported-locale
+        // fallback) already returns analysed items in the same request —
+        // reusing them here skips a full second OpenAI round trip on every
+        // recording from the very users this fallback exists for. Only safe
+        // because elderly mode never lets the transcript be edited before
+        // acting on it; standard mode's review step means the text can
+        // change, so it always re-analyzes.
+        let nutritionResult;
+        if (result.source === 'server' && result.items?.length > 0) {
+          nutritionResult = { items: result.items, totals: result.totals };
+        } else {
+          setState('analyzing');
 
-        const nutritionResult = await analyzeTranscript(transcript);
+          // Track analysis started
+          trackVoiceAnalysisStarted();
 
-        if (isCancelledRef.current) {
-          return;
-        }
+          nutritionResult = await analyzeTranscript(transcript);
 
-        // Blocked pending AI consent — same graceful screen as everywhere else,
-        // not a dead end (see the standard-mode handleConfirm for the full
-        // explanation).
-        if (nutritionResult?.needsConsent) {
-          setPendingAnalyzeText(transcript);
-          setPendingConsentUri(null);
-          setState('consent');
-          await triggerHaptic('light');
-          announceForAccessibility('Voice logging needs AI to be enabled.');
-          stopCalledRef.current = false;
-          return;
-        }
+          if (isCancelledRef.current) {
+            return;
+          }
 
-        // Check if analysis failed (returned null)
-        if (!nutritionResult) {
-          // Track analysis failed
-          trackVoiceAnalysisFailed('api_error', error || 'Unknown error');
+          // Blocked pending AI consent — same graceful screen as everywhere
+          // else, not a dead end (see the standard-mode handleConfirm for
+          // the full explanation).
+          if (nutritionResult?.needsConsent) {
+            setPendingAnalyzeText(transcript);
+            setPendingConsentUri(null);
+            setState('consent');
+            await triggerHaptic('light');
+            announceForAccessibility('Voice logging needs AI to be enabled.');
+            stopCalledRef.current = false;
+            return;
+          }
 
-          // Use error from hook if available, otherwise generic message
-          const errorMsg = error || 'Failed to analyze nutrition. Please try again.';
-          setLocalError(errorMsg);
-          setState('error');
-          await triggerHaptic('error');
-          announceForAccessibility(`Error: ${errorMsg}`);
-          await speakInstruction('Sorry, something went wrong. Please try again.', true, voiceLanguage);
-          stopCalledRef.current = false;
-          return;
+          // Check if analysis failed (returned null)
+          if (!nutritionResult) {
+            // Track analysis failed
+            trackVoiceAnalysisFailed('api_error', error || 'Unknown error');
+
+            // Use error from hook if available, otherwise generic message
+            const errorMsg = error || 'Failed to analyze nutrition. Please try again.';
+            setLocalError(errorMsg);
+            setState('error');
+            await triggerHaptic('error');
+            announceForAccessibility(`Error: ${errorMsg}`);
+            await speakInstruction('Sorry, something went wrong. Please try again.', true, voiceLanguage);
+            stopCalledRef.current = false;
+            return;
+          }
         }
 
         const itemCount = nutritionResult.items?.length || 0;
@@ -595,11 +608,30 @@ export function VoiceModal({
         // to log, and saying "logged successfully" over TTS would be false.
         if (itemCount === 0) {
           trackVoiceAnalysisFailed('empty_result', 'No food identified in transcript');
-          setLocalError("Couldn't identify any food in that. Try recording again with more detail.");
+          // A zero-result caused by AI being skipped for lack of consent isn't
+          // fixable by re-recording — telling the user to do that anyway sends
+          // them into a retry loop that can never succeed. Point at the actual
+          // fix instead.
+          const consentBlocked = nutritionResult?.aiSkippedForConsent === true;
+          setLocalError(
+            consentBlocked
+              ? 'Local matching couldn’t find that. Enable AI analysis in Privacy & Data for better accuracy.'
+              : "Couldn't identify any food in that. Try recording again with more detail."
+          );
           setState('error');
           await triggerHaptic('error');
-          announceForAccessibility("Couldn't identify any food in that.");
-          await speakInstruction('I could not identify any food in that. Please try again.', true, voiceLanguage);
+          announceForAccessibility(
+            consentBlocked
+              ? "Couldn't identify any food using local matching."
+              : "Couldn't identify any food in that."
+          );
+          await speakInstruction(
+            consentBlocked
+              ? 'I could not identify that with local matching. Enable AI analysis in Privacy and Data for better accuracy.'
+              : 'I could not identify any food in that. Please try again.',
+            true,
+            voiceLanguage
+          );
           stopCalledRef.current = false;
           return;
         }
@@ -714,10 +746,22 @@ export function VoiceModal({
       // idea why. Keep them in the voice flow so they can edit or re-record.
       if (itemCount === 0) {
         trackVoiceAnalysisFailed('empty_result', 'No food identified in transcript');
-        setLocalError("Couldn't identify any food in that. Try recording again with more detail.");
+        // Same distinction as the elderly-mode path above: a zero result
+        // caused by AI being skipped for lack of consent can't be fixed by
+        // re-recording, so don't tell the user to do that.
+        const consentBlocked = nutritionResult?.aiSkippedForConsent === true;
+        setLocalError(
+          consentBlocked
+            ? 'Local matching couldn’t find that. Enable AI analysis in Privacy & Data for better accuracy.'
+            : "Couldn't identify any food in that. Try recording again with more detail."
+        );
         setState('error');
         await triggerHaptic('error');
-        announceForAccessibility("Couldn't identify any food in that. Try recording again.");
+        announceForAccessibility(
+          consentBlocked
+            ? "Couldn't identify any food using local matching."
+            : "Couldn't identify any food in that. Try recording again."
+        );
         setIsSubmitting(false);
         return;
       }
@@ -783,10 +827,6 @@ export function VoiceModal({
       setIsSavingResult(false);
     }
   }, [reviewResult, isSavingResult, onSaveNow, onComplete, handleClose]);
-
-  const handleDiscardReview = useCallback(() => {
-    handleClose();
-  }, [handleClose]);
 
   const handleEditTranscription = useCallback(() => {
     setIsEditing(true);
@@ -1237,7 +1277,7 @@ export function VoiceModal({
               <View style={headerStyle}>
                 <Ionicons name="mic" size={ICON_SIZES.md} color={BRAND.primary} />
                 <Text style={titleStyle}>Voice Logging</Text>
-                <TouchableOpacity onPress={handleDiscardReview} style={styles.closeButton} accessibilityLabel="Discard and close">
+                <TouchableOpacity onPress={handleClose} style={styles.closeButton} accessibilityLabel="Discard and close">
                   <Ionicons name="close" size={ICON_SIZES.md} color={TEXT.tertiary} />
                 </TouchableOpacity>
               </View>
@@ -1282,7 +1322,7 @@ export function VoiceModal({
                 <View style={styles.transcriptionActions}>
                   <TouchableOpacity
                     style={styles.reRecordButton}
-                    onPress={handleDiscardReview}
+                    onPress={handleClose}
                     disabled={isSavingResult}
                     accessibilityLabel="Discard this result"
                   >

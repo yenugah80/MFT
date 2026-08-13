@@ -400,7 +400,17 @@ export const useServerVoice = (options = {}) => {
         _timeout: TRANSCRIBE_TIMEOUT_MS,
       });
 
-      return { transcript: response?.text || '', items: response?.data || [] };
+      // response.data is the unifiedResponse object ({ items, totals, ... }),
+      // not an item array — `items: response?.data` previously stored the
+      // whole object under that name, which meant nothing downstream could
+      // actually use it (an object isn't a usable "items" list), silently
+      // forcing a second, redundant analysis call for every server-fallback
+      // transcription despite this endpoint already returning analysed items.
+      return {
+        transcript: response?.text || '',
+        items: response?.data?.items || [],
+        totals: response?.data?.totals || {},
+      };
     } catch (err) {
       const body = err?.response?.data;
 
@@ -413,7 +423,15 @@ export const useServerVoice = (options = {}) => {
       }
 
       console.error('[useServerVoice] Server transcription failed:', err?.message);
-      return null;
+      // Distinguishable from returning null for "nothing to send" (no uri,
+      // recording too short) — without this, stopRecording's caller couldn't
+      // tell a genuine network/server failure apart from silence, and told
+      // the user "No speech detected" for a problem retrying speech clearer
+      // cannot fix.
+      return {
+        serverError: true,
+        error: 'Could not reach the transcription service. Please check your connection and try again.',
+      };
     } finally {
       setIsProcessing(false);
     }
@@ -481,12 +499,18 @@ export const useServerVoice = (options = {}) => {
           // The endpoint returns analysed foods alongside the text, so the
           // caller can skip the separate analysis round trip entirely.
           items: remote.items,
+          totals: remote.totals,
         };
       }
 
       if (remote?.needsConsent) {
         setError(remote.error);
         return { transcript: '', confidence: 0, recordingUri: capturedUri, isEmpty: true, needsConsent: true };
+      }
+
+      if (remote?.serverError) {
+        setError(remote.error);
+        return { transcript: '', confidence: 0, recordingUri: capturedUri, isEmpty: true };
       }
     }
 
@@ -557,6 +581,11 @@ export const useServerVoice = (options = {}) => {
         nutrition: response.data,
         items: analysisData?.items || [],
         totals: analysisData?.totals || {},
+        // True when zero items came back specifically because AI was
+        // available but skipped for lack of consent, not because AI (or
+        // local matching) genuinely found nothing — see VoiceModal's
+        // zero-items handling for why that distinction matters.
+        aiSkippedForConsent: response.data?.aiSkippedForConsent === true,
       };
     } catch (err) {
       console.error('[useServerVoice] Analysis error:', err);

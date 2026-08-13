@@ -136,7 +136,11 @@ const CHIP_CONFIG = {
 
 function InsightChip({ type, text, isAccent = false }) {
   const config = CHIP_CONFIG[type];
-  if (!text || !config) return null;
+  // typeof guard: this renders `text` directly inside a <Text> with no
+  // truncation step to catch a non-string value first — an object here (this
+  // shipped once already, from transformTo5W2H mis-mapping personalization)
+  // crashes with "Objects are not valid as a React child".
+  if (!text || typeof text !== 'string' || !config) return null;
 
   return (
     <View style={[styles.chip, isAccent && styles.chipAccent]}>
@@ -280,12 +284,16 @@ export default function InsightDetailsSheet({
     }
 
     // Closing: The expected benefit
-    if (why?.healthBenefit) {
+    // typeof guards: `recommendation` can arrive already in 5W2H shape (see
+    // the early-return in transformTo5W2H), which this component trusts
+    // as-is — a caller supplying a non-string here would otherwise crash on
+    // .toLowerCase() instead of just omitting that paragraph.
+    if (why?.healthBenefit && typeof why.healthBenefit === 'string') {
       paragraphs.push(`This ${why.healthBenefit.toLowerCase()}.`);
     }
 
     // Additional context from personalization
-    if (who?.personalization) {
+    if (who?.personalization && typeof who.personalization === 'string') {
       paragraphs.push(`This recommendation is ${who.personalization.toLowerCase()}.`);
     }
 

@@ -745,6 +745,8 @@ export default function LogScreen() {
         carbs: totalCarbs,
         fats: totalFat,
         mealId: mealEventId,
+        source: analysisResult.source || 'text',
+        mealType: effectiveMealType,
         originalAnalysis: analysisResult
       });
 

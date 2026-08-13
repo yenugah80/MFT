@@ -100,7 +100,11 @@ function EvidenceBadge({ type = 'personalized' }) {
 
 function ReasonChip({ type, text, isAccent = false }) {
   const config = CHIP_CONFIG[type];
-  if (!text || !config) return null;
+  // typeof guard: a caller passing an object instead of a string (this
+  // shipped once already) has no .length, so the truncation check below was
+  // false and the raw object reached <Text> unchanged — React Native throws
+  // "Objects are not valid as a React child" on that.
+  if (!text || typeof text !== 'string' || !config) return null;
 
   // Truncate to max 40 chars for chips
   const displayText = text.length > 40 ? `${text.slice(0, 37)}...` : text;

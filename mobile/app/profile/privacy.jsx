@@ -19,6 +19,11 @@ export default function PrivacyScreen() {
   const queryClient = useQueryClient();
   const [shareInsights, setShareInsights] = useState(false);
   const [analytics, setAnalytics] = useState(true);
+  // Separate endpoint/table from the other two toggles above (`/consent/*`,
+  // not `/profile/privacy`) — this is the one AIConsentPrompt's "Not now"
+  // routes here for, so it has to actually exist on this screen.
+  const [aiAnalysisConsent, setAiAnalysisConsent] = useState(false);
+  const [isTogglingAI, setIsTogglingAI] = useState(false);
   // App lock is enforced by BiometricLockProvider. The device (SecureStore) is
   // the source of truth for whether this phone is gated — a server flag can't
   // be trusted to gate a cold start, and a device that can't authenticate must
@@ -44,6 +49,15 @@ export default function PrivacyScreen() {
       setLoadError("Failed to load privacy settings");
     } finally {
       setIsLoading(false);
+    }
+
+    // Separate try/catch: a failure here shouldn't block the two toggles
+    // above from loading, and vice versa — they're unrelated backends.
+    try {
+      const status = await apiClient.get("/consent/status");
+      setAiAnalysisConsent(status?.consent?.hasConsent === true);
+    } catch (error) {
+      console.error("[PrivacyScreen] Failed to load AI consent status", error);
     }
   }, []);
 
@@ -112,6 +126,34 @@ export default function PrivacyScreen() {
       }
     } finally {
       setIsTogglingLock(false);
+    }
+  };
+
+  const handleToggleAIConsent = async (value) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsTogglingAI(true);
+    const previous = aiAnalysisConsent;
+    setAiAnalysisConsent(value);
+    try {
+      if (value) {
+        // `understand` must be exactly `true` — the backend rejects anything
+        // else (see requireAuth-gated POST /consent/give-openai-consent).
+        await apiClient.post("/consent/give-openai-consent", {
+          understand: true,
+          purpose: "privacy-settings",
+        });
+      } else {
+        await apiClient.post("/consent/revoke-openai-consent");
+      }
+    } catch (error) {
+      console.error("[PrivacyScreen] Failed to update AI consent", error);
+      setAiAnalysisConsent(previous);
+      Alert.alert(
+        "Couldn't Save",
+        "Could not update AI-assisted analysis. Please try again."
+      );
+    } finally {
+      setIsTogglingAI(false);
     }
   };
 
@@ -257,6 +299,24 @@ export default function PrivacyScreen() {
               }
               disabled={isSaving}
             />
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>AI-assisted analysis</Text>
+              <Text style={styles.rowSubtitle}>
+                Let AI read your food photos and voice notes to fill in nutrition. Sent to OpenAI, never used for training.
+              </Text>
+            </View>
+            {isTogglingAI ? (
+              <ActivityIndicator size="small" color={BRAND.primary} />
+            ) : (
+              <Switch
+                value={aiAnalysisConsent}
+                onValueChange={handleToggleAIConsent}
+                disabled={isTogglingAI}
+              />
+            )}
           </View>
         </View>
 
