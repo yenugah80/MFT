@@ -156,6 +156,37 @@ describe('API response codes match the server exactly', () => {
   });
 });
 
+describe('result provenance is not claimed by mode switches', () => {
+  /**
+   * `analysisSource` records where the CURRENT analysis result came from. It
+   * feeds the saved log's `source` column, retry routing, and which result UI
+   * renders. The input-mode tabs used to set it alongside setInputMode, so
+   * merely tapping another tab relabelled an existing unsaved result: analyse a
+   * photo, tap Voice, and the effect in log.js auto-opened MealSummaryScreen
+   * over photo data labelled as voice — and saving stored source:'voice'.
+   *
+   * Only a real analysis entry point may set it.
+   */
+  it('no handler sets both setInputMode and setAnalysisSource', () => {
+    const violations = [];
+
+    for (const file of dirs('app', 'components')) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      // Arrow-function handler bodies, inline or braced.
+      for (const m of src.matchAll(/onPress=\{[\s\S]{0,400}?\}\}/g)) {
+        if (/setInputMode\s*\(/.test(m[0]) && /setAnalysisSource\s*\(/.test(m[0])) {
+          violations.push(
+            `${rel(file)}: an onPress calls both setInputMode and setAnalysisSource — ` +
+              `switching tabs must not relabel an existing result`
+          );
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
 describe('scroll areas are not nested in content-hugging containers', () => {
   /**
    * Files where a hug-container and a flex:1 scroll style coexist but are in
