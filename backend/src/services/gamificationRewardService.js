@@ -253,7 +253,10 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
       WHERE user_id = ${userId}
     `;
     const selectResult = await dbConn.execute(selectQuery);
-    const currentGamification = selectResult.rows?.[0] || null;
+    // dbConn.execute() on this postgres-js-backed Drizzle instance returns
+    // the row array directly, not { rows: [...] } (that shape was
+    // neon-http's, dropped 2026-06-22 — see backend/CLAUDE.md on the driver).
+    const currentGamification = selectResult[0] || null;
 
     if (!currentGamification) {
       // Initialize with streak of 1 for brand new user
@@ -275,7 +278,7 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
 
       if (!insertResult || insertResult.length === 0) {
         const refetch = await dbConn.execute(selectQuery);
-        const existingRow = refetch.rows?.[0];
+        const existingRow = refetch[0];
         if (existingRow) {
           return {
             streak: existingRow.streak,
@@ -508,7 +511,9 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
       WHERE user_id = ${userId}
       GROUP BY DATE(logged_date)
     `);
-    const foodLogsByDay = foodLogsResult.rows || [];
+    // See updateStreak's note above — dbConn.execute() returns the row
+    // array directly on this driver, not { rows: [...] }.
+    const foodLogsByDay = foodLogsResult || [];
     let foodXP = 0;
     foodLogsByDay.forEach(day => {
       const count = parseInt(day.count) || 0;
@@ -522,14 +527,14 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
     const waterLogsResult = await dbConn.execute(sql`
       SELECT COUNT(*) as count FROM water_log WHERE user_id = ${userId}
     `);
-    const waterCount = parseInt(waterLogsResult.rows?.[0]?.count) || 0;
+    const waterCount = parseInt(waterLogsResult[0]?.count) || 0;
     const waterXP = waterCount * 5;
 
     // Count mood logs (8 XP each)
     const moodLogsResult = await dbConn.execute(sql`
       SELECT COUNT(*) as count FROM mood_log WHERE user_id = ${userId}
     `);
-    const moodCount = parseInt(moodLogsResult.rows?.[0]?.count) || 0;
+    const moodCount = parseInt(moodLogsResult[0]?.count) || 0;
     const moodXP = moodCount * 8;
 
     // Count activity logs (10 XP base + duration bonus)
@@ -538,8 +543,8 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
       FROM activity_log
       WHERE user_id = ${userId}
     `);
-    const activityCount = parseInt(activityLogsResult.rows?.[0]?.count) || 0;
-    const totalActivityMinutes = parseInt(activityLogsResult.rows?.[0]?.total_minutes) || 0;
+    const activityCount = parseInt(activityLogsResult[0]?.count) || 0;
+    const totalActivityMinutes = parseInt(activityLogsResult[0]?.total_minutes) || 0;
     // 10 XP per log + 1 XP per 5 minutes (capped at 20 bonus per log)
     const activityXP = activityCount * 10 + Math.min(Math.floor(totalActivityMinutes / 5), activityCount * 20);
 
