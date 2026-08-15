@@ -520,7 +520,9 @@ async function checkActualPreviousStreakBreak(userId, dbConn) {
       ORDER BY log_date ASC
     `);
 
-    const dates = logDates.rows || [];
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
+    const dates = logDates || [];
     if (dates.length < 2) return false;
 
     // Check for gaps > 1 day (indicates a streak break)
@@ -590,18 +592,21 @@ async function checkMissedWeekend(userId, dbConn) {
 async function checkConsecutiveWaterGoalDays(userId, targetDays, dbConn) {
   try {
     // Get water logs with goal completion status
+    // water_log stores amount_liters (decimal), not amount_ml — there is no
+    // amount_ml column. 2.0 liters/day is the equivalent of the previous
+    // (non-functional) 2000ml threshold.
     const result = await dbConn.execute(sql`
       SELECT DATE(logged_date) as log_date,
-             SUM(amount_ml) as total_ml
+             SUM(amount_liters) as total_liters
       FROM water_log
       WHERE user_id = ${userId}
       GROUP BY DATE(logged_date)
-      HAVING SUM(amount_ml) >= 2000
+      HAVING SUM(amount_liters) >= 2.0
       ORDER BY log_date DESC
       LIMIT ${targetDays + 7}
     `);
 
-    return countConsecutiveDays(result.rows || [], targetDays);
+    return countConsecutiveDays(result || [], targetDays);
   } catch (error) {
     console.error("[Achievement] Error checking water goal days:", error);
     return 0;
@@ -610,19 +615,20 @@ async function checkConsecutiveWaterGoalDays(userId, targetDays, dbConn) {
 
 async function checkConsecutiveHighProteinDays(userId, targetDays, dbConn) {
   try {
-    // Check days with >= 50g protein logged
+    // food_log has a direct protein column (integer) — there is no
+    // nutrition JSON column to extract from.
     const result = await dbConn.execute(sql`
       SELECT DATE(logged_date) as log_date,
-             SUM(COALESCE((nutrition->>'protein')::numeric, 0)) as total_protein
+             SUM(COALESCE(protein, 0)) as total_protein
       FROM food_log
       WHERE user_id = ${userId}
       GROUP BY DATE(logged_date)
-      HAVING SUM(COALESCE((nutrition->>'protein')::numeric, 0)) >= 50
+      HAVING SUM(COALESCE(protein, 0)) >= 50
       ORDER BY log_date DESC
       LIMIT ${targetDays + 7}
     `);
 
-    return countConsecutiveDays(result.rows || [], targetDays);
+    return countConsecutiveDays(result || [], targetDays);
   } catch (error) {
     console.error("[Achievement] Error checking protein days:", error);
     return 0;
@@ -642,7 +648,7 @@ async function checkConsecutiveBalancedDays(userId, targetDays, dbConn) {
       LIMIT ${targetDays + 7}
     `);
 
-    return countConsecutiveDays(result.rows || [], targetDays);
+    return countConsecutiveDays(result || [], targetDays);
   } catch (error) {
     console.error("[Achievement] Error checking balanced days:", error);
     return 0;
@@ -651,19 +657,21 @@ async function checkConsecutiveBalancedDays(userId, targetDays, dbConn) {
 
 async function checkConsecutiveCalorieGoalDays(userId, targetDays, dbConn) {
   try {
-    // Check days within 1800-2500 calorie range (reasonable default)
+    // Check days within 1800-2500 calorie range (reasonable default).
+    // food_log has a direct calories column (integer) — there is no
+    // nutrition JSON column to extract from.
     const result = await dbConn.execute(sql`
       SELECT DATE(logged_date) as log_date,
-             SUM(COALESCE((nutrition->>'calories')::numeric, 0)) as total_cals
+             SUM(COALESCE(calories, 0)) as total_cals
       FROM food_log
       WHERE user_id = ${userId}
       GROUP BY DATE(logged_date)
-      HAVING SUM(COALESCE((nutrition->>'calories')::numeric, 0)) BETWEEN 1200 AND 3000
+      HAVING SUM(COALESCE(calories, 0)) BETWEEN 1200 AND 3000
       ORDER BY log_date DESC
       LIMIT ${targetDays + 14}
     `);
 
-    return countConsecutiveDays(result.rows || [], targetDays);
+    return countConsecutiveDays(result || [], targetDays);
   } catch (error) {
     console.error("[Achievement] Error checking calorie days:", error);
     return 0;
@@ -694,7 +702,7 @@ async function checkConsecutiveVeggieDays(userId, targetDays, dbConn) {
       LIMIT ${targetDays + 7}
     `);
 
-    return countConsecutiveDays(result.rows || [], targetDays);
+    return countConsecutiveDays(result || [], targetDays);
   } catch (error) {
     console.error("[Achievement] Error checking veggie days:", error);
     return 0;
@@ -711,7 +719,7 @@ async function checkEarlyBreakfastLogs(userId, dbConn) {
         AND (meal_type = 'breakfast' OR LOWER(food_name) LIKE '%breakfast%')
     `);
 
-    return parseInt(result.rows?.[0]?.count) || 0;
+    return parseInt(result[0]?.count) || 0;
   } catch (error) {
     console.error("[Achievement] Error checking early breakfast logs:", error);
     return 0;
@@ -728,7 +736,7 @@ async function checkLateDinnerLogs(userId, dbConn) {
         AND (meal_type = 'dinner' OR meal_type = 'snack')
     `);
 
-    return parseInt(result.rows?.[0]?.count) || 0;
+    return parseInt(result[0]?.count) || 0;
   } catch (error) {
     console.error("[Achievement] Error checking late dinner logs:", error);
     return 0;
