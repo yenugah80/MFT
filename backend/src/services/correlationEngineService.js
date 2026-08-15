@@ -1780,7 +1780,9 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
             AND logged_at <= ${now.toISOString()}
           ORDER BY logged_at
         `);
-        return result.rows || [];
+        // db.execute() returns the row array directly on this driver, not
+        // { rows: [...] } — see gamificationRewardService.js.
+        return result || [];
       } catch (err) {
         // Table may not exist - return empty array
         console.log('[Correlation Engine] activity_log not available:', err.message);
