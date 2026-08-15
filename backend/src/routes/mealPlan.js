@@ -181,13 +181,15 @@ router.get('/saved', async (req, res) => {
       LIMIT 1
     `);
 
-    if (result.rows.length === 0) {
+    // db.execute() on this postgres-js-backed Drizzle instance returns the
+    // row array directly, not { rows: [...] } — see gamificationRewardService.js.
+    if (result.length === 0) {
       return res.json({ plan: null });
     }
 
     res.json({
-      plan: result.rows[0].plan_data,
-      savedAt: result.rows[0].saved_at,
+      plan: result[0].plan_data,
+      savedAt: result[0].saved_at,
     });
   } catch (error) {
     console.error('[MealPlan] Fetch error:', error.message);
