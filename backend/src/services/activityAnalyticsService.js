@@ -165,7 +165,9 @@ class ActivityAnalyticsService {
           AND logged_at >= NOW() - INTERVAL '30 days'
       `);
 
-      const stats = result.rows?.[0] || { total_logs: 0, distinct_days: 0 };
+      // db.execute() returns the row array directly on this driver, not
+      // { rows: [...] } — see gamificationRewardService.js.
+      const stats = result[0] || { total_logs: 0, distinct_days: 0 };
       const distinctDays = parseInt(stats.distinct_days) || 0;
       const totalLogs = parseInt(stats.total_logs) || 0;
 
@@ -228,7 +230,7 @@ class ActivityAnalyticsService {
         ORDER BY logged_at DESC
       `);
 
-      const logs = logsResult.rows || [];
+      const logs = logsResult || [];
 
       if (logs.length === 0) {
         return null;
@@ -411,7 +413,7 @@ class ActivityAnalyticsService {
           AND logged_at >= ${startDate.toISOString()}
           AND logged_at <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -425,7 +427,7 @@ class ActivityAnalyticsService {
           AND logged_date >= ${startDate.toISOString()}
           AND logged_date <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -439,7 +441,7 @@ class ActivityAnalyticsService {
           AND logged_date >= ${startDate.toISOString()}
           AND logged_date <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -453,7 +455,7 @@ class ActivityAnalyticsService {
           AND logged_date >= ${startDate.toISOString()}
           AND logged_date <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -796,7 +798,7 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
       `);
 
       const logsByDate = {};
-      (result.rows || []).forEach(row => {
+      (result || []).forEach(row => {
         logsByDate[row.date] = {
           minutes: parseInt(row.minutes) || 0,
           types: row.types,
