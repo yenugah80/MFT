@@ -71,7 +71,9 @@ export default function StressLogger({ visible, onClose }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // Form state
-  const [stressLevel, setStressLevel] = useState(5);
+  // Null until the user picks. The level IS the datum here — an untouched
+  // Save used to record a stress reading of 5 that nobody entered.
+  const [stressLevel, setStressLevel] = useState(null);
   const [selectedTriggers, setSelectedTriggers] = useState([]);
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
   const [selectedCoping, setSelectedCoping] = useState([]);
@@ -112,7 +114,7 @@ export default function StressLogger({ visible, onClose }) {
   // Reset form when opening
   useEffect(() => {
     if (visible) {
-      setStressLevel(5);
+      setStressLevel(null);
       setSelectedTriggers([]);
       setSelectedSymptoms([]);
       setSelectedCoping([]);
@@ -174,13 +176,15 @@ export default function StressLogger({ visible, onClose }) {
     onClose();
   };
 
-  const getStressInfo = () => {
-    const info = STRESS_LEVELS.find(l => l.value === stressLevel);
-    return info || STRESS_LEVELS[4]; // Default to level 5
-  };
+  // Null when unrated — deliberately does NOT fall back to level 5.
+  const getStressInfo = () =>
+    STRESS_LEVELS.find(l => l.value === stressLevel) || null;
 
   const stressInfo = getStressInfo();
-  const stressColor = STRESS_COLORS[stressLevel - 1];
+  const hasLevel = stressLevel !== null;
+  // STRESS_COLORS encodes severity, so there is no honest colour for "not yet
+  // rated". Fall back to the neutral Stress accent used on the dashboard card.
+  const stressColor = hasLevel ? STRESS_COLORS[stressLevel - 1] : SEMANTIC.warning.base;
 
   return (
     <Modal
@@ -232,13 +236,19 @@ export default function StressLogger({ visible, onClose }) {
               <Text style={styles.sectionTitle}>Stress Level</Text>
 
               <View style={styles.levelDisplay}>
-                <View style={[styles.levelCircle, { backgroundColor: `${stressColor}20`, borderColor: stressColor }]}>
-                  <Text style={[styles.levelValue, { color: stressColor }]}>
-                    {stressLevel}
-                  </Text>
-                </View>
-                <Text style={styles.levelLabel}>{stressInfo.label}</Text>
-                <Text style={styles.levelDescription}>{stressInfo.description}</Text>
+                {hasLevel ? (
+                  <>
+                    <View style={[styles.levelCircle, { backgroundColor: `${stressColor}20`, borderColor: stressColor }]}>
+                      <Text style={[styles.levelValue, { color: stressColor }]}>
+                        {stressLevel}
+                      </Text>
+                    </View>
+                    <Text style={styles.levelLabel}>{stressInfo.label}</Text>
+                    <Text style={styles.levelDescription}>{stressInfo.description}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.levelPrompt}>Tap a number to rate your stress</Text>
+                )}
               </View>
 
               <View style={styles.levelSlider}>
@@ -422,7 +432,8 @@ export default function StressLogger({ visible, onClose }) {
                 isLogging && styles.saveButtonDisabled
               ]}
               onPress={handleSave}
-              disabled={isLogging}
+              disabled={!hasLevel || isLogging}
+              accessibilityHint={hasLevel ? undefined : 'Choose a stress level to save'}
             >
               <LinearGradient
                 colors={[stressColor, `${stressColor}DD`]}
@@ -542,6 +553,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size['3xl'],
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
+  },
+  levelPrompt: {
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.tertiary,
+    paddingVertical: SPACING[5],
+    textAlign: 'center',
   },
   levelLabel: {
     fontSize: TYPOGRAPHY.size.lg,

@@ -59,8 +59,12 @@ function ActivityScreen() {
   const [selectedFocus, setSelectedFocus] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState(null);
-  const [duration, setDuration] = useState('30');
-  const [intensity, setIntensity] = useState('MODERATE');
+  // Empty, not '30'. Duration is the larger multiplier in calculateCalories,
+  // so a pre-filled guess put an invented figure into the day's energy balance.
+  const [duration, setDuration] = useState('');
+  // Null until chosen — light/moderate/vigorous is a judgement only the user
+  // can make, and it feeds the calorie estimate.
+  const [intensity, setIntensity] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -93,8 +97,15 @@ function ActivityScreen() {
     setModalVisible(true);
   };
 
+  // Mirrors the bounds useActivityLog.logActivity already enforces, so an
+  // invalid duration is a disabled button rather than a thrown error.
+  const durationValue = parseInt(duration, 10);
+  const isValidDuration =
+    /^\d+$/.test(duration.trim()) && durationValue > 0 && durationValue <= 1440;
+  const canLogActivity = !!selectedExercise && isValidDuration && !!intensity;
+
   const handleLogActivity = async () => {
-    if (!selectedExercise || !duration) return;
+    if (!canLogActivity) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -121,8 +132,8 @@ function ActivityScreen() {
       });
 
       setModalVisible(false);
-      setDuration('30');
-      setIntensity('MODERATE');
+      setDuration('');
+      setIntensity(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Error logging activity:', error);
@@ -389,10 +400,14 @@ function ActivityScreen() {
                 </View>
 
                 {/* Calories Preview */}
+                {/* Only estimate once both inputs are real — otherwise this
+                    rendered "~0 calories burned", which reads as a result. */}
                 <View style={styles.caloriesPreview}>
                   <Ionicons name="flame" size={24} color={SEMANTIC.warning.base} />
                   <Text style={styles.caloriesPreviewText}>
-                    ~{calculateCalories(selectedExercise, parseInt(duration) || 0, userWeight, intensity)} calories burned
+                    {isValidDuration && intensity
+                      ? `~${calculateCalories(selectedExercise, durationValue, userWeight, intensity)} calories burned`
+                      : 'Enter a duration and intensity to estimate calories'}
                   </Text>
                 </View>
 
@@ -405,9 +420,14 @@ function ActivityScreen() {
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.logButton, isLogging && styles.logButtonDisabled]}
+                    style={[styles.logButton, (!canLogActivity || isLogging) && styles.logButtonDisabled]}
                     onPress={handleLogActivity}
-                    disabled={isLogging}
+                    disabled={!canLogActivity || isLogging}
+                    accessibilityHint={
+                      !isValidDuration
+                        ? 'Enter a duration in minutes to log'
+                        : (!intensity ? 'Choose an intensity to log' : undefined)
+                    }
                   >
                     <LinearGradient
                       colors={[BRAND.primary, `${BRAND.primary}CC`]}

@@ -156,6 +156,36 @@ describe('API response codes match the server exactly', () => {
   });
 });
 
+describe('subjective ratings are not pre-filled', () => {
+  /**
+   * A pre-filled subjective rating is indistinguishable in the database from a
+   * deliberate answer. Log Sleep opened and saved untouched used to record
+   * "quality 7/10", Log Stress "level 5", and Log Activity "30 minutes at
+   * moderate intensity" — the last feeding calculateCalories and the dashboard's
+   * energy balance. Objective values (bed/wake times) may still be pre-filled;
+   * these may not.
+   */
+  const SUBJECTIVE_DEFAULTS = [
+    { file: 'components/SleepLogger.jsx', state: 'quality' },
+    { file: 'components/StressLogger.jsx', state: 'stressLevel' },
+    { file: 'app/(tabs)/activity.jsx', state: 'intensity' },
+    { file: 'app/(tabs)/activity.jsx', state: 'duration' },
+  ];
+
+  it.each(SUBJECTIVE_DEFAULTS)('$file: $state starts unset', ({ file, state }) => {
+    const src = stripComments(fs.readFileSync(path.join(MOBILE_ROOT, file), 'utf8'));
+    const decl = new RegExp(`const\\s*\\[\\s*${state}\\s*,[^\\]]*\\]\\s*=\\s*useState\\(([^)]*)\\)`);
+    const match = src.match(decl);
+
+    // Guard the guard: a renamed state must fail loudly, not silently pass.
+    expect(match).not.toBeNull();
+
+    const initialiser = match[1].trim();
+    // '' is the unset form for a text input; null for everything else.
+    expect(["null", "''", '""']).toContain(initialiser);
+  });
+});
+
 describe('result provenance is not claimed by mode switches', () => {
   /**
    * `analysisSource` records where the CURRENT analysis result came from. It

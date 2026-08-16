@@ -69,7 +69,10 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
     date.setHours(6, 30, 0, 0); // Default 6:30 AM next day
     return date;
   });
-  const [quality, setQuality] = useState(7);
+  // Null until the user picks. A pre-filled 7/10 is indistinguishable in the
+  // database from a deliberate answer, so an untouched Save used to record a
+  // sleep rating nobody chose.
+  const [quality, setQuality] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [notes, setNotes] = useState('');
 
@@ -120,7 +123,9 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
       if (initialData) {
         setBedTime(new Date(initialData.bedTime));
         setWakeTime(new Date(initialData.wakeTime));
-        setQuality(initialData.quality || 7);
+        // ?? not || — an entry saved without a quality stays unrated rather
+        // than acquiring a 7 on edit.
+        setQuality(initialData.quality ?? null);
         setSelectedTags(initialData.tags ? Object.keys(initialData.tags).filter(k => initialData.tags[k]) : []);
         setNotes(initialData.notes || '');
       } else {
@@ -135,7 +140,7 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
 
         setBedTime(defaultBed);
         setWakeTime(defaultWake);
-        setQuality(7);
+        setQuality(null);
         setSelectedTags([]);
         setNotes('');
       }
@@ -210,13 +215,14 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const getQualityLabel = () => {
-    const label = SLEEP_QUALITY_LABELS.find(l => l.value === quality);
-    return label || SLEEP_QUALITY_LABELS[6]; // Default to 7
-  };
+  // Returns null when unrated — deliberately does NOT fall back to 7, which is
+  // how an unchosen rating used to acquire an icon, a colour and a number.
+  const getQualityLabel = () =>
+    SLEEP_QUALITY_LABELS.find(l => l.value === quality) || null;
 
   const qualityLabel = getQualityLabel();
   const isValidDuration = isValidSleepDuration(durationMinutes);
+  const canSave = isValidDuration && quality !== null;
 
   return (
     <Modal
@@ -346,15 +352,21 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
               <Text style={styles.sectionTitle}>Sleep Quality</Text>
 
               <View style={styles.qualityDisplay}>
-                <Ionicons
-                  name={qualityLabel.icon}
-                  size={40}
-                  color={qualityLabel.color}
-                />
-                <Text style={[styles.qualityValue, { color: qualityLabel.color }]}>
-                  {quality}
-                </Text>
-                <Text style={styles.qualityLabel}>{qualityLabel.label}</Text>
+                {qualityLabel ? (
+                  <>
+                    <Ionicons
+                      name={qualityLabel.icon}
+                      size={40}
+                      color={qualityLabel.color}
+                    />
+                    <Text style={[styles.qualityValue, { color: qualityLabel.color }]}>
+                      {quality}
+                    </Text>
+                    <Text style={styles.qualityLabel}>{qualityLabel.label}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.qualityPrompt}>Tap to rate your sleep</Text>
+                )}
               </View>
 
               <View style={styles.qualitySlider}>
@@ -453,10 +465,15 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                (!isValidDuration || isLogging) && styles.saveButtonDisabled
+                (!canSave || isLogging) && styles.saveButtonDisabled
               ]}
               onPress={handleSave}
-              disabled={!isValidDuration || isLogging}
+              disabled={!canSave || isLogging}
+              accessibilityHint={
+                quality === null
+                  ? 'Choose a sleep quality to save'
+                  : (!isValidDuration ? 'Check your bed and wake times to save' : undefined)
+              }
             >
               <LinearGradient
                 colors={[VIBRANT_WELLNESS.sleep.solid, `${VIBRANT_WELLNESS.sleep.solid}DD`]}
@@ -632,6 +649,11 @@ const styles = StyleSheet.create({
   qualityLabel: {
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
+  },
+  qualityPrompt: {
+    fontSize: TYPOGRAPHY.size.base,
+    color: TEXT.tertiary,
+    paddingVertical: SPACING[4],
   },
   qualitySlider: {
     flexDirection: 'row',
