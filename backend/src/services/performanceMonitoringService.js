@@ -395,6 +395,12 @@ export function getDashboardMetrics() {
  * Get historical metrics for a time range
  */
 export async function getHistoricalMetrics(startTime, endTime, endpoint = null) {
+  // NOTE: performance_metrics does not exist in the database at all (no
+  // migration ever created it) — every function in this file that touches
+  // it, including persistMetrics' INSERT, throws "relation does not exist"
+  // today. Not fixed here — that's a real schema decision (retention,
+  // indexing), not a rename. The .rows fix below is correct regardless of
+  // that, for whenever the table exists.
   const result = await db.execute(sql`
     SELECT
       endpoint,
@@ -417,7 +423,9 @@ export async function getHistoricalMetrics(startTime, endTime, endpoint = null) 
     startTime,
     endTime,
     endpoint,
-    metrics: result.rows,
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
+    metrics: result,
   };
 }
 
@@ -444,7 +452,7 @@ export async function getSLOComplianceReport(days = 30) {
   return {
     period_days: days,
     slo_targets: SLODefinitions,
-    compliance: result.rows.map(row => ({
+    compliance: result.map(row => ({
       endpoint: row.endpoint,
       total_hours: parseInt(row.total_hours),
       p50_compliance: (row.p50_compliant / row.total_hours * 100).toFixed(1) + '%',

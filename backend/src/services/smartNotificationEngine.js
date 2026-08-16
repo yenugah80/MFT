@@ -16,15 +16,17 @@
 import { db } from '../config/db.js';
 import { sql } from 'drizzle-orm';
 import NodeCache from 'node-cache';
-import Expo from 'expo-server-sdk';
+// expo-server-sdk was imported but never actually added as a dependency
+// (not in package.json, not installed) — this made the whole module fail
+// to load with MODULE_NOT_FOUND. Only one method was used (a token-format
+// check), so it's replaced below with the same plain string check
+// pushNotificationService.js already uses, rather than adding a dependency
+// for one static validation call.
 
 // Caches for notification optimization
 const userEngagementCache = new NodeCache({ stdTTL: 3600, checkperiod: 300 });
 const sendTimeCache = new NodeCache({ stdTTL: 86400, checkperiod: 3600 });
 const fatigueCache = new NodeCache({ stdTTL: 86400, checkperiod: 600 });
-
-// Expo SDK for push notifications
-const expo = new Expo({ accessToken: process.env.EXPO_ACCESS_TOKEN });
 
 // ============================================================================
 // NOTIFICATION TYPES & PRIORITIES
@@ -145,14 +147,16 @@ export async function predictOptimalSendTime(userId, notificationType) {
     let confidence = 0.3;
     let method = 'default';
 
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
     // Use engagement data if sufficient
-    if (engagementData.rows.length >= 3) {
-      optimalHour = parseInt(engagementData.rows[0].hour);
-      confidence = Math.min(engagementData.rows[0].clicks / 20, 0.9);
+    if (engagementData.length >= 3) {
+      optimalHour = parseInt(engagementData[0].hour);
+      confidence = Math.min(engagementData[0].clicks / 20, 0.9);
       method = 'engagement';
-    } else if (activityData.rows.length >= 3) {
-      optimalHour = parseInt(activityData.rows[0].hour);
-      confidence = Math.min(activityData.rows[0].actions / 50, 0.7);
+    } else if (activityData.length >= 3) {
+      optimalHour = parseInt(activityData[0].hour);
+      confidence = Math.min(activityData[0].actions / 50, 0.7);
       method = 'activity';
     }
 
@@ -160,7 +164,7 @@ export async function predictOptimalSendTime(userId, notificationType) {
     const timezoneResult = await db.execute(sql`
       SELECT timezone_offset FROM gamification WHERE user_id = ${userId}
     `);
-    const timezoneOffset = timezoneResult.rows[0]?.timezone_offset || 0;
+    const timezoneOffset = timezoneResult[0]?.timezone_offset || 0;
 
     const result = {
       optimalHour,
@@ -237,7 +241,7 @@ export async function checkNotificationFatigue(userId, notificationType) {
       lastUpdated: Date.now(),
     };
 
-    for (const row of result.rows) {
+    for (const row of result) {
       const sent = parseInt(row.sent_count);
       const clicked = parseInt(row.clicked_count);
       fatigueState.totalSent24h += sent;
@@ -458,11 +462,11 @@ async function getUserNotificationContext(userId) {
       WHERE p.user_id = ${userId}
     `);
 
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return { name: null, streak: 0, level: 1 };
     }
 
-    const row = result.rows[0];
+    const row = result[0];
     const context = {
       name: row.full_name?.split(' ')[0] || null,
       streak: row.streak || 0,
@@ -577,7 +581,7 @@ export async function smartSendNotification(userId, notificationType, data = {},
       SELECT notifications FROM account_settings WHERE user_id = ${userId}
     `);
 
-    const preferences = preferencesResult.rows[0]?.notifications || {};
+    const preferences = preferencesResult[0]?.notifications || {};
     if (preferences[notificationType] === false && priority > NotificationPriority.HIGH) {
       return { sent: false, reason: 'user_disabled', type: notificationType };
     }
@@ -649,15 +653,15 @@ async function sendPushNotification(userId, content, deepLink, priority) {
     WHERE user_id = ${userId}
   `);
 
-  const tokens = tokenResult.rows[0];
+  const tokens = tokenResult[0];
   if (!tokens?.expo_push_token && !tokens?.fcm_token) {
     return { success: false, reason: 'no_push_token' };
   }
 
   const pushToken = tokens.expo_push_token || tokens.fcm_token;
 
-  // Validate Expo push token
-  if (!Expo.isExpoPushToken(pushToken)) {
+  // Validate Expo push token — same check pushNotificationService.js uses
+  if (!pushToken.startsWith('ExponentPushToken[') && !pushToken.startsWith('ExpoPushToken[')) {
     console.warn('[SmartNotification] Invalid Expo push token:', pushToken);
     return { success: false, reason: 'invalid_token' };
   }
@@ -672,22 +676,34 @@ async function sendPushNotification(userId, content, deepLink, priority) {
     channelId: getChannelId(priority),
   };
 
+  // Same raw Expo push API call pushNotificationService.js already uses in
+  // production — this function used to route through expo-server-sdk's
+  // chunkPushNotifications/sendPushNotificationsAsync, but that dependency
+  // was never actually installed (see the import removal note above), so
+  // this always threw before reaching Expo at all.
   try {
-    const chunks = expo.chunkPushNotifications([message]);
-    const tickets = [];
-
-    for (const chunk of chunks) {
-      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-      tickets.push(...ticketChunk);
+    const headers = {
+      Accept: 'application/json',
+      'Accept-encoding': 'gzip, deflate',
+      'Content-Type': 'application/json',
+    };
+    if (process.env.EXPO_ACCESS_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
     }
 
-    const ticket = tickets[0];
-    if (ticket.status === 'ok') {
-      return { success: true, notificationId: ticket.id };
-    } else {
-      console.error('[SmartNotification] Push failed:', ticket.message);
-      return { success: false, reason: ticket.message };
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(message),
+    });
+    const result = await response.json();
+
+    if (result.data?.status === 'error') {
+      console.error('[SmartNotification] Push failed:', result.data.message);
+      return { success: false, reason: result.data.message };
     }
+
+    return { success: true, notificationId: result.data?.id };
   } catch (error) {
     console.error('[SmartNotification] Push error:', error.message);
     return { success: false, reason: error.message };
@@ -799,14 +815,14 @@ export async function getNotificationAnalytics(userId, days = 30) {
     userId,
     periodDays: days,
     summary: {
-      totalSent: parseInt(summary.rows[0]?.total_sent || 0),
-      totalClicked: parseInt(summary.rows[0]?.total_clicked || 0),
-      clickRate: summary.rows[0]?.total_sent > 0
-        ? ((summary.rows[0].total_clicked / summary.rows[0].total_sent) * 100).toFixed(1) + '%'
+      totalSent: parseInt(summary[0]?.total_sent || 0),
+      totalClicked: parseInt(summary[0]?.total_clicked || 0),
+      clickRate: summary[0]?.total_sent > 0
+        ? ((summary[0].total_clicked / summary[0].total_sent) * 100).toFixed(1) + '%'
         : '0%',
-      avgResponseSeconds: Math.round(summary.rows[0]?.avg_response_time || 0),
+      avgResponseSeconds: Math.round(summary[0]?.avg_response_time || 0),
     },
-    byType: result.rows.map(row => ({
+    byType: result.map(row => ({
       type: row.notification_type,
       sent: parseInt(row.sent),
       clicked: parseInt(row.clicked),
@@ -835,7 +851,7 @@ export async function getGlobalNotificationMetrics(days = 7) {
 
   return {
     periodDays: days,
-    dailyMetrics: result.rows,
+    dailyMetrics: result,
   };
 }
 

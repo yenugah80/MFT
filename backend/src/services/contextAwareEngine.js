@@ -276,8 +276,10 @@ async function getUserStateContext(userId) {
       LIMIT 1
     `);
 
-    if (moodResult.rows.length > 0) {
-      const mood = moodResult.rows[0];
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
+    if (moodResult.length > 0) {
+      const mood = moodResult[0];
       signals[ContextSignals.MOOD] = mood.mood;
       signals[ContextSignals.ENERGY_LEVEL] = mood.energy_level || 5;
 
@@ -300,8 +302,8 @@ async function getUserStateContext(userId) {
         AND logged_date::date = CURRENT_DATE
     `);
 
-    if (hydrationResult.rows.length > 0) {
-      const { total_liters, goal } = hydrationResult.rows[0];
+    if (hydrationResult.length > 0) {
+      const { total_liters, goal } = hydrationResult[0];
       const percentage = goal > 0 ? (total_liters / goal) * 100 : 0;
 
       if (percentage < 30) {
@@ -338,8 +340,8 @@ async function getActivityContext(userId) {
         AND day_key = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
     `);
 
-    if (activityResult.rows.length > 0) {
-      const activity = activityResult.rows[0];
+    if (activityResult.length > 0) {
+      const activity = activityResult[0];
       const minutes = activity.total_minutes || 0;
 
       if (minutes > 60) {
@@ -388,7 +390,7 @@ async function getCalendarContext(userId) {
       WHERE user_id = ${userId}
     `);
 
-    if (profileResult.rows.length === 0 || !profileResult.rows[0].calendar_connected) {
+    if (profileResult.length === 0 || !profileResult[0].calendar_connected) {
       // No calendar connected - use heuristics
       const hour = new Date().getHours();
       const isWorkHours = hour >= 9 && hour <= 17;
