@@ -181,6 +181,11 @@ export function useActivityLog() {
       // stale data after a log or delete.
       queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      // Your Progress reads these separately from the above — without this
+      // a new activity entry wouldn't show there until a manual refresh.
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 
@@ -293,6 +298,9 @@ export function useActivityLog() {
       // stale data after a log or delete.
       queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 

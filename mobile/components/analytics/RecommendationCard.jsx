@@ -134,11 +134,15 @@ export default function RecommendationCard({
       }
     }
 
-    // Show satisfaction prompt after short delay
-    setTimeout(() => {
-      showSatisfactionPrompt();
-    }, 1500);
-  }, [id, onComplete, recommendation, showSatisfactionPrompt]);
+    // Only prompt for satisfaction when there's a real handler wired — no
+    // caller currently passes onRecordSatisfaction, so unconditionally
+    // showing this was a dead-end dialog (every button led nowhere).
+    if (onRecordSatisfaction) {
+      setTimeout(() => {
+        showSatisfactionPrompt();
+      }, 1500);
+    }
+  }, [id, onComplete, recommendation, onRecordSatisfaction, showSatisfactionPrompt]);
 
   const showSatisfactionPrompt = useCallback(() => {
     Alert.alert(

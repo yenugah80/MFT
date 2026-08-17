@@ -21,9 +21,19 @@ import {
   activityLogTable,
   userCorrelationsTable,
   profilesTable,
+  recommendationsHistoryTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
 import { getLocalDayRange } from '../utils/timezone.js';
+
+// recommendations_history.recommendation_id is globally unique across all
+// users (not per-user), so the 4 static onboarding-nudge ids below
+// ('nutrition_first_meal' etc.) must be namespaced per user before they're
+// ever written there — otherwise the first user to trigger a nudge would
+// permanently own that row and every other user's insert/lookup would
+// silently miss.
+export const ENGAGEMENT_NUDGE_TYPE = 'ENGAGEMENT_NUDGE';
+export const nudgeRecommendationId = (userId, baseId) => `${userId}:${baseId}`;
 
 /**
  * ============================================
@@ -129,6 +139,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
     moodPeriod,
     moodAll,
     moodWeek,
+    moodPeriodIntensities,
     waterTotal,
     waterToday,
     waterTodayAmount,
@@ -159,6 +170,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
     db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, periodStart))),
     db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(eq(moodLogTable.userId, userId)),
     db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekAgo))),
+    db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, periodStart))),
 
     // Water queries
     db.select({ count: count() }).from(waterLogTable).where(eq(waterLogTable.userId, userId)),
@@ -199,6 +211,12 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
   // Calculate mood averages
   const avgIntensity = moodAll.length > 0 ? moodAll.reduce((sum, m) => sum + (parseFloat(m.intensity) || 0), 0) / moodAll.length : 0;
   const avgIntensityThisWeek = moodWeek.length > 0 ? moodWeek.reduce((sum, m) => sum + (parseFloat(m.intensity) || 0), 0) / moodWeek.length : 0;
+  // Same period-scoping as avgCaloriesPerDay/avgDailyMl above — the wellness
+  // score's mood component was reading avgIntensityThisWeek (fixed to a
+  // literal 7 days) regardless of what period the caller actually asked for.
+  const avgIntensityInPeriod = moodPeriodIntensities.length > 0
+    ? moodPeriodIntensities.reduce((sum, m) => sum + (parseFloat(m.intensity) || 0), 0) / moodPeriodIntensities.length
+    : 0;
 
   // Calculate water stats
   const todayMl = waterTodayAmount.reduce((sum, w) => sum + ((parseFloat(w.amount) || 0) * 1000), 0);
@@ -219,6 +237,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
   // figure the frontend's Week/Month toggle should actually display.
   const weeklyMinutes = activityWeekMinutes.reduce((sum, a) => sum + (parseFloat(a.minutes) || 0), 0);
   const periodMinutes = activityPeriodMinutes.reduce((sum, a) => sum + (parseFloat(a.minutes) || 0), 0);
+  const avgMinutesPerDay = lookbackDays > 0 ? periodMinutes / lookbackDays : 0;
 
   return {
     totalDataPoints:
@@ -246,6 +265,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
       thisWeek: moodThisWeek[0]?.count || 0,
       avgIntensity,
       avgIntensityThisWeek,
+      avgIntensityInPeriod,
       hasDataInPeriod: (moodPeriod[0]?.count || 0) > 0,
     },
     water: {
@@ -261,6 +281,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
       weeklyMinutes,
       avgWeeklyMinutes: weeklyMinutes, // Current week's minutes as average for now
       periodMinutes,
+      avgMinutesPerDay,
       hasDataInPeriod: activityPeriodMinutes.length > 0,
     },
     goals: {
@@ -1146,16 +1167,21 @@ function generateActivityRecommendations(stats, recentLogs, correlations, stage)
  * - Activity → Mood, Sleep, Energy
  * - Nutrition timing → Performance
  */
-function generateCrossDomainRecommendations(stats, recentLogs, correlations, stage) {
+export function generateCrossDomainRecommendations(stats, recentLogs, correlations, stage) {
   const recommendations = [];
   const { food, mood, water, activity, goals } = stats;
   const { foodLogs, moodLogs, waterLogs, activityLogs } = recentLogs;
 
-  // Calculate scores for wellness breakdown
-  const calorieScore = Math.min(100, goals.calorieGoal > 0 ? (food.todayCalories / goals.calorieGoal) * 100 : 0);
-  const waterScore = Math.min(100, goals.waterGoalMl > 0 ? (water.todayMl / goals.waterGoalMl) * 100 : 0);
-  const activityScore = Math.min(100, goals.activityGoalMinutes > 0 ? (activity.weeklyMinutes / goals.activityGoalMinutes) * 100 : 0);
-  const moodScore = mood.avgIntensityThisWeek > 0 ? mood.avgIntensityThisWeek * 10 : 50;
+  // Calculate scores for wellness breakdown. All four are period-scoped
+  // daily averages vs. a daily-equivalent goal, matching the Day/Week/Month
+  // selector — this previously mixed a today-only calorie/water figure with
+  // a fixed-weekly activity/mood figure, so the score (and the Focus/Strength
+  // cards derived from it) never actually changed when the period did.
+  const calorieScore = Math.min(100, goals.calorieGoal > 0 ? (food.avgCaloriesPerDay / goals.calorieGoal) * 100 : 0);
+  const waterScore = Math.min(100, goals.waterGoalMl > 0 ? (water.avgDailyMl / goals.waterGoalMl) * 100 : 0);
+  const activityGoalPerDay = goals.activityGoalMinutes / 7; // CDC goal is weekly; scale to a daily-equivalent target
+  const activityScore = Math.min(100, activityGoalPerDay > 0 ? (activity.avgMinutesPerDay / activityGoalPerDay) * 100 : 0);
+  const moodScore = mood.avgIntensityInPeriod > 0 ? mood.avgIntensityInPeriod * 10 : 50;
 
   // Start providing cross-domain insights from Day 2
   if (stats.totalDataPoints >= 3) {
@@ -1645,28 +1671,111 @@ function generateCrossDomainRecommendations(stats, recentLogs, correlations, sta
  * @param {string} period - 'today' | 'week' | 'month' | 'all'
  * @returns {Promise<Object>} Full analytics with recommendations
  */
+/**
+ * Engagement nudges (the 4 static 'action'-type onboarding cards — "Log Your
+ * First Meal" etc.) are recomputed fresh on every request from live stats,
+ * with no memory of past dismissals. Without this, tapping "Later" on one
+ * would do nothing: the same card reappears on the very next fetch. This
+ * loads this user's persisted decisions so they can be filtered out below.
+ *
+ * @returns {Map<string, string>} base nudge id -> interactionStatus
+ */
+async function getNudgeStatuses(userId) {
+  const rows = await db
+    .select({
+      recommendationId: recommendationsHistoryTable.recommendationId,
+      interactionStatus: recommendationsHistoryTable.interactionStatus,
+    })
+    .from(recommendationsHistoryTable)
+    .where(and(
+      eq(recommendationsHistoryTable.userId, userId),
+      eq(recommendationsHistoryTable.recommendationType, ENGAGEMENT_NUDGE_TYPE)
+    ));
+
+  const prefix = `${userId}:`;
+  const statuses = new Map();
+  for (const row of rows) {
+    if (row.recommendationId.startsWith(prefix)) {
+      statuses.set(row.recommendationId.slice(prefix.length), row.interactionStatus);
+    }
+  }
+  return statuses;
+}
+
+/**
+ * Drops any nudge the user already accepted/rejected, and namespaces the
+ * remaining ones' ids so a later Done/Later tap on the mobile client can
+ * find and update the right recommendations_history row (see
+ * nudgeRecommendationId above for why namespacing is required at all).
+ */
+export function applyNudgeStatuses(recs, userId, nudgeStatuses) {
+  return recs
+    .filter((rec) => {
+      if (rec.type !== 'action') return true;
+      const status = nudgeStatuses.get(rec.id);
+      return status !== 'accepted' && status !== 'rejected';
+    })
+    .map((rec) => rec.type === 'action'
+      ? { ...rec, id: nudgeRecommendationId(userId, rec.id) }
+      : rec);
+}
+
+/**
+ * Persists a 'shown' row for each surviving engagement nudge so the mobile
+ * client's Done/Later actions have something real to update — mirrors the
+ * backfill pattern in loggingController.js for quick-logged meals.
+ * onConflictDoNothing makes repeat calls (every time the user opens Your
+ * Progress) idempotent instead of erroring on the unique recommendationId.
+ */
+async function backfillNudgeHistory(userId, allRecs) {
+  const nudges = allRecs.filter((rec) => rec.type === 'action');
+  if (!nudges.length) return;
+
+  const rows = nudges.map((rec) => ({
+    userId,
+    recommendationId: rec.id, // already namespaced by applyNudgeStatuses
+    foodName: rec.title, // NOT NULL column; this table was built food-candidate-shaped,
+    calories: 0,         // and nudges have no nutrition data — placeholders are intentional.
+    protein: 0,
+    carbs: 0,
+    fats: 0,
+    recommendationType: ENGAGEMENT_NUDGE_TYPE,
+    reason: rec.message,
+    interactionStatus: 'shown',
+  }));
+
+  await db
+    .insert(recommendationsHistoryTable)
+    .values(rows)
+    .onConflictDoNothing({ target: recommendationsHistoryTable.recommendationId });
+}
+
 export async function getAnalyticsRecommendations(userId, period = 'week', offsetMinutes = 0) {
   const lookbackDays = period === 'today' ? 1 : period === 'week' ? 7 : period === 'month' ? 30 : 365;
 
   // Gather all data in parallel
-  const [stats, recentLogs, correlations] = await Promise.all([
+  const [stats, recentLogs, correlations, nudgeStatuses] = await Promise.all([
     getUserDataStats(userId, lookbackDays, offsetMinutes),
     getRecentLogs(userId, lookbackDays),
     getUserCorrelationsData(userId),
+    getNudgeStatuses(userId),
   ]);
 
   // Determine user's stage
   const stage = determineStage(stats);
 
   // Generate recommendations for each domain
-  const nutritionRecs = generateNutritionRecommendations(stats, recentLogs, correlations, stage);
-  const moodRecs = generateMoodRecommendations(stats, recentLogs, correlations, stage);
-  const hydrationRecs = generateHydrationRecommendations(stats, recentLogs, correlations, stage);
-  const activityRecs = generateActivityRecommendations(stats, recentLogs, correlations, stage);
+  const nutritionRecs = applyNudgeStatuses(generateNutritionRecommendations(stats, recentLogs, correlations, stage), userId, nudgeStatuses);
+  const moodRecs = applyNudgeStatuses(generateMoodRecommendations(stats, recentLogs, correlations, stage), userId, nudgeStatuses);
+  const hydrationRecs = applyNudgeStatuses(generateHydrationRecommendations(stats, recentLogs, correlations, stage), userId, nudgeStatuses);
+  const activityRecs = applyNudgeStatuses(generateActivityRecommendations(stats, recentLogs, correlations, stage), userId, nudgeStatuses);
   const crossDomainRecs = generateCrossDomainRecommendations(stats, recentLogs, correlations, stage);
 
   // Sort by priority within each domain
   const sortByPriority = (a, b) => a.priority - b.priority;
+
+  backfillNudgeHistory(userId, [...nutritionRecs, ...moodRecs, ...hydrationRecs, ...activityRecs])
+    .catch((err) => console.warn('[AnalyticsRecommendations] Nudge history backfill failed:', err.message));
 
   return {
     success: true,

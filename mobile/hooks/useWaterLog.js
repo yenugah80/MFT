@@ -77,6 +77,11 @@ export function useWaterLog() {
       // Invalidate to get fresh data from server
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['waterToday'] });
+      // Your Progress reads these separately — without this a new water
+      // entry wouldn't show there until a manual refresh.
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
 
       // Smart notifications: Cancel streak protection since user logged water today
       cancelStreakProtectionIfLoggedToday().catch(() => {});
@@ -221,6 +226,9 @@ export function useWaterLog() {
       // Invalidate to get fresh data from server
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['waterToday'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 

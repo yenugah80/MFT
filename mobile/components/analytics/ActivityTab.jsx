@@ -41,7 +41,7 @@ const CHART_WIDTH = Dimensions.get('window').width - SPACING[4] * 4;
 
 const CDC_WEEKLY_GOAL = 150; // minutes
 
-export default function ActivityTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
+export default function ActivityTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   // Empty state when no data and no recommendations
   if (!data && recommendations.length === 0) {
     return (
@@ -82,7 +82,12 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
           {actionRecs.map((rec, idx) => (
-            <RecommendationCard key={rec.id || idx} recommendation={rec} />
+            <RecommendationCard
+              key={rec.id || idx}
+              recommendation={rec}
+              onComplete={onCompleteRecommendation}
+              onDismiss={onDismissRecommendation}
+            />
           ))}
         </View>
       )}

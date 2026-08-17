@@ -29,7 +29,7 @@ import {
   BRAND,
 } from '../../constants/premiumTheme';
 
-export default function HydrationTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
+export default function HydrationTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   const router = useRouter();
 
   const handleViewFullAnalytics = () => {
@@ -107,7 +107,12 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
           {actionRecs.map((rec, idx) => (
-            <RecommendationCard key={rec.id || idx} recommendation={rec} />
+            <RecommendationCard
+              key={rec.id || idx}
+              recommendation={rec}
+              onComplete={onCompleteRecommendation}
+              onDismiss={onDismissRecommendation}
+            />
           ))}
         </View>
       )}

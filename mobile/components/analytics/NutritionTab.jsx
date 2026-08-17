@@ -63,7 +63,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function NutritionTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
+export default function NutritionTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   const router = useRouter();
   const [showSmartRecs, setShowSmartRecs] = useState(false);
   const [loggingId, setLoggingId] = useState(null);
@@ -197,7 +197,12 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
         {actionRecs.length > 0 && (
           <View style={styles.actionsSection}>
             {actionRecs.map((rec, idx) => (
-              <RecommendationCard key={rec.id || idx} recommendation={rec} />
+              <RecommendationCard
+                key={rec.id || idx}
+                recommendation={rec}
+                onComplete={onCompleteRecommendation}
+                onDismiss={onDismissRecommendation}
+              />
             ))}
           </View>
         )}

@@ -57,6 +57,8 @@ export default function AnalyticsScreen() {
     hydration,
     wellness,
     recommendations,
+    onCompleteRecommendation,
+    onDismissRecommendation,
     isLoading,
     refetch,
     queries,
@@ -107,6 +109,8 @@ export default function AnalyticsScreen() {
       period,
       onRefresh,
       refreshing,
+      onCompleteRecommendation,
+      onDismissRecommendation,
     };
 
     switch (activeDomain) {

@@ -58,9 +58,13 @@ export function useMoodLog() {
       });
     },
     onSuccess: () => {
-      // Batch invalidation — single flush instead of 5 independent refetches
+      // Batch invalidation — single flush instead of 5 independent refetches.
+      // Includes Your Progress's keys (analytics-unified/-recommendations,
+      // decision-brain) so a new mood entry shows up there without a manual
+      // pull-to-refresh — previously only this screen's own queries refreshed.
       queryClient.invalidateQueries({
-        predicate: (q) => ['dashboard', 'moodLogs', 'moodTrends', 'moodInsights', 'moodToday']
+        predicate: (q) => ['dashboard', 'moodLogs', 'moodTrends', 'moodInsights', 'moodToday',
+          'analytics-unified', 'analytics-recommendations', 'decision-brain']
           .includes(q.queryKey[0]),
       });
     },

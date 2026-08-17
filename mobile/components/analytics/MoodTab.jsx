@@ -56,7 +56,7 @@ const MOOD_LABELS = {
   sad: 'Sad',
 };
 
-export default function MoodTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
+export default function MoodTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   const router = useRouter();
 
   const handleViewPatterns = () => {
@@ -107,7 +107,12 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
       {actionRecs.length > 0 && (
         <View style={styles.actionsSection}>
           {actionRecs.map((rec, idx) => (
-            <RecommendationCard key={rec.id || idx} recommendation={rec} />
+            <RecommendationCard
+              key={rec.id || idx}
+              recommendation={rec}
+              onComplete={onCompleteRecommendation}
+              onDismiss={onDismissRecommendation}
+            />
           ))}
         </View>
       )}

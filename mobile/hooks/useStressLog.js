@@ -198,6 +198,11 @@ export function useStressLog() {
       queryClient.invalidateQueries({ queryKey: ['stressToday'] });
       queryClient.invalidateQueries({ queryKey: ['stressPatterns'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      // Your Progress reads these separately — Wellness's stress insight
+      // wouldn't update until a manual refresh otherwise.
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 
@@ -266,6 +271,9 @@ export function useStressLog() {
       queryClient.invalidateQueries({ queryKey: ['stressToday'] });
       queryClient.invalidateQueries({ queryKey: ['stressPatterns'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 

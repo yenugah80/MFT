@@ -156,6 +156,11 @@ export function useSleepLog() {
       queryClient.invalidateQueries({ queryKey: ['sleepToday'] });
       queryClient.invalidateQueries({ queryKey: ['sleepTrends'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      // Your Progress reads these separately — Wellness's sleep-recovery
+      // insight wouldn't update until a manual refresh otherwise.
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 
@@ -225,6 +230,9 @@ export function useSleepLog() {
       queryClient.invalidateQueries({ queryKey: ['sleepToday'] });
       queryClient.invalidateQueries({ queryKey: ['sleepTrends'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
   });
 

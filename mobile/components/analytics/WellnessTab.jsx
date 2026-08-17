@@ -118,6 +118,9 @@ export default function WellnessTab({ data, period, recommendations = [], stats,
       {wellnessScoreRec && (
         <View style={styles.scoreCard}>
           <Text style={styles.scoreTitle}>Wellness Score</Text>
+          <Text style={styles.scoreSubtitle}>
+            {period === 'today' ? "Today's average" : period === 'month' ? 'This month\'s average' : "This week's average"}
+          </Text>
           <View style={styles.gaugeWrapper}>
             <GaugeChart value={wellnessScore} size={180} label="out of 100" />
           </View>
@@ -289,6 +292,13 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.lg,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
+    alignSelf: 'flex-start',
+    marginBottom: SPACING[1],
+  },
+  scoreSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
     alignSelf: 'flex-start',
     marginBottom: SPACING[2],
   },

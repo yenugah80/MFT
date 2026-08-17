@@ -400,9 +400,14 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
     },
     onSuccess: () => {
       if (__DEV__) console.log('[useSmartRecommendations] Quick log successful');
-      // Invalidate both dashboard and recommendations
+      // Invalidate both dashboard and recommendations. Also Your Progress's
+      // keys — this is a real meal log (backfilled into recommendations_history
+      // per loggingController.js), so it should show up there too.
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['smartRecommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
     onError: (err) => {
       if (__DEV__) console.error('[useSmartRecommendations] Quick log error:', err);

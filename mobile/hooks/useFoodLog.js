@@ -655,8 +655,13 @@ export function useFoodLog() {
 
             await removeFromSyncQueue(log.clientEventId);
 
-            // Invalidate dashboard cache for auto-refresh
+            // Invalidate dashboard cache for auto-refresh. Also Your Progress's
+            // keys — without this a synced meal wouldn't show there until a
+            // manual pull-to-refresh, even though it's already on the server.
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+            queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+            queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+            queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
 
             console.log('[useFoodLog] ✅ Synced:', log.foodName);
           } else {

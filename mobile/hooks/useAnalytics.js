@@ -12,8 +12,8 @@
  * - Netflix/LinkedIn-style personalization
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 import apiClient from '../services/apiClient';
 import { mapDecisionBrainInsights } from '../utils/decisionBrainInsights';
 
@@ -27,6 +27,8 @@ const QUERY_KEYS = {
  * @param {string} period - 'today' | 'week' | 'month' | 'all'
  */
 export function useAnalytics(period = 'week') {
+  const queryClient = useQueryClient();
+
   // Fetch comprehensive analytics with recommendations
   const recommendationsQuery = useQuery({
     queryKey: QUERY_KEYS.analyticsRecommendations(period),
@@ -120,16 +122,25 @@ export function useAnalytics(period = 'week') {
   const recommendations = useMemo(() => {
     const data = recommendationsQuery.data;
 
+    // The Food Engine still generates 4 static 'action'-type onboarding
+    // nudges ("Log Your First Meal" etc., gated on zero logs ever) —
+    // Phase 1's migration to decision-brain only replaced the
+    // pattern/insight/suggestion cards, not these, so they're merged back
+    // in here rather than lost. Their ids are already namespaced by the
+    // backend (nudgeRecommendationId) so Done/Later can track them.
+    const actionRecs = (domain) => (data?.success ? data.recommendations?.[domain] || [] : [])
+      .filter((r) => r.type === 'action');
+
     return {
       // Insight cards (patterns/correlations/suggestions) now come from the
       // Insight Engine (decision-brain), not the Food Engine's ad hoc
       // generators — see docs/architecture/recommendation-engine.md. Each
       // tab reads this via the `recommendations` prop passed in
       // app/analytics/index.jsx.
-      nutrition: mapDecisionBrainInsights(nutritionInsightsQuery.data, 'nutrition'),
-      mood: mapDecisionBrainInsights(moodInsightsQuery.data, 'mood'),
-      hydration: mapDecisionBrainInsights(hydrationInsightsQuery.data, 'hydration'),
-      activity: mapDecisionBrainInsights(activityInsightsQuery.data, 'activity'),
+      nutrition: [...actionRecs('nutrition'), ...mapDecisionBrainInsights(nutritionInsightsQuery.data, 'nutrition')],
+      mood: [...actionRecs('mood'), ...mapDecisionBrainInsights(moodInsightsQuery.data, 'mood')],
+      hydration: [...actionRecs('hydration'), ...mapDecisionBrainInsights(hydrationInsightsQuery.data, 'hydration')],
+      activity: [...actionRecs('activity'), ...mapDecisionBrainInsights(activityInsightsQuery.data, 'activity')],
       // Wellness tab migration is out of scope for this phase — its
       // "wellness score" gauge needs a shape decision-brain doesn't
       // document the same way (see the ADR's migration-status note), so it
@@ -401,6 +412,29 @@ export function useAnalytics(period = 'week') {
     ]);
   };
 
+  // Backs the Done/Later buttons on the 4 engagement-nudge cards (the only
+  // recommendation type RecommendationCard renders action buttons for).
+  // Hits the same tracking endpoint the food-candidate flow already uses
+  // (backend/src/routes/recommendations.js POST /:id/track), which also
+  // closes the Thompson Sampling loop for accept/reject.
+  const trackRecommendationMutation = useMutation({
+    mutationFn: async ({ id, action }) => apiClient.post(`/recommendations/${id}/track`, { action }),
+    onSuccess: () => {
+      // Backend excludes accepted/rejected nudges from the next fetch (see
+      // applyNudgeStatuses), so refetching is what actually makes the card
+      // disappear — there's no client-side filtering to do here.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.analyticsRecommendations(period) });
+    },
+  });
+
+  const onCompleteRecommendation = useCallback((id) => {
+    return trackRecommendationMutation.mutateAsync({ id, action: 'accept' });
+  }, [trackRecommendationMutation]);
+
+  const onDismissRecommendation = useCallback((id) => {
+    return trackRecommendationMutation.mutateAsync({ id, action: 'reject' });
+  }, [trackRecommendationMutation]);
+
   return {
     // Domain data with recommendations
     nutrition,
@@ -411,6 +445,10 @@ export function useAnalytics(period = 'week') {
 
     // All recommendations grouped
     recommendations,
+
+    // Done/Later handlers for the engagement-nudge action cards
+    onCompleteRecommendation,
+    onDismissRecommendation,
 
     // Loading & control
     isLoading,
