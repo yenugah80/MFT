@@ -1,7 +1,9 @@
-import { foodLogTable, waterLogTable, moodLogTable } from "../db/schema.js";
+import { foodLogTable, waterLogTable, moodLogTable, recommendationsHistoryTable } from "../db/schema.js";
+import { db } from "../db/index.js";
 import errors from "../utils/errorResponse.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { invalidateCFCache } from "../services/collaborativeFilteringService.js";
 
 export async function logMeal(req, res) {
   try {
@@ -28,6 +30,7 @@ export async function logMeal(req, res) {
       imageUrl,
       loggedDate,
       source,
+      sourceMeta: clientSourceMeta,
     } = req.body;
 
     if (!foodName) {
@@ -105,6 +108,7 @@ export async function logMeal(req, res) {
         loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
         source,
         sourceMeta: {
+          ...(clientSourceMeta && typeof clientSourceMeta === 'object' ? clientSourceMeta : {}),
           plausibility,
           macroReconciled,
           ...(macroReconciled ? { originalCaloriesKcal } : {}),
@@ -118,6 +122,38 @@ export async function logMeal(req, res) {
 
     // Clear pattern cache for this user (new data invalidates cached patterns)
     clearPatternCache(userId);
+
+    // Smart Food Picks (smartRecommendationEngine.js) never persists candidates
+    // to recommendations_history, so quick-logging one previously left zero
+    // audit trail and never fed collaborative filtering. Backfill that here,
+    // recorded as already-accepted since logging *is* the acceptance action
+    // for this surface. Deliberately NOT fed into Thompson Sampling — these
+    // are rule-scored catalogue picks, not bandit-selected candidates, and
+    // recommendationType 'SMART_PICK' is not one of the bandit's arm types.
+    // Best-effort: never let this fail the actual food-log write.
+    if (clientSourceMeta?.source === 'smart_recommendation' && clientSourceMeta?.recommendationId) {
+      db.insert(recommendationsHistoryTable)
+        .values({
+          userId,
+          recommendationId: `smart-${clientSourceMeta.recommendationId}-${result[0].id}`,
+          foodName,
+          calories: Math.round(effectiveCalories ?? 0),
+          protein: Math.round(protein ?? 0),
+          carbs: Math.round(carbs ?? 0),
+          fats: Math.round(fats ?? 0),
+          fiber: fiber ?? 0,
+          recommendationType: 'SMART_PICK',
+          mealType: mealType ?? null,
+          interactionStatus: 'accepted',
+          wasLogged: true,
+          loggedFoodId: result[0].id,
+          loggedAt: new Date(),
+          interactedAt: new Date(),
+          aiGenerated: false,
+        })
+        .then(() => invalidateCFCache(userId))
+        .catch((err) => console.warn('[LoggingController] Smart pick history backfill failed:', err.message));
+    }
 
     res.status(201).json(result[0]);
   } catch (err) {

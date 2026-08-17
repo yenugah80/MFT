@@ -379,12 +379,14 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
         mealType: recommendation.mealType,
       };
 
-      const response = await apiClient.post('/log/food', {
+      // /log/food was never a registered route (confirmed 404 in production) —
+      // the real endpoint is /log/meal, which also expects `fats` not `fat`.
+      const response = await apiClient.post('/log/meal', {
         foodName: quickLogData.foodName,
         calories: quickLogData.calories,
         protein: quickLogData.protein,
         carbs: quickLogData.carbs,
-        fat: quickLogData.fat || quickLogData.fats,
+        fats: quickLogData.fat || quickLogData.fats,
         fiber: quickLogData.fiber,
         mealType: quickLogData.mealType,
         servingSize: recommendation.portion || '1 serving',
@@ -410,9 +412,10 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
   const quickLog = useCallback(async (recommendation) => {
     try {
       const result = await quickLogMutation.mutateAsync(recommendation);
+      // logMeal returns the inserted row directly, not wrapped in { foodLog }.
       return {
         success: true,
-        foodLog: result?.foodLog,
+        foodLog: result,
         message: `${recommendation.name} added to your log!`,
       };
     } catch (err) {

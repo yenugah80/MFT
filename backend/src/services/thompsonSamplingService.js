@@ -425,7 +425,7 @@ const POPULATION_PRIOR_WEIGHT = 0.3;
  * @param {number} beta - Shape parameter (failures + 1)
  * @returns {number} Sample from Beta(alpha, beta)
  */
-function sampleBeta(alpha, beta) {
+export function sampleBeta(alpha, beta) {
   // Use the relationship between Gamma and Beta distributions
   const gammaAlpha = sampleGamma(alpha, 1);
   const gammaBeta = sampleGamma(beta, 1);
@@ -439,7 +439,7 @@ function sampleBeta(alpha, beta) {
  * @param {number} scale - Scale parameter (θ)
  * @returns {number} Sample from Gamma(shape, scale)
  */
-function sampleGamma(shape, scale) {
+export function sampleGamma(shape, scale) {
   if (shape < 1) {
     // For shape < 1, use transformation
     return sampleGamma(1 + shape, scale) * Math.pow(Math.random(), 1 / shape);
@@ -472,7 +472,7 @@ function sampleGamma(shape, scale) {
  * Sample from standard normal distribution using Box-Muller transform
  * @returns {number} Sample from N(0, 1)
  */
-function randomNormal() {
+export function randomNormal() {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
   while (v === 0) v = Math.random();
@@ -485,7 +485,7 @@ function randomNormal() {
  * @param {number} beta
  * @returns {number} E[X] = α / (α + β)
  */
-function betaMean(alpha, beta) {
+export function betaMean(alpha, beta) {
   return alpha / (alpha + beta);
 }
 
@@ -495,7 +495,7 @@ function betaMean(alpha, beta) {
  * @param {number} beta
  * @returns {number} Var[X] = αβ / ((α+β)²(α+β+1))
  */
-function betaVariance(alpha, beta) {
+export function betaVariance(alpha, beta) {
   const sum = alpha + beta;
   return (alpha * beta) / (sum * sum * (sum + 1));
 }
@@ -507,7 +507,7 @@ function betaVariance(alpha, beta) {
  * @param {number} beta
  * @returns {{lower: number, upper: number}}
  */
-function betaCredibleInterval(alpha, beta) {
+export function betaCredibleInterval(alpha, beta) {
   const mean = betaMean(alpha, beta);
   const variance = betaVariance(alpha, beta);
   const std = Math.sqrt(variance);
@@ -559,7 +559,7 @@ export function getTimeBucket(hour) {
  * @param {Date} lastUpdated - Last update timestamp
  * @returns {{alpha: number, beta: number}}
  */
-function applyDecay(alpha, beta, lastUpdated) {
+export function applyDecay(alpha, beta, lastUpdated) {
   const daysSinceUpdate = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60 * 24);
 
   if (daysSinceUpdate < 1) {
@@ -628,8 +628,13 @@ export async function selectArm(userId, candidateArms, options = {}) {
           lastUpdated: new Date(),
         };
       } else {
-        // Apply temporal decay
-        const decayed = applyDecay(arm.alpha, arm.beta, arm.lastUpdated);
+        // Apply temporal decay. Explicit Number() for the same reason as
+        // updateArm() — alpha/beta are `decimal` columns and come back as
+        // strings; harmless here today only because every downstream use
+        // (sampleGamma's `shape - 1/3`, betaMean's division) happens to
+        // coerce via subtraction/division rather than `+`, which is too
+        // fragile to leave undocumented.
+        const decayed = applyDecay(Number(arm.alpha), Number(arm.beta), arm.lastUpdated);
         arm.alpha = decayed.alpha;
         arm.beta = decayed.beta;
       }
@@ -718,8 +723,13 @@ export async function updateArm(userId, armKey, success, metadata = {}) {
       currentArm = insertResult[0];
     }
 
-    // Apply temporal decay before update
-    const decayed = applyDecay(currentArm.alpha, currentArm.beta, currentArm.lastUpdated);
+    // alpha/beta are `decimal` columns — pg/drizzle return those as strings,
+    // not numbers. applyDecay's early-return branch (updates <1 day apart,
+    // the common case for an active arm) passes them straight through
+    // unchanged, so without this coercion `decayed.alpha + 1` below silently
+    // string-concatenates ("2.0000"+1 -> "2.00001") instead of adding,
+    // corrupting the bandit's learned state on every same-day repeat update.
+    const decayed = applyDecay(Number(currentArm.alpha), Number(currentArm.beta), currentArm.lastUpdated);
 
     // Bayesian update: Beta(α, β) + Bernoulli → Beta(α + success, β + (1-success))
     const newAlpha = decayed.alpha + (success ? 1 : 0);

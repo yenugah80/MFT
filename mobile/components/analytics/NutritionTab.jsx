@@ -29,6 +29,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
@@ -63,8 +64,14 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function NutritionTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
+  const router = useRouter();
   const [showSmartRecs, setShowSmartRecs] = useState(false);
   const [loggingId, setLoggingId] = useState(null);
+
+  const handleViewFullAnalytics = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/analytics/nutrition');
+  }, [router]);
 
   // Celebration hook for quick-log success
   const { celebrate, CelebrationComponent } = useQuickLogCelebration();
@@ -125,13 +132,22 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
     );
   }
 
-  const { calories, macros, mealsLogged, weekData = [], weeklyAverages, primaryGoal } = data || { calories: {}, macros: {}, mealsLogged: 0 };
+  const { calories, macros, mealsLogged, weekData = [], weeklyAverages, primaryGoal, hasDataInPeriod } = data || { calories: {}, macros: {}, mealsLogged: 0 };
   const hasWeekTrend = weekData.some((d) => d.calories > 0);
-  const hasRealData = (calories.consumed || 0) > 0 || (mealsLogged || 0) > 0;
+  // Single source of truth for "does this tab have anything to show" — the
+  // same period-scoped signal the insight cards below are generated from,
+  // so they can't disagree with this empty-state check (previously checked
+  // today-only calories, which could be 0 while period insights were not).
+  const hasRealData = hasDataInPeriod ?? ((calories.consumed || 0) > 0 || (mealsLogged || 0) > 0);
   const goalPaceLabel = getGoalPaceLabel(calories.consumed || 0, calories.budget || 2000, primaryGoal);
   const weeklyGoalPaceLabel = weeklyAverages
     ? getGoalPaceLabel(weeklyAverages.avgCalories || 0, calories.budget || 2000, primaryGoal)
     : '';
+  // weekData/weeklyAverages now genuinely reflect the selected period
+  // (previously always a fixed 7 days regardless of the toggle) — these
+  // labels follow suit instead of hardcoding "week".
+  const periodAdjective = period === 'today' ? 'Today’s' : period === 'month' ? 'Monthly' : 'Weekly';
+  const periodPhrase = period === 'today' ? 'today' : period === 'month' ? 'this month' : 'this week';
 
   // Separate recommendations by type for organized display
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -156,6 +172,27 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
           />
         }
       >
+        {/* Nutrition has a dedicated analytics screen (calorie/macro trend,
+            goal reality check, over 7 or 30 days). This tab stays as the
+            today-focused summary with AI Smart Food Picks and hands off to
+            it — same pattern as HydrationTab's full-analytics link. */}
+        <TouchableOpacity
+          style={styles.fullAnalyticsLink}
+          onPress={handleViewFullAnalytics}
+          activeOpacity={0.8}
+        >
+          <View style={styles.fullAnalyticsIcon}>
+            <Ionicons name="stats-chart" size={18} color={VIBRANT_WELLNESS.nutrition.solid} />
+          </View>
+          <View style={styles.fullAnalyticsText}>
+            <Text style={styles.fullAnalyticsTitle}>Full nutrition analytics</Text>
+            <Text style={styles.fullAnalyticsSubtitle}>
+              Calorie & macro trends, goal reality check, 7 or 30 days
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+        </TouchableOpacity>
+
         {/* Priority Actions - Show first if any */}
         {actionRecs.length > 0 && (
           <View style={styles.actionsSection}>
@@ -207,17 +244,18 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
               how intake has moved across the week. */}
           {hasWeekTrend && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Weekly Trend</Text>
+              <Text style={styles.cardTitle}>{periodAdjective} Trend</Text>
               <MiniLineChart
                 data={weekData.map((d) => d.calories)}
                 labels={weekData.map((d) => d.label)}
                 width={CHART_WIDTH}
                 color={VIBRANT_WELLNESS.nutrition.solid}
                 showGrid
+                showDots={weekData.length <= 10}
               />
               {weeklyAverages && (
                 <Text style={styles.trendSubtext}>
-                  Averaging {Math.round(weeklyAverages.avgCalories).toLocaleString()} cal/day this week
+                  Averaging {Math.round(weeklyAverages.avgCalories).toLocaleString()} cal/day {periodPhrase}
                   {weeklyGoalPaceLabel ? ` — ${weeklyGoalPaceLabel}` : ''}
                 </Text>
               )}
@@ -235,7 +273,7 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
               totals in a different widget shape. */}
           {weeklyAverages && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Weekly Macro Averages</Text>
+              <Text style={styles.cardTitle}>{periodAdjective} Macro Averages</Text>
               <View style={styles.macroList}>
                 <MacroBar
                   name="Protein"
@@ -450,6 +488,35 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     marginBottom: SPACING[2],
+  },
+  fullAnalyticsLink: {
+    ...CARD_SYSTEM.standard,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    marginBottom: SPACING[4],
+  },
+  fullAnalyticsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}15`,
+  },
+  fullAnalyticsText: {
+    flex: 1,
+  },
+  fullAnalyticsTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  fullAnalyticsSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 1,
   },
   metricsRow: {
     flexDirection: 'row',

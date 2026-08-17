@@ -86,7 +86,7 @@ const CORRELATION_CONFIG = {
  * Calculate scaled confidence based on sample size
  * Returns higher confidence for larger sample sizes
  */
-function getScaledConfidence(occurrences, baseConfidence) {
+export function getScaledConfidence(occurrences, baseConfidence) {
   const { SAMPLE_SIZE_SCALING, MIN_OCCURRENCES } = CORRELATION_CONFIG;
 
   if (occurrences < MIN_OCCURRENCES) {
@@ -109,7 +109,7 @@ function getScaledConfidence(occurrences, baseConfidence) {
 /**
  * Get the previous day's date key (YYYY-MM-DD format)
  */
-function getPreviousDay(dateKey) {
+export function getPreviousDay(dateKey) {
   if (!dateKey) return null;
   const date = new Date(dateKey);
   date.setDate(date.getDate() - 1);
@@ -130,7 +130,7 @@ function getPreviousDay(dateKey) {
  * @param {Object} params.additionalFields - Any extra fields specific to this correlation
  * @returns {Object} Standardized evidence JSON
  */
-function buildStandardizedEvidence({
+export function buildStandardizedEvidence({
   examples = [],
   avgValueWith = null,
   avgValueWithout = null,
@@ -211,7 +211,7 @@ function buildStandardizedEvidence({
 /**
  * Check if user has sufficient data for correlation analysis
  */
-function hasInsufficientData(foodLogs, moodLogs, waterLogs) {
+export function hasInsufficientData(foodLogs, moodLogs, waterLogs) {
   const { MIN_FOOD_LOGS, MIN_MOOD_LOGS, MIN_WATER_LOGS } = CORRELATION_CONFIG;
 
   return {
@@ -328,7 +328,7 @@ function extractWaterSignals(waterLog) {
 /**
  * Map mood category to valence (-1 to 1)
  */
-function mapMoodToValence(mood) {
+export function mapMoodToValence(mood) {
   const moodMap = {
     happy: 1.0,
     energized: 0.8,
@@ -402,7 +402,7 @@ function detectHighNovaMoodCrash(foodSignals, moodSignals, windowHours = 4) {
  * WHEN: Same day, cumulative effect
  * HOW AFFECTS: Energy crashes, mood negativity, focus issues
  */
-function detectDehydrationFatigue(dailyWaterTotal, moodSignals, hydrationGoal) {
+export function detectDehydrationFatigue(dailyWaterTotal, moodSignals, hydrationGoal) {
   if (!moodSignals) return null;
 
   const hydrationDeficit = Math.max(0, 1 - (dailyWaterTotal / hydrationGoal));
@@ -433,7 +433,7 @@ function detectDehydrationFatigue(dailyWaterTotal, moodSignals, hydrationGoal) {
  * WHEN: Same day or 4h window
  * HOW AFFECTS: Nutrition consistency, energy, recovery
  */
-function detectStressEatingPattern(stressIntensity, mealCount, expectedMeals, calorieDeviation) {
+export function detectStressEatingPattern(stressIntensity, mealCount, expectedMeals, calorieDeviation) {
   if (stressIntensity < 6) return null; // Only detect if high stress (6+/10)
 
   const isMealSkipping = mealCount < expectedMeals - 1;
@@ -1628,7 +1628,7 @@ function detectWeekendPatternShift(allFoodLogs, windowDays) {
 /**
  * Calculate confidence based on pattern strength, occurrence count, and confounders
  */
-function calculateConfidence(occurrences, baseConfidence, confounderPenalties) {
+export function calculateConfidence(occurrences, baseConfidence, confounderPenalties) {
   // Base confidence from occurrence count
   let confidence = Math.min(occurrences / 3, 1.0) * baseConfidence;
 
@@ -1645,7 +1645,7 @@ function calculateConfidence(occurrences, baseConfidence, confounderPenalties) {
 /**
  * Determine health impact severity based on affected domains and frequency
  */
-function determineHealthImpactSeverity(affectedDomains, occurrences, isPositive = false) {
+export function determineHealthImpactSeverity(affectedDomains, occurrences, isPositive = false) {
   if (isPositive) return 'positive';
 
   const severityScore = affectedDomains.length + (occurrences >= 3 ? 1 : 0);

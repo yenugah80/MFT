@@ -2861,7 +2861,7 @@ function calculateHydrationStats(waterLogs, goal) {
   };
 }
 
-function calculateActivityStats(activityLogs, moodLogs) {
+export function calculateActivityStats(activityLogs, moodLogs) {
   if (!activityLogs || activityLogs.length === 0) {
     return {
       totalMinutesThisWeek: 0,
@@ -2880,10 +2880,13 @@ function calculateActivityStats(activityLogs, moodLogs) {
     };
   }
 
-  // Group by day
+  // Group by day. activity_log's timestamp column is `loggedAt`, not
+  // `loggedDate` (that name belongs to other log tables, e.g. mood_log) —
+  // reading the wrong field here always produced Invalid Date, so this
+  // function has thrown for every user on every call since it was written.
   const byDay = {};
   activityLogs.forEach(log => {
-    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const dateKey = new Date(log.loggedAt).toISOString().split('T')[0];
     if (!byDay[dateKey]) {
       byDay[dateKey] = [];
     }
@@ -2917,7 +2920,7 @@ function calculateActivityStats(activityLogs, moodLogs) {
   // Most active day of week
   const dayOfWeekCounts = {};
   activityLogs.forEach(log => {
-    const dayOfWeek = new Date(log.loggedDate).toLocaleDateString('en-US', { weekday: 'long' });
+    const dayOfWeek = new Date(log.loggedAt).toLocaleDateString('en-US', { weekday: 'long' });
     dayOfWeekCounts[dayOfWeek] = (dayOfWeekCounts[dayOfWeek] || 0) + 1;
   });
   const mostActiveDay = Object.entries(dayOfWeekCounts)
@@ -2970,7 +2973,7 @@ function calculateActivityStats(activityLogs, moodLogs) {
   // Preferred time
   const hourCounts = {};
   activityLogs.forEach(log => {
-    const hour = new Date(log.loggedDate).getHours();
+    const hour = new Date(log.loggedAt).getHours();
     hourCounts[hour] = (hourCounts[hour] || 0) + 1;
   });
   const peakHour = Object.entries(hourCounts)
@@ -3836,7 +3839,7 @@ function generateHydrationTrendData(waterLogs) {
   return trendData;
 }
 
-function generateActivityTrendData(activityLogs) {
+export function generateActivityTrendData(activityLogs) {
   const now = new Date();
   const trendData = [];
 
@@ -3846,8 +3849,12 @@ function generateActivityTrendData(activityLogs) {
     const dateKey = date.toISOString().split('T')[0];
     const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
 
+    // activity_log's timestamp column is `loggedAt`, not `loggedDate` (see
+    // calculateActivityStats above for the same bug) — this filter always
+    // matched zero rows before, then threw once new Date(undefined) hit
+    // .toISOString().
     const dayLogs = activityLogs.filter(log => {
-      const logDate = new Date(log.loggedDate).toISOString().split('T')[0];
+      const logDate = new Date(log.loggedAt).toISOString().split('T')[0];
       return logDate === dateKey;
     });
 

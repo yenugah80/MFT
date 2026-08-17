@@ -35,7 +35,7 @@ export default function ActivityMoodCard({
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights');
+    router.push('/analytics');
   };
 
   // Empty state

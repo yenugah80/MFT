@@ -75,9 +75,14 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
     );
   }
 
-  const { avgScore, dominantMood, entriesLogged, bestDay, trend } = data || {};
+  const { avgScore, dominantMood, entriesLogged, bestDay, trend, hasDataInPeriod } = data || {};
   const moodColor = MOOD_PALETTE[dominantMood]?.base || VIBRANT_WELLNESS.mood.solid;
-  const hasRealData = (entriesLogged || 0) > 0;
+  // Single source of truth for "does this tab have anything to show" — the
+  // same signal the insight cards below are generated from, so they can't
+  // disagree with this empty-state check the way Nutrition/Hydration used to.
+  const hasRealData = hasDataInPeriod ?? (entriesLogged || 0) > 0;
+  const periodLabel = period === 'today' ? 'today' : period === 'month' ? 'this month' : 'this week';
+  const periodAdjective = period === 'today' ? 'Today’s' : period === 'month' ? 'Monthly' : 'Weekly';
 
   // Separate recommendations by type
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -137,24 +142,31 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
             <MetricCard
               value={entriesLogged || 0}
               label="Entries"
-              subtitle={period === 'today' ? 'today' : 'logged'}
+              subtitle={periodLabel}
               icon="journal"
               iconColor={VIBRANT_WELLNESS.mood.solid}
             />
           </View>
 
-          {/* Mood Trend */}
+          {/* Mood Trend — previously hardcoded to the last 7 entries
+              regardless of the selected period (trend itself is now the
+              full period-scoped series from useAnalytics.js, so Month
+              genuinely shows ~30 points instead of the same 7 as Week). */}
           {trend && trend.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Mood Trend</Text>
+              <Text style={styles.cardTitle}>{periodAdjective} Mood Trend</Text>
               <MiniLineChart
-                data={trend.slice(-7).map((entry) => entry.intensity || 5)}
-                labels={trend.slice(-7).map((entry) =>
-                  new Date(entry.loggedDate).toLocaleDateString('en-US', { weekday: 'narrow' })
+                data={trend.map((entry) => entry.intensity || 5)}
+                labels={trend.map((entry) =>
+                  // /mood/trends returns day-aggregate rows as { date, ... },
+                  // not `loggedDate` — that mismatch produced "Invalid Date"
+                  // on every point.
+                  new Date(entry.date).toLocaleDateString('en-US', { weekday: 'narrow' })
                 )}
                 width={CHART_WIDTH}
                 color={moodColor}
                 showGrid
+                showDots={trend.length <= 10}
               />
             </View>
           )}

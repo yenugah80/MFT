@@ -566,7 +566,7 @@ export const FOOD_CATALOGUE = [
  * @param {object} signals
  * @returns {number}
  */
-function scoreCandidate(food, signals) {
+export function scoreCandidate(food, signals) {
   const allergenRisk = detectAllergenRisk(food, signals.allergies ?? []);
   if (allergenRisk.hasRisk) return Number.NEGATIVE_INFINITY;
 

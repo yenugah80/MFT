@@ -778,11 +778,16 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
   // WEEK DATA FOR CHARTS
   // ==========================================================================
 
-  async getWeekData(userId) {
+  // `days` was hardcoded to 7 with no parameter at all — the Activity tab's
+  // Day/Week/Month toggle changed nothing here, so "This Week" was the only
+  // window it could ever show. Default 7 preserves exact prior behavior for
+  // any caller that doesn't pass it (this function's name stays getWeekData
+  // since that's still its default/most common shape).
+  async getWeekData(userId, days = 7) {
     try {
       const today = new Date();
-      const weekAgo = new Date();
-      weekAgo.setDate(today.getDate() - 6);
+      const rangeStart = new Date();
+      rangeStart.setDate(today.getDate() - (days - 1));
 
       const result = await db.execute(sql`
         SELECT
@@ -791,7 +796,7 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
           STRING_AGG(DISTINCT type, ', ') as types
         FROM activity_log
         WHERE user_id = ${userId}
-          AND logged_at >= ${weekAgo.toISOString()}
+          AND logged_at >= ${rangeStart.toISOString()}
           AND logged_at <= ${today.toISOString()}
         GROUP BY DATE(logged_at)
         ORDER BY date ASC
@@ -805,9 +810,9 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
         };
       });
 
-      // Build week array
+      // Build the day array
       const weekData = [];
-      for (let i = 6; i >= 0; i--) {
+      for (let i = days - 1; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(today.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
@@ -823,15 +828,15 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
       return weekData;
     } catch (error) {
       console.error('[ActivityAnalytics] getWeekData error:', error);
-      return this.generateEmptyWeekData();
+      return this.generateEmptyWeekData(days);
     }
   }
 
-  generateEmptyWeekData() {
+  generateEmptyWeekData(days = 7) {
     const weekData = [];
     const today = new Date();
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
 
@@ -850,11 +855,11 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
   // MAIN DASHBOARD AGGREGATION
   // ==========================================================================
 
-  async getDashboardAnalytics(userId) {
+  async getDashboardAnalytics(userId, days = 7) {
     const [coldStart, patterns, weekData] = await Promise.all([
       this.getColdStartStage(userId),
       this.analyzeActivityPatterns(userId, 30),
-      this.getWeekData(userId),
+      this.getWeekData(userId, days),
     ]);
 
     // Only run heavy analysis for established users

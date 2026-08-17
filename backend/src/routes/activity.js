@@ -441,7 +441,11 @@ router.get('/week-data', async (req, res) => {
 router.get('/analytics/dashboard', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const analytics = await activityAnalyticsService.getDashboardAnalytics(userId);
+    // Optional — defaults to 7 (unchanged prior behavior) when the caller
+    // doesn't pass it. Lets the Your Progress Day/Week/Month toggle actually
+    // change what this endpoint returns instead of always showing 7 days.
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 90);
+    const analytics = await activityAnalyticsService.getDashboardAnalytics(userId, days);
 
     res.json(analytics);
   } catch (error) {

@@ -89,7 +89,7 @@ export default function DailyIntelligenceBehaviorSection({
     if (onViewProgress) {
       onViewProgress();
     } else {
-      router.push('/insights');
+      router.push('/analytics');
     }
   }, [onViewProgress, router]);
 
@@ -179,7 +179,7 @@ export default function DailyIntelligenceBehaviorSection({
               style={componentStyles.viewAllButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/insights');
+                router.push('/analytics');
               }}
               accessibilityRole="button"
               accessibilityLabel="View all pattern insights"

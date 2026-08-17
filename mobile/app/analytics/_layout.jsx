@@ -11,6 +11,7 @@ export default function AnalyticsLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="hydration" />
+      <Stack.Screen name="nutrition" />
     </Stack>
   );
 }

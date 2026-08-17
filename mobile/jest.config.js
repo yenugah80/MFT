@@ -18,7 +18,7 @@ module.exports = {
       // Unchanged from before this file became a multi-project config —
       // every pre-existing test here still runs exactly as it did.
       testMatch: ['**/__tests__/**/*.test.{js,jsx,ts,tsx}'],
-      testPathIgnorePatterns: ['<rootDir>/__tests__/auth/', '<rootDir>/__tests__/consent/', '<rootDir>/__tests__/log/'],
+      testPathIgnorePatterns: ['<rootDir>/__tests__/auth/', '<rootDir>/__tests__/consent/', '<rootDir>/__tests__/log/', '<rootDir>/__tests__/analytics/'],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },
       testEnvironment: 'node',
@@ -37,6 +37,7 @@ module.exports = {
         '<rootDir>/__tests__/auth/**/*.test.{js,jsx,ts,tsx}',
         '<rootDir>/__tests__/consent/**/*.test.{js,jsx,ts,tsx}',
         '<rootDir>/__tests__/log/**/*.test.{js,jsx,ts,tsx}',
+        '<rootDir>/__tests__/analytics/**/*.test.{js,jsx,ts,tsx}',
       ],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.components.js'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },

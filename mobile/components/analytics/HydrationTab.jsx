@@ -48,8 +48,12 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
     );
   }
 
-  const { todayMl, goalMl, goalPercent, streak, avgDaily } = data || {};
-  const hasRealData = (todayMl || 0) > 0;
+  const { todayMl, goalMl, goalPercent, streak, avgDaily, hasDataInPeriod } = data || {};
+  // Single source of truth for "does this tab have anything to show" — the
+  // same period-scoped signal the insight cards below are generated from,
+  // so they can't disagree with this empty-state check (previously checked
+  // today-only water, which could be 0 while period insights were not).
+  const hasRealData = hasDataInPeriod ?? (todayMl || 0) > 0;
 
   // Convert ml to liters for display
   const todayL = ((todayMl || 0) / 1000).toFixed(1);
@@ -240,7 +244,11 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
               <InsightItem
                 icon="stats-chart"
                 color={VIBRANT_WELLNESS.hydration.solid}
-                text={`Average daily intake: ${avgL}L`}
+                // avgDaily is already genuinely period-scoped (backend
+                // getUserDataStats computes it over the selected lookback
+                // window) — this label was the only thing not reflecting
+                // that, silently reading as if it never changed.
+                text={`Average daily intake ${period === 'today' ? 'today' : period === 'month' ? 'this month' : 'this week'}: ${avgL}L`}
               />
             )}
             {(streak || 0) > 2 && (

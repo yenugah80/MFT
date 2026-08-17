@@ -13,6 +13,7 @@ module.exports = {
     '**/__tests__/**/uiContractGuards.test.js',
     '**/__tests__/**/sleepWindow.test.js',
     '**/__tests__/**/spacingScale.test.js',
+    '**/__tests__/**/decisionBrainInsights.test.js',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

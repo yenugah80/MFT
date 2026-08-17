@@ -9,12 +9,13 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MetricCard from './MetricCard';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
 import ProgressRing from './ProgressRing';
 import MiniBarChart from './MiniBarChart';
+import MiniLineChart from './MiniLineChart';
 import AnalyticsEmptyState from './AnalyticsEmptyState';
 import { getActivityEmptySubtitle } from '../../utils/emptyStateCopy';
 import {
@@ -32,6 +33,12 @@ import {
 // hand-rolled bar's own assumption (60 min = a "full" day's bar).
 const DAY_BAR_MAX_MINUTES = 60;
 
+// MiniBarChart lays out one horizontal row per data point within a fixed
+// height; past ~10 rows the per-row height goes negative. Month view now
+// passes 30 days, so it switches to MiniLineChart instead.
+const MAX_BAR_CHART_DAYS = 10;
+const CHART_WIDTH = Dimensions.get('window').width - SPACING[4] * 4;
+
 const CDC_WEEKLY_GOAL = 150; // minutes
 
 export default function ActivityTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
@@ -46,8 +53,11 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
     );
   }
 
-  const { totalMinutes, cdcGoalPercent, activeDays, weekData, streak, primaryGoal } = data || {};
-  const hasRealData = (totalMinutes || 0) > 0;
+  const { totalMinutes, weeklyGoalMinutes, cdcGoalPercent, activeDays, weekData, streak, primaryGoal, hasDataInPeriod } = data || {};
+  // Single source of truth for "does this tab have anything to show" — the
+  // same period-scoped signal the insight cards below are generated from.
+  const hasRealData = hasDataInPeriod ?? (totalMinutes || 0) > 0;
+  const periodLabel = period === 'today' ? 'today' : period === 'month' ? 'this month' : 'this week';
 
   // Separate recommendations by type
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -94,7 +104,7 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
             <MetricCard
               value={totalMinutes || 0}
               label="Minutes"
-              subtitle={period === 'week' ? 'this week' : period}
+              subtitle={periodLabel}
               icon="time"
               iconColor={VIBRANT_WELLNESS.activity.solid}
             />
@@ -105,6 +115,8 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
               icon="ribbon"
               iconColor={(cdcGoalPercent || 0) >= 100 ? SEMANTIC.success.base : VIBRANT_WELLNESS.activity.solid}
             />
+            {/* CDC guideline is inherently weekly — this card intentionally
+                does not change with the Day/Week/Month toggle. */}
             <MetricCard
               value={activeDays || 0}
               label="Active Days"
@@ -114,38 +126,55 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
             />
           </View>
 
-          {/* CDC Goal Progress */}
+          {/* CDC Goal Progress — always "this week", regardless of the
+              Day/Week/Month toggle above (see weeklyGoalMinutes comment
+              in useAnalytics.js). */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Weekly Goal Progress</Text>
             <View style={styles.goalContainer}>
               <ProgressRing
-                value={totalMinutes || 0}
+                value={weeklyGoalMinutes || 0}
                 goal={CDC_WEEKLY_GOAL}
                 color={getGoalColor(cdcGoalPercent || 0)}
-                centerValue={totalMinutes || 0}
+                centerValue={weeklyGoalMinutes || 0}
                 centerLabel={`of ${CDC_WEEKLY_GOAL} min`}
               />
               <Text style={styles.goalSubtext}>
                 {(cdcGoalPercent || 0) >= 100
                   ? 'You hit your CDC goal!'
-                  : `${CDC_WEEKLY_GOAL - (totalMinutes || 0)} minutes to go`}
+                  : `${CDC_WEEKLY_GOAL - (weeklyGoalMinutes || 0)} minutes to go`}
               </Text>
             </View>
           </View>
 
-          {/* Weekly Activity */}
+          {/* Activity trend — genuinely reflects the selected period now.
+              MiniBarChart's one-row-per-day layout only works up to
+              MAX_BAR_CHART_DAYS; Month (30 days) switches to a line chart. */}
           {weekData && weekData.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>This Week</Text>
-              <MiniBarChart
-                data={weekData.map((day) => ({
-                  label: day.label,
-                  value: day.minutes || 0,
-                  maxValue: DAY_BAR_MAX_MINUTES,
-                  color: (day.minutes || 0) > 0 ? VIBRANT_WELLNESS.activity.solid : SURFACES.background.tertiary,
-                }))}
-                unit="min"
-              />
+              <Text style={styles.cardTitle}>
+                {period === 'today' ? 'Today' : period === 'month' ? 'This Month' : 'This Week'}
+              </Text>
+              {weekData.length <= MAX_BAR_CHART_DAYS ? (
+                <MiniBarChart
+                  data={weekData.map((day) => ({
+                    label: day.label,
+                    value: day.minutes || 0,
+                    maxValue: DAY_BAR_MAX_MINUTES,
+                    color: (day.minutes || 0) > 0 ? VIBRANT_WELLNESS.activity.solid : SURFACES.background.tertiary,
+                  }))}
+                  unit="min"
+                />
+              ) : (
+                <MiniLineChart
+                  data={weekData.map((day) => day.minutes || 0)}
+                  labels={weekData.map((day) => day.label)}
+                  width={CHART_WIDTH}
+                  color={VIBRANT_WELLNESS.activity.solid}
+                  showDots={false}
+                  showGrid
+                />
+              )}
             </View>
           )}
         </>

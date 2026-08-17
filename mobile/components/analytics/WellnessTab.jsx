@@ -9,8 +9,10 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import RecommendationCard, { RecommendationSection } from './RecommendationCard';
 import GaugeChart from './GaugeChart';
 import {
@@ -26,6 +28,18 @@ import {
 } from '../../constants/premiumTheme';
 
 export default function WellnessTab({ data, period, recommendations = [], stats, onRefresh, refreshing = false }) {
+  const router = useRouter();
+
+  const handleViewSleep = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/insights/sleep-analytics');
+  };
+
+  const handleViewStress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/insights/stress-patterns');
+  };
+
   // Empty state when no data and no recommendations
   if (recommendations.length === 0) {
     return (
@@ -55,6 +69,22 @@ export default function WellnessTab({ data, period, recommendations = [], stats,
             <Ionicons name="fitness" size={20} color={VIBRANT_WELLNESS.activity.solid} />
             <Text style={styles.hintText}>Activity</Text>
           </View>
+        </View>
+
+        {/* Sleep/stress links belong here too, not just the populated state
+            below — a new user with no cross-domain data yet is exactly who
+            benefits most from discovering these screens exist. */}
+        <View style={styles.emptyStateLinks}>
+          <TouchableOpacity style={styles.linkRow} onPress={handleViewSleep} activeOpacity={0.7}>
+            <Ionicons name="moon-outline" size={18} color={TEXT.primary} />
+            <Text style={styles.linkRowText}>Sleep Analytics</Text>
+            <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.linkRow} onPress={handleViewStress} activeOpacity={0.7}>
+            <Ionicons name="pulse-outline" size={18} color={TEXT.primary} />
+            <Text style={styles.linkRowText}>Stress Patterns</Text>
+            <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -150,6 +180,24 @@ export default function WellnessTab({ data, period, recommendations = [], stats,
           recommendations={insightRecs}
         />
       )}
+
+      {/* More Insights — sleep/stress deep-dives were previously reachable
+          only from Dashboard summary cards, with no path back into this
+          screen or /insights (see docs/architecture/recommendation-engine.md
+          UX consolidation notes). */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>More Insights</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={handleViewSleep} activeOpacity={0.7}>
+          <Ionicons name="moon-outline" size={18} color={TEXT.primary} />
+          <Text style={styles.linkRowText}>Sleep Analytics</Text>
+          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkRow} onPress={handleViewStress} activeOpacity={0.7}>
+          <Ionicons name="pulse-outline" size={18} color={TEXT.primary} />
+          <Text style={styles.linkRowText}>Stress Patterns</Text>
+          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
+        </TouchableOpacity>
+      </View>
 
       {/* How It Works */}
       <View style={styles.infoCard}>
@@ -300,6 +348,24 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
+  },
+  emptyStateLinks: {
+    alignSelf: 'stretch',
+    marginTop: SPACING[8],
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    ...CARD_SYSTEM.standard,
+    marginBottom: SPACING[2],
+  },
+  linkRowText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
   },
   infoCard: {
     ...CARD_SYSTEM.standard,

@@ -23,6 +23,7 @@ import {
   profilesTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
+import { getLocalDayRange } from '../utils/timezone.js';
 
 /**
  * ============================================
@@ -93,12 +94,27 @@ function determineStage(dataStats) {
 /**
  * Get comprehensive user data statistics
  * Uses separate queries to avoid Drizzle ORM subquery limitations
+ *
+ * @param {string} userId
+ * @param {number} lookbackDays - Window (in days) the caller's UI period covers
+ *   ('today'=1, 'week'=7, 'month'=30, ...). Drives the *Period fields below,
+ *   which are what the frontend's Week/Month toggle should actually read.
+ *   `thisWeek`/`weeklyMinutes`/`avgIntensityThisWeek` stay pinned to a literal
+ *   trailing 7 days regardless of this param — they back CDC-guideline
+ *   messaging and cross-domain scoring that are inherently weekly, not the
+ *   period selector, and repointing them would make those messages lie
+ *   (e.g. "exceeded 150 min/week" against a 30-day total).
  */
-async function getUserDataStats(userId) {
+async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // "Today" must be the caller's local day, not the server's — the server
+  // runs UTC while a user can be at any offset. Defaults to 0 (UTC) so the
+  // three internal callers that don't have a request/offset to pass keep
+  // their existing behavior exactly as before.
+  const { start: today } = getLocalDayRange(offsetMinutes, now);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const periodStart = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
 
   // Run all queries in parallel for performance
   const [
@@ -110,6 +126,7 @@ async function getUserDataStats(userId) {
     moodTotal,
     moodToday,
     moodThisWeek,
+    moodPeriod,
     moodAll,
     moodWeek,
     waterTotal,
@@ -119,6 +136,7 @@ async function getUserDataStats(userId) {
     activityTotal,
     activityThisWeek,
     activityWeekMinutes,
+    activityPeriodMinutes,
     profile,
   ] = await Promise.all([
     // Food queries
@@ -138,6 +156,7 @@ async function getUserDataStats(userId) {
     db.select({ count: count() }).from(moodLogTable).where(eq(moodLogTable.userId, userId)),
     db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, today))),
     db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekAgo))),
+    db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, periodStart))),
     db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(eq(moodLogTable.userId, userId)),
     db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekAgo))),
 
@@ -151,6 +170,7 @@ async function getUserDataStats(userId) {
     db.select({ count: count() }).from(activityLogTable).where(eq(activityLogTable.userId, userId)),
     db.select({ count: count() }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekAgo))),
     db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekAgo))),
+    db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, periodStart))),
 
     // Profile for goals
     db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
@@ -165,9 +185,11 @@ async function getUserDataStats(userId) {
   const todayCarbs = todayFoodLogs.reduce((sum, f) => sum + (parseFloat(f.carbs) || 0), 0);
   const todayFat = todayFoodLogs.reduce((sum, f) => sum + (parseFloat(f.fat) || 0), 0);
 
-  // Calculate daily averages for food
+  // Calculate daily averages for food — scoped to the caller's period, not
+  // all-time, so Week vs Month actually show different trend numbers.
+  const foodInPeriod = foodAllLogs.filter(f => new Date(f.loggedDate) >= periodStart);
   const foodByDay = {};
-  foodAllLogs.forEach(f => {
+  foodInPeriod.forEach(f => {
     const day = new Date(f.loggedDate).toISOString().split('T')[0];
     foodByDay[day] = (foodByDay[day] || 0) + (parseFloat(f.calories) || 0);
   });
@@ -181,17 +203,22 @@ async function getUserDataStats(userId) {
   // Calculate water stats
   const todayMl = waterTodayAmount.reduce((sum, w) => sum + ((parseFloat(w.amount) || 0) * 1000), 0);
 
-  // Calculate daily water average
+  // Calculate daily water average — same period-scoping as calories above.
+  const waterInPeriod = waterAllLogs.filter(w => new Date(w.loggedDate) >= periodStart);
   const waterByDay = {};
-  waterAllLogs.forEach(w => {
+  waterInPeriod.forEach(w => {
     const day = new Date(w.loggedDate).toISOString().split('T')[0];
     waterByDay[day] = (waterByDay[day] || 0) + ((parseFloat(w.amount) || 0) * 1000);
   });
   const dailyWater = Object.values(waterByDay);
   const avgDailyMl = dailyWater.length > 0 ? dailyWater.reduce((a, b) => a + b, 0) / dailyWater.length : 0;
 
-  // Calculate activity stats
+  // Calculate activity stats. weeklyMinutes stays pinned to a literal 7-day
+  // window — it backs the CDC 150-min/week messaging below and must not
+  // drift with the period selector. periodMinutes is the period-scoped
+  // figure the frontend's Week/Month toggle should actually display.
   const weeklyMinutes = activityWeekMinutes.reduce((sum, a) => sum + (parseFloat(a.minutes) || 0), 0);
+  const periodMinutes = activityPeriodMinutes.reduce((sum, a) => sum + (parseFloat(a.minutes) || 0), 0);
 
   return {
     totalDataPoints:
@@ -209,6 +236,9 @@ async function getUserDataStats(userId) {
       todayCarbs,
       todayFat,
       avgCaloriesPerDay,
+      // Canonical "does this tab have anything to show for the selected
+      // period" signal — replaces each tab's own today-only heuristic.
+      hasDataInPeriod: foodInPeriod.length > 0,
     },
     mood: {
       total: moodTotal[0]?.count || 0,
@@ -216,18 +246,22 @@ async function getUserDataStats(userId) {
       thisWeek: moodThisWeek[0]?.count || 0,
       avgIntensity,
       avgIntensityThisWeek,
+      hasDataInPeriod: (moodPeriod[0]?.count || 0) > 0,
     },
     water: {
       total: waterTotal[0]?.count || 0,
       today: waterToday[0]?.count || 0,
       todayMl,
       avgDailyMl,
+      hasDataInPeriod: waterInPeriod.length > 0,
     },
     activity: {
       total: activityTotal[0]?.count || 0,
       thisWeek: activityThisWeek[0]?.count || 0,
       weeklyMinutes,
       avgWeeklyMinutes: weeklyMinutes, // Current week's minutes as average for now
+      periodMinutes,
+      hasDataInPeriod: activityPeriodMinutes.length > 0,
     },
     goals: {
       calorieGoal: userProfile.calorieGoal || 2000,
@@ -1611,12 +1645,12 @@ function generateCrossDomainRecommendations(stats, recentLogs, correlations, sta
  * @param {string} period - 'today' | 'week' | 'month' | 'all'
  * @returns {Promise<Object>} Full analytics with recommendations
  */
-export async function getAnalyticsRecommendations(userId, period = 'week') {
+export async function getAnalyticsRecommendations(userId, period = 'week', offsetMinutes = 0) {
   const lookbackDays = period === 'today' ? 1 : period === 'week' ? 7 : period === 'month' ? 30 : 365;
 
   // Gather all data in parallel
   const [stats, recentLogs, correlations] = await Promise.all([
-    getUserDataStats(userId),
+    getUserDataStats(userId, lookbackDays, offsetMinutes),
     getRecentLogs(userId, lookbackDays),
     getUserCorrelationsData(userId),
   ]);

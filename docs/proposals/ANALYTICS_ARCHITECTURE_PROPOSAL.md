@@ -3,8 +3,22 @@
 **Document Type:** Design Proposal
 **Author:** Principal Creative Designer
 **Date:** January 2026
-**Status:** DRAFT - Pending Approval
+**Status:** SUPERSEDED (2026-08-16) — see `docs/architecture/recommendation-engine.md`
 **Stakeholders:** Product, Engineering, Design
+
+> **Superseded.** This document's core evidence (`MoodTab.jsx`/`ActivityTab.jsx`/
+> `HydrationTab.jsx` listed as "Orphaned, unused") is stale — those are the
+> live implementation of `/analytics` ("Your Progress") today. The
+> fragmentation problem was real and partially addressed differently than
+> proposed here: the two competing entry points (`/insights` vs `/analytics`)
+> were consolidated by retiring `/insights/index.jsx` as a redirect rather
+> than rebuilding a new component/hook file structure from scratch, and the
+> insight-card data source was unified onto the decision-brain Insight
+> Engine instead of a new `useInsightsGenerator` hook. See
+> `docs/architecture/recommendation-engine.md` for what actually shipped.
+> This doc's design ideas (progressive-disclosure layout, category color
+> tokens, a shared component library) are still reasonable references for
+> future polish work, just not the literal file structure below.
 
 ---
 

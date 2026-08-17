@@ -880,8 +880,11 @@ router.get("/dashboard", async (req, res) => {
     const yesterday = addDaysUTC(today, -1);
     const { start: yesterdayStart, end: yesterdayEnd } = getLocalDayRange(offsetMinutes, yesterday);
 
-    // Get last 7 days date range
-    const sevenDaysAgo = addDaysUTC(today, -7);
+    // Optional — defaults to 7 (unchanged prior behavior). Lets the Your
+    // Progress Day/Week/Month toggle actually change weekSummaries/
+    // weeklyAverages below instead of them always covering a fixed 7 days.
+    const trendDays = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 90);
+    const periodDaysAgo = addDaysUTC(today, -trendDays);
 
     // Get last 30 days date range
     const thirtyDaysAgo = addDaysUTC(today, -30);
@@ -921,13 +924,13 @@ router.get("/dashboard", async (req, res) => {
         )
         .limit(1),
 
-      // Last 7 days summaries for trends
+      // Last `trendDays` summaries for trends/weeklyAverages (defaults to 7)
       db.select()
         .from(dailyNutritionSummaryTable)
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            gte(dailyNutritionSummaryTable.date, toDateStr(sevenDaysAgo))
+            gte(dailyNutritionSummaryTable.date, toDateStr(periodDaysAgo))
           )
         )
         .orderBy(desc(dailyNutritionSummaryTable.date)),
