@@ -906,7 +906,12 @@ function detectDailyHydrationMoodStability(dailyWaterTotal, dayMoodLogs, hydrati
       evidence: {
         dayKey,
         avgHydration: Math.round(dailyWaterTotal * 10) / 10, // Used by suggestion generator
-        goalPercent: Math.round(hydrationPercent),
+        // Named to match the sibling dehydration_mood_instability rule
+        // below (hydrationPercent, not goalPercent) — the mismatch meant
+        // hydration_mood_stability_positive's consumer (this file, ~line
+        // 2263) always read undefined here, rendering "NaN% of goal" in
+        // production text.
+        hydrationPercent: Math.round(hydrationPercent),
         moodBoost: moodBoost > 0 ? moodBoost : 1,
         moodLogCount: dayMoodLogs.length,
         energyStability: Math.round(energyStability * 100) / 100,
@@ -2260,7 +2265,12 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
       occurrences: matches.length,
       healthImpactSeverity: 'positive',
       affectedDomains: ['mood_stability', 'energy', 'irritability'],
-      expectedOutcome: `On days you drink enough water (${Math.round(matches.reduce((s, m) => s + m.evidence.hydrationPercent, 0) / matches.length)}% of goal), your mood stays more stable with ${Math.round((1 - matches.reduce((s, m) => s + m.evidence.irritabilityRate, 0) / matches.length / 100) * 100)}% less irritability. Keep it up!`,
+      // evidence.irritabilityRate is already stored as a 0-100 percentage
+      // (see the rule above, Math.round(irritabilityRate * 100)) — dividing
+      // it by 100 again here treated it as 0-1, so (1 - tinyFraction)*100
+      // rounded to ~100% on essentially every occurrence regardless of the
+      // real value. Report the measured rate directly instead.
+      expectedOutcome: `On days you drink enough water (${Math.round(matches.reduce((s, m) => s + m.evidence.hydrationPercent, 0) / matches.length)}% of goal), your mood stays more stable with only ${Math.round(matches.reduce((s, m) => s + m.evidence.irritabilityRate, 0) / matches.length)}% irritability. Keep it up!`,
       lastObservedDate: matches[matches.length - 1].evidence.dayKey,
       firstObservedDate: matches[0].evidence.dayKey,
       isActive: true,
