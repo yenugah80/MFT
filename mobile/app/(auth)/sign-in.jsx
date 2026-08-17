@@ -280,7 +280,7 @@ export default function SignInScreen() {
     setLoading(true);
     setMessage(null);
     try {
-      const attempt = await signIn.create({ identifier: email.trim(), password });
+      const attempt = await signIn.create({ identifier: email.trim(), password: password.trim() });
       if (attempt.status === "complete") {
         await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
         await setActive({ session: attempt.createdSessionId });
@@ -399,7 +399,7 @@ export default function SignInScreen() {
       setNotice("error", "Complete the code and both password fields.");
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (newPassword.trim() !== confirmPassword.trim()) {
       setNotice("error", "Your new passwords do not match.");
       return;
     }
@@ -414,13 +414,13 @@ export default function SignInScreen() {
       let attempt = await (resetAttemptRef.current || signIn).attemptFirstFactor({
         strategy: "reset_password_email_code",
         code: code.trim(),
-        password: newPassword,
+        password: newPassword.trim(),
       });
 
       resetAttemptRef.current = attempt;
       if (attempt.status === "needs_new_password") {
         attempt = await attempt.resetPassword({
-          password: newPassword,
+          password: newPassword.trim(),
           signOutOfOtherSessions: true,
         });
         resetAttemptRef.current = attempt;

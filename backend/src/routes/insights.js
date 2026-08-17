@@ -48,7 +48,12 @@ import { errors } from '../utils/errorResponse.js';
 import { computeUserCorrelations } from '../services/correlationEngineService.js';
 import {
   filterAndDeduplicateCorrelations,
-  formatCorrelationTitle,
+  // Aliased: this file already has its own formatCorrelationTitle(correlation)
+  // (line ~2349, takes a full correlation object) for an unrelated existing
+  // route — same name, different signature (this one takes ruleName), so a
+  // bare import collided and crashed the server on boot with a duplicate
+  // identifier SyntaxError.
+  formatCorrelationTitle as formatRuleTitle,
   generateSuggestionForCorrelation,
 } from '../services/decisionBrainService.js';
 import { openaiClient as openai } from '../services/apiClients/OpenAIClient.js';
@@ -160,7 +165,7 @@ router.get('/correlations', async (req, res) => {
 
     const transformedCorrelations = deduped.slice(0, parseInt(limit)).map(c => ({
       id: c.ruleName,
-      pattern: formatCorrelationTitle(c.ruleName),
+      pattern: formatRuleTitle(c.ruleName),
       explanation: c.expectedOutcome,
       confidence: Math.round((parseFloat(c.confidence) || 0) * 100),
       occurrences: c.occurrences || 0,
