@@ -884,7 +884,12 @@ router.get("/dashboard", async (req, res) => {
     // Progress Day/Week/Month toggle actually change weekSummaries/
     // weeklyAverages below instead of them always covering a fixed 7 days.
     const trendDays = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 90);
-    const periodDaysAgo = addDaysUTC(today, -trendDays);
+    // Inclusive of today: trendDays=1 must mean "today only," not "today +
+    // yesterday." addDaysUTC(today, -trendDays) was off by one — for
+    // days=1 it anchored the window at yesterday, so a summary row from
+    // yesterday (with today still empty) silently populated "Today's Macro
+    // Averages" with yesterday's numbers under a mislabeled title.
+    const periodDaysAgo = addDaysUTC(today, -(trendDays - 1));
 
     // Get last 30 days date range
     const thirtyDaysAgo = addDaysUTC(today, -30);
