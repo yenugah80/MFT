@@ -2347,7 +2347,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
   }
 
   if (proteinBreakfastMatches.length >= 2) {
-    const avgProtein = proteinBreakfastMatches.reduce((s, m) => s + m.evidence.breakfastProtein, 0) / proteinBreakfastMatches.length;
+    const avgProtein = proteinBreakfastMatches.reduce((s, m) => s + m.evidence.proteinGrams, 0) / proteinBreakfastMatches.length;
     correlations.push({
       correlationType: 'meal_timing_mood',
       ruleName: 'protein_breakfast_sustained_energy',

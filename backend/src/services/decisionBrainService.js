@@ -1633,7 +1633,7 @@ function generateMoodPatterns(moodData, moodStats, correlations) {
  * - Filter out patterns with insufficient occurrences (<7)
  * - Filter out low confidence patterns (<0.6)
  */
-function filterAndDeduplicateCorrelations(correlations, minOccurrences = 7, minConfidence = 0.6) {
+export function filterAndDeduplicateCorrelations(correlations, minOccurrences = 7, minConfidence = 0.6) {
   if (!correlations || !Array.isArray(correlations)) return [];
 
   // First filter by minimum thresholds
@@ -1847,7 +1847,7 @@ function categorizePattern(ruleName) {
   return 'general';
 }
 
-function formatCorrelationTitle(ruleName) {
+export function formatCorrelationTitle(ruleName) {
   if (!ruleName) return 'Pattern detected';
 
   const titleMap = {
@@ -1909,7 +1909,7 @@ function getIconForCorrelation(ruleName) {
  *
  * Returns null if insufficient data - UI handles empty states
  */
-function generateSuggestionForCorrelation(correlation) {
+export function generateSuggestionForCorrelation(correlation) {
   const {
     ruleName = '',
     signalAValue,

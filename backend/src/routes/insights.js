@@ -46,6 +46,11 @@ import { generateDailyStoryLine, calculateDailyScore } from '../services/storyLi
 import { generateMoodInsights, generateBasicMoodInsights } from '../services/moodInsightService.js';
 import { errors } from '../utils/errorResponse.js';
 import { computeUserCorrelations } from '../services/correlationEngineService.js';
+import {
+  filterAndDeduplicateCorrelations,
+  formatCorrelationTitle,
+  generateSuggestionForCorrelation,
+} from '../services/decisionBrainService.js';
 import { openaiClient as openai } from '../services/apiClients/OpenAIClient.js';
 import { discoverNovelCorrelations, getNovelInsights } from '../services/autoCorrelationDiscoveryService.js';
 import {
@@ -130,56 +135,43 @@ router.get('/predictive', async (req, res) => {
  * GET /api/insights/correlations
  * Returns discovered behavioral correlations
  */
+// Cross-domain correlationTypes (see correlationEngineService.js's rule
+// catalogue) that genuinely link food and mood — used to filter the
+// Insight Engine's full correlation set down to what this screen is about.
+const FOOD_MOOD_CORRELATION_TYPES = ['mood_food', 'stress_eating', 'meal_timing_mood', 'carryover_next_day'];
+
 router.get('/correlations', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { limit = 5 } = req.query;
 
-    // Fetch stored correlations from the database
-    const correlations = await db.select()
-      .from(moodMealCorrelationsTable)
-      .where(eq(moodMealCorrelationsTable.userId, userId))
-      .orderBy(desc(moodMealCorrelationsTable.strength))
-      .limit(parseInt(limit));
+    // Previously read from moodMealCorrelationsTable (empty for every user —
+    // nothing writes to it) with a fallback to a 3-rule generator narrow
+    // enough that it stayed empty for real, dense demo data too (verified:
+    // none of its 3 hardcoded thresholds fired for a 21-day window with 27
+    // moods/67 foods). Migrated onto the same Insight Engine that already
+    // powers the 5 "Your Progress" tabs — see docs/architecture/recommendation-engine.md —
+    // instead of tuning a second, narrower correlation system.
+    const result = await computeUserCorrelations(userId, { windowTypes: ['7d', '14d'] });
+    const foodMoodCorrelations = (result?.correlations || [])
+      .filter(c => FOOD_MOOD_CORRELATION_TYPES.includes(c.correlationType));
 
-    // If no stored correlations, generate rule-based ones
-    if (correlations.length === 0) {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 21);
+    const deduped = filterAndDeduplicateCorrelations(foodMoodCorrelations, 5, 0.6);
 
-      const [moods, foods] = await Promise.all([
-        db.select().from(moodLogTable)
-          .where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, startDate))),
-        db.select().from(foodLogTable)
-          .where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, startDate))),
-      ]);
-
-      const generatedCorrelations = generateBehavioralCorrelations(moods, foods, parseTimezoneOffsetMinutes(req) ?? 0);
-      return res.json({
-        success: true,
-        correlations: generatedCorrelations,
-        source: 'generated',
-      });
-    }
-
-    // Transform stored correlations to frontend format
-    const transformedCorrelations = correlations.map(corr => ({
-      id: corr.id,
-      factor: formatMealPattern(corr.mealPattern),
-      outcome: corr.moodPattern,
-      type: getMoodType(corr.moodPattern),
-      correlation: Math.round(parseFloat(corr.strength) * 100),
-      dataPoints: corr.occurrences,
-      instances: corr.occurrences,
-      confidence: Math.round(parseFloat(corr.confidence) * 100),
-      explanation: generateExplanation(corr.mealPattern, corr.moodPattern),
-      suggestion: generateSuggestion(corr.mealPattern, corr.moodPattern),
+    const transformedCorrelations = deduped.slice(0, parseInt(limit)).map(c => ({
+      id: c.ruleName,
+      pattern: formatCorrelationTitle(c.ruleName),
+      explanation: c.expectedOutcome,
+      confidence: Math.round((parseFloat(c.confidence) || 0) * 100),
+      occurrences: c.occurrences || 0,
+      suggestion: generateSuggestionForCorrelation(c) || c.expectedOutcome,
+      type: c.healthImpactSeverity === 'positive' ? 'positive' : 'negative',
     }));
 
     res.json({
       success: true,
       correlations: transformedCorrelations,
-      source: 'stored',
+      source: 'insight-engine',
     });
   } catch (error) {
     console.error('[Insights] Correlations error:', error);

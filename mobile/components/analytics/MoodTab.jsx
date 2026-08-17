@@ -56,6 +56,15 @@ const MOOD_LABELS = {
   sad: 'Sad',
 };
 
+// mood_log.mood is validated server-side to these 8 values on every write
+// through the app (POST /mood/log rejects anything else), but historical
+// rows written outside that path (seed/demo data, a future migration) can
+// still contain something else. Falling back to "N/A"/dropping the entry
+// silently, as this used to, turns one bad row into a badly broken card —
+// capitalizing the raw value keeps the screen honest instead.
+const capitalizeMood = (mood) => mood ? mood.charAt(0).toUpperCase() + mood.slice(1) : 'N/A';
+const FALLBACK_MOOD_COLOR = { base: '#9CA3AF', light: '#D1D5DB', dark: '#6B7280', bg: '#F3F4F6' };
+
 export default function MoodTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   const router = useRouter();
 
@@ -139,7 +148,7 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
               iconColor={VIBRANT_WELLNESS.mood.solid}
             />
             <MetricCard
-              value={MOOD_LABELS[dominantMood] || 'N/A'}
+              value={MOOD_LABELS[dominantMood] || capitalizeMood(dominantMood)}
               label="Top Mood"
               icon={MOOD_ICONS[dominantMood] || 'happy'}
               iconColor={moodColor}
@@ -176,23 +185,37 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
             </View>
           )}
 
-          {/* Mood Distribution */}
-          {trend && trend.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Mood Distribution</Text>
-              <View style={styles.distributionContainer}>
-                {Object.entries(MOOD_PALETTE).slice(0, 6).map(([mood, colors]) => {
-                  const count = trend?.filter(e => e.mood === mood).length || 0;
-                  const percentage = trend?.length > 0 ? Math.round((count / trend.length) * 100) : 0;
+          {/* Mood Distribution — built from moods actually present in
+              `trend`, not a fixed list of known keys. Iterating only the
+              known MOOD_PALETTE keys silently dropped any unrecognized
+              value from the whole distribution (percentages that didn't
+              sum to 100%, with no indication anything was missing). */}
+          {trend && trend.length > 0 && (() => {
+            const counts = {};
+            trend.forEach((e) => {
+              if (e.mood) counts[e.mood] = (counts[e.mood] || 0) + 1;
+            });
+            const rows = Object.entries(counts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 6)
+              .map(([mood, count]) => ({
+                mood,
+                count,
+                percentage: Math.round((count / trend.length) * 100),
+                colors: MOOD_PALETTE[mood] || FALLBACK_MOOD_COLOR,
+                label: MOOD_LABELS[mood] || capitalizeMood(mood),
+              }));
 
-                  if (percentage === 0) return null;
-
-                  return (
+            return (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Mood Distribution</Text>
+                <View style={styles.distributionContainer}>
+                  {rows.map(({ mood, percentage, colors, label }) => (
                     <View key={mood} style={styles.distributionRow}>
                       <View style={styles.distributionHeader}>
                         <View style={styles.moodLabelRow}>
                           <View style={[styles.moodDot, { backgroundColor: colors.base }]} />
-                          <Text style={styles.moodLabel}>{MOOD_LABELS[mood]}</Text>
+                          <Text style={styles.moodLabel}>{label}</Text>
                         </View>
                         <Text style={styles.moodPercentage}>{percentage}%</Text>
                       </View>
@@ -205,11 +228,11 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
                         />
                       </View>
                     </View>
-                  );
-                })}
+                  ))}
+                </View>
               </View>
-            </View>
-          )}
+            );
+          })()}
         </>
       )}
 
@@ -260,7 +283,7 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
             <InsightItem
               icon="bulb"
               color={VIBRANT_WELLNESS.mood.solid}
-              text={`Most common mood: ${MOOD_LABELS[dominantMood] || 'N/A'}`}
+              text={`Most common mood: ${MOOD_LABELS[dominantMood] || capitalizeMood(dominantMood)}`}
             />
           </View>
         </View>
