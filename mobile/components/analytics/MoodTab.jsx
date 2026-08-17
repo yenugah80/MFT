@@ -263,8 +263,12 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
         />
       )}
 
-      {/* Fallback static insights */}
-      {recommendations.length === 0 && data && (
+      {/* Fallback static insights — gated on hasRealData too (not just
+          recommendations.length), since bestDay/avgScore/dominantMood fall
+          back to all-time stats when the period has zero entries. Without
+          this, the tab showed "No mood data yet" and a populated Insights
+          card side by side, contradicting each other. */}
+      {recommendations.length === 0 && data && hasRealData && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Insights</Text>
           <View style={styles.insightsList}>

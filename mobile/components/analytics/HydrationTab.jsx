@@ -232,7 +232,7 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
       )}
 
       {/* Fallback static insights */}
-      {recommendations.length === 0 && data && (
+      {recommendations.length === 0 && data && hasRealData && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Insights</Text>
           <View style={styles.insightsList}>

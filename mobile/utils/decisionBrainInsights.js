@@ -27,7 +27,11 @@ export function mapDecisionBrainInsights(data, domain) {
     message: p.description,
     icon: p.icon,
     color: p.color,
-    metric: p.confidence !== undefined ? { confidence: p.confidence } : undefined,
+    // Backend pattern generators return confidence as a 0-1 fraction (e.g.
+    // 0.8); RecommendationCard's badge renders `{metric.confidence}%`
+    // directly with no scaling of its own, so this must already be 0-100
+    // or every pattern card shows something like "0.8%" instead of "80%".
+    metric: p.confidence !== undefined ? { confidence: Math.round(p.confidence * 100) } : undefined,
   }));
 
   const correlations = (data.correlations || []).map((c, i) => ({

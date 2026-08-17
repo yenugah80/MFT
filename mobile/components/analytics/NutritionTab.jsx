@@ -393,7 +393,7 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
         )}
 
         {/* Fallback static insights if no recommendations but have data */}
-        {recommendations.length === 0 && data && (
+        {recommendations.length === 0 && data && hasRealData && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Insights</Text>
             <View style={styles.insightsList}>

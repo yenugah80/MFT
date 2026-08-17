@@ -33,7 +33,7 @@ describe('mapDecisionBrainInsights', () => {
       message: 'You log more before noon.',
       icon: 'sunny',
       color: '#F59E0B',
-      metric: { confidence: 0.8 },
+      metric: { confidence: 80 },
     });
     expect(result.id).toBe('activity-pattern-0');
   });

@@ -213,7 +213,7 @@ export default function ActivityTab({ data, period, recommendations = [], onRefr
       )}
 
       {/* Fallback static insights */}
-      {recommendations.length === 0 && data && (
+      {recommendations.length === 0 && data && hasRealData && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Insights</Text>
           <View style={styles.insightsList}>
