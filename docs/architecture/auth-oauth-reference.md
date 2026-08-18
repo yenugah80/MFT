@@ -4,8 +4,10 @@ Written 2026-08-05 after a full day spent on sign-in failures, extended
 2026-08-09 with a sixth. Independent causes keep stacking on top of each
 other; each fix only exposes the next one. Most of them were **not in the
 codebase** — Clerk dashboard settings, environment variables, a wrong API
-constant, or (cause #6) a Clerk-side behavior with no dashboard toggle found
-yet. That is exactly why this document exists: redesigning the auth screens
+constant, or (cause #6) Clerk's Device Trust — a per-device step-up
+reverification that does have a dashboard toggle (Protect → Rules),
+deliberately left on; see cause #6 below. That is exactly why this
+document exists: redesigning the auth screens
 will not reintroduce most of these, but changing config or copying patterns
 from the old code will.
 
@@ -154,10 +156,21 @@ Yet a fresh `POST /v1/client/sign_ins` always returned `needs_second_factor`
 with `email_code` in `supported_second_factors`, 100% reproducible across
 three separate accounts. The one flag that stood out:
 `auth_config.reverification: true`, alongside `client_trust_state: "new"` on
-every attempt — Clerk's newer device-trust/step-up reverification behavior,
-not classic per-user MFA. Dashboard root cause still unconfirmed; no Backend
-API endpoint exposes or controls it (`/v1/instance/settings`,
-`/v1/instance/reverification`, `/v1/instance/auth_config` all 404).
+every attempt — Clerk's documented "Device Trust" feature
+(clerk.com/docs/guides/secure/client-trust), not classic per-user MFA. No
+Backend API endpoint exposes or controls it (`/v1/instance/settings`,
+`/v1/instance/reverification`, `/v1/instance/auth_config` all 404), but it
+**is** a Dashboard toggle: Protect → Rules → Device Trust → Manage → Enable.
+Per Clerk's docs, trust is tied to the persisted client auth cookie and
+lasts "for as long as that cookie remains present and valid" — i.e. once
+per device for a real user, not once per sign-in. Deliberately left enabled:
+it's real protection against credential stuffing from unknown devices, and
+disabling it instance-wide to smooth one App Review reviewer's first login
+isn't a good trade — use a demo account on an inbox someone can actually
+check instead. Whether a sign-out/sign-in
+cycle on the same device re-triggers it (vs. only a fresh install) is not
+stated in the docs and untested — don't instruct an App Review reviewer to
+sign out and back in.
 
 **Fix:** stopped waiting on a dashboard fix and implemented the missing
 branch instead, mirroring the existing `reset_password_email_code` pattern
@@ -182,11 +195,14 @@ OTP (`second_factor_verification.status: "unverified"`) — confirming
 `prepareSecondFactor`/`attemptSecondFactor` is the correct SDK contract before
 trusting it in `mobile/app/(auth)/sign-in.jsx`.
 
-**Still open:** whether this also affects Google/Apple OAuth sign-in is
-unverified — `needs_second_factor` was only reproduced on the `password`
-first factor, and OAuth's `external_account` factor can't be tested via curl
-without a real provider token. Test on a physical device before assuming
-OAuth is unaffected.
+**Resolved (docs, not yet device-tested):** Clerk's Device Trust docs state
+it "only applies to password-based sign-ins. Passwordless authentication
+methods (such as email link sign-ins, OTPs, passkeys, and OAuth) are not
+affected." So Google/Apple OAuth should not hit `needs_second_factor` at
+all. This settles the question from documentation; it still hasn't been
+confirmed live on a physical device with a real provider token (OAuth's
+`external_account` factor can't be tested via curl), so treat it as
+high-confidence rather than verified.
 
 ---
 
