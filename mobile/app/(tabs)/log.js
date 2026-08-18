@@ -1165,7 +1165,13 @@ export default function LogScreen() {
             setShowHydrationModal(true);
           }}
           onHistoryPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
-          logCount={foodLog.logs?.length || 0}
+          // Server truth (today's actual food_log rows), not the local
+          // offline-sync queue — that queue only ever grows when a meal is
+          // logged through this app on this device, so a fresh install or a
+          // meal logged another way (voice, another device) always read as
+          // 0 there even with a rich real history. Falls back to the local
+          // count only while dashboardData hasn't loaded yet (e.g. offline).
+          logCount={dashboardData?.today?.foodLogs?.length ?? foodLog.logs?.length ?? 0}
         />
       </LinearGradient>
 
