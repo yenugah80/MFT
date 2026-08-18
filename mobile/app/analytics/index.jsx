@@ -180,6 +180,8 @@ export default function AnalyticsScreen() {
             onPress={handleBack}
             activeOpacity={0.7}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
             <Ionicons name="chevron-back" size={28} color={TEXT.primary} />
           </TouchableOpacity>
@@ -203,7 +205,12 @@ export default function AnalyticsScreen() {
           <Ionicons name="cloud-offline-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorTitle}>Unable to load data</Text>
           <Text style={styles.errorText}>Pull down to try again</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={onRefresh}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading"
+          >
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>

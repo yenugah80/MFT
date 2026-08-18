@@ -75,12 +75,24 @@ export default function WellnessTab({ data, period, recommendations = [], stats,
             below — a new user with no cross-domain data yet is exactly who
             benefits most from discovering these screens exist. */}
         <View style={styles.emptyStateLinks}>
-          <TouchableOpacity style={styles.linkRow} onPress={handleViewSleep} activeOpacity={0.7}>
+          <TouchableOpacity
+          style={styles.linkRow}
+          onPress={handleViewSleep}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Sleep analytics"
+        >
             <Ionicons name="moon-outline" size={18} color={TEXT.primary} />
             <Text style={styles.linkRowText}>Sleep Analytics</Text>
             <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.linkRow} onPress={handleViewStress} activeOpacity={0.7}>
+          <TouchableOpacity
+          style={styles.linkRow}
+          onPress={handleViewStress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Stress patterns"
+        >
             <Ionicons name="pulse-outline" size={18} color={TEXT.primary} />
             <Text style={styles.linkRowText}>Stress Patterns</Text>
             <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
@@ -190,12 +202,24 @@ export default function WellnessTab({ data, period, recommendations = [], stats,
           UX consolidation notes). */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>More Insights</Text>
-        <TouchableOpacity style={styles.linkRow} onPress={handleViewSleep} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.linkRow}
+          onPress={handleViewSleep}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Sleep analytics"
+        >
           <Ionicons name="moon-outline" size={18} color={TEXT.primary} />
           <Text style={styles.linkRowText}>Sleep Analytics</Text>
           <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={handleViewStress} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.linkRow}
+          onPress={handleViewStress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Stress patterns"
+        >
           <Ionicons name="pulse-outline" size={18} color={TEXT.primary} />
           <Text style={styles.linkRowText}>Stress Patterns</Text>
           <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />

@@ -293,7 +293,13 @@ export default function MoodTab({ data, period, recommendations = [], onRefresh,
         </View>
       )}
 
-      <TouchableOpacity style={styles.patternsLink} onPress={handleViewPatterns} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.patternsLink}
+        onPress={handleViewPatterns}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="See mood and food patterns"
+      >
         <Ionicons name="restaurant-outline" size={18} color={TEXT.primary} />
         <Text style={styles.patternsLinkText}>See Mood & Food Patterns</Text>
         <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />

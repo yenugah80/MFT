@@ -32,6 +32,9 @@ export default function AnalyticsTabBar({ selected = 'nutrition', onSelect }) {
             style={[styles.tab, isActive && styles.tabActive]}
             onPress={() => handleSelect(tab.key)}
             activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tab.label} tab`}
+            accessibilityState={{ selected: isActive }}
           >
             <Ionicons
               name={tab.icon}

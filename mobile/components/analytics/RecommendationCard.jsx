@@ -212,6 +212,8 @@ export default function RecommendationCard({
         pressed && styles.containerPressed,
       ]}
       onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${message}`}
     >
       {/* Header Row */}
       <View style={styles.header}>
@@ -359,6 +361,9 @@ export default function RecommendationCard({
                 style={[styles.microActionItem, isCompleted && styles.microActionItemCompleted]}
                 onPress={() => !isCompleted && handleStepComplete(index)}
                 disabled={isCompleted}
+                accessibilityRole="checkbox"
+                accessibilityLabel={step.label || step}
+                accessibilityState={{ checked: isCompleted, disabled: isCompleted }}
               >
                 <View style={[styles.microActionCheck, isCompleted && { backgroundColor: iconColor }]}>
                   {isCompleted && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
@@ -378,12 +383,16 @@ export default function RecommendationCard({
           <TouchableOpacity
             style={[styles.actionButton, styles.actionButtonPrimary, { backgroundColor: iconColor }]}
             onPress={handleActionComplete}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark "${title}" as done`}
           >
             <Text style={styles.actionButtonTextPrimary}>Done</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleDismiss}
+            accessibilityRole="button"
+            accessibilityLabel={`Dismiss "${title}" for later`}
           >
             <Text style={styles.actionButtonText}>Later</Text>
           </TouchableOpacity>
@@ -404,7 +413,13 @@ export function RecommendationRow({ recommendation, onPress }) {
   const iconColor = color || typeStyle.gradient[0];
 
   return (
-    <TouchableOpacity style={styles.rowContainer} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.rowContainer}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${message}`}
+    >
       <View style={[styles.rowIcon, { backgroundColor: `${iconColor}15` }]}>
         <Ionicons name={icon || typeStyle.icon} size={18} color={iconColor} />
       </View>
@@ -431,7 +446,12 @@ export function RecommendationSection({ title, subtitle, recommendations = [], o
           {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
         </View>
         {onSeeAll && recommendations.length > 2 && (
-          <TouchableOpacity onPress={onSeeAll} style={styles.seeAllButton}>
+          <TouchableOpacity
+            onPress={onSeeAll}
+            style={styles.seeAllButton}
+            accessibilityRole="button"
+            accessibilityLabel={`See all ${title}`}
+          >
             <Text style={styles.seeAllText}>See All</Text>
             <Ionicons name="chevron-forward" size={14} color={BRAND.primary} />
           </TouchableOpacity>

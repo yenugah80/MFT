@@ -40,6 +40,9 @@ const TimeframeSelector = ({
             onPress={() => !disabled && onSelect?.(tf.key)}
             activeOpacity={0.7}
             disabled={disabled}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tf.label} view`}
+            accessibilityState={{ selected: isSelected, disabled }}
           >
             <Ionicons
               name={tf.icon}

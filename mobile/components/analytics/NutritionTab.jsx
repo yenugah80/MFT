@@ -180,6 +180,8 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
           style={styles.fullAnalyticsLink}
           onPress={handleViewFullAnalytics}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Full nutrition analytics. Calorie and macro trends, goal reality check, 7 or 30 days"
         >
           <View style={styles.fullAnalyticsIcon}>
             <Ionicons name="stats-chart" size={18} color={VIBRANT_WELLNESS.nutrition.solid} />

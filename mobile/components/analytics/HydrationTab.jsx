@@ -90,6 +90,8 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
         style={styles.fullAnalyticsLink}
         onPress={handleViewFullAnalytics}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Full hydration analytics"
       >
         <View style={styles.fullAnalyticsIcon}>
           <Ionicons name="water" size={18} color={VIBRANT_WELLNESS.hydration.solid} />
