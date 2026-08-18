@@ -33,7 +33,7 @@
     "validate:tokens": "node scripts/validate-theme-tokens.mjs",
     "validate:release": "node scripts/validate-release-config.mjs",
     "validate": "npm run validate:tokens && npm run validate:release",
-    "test": "npm run validate && jest --config jest.unit.config.js",
+    "test": "npm run validate && jest --config jest.unit.config.js && jest --config jest.config.js",
     "test:unit": "jest --config jest.unit.config.js",
     "test:auth": "jest --selectProjects components",
     "test:watch": "jest --watch",
