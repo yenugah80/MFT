@@ -707,7 +707,7 @@ function getMoodPatternRecommendations(patterns) {
 function getFoodMoodRecommendations(correlations) {
   const recs = [];
 
-  const negativeCorrelation = correlations.find(c => c.impact === 'negative');
+  const negativeCorrelation = (correlations || []).find(c => c.impact === 'negative');
   if (negativeCorrelation) {
     recs.push({
       type: RECOMMENDATION_TYPES.NUTRITION,

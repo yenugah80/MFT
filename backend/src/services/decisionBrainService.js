@@ -499,10 +499,12 @@ export async function generateMoodInsights(userId) {
       };
     }
 
-    // Step 3: Generate mood profile using existing mood engine
-    const moodProfile = await generateMoodProfile(userId, {
-      windowDays: 14,
-    });
+    // Step 3: Generate mood profile using existing mood engine.
+    // buildMoodProfile(userId) only takes one argument (it uses its own
+    // hardcoded 30/7-day windows internally) — the windowDays option here
+    // was silently ignored either way, so it's dropped rather than left
+    // implying a configurability that doesn't exist.
+    const moodProfile = await generateMoodProfile(userId);
 
     // Step 4: Get mood-specific correlations
     let moodCorrelations = [];
@@ -522,8 +524,12 @@ export async function generateMoodInsights(userId) {
     // Step 6: Generate mood-specific insights (patterns)
     const patterns = generateMoodPatterns(moodData, moodStats, moodCorrelations);
 
-    // Step 7: Get mood recommendations
-    const recommendations = await generateMoodRecommendations(userId, moodProfile);
+    // Step 7: Get mood recommendations. generateMoodRecommendations(profile)
+    // takes ONE argument — passing userId first shifted moodProfile into an
+    // unused second slot, so `profile` inside was a string with no
+    // .foodMoodCorrelations, and getFoodMoodRecommendations's
+    // correlations.find() threw on every call to this endpoint.
+    const recommendations = await generateMoodRecommendations(moodProfile);
 
     // Step 8: Get trend data (7-day)
     const trendData = generateMoodTrendData(moodData.moodLogs);
