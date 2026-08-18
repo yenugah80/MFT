@@ -1292,22 +1292,21 @@ router.get("/dashboard", async (req, res) => {
       canRestoreStreak = hoursSinceReset <= 24;
     }
 
-    // PRODUCTION FIX: Use calculated currentStreak as source of truth
-    // This ensures streak reflects actual logged activity, not stale DB value
-    // Sync DB in background if they differ (don't block response)
-    if (currentStreak !== storedStreak && gamificationRow?.id) {
-      // Async update - don't await to keep response fast
-      db.update(gamificationTable)
-        .set({ streak: currentStreak })
-        .where(eq(gamificationTable.userId, userId))
-        .then(() => console.log(`[Dashboard] Synced streak: ${storedStreak} → ${currentStreak}`))
-        .catch(err => console.error('[Dashboard] Failed to sync streak:', err));
-    }
-
+    // gamification.streak (storedStreak, above) is the source of truth:
+    // updateStreak() (in gamificationRewardService.js) maintains it
+    // incrementally across every logging route (activity/food/water/mood)
+    // with its own break/restore logic. currentStreak is only a same-request
+    // recomputation — logged as a diagnostic above when it disagrees — and it
+    // must never be trusted over the stored value: it undercounts (it never
+    // looks at activity_log, only food/water/mood) and is sensitive to
+    // day-boundary/timezone edge cases. A previous version of this route did
+    // treat it as authoritative, silently overwriting gamification.streak
+    // with this recomputed number whenever they disagreed, which corrupted a
+    // real 37-day streak down to 0 in production. Never write it back here.
     const gamificationWithLevel = {
       ...gamificationRow,
       totalMealsLogged: lifetimeMealsLogged,  // Real count; the DB column is never incremented
-      streak: currentStreak,            // CRITICAL: Use calculated streak, not stale DB value
+      streak: gamificationRow?.streak ?? 0,   // Stored value — see comment above, do not use currentStreak here
       level: levelInfo.level,           // Override DB level with calculated level
       levelName: levelInfo.levelName,
       rank: levelInfo.rank,
@@ -1394,7 +1393,7 @@ router.get("/dashboard", async (req, res) => {
           totalFats: s.totalFats,
           mealCount: s.mealCount || 0,
         })),
-        currentStreak,
+        currentStreak: gamificationRow?.streak ?? 0,
       },
       recentWeight: recentWeightEntries,
       // USER LIFECYCLE - Single source of truth for user state detection
