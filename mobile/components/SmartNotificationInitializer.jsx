@@ -27,13 +27,18 @@ import { RATE_LIMITS } from '../constants/notificationTypes';
 // check (currentStreak >= milestone && previousStreak < milestone) always
 // looks like a fresh crossing of the *lowest* milestone when the baseline
 // itself never survives a restart.
-const HIGHEST_CELEBRATED_MILESTONE_KEY = '@highest_celebrated_streak_milestone';
+// Scoped per Clerk userId (matches the shape of similar keys elsewhere,
+// e.g. useStreakPopups.js's STREAK_POPUP_SHOWN_KEY + resetAt suffix) —
+// without this, switching accounts on the same device would have the new
+// user's milestones silently suppressed by whatever the previous account
+// last celebrated.
+const HIGHEST_CELEBRATED_MILESTONE_KEY_PREFIX = '@highest_celebrated_streak_milestone_';
 
 // Use unified rate limits from constants (aliased for clarity)
 const CHECK_INTERVALS = RATE_LIMITS;
 
 export default function SmartNotificationInitializer({ children }) {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const notify = useNotification();
   const { data: dashboard } = useDashboard();
 
@@ -61,9 +66,12 @@ export default function SmartNotificationInitializer({ children }) {
   const isFirstEverLoadRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
 
-  // Load the real baseline before any milestone check runs.
+  // Load the real baseline before any milestone check runs. Waits for
+  // userId specifically (not just isSignedIn) since the key needs it.
   useEffect(() => {
-    AsyncStorage.getItem(HIGHEST_CELEBRATED_MILESTONE_KEY)
+    if (!userId) return;
+
+    AsyncStorage.getItem(HIGHEST_CELEBRATED_MILESTONE_KEY_PREFIX + userId)
       .then((stored) => {
         const parsed = parseInt(stored, 10);
         if (Number.isFinite(parsed)) {
@@ -79,7 +87,7 @@ export default function SmartNotificationInitializer({ children }) {
       .finally(() => {
         setPersistedMilestoneLoaded(true);
       });
-  }, []);
+  }, [userId]);
 
   // Check if enough time has passed since last check
   const canCheck = (type) => {
@@ -140,7 +148,7 @@ export default function SmartNotificationInitializer({ children }) {
     if (isFirstEverLoadRef.current) {
       isFirstEverLoadRef.current = false;
       lastGoalsRef.current.streakDays = currentStreak;
-      AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY, String(currentStreak)).catch(() => {});
+      AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY_PREFIX + userId, String(currentStreak)).catch(() => {});
       return;
     }
 
@@ -154,13 +162,13 @@ export default function SmartNotificationInitializer({ children }) {
           title: `${milestone} Day Streak! 🔥`,
         });
         console.log(`[SmartNotifications] Streak milestone ${milestone} celebration triggered`);
-        AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY, String(milestone)).catch(() => {});
+        AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY_PREFIX + userId, String(milestone)).catch(() => {});
         break; // Only celebrate one milestone at a time
       }
     }
     lastGoalsRef.current.streakDays = currentStreak;
 
-  }, [dashboard, notify, persistedMilestoneLoaded]);
+  }, [dashboard, notify, persistedMilestoneLoaded, userId]);
 
   // Handle app state changes - run checks when app comes to foreground
   useEffect(() => {
