@@ -48,6 +48,7 @@ import {
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { getLocalDayRange } from '../utils/timezone.js';
 import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
+import { ensureRedisReady } from '../config/redisClient.js';
 
 // ============================================================================
 // CONSTANTS
@@ -126,12 +127,44 @@ export const DEHYDRATION_RISK = {
 const VELOCITY_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 hours
 
 /**
- * In-process signal cache.
- * Key: `${userId}:${tzOffsetMinutes}`
- * Value: { signal, expiresAt }
+ * Signal cache. Key: `${userId}:${tzOffsetMinutes}`.
+ * Redis-backed when REDIS_URL is configured (so a burst of requests
+ * hitting different server instances still shares one computed signal);
+ * falls back to this in-process Map otherwise. TTL is intentionally short
+ * because signals are time-sensitive.
  */
-const signalCache = new Map();
-const SIGNAL_CACHE_TTL_MS = 60 * 1000; // 1 minute – short because signals are time-sensitive
+const signalCacheFallback = new Map();
+const SIGNAL_CACHE_TTL_MS = 60 * 1000;
+const SIGNAL_CACHE_TTL_SECONDS = 60;
+const SIGNAL_REDIS_PREFIX = 'signal:';
+
+async function signalCacheGet(cacheKey) {
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      const raw = await redis.get(SIGNAL_REDIS_PREFIX + cacheKey);
+      if (raw !== null) return JSON.parse(raw);
+    } catch (err) {
+      console.warn('[HydrationSignal] Redis get failed, using in-memory fallback:', err.message);
+    }
+  }
+  const cached = signalCacheFallback.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.signal;
+  return null;
+}
+
+async function signalCacheSet(cacheKey, signal) {
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.setEx(SIGNAL_REDIS_PREFIX + cacheKey, SIGNAL_CACHE_TTL_SECONDS, JSON.stringify(signal));
+      return;
+    } catch (err) {
+      console.warn('[HydrationSignal] Redis set failed, using in-memory fallback:', err.message);
+    }
+  }
+  signalCacheFallback.set(cacheKey, { signal, expiresAt: Date.now() + SIGNAL_CACHE_TTL_MS });
+}
 
 // ============================================================================
 // TYPES (JSDoc only – project uses plain JS)
@@ -183,18 +216,13 @@ export async function getHydrationSignal(userId, tzOffsetMinutes = 0, forceRefre
   const cacheKey = `${userId}:${tzOffsetMinutes}`;
 
   if (!forceRefresh) {
-    const cached = signalCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.signal;
-    }
+    const cached = await signalCacheGet(cacheKey);
+    if (cached) return cached;
   }
 
   try {
     const signal = await _buildSignal(userId, tzOffsetMinutes);
-    signalCache.set(cacheKey, {
-      signal,
-      expiresAt: Date.now() + SIGNAL_CACHE_TTL_MS,
-    });
+    await signalCacheSet(cacheKey, signal);
     return signal;
   } catch (error) {
     console.error('[HydrationSignal] getHydrationSignal error:', error);
@@ -209,10 +237,24 @@ export async function getHydrationSignal(userId, tzOffsetMinutes = 0, forceRefre
  *
  * @param {string} userId
  */
-export function invalidateSignalCache(userId) {
-  for (const key of signalCache.keys()) {
+export async function invalidateSignalCache(userId) {
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      // SCAN (not KEYS) — non-blocking, safe to run against a production
+      // instance under load. A user has few tzOffset variants at once, so
+      // this is a handful of keys, not a full-keyspace scan.
+      const pattern = `${SIGNAL_REDIS_PREFIX}${userId}:*`;
+      for await (const key of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+        await redis.del(key);
+      }
+    } catch (err) {
+      console.warn('[HydrationSignal] Redis invalidate failed:', err.message);
+    }
+  }
+  for (const key of signalCacheFallback.keys()) {
     if (key.startsWith(`${userId}:`)) {
-      signalCache.delete(key);
+      signalCacheFallback.delete(key);
     }
   }
 }
@@ -599,15 +641,16 @@ function _safeDefault(userId) {
 // ============================================================================
 
 /**
- * Prune expired entries from the in-process cache.
- * Called on a low-frequency timer to prevent unbounded growth in long-running
- * processes with many users.
+ * Prune expired entries from the in-memory fallback cache. Only relevant
+ * when Redis isn't configured/reachable — Redis expires its own keys via
+ * SETEX, no pruning needed there. Called on a low-frequency timer to
+ * prevent unbounded growth in long-running processes with many users.
  */
 function _pruneExpiredCache() {
   const now = Date.now();
-  for (const [key, entry] of signalCache.entries()) {
+  for (const [key, entry] of signalCacheFallback.entries()) {
     if (entry.expiresAt <= now) {
-      signalCache.delete(key);
+      signalCacheFallback.delete(key);
     }
   }
 }
