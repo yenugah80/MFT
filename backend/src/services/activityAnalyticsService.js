@@ -18,6 +18,44 @@
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from './apiClients/OpenAIClient.js';
+import NodeCache from 'node-cache';
+import { ensureRedisReady } from '../config/redisClient.js';
+
+// AI recommendations are generated from 30-day patterns that don't shift
+// meaningfully within a day, but getDashboardAnalytics awaited this OpenAI
+// call synchronously on every single dashboard load for established users
+// — measured 7-9s response times in production. Same Redis-backed /
+// in-memory-fallback cache pattern as Phase 3's CF/signal caches.
+const AI_RECS_CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
+const aiRecsCacheFallback = new NodeCache({ stdTTL: AI_RECS_CACHE_TTL_SECONDS, checkperiod: 900 });
+
+async function getCachedAIRecommendations(userId) {
+  const key = `activity-ai-recs:${userId}`;
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw !== null) return JSON.parse(raw);
+    } catch (err) {
+      console.warn('[ActivityAnalytics] Redis get failed for AI recs cache:', err.message);
+    }
+  }
+  return aiRecsCacheFallback.get(key);
+}
+
+async function setCachedAIRecommendations(userId, recommendations) {
+  const key = `activity-ai-recs:${userId}`;
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.setEx(key, AI_RECS_CACHE_TTL_SECONDS, JSON.stringify(recommendations));
+      return;
+    } catch (err) {
+      console.warn('[ActivityAnalytics] Redis set failed for AI recs cache:', err.message);
+    }
+  }
+  aiRecsCacheFallback.set(key, recommendations);
+}
 
 // ============================================================================
 // SCIENTIFIC EVIDENCE BASE
@@ -588,6 +626,9 @@ class ActivityAnalyticsService {
   // ==========================================================================
 
   async generateAIRecommendations(userId, patterns, correlations, moodData) {
+    const cached = await getCachedAIRecommendations(userId);
+    if (cached) return cached;
+
     try {
       const prompt = this.buildRecommendationPrompt(patterns, correlations, moodData);
 
@@ -628,11 +669,12 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
 
       // Parse JSON from response
       const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-
-      return this.getFallbackRecommendations(patterns);
+      const recommendations = jsonMatch ? JSON.parse(jsonMatch[0]) : this.getFallbackRecommendations(patterns);
+      // Don't cache the fallback — if OpenAI is degraded right now, the
+      // next request should retry rather than being stuck with the
+      // generic fallback for the full TTL.
+      if (jsonMatch) await setCachedAIRecommendations(userId, recommendations);
+      return recommendations;
     } catch (error) {
       console.error('[ActivityAnalytics] generateAIRecommendations error:', error);
       return this.getFallbackRecommendations(patterns);
