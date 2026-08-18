@@ -244,9 +244,18 @@ export async function invalidateSignalCache(userId) {
       // SCAN (not KEYS) — non-blocking, safe to run against a production
       // instance under load. A user has few tzOffset variants at once, so
       // this is a handful of keys, not a full-keyspace scan.
+      //
+      // node-redis v5's scanIterator yields BATCHES (arrays) per cursor
+      // page, not one key per iteration — including an empty array [] when
+      // a page matches nothing (which it always does at least once for a
+      // pattern with zero matches, the common case: most calls here happen
+      // on a cache miss with nothing cached yet). del([]) sends DEL with
+      // zero key arguments, which Redis rejects with "ERR wrong number of
+      // arguments" — this was firing (harmlessly, caught below) on nearly
+      // every invalidation call.
       const pattern = `${SIGNAL_REDIS_PREFIX}${userId}:*`;
-      for await (const key of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-        await redis.del(key);
+      for await (const keys of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+        if (keys.length > 0) await redis.del(keys);
       }
     } catch (err) {
       console.warn('[HydrationSignal] Redis invalidate failed:', err.message);
