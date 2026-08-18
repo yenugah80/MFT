@@ -380,6 +380,11 @@ export function useAnalytics(period = 'week') {
       goalPercent: waterGoal ? Math.round((todayWater / waterGoal) * 100) : 0,
       streak: data?.patterns?.streak || 0,
       avgDaily: recStats?.avgDailyMl || data?.patterns?.avgDailyMl || todayWater,
+      // Genuinely period-scoped — Week vs Month actually differ, unlike
+      // todayMl/goalPercent/streak above which are always "right now."
+      totalMlInPeriod: recStats?.totalMlInPeriod || 0,
+      daysLoggedInPeriod: recStats?.daysLoggedInPeriod || 0,
+      daysGoalMetInPeriod: recStats?.daysGoalMetInPeriod || 0,
       hasDataInPeriod: recStats?.hasDataInPeriod ?? todayWater > 0,
       // Note: insight cards are NOT read from this object — HydrationTab
       // gets them via the separate `recommendations` prop.

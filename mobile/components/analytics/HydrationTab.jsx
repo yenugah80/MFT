@@ -48,7 +48,17 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
     );
   }
 
-  const { todayMl, goalMl, goalPercent, streak, avgDaily, hasDataInPeriod } = data || {};
+  const {
+    todayMl,
+    goalMl,
+    goalPercent,
+    streak,
+    avgDaily,
+    hasDataInPeriod,
+    totalMlInPeriod,
+    daysLoggedInPeriod,
+    daysGoalMetInPeriod,
+  } = data || {};
   // Single source of truth for "does this tab have anything to show" — the
   // same period-scoped signal the insight cards below are generated from,
   // so they can't disagree with this empty-state check (previously checked
@@ -63,6 +73,13 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
   // Calculate glasses (250ml = 1 glass)
   const glasses = Math.round((todayMl || 0) / 250);
   const goalGlasses = Math.round((goalMl || 2000) / 250);
+
+  // Period-scoped summary — the only content on this tab that actually
+  // changes with the Day/Week/Month selector (everything above is always
+  // "right now," same as Nutrition's calorie ring staying today-scoped).
+  const periodAdjective = period === 'month' ? 'Monthly' : 'Weekly';
+  const periodPhrase = period === 'month' ? 'this month' : 'this week';
+  const totalL = ((totalMlInPeriod || 0) / 1000).toFixed(1);
 
   // Separate recommendations by type
   const actionRecs = recommendations.filter(r => r.type === 'action');
@@ -156,6 +173,28 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
               iconColor={(streak || 0) > 0 ? '#F97316' : TEXT.tertiary}
             />
           </View>
+
+          {/* Period Summary — the only card here that changes with Day/Week/
+              Month; everything else on this tab is deliberately "right now." */}
+          {period !== 'today' && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>{periodAdjective} Hydration</Text>
+              <View style={styles.periodSummaryRow}>
+                <View style={styles.periodSummaryItem}>
+                  <Text style={styles.periodSummaryValue}>{totalL}L</Text>
+                  <Text style={styles.periodSummaryLabel}>Total {periodPhrase}</Text>
+                </View>
+                <View style={styles.periodSummaryItem}>
+                  <Text style={styles.periodSummaryValue}>{avgL}L</Text>
+                  <Text style={styles.periodSummaryLabel}>Daily average</Text>
+                </View>
+                <View style={styles.periodSummaryItem}>
+                  <Text style={styles.periodSummaryValue}>{daysGoalMetInPeriod || 0}/{daysLoggedInPeriod || 0}</Text>
+                  <Text style={styles.periodSummaryLabel}>Days goal met</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Progress Ring */}
           <View style={styles.card}>
@@ -375,6 +414,26 @@ const styles = StyleSheet.create({
   ringContainer: {
     alignItems: 'center',
     paddingVertical: SPACING[2],
+  },
+  periodSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  periodSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  periodSummaryValue: {
+    fontSize: TYPOGRAPHY.size.lg,
+    fontWeight: TYPOGRAPHY.weight.bold,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  periodSummaryLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 2,
+    textAlign: 'center',
   },
   glassesContainer: {
     flexDirection: 'row',

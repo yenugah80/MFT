@@ -20,7 +20,7 @@ import {
   waterLogTable,
   activityLogTable,
   userCorrelationsTable,
-  profilesTable,
+  nutritionGoalsTable,
   recommendationsHistoryTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
@@ -148,7 +148,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
     activityThisWeek,
     activityWeekMinutes,
     activityPeriodMinutes,
-    profile,
+    nutritionGoals,
   ] = await Promise.all([
     // Food queries
     db.select({ count: count() }).from(foodLogTable).where(eq(foodLogTable.userId, userId)),
@@ -184,11 +184,17 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
     db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekAgo))),
     db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, periodStart))),
 
-    // Profile for goals
-    db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
+    // The user's actual saved goals. This used to select from profilesTable,
+    // which has no goal columns at all (calorieGoal/proteinGoal/carbsGoal/
+    // fatGoal/waterGoal don't exist anywhere in the schema) — every goal
+    // below was silently falling back to the hardcoded default for every
+    // user, regardless of what they'd actually set during onboarding/
+    // settings, because the real table (nutritionGoalsTable) was never
+    // queried.
+    db.select().from(nutritionGoalsTable).where(eq(nutritionGoalsTable.userId, userId)).limit(1),
   ]);
 
-  const userProfile = profile[0] || {};
+  const userGoals = nutritionGoals[0] || {};
 
   // Calculate food stats
   const todayFoodLogs = foodAllLogs.filter(f => new Date(f.loggedDate) >= today);
@@ -230,6 +236,10 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
   });
   const dailyWater = Object.values(waterByDay);
   const avgDailyMl = dailyWater.length > 0 ? dailyWater.reduce((a, b) => a + b, 0) / dailyWater.length : 0;
+  const totalMlInPeriod = dailyWater.reduce((a, b) => a + b, 0);
+  const daysLoggedInPeriod = dailyWater.length;
+  const periodWaterGoalMl = (parseFloat(userGoals.waterLiters) || 2) * 1000;
+  const daysGoalMetInPeriod = dailyWater.filter((ml) => ml >= periodWaterGoalMl).length;
 
   // Calculate activity stats. weeklyMinutes stays pinned to a literal 7-day
   // window — it backs the CDC 150-min/week messaging below and must not
@@ -273,6 +283,12 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
       today: waterToday[0]?.count || 0,
       todayMl,
       avgDailyMl,
+      // Genuinely period-scoped (Week vs Month actually differ), unlike
+      // todayMl/avgDailyMl's siblings above — the Hydration tab previously
+      // had nothing that varied with the Day/Week/Month selector at all.
+      totalMlInPeriod,
+      daysLoggedInPeriod,
+      daysGoalMetInPeriod,
       hasDataInPeriod: waterInPeriod.length > 0,
     },
     activity: {
@@ -285,11 +301,13 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
       hasDataInPeriod: activityPeriodMinutes.length > 0,
     },
     goals: {
-      calorieGoal: userProfile.calorieGoal || 2000,
-      proteinGoal: userProfile.proteinGoal || 150,
-      carbsGoal: userProfile.carbsGoal || 250,
-      fatGoal: userProfile.fatGoal || 65,
-      waterGoalMl: (userProfile.waterGoal || 2) * 1000,
+      // Was always the hardcoded default for every user — see the comment
+      // on the nutritionGoals query above.
+      calorieGoal: userGoals.dailyCalories || 2000,
+      proteinGoal: userGoals.proteinG || 150,
+      carbsGoal: userGoals.carbsG || 250,
+      fatGoal: userGoals.fatsG || 65,
+      waterGoalMl: periodWaterGoalMl,
       activityGoalMinutes: 150, // CDC recommendation
     },
   };
