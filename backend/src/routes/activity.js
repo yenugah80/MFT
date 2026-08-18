@@ -36,6 +36,7 @@ import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import { ensureActivityLogTableShape, ensureRecoverySnapshotsTable } from '../utils/schemaGuards.js';
 import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
+import { invalidateActivityAIRecsCache } from '../services/activityAnalyticsService.js';
 
 const router = express.Router();
 
@@ -213,6 +214,9 @@ router.post('/log', async (req, res) => {
 
     // Clear pattern cache for this user (new data invalidates cached patterns)
     clearPatternCache(userId);
+    invalidateActivityAIRecsCache(userId).catch((err) =>
+      console.error('[Activity] AI recs cache invalidation failed (non-fatal):', err)
+    );
 
     res.json({
       success: true,
@@ -373,6 +377,10 @@ router.delete('/:id', async (req, res) => {
     if (deleted.length === 0) {
       return res.status(404).json({ error: 'Activity not found or not owned by user' });
     }
+
+    invalidateActivityAIRecsCache(userId).catch((err) =>
+      console.error('[Activity] AI recs cache invalidation failed (non-fatal):', err)
+    );
 
     res.json({
       success: true,

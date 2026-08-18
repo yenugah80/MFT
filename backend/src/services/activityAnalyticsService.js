@@ -57,6 +57,23 @@ async function setCachedAIRecommendations(userId, recommendations) {
   aiRecsCacheFallback.set(key, recommendations);
 }
 
+// Called on new/deleted activity logs so recommendations reflect the change
+// immediately instead of waiting out the 6h TTL (which remains as a backstop
+// in case this invalidation is ever missed — same defense-in-depth pattern
+// as invalidateCFCache/invalidateSignalCache).
+export async function invalidateActivityAIRecsCache(userId) {
+  const key = `activity-ai-recs:${userId}`;
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch (err) {
+      console.warn('[ActivityAnalytics] Redis del failed for AI recs cache:', err.message);
+    }
+  }
+  aiRecsCacheFallback.del(key);
+}
+
 // ============================================================================
 // SCIENTIFIC EVIDENCE BASE
 // ============================================================================
