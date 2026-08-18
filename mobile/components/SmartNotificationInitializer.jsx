@@ -11,13 +11,23 @@
  * Place this component inside the NotificationProvider.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNotification } from '../providers/NotificationProvider';
 import { useDashboard } from '../hooks/useDashboard';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
 import { RATE_LIMITS } from '../constants/notificationTypes';
+
+// Highest streak milestone (7/14/30/50/100) already celebrated, persisted
+// across app restarts. Without this, lastGoalsRef below resets to 0 on
+// every cold start, so a user at day 37 would see the "7 Day Streak!"
+// celebration replay on every single launch — the milestone-crossing
+// check (currentStreak >= milestone && previousStreak < milestone) always
+// looks like a fresh crossing of the *lowest* milestone when the baseline
+// itself never survives a restart.
+const HIGHEST_CELEBRATED_MILESTONE_KEY = '@highest_celebrated_streak_milestone';
 
 // Use unified rate limits from constants (aliased for clarity)
 const CHECK_INTERVALS = RATE_LIMITS;
@@ -36,7 +46,40 @@ export default function SmartNotificationInitializer({ children }) {
   const lastGoalsRef = useRef({
     streakDays: 0,
   });
+  // Guards the milestone-check effect below from running against the
+  // default streakDays: 0 before the persisted value has loaded. A state
+  // (not a ref) so its change actually re-triggers that effect — dashboard
+  // and notify are typically both already available on first render, so a
+  // ref flip alone would never cause the check to re-run.
+  const [persistedMilestoneLoaded, setPersistedMilestoneLoaded] = useState(false);
+  // True when AsyncStorage had nothing stored — i.e. this device has never
+  // recorded a milestone before (fresh install, or migrating from the old
+  // buggy behavior). In that case the milestone-check effect seeds silently
+  // from the CURRENT streak instead of comparing against 0, so a user
+  // already at day 37 doesn't replay 7 -> 14 -> 30 across their next few
+  // app opens before finally catching up.
+  const isFirstEverLoadRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
+
+  // Load the real baseline before any milestone check runs.
+  useEffect(() => {
+    AsyncStorage.getItem(HIGHEST_CELEBRATED_MILESTONE_KEY)
+      .then((stored) => {
+        const parsed = parseInt(stored, 10);
+        if (Number.isFinite(parsed)) {
+          lastGoalsRef.current.streakDays = parsed;
+        } else {
+          isFirstEverLoadRef.current = true;
+        }
+      })
+      .catch(() => {
+        // Non-blocking — worst case, this cold start re-celebrates once
+        // more, same as before this fix, rather than crashing.
+      })
+      .finally(() => {
+        setPersistedMilestoneLoaded(true);
+      });
+  }, []);
 
   // Check if enough time has passed since last check
   const canCheck = (type) => {
@@ -86,12 +129,21 @@ export default function SmartNotificationInitializer({ children }) {
   // NOTE: Hydration celebrations are handled by HydrationTracker's MilestoneToast
   // This only handles streak milestones to avoid duplicate notifications
   useEffect(() => {
-    if (!dashboard || !notify) return;
+    if (!dashboard || !notify || !persistedMilestoneLoaded) return;
 
     const trends = dashboard.trends || {};
-
-    // Check streak milestones
     const currentStreak = trends.currentStreak || 0;
+
+    // First time this device has ever run the check (no persisted value):
+    // seed from the current streak with no celebration, rather than
+    // comparing against 0 and replaying every milestone already passed.
+    if (isFirstEverLoadRef.current) {
+      isFirstEverLoadRef.current = false;
+      lastGoalsRef.current.streakDays = currentStreak;
+      AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY, String(currentStreak)).catch(() => {});
+      return;
+    }
+
     const previousStreak = lastGoalsRef.current.streakDays || 0;
 
     // Celebrate streak milestones (7, 14, 30, 50, 100 days)
@@ -102,12 +154,13 @@ export default function SmartNotificationInitializer({ children }) {
           title: `${milestone} Day Streak! 🔥`,
         });
         console.log(`[SmartNotifications] Streak milestone ${milestone} celebration triggered`);
+        AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY, String(milestone)).catch(() => {});
         break; // Only celebrate one milestone at a time
       }
     }
     lastGoalsRef.current.streakDays = currentStreak;
 
-  }, [dashboard, notify]);
+  }, [dashboard, notify, persistedMilestoneLoaded]);
 
   // Handle app state changes - run checks when app comes to foreground
   useEffect(() => {
