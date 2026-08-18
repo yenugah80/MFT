@@ -381,6 +381,9 @@ export default function SleepLogger({ visible, onClose, initialData = null }) {
                       }
                     ]}
                     onPress={() => handleQualityChange(label.value)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Sleep quality ${label.value} out of 10, ${label.label}`}
+                    accessibilityState={{ selected: quality === label.value }}
                   >
                     {quality === label.value && (
                       <View style={styles.qualityDotInner} />

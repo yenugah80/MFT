@@ -261,6 +261,9 @@ export default function StressLogger({ visible, onClose }) {
                       stressLevel === level && styles.levelDotActive,
                     ]}
                     onPress={() => handleLevelChange(level)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Stress level ${level} out of 10`}
+                    accessibilityState={{ selected: stressLevel === level }}
                   >
                     {stressLevel === level && (
                       <View style={styles.levelDotInner} />

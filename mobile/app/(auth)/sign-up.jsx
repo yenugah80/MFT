@@ -183,7 +183,7 @@ export default function SignUpScreen() {
     try {
       await signUp.create({
         emailAddress: email.trim(),
-        password,
+        password: password.trim(),
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
       });
