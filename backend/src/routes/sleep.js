@@ -180,10 +180,20 @@ router.post('/log', async (req, res) => {
       })
       .returning();
 
-    // Update streak
+    // Update streak. Every other logging route (activity/food/water/mood/
+    // stress) credits the day the entry is FOR, not the moment it was
+    // submitted — this one used new Date() instead, so a sleep log entered
+    // any time after the fact (backfilling a missed night, bulk import,
+    // even just logging late) credited today instead of the night it
+    // actually happened, and could silently report a gap/break that never
+    // occurred. wakeTimeDate (the morning the sleep session ends, when a
+    // user would naturally log it) is the closest sleep-specific analogue
+    // to "loggedDate" elsewhere — sleepDate/dayKey key off bedTime/now
+    // instead, for the unrelated purpose of identifying which night this
+    // entry is for, not when to credit the streak.
     let streakResult = null;
     try {
-      streakResult = await updateStreak(userId, new Date(), db, offsetMinutes);
+      streakResult = await updateStreak(userId, wakeTimeDate, db, offsetMinutes);
       console.log(`[Sleep] Streak updated: ${streakResult.streak}`);
     } catch (streakError) {
       console.error('[Sleep] Streak update failed (non-fatal):', streakError);
