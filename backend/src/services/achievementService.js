@@ -412,8 +412,8 @@ async function checkWeekendLogs(userId, dbConn) {
         .from(foodLogTable)
         .where(and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${saturday}`,
-          sql`${foodLogTable.loggedDate} <= ${saturdayEnd}`
+          gte(foodLogTable.loggedDate, saturday),
+          lte(foodLogTable.loggedDate, saturdayEnd)
         ));
 
       results.hasSaturday = (saturdayLogs[0]?.count || 0) > 0;
@@ -429,8 +429,8 @@ async function checkWeekendLogs(userId, dbConn) {
         .from(foodLogTable)
         .where(and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${sunday}`,
-          sql`${foodLogTable.loggedDate} <= ${sundayEnd}`
+          gte(foodLogTable.loggedDate, sunday),
+          lte(foodLogTable.loggedDate, sundayEnd)
         ));
 
       results.hasSunday = (sundayLogs[0]?.count || 0) > 0;
@@ -462,20 +462,25 @@ async function checkLastWeekendLogs(userId, dbConn) {
     const sundayEnd = new Date(lastSunday);
     sundayEnd.setUTCHours(23, 59, 59, 999);
 
+    // gte/lte, not raw sql`` — a JS Date interpolated into a raw template
+    // bypasses Drizzle's column-type serialization and throws when it
+    // reaches the driver unserialized (see backend/CLAUDE.md's postgres-js
+    // note). This was throwing on every call, silently breaking the
+    // Saturday/Sunday-logging achievement check for every user.
     const [saturdayLogs, sundayLogs] = await Promise.all([
       dbConn.select({ count: sql`count(*)::int` })
         .from(foodLogTable)
         .where(and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${lastSaturday}`,
-          sql`${foodLogTable.loggedDate} <= ${saturdayEnd}`
+          gte(foodLogTable.loggedDate, lastSaturday),
+          lte(foodLogTable.loggedDate, saturdayEnd)
         )),
       dbConn.select({ count: sql`count(*)::int` })
         .from(foodLogTable)
         .where(and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${lastSunday}`,
-          sql`${foodLogTable.loggedDate} <= ${sundayEnd}`
+          gte(foodLogTable.loggedDate, lastSunday),
+          lte(foodLogTable.loggedDate, sundayEnd)
         )),
     ]);
 
@@ -558,20 +563,21 @@ async function checkMissedWeekend(userId, dbConn) {
     const sundayEnd = new Date(lastSunday);
     sundayEnd.setUTCHours(23, 59, 59, 999);
 
+    // gte/lte, not raw sql`` — see checkLastWeekendLogs above for why.
     const [saturdayLogs, sundayLogs] = await Promise.all([
       dbConn.select({ count: sql`count(*)::int` })
         .from(foodLogTable)
         .where(and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${lastSaturday}`,
-          sql`${foodLogTable.loggedDate} <= ${saturdayEnd}`
+          gte(foodLogTable.loggedDate, lastSaturday),
+          lte(foodLogTable.loggedDate, saturdayEnd)
         )),
       dbConn.select({ count: sql`count(*)::int` })
         .from(foodLogTable)
         .where(and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${lastSunday}`,
-          sql`${foodLogTable.loggedDate} <= ${sundayEnd}`
+          gte(foodLogTable.loggedDate, lastSunday),
+          lte(foodLogTable.loggedDate, sundayEnd)
         )),
     ]);
 

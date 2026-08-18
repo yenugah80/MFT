@@ -15,7 +15,7 @@
 import cron from 'cron';
 import { db } from '../config/db.js';
 import { gamificationTable, foodLogTable, waterLogTable, moodLogTable, activityLogTable } from '../db/schema.js';
-import { eq, and, sql, or } from 'drizzle-orm';
+import { eq, and, sql, or, gte, lte } from 'drizzle-orm';
 import { addDaysUTC, getLocalDayRange } from '../utils/timezone.js';
 
 // Unified freeze award interval (consistent with gamificationService.js)
@@ -74,34 +74,43 @@ export function initStreakCronJob() {
 
             // Check if user logged ANY activity yesterday (Snapchat-style: any log counts)
             // Includes: food, water, mood, AND activity logs
+            //
+            // gte/lte, not raw sql`` — a JS Date interpolated into a raw
+            // template bypasses Drizzle's column-type serialization and
+            // throws when it reaches the driver unserialized (see
+            // backend/CLAUDE.md's postgres-js note). This threw on every
+            // user with an active streak, every night — caught by the
+            // per-user try/catch below and silently skipped, meaning this
+            // entire cron job has never actually reset a streak or
+            // auto-consumed a freeze since this pattern was introduced.
             const activityCounts = await Promise.all([
               db.select({ count: sql`count(*)::int` })
                 .from(foodLogTable)
                 .where(and(
                   eq(foodLogTable.userId, userId),
-                  sql`${foodLogTable.loggedDate} >= ${yesterdayStart}`,
-                  sql`${foodLogTable.loggedDate} <= ${yesterdayEnd}`
+                  gte(foodLogTable.loggedDate, yesterdayStart),
+                  lte(foodLogTable.loggedDate, yesterdayEnd)
                 )),
               db.select({ count: sql`count(*)::int` })
                 .from(waterLogTable)
                 .where(and(
                   eq(waterLogTable.userId, userId),
-                  sql`${waterLogTable.loggedDate} >= ${yesterdayStart}`,
-                  sql`${waterLogTable.loggedDate} <= ${yesterdayEnd}`
+                  gte(waterLogTable.loggedDate, yesterdayStart),
+                  lte(waterLogTable.loggedDate, yesterdayEnd)
                 )),
               db.select({ count: sql`count(*)::int` })
                 .from(moodLogTable)
                 .where(and(
                   eq(moodLogTable.userId, userId),
-                  sql`${moodLogTable.loggedDate} >= ${yesterdayStart}`,
-                  sql`${moodLogTable.loggedDate} <= ${yesterdayEnd}`
+                  gte(moodLogTable.loggedDate, yesterdayStart),
+                  lte(moodLogTable.loggedDate, yesterdayEnd)
                 )),
               db.select({ count: sql`count(*)::int` })
                 .from(activityLogTable)
                 .where(and(
                   eq(activityLogTable.userId, userId),
-                  sql`${activityLogTable.loggedAt} >= ${yesterdayStart}`,
-                  sql`${activityLogTable.loggedAt} <= ${yesterdayEnd}`
+                  gte(activityLogTable.loggedAt, yesterdayStart),
+                  lte(activityLogTable.loggedAt, yesterdayEnd)
                 )),
             ]);
 
