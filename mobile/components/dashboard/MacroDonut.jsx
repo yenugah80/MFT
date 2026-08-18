@@ -14,6 +14,10 @@ import {
   calculateMacroPercentages,
   calculateCaloriesFromMacros,
 } from '../../constants/designTokens';
+// TEXT (light-theme foreground colors) is separate from COLORS (dark theme) —
+// COLORS.text.* is near-white and unreadable on this app's light background.
+// See CLAUDE.md's "White text on white background" entry.
+import { TEXT } from '../../constants/premiumTheme';
 
 /**
  * @param {Object} props
@@ -239,7 +243,7 @@ const styles = StyleSheet.create({
   centerValue: {
     fontSize: TYPOGRAPHY.size['4xl'],
     fontWeight: TYPOGRAPHY.weight.black,
-    color: COLORS.text.primary,
+    color: TEXT.primary,
     letterSpacing: TYPOGRAPHY.letterSpacing.tight,
   },
   centerValueCompact: {
@@ -249,7 +253,7 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
     marginTop: 4,
   },
   centerLabelCompact: {
@@ -280,13 +284,13 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: COLORS.text.secondary,
+    color: TEXT.secondary,
   },
   legendValue: {
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: COLORS.text.tertiary,
+    color: TEXT.tertiary,
   },
   // Empty state
   emptyState: {
@@ -302,6 +306,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.medium,
     fontFamily: TYPOGRAPHY.family.medium,
-    color: COLORS.text.muted,
+    color: TEXT.muted,
   },
 });
