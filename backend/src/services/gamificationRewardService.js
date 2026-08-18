@@ -2,7 +2,7 @@
 // Handles XP calculation, awarding, and streak management
 
 import { db } from "../config/db.js";
-import { gamificationTable } from "../db/schema.js";
+import { gamificationTable, gamificationAuditLogTable } from "../db/schema.js";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { normalizeDateUTC, addDaysUTC, getLocalDateUTC, getLocalDayRange } from "../utils/timezone.js";
 import { calculateLevel, checkLevelUp } from "../utils/levelCalculator.js";
@@ -14,6 +14,23 @@ import {
 
 // Streak milestones that trigger celebrations
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 150, 200, 365];
+
+// Fire-and-forget audit trail for every streak write — see migration 0049.
+// Never awaited by the caller and never allowed to throw: a logging failure
+// must not block the real update. callSite is a lightweight "who called
+// updateStreak" hint (file:line from the stack), not a full trace.
+function logGamificationChange(userId, oldValues, newValues, dbConn = db) {
+  const callSite = (new Error().stack || '')
+    .split('\n')
+    .slice(3, 4) // skip this fn, updateStreak's throw point, and the direct caller frame
+    .map((l) => l.trim())
+    .join('') || null;
+
+  dbConn
+    .insert(gamificationAuditLogTable)
+    .values({ userId, source: 'updateStreak', oldValues, newValues, callSite })
+    .catch((err) => console.warn('[GamificationReward] Audit log insert failed (non-fatal):', err.message));
+}
 
 // ============================================================================
 // XP REWARDS BY LOG TYPE
@@ -382,6 +399,19 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
       .update(gamificationTable)
       .set(updateData)
       .where(eq(gamificationTable.userId, userId));
+
+    logGamificationChange(
+      userId,
+      {
+        streak: currentGamification.streak,
+        previousStreak: currentGamification.previous_streak,
+        lastLogDate: currentGamification.last_log_date,
+        lastStreakUpdatedAt: currentGamification.last_streak_updated_at,
+        streakResetAt: currentGamification.streak_reset_at,
+      },
+      updateData,
+      dbConn
+    );
 
     if (newStreak !== currentStreak) {
       const emoji = streakBroken ? '💔→🔥' : (streakIncremented ? '🔥' : '');

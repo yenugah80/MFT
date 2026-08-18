@@ -164,6 +164,30 @@ export const gamificationTable = pgTable(
   })
 );
 
+// Audit trail for gamification.streak writes — added after two production
+// incidents where the streak was silently overwritten by buggy code and the
+// only way to reconstruct what happened was live reasoning + manual queries.
+// Written by updateStreak() (the single source of truth for streak changes)
+// in gamificationRewardService.js.
+export const gamificationAuditLogTable = pgTable(
+  "gamification_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    changedAt: timestamp("changed_at").defaultNow().notNull(),
+    source: text("source").notNull(),
+    oldValues: jsonb("old_values"),
+    newValues: jsonb("new_values"),
+    callSite: text("call_site"),
+  },
+  (table) => ({
+    userIdIdx: index("gamification_audit_log_user_id_idx").on(table.userId),
+    changedAtIdx: index("gamification_audit_log_changed_at_idx").on(table.changedAt),
+  })
+);
+
 // Daily meal counts table - tracks meals logged per day for XP cap
 export const dailyMealCountsTable = pgTable(
   "daily_meal_counts",
