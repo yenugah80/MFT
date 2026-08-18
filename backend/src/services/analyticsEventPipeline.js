@@ -632,6 +632,11 @@ export function getRealTimeMetrics() {
  * Get funnel analysis
  */
 export async function getFunnelAnalysis(funnelId, startDate, endDate) {
+  // Not called anywhere in the codebase today (verified), but a bare Date
+  // interpolated into raw sql`` bypasses Drizzle's column-type
+  // serialization and throws at the driver. new Date(x).toISOString()
+  // accepts either a Date or an ISO string from the caller, since there's
+  // no real call site to pin the exact type down.
   const result = await db.execute(sql`
     WITH funnel_data AS (
       SELECT
@@ -642,7 +647,7 @@ export async function getFunnelAnalysis(funnelId, startDate, endDate) {
       FROM analytics_events
       WHERE event_name = 'funnel_step'
         AND properties->>'funnel_id' = ${funnelId}
-        AND timestamp BETWEEN ${startDate} AND ${endDate}
+        AND timestamp BETWEEN ${new Date(startDate).toISOString()} AND ${new Date(endDate).toISOString()}
     ),
     step_counts AS (
       SELECT

@@ -401,6 +401,12 @@ export async function getHistoricalMetrics(startTime, endTime, endpoint = null) 
   // today. Not fixed here — that's a real schema decision (retention,
   // indexing), not a rename. The .rows fix below is correct regardless of
   // that, for whenever the table exists.
+  // Not called anywhere in the codebase today (verified), but a bare Date
+  // interpolated into raw sql`` bypasses Drizzle's column-type
+  // serialization and throws at the driver — fixed for whenever this and
+  // the missing performance_metrics table (see note above) both exist.
+  // new Date(x).toISOString() accepts either a Date or an ISO string from
+  // the caller, since there's no real call site to pin the exact type down.
   const result = await db.execute(sql`
     SELECT
       endpoint,
@@ -414,7 +420,7 @@ export async function getHistoricalMetrics(startTime, endTime, endpoint = null) 
       min_latency_ms,
       max_latency_ms
     FROM performance_metrics
-    WHERE hour_bucket BETWEEN ${startTime} AND ${endTime}
+    WHERE hour_bucket BETWEEN ${new Date(startTime).toISOString()} AND ${new Date(endTime).toISOString()}
       ${endpoint ? sql`AND endpoint = ${endpoint}` : sql``}
     ORDER BY hour_bucket DESC
   `);
