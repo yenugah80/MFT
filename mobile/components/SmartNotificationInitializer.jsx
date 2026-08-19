@@ -14,11 +14,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as StoreReview from 'expo-store-review';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNotification } from '../providers/NotificationProvider';
 import { useDashboard } from '../hooks/useDashboard';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
 import { RATE_LIMITS } from '../constants/notificationTypes';
+
+// A user who's kept a 7-day streak has demonstrated real habit formation —
+// the standard ASO-recommended moment to ask for a review, since it's tied
+// to a positive milestone rather than an arbitrary launch count. Own
+// one-time guard on top of iOS's own throttling (max 3 requestReview calls
+// per 365 days, OS-decided whether it actually shows) so this specific
+// trigger only ever fires once per account, not once per app-milestone-path
+// re-render.
+const REVIEW_REQUESTED_KEY_PREFIX = '@review_requested_';
 
 // Highest streak milestone (7/14/30/50/100) already celebrated, persisted
 // across app restarts. Without this, lastGoalsRef below resets to 0 on
@@ -163,6 +173,23 @@ export default function SmartNotificationInitializer({ children }) {
         });
         console.log(`[SmartNotifications] Streak milestone ${milestone} celebration triggered`);
         AsyncStorage.setItem(HIGHEST_CELEBRATED_MILESTONE_KEY_PREFIX + userId, String(milestone)).catch(() => {});
+
+        // Ask for a review right after the FIRST real milestone (7 days) —
+        // a moment of demonstrated value, not an arbitrary launch count.
+        // Later milestones don't re-ask; one shot at this specific trigger.
+        if (milestone === 7) {
+          AsyncStorage.getItem(REVIEW_REQUESTED_KEY_PREFIX + userId).then((alreadyAsked) => {
+            if (alreadyAsked) return;
+            AsyncStorage.setItem(REVIEW_REQUESTED_KEY_PREFIX + userId, 'true').catch(() => {});
+            // A brief delay so the review sheet doesn't compete with the
+            // celebration animation/haptic that just fired above.
+            setTimeout(() => {
+              StoreReview.isAvailableAsync().then((available) => {
+                if (available) StoreReview.requestReview();
+              }).catch(() => {});
+            }, 2500);
+          }).catch(() => {});
+        }
         break; // Only celebrate one milestone at a time
       }
     }
