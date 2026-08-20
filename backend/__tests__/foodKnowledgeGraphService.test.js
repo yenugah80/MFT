@@ -40,6 +40,35 @@ describe('foodKnowledgeGraphService allergen risk detection', () => {
     expect(risk.matchedAllergens).toContain('tree nut');
     expect(risk.ingredientMatches).toContain('almond');
   });
+
+  // Regression: a plural food name used to slip past the whole safety net.
+  // expandAllergens() normalises every cross-reactivity term back to its
+  // singular alias, so the term list only ever holds 'almond'/'egg' — while
+  // real foods are named "Handful of Almonds" and "Scrambled Eggs". The old
+  // strict word boundary saw the trailing 's' and refused to match, so these
+  // were recommended to users who had declared exactly those allergies.
+  describe.each([
+    ['Handful of Almonds (23 nuts)', ['Tree Nuts']],
+    ['Walnuts', ['Tree Nuts']],
+    ['Cashews', ['tree_nuts']],
+    ['Scrambled Eggs (2 large)', ['Eggs']],
+  ])('plural food name vs declared allergy', (foodName, allergies) => {
+    test(`blocks "${foodName}" for ${allergies[0]}`, () => {
+      expect(detectAllergenRisk({ name: foodName }, allergies).hasRisk).toBe(true);
+    });
+  });
+
+  // The plural tolerance must not start blocking unrelated foods.
+  describe.each([
+    ['Grilled Chicken Breast', ['Peanuts']],
+    ['Steamed Broccoli', ['Tree Nuts']],
+    ['Banana', ['Eggs']],
+    ['Buckwheat Pancakes', ['Wheat']], // ALLERGEN_EXCEPTIONS must still apply
+  ])('unrelated food vs declared allergy', (foodName, allergies) => {
+    test(`allows "${foodName}" for ${allergies[0]}`, () => {
+      expect(detectAllergenRisk({ name: foodName }, allergies).hasRisk).toBe(false);
+    });
+  });
 });
 
 describe('foodKnowledgeGraphService food attribute inference', () => {

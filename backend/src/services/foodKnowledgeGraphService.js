@@ -146,9 +146,25 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Whole-word allergen term match, tolerant of a plural food name.
+ *
+ * The trailing `(e?s)?` is load-bearing, not cosmetic. Allergen terms are
+ * stored singular ('almond', 'egg') because expandAllergens() runs every
+ * cross-reactivity term back through normalizeAllergen(), which maps plurals
+ * to their singular alias — so 'eggs' can never survive into the term list.
+ * Real foods, meanwhile, are named in the plural: "Handful of Almonds",
+ * "Scrambled Eggs (2 large)", "Cashews". Without this, the strict boundary
+ * `([^a-z0-9]|$)` sees the trailing 's' and refuses to match, so a declared
+ * Tree Nuts or Eggs allergy silently failed to block exactly those foods.
+ *
+ * Erring toward over-matching is deliberate here: a false positive hides one
+ * suggestion, a false negative recommends an allergen to someone who told us
+ * they react to it.
+ */
 function hasTerm(text, term) {
   if (!text || !term) return false;
-  const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}([^a-z0-9]|$)`, 'i');
+  const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}(e?s)?([^a-z0-9]|$)`, 'i');
   return pattern.test(text);
 }
 
