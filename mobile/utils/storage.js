@@ -16,7 +16,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const STORAGE_KEYS = {
   REACT_QUERY_CACHE: 'react-query-cache',
   USER_PREFERENCES: 'user-preferences',
-  OFFLINE_QUEUE: 'offline-queue',
   LAST_SYNC: 'last-sync',
   HYDRATION_CELEBRATION: 'hydration-celebration-key',
   HYDRATION_DAILY_INSIGHT: 'hydration-daily-insight',

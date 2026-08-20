@@ -10,7 +10,6 @@ export * as dateHelpers from './dateHelpers';
 
 // Storage & Persistence
 export { default as storage } from './storage';
-export { default as offlineQueue } from './offlineQueue';
 export { default as queryPersistence } from './queryPersistence';
 export { default as preferences } from './preferences';
 
