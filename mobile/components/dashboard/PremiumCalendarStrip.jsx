@@ -513,7 +513,6 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
                       <View style={dayDetailStyles.periodSummary}>
                         <Text style={dayDetailStyles.periodSummaryText}>
                           <Text style={{ fontWeight: '700', color: colors.text }}>{periodStats.daysLogged}</Text> of {periodStats.totalDays} days logged
-                          fontFamily: TYPOGRAPHY.family.bold,
                         </Text>
                       </View>
                     )}
@@ -862,6 +861,7 @@ const dayDetailStyles = StyleSheet.create({
   },
   periodSummaryText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
   },
 
