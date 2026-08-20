@@ -27,7 +27,7 @@ import { getUserSignals, invalidateUserSignals } from '../services/userSignalCac
 import { selectArm, updateArm, generateArmKey, getTimeBucket } from '../services/thompsonSamplingService.js';
 import { generateCandidates } from '../services/candidateGenerationService.js';
 import { getUserLaggedCorrelations } from '../services/laggedCorrelationService.js';
-import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens } from '../services/foodKnowledgeGraphService.js';
+import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens, detectDietViolation } from '../services/foodKnowledgeGraphService.js';
 import { invalidateCFCache } from '../services/collaborativeFilteringService.js';
 import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 
@@ -304,7 +304,9 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
             remainingBudget,
             parsedLimit,
             userSignalsForLLM,
-          ).filter(rec => !improvedAllergenCheck(rec, profile?.dietary?.allergies || []));
+          )
+            .filter(rec => !improvedAllergenCheck(rec, profile?.dietary?.allergies || []))
+            .filter(rec => !violatesDietPreference(rec, profile?.dietary?.preferences || []));
         }
 
         // Enrich with micronutrients
@@ -906,6 +908,21 @@ function improvedAllergenCheck(food, allergies) {
 }
 
 /**
+ * Diet-preference counterpart to improvedAllergenCheck, for the same
+ * "final filter after generation" call sites. Accepts preferences as either
+ * bare strings or {id} objects — profile.dietary.preferences is stored as
+ * the latter (see dietaryPreferenceIds elsewhere in this file), while the
+ * dietary_preferences table itself stores bare strings, so this normalises
+ * rather than assuming the caller already did.
+ */
+function violatesDietPreference(food, preferences) {
+  const dietIds = (preferences || [])
+    .map((p) => (typeof p === 'string' ? p : p?.id))
+    .filter(Boolean);
+  return detectDietViolation(food, dietIds).violates;
+}
+
+/**
  * Derive the user's local hour from the timezone offset sent by the device.
  *
  * JS getTimezoneOffset() semantics (also used by the mobile app):
@@ -1040,6 +1057,27 @@ function validateRecommendation(rec, remainingBudget, allergies, dietaryPrefs, m
   }
   if (rec.dietCompliant !== undefined && typeof rec.dietCompliant !== 'boolean') {
     errors.push('dietCompliant must be boolean');
+  }
+
+  // 5️⃣ Diet compliance — actually checked, not trusted from the model.
+  // The `dietaryPrefs` param existed here unused; rec.dietCompliant is the
+  // LLM self-reporting on its own suggestion, which is prompt-obedience, not
+  // verification. Items are objects with .id (dietaryPreferenceIds elsewhere
+  // in this file uses the same shape) or bare strings — accept both so this
+  // doesn't silently no-op if the caller passes either.
+  const dietIds = (dietaryPrefs || [])
+    .map((p) => (typeof p === 'string' ? p : p?.id))
+    .filter(Boolean);
+  if (dietIds.length > 0) {
+    const dietCheck = detectDietViolation({ name: rec.foodName, carbs: rec.carbs }, dietIds);
+    if (dietCheck.violates) {
+      errors.push(`Violates declared diet preference: ${dietCheck.violatedDiets.join(', ')}`);
+    } else {
+      // Item passed a real check — the client's dietCompliance badge should
+      // say so even if the model's own dietCompliant guess disagreed, rather
+      // than surfacing "Not in your preferences" on a food we just verified.
+      rec.dietCompliant = true;
+    }
   }
 
   // 6️⃣ Preference strength validation
@@ -1991,8 +2029,10 @@ async function generateEnhancedRecommendations(
     );
   }
 
-  // Final allergen filter for fallback
-  return recommendations.filter(rec => !improvedAllergenCheck(rec, allergies));
+  // Final allergen + diet filter for fallback
+  return recommendations
+    .filter(rec => !improvedAllergenCheck(rec, allergies))
+    .filter(rec => !violatesDietPreference(rec, profile?.dietary?.preferences || []));
 }
 
 /**

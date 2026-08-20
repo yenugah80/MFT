@@ -18,11 +18,13 @@ import {
   waterLogTable,
   activityLogTable,
   profilesTable,
+  dietaryPreferencesTable,
   recommendationsHistoryTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, inArray } from 'drizzle-orm';
 import { getUserSignals } from './userSignalCacheService.js';
 import { computeWindowedFoodMoodCorrelations } from './moodSignalService.js';
+import { detectAllergenRisk } from './foodKnowledgeGraphService.js';
 
 // ============================================
 // NUTRITIONAL KNOWLEDGE BASE
@@ -59,6 +61,7 @@ const SMART_FOODS = [
     nutrition: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
     micros: { vitaminB12: 0.3, iron: 1, zinc: 1, magnesium: 25 },
     tags: ['high-protein', 'low-carb', 'lean', 'muscle-building'],
+    excludedDiets: ['vegan', 'vegetarian'],
     prepTime: 15,
     difficulty: 'easy',
     satiety: 9, // 1-10 how filling
@@ -72,6 +75,7 @@ const SMART_FOODS = [
     nutrition: { calories: 150, protein: 15, carbs: 12, fat: 4, fiber: 2 },
     micros: { calcium: 150, vitaminB12: 1.3, potassium: 240 },
     tags: ['high-protein', 'probiotic', 'quick', 'calcium-rich'],
+    excludedDiets: ['vegan'],
     prepTime: 2,
     difficulty: 'easy',
     satiety: 7,
@@ -85,6 +89,7 @@ const SMART_FOODS = [
     nutrition: { calories: 180, protein: 12, carbs: 2, fat: 14, fiber: 0 },
     micros: { vitaminB12: 1.1, vitaminD: 2, iron: 1.8, zinc: 1.3 },
     tags: ['high-protein', 'quick', 'versatile', 'brain-food'],
+    excludedDiets: ['vegan'],
     prepTime: 5,
     difficulty: 'easy',
     satiety: 7,
@@ -98,6 +103,7 @@ const SMART_FOODS = [
     nutrition: { calories: 280, protein: 35, carbs: 0, fat: 15, fiber: 0 },
     micros: { vitaminD: 15, vitaminB12: 4.8, potassium: 500, magnesium: 30 },
     tags: ['high-protein', 'omega-3', 'heart-healthy', 'brain-food'],
+    excludedDiets: ['vegan', 'vegetarian'],
     prepTime: 20,
     difficulty: 'medium',
     satiety: 9,
@@ -112,6 +118,7 @@ const SMART_FOODS = [
     nutrition: { calories: 110, protein: 14, carbs: 5, fat: 4, fiber: 0 },
     micros: { calcium: 100, vitaminB12: 0.9, potassium: 140 },
     tags: ['high-protein', 'low-calorie', 'calcium-rich'],
+    excludedDiets: ['vegan'],
     prepTime: 1,
     difficulty: 'easy',
     satiety: 6,
@@ -127,6 +134,7 @@ const SMART_FOODS = [
     nutrition: { calories: 250, protein: 8, carbs: 45, fat: 5, fiber: 6 },
     micros: { iron: 2, magnesium: 50, potassium: 400, zinc: 1.5 },
     tags: ['fiber-rich', 'heart-healthy', 'energy-boost', 'filling'],
+    excludedDiets: ['keto'],
     prepTime: 5,
     difficulty: 'easy',
     satiety: 8,
@@ -140,6 +148,7 @@ const SMART_FOODS = [
     nutrition: { calories: 280, protein: 10, carbs: 40, fat: 8, fiber: 5 },
     micros: { iron: 3, magnesium: 80, potassium: 350, zinc: 2 },
     tags: ['complete-protein', 'fiber-rich', 'plant-based'],
+    excludedDiets: ['keto'],
     prepTime: 20,
     difficulty: 'medium',
     satiety: 8,
@@ -153,6 +162,7 @@ const SMART_FOODS = [
     nutrition: { calories: 115, protein: 2, carbs: 27, fat: 0, fiber: 4 },
     micros: { vitaminA: 1000, vitaminC: 20, potassium: 450, magnesium: 30 },
     tags: ['fiber-rich', 'vitamin-a', 'low-fat', 'filling'],
+    excludedDiets: ['keto'],
     prepTime: 45,
     difficulty: 'easy',
     satiety: 7,
@@ -166,6 +176,7 @@ const SMART_FOODS = [
     nutrition: { calories: 215, protein: 5, carbs: 45, fat: 2, fiber: 3.5 },
     micros: { magnesium: 85, potassium: 85, zinc: 1.2 },
     tags: ['whole-grain', 'fiber-rich', 'filling'],
+    excludedDiets: ['keto'],
     prepTime: 30,
     difficulty: 'easy',
     satiety: 7,
@@ -181,6 +192,7 @@ const SMART_FOODS = [
     nutrition: { calories: 80, protein: 3, carbs: 10, fat: 3, fiber: 4 },
     micros: { vitaminA: 200, vitaminC: 30, vitaminK: 80, potassium: 300 },
     tags: ['low-calorie', 'fiber-rich', 'hydrating', 'vitamin-rich'],
+    excludedDiets: [],
     prepTime: 10,
     difficulty: 'easy',
     satiety: 5,
@@ -194,6 +206,7 @@ const SMART_FOODS = [
     nutrition: { calories: 55, protein: 4, carbs: 11, fat: 0.5, fiber: 5 },
     micros: { vitaminC: 135, vitaminK: 180, calcium: 50, potassium: 300 },
     tags: ['low-calorie', 'fiber-rich', 'vitamin-c', 'anti-inflammatory'],
+    excludedDiets: [],
     prepTime: 8,
     difficulty: 'easy',
     satiety: 5,
@@ -207,6 +220,7 @@ const SMART_FOODS = [
     nutrition: { calories: 50, protein: 3, carbs: 4, fat: 3, fiber: 2 },
     micros: { vitaminA: 400, vitaminC: 15, iron: 3.5, magnesium: 80, calcium: 120 },
     tags: ['iron-rich', 'low-calorie', 'quick', 'nutrient-dense'],
+    excludedDiets: [],
     prepTime: 5,
     difficulty: 'easy',
     satiety: 4,
@@ -222,6 +236,7 @@ const SMART_FOODS = [
     nutrition: { calories: 280, protein: 7, carbs: 25, fat: 18, fiber: 8 },
     micros: { potassium: 500, vitaminE: 3, magnesium: 40, vitaminC: 10 },
     tags: ['healthy-fats', 'fiber-rich', 'heart-healthy', 'trendy'],
+    excludedDiets: ['keto'],
     prepTime: 5,
     difficulty: 'easy',
     satiety: 7,
@@ -235,6 +250,7 @@ const SMART_FOODS = [
     nutrition: { calories: 165, protein: 6, carbs: 6, fat: 14, fiber: 3.5 },
     micros: { vitaminE: 7.5, magnesium: 75, calcium: 75 },
     tags: ['healthy-fats', 'portable', 'heart-healthy', 'satisfying'],
+    excludedDiets: [],
     prepTime: 0,
     difficulty: 'easy',
     satiety: 6,
@@ -248,6 +264,7 @@ const SMART_FOODS = [
     nutrition: { calories: 180, protein: 6, carbs: 18, fat: 10, fiber: 5 },
     micros: { iron: 2, potassium: 250, vitaminC: 15 },
     tags: ['plant-based', 'fiber-rich', 'satisfying', 'mediterranean'],
+    excludedDiets: ['keto'],
     prepTime: 2,
     difficulty: 'easy',
     satiety: 6,
@@ -263,6 +280,7 @@ const SMART_FOODS = [
     nutrition: { calories: 90, protein: 2, carbs: 22, fat: 0, fiber: 1 },
     micros: { vitaminC: 20, vitaminA: 45, potassium: 270 },
     tags: ['hydrating', 'low-calorie', 'refreshing', 'summer'],
+    excludedDiets: ['keto'],
     prepTime: 3,
     difficulty: 'easy',
     satiety: 4,
@@ -277,6 +295,7 @@ const SMART_FOODS = [
     nutrition: { calories: 15, protein: 1, carbs: 3, fat: 0, fiber: 0.5 },
     micros: { vitaminK: 15, potassium: 150 },
     tags: ['hydrating', 'low-calorie', 'refreshing', 'crispy'],
+    excludedDiets: [],
     prepTime: 2,
     difficulty: 'easy',
     satiety: 2,
@@ -293,6 +312,7 @@ const SMART_FOODS = [
     nutrition: { calories: 105, protein: 1, carbs: 27, fat: 0, fiber: 3 },
     micros: { potassium: 420, vitaminB6: 0.4, magnesium: 32 },
     tags: ['quick-energy', 'portable', 'pre-workout', 'potassium-rich'],
+    excludedDiets: ['keto'],
     prepTime: 0,
     difficulty: 'easy',
     satiety: 5,
@@ -306,6 +326,7 @@ const SMART_FOODS = [
     nutrition: { calories: 270, protein: 7, carbs: 30, fat: 16, fiber: 5 },
     micros: { vitaminE: 2, magnesium: 50, potassium: 350 },
     tags: ['balanced', 'satisfying', 'fiber-rich', 'protein-boost'],
+    excludedDiets: ['keto'],
     prepTime: 2,
     difficulty: 'easy',
     satiety: 7,
@@ -321,6 +342,7 @@ const SMART_FOODS = [
     nutrition: { calories: 170, protein: 2, carbs: 13, fat: 12, fiber: 3 },
     micros: { iron: 3.4, magnesium: 65, zinc: 1 },
     tags: ['mood-boost', 'antioxidant', 'treat', 'satisfying'],
+    excludedDiets: ['keto'],
     prepTime: 0,
     difficulty: 'easy',
     satiety: 4,
@@ -335,6 +357,7 @@ const SMART_FOODS = [
     nutrition: { calories: 70, protein: 1, carbs: 17, fat: 0.5, fiber: 4 },
     micros: { vitaminC: 50, vitaminK: 20 },
     tags: ['antioxidant', 'low-calorie', 'brain-food', 'refreshing'],
+    excludedDiets: ['keto'],
     prepTime: 1,
     difficulty: 'easy',
     satiety: 4,
@@ -351,6 +374,7 @@ const SMART_FOODS = [
     nutrition: { calories: 450, protein: 35, carbs: 45, fat: 12, fiber: 5 },
     micros: { vitaminA: 150, vitaminC: 30, iron: 3, zinc: 3, potassium: 500 },
     tags: ['balanced', 'complete-meal', 'muscle-building', 'filling'],
+    excludedDiets: ['vegan', 'vegetarian', 'keto'],
     prepTime: 30,
     difficulty: 'medium',
     satiety: 9,
@@ -364,6 +388,7 @@ const SMART_FOODS = [
     nutrition: { calories: 350, protein: 20, carbs: 30, fat: 15, fiber: 6 },
     micros: { calcium: 200, iron: 4, vitaminC: 40, potassium: 400 },
     tags: ['plant-based', 'balanced', 'quick', 'asian-inspired'],
+    excludedDiets: ['keto'],
     prepTime: 20,
     difficulty: 'medium',
     satiety: 7,
@@ -377,6 +402,7 @@ const SMART_FOODS = [
     nutrition: { calories: 480, protein: 18, carbs: 50, fat: 22, fiber: 8 },
     micros: { vitaminA: 200, vitaminC: 35, iron: 3, calcium: 100, potassium: 450 },
     tags: ['balanced', 'heart-healthy', 'fiber-rich', 'mediterranean'],
+    excludedDiets: ['vegan', 'keto'],
     prepTime: 15,
     difficulty: 'medium',
     satiety: 8,
@@ -707,13 +733,23 @@ export async function getSmartRecommendations(userId, options = {}) {
   };
 
   // 2-6. Parallelize all independent data fetches
-  const [gapsData, history, correlations, moodResults, activityResults, signals] = await Promise.all([
+  // dietaryResult uses .catch rather than joining the Promise.all's own
+  // rejection path — a fetch failure here must not silently skip the
+  // allergen/diet filter below by throwing before it runs. It must be
+  // indistinguishable from "we don't know this user's restrictions", which
+  // is exactly the case the filter is written to treat as unsafe.
+  const [gapsData, history, correlations, moodResults, activityResults, signals, dietaryResult] = await Promise.all([
     calculateNutritionalGaps(userId, goals),
     getUserFoodHistory(userId),
     getMoodFoodCorrelations(userId),
     db.select().from(moodLogTable).where(eq(moodLogTable.userId, userId)).orderBy(desc(moodLogTable.loggedDate)).limit(1),
     db.select().from(activityLogTable).where(eq(activityLogTable.userId, userId)).orderBy(desc(activityLogTable.loggedAt)).limit(1),
     getUserSignals(userId, { timezoneOffset }),
+    db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).limit(1)
+      .catch((err) => {
+        console.error('[SmartRecommendations] Dietary preferences lookup failed, will serve nothing:', err);
+        return null;
+      }),
   ]);
 
   const recentMood = moodResults[0];
@@ -734,8 +770,36 @@ export async function getSmartRecommendations(userId, options = {}) {
     signals,
   };
 
-  // 6. Score all foods
-  const scoredFoods = SMART_FOODS.map(food => {
+  // Screen the catalogue against allergies and declared diets BEFORE scoring.
+  // A food dropped here never gets a chance to rank well and be recommended —
+  // this cannot be undone downstream, unlike a low score which can still
+  // surface if nothing else scores higher.
+  //
+  // dietaryResult === null means the lookup itself failed (network/db error),
+  // which is NOT the same as a user with no row — a user who never filled in
+  // onboarding has an empty allergies/preferences array and is correctly
+  // unrestricted. A lookup failure must fail closed: we cannot tell the two
+  // apart from a missing row alone, so treat "we don't know" as "assume the
+  // worst" and serve nothing rather than guess safe.
+  if (dietaryResult === null) {
+    return { recommendations: [], context: { mealType, reasoning: 'Unable to verify dietary safety right now.' } };
+  }
+
+  const dietaryRow = dietaryResult[0];
+  const allergies = Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [];
+  const excludedDietsDeclared = new Set(
+    (Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [])
+      .map((p) => String(p).toLowerCase().trim())
+  );
+
+  const safeFoods = SMART_FOODS.filter((food) => {
+    if (allergies.length > 0 && detectAllergenRisk(food, allergies).hasRisk) return false;
+    if (food.excludedDiets?.some((diet) => excludedDietsDeclared.has(diet))) return false;
+    return true;
+  });
+
+  // 6. Score the screened foods only
+  const scoredFoods = safeFoods.map(food => {
     const { score, reasons } = scoreFood(food, context);
     return { ...food, score, reasons };
   });
