@@ -1196,20 +1196,34 @@ export function useFoodLog() {
   useEffect(() => {
     if (!Network?.addNetworkStateListener) return;
 
-    // Seeded from the real current state, not an optimistic default: an app
-    // launched while offline would otherwise start as "was online", making the
-    // first real reconnect look like no transition at all.
-    let wasUsable = true;
+    // Starts pessimistic, then seeded from the real current state. The two
+    // failure modes are not symmetric: missing a reconnect costs the user a
+    // meal stuck in the queue until the 5-minute backoff or a foreground,
+    // while a spurious reconnect costs one syncNow that no-ops on an empty
+    // queue. So an unknown state must read as "was offline" — assuming
+    // "was online" is what makes a real reconnect look like no transition.
+    // At most one redundant drain per mount, since wasUsable latches true.
+    let wasUsable = false;
     let cancelled = false;
+    // The listener is authoritative once it has spoken. Without this, a
+    // getNetworkStateAsync that resolves late (it is a native round-trip) can
+    // clobber a fresher transition the listener already recorded — seeding
+    // "online" over a just-observed drop, and swallowing the reconnect after.
+    let seeded = false;
 
     Network.getNetworkStateAsync?.()
-      .then(state => { if (!cancelled) wasUsable = isUsableConnection(state); })
-      .catch(() => { /* keep the optimistic default */ });
+      .then(state => {
+        if (cancelled || seeded) return;
+        wasUsable = isUsableConnection(state);
+        seeded = true;
+      })
+      .catch(() => { /* stay pessimistic; worst case is one redundant drain */ });
 
     let subscription;
     try {
       subscription = Network.addNetworkStateListener(state => {
         const usable = isUsableConnection(state);
+        seeded = true;
         const reconnected = usable && !wasUsable;
         wasUsable = usable;
 
