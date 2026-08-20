@@ -255,15 +255,24 @@ export default function Recommendation5W2HCard({
   }), [who, what, when, where, why, how, howMuch]);
 
   // Determine evidence type for badge
+  //
+  // `confidence` is only an object with a string `.source` when the item came
+  // through transformTo5W2H's mapping branch. Anything already carrying
+  // who/what/why is passed through untouched (recommendations.jsx), and on that
+  // path `confidence` is a bare 0-1 number — so `.source` is undefined and
+  // calling `.includes` on it threw "confidence?.source?.includes is not a
+  // function", crashing the whole screen on the first card. Guard on the type
+  // rather than on presence, matching the narrative memo above.
+  const confidenceSource = typeof confidence?.source === 'string' ? confidence.source : '';
   const evidenceType = useMemo(() => {
-    if (confidence?.source?.includes('USDA') || why?.scienceSource) {
+    if (confidenceSource.includes('USDA') || why?.scienceSource) {
       return 'evidenceBased';
     }
-    if (confidence?.source?.includes('pattern') || why?.dataPoints?.length > 0) {
+    if (confidenceSource.includes('pattern') || why?.dataPoints?.length > 0) {
       return 'correlation';
     }
     return 'personalized';
-  }, [confidence, why]);
+  }, [confidenceSource, why]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {
@@ -376,7 +385,7 @@ export default function Recommendation5W2HCard({
         evidenceType={evidenceType}
         confidence={confidence?.score}
         dataPoints={confidence?.dataPoints}
-        source={confidence?.source || why?.scienceSource}
+        source={confidenceSource || why?.scienceSource}
         style={styles.reasonCard}
         onCopyReasoning={onCopyReasoning}
       />

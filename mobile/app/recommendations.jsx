@@ -1,8 +1,10 @@
 /**
  * Recommendations Screen
  *
- * Displays all 5W2H personalized recommendations for premium users.
- * Shows upgrade prompt for free users.
+ * Displays all 5W2H personalized recommendations.
+ *
+ * Unlocked for everyone in v1.0 — see REQUIRES_PREMIUM below. The upgrade
+ * prompt is retained but unreachable until in-app purchase is wired up.
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -180,11 +182,26 @@ function UpgradePrompt({ onUpgrade }) {
   );
 }
 
+/**
+ * 5W2H recommendations ship unlocked in v1.0.
+ *
+ * In-app purchase is not wired up yet — `react-native-purchases` isn't
+ * installed and SubscriptionContext.js is still scaffolding with its RevenueCat
+ * code commented out — so `isPremium` is always false in practice. Gating on it
+ * advertised a feature nobody could buy and sent "Upgrade" to the Profile tab,
+ * which is a dead end for the user and an App Review completeness risk.
+ *
+ * The paywall UI (UpgradePrompt) and the subscription lookup are deliberately
+ * left in place: flip this back to true once IAP ships and gating returns with
+ * no other edits.
+ */
+const REQUIRES_PREMIUM = false;
+
 export default function RecommendationsScreen() {
   const router = useRouter();
   const notify = useNotification();
   const subscription = useSubscription();
-  const isPremium = subscription?.isPremium ?? false;
+  const hasAccess = !REQUIRES_PREMIUM || (subscription?.isPremium ?? false);
 
   const [selectedRec, setSelectedRec] = useState(null);
   const [showDetailsSheet, setShowDetailsSheet] = useState(false);
@@ -199,7 +216,7 @@ export default function RecommendationsScreen() {
     error,
     fetchRecommendations: refetch,
     trackInteraction,
-  } = useRecommendations({ enabled: isPremium });
+  } = useRecommendations({ enabled: hasAccess });
 
   // Transform API recommendations to 5W2H format
   const recommendations = useMemo(() => {
@@ -283,7 +300,7 @@ export default function RecommendationsScreen() {
             />
           }
         >
-          {isPremium ? (
+          {hasAccess ? (
             <>
               {/* Header */}
               <FadeInView animation="fadeIn" delay={0}>
