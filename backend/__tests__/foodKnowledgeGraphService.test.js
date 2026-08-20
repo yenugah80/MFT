@@ -1,6 +1,7 @@
 import {
   detectAllergenRisk,
   inferFoodAttributes,
+  detectDietViolation,
 } from '../src/services/foodKnowledgeGraphService.js';
 
 describe('foodKnowledgeGraphService allergen risk detection', () => {
@@ -78,5 +79,44 @@ describe('foodKnowledgeGraphService food attribute inference', () => {
     expect(attrs.tags).toEqual(expect.arrayContaining(['high-protein', 'fiber-rich', 'complex-carbs']));
     expect(attrs.moodBoost).toBe(true);
     expect(attrs.cuisineTags).toContain('indian');
+  });
+});
+
+describe('foodKnowledgeGraphService diet preference compliance', () => {
+  test('vegetarian blocks meat and fish, allows eggs and dairy', () => {
+    expect(detectDietViolation({ name: 'Grilled Chicken Breast' }, ['vegetarian']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Baked Salmon Fillet' }, ['vegetarian']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Scrambled Eggs (2 large)' }, ['vegetarian']).violates).toBe(false);
+    expect(detectDietViolation({ name: 'Cottage Cheese' }, ['vegetarian']).violates).toBe(false);
+  });
+
+  test('vegan additionally blocks eggs and dairy that vegetarian allows', () => {
+    const eggs = detectDietViolation({ name: 'Scrambled Eggs (2 large)' }, ['vegan']);
+    const yogurt = detectDietViolation({ name: 'Greek Yogurt with Berries' }, ['vegan']);
+    const plant = detectDietViolation({ name: 'Quinoa Bowl with Vegetables' }, ['vegan']);
+
+    expect(eggs.violates).toBe(true);
+    expect(yogurt.violates).toBe(true);
+    expect(plant.violates).toBe(false);
+  });
+
+  test('keto is judged on carb grams, not ingredient names', () => {
+    const highCarb = detectDietViolation({ name: 'Oatmeal with Banana', nutrition: { carbs: 45 } }, ['keto']);
+    const lowCarb = detectDietViolation({ name: 'Grilled Chicken Breast', nutrition: { carbs: 0 } }, ['keto']);
+    const unknown = detectDietViolation({ name: 'Mystery Dish' }, ['keto']);
+
+    expect(highCarb.violates).toBe(true);
+    expect(lowCarb.violates).toBe(false);
+    // No carb data to judge — must not reject on a guess.
+    expect(unknown.violates).toBe(false);
+  });
+
+  test('no declared diets never violates', () => {
+    expect(detectDietViolation({ name: 'Grilled Chicken Breast' }, []).violates).toBe(false);
+  });
+
+  test('reports every diet a food violates, not just the first', () => {
+    const result = detectDietViolation({ name: 'Grilled Chicken Breast' }, ['vegan', 'vegetarian']);
+    expect(result.violatedDiets.sort()).toEqual(['vegan', 'vegetarian']);
   });
 });

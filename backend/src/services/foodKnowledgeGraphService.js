@@ -249,6 +249,92 @@ export function detectAllergenRisk(food, allergies = []) {
   };
 }
 
+// ============================================================================
+// DIET PREFERENCE COMPLIANCE
+// The only diet vocabulary actually collected from users anywhere in the app
+// (mobile/constants/pairingCandidates.js): vegan, vegetarian, keto. Vegan and
+// vegetarian are checked by animal-product term match on name/ingredients —
+// the same mechanism as allergen detection, reusing hasTerm() so a "Chicken"
+// vegetarian violation gets the same plural/whole-word handling as an "Eggs"
+// allergy match. Keto is a macro threshold, not a term: no single ingredient
+// makes a dish non-keto, but a chosen recommendation this carb-heavy has
+// effectively spent someone's entire daily keto carb budget on one item.
+// ============================================================================
+
+const VEGETARIAN_VIOLATION_TERMS = [
+  'chicken', 'beef', 'pork', 'turkey', 'lamb', 'bacon', 'sausage', 'ham',
+  'salmon', 'tuna', 'fish', 'shrimp', 'prawn', 'crab', 'lobster', 'anchovy',
+  'gelatin', 'lard', 'meat',
+];
+
+// Vegan additionally excludes every animal-derived product a vegetarian diet
+// still allows.
+const VEGAN_ADDITIONAL_VIOLATION_TERMS = [
+  'egg', 'milk', 'cheese', 'yogurt', 'yoghurt', 'butter', 'cream', 'honey',
+  'whey', 'casein', 'ghee', 'paneer',
+];
+
+// A single recommended item above this carb count has consumed most or all
+// of a typical <20g/day keto carb budget by itself — conservative on purpose,
+// since under-flagging defeats the point but over-flagging only costs one
+// suggestion, not a health outcome the way an allergen false-negative would.
+const KETO_MAX_CARBS_G = 20;
+
+/**
+ * Whether a food violates a declared diet preference.
+ *
+ * Unlike detectAllergenRisk, a false positive here is low-cost (one hidden
+ * suggestion) rather than unsafe, so this stays intentionally simple: no
+ * cross-reactivity expansion, no hidden-dish table. Ingredient text is
+ * checked the same way allergens are, via the same hasTerm() so plural food
+ * names ("Eggs Benedict") are not missed the way the pre-fix allergen
+ * matcher missed them.
+ *
+ * @param {string|object} food - food name, or object with name/ingredients/nutrition
+ * @param {string[]} diets - declared preferences, e.g. ['vegan', 'keto']
+ * @returns {{violates: boolean, violatedDiets: string[]}}
+ */
+export function detectDietViolation(food, diets = []) {
+  const declared = (diets || []).map((d) => String(d).toLowerCase().trim()).filter(Boolean);
+  if (declared.length === 0) return { violates: false, violatedDiets: [] };
+
+  const foodName = typeof food === 'string' ? food : (food?.name || food?.foodName || '');
+  const textParts = [foodName];
+  const ingredients = typeof food === 'object' && food
+    ? (food.ingredients || food.keyIngredients || food.ingredientsBreakdown || [])
+    : [];
+  for (const ingredient of ingredients) {
+    if (typeof ingredient === 'string') textParts.push(ingredient);
+    else if (ingredient?.name) textParts.push(ingredient.name);
+  }
+  const searchableText = textParts.join(' ').toLowerCase();
+
+  const violatedDiets = [];
+
+  if (declared.includes('vegetarian') || declared.includes('vegan')) {
+    if (VEGETARIAN_VIOLATION_TERMS.some((term) => hasTerm(searchableText, term))) {
+      if (declared.includes('vegetarian')) violatedDiets.push('vegetarian');
+      if (declared.includes('vegan')) violatedDiets.push('vegan');
+    }
+  }
+  if (declared.includes('vegan') && !violatedDiets.includes('vegan')) {
+    if (VEGAN_ADDITIONAL_VIOLATION_TERMS.some((term) => hasTerm(searchableText, term))) {
+      violatedDiets.push('vegan');
+    }
+  }
+
+  if (declared.includes('keto')) {
+    const carbs = typeof food === 'object' && food
+      ? (food.nutrition?.carbs ?? food.carbs ?? food.carbs_g)
+      : undefined;
+    if (typeof carbs === 'number' && carbs > KETO_MAX_CARBS_G) {
+      violatedDiets.push('keto');
+    }
+  }
+
+  return { violates: violatedDiets.length > 0, violatedDiets };
+}
+
 export function inferFoodAttributes(food) {
   const name = String(food?.name || food?.foodName || '').toLowerCase();
   const tags = new Set(food?.tags || []);
