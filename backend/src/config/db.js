@@ -3,6 +3,19 @@ import postgres from "postgres";
 import { ENV } from "./env.js";
 import * as schema from "../db/schema.js";
 
+// Postgres (Neon) session TimeZone is GMT, but postgres-js parses `timestamp
+// without time zone` columns back into JS Date objects using the Node
+// PROCESS's local timezone, not the DB's. Railway/most hosts don't set TZ,
+// so Node falls back to the host's system zone (observed: America/New_York),
+// silently shifting every timestamp column by the DST offset (+4h EDT) on
+// every read — `date` columns are unaffected, this is timestamp-only. This
+// broke streak-continuity math in gamificationRewardService.js (a same-day
+// log read back 4h into the next UTC day looked like a 2-day gap and reset
+// a 37-day streak to 1). Must be set before any query runs, so it lives here
+// next to client creation rather than relying on an app-wide env var that's
+// easy to forget on a new deploy target.
+process.env.TZ = "UTC";
+
 // TCP connection pool — correct for long-running Express on Railway.
 // Neon HTTP driver was wrong here: no real transactions, new HTTP request per query.
 //

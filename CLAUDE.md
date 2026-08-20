@@ -23,7 +23,15 @@ MFT (My Flourish Tracker) is a comprehensive nutrition and wellness tracking mob
   a new HTTP request per query. This matters when writing queries: raw
   ``sql`...` `` templates bypass Drizzle's column type mapping, so a JS `Date`
   interpolated into one reaches the driver unserialized and throws. Use the
-  `gte`/`lte`/`eq` operators for typed columns.
+  `gte`/`lte`/`eq` operators for typed columns. Separately: `postgres-js`
+  parses `timestamp` (no timezone) columns back into JS `Date` objects using
+  the Node **process's** local timezone, not the DB's — Postgres/Neon here is
+  GMT, but an unset `TZ` env var makes Node fall back to the host's system
+  zone. `db.js` pins `process.env.TZ = "UTC"` before the client is created,
+  and Railway also has `TZ=UTC` set; don't remove either without re-checking
+  this, since it silently shifts every timestamp read by the DST offset and
+  previously reset a real streak (37→1) by making a same-day log look like a
+  2-day gap. `date` (no time) columns are unaffected — this is timestamp-only.
 - **ORM**: Drizzle ORM
 - **AI**: OpenAI API for food analysis and recommendations
 - **Authentication**: Clerk middleware (@clerk/express)
