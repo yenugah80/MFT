@@ -727,7 +727,40 @@ router.get("/summary", async (req, res) => {
       .orderBy(desc(dailyNutritionSummaryTable.date))
       .limit(Number(limit));
 
-    res.json(summaries);
+    // daily_nutrition_summary has no meal-count column, so derive it from
+    // food_log directly and merge it in — the mobile calendar (30D/60D/90D
+    // views) reads summary.mealCount and silently showed "0 meals logged"
+    // for every period without this.
+    let mealCountWhere = eq(foodLogTable.userId, userId);
+    if (date) {
+      const targetDate = new Date(date);
+      targetDate.setUTCHours(0, 0, 0, 0);
+      const nextDate = new Date(targetDate);
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+      mealCountWhere = and(mealCountWhere, gte(foodLogTable.loggedDate, targetDate), lte(foodLogTable.loggedDate, nextDate));
+    } else if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setUTCHours(23, 59, 59, 999);
+      mealCountWhere = and(mealCountWhere, gte(foodLogTable.loggedDate, start), lte(foodLogTable.loggedDate, end));
+    }
+
+    const mealCountRows = await db.select({
+      day: sql`DATE(${foodLogTable.loggedDate})`,
+      count: sql`COUNT(*)::int`,
+    })
+      .from(foodLogTable)
+      .where(mealCountWhere)
+      .groupBy(sql`DATE(${foodLogTable.loggedDate})`);
+
+    const mealCountByDay = new Map(mealCountRows.map((r) => [toDateStr(new Date(r.day)), r.count]));
+    const summariesWithMealCount = summaries.map((s) => ({
+      ...s,
+      mealCount: mealCountByDay.get(toDateStr(new Date(s.date))) || 0,
+    }));
+
+    res.json(summariesWithMealCount);
   } catch (error) {
     console.error("[NutritionSummary] Error:", error);
     errors.internal(res, 'Failed to fetch nutrition summary');
