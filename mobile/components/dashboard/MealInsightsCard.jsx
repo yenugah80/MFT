@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
 import { BRAND, TEXT, SURFACES, SHADOWS, SEMANTIC, CARD_SYSTEM, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { getMealGroupKey } from '../../utils/mealGrouping';
 
 // Tab options - Stats shows aggregate data, Insights shows AI tips
 const TABS = [
@@ -58,9 +59,7 @@ function groupMeals(meals) {
     if (meal.mealId) {
       groupKey = meal.mealId;
     } else if (meal.clientEventId) {
-      // Use first 2 segments of clientEventId as group key
-      const parts = meal.clientEventId.split('-');
-      groupKey = parts.slice(0, 2).join('-');
+      groupKey = getMealGroupKey(meal.clientEventId);
     } else {
       // Use timestamp rounded to nearest minute
       const date = new Date(meal.loggedDate || meal.createdAt);

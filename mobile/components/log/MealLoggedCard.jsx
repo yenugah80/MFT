@@ -739,6 +739,11 @@ export default function MealLoggedCard({
               sodium_mg: meal.sodium,
             },
             name: meal.foodName || meal.name,
+            // Dropped previously — useMealPairings.js reads meal?.mealType
+            // and falls back to 'lunch' when it's missing, so every pairing
+            // request from this screen was silently mislabeled regardless
+            // of when the meal was actually logged.
+            mealType: meal.mealType,
             healthScore: meal.healthScore,
             nutriScore: meal.nutriScore,
             micros: meal.micros,

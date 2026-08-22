@@ -68,6 +68,7 @@ import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 
 // Import centralized typography from premium theme
 import { TYPOGRAPHY, TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { countDistinctMeals } from '../../utils/mealGrouping';
 
 /**
  * Maps a VoiceModal analysis result (backend items shape, from /voice/process)
@@ -1165,13 +1166,15 @@ export default function LogScreen() {
             setShowHydrationModal(true);
           }}
           onHistoryPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
-          // Server truth (today's actual food_log rows), not the local
-          // offline-sync queue — that queue only ever grows when a meal is
-          // logged through this app on this device, so a fresh install or a
-          // meal logged another way (voice, another device) always read as
-          // 0 there even with a rich real history. Falls back to the local
-          // count only while dashboardData hasn't loaded yet (e.g. offline).
-          logCount={dashboardData?.today?.foodLogs?.length ?? foodLog.logs?.length ?? 0}
+          // Server truth (today's distinct MEALS, not food_log rows — a
+          // 3-item meal is one meal, see utils/mealGrouping.js), not the
+          // local offline-sync queue — that queue only ever grows when a
+          // meal is logged through this app on this device, so a fresh
+          // install or a meal logged another way (voice, another device)
+          // always read as 0 there even with a rich real history. Falls
+          // back to a client-computed grouped count only while
+          // dashboardData hasn't loaded yet (e.g. offline).
+          logCount={dashboardData?.today?.mealCount ?? countDistinctMeals(foodLog.logs)}
         />
       </LinearGradient>
 

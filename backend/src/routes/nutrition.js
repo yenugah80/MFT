@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
 import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification, backfillXPFromHistory } from "../services/gamificationRewardService.js";
+import { countDistinctMeals, getMealGroupKey } from "../utils/mealGrouping.js";
 import { calculateLevel } from "../utils/levelCalculator.js";
 import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
@@ -746,15 +747,25 @@ router.get("/summary", async (req, res) => {
       mealCountWhere = and(mealCountWhere, gte(foodLogTable.loggedDate, start), lte(foodLogTable.loggedDate, end));
     }
 
+    // Row-per-day fetch, not a SQL COUNT(*) — a raw per-row count double-counts
+    // a multi-item meal (one meal, three food_log rows) as three "meals
+    // logged". Grouped in JS with the same clientEventId-prefix scheme the
+    // dashboard endpoint uses (see utils/mealGrouping.js) — row volume here
+    // is one user's logs over at most a 90-day window, not a concern.
     const mealCountRows = await db.select({
       day: sql`DATE(${foodLogTable.loggedDate})`,
-      count: sql`COUNT(*)::int`,
+      clientEventId: foodLogTable.clientEventId,
     })
       .from(foodLogTable)
-      .where(mealCountWhere)
-      .groupBy(sql`DATE(${foodLogTable.loggedDate})`);
+      .where(mealCountWhere);
 
-    const mealCountByDay = new Map(mealCountRows.map((r) => [toDateStr(new Date(r.day)), r.count]));
+    const mealGroupsByDay = new Map();
+    for (const row of mealCountRows) {
+      const dayKey = toDateStr(new Date(row.day));
+      if (!mealGroupsByDay.has(dayKey)) mealGroupsByDay.set(dayKey, new Set());
+      mealGroupsByDay.get(dayKey).add(getMealGroupKey(row.clientEventId));
+    }
+    const mealCountByDay = new Map([...mealGroupsByDay.entries()].map(([day, groups]) => [day, groups.size]));
     const summariesWithMealCount = summaries.map((s) => ({
       ...s,
       mealCount: mealCountByDay.get(toDateStr(new Date(s.date))) || 0,
@@ -1077,7 +1088,14 @@ router.get("/dashboard", async (req, res) => {
           `);
         } catch (err) {
           console.warn('[Dashboard] activity_log query failed (table may not exist):', err.message);
-          return { rows: [] };
+          // Empty array, matching the success path's shape — db.execute()
+          // returns the row array directly on this project's postgres-js
+          // driver (see config/db.js), not { rows: [] }. That old neon-http
+          // shape here masked the real bug below: even a SUCCESSFUL query
+          // read `.rows` off a plain array (undefined) and silently fell
+          // back to [] every time, so today's activity never showed up on
+          // the dashboard regardless of whether the query worked.
+          return [];
         }
       })(),
 
@@ -1140,8 +1158,10 @@ router.get("/dashboard", async (req, res) => {
 
     const lifetimeMealsLogged = lifetimeMealCountResult?.[0]?.count || 0;
 
-    // Extract today's activity logs from raw SQL result
-    const todayActivityLogs = todayActivityLogsResult?.rows || [];
+    // Extract today's activity logs from raw SQL result. db.execute()
+    // returns the array directly (see comment above) — was reading .rows,
+    // which silently evaluated to [] on every call, success or failure.
+    const todayActivityLogs = todayActivityLogsResult || [];
 
     // Calculate today's water total
     const todayWaterTotal = todayWaterLogs.reduce((sum, log) => {
@@ -1390,6 +1410,9 @@ router.get("/dashboard", async (req, res) => {
         waterIntakeLiters: todayWaterTotal,
         waterLogs: todayWaterLogs,
         foodLogs: todayFoodLogs,
+        // Distinct meals, not food_log rows — a 3-item meal is one meal,
+        // not three. See utils/mealGrouping.js for how rows are grouped.
+        mealCount: countDistinctMeals(todayFoodLogs),
         moodLogs: todayMoodLogs,
         activityLogs: todayActivityLogs,
         activityMinutes: todayActivityLogs.reduce((sum, log) => sum + (parseInt(log.duration_minutes) || 0), 0),
