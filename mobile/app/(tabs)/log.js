@@ -55,6 +55,8 @@ import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
 import LogInputSection from '../../components/log/LogInputSection';
 import MoodLogger from '../../components/MoodLogger';
+import SleepLogger from '../../components/SleepLogger';
+import StressLogger from '../../components/StressLogger';
 import MealPreviewCard from '../../components/log/MealPreviewCard';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
 import UnifiedMealAnalysis from '../../components/log/UnifiedMealAnalysis';
@@ -157,6 +159,8 @@ export default function LogScreen() {
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showMoodModal, setShowMoodModal] = useState(false);
+  const [showSleepModal, setShowSleepModal] = useState(false);
+  const [showStressModal, setShowStressModal] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
   const [isEnablingConsent, setIsEnablingConsent] = useState(false);
   const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
@@ -210,6 +214,8 @@ export default function LogScreen() {
 
   const closeAllModals = useCallback(() => {
     setShowMoodModal(false);
+    setShowSleepModal(false);
+    setShowStressModal(false);
     setShowHydrationModal(false);
     setShowVoiceModal(false);
     setShowCameraModal(false);
@@ -1196,6 +1202,14 @@ export default function LogScreen() {
             closeAllModals();
             setShowHydrationModal(true);
           }}
+          onSleepPress={() => {
+            closeAllModals();
+            setShowSleepModal(true);
+          }}
+          onStressPress={() => {
+            closeAllModals();
+            setShowStressModal(true);
+          }}
           onHistoryPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
           // Server truth (today's distinct MEALS, not food_log rows — a
           // 3-item meal is one meal, see utils/mealGrouping.js), not the
@@ -1567,6 +1581,16 @@ export default function LogScreen() {
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
         onSuccess={(mood) => notify.success(moodMessages.logged(mood), { domain: 'mood' })}
+      />
+
+      <SleepLogger
+        visible={showSleepModal}
+        onClose={() => setShowSleepModal(false)}
+      />
+
+      <StressLogger
+        visible={showStressModal}
+        onClose={() => setShowStressModal(false)}
       />
 
       <HealthAnalysisModal

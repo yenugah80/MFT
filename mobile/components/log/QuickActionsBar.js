@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
 
-export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, logCount }) => {
+export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStressPress, onHistoryPress, logCount }) => {
   return (
     <View style={styles.quickActionsBar}>
       <TouchableOpacity
@@ -13,7 +13,7 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         accessibilityLabel="Log your mood"
       >
         <Ionicons name="happy-outline" size={20} color={BRAND.primary} />
-        <Text style={styles.quickActionText}>Mood</Text>
+        <Text style={styles.quickActionText} numberOfLines={1}>Mood</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -23,7 +23,31 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         accessibilityLabel="Log your water intake"
       >
         <Ionicons name="water-outline" size={20} color={BRAND.primary} />
-        <Text style={styles.quickActionText}>Water</Text>
+        <Text style={styles.quickActionText} numberOfLines={1}>Water</Text>
+      </TouchableOpacity>
+
+      {/* Sleep and Stress already had full logger modals (SleepLogger.jsx,
+          StressLogger.jsx) reachable only by drilling into a dashboard
+          summary card — no quick entry point existed here at all, unlike
+          Mood/Water which were one tap away from the primary Log tab. */}
+      <TouchableOpacity
+        style={styles.quickActionChip}
+        onPress={onSleepPress}
+        activeOpacity={0.7}
+        accessibilityLabel="Log your sleep"
+      >
+        <Ionicons name="moon-outline" size={20} color={BRAND.primary} />
+        <Text style={styles.quickActionText} numberOfLines={1}>Sleep</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.quickActionChip}
+        onPress={onStressPress}
+        activeOpacity={0.7}
+        accessibilityLabel="Log your stress"
+      >
+        <Ionicons name="pulse-outline" size={20} color={BRAND.primary} />
+        <Text style={styles.quickActionText} numberOfLines={1}>Stress</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -33,8 +57,8 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         accessibilityLabel="Open logged meals history"
       >
         <Ionicons name="flame-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
-        <Text style={styles.quickActionValue}>{logCount || 0}</Text>
-        <Text style={styles.quickActionLabel}>logged</Text>
+        <Text style={styles.quickActionValue} numberOfLines={1}>{logCount || 0}</Text>
+        <Text style={styles.quickActionLabel} numberOfLines={1}>logged</Text>
       </TouchableOpacity>
     </View>
   );
@@ -43,19 +67,19 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
 const styles = StyleSheet.create({
   quickActionsBar: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
+    gap: 6,
+    paddingHorizontal: 16,
   },
   quickActionChip: {
     flex: 1,
     backgroundColor: SURFACES.card.primary,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 5,
     shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
