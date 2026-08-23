@@ -69,6 +69,7 @@ import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 // Import centralized typography from premium theme
 import { TYPOGRAPHY, TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { countDistinctMeals } from '../../utils/mealGrouping';
+import { aggregateMicros } from '../../utils/micronutrients';
 
 /**
  * Maps a VoiceModal analysis result (backend items shape, from /voice/process)
@@ -590,9 +591,20 @@ export default function LogScreen() {
     setAnalyzedFood(null);
     setSelectedImage(null);
 
+    // Top-level nutriScore/healthScore/healthAnalysis come from the backend's
+    // enrichWithHealthMetrics on the overall analysisResult, not per-item —
+    // buildLegacyFoodLog's item.nutriscore/item.healthScore reads were
+    // reading fields that don't exist there, so MealLoggedCard's score chip
+    // row (meal.nutriScore / meal.healthScore) silently never rendered post-log
+    // even though the pre-log analysis screen shows them correctly.
+    const matchingAnalysis = foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null;
+
     setLoggedMeal({
       ...foodDataWithId,
-      originalAnalysis: analyzedFood || (foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null)
+      nutriScore: matchingAnalysis?.nutriScore ?? foodData.nutriscore ?? null,
+      healthScore: foodDataWithId.healthScore ?? matchingAnalysis?.healthScore ?? null,
+      healthAnalysis: matchingAnalysis?.healthAnalysis ?? null,
+      originalAnalysis: analyzedFood || matchingAnalysis
     });
 
     InteractionManager.runAfterInteractions(() => {
@@ -690,6 +702,13 @@ export default function LogScreen() {
       let totalProtein = 0;
       let totalCarbs = 0;
       let totalFat = 0;
+      let totalFiber = 0;
+      let totalSugar = 0;
+      let totalSodium = 0;
+      // Summed across items so the post-log MealLoggedCard's fiber/sugar
+      // tile and micronutrient section aren't empty for multi-item meals —
+      // each item.micros is per-item, MealLoggedCard needs the meal total.
+      const aggregatedMicros = aggregateMicros(analysisResult.items);
 
       const savePromises = analysisResult.items.map((item, index) => {
         const servingText = item.portion?.amount && item.portion?.unit
@@ -727,6 +746,9 @@ export default function LogScreen() {
         totalProtein += foodLogData.protein || 0;
         totalCarbs += foodLogData.carbs || 0;
         totalFat += foodLogData.fats || 0;
+        totalFiber += foodLogData.fiber || 0;
+        totalSugar += foodLogData.sugar || 0;
+        totalSodium += foodLogData.sodium || 0;
 
         return foodLog.addLog(foodLogData);
       });
@@ -745,6 +767,15 @@ export default function LogScreen() {
         protein: totalProtein,
         carbs: totalCarbs,
         fats: totalFat,
+        fiber: totalFiber,
+        sugar: totalSugar,
+        sodium: totalSodium,
+        micros: aggregatedMicros,
+        // Top-level fields from enrichWithHealthMetrics — same source
+        // _doSaveLog now reads for the single-item flow (see above).
+        nutriScore: analysisResult.nutriScore ?? null,
+        healthScore: analysisResult.healthScore ?? null,
+        healthAnalysis: analysisResult.healthAnalysis ?? null,
         mealId: mealEventId,
         source: analysisResult.source || 'text',
         mealType: effectiveMealType,

@@ -38,6 +38,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS, CARD_SYSTEM } from '../../constants/premiumTheme';
 import { MODERN_MACROS, BOLD_GRADIENTS } from '../../constants/modernColorPalette';
+import { getDailyValueFor } from '../../utils/micronutrients';
 import { NutriScoreTag, HealthScoreBadge } from '../NutriScoreBadge';
 import { SuccessCheckmark } from '../analytics/CelebrationAnimation';
 
@@ -111,6 +112,11 @@ const getSourceLabel = (source) => {
     default: return 'Text Input';
   }
 };
+
+// %DV lookup for a micronutrient name — see utils/micronutrients.js.
+// Nothing (backend or client) ever attaches a .dv field to a micros entry,
+// so reading it directly (the previous approach) always evaluated to
+// undefined and the %DV badge below never rendered.
 
 // ============================================================================
 // MACRO BAR COMPONENT - Tufte Small Multiple
@@ -517,8 +523,9 @@ export default function MealLoggedCard({
       // Normalize to {name, value, unit} format
       const isObject = typeof val === 'object' && val !== null;
       const value = isObject ? (val.value ?? 0) : (typeof val === 'number' ? val : 0);
-      const unit = isObject ? (val.unit || 'mg') : 'mg';
-      return [name, { value, unit, dv: isObject ? val.dv : undefined }];
+      const dailyValue = getDailyValueFor(name);
+      const unit = (isObject && val.unit) || dailyValue?.unit || 'mg';
+      return [name, { value, unit, dv: dailyValue?.value }];
     })
     .filter(([, data]) => data.value > 0);
 
@@ -664,7 +671,7 @@ export default function MealLoggedCard({
                 />
                 <MacroTile
                   label="Fat"
-                  value={meal.fat}
+                  value={meal.fats}
                   unit="g"
                   color={MODERN_MACROS.fat.base}
                   goal={dailyGoals?.fatG}
@@ -703,7 +710,7 @@ export default function MealLoggedCard({
                 />
                 <StaticMacroTile
                   label="Fat"
-                  value={meal.fat}
+                  value={meal.fats}
                   unit="g"
                   color={MODERN_MACROS.fat.base}
                   goal={dailyGoals?.fatG}
@@ -733,7 +740,7 @@ export default function MealLoggedCard({
               calories_kcal: meal.calories,
               protein_g: meal.protein,
               carbs_g: meal.carbs,
-              fat_g: meal.fat,
+              fat_g: meal.fats,
               fiber_g: meal.fiber,
               sugar_g: meal.sugar,
               sodium_mg: meal.sodium,
@@ -769,7 +776,7 @@ export default function MealLoggedCard({
               calories_kcal: meal.calories,
               protein_g: meal.protein,
               carbs_g: meal.carbs,
-              fat_g: meal.fat,
+              fat_g: meal.fats,
               fiber_g: meal.fiber,
             },
           }}
@@ -839,8 +846,8 @@ export default function MealLoggedCard({
                   />
                   <ComparisonBar
                     label="Fat"
-                    mealValue={meal.fat}
-                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
+                    mealValue={meal.fats}
+                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fats || 0)}
                     goal={dailyGoals.fatG}
                     unit="g"
                     color={MODERN_MACROS.fat.base}
@@ -879,8 +886,8 @@ export default function MealLoggedCard({
                   />
                   <StaticComparisonBar
                     label="Fat"
-                    mealValue={meal.fat}
-                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
+                    mealValue={meal.fats}
+                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fats || 0)}
                     goal={dailyGoals.fatG}
                     unit="g"
                     color={MODERN_MACROS.fat.base}
