@@ -45,6 +45,7 @@ import {
   SHADOWS,
 } from '../../constants/premiumDesignSystem';
 import { usePressAnimation, SPRING } from '../../utils/animations';
+import { buildRecommendationSummary } from '../../utils/recommendationSummary';
 import ReasonCard from './ReasonCard';
 
 // ============================================================================
@@ -196,19 +197,7 @@ export default function Recommendation5W2HCard({
   // shape (this card renders whatever transformTo5W2H — or a future caller —
   // produces), and a non-string field here previously crashed the whole
   // screen on first render (see transformTo5W2H in app/recommendations.jsx).
-  const summary = useMemo(() => {
-    const action = typeof what?.action === 'string' ? what.action : 'Take action';
-    const reason = typeof why?.primaryReason === 'string' ? why.primaryReason : '';
-
-    // Create a natural-sounding fused sentence
-    if (reason) {
-      // "Earlier, lighter dinners to improve your sleep comfort."
-      // Not: "What: Eat earlier. Why: Sleep better."
-      const cleanReason = reason.toLowerCase().replace(/^your /, '').replace(/\.$/, '');
-      return `${action.replace(/\.$/, '')} to address ${cleanReason}.`;
-    }
-    return action;
-  }, [what, why]);
+  const summary = useMemo(() => buildRecommendationSummary(what, why), [what, why]);
 
   // Build narrative paragraph - the story, not the framework
   const narrative = useMemo(() => {

@@ -47,11 +47,15 @@ beforeEach(() => {
 });
 
 describe("rendering", () => {
+  // Default 5000ms times out under full-suite parallel load (passes
+  // instantly in isolation) — this screen's mount reads AsyncStorage before
+  // its first paint, which is legitimately slower than a synchronous
+  // render, not broken.
   test("shows the returning-user hero when AsyncStorage has the flag", async () => {
     await renderReturningUser(true);
     expect(screen.getByText("Good to see you again.")).toBeOnTheScreen();
     expect(screen.getByText("Your wellness dashboard is ready.")).toBeOnTheScreen();
-  });
+  }, 15000);
 
   test("shows the first-time hero when AsyncStorage has no flag", async () => {
     await renderReturningUser(false);

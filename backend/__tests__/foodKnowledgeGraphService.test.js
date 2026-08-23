@@ -119,4 +119,51 @@ describe('foodKnowledgeGraphService diet preference compliance', () => {
     const result = detectDietViolation({ name: 'Grilled Chicken Breast' }, ['vegan', 'vegetarian']);
     expect(result.violatedDiets.sort()).toEqual(['vegan', 'vegetarian']);
   });
+
+  // Regression: detectDietViolation used to only understand vegan/vegetarian/
+  // keto, even though onboarding collects 8 diets. The other 5 silently never
+  // violated, which meant validateRecommendation force-overwrote a correct
+  // model dietCompliant:false to true for every one of them.
+  test('pescatarian blocks land-animal meat but allows fish, dairy, and eggs', () => {
+    expect(detectDietViolation({ name: 'Grilled Chicken Breast' }, ['pescatarian']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Baked Salmon Fillet' }, ['pescatarian']).violates).toBe(false);
+    expect(detectDietViolation({ name: 'Cottage Cheese' }, ['pescatarian']).violates).toBe(false);
+    expect(detectDietViolation({ name: 'Scrambled Eggs (2 large)' }, ['pescatarian']).violates).toBe(false);
+  });
+
+  test('paleo blocks grains, legumes, and dairy', () => {
+    expect(detectDietViolation({ name: 'Brown Rice (1 cup cooked)' }, ['paleo']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Hummus with Veggie Sticks' }, ['paleo']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Cottage Cheese' }, ['paleo']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Grilled Chicken Breast' }, ['paleo']).violates).toBe(false);
+    expect(detectDietViolation({ name: 'Steamed Broccoli' }, ['paleo']).violates).toBe(false);
+  });
+
+  test('gluten_free blocks wheat/gluten terms and tolerates buckwheat', () => {
+    expect(detectDietViolation({ name: 'Whole Wheat Pita' }, ['gluten_free']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Seitan Stir Fry' }, ['gluten_free']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Buckwheat Pancakes' }, ['gluten_free']).violates).toBe(false);
+    expect(detectDietViolation({ name: 'Grilled Chicken Breast' }, ['gluten_free']).violates).toBe(false);
+  });
+
+  test('low_carb is judged on carb grams with a higher threshold than keto', () => {
+    const highCarb = detectDietViolation({ name: 'Brown Rice', nutrition: { carbs: 70 } }, ['low_carb']);
+    const lowCarb = detectDietViolation({ name: 'Steamed Broccoli', nutrition: { carbs: 11 } }, ['low_carb']);
+    expect(highCarb.violates).toBe(true);
+    expect(lowCarb.violates).toBe(false);
+  });
+
+  test('balanced never violates — it carries no restriction', () => {
+    expect(detectDietViolation({ name: 'Grilled Chicken Breast', nutrition: { carbs: 200 } }, ['balanced']).violates).toBe(false);
+  });
+
+  // Regression: the diet term lists used to be a smaller, independently
+  // maintained vocabulary than ALLERGEN_CROSS_REACTIVITY in the same file,
+  // missing terms the allergen system already had correct.
+  test('vegan/vegetarian catch fish and dairy terms the allergen map already knows', () => {
+    expect(detectDietViolation({ name: 'Grilled Tilapia' }, ['vegetarian']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Mayonnaise Coleslaw' }, ['vegan']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Curd Rice' }, ['vegan']).violates).toBe(true);
+    expect(detectDietViolation({ name: 'Egg Curry' }, ['vegan']).violates).toBe(true);
+  });
 });

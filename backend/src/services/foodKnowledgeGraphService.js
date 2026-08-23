@@ -135,6 +135,12 @@ const ALLERGEN_EXCEPTIONS = {
   dairy: ['dairy-free', 'dairy free', 'non-dairy', 'nondairy'],
   milk: ['milk-free', 'milk free'],
   peanut: ['peanut-free', 'peanut free'],
+  // 'butter' is a dairy cross-reactivity term, but nut/seed butters are
+  // dairy-free by definition — without this a dairy allergy (or a vegan
+  // diet check, which reuses this same exception logic) blocks every
+  // peanut/almond-butter recommendation, including the ones this file's own
+  // test suite uses as its tree-nut allergy example.
+  butter: ['peanut butter', 'almond butter', 'cashew butter', 'sunflower butter', 'cocoa butter', 'shea butter', 'apple butter'],
 };
 
 function normalizeAllergen(allergen) {
@@ -169,6 +175,44 @@ function hasTerm(text, term) {
 }
 
 /**
+ * hasTerm(), but honoring ALLERGEN_EXCEPTIONS — e.g. 'butter' matches
+ * literal dairy butter but not 'peanut butter'. Shared by detectAllergenRisk
+ * and detectDietViolation so an exception added for one system (a dairy
+ * allergy) automatically protects the other (a vegan diet check) instead of
+ * silently applying to only whichever function was updated.
+ */
+function matchesTerm(text, term) {
+  const exceptions = ALLERGEN_EXCEPTIONS[term] || [];
+  if (exceptions.some((exception) => text.includes(exception))) return false;
+  return hasTerm(text, term);
+}
+
+function getFoodName(food) {
+  return typeof food === 'string' ? food : (food?.name || food?.foodName || '');
+}
+
+/**
+ * Build the lowercased search text for a food: its name plus every
+ * ingredient name, flattened into one string. Shared by detectAllergenRisk
+ * and detectDietViolation so a future change to how ingredients are read
+ * (the ingredients/keyIngredients/ingredientsBreakdown fallback order, or
+ * the string-vs-{name} ingredient shape) can't drift between the two copies
+ * — that's exactly the class of bug the plural-matching fix above addressed,
+ * just for allergens only, before this was factored out.
+ */
+function buildSearchableText(food) {
+  const textParts = [getFoodName(food)];
+  const ingredients = typeof food === 'object' && food
+    ? (food.ingredients || food.keyIngredients || food.ingredientsBreakdown || [])
+    : [];
+  for (const ingredient of ingredients) {
+    if (typeof ingredient === 'string') textParts.push(ingredient);
+    else if (ingredient?.name) textParts.push(ingredient.name);
+  }
+  return textParts.join(' ').toLowerCase();
+}
+
+/**
  * Expand a user's allergen list with cross-reactive terms.
  * Returns a deduplicated flat list of all terms to flag in food names.
  *
@@ -192,27 +236,15 @@ export function detectAllergenRisk(food, allergies = []) {
     return { hasRisk: false, matchedAllergens: [], hiddenMatches: [], ingredientMatches: [], confidence: 1 };
   }
 
-  const foodName = typeof food === 'string' ? food : (food?.name || food?.foodName || '');
-  const textParts = [foodName];
-  const ingredients = typeof food === 'object' && food
-    ? (food.ingredients || food.keyIngredients || food.ingredientsBreakdown || [])
-    : [];
-
-  for (const ingredient of ingredients) {
-    if (typeof ingredient === 'string') textParts.push(ingredient);
-    else if (ingredient?.name) textParts.push(ingredient.name);
-  }
-
-  const searchableText = textParts.join(' ').toLowerCase();
+  const foodName = getFoodName(food);
+  const searchableText = buildSearchableText(food);
   const expandedTerms = expandAllergens(declared);
   const matched = new Set();
   const ingredientMatches = [];
   const hiddenMatches = [];
 
   for (const term of expandedTerms) {
-    const exceptions = ALLERGEN_EXCEPTIONS[term] || [];
-    if (exceptions.some((exception) => searchableText.includes(exception))) continue;
-    if (hasTerm(searchableText, term)) {
+    if (matchesTerm(searchableText, term)) {
       matched.add(normalizeAllergen(term));
       for (const declaredAllergen of declared) {
         if (expandAllergens([declaredAllergen]).includes(term)) {
@@ -251,84 +283,130 @@ export function detectAllergenRisk(food, allergies = []) {
 
 // ============================================================================
 // DIET PREFERENCE COMPLIANCE
-// The only diet vocabulary actually collected from users anywhere in the app
-// (mobile/constants/pairingCandidates.js): vegan, vegetarian, keto. Vegan and
-// vegetarian are checked by animal-product term match on name/ingredients —
-// the same mechanism as allergen detection, reusing hasTerm() so a "Chicken"
-// vegetarian violation gets the same plural/whole-word handling as an "Eggs"
-// allergy match. Keto is a macro threshold, not a term: no single ingredient
-// makes a dish non-keto, but a chosen recommendation this carb-heavy has
-// effectively spent someone's entire daily keto carb budget on one item.
+// Full vocabulary actually collected from users
+// (mobile/constants/onboardingConfig.js, dietaryPreferences step): balanced,
+// vegan, keto, vegetarian, pescatarian, paleo, low_carb, gluten_free.
+// 'balanced' carries no restriction by definition and is never checked.
+// The rest are checked by term match on name/ingredients, reusing hasTerm()
+// so a "Chicken" vegetarian violation gets the same plural/whole-word
+// handling as an "Eggs" allergy match. Where possible the term lists are
+// built from the RAW VALUE ARRAYS of ALLERGEN_CROSS_REACTIVITY (fish,
+// shellfish, dairy, soy, peanut) instead of a second, independently
+// maintained vocabulary — that second list is exactly how this file's
+// vegetarian/vegan terms previously drifted behind the allergen system and
+// missed 'tilapia', 'mayonnaise', 'curd', etc. (Deliberately reading the raw
+// arrays, not calling expandAllergens()/normalizeAllergen() — those collapse
+// aliases like 'milk' -> 'dairy' for allergen-set dedup purposes, which
+// would silently drop 'milk' as a literal term to search for here.)
+// Keto and low-carb are macro thresholds, not terms: no single ingredient
+// makes a dish non-compliant, but a chosen recommendation this carb-heavy
+// has effectively spent someone's entire daily carb budget on one item.
 // ============================================================================
 
-const VEGETARIAN_VIOLATION_TERMS = [
+const MEAT_VIOLATION_TERMS = [
   'chicken', 'beef', 'pork', 'turkey', 'lamb', 'bacon', 'sausage', 'ham',
-  'salmon', 'tuna', 'fish', 'shrimp', 'prawn', 'crab', 'lobster', 'anchovy',
-  'gelatin', 'lard', 'meat',
+  'gelatin', 'lard', 'meat', 'duck', 'venison', 'mutton',
 ];
+
+// Raw value arrays, not expandAllergens() — see header comment.
+const SEAFOOD_VIOLATION_TERMS = [
+  ...ALLERGEN_CROSS_REACTIVITY.fish,
+  ...ALLERGEN_CROSS_REACTIVITY.shellfish,
+];
+
+// Vegetarian excludes meat and seafood; still allows eggs and dairy.
+const VEGETARIAN_VIOLATION_TERMS = [...MEAT_VIOLATION_TERMS, ...SEAFOOD_VIOLATION_TERMS];
 
 // Vegan additionally excludes every animal-derived product a vegetarian diet
-// still allows.
+// still allows. 'egg' is listed alongside the raw ALLERGEN_CROSS_REACTIVITY
+// value ('eggs') because hasTerm()'s plural tolerance only forgives an EXTRA
+// trailing 's' on the food text, not a missing one — 'eggs' alone would miss
+// a singular food name like "Egg Curry".
 const VEGAN_ADDITIONAL_VIOLATION_TERMS = [
-  'egg', 'milk', 'cheese', 'yogurt', 'yoghurt', 'butter', 'cream', 'honey',
-  'whey', 'casein', 'ghee', 'paneer',
+  'egg', ...ALLERGEN_CROSS_REACTIVITY.egg,
+  ...ALLERGEN_CROSS_REACTIVITY.dairy,
+  'honey',
 ];
 
+// Pescatarian excludes land-animal meat only; fish, shellfish, dairy, and
+// eggs all stay.
+const PESCATARIAN_VIOLATION_TERMS = MEAT_VIOLATION_TERMS;
+
+// Paleo excludes grains, legumes (incl. peanut and soy), and dairy.
+const PALEO_VIOLATION_TERMS = [
+  'wheat', 'gluten', 'flour', 'bread', 'pasta', 'rice', 'oat', 'oats',
+  'barley', 'rye', 'corn', 'cereal', 'quinoa', 'semolina',
+  'bean', 'beans', 'lentil', 'lentils', 'chickpea', 'chickpeas', 'hummus',
+  ...ALLERGEN_CROSS_REACTIVITY.soy,
+  ...ALLERGEN_CROSS_REACTIVITY.peanut,
+  ...ALLERGEN_CROSS_REACTIVITY.dairy,
+];
+
+// Gluten-free excludes wheat/gluten and derivatives — the exact term set the
+// allergen system already maintains for wheat allergies (union of the
+// 'wheat' and 'gluten' cross-reactivity entries cross-references both terms
+// into the combined list, so both 'wheat' and 'gluten' end up covered as
+// literal terms without needing to be added separately).
+const GLUTEN_FREE_VIOLATION_TERMS = [
+  ...ALLERGEN_CROSS_REACTIVITY.wheat,
+  ...ALLERGEN_CROSS_REACTIVITY.gluten,
+];
+
+// Diets checked by term match against food name + ingredients.
+const TERM_BASED_DIETS = {
+  vegetarian: VEGETARIAN_VIOLATION_TERMS,
+  vegan: [...VEGETARIAN_VIOLATION_TERMS, ...VEGAN_ADDITIONAL_VIOLATION_TERMS],
+  pescatarian: PESCATARIAN_VIOLATION_TERMS,
+  paleo: PALEO_VIOLATION_TERMS,
+  gluten_free: GLUTEN_FREE_VIOLATION_TERMS,
+};
+
 // A single recommended item above this carb count has consumed most or all
-// of a typical <20g/day keto carb budget by itself — conservative on purpose,
-// since under-flagging defeats the point but over-flagging only costs one
-// suggestion, not a health outcome the way an allergen false-negative would.
-const KETO_MAX_CARBS_G = 20;
+// of a typical daily carb budget for that diet by itself — conservative on
+// purpose, since under-flagging defeats the point but over-flagging only
+// costs one suggestion, not a health outcome the way an allergen
+// false-negative would.
+const CARB_THRESHOLD_DIETS = {
+  keto: 20,
+  low_carb: 60,
+};
 
 /**
  * Whether a food violates a declared diet preference.
  *
  * Unlike detectAllergenRisk, a false positive here is low-cost (one hidden
  * suggestion) rather than unsafe, so this stays intentionally simple: no
- * cross-reactivity expansion, no hidden-dish table. Ingredient text is
- * checked the same way allergens are, via the same hasTerm() so plural food
- * names ("Eggs Benedict") are not missed the way the pre-fix allergen
- * matcher missed them.
+ * hidden-dish table. Ingredient text is checked the same way allergens are,
+ * via the same hasTerm() so plural food names ("Eggs Benedict") are not
+ * missed the way the pre-fix allergen matcher missed them.
  *
  * @param {string|object} food - food name, or object with name/ingredients/nutrition
- * @param {string[]} diets - declared preferences, e.g. ['vegan', 'keto']
+ * @param {string[]} diets - declared preferences, e.g. ['vegan', 'gluten_free']
  * @returns {{violates: boolean, violatedDiets: string[]}}
  */
 export function detectDietViolation(food, diets = []) {
   const declared = (diets || []).map((d) => String(d).toLowerCase().trim()).filter(Boolean);
   if (declared.length === 0) return { violates: false, violatedDiets: [] };
 
-  const foodName = typeof food === 'string' ? food : (food?.name || food?.foodName || '');
-  const textParts = [foodName];
-  const ingredients = typeof food === 'object' && food
-    ? (food.ingredients || food.keyIngredients || food.ingredientsBreakdown || [])
-    : [];
-  for (const ingredient of ingredients) {
-    if (typeof ingredient === 'string') textParts.push(ingredient);
-    else if (ingredient?.name) textParts.push(ingredient.name);
-  }
-  const searchableText = textParts.join(' ').toLowerCase();
+  const searchableText = buildSearchableText(food);
 
   const violatedDiets = [];
 
-  if (declared.includes('vegetarian') || declared.includes('vegan')) {
-    if (VEGETARIAN_VIOLATION_TERMS.some((term) => hasTerm(searchableText, term))) {
-      if (declared.includes('vegetarian')) violatedDiets.push('vegetarian');
-      if (declared.includes('vegan')) violatedDiets.push('vegan');
-    }
-  }
-  if (declared.includes('vegan') && !violatedDiets.includes('vegan')) {
-    if (VEGAN_ADDITIONAL_VIOLATION_TERMS.some((term) => hasTerm(searchableText, term))) {
-      violatedDiets.push('vegan');
+  for (const [diet, terms] of Object.entries(TERM_BASED_DIETS)) {
+    if (!declared.includes(diet)) continue;
+    if (terms.some((term) => matchesTerm(searchableText, term))) {
+      violatedDiets.push(diet);
     }
   }
 
-  if (declared.includes('keto')) {
-    const carbs = typeof food === 'object' && food
-      ? (food.nutrition?.carbs ?? food.carbs ?? food.carbs_g)
-      : undefined;
-    if (typeof carbs === 'number' && carbs > KETO_MAX_CARBS_G) {
-      violatedDiets.push('keto');
+  const carbs = typeof food === 'object' && food
+    ? (food.nutrition?.carbs ?? food.carbs ?? food.carbs_g)
+    : undefined;
+  if (typeof carbs === 'number') {
+    for (const [diet, maxCarbs] of Object.entries(CARB_THRESHOLD_DIETS)) {
+      if (declared.includes(diet) && carbs > maxCarbs) {
+        violatedDiets.push(diet);
+      }
     }
   }
 

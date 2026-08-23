@@ -9,7 +9,7 @@
  * a future refactor can't silently change scoring weights without a test
  * failing.
  */
-import { scoreCandidate } from '../src/services/candidateGenerationService.js';
+import { scoreCandidate, filterCatalogueByMealType } from '../src/services/candidateGenerationService.js';
 
 const baseFood = (overrides = {}) => ({
   name: 'Grilled Chicken Breast',
@@ -110,6 +110,42 @@ describe('scoreCandidate — variety and rejection penalties', () => {
     // More rejections -> lower (or equal, once clamped at 0) score.
     expect(score(2)).toBeGreaterThanOrEqual(score(3));
     expect(score(3)).toBeGreaterThanOrEqual(score(4));
+  });
+});
+
+describe('filterCatalogueByMealType', () => {
+  // Regression: this used to be an unfiltered pass-through despite a
+  // comment above it claiming otherwise — a breakfast-only catalogue item
+  // could surface as a dinner recommendation with only scoreCandidate()'s
+  // +10 soft bonus working against it, not nearly enough on its own.
+  const catalogue = [
+    { name: 'Oatmeal', mealTypes: ['breakfast'] },
+    { name: 'Grilled Chicken Breast', mealTypes: ['lunch', 'dinner'] },
+    { name: 'Everything Bar', mealTypes: ['breakfast', 'lunch', 'dinner', 'snack'] },
+    { name: 'No Meal Type Data' }, // no mealTypes at all — nothing to check against
+  ];
+
+  it('excludes a breakfast-only item from a dinner request', () => {
+    const result = filterCatalogueByMealType(catalogue, 'dinner');
+    expect(result.find((f) => f.name === 'Oatmeal')).toBeUndefined();
+    expect(result.find((f) => f.name === 'Grilled Chicken Breast')).toBeDefined();
+  });
+
+  it('excludes a lunch/dinner item from a breakfast request', () => {
+    const result = filterCatalogueByMealType(catalogue, 'breakfast');
+    expect(result.find((f) => f.name === 'Grilled Chicken Breast')).toBeUndefined();
+    expect(result.find((f) => f.name === 'Oatmeal')).toBeDefined();
+  });
+
+  it('keeps an any-time item for every meal type', () => {
+    for (const mealType of ['breakfast', 'lunch', 'dinner', 'snack']) {
+      expect(filterCatalogueByMealType(catalogue, mealType).find((f) => f.name === 'Everything Bar')).toBeDefined();
+    }
+  });
+
+  it('exempts an item with no mealTypes data rather than dropping it', () => {
+    const result = filterCatalogueByMealType(catalogue, 'dinner');
+    expect(result.find((f) => f.name === 'No Meal Type Data')).toBeDefined();
   });
 });
 

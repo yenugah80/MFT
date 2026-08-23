@@ -35,13 +35,17 @@ function neverAsked() {
 }
 
 describe("visibility — only for accounts genuinely never asked", () => {
+  // Default 5000ms times out under full-suite parallel load (passes
+  // instantly in isolation) — this component's mount does a real async
+  // effect chain (AsyncStorage read → API call → state update → render),
+  // which is legitimately slower than a single-render test, not broken.
   test("shows when not seen locally and the server reports hasBeenAsked: false", async () => {
     neverAsked();
     render(<AIConsentPrompt />);
 
     await waitFor(() => expect(screen.getByText("Turn On Smart Analysis")).toBeOnTheScreen());
     expect(apiClient.get).toHaveBeenCalledWith("/consent/status");
-  });
+  }, 15000);
 
   test("stays hidden when already seen on this device — never even calls the server", async () => {
     getItem.mockResolvedValueOnce(true);

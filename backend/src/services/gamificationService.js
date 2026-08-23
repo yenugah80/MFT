@@ -5,6 +5,17 @@
  * - Streak freezes: Earned every 7 days, can restore broken streaks
  * - 24-hour restoration window after streak loss
  * - Transaction-protected operations
+ *
+ * Fixed 2026-08-21: `tx.execute(sql\`...\`)` returns the row array directly
+ * on this project's postgres-js driver, not `{ rows: [...] }` (see the
+ * shape note on `db` in config/db.js). This file read `.rows?.[0]`
+ * everywhere, so `userData` was always undefined and every function below
+ * silently short-circuited on its own "no data" branch — awarding a freeze,
+ * consuming one, and restoring a streak (POST /gamification/check-streak
+ * and /restore-streak) all failed on every real call, not just some. This
+ * file was missed by the 2026-08-16 sweep that fixed the same bug in
+ * `gamificationRewardService.js` and 14 other files — different file,
+ * easy to mistake for already-covered by name alone.
  */
 
 import { db } from "../config/db.js";
@@ -37,7 +48,7 @@ export async function checkAndAwardStreakFreeze(userId, currentStreak) {
           FOR UPDATE
         `;
         const lockedRows = await tx.execute(lockQuery);
-        const userData = lockedRows.rows?.[0];
+        const userData = lockedRows?.[0];
 
         if (!userData) return { awarded: false, reason: 'no_user_data' };
 
@@ -104,7 +115,7 @@ export async function consumeStreakFreeze(userId) {
         FOR UPDATE
       `;
       const lockedRows = await tx.execute(lockQuery);
-      const userData = lockedRows.rows?.[0];
+      const userData = lockedRows?.[0];
 
       if (!userData) return { consumed: false, reason: 'no_user_data' };
 
@@ -164,7 +175,7 @@ export async function restoreStreak(userId) {
         FOR UPDATE
       `;
       const lockedRows = await tx.execute(lockQuery);
-      const userData = lockedRows.rows?.[0];
+      const userData = lockedRows?.[0];
 
       if (!userData) {
         return {

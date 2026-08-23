@@ -85,6 +85,8 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
     fetchRecommendations,
     quickLog,
     hasRecommendations: hasSmartRecs,
+    blocked: smartRecsBlocked,
+    blockedReason: smartRecsBlockedReason,
   } = useSmartRecommendations({ enabled: showSmartRecs });
 
   // Handle pull-to-refresh — refreshing state is owned by the parent screen
@@ -341,6 +343,13 @@ export default function NutritionTab({ data, period, recommendations = [], onRef
             <View style={styles.smartRecsContent}>
               {smartLoading ? (
                 <SmartRecommendationsLoadingSkeleton cardCount={3} />
+              ) : smartRecsBlocked ? (
+                <View style={styles.smartRecsEmpty}>
+                  <Ionicons name="shield-outline" size={32} color={TEXT.tertiary} />
+                  <Text style={styles.smartRecsEmptyText}>
+                    {smartRecsBlockedReason || "Couldn't verify dietary safety right now — try again shortly"}
+                  </Text>
+                </View>
               ) : hasSmartRecs ? (
                 <>
                   {summary && (

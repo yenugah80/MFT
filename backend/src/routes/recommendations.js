@@ -30,6 +30,7 @@ import { getUserLaggedCorrelations } from '../services/laggedCorrelationService.
 import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens, detectDietViolation } from '../services/foodKnowledgeGraphService.js';
 import { invalidateCFCache } from '../services/collaborativeFilteringService.js';
 import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { buildNutritionalGaps, getDeterministicReason } from '../services/recommendationReasoning.js';
 
 const router = express.Router();
 
@@ -224,13 +225,7 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
         const recentFoodNames = (history.preferredFoods ?? []).concat(
           (dashboardResult.today?.nutrition?.recentFoods ?? []).map((f) => f.foodName ?? f)
         );
-        const nutritionalGaps = {
-          calories: { remaining: remainingBudget.calories },
-          protein:  { status: remainingBudget.protein  < 30  ? 'low' : 'ok', remaining: remainingBudget.protein },
-          carbs:    { status: remainingBudget.carbs    < 50  ? 'low' : 'ok', remaining: remainingBudget.carbs },
-          fats:     { status: remainingBudget.fats     < 15  ? 'low' : 'ok', remaining: remainingBudget.fats },
-          fiber:    { status: 'unknown' },
-        };
+        const nutritionalGaps = buildNutritionalGaps(remainingBudget);
 
         const enrichedSignals = {
           ...userSignals,
@@ -908,18 +903,24 @@ function improvedAllergenCheck(food, allergies) {
 }
 
 /**
- * Diet-preference counterpart to improvedAllergenCheck, for the same
- * "final filter after generation" call sites. Accepts preferences as either
+ * Normalise declared diet preferences to a flat array of ids. Accepts either
  * bare strings or {id} objects — profile.dietary.preferences is stored as
  * the latter (see dietaryPreferenceIds elsewhere in this file), while the
- * dietary_preferences table itself stores bare strings, so this normalises
- * rather than assuming the caller already did.
+ * dietary_preferences table itself stores bare strings, so every call site
+ * needs this rather than assuming the caller already normalised.
  */
-function violatesDietPreference(food, preferences) {
-  const dietIds = (preferences || [])
+function normalizeDietIds(preferences) {
+  return (preferences || [])
     .map((p) => (typeof p === 'string' ? p : p?.id))
     .filter(Boolean);
-  return detectDietViolation(food, dietIds).violates;
+}
+
+/**
+ * Diet-preference counterpart to improvedAllergenCheck, for the same
+ * "final filter after generation" call sites.
+ */
+function violatesDietPreference(food, preferences) {
+  return detectDietViolation(food, normalizeDietIds(preferences)).violates;
 }
 
 /**
@@ -1062,14 +1063,13 @@ function validateRecommendation(rec, remainingBudget, allergies, dietaryPrefs, m
   // 5️⃣ Diet compliance — actually checked, not trusted from the model.
   // The `dietaryPrefs` param existed here unused; rec.dietCompliant is the
   // LLM self-reporting on its own suggestion, which is prompt-obedience, not
-  // verification. Items are objects with .id (dietaryPreferenceIds elsewhere
-  // in this file uses the same shape) or bare strings — accept both so this
-  // doesn't silently no-op if the caller passes either.
-  const dietIds = (dietaryPrefs || [])
-    .map((p) => (typeof p === 'string' ? p : p?.id))
-    .filter(Boolean);
+  // verification.
+  const dietIds = normalizeDietIds(dietaryPrefs);
   if (dietIds.length > 0) {
-    const dietCheck = detectDietViolation({ name: rec.foodName, carbs: rec.carbs }, dietIds);
+    // Pass the full rec, not just {name, carbs} — detectDietViolation also
+    // reads .keyIngredients, and a name like "Hearty Grain Bowl" alone won't
+    // reveal a non-compliant ingredient the model itself listed separately.
+    const dietCheck = detectDietViolation(rec, dietIds);
     if (dietCheck.violates) {
       errors.push(`Violates declared diet preference: ${dietCheck.violatedDiets.join(', ')}`);
     } else {
@@ -1959,7 +1959,7 @@ function buildDeterministicRecommendationsFromCandidates(candidates, recType, me
         message: 'Screened against allergens and hidden allergen dishes',
         confidence: candidate.allergenRisk?.confidence ?? 0.95,
       },
-      reason: `${candidate.name} ranked highly for your current ${mealType} context and remaining nutrition budget.`,
+      reason: getDeterministicReason(candidate, mealType, remainingBudget),
       tips: 'Use the listed portion as the nutrition baseline and adjust only after logging the actual amount.',
       mealType,
       recType,
@@ -2718,11 +2718,25 @@ router.post('/pairings', requireAuth(), async (req, res) => {
       calories: Math.max(num(goalsRow?.dailyCalories) - num(macros.consumedCalories_kcal) - num(macros.calories_kcal), 0),
     };
 
+    // scoreCandidate() (candidateGenerationService.js) reads nutritionalGaps
+    // as { calories: { remaining }, protein: { status }, fiber: { status } }
+    // — passing `gaps` directly (plain numbers) made every `.status`/
+    // `.remaining` read undefined, so this endpoint never got the
+    // protein/fiber gap-closing bonus and always fell back to a flat
+    // 2000kcal "remaining budget" regardless of this user's real goal.
+    // `gaps` itself stays plain numbers for the closesProtein/closesFiber
+    // math below, which already expects that shape.
+    const nutritionalGapsForScoring = {
+      calories: { remaining: gaps.calories },
+      protein: { status: gaps.protein > 0 ? 'low' : 'ok', remaining: gaps.protein },
+      fiber: { status: gaps.fiber > 0 ? 'low' : 'ok', remaining: gaps.fiber },
+    };
+
     const candidates = await generateCandidates(userId, {
       signals: {
         allergies,
         cuisinePreference: Array.isArray(profileRow?.cuisinePreference) ? profileRow.cuisinePreference[0] : null,
-        nutritionalGaps: gaps,
+        nutritionalGaps: nutritionalGapsForScoring,
         mealType,
       },
       profile: {

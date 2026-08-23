@@ -24,7 +24,7 @@ import {
 import { eq, and, gte, desc, sql, inArray } from 'drizzle-orm';
 import { getUserSignals } from './userSignalCacheService.js';
 import { computeWindowedFoodMoodCorrelations } from './moodSignalService.js';
-import { detectAllergenRisk } from './foodKnowledgeGraphService.js';
+import { detectAllergenRisk, detectDietViolation } from './foodKnowledgeGraphService.js';
 
 // ============================================
 // NUTRITIONAL KNOWLEDGE BASE
@@ -51,7 +51,7 @@ const DAILY_VALUES = {
 };
 
 // Smart food database with rich nutritional data
-const SMART_FOODS = [
+export const SMART_FOODS = [
   // HIGH PROTEIN OPTIONS
   {
     id: 'grilled_chicken_breast',
@@ -235,6 +235,9 @@ const SMART_FOODS = [
     mealTypes: ['breakfast', 'lunch', 'snack'],
     nutrition: { calories: 280, protein: 7, carbs: 25, fat: 18, fiber: 8 },
     micros: { potassium: 500, vitaminE: 3, magnesium: 40, vitaminC: 10 },
+    // 'toast' alone doesn't contain an allergen term the checker recognizes —
+    // ingredients are what actually let detectAllergenRisk catch the wheat.
+    ingredients: ['avocado', 'whole grain bread', 'olive oil', 'lemon juice'],
     tags: ['healthy-fats', 'fiber-rich', 'heart-healthy', 'trendy'],
     excludedDiets: ['keto'],
     prepTime: 5,
@@ -387,6 +390,9 @@ const SMART_FOODS = [
     mealTypes: ['lunch', 'dinner'],
     nutrition: { calories: 350, protein: 20, carbs: 30, fat: 15, fiber: 6 },
     micros: { calcium: 200, iron: 4, vitaminC: 40, potassium: 400 },
+    // Sesame oil is a real, common ingredient in a soy-sauce stir fry that
+    // the food name alone gives no signal of.
+    ingredients: ['tofu', 'soy sauce', 'sesame oil', 'mixed vegetables'],
     tags: ['plant-based', 'balanced', 'quick', 'asian-inspired'],
     excludedDiets: ['keto'],
     prepTime: 20,
@@ -401,6 +407,12 @@ const SMART_FOODS = [
     mealTypes: ['lunch', 'dinner'],
     nutrition: { calories: 480, protein: 18, carbs: 50, fat: 22, fiber: 8 },
     micros: { vitaminA: 200, vitaminC: 35, iron: 3, calcium: 100, potassium: 450 },
+    // Feta (dairy), pita (wheat), and tahini (sesame, via the hummus) are
+    // all hidden behind the generic "Mediterranean Bowl" name. 'tahini' is
+    // named explicitly rather than just 'hummus' — detectAllergenRisk's
+    // hidden-dish table only searches the food's NAME, not its ingredients,
+    // so 'hummus' alone here would not actually surface the sesame risk.
+    ingredients: ['mixed greens', 'hummus', 'tahini', 'feta cheese', 'whole wheat pita', 'olives', 'cucumber'],
     tags: ['balanced', 'heart-healthy', 'fiber-rich', 'mediterranean'],
     excludedDiets: ['vegan', 'keto'],
     prepTime: 15,
@@ -782,7 +794,22 @@ export async function getSmartRecommendations(userId, options = {}) {
   // apart from a missing row alone, so treat "we don't know" as "assume the
   // worst" and serve nothing rather than guess safe.
   if (dietaryResult === null) {
-    return { recommendations: [], context: { mealType, reasoning: 'Unable to verify dietary safety right now.' } };
+    // Same field set as the success return below (nulled out where there's
+    // nothing to report), plus blocked/reasoning — so this can't be mistaken
+    // for "no good matches today" by a consumer destructuring either shape,
+    // and a client that wants to explain why can actually find out.
+    return {
+      success: false,
+      blocked: true,
+      reasoning: 'Unable to verify dietary safety right now — please try again shortly.',
+      mealType,
+      currentHour: new Date().getHours(),
+      recommendations: [],
+      summary: null,
+      nutritionalStatus: null,
+      userContext: null,
+      meta: { generatedAt: new Date().toISOString(), foodsAnalyzed: 0, historyDays: 14 },
+    };
   }
 
   const dietaryRow = dietaryResult[0];
@@ -792,9 +819,20 @@ export async function getSmartRecommendations(userId, options = {}) {
       .map((p) => String(p).toLowerCase().trim())
   );
 
+  // Two diet signals, deliberately both kept: `excludedDiets` is a
+  // hand-curated list per catalogue item (and is sometimes intentionally
+  // stricter than a generic checker — e.g. excluding a 17g-carb fruit bowl
+  // from keto suggestions even though it's under the generic threshold).
+  // But it was only ever curated against vegan/vegetarian/keto, so on its
+  // own it silently applies zero filtering for a pescatarian, paleo,
+  // gluten_free, or low_carb user. detectDietViolation covers all of those,
+  // so running both and failing closed on either catches what the other
+  // one misses.
+  const declaredDietIds = [...excludedDietsDeclared];
   const safeFoods = SMART_FOODS.filter((food) => {
     if (allergies.length > 0 && detectAllergenRisk(food, allergies).hasRisk) return false;
     if (food.excludedDiets?.some((diet) => excludedDietsDeclared.has(diet))) return false;
+    if (declaredDietIds.length > 0 && detectDietViolation(food, declaredDietIds).violates) return false;
     return true;
   });
 

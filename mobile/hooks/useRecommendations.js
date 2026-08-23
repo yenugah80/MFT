@@ -452,6 +452,13 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
     // Current meal type (auto-detected or forced)
     mealType: data?.mealType || mealType,
 
+    // True when the backend deliberately withheld recommendations because it
+    // couldn't verify allergen/diet safety (a DB lookup failure, not "no
+    // good matches") — distinct from isEmpty so the UI can explain why
+    // instead of showing the generic "log some meals" empty state.
+    blocked: data?.blocked === true,
+    blockedReason: data?.blocked === true ? data?.reasoning || null : null,
+
     // Loading states
     loading,
     isFetching,
@@ -465,7 +472,7 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
 
     // Derived
     hasRecommendations: (data?.recommendations?.length || 0) > 0,
-    isEmpty: !loading && (data?.recommendations?.length || 0) === 0,
+    isEmpty: !loading && data?.blocked !== true && (data?.recommendations?.length || 0) === 0,
     topPriorities: data?.nutritionalStatus?.priorities || [],
   };
 }
