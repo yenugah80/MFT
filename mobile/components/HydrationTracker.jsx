@@ -1725,31 +1725,6 @@ export default function HydrationTracker({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <LinearGradient
-          colors={SURFACES.gradient.blue}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
-        >
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <View style={styles.headerIconContainer}>
-                <Ionicons name="water" size={ICON_SIZES.xl} color={TEXT.white} />
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>Hydration HQ</Text>
-                <Text style={styles.headerSubtitle}>Where champions refuel 💧</Text>
-              </View>
-            </View>
-            {goalReached && (
-              <View style={styles.goalBadge}>
-                <Ionicons name="trophy" size={20} color={SEMANTIC.warning.base} />
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-
         {/* Main Visualization */}
         <View style={styles.visualizationCard}>
           <View style={styles.progressContainer}>
@@ -2009,63 +1984,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING[4],
+    padding: SPACING[3],
     paddingBottom: SPACING[8],
-  },
-
-  // Header
-  headerCard: {
-    borderRadius: RADIUS.xl,
-    padding: SPACING[5],
-    marginBottom: SPACING[4],
-    ...SHADOWS.info,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  headerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.md,
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.white,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: SPACING[1],
-  },
-  goalBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: RADIUS.full,
-    backgroundColor: SEMANTIC.warning.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.warning,
   },
 
   // Visualization
   visualizationCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[6],
+    padding: SPACING[4],
     marginBottom: SPACING[4],
     alignItems: 'center',
     ...SHADOWS.lg,
@@ -2074,9 +2001,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING[6],
-    width: 220,
-    height: 220,
+    marginBottom: SPACING[4],
+    width: 208,
+    height: 208,
   },
   ringWrapper: {
     position: 'absolute',
