@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
-export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStressPress, onHistoryPress, logCount }) => {
+export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStressPress }) => {
   return (
     <View style={styles.quickActionsBar}>
       <TouchableOpacity
@@ -49,17 +49,6 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStr
         <Ionicons name="pulse-outline" size={20} color={BRAND.primary} />
         <Text style={styles.quickActionText} numberOfLines={1}>Stress</Text>
       </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.quickActionChip}
-        onPress={onHistoryPress}
-        activeOpacity={0.7}
-        accessibilityLabel="Open logged meals history"
-      >
-        <Ionicons name="flame-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
-        <Text style={styles.quickActionValue} numberOfLines={1}>{logCount || 0}</Text>
-        <Text style={styles.quickActionLabel} numberOfLines={1}>logged</Text>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -90,15 +79,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-  },
-  quickActionValue: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: SEMANTIC_ACTIONS.primary,
-  },
-  quickActionLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
   },
 });

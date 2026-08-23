@@ -1139,6 +1139,15 @@ export default function LogScreen() {
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
 
+  // Server truth (today's distinct MEALS, not food_log rows — a 3-item meal
+  // is one meal, see utils/mealGrouping.js), not the local offline-sync
+  // queue — that queue only ever grows when a meal is logged through this
+  // app on this device, so a fresh install or a meal logged another way
+  // (voice, another device) always read as 0 there even with a rich real
+  // history. Falls back to a client-computed grouped count only while
+  // dashboardData hasn't loaded yet (e.g. offline).
+  const logCount = dashboardData?.today?.mealCount ?? countDistinctMeals(foodLog.logs);
+
   // P0-4 FIX: Wrap entire screen with ErrorBoundary to prevent data loss
   return (
     <AnimatedMeshGradient
@@ -1186,9 +1195,16 @@ export default function LogScreen() {
           <TouchableOpacity
             style={styles.historyButton}
             onPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
-            accessibilityLabel="Open food history"
+            accessibilityLabel={`Open food history, ${logCount} meals logged today`}
           >
             <Ionicons name="time-outline" size={24} color="#FFFFFF" />
+            {logCount > 0 && (
+              <View style={styles.mealCountBadge}>
+                <Text style={styles.mealCountBadgeText}>
+                  {logCount > 9 ? '9+' : logCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1210,16 +1226,6 @@ export default function LogScreen() {
             closeAllModals();
             setShowStressModal(true);
           }}
-          onHistoryPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
-          // Server truth (today's distinct MEALS, not food_log rows — a
-          // 3-item meal is one meal, see utils/mealGrouping.js), not the
-          // local offline-sync queue — that queue only ever grows when a
-          // meal is logged through this app on this device, so a fresh
-          // install or a meal logged another way (voice, another device)
-          // always read as 0 there even with a rich real history. Falls
-          // back to a client-computed grouped count only while
-          // dashboardData hasn't loaded yet (e.g. offline).
-          logCount={dashboardData?.today?.mealCount ?? countDistinctMeals(foodLog.logs)}
         />
       </LinearGradient>
 
@@ -1785,6 +1791,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  // Same badge pattern as the dashboard's notification bell
+  // (MinimalDashboardHeader.jsx) — reused here rather than a distinct new
+  // style, plus SEMANTIC_ACTIONS.primary (warm orange) instead of that
+  // badge's red, matching the flame/streak color this "meals logged" count
+  // used before it was a standalone pill.
+  mealCountBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: SEMANTIC_ACTIONS.primary,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  mealCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   /* Scroll View */
