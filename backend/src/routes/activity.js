@@ -30,7 +30,7 @@ import {
 import activityAnalyticsService from '../services/activityAnalyticsService.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
-import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
+import { parseTimezoneOffsetMinutes, getDayKey, getLocalWeekRange } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import { ensureActivityLogTableShape, ensureRecoverySnapshotsTable } from '../utils/schemaGuards.js';
@@ -258,9 +258,7 @@ router.get('/today', async (req, res) => {
     const summary = getActivitySummary(activities);
 
     // Get weekly progress
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
-    weekStart.setHours(0, 0, 0, 0);
+    const { start: weekStart } = getLocalWeekRange(offsetMinutes);
 
     const weeklyActivities = await db
       .select({
@@ -277,6 +275,22 @@ router.get('/today', async (req, res) => {
     const weeklyMinutes = parseInt(weeklyActivities[0]?.totalMinutes) || 0;
     const weeklyProgress = getWeeklyProgress(weeklyMinutes);
 
+    // Domain streak, not the account-wide gamification streak. dayKey is
+    // written in the user's local timezone when each activity is logged.
+    const activityDays = await db
+      .selectDistinct({ dayKey: activityLogTable.dayKey })
+      .from(activityLogTable)
+      .where(eq(activityLogTable.userId, userId))
+      .orderBy(desc(activityLogTable.dayKey));
+    const loggedDays = new Set(activityDays.map((row) => row.dayKey).filter(Boolean));
+    const cursor = new Date(`${today}T00:00:00.000Z`);
+    if (!loggedDays.has(today)) cursor.setUTCDate(cursor.getUTCDate() - 1);
+    let currentActivityStreak = 0;
+    while (loggedDays.has(cursor.toISOString().slice(0, 10))) {
+      currentActivityStreak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+
     res.json({
       success: true,
       today: {
@@ -285,6 +299,7 @@ router.get('/today', async (req, res) => {
       },
       activities,
       weeklyProgress,
+      streak: { current: currentActivityStreak },
     });
   } catch (error) {
     console.error('[Activity] GET /today error:', error);
@@ -772,8 +787,9 @@ function getFallbackInsights(patterns) {
 router.get('/intelligence', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
 
-    const intelligence = await getActivityIntelligence(userId);
+    const intelligence = await getActivityIntelligence(userId, offsetMinutes);
 
     if (intelligence.error) {
       return res.status(500).json({ error: intelligence.error });
@@ -784,7 +800,6 @@ router.get('/intelligence', async (req, res) => {
     if (Number.isFinite(intelligence.recovery?.score)) {
       try {
         await ensureRecoverySnapshotsTable();
-        const offsetMinutes = parseTimezoneOffsetMinutes(req);
         const dayKey = getDayKey(new Date(), offsetMinutes);
         const countedWeight = intelligence.recovery.coverage
           ? intelligence.recovery.coverage.countedWeight / 100

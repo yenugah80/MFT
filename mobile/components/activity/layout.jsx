@@ -143,6 +143,7 @@ export function CollapsibleSection({
   defaultOpen = false,
   open: openProp,
   onToggle,
+  embedded = false,
   children,
 }) {
   const [openState, setOpenState] = useState(defaultOpen);
@@ -160,11 +161,16 @@ export function CollapsibleSection({
   }, [isControlled, onToggle, openProp]);
 
   return (
-    <View style={styles.collapsible}>
+    <View style={[styles.collapsible, embedded && styles.collapsibleEmbedded]}>
       <TouchableOpacity
         onPress={toggle}
         activeOpacity={0.8}
-        style={[styles.collapsibleHeader, open && styles.collapsibleHeaderOpen]}
+        style={[
+          styles.collapsibleHeader,
+          embedded && styles.collapsibleHeaderEmbedded,
+          open && styles.collapsibleHeaderOpen,
+          open && embedded && styles.collapsibleHeaderEmbeddedOpen,
+        ]}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         accessibilityLabel={`${title}, ${open ? 'expanded' : 'collapsed'}`}
@@ -198,6 +204,12 @@ const styles = StyleSheet.create({
   collapsible: {
     marginBottom: SPACING[3],
   },
+  collapsibleEmbedded: {
+    marginTop: SPACING[3],
+    marginBottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
+  },
   // A tappable row deserves to look tappable: a card, not text on background
   collapsibleHeader: {
     flexDirection: 'row',
@@ -212,6 +224,18 @@ const styles = StyleSheet.create({
   collapsibleHeaderOpen: {
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    marginBottom: SPACING[2],
+  },
+  collapsibleHeaderEmbedded: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  collapsibleHeaderEmbeddedOpen: {
     marginBottom: SPACING[2],
   },
   collapsibleChip: {

@@ -5,12 +5,22 @@ const React = require("react");
 const mockRouter = {
   replace: jest.fn(),
   push: jest.fn(),
+  setParams: jest.fn(),
   back: jest.fn(),
   canGoBack: jest.fn(() => false),
 };
+let mockSearchParams = {};
 
 function useRouter() {
   return mockRouter;
+}
+
+function useLocalSearchParams() {
+  return mockSearchParams;
+}
+
+function setMockSearchParams(nextParams = {}) {
+  mockSearchParams = nextParams;
 }
 
 // Real useFocusEffect (react-navigation) re-runs the callback on every
@@ -25,4 +35,4 @@ function useFocusEffect(callback) {
   }, []);
 }
 
-module.exports = { useRouter, useFocusEffect, mockRouter };
+module.exports = { useRouter, useLocalSearchParams, useFocusEffect, mockRouter, setMockSearchParams };

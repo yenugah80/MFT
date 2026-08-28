@@ -155,24 +155,32 @@ export default function SleepSummaryCard({ compact = true }) {
           {/* Action Buttons */}
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, styles.secondaryActionButton]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/history/sleep');
+              }}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open sleep history"
+              accessibilityHint="Shows your previous sleep records"
+            >
+              <Ionicons name="time-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
+              <Text style={[styles.actionButtonText, styles.secondaryActionText]} numberOfLines={1}>History</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.primaryActionButton]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/insights/sleep-analytics');
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open sleep insights"
+              accessibilityHint="Shows trends and patterns from your sleep records"
             >
-              <Ionicons name="analytics-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
-              <Text style={styles.actionButtonText}>Insights</Text>
-              <Ionicons name="chevron-forward" size={12} color={TEXT.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleLogSleep}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
-              <Text style={styles.actionButtonText}>Log</Text>
+              <Ionicons name="analytics" size={14} color={SURFACES.card.primary} />
+              <Text style={[styles.actionButtonText, styles.primaryActionText]} numberOfLines={1}>Insights</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -294,7 +302,7 @@ const styles = StyleSheet.create({
   // Action Buttons
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: SPACING[2],
+    gap: 6,
     marginTop: SPACING[3],
   },
   actionButton: {
@@ -302,19 +310,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING[1],
-    backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}10`,
+    gap: 4,
+    minHeight: 44,
     paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[2],
-    borderRadius: RADIUS.md,
+    paddingHorizontal: 6,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
+  },
+  secondaryActionButton: {
+    backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}0A`,
     borderColor: `${VIBRANT_WELLNESS.sleep.solid}20`,
   },
+  primaryActionButton: {
+    backgroundColor: VIBRANT_WELLNESS.sleep.solid,
+    borderColor: VIBRANT_WELLNESS.sleep.solid,
+    shadowColor: VIBRANT_WELLNESS.sleep.solid,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   actionButtonText: {
-    flex: 1,
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
+  },
+  secondaryActionText: {
+    color: VIBRANT_WELLNESS.sleep.solid,
+  },
+  primaryActionText: {
+    color: SURFACES.card.primary,
   },
 });

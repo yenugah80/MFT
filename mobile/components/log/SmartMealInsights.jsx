@@ -753,7 +753,9 @@ const generateDailyContext = (meal, userGoals, dailyTotals) => {
     ? Math.round((newTotalProtein / userGoals.proteinG) * 100)
     : null;
 
-  const remainingCalories = Math.max(0, userGoals.dailyCalories - newTotalCalories);
+  // Keep this signed so the UI can report the actual amount over target;
+  // clamping to zero made every over-goal state say “0 cal over target”.
+  const remainingCalories = userGoals.dailyCalories - newTotalCalories;
 
   return {
     calories: {
@@ -786,13 +788,15 @@ const detectWeeklyPatterns = (historicalData) => {
   const { weeklyAverage, monthlyTrend, mealTypeAverage } = historicalData;
 
   // Consistency pattern
-  if (weeklyAverage.daysOfData >= 5) {
+  const daysOfData = Math.min(7, Math.max(0, Number(weeklyAverage.daysOfData) || 0));
+
+  if (daysOfData >= 5) {
     patterns.push({
       type: 'positive',
       icon: 'checkmark-circle-outline',
-      message: `Great consistency! Logged ${weeklyAverage.daysOfData} of the last 7 days.`,
+      message: `Great consistency! Logged ${daysOfData} of the last 7 days.`,
     });
-  } else if (weeklyAverage.daysOfData <= 2) {
+  } else if (daysOfData <= 2) {
     patterns.push({
       type: 'info',
       icon: 'calendar-outline',
@@ -890,9 +894,9 @@ const DailyProgressBar = ({ dailyContext }) => {
         />
       </View>
       <Text style={styles.dailyProgressSubtext}>
-        {calories.remaining > 0
-          ? `${calories.remaining} cal remaining today`
-          : `${Math.abs(calories.remaining)} cal over target`}
+        {calories.remaining >= 0
+          ? `${Math.round(calories.remaining)} cal remaining today`
+          : `${Math.round(Math.abs(calories.remaining))} cal over target`}
       </Text>
     </View>
   );

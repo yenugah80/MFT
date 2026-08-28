@@ -1110,23 +1110,25 @@ export default function UnifiedMealAnalysis({
     // If user has modified items, always recalculate from activeItems
     const hasExclusions = excludedItems.size > 0 || excludedIngredients.size > 0;
 
-    if (!hasExclusions && totals && (totals.calories > 0 || totals.calories_kcal > 0)) {
-      // If sodium is missing from totals, try to extract from micros
-      let sodium = totals.sodium || totals.sodium_mg || 0;
-      if (sodium === 0 && totals.micros) {
-        sodium = extractSodiumFromMicros(totals.micros);
-      }
-      return {
-        calories: totals.calories || totals.calories_kcal || 0,
-        protein: totals.protein || totals.protein_g || 0,
-        carbs: totals.carbs || totals.carbs_g || 0,
-        fat: totals.fat || totals.fat_g || 0,
-        fiber: totals.fiber || totals.fiber_g || 0,
-        sugar: totals.sugar || totals.sugar_g || 0,
-        sodium,
-        micros: totals.micros || {},
-      };
-    }
+    // Macros always come from summing the items (below), not from the
+    // top-level `totals` object — resolve.js's own calculateTotals() nests
+    // macros under totals.macros and only sums calories/protein/carbs/fat,
+    // silently dropping fiber/sugar/sodium. The item-level sum below is the
+    // only place those are computed correctly.
+    //
+    // nutriScore/healthScore ARE reliable at the top level regardless
+    // (enrichWithHealthMetrics adds them onto draft.totals directly), so
+    // they're read here independent of the macro source, and only when the
+    // user isn't actively excluding items/ingredients — that's a live-edit
+    // state with no backend round-trip, so it keeps the local estimate
+    // further down instead.
+    const backendScore = !hasExclusions && totals?.nutriScore != null
+      ? {
+          nutriScore: totals.nutriScore,
+          nutriScoreValue: totals.nutriScoreValue ?? null,
+          healthScore: totals.healthScore ?? null,
+        }
+      : { nutriScore: null, nutriScoreValue: null, healthScore: null };
 
     // Calculate from active items only (exclude removed items)
     // Also need original item indices to check excluded ingredients
@@ -1187,26 +1189,38 @@ export default function UnifiedMealAnalysis({
       return acc;
     }, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, micros: {} });
 
-    return result;
+    return { ...result, ...backendScore };
   }, [activeItems, totals, excludedItems, excludedIngredients]);
 
   // Calculate average confidence first (needed for unified scoring)
   const avgConfidence = items.reduce((sum, i) => sum + (i.sourceEvidence?.[0]?.confidence || i.confidence || 0.7), 0) / (items.length || 1);
 
-  // Use unified scoring function (same as MealSummaryScreen) for consistency
-  const mealScore = calculateUnifiedMealScore({
-    macros: {
-      protein_g: calculatedTotals.protein,
-      carbs_g: calculatedTotals.carbs,
-      fat_g: calculatedTotals.fat,
-      fiber_g: calculatedTotals.fiber,
-      sugar_g: calculatedTotals.sugar,
-      calories_kcal: calculatedTotals.calories,
-    },
-    micros: calculatedTotals.micros,
-    confidence: avgConfidence,
-  });
-  const nutriGrade = scoreToNutriGrade(mealScore);
+  const hasExclusions = excludedItems.size > 0 || excludedIngredients.size > 0;
+
+  // Prefer the backend's own healthScore/nutriScore (same values the post-log
+  // confirmation card shows) over a client-side recalculation — this screen
+  // used to compute its own score via a completely different ratio-based
+  // rubric, which could land nowhere near the backend's number for the same
+  // meal (e.g. 98/Excellent here vs C/59 post-log for one real meal). While
+  // the user is actively excluding items/ingredients there's no backend
+  // round-trip for that edited state, so this is the one path that still
+  // computes locally — it's a live preview, not the value that gets saved.
+  const hasBackendScore = !hasExclusions && calculatedTotals.nutriScore != null;
+  const mealScore = hasBackendScore
+    ? calculatedTotals.healthScore
+    : calculateUnifiedMealScore({
+        macros: {
+          protein_g: calculatedTotals.protein,
+          carbs_g: calculatedTotals.carbs,
+          fat_g: calculatedTotals.fat,
+          fiber_g: calculatedTotals.fiber,
+          sugar_g: calculatedTotals.sugar,
+          calories_kcal: calculatedTotals.calories,
+        },
+        micros: calculatedTotals.micros,
+        confidence: avgConfidence,
+      });
+  const nutriGrade = hasBackendScore ? calculatedTotals.nutriScore : scoreToNutriGrade(mealScore);
   const hasHighSodium = calculatedTotals.sodium > 800;
 
   // Extract allergens from all items

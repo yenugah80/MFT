@@ -24,7 +24,7 @@ import {
   recommendationsHistoryTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
-import { getLocalDayRange } from '../utils/timezone.js';
+import { getLocalDayRange, getLocalWeekRange } from '../utils/timezone.js';
 
 // recommendations_history.recommendation_id is globally unique across all
 // users (not per-user), so the 4 static onboarding-nudge ids below
@@ -109,8 +109,9 @@ function determineStage(dataStats) {
  * @param {number} lookbackDays - Window (in days) the caller's UI period covers
  *   ('today'=1, 'week'=7, 'month'=30, ...). Drives the *Period fields below,
  *   which are what the frontend's Week/Month toggle should actually read.
- *   `thisWeek`/`weeklyMinutes`/`avgIntensityThisWeek` stay pinned to a literal
- *   trailing 7 days regardless of this param — they back CDC-guideline
+ *   `thisWeek`/`weeklyMinutes`/`avgIntensityThisWeek` stay pinned to the
+ *   user's current Sunday-Saturday calendar week regardless of this param —
+ *   they back CDC-guideline
  *   messaging and cross-domain scoring that are inherently weekly, not the
  *   period selector, and repointing them would make those messages lie
  *   (e.g. "exceeded 150 min/week" against a 30-day total).
@@ -122,7 +123,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
   // three internal callers that don't have a request/offset to pass keep
   // their existing behavior exactly as before.
   const { start: today } = getLocalDayRange(offsetMinutes, now);
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const { start: weekStart } = getLocalWeekRange(offsetMinutes, now);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const periodStart = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
 
@@ -153,7 +154,7 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
     // Food queries
     db.select({ count: count() }).from(foodLogTable).where(eq(foodLogTable.userId, userId)),
     db.select({ count: count() }).from(foodLogTable).where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, today))),
-    db.select({ count: count() }).from(foodLogTable).where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, weekAgo))),
+    db.select({ count: count() }).from(foodLogTable).where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, weekStart))),
     db.select({ count: count() }).from(foodLogTable).where(and(eq(foodLogTable.userId, userId), gte(foodLogTable.loggedDate, monthAgo))),
     db.select({
       calories: foodLogTable.calories,
@@ -166,10 +167,10 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
     // Mood queries
     db.select({ count: count() }).from(moodLogTable).where(eq(moodLogTable.userId, userId)),
     db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, today))),
-    db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekAgo))),
+    db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekStart))),
     db.select({ count: count() }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, periodStart))),
     db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(eq(moodLogTable.userId, userId)),
-    db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekAgo))),
+    db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, weekStart))),
     db.select({ intensity: moodLogTable.intensity }).from(moodLogTable).where(and(eq(moodLogTable.userId, userId), gte(moodLogTable.loggedDate, periodStart))),
 
     // Water queries
@@ -180,8 +181,8 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
 
     // Activity queries
     db.select({ count: count() }).from(activityLogTable).where(eq(activityLogTable.userId, userId)),
-    db.select({ count: count() }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekAgo))),
-    db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekAgo))),
+    db.select({ count: count() }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekStart))),
+    db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, weekStart))),
     db.select({ minutes: activityLogTable.durationMinutes }).from(activityLogTable).where(and(eq(activityLogTable.userId, userId), gte(activityLogTable.loggedAt, periodStart))),
 
     // The user's actual saved goals. This used to select from profilesTable,
@@ -241,9 +242,10 @@ async function getUserDataStats(userId, lookbackDays = 7, offsetMinutes = 0) {
   const periodWaterGoalMl = (parseFloat(userGoals.waterLiters) || 2) * 1000;
   const daysGoalMetInPeriod = dailyWater.filter((ml) => ml >= periodWaterGoalMl).length;
 
-  // Calculate activity stats. weeklyMinutes stays pinned to a literal 7-day
-  // window — it backs the CDC 150-min/week messaging below and must not
-  // drift with the period selector. periodMinutes is the period-scoped
+  // Calculate activity stats. weeklyMinutes stays pinned to the user's current
+  // Sunday-Saturday calendar week — it backs the 150-min/week messaging and
+  // now matches Dashboard and Activity Insights. It does not drift with the
+  // period selector. periodMinutes is the period-scoped
   // figure the frontend's Week/Month toggle should actually display.
   const weeklyMinutes = activityWeekMinutes.reduce((sum, a) => sum + (parseFloat(a.minutes) || 0), 0);
   const periodMinutes = activityPeriodMinutes.reduce((sum, a) => sum + (parseFloat(a.minutes) || 0), 0);

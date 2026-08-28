@@ -69,7 +69,7 @@ function calculatePerUnitNutrition(nutrition, quantity) {
  * Calculate totals from items array
  */
 function calculateTotals(items) {
-  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 };
+  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, gramsEquivalent: 0 };
 
   items.forEach(item => {
     const nutrition = item.nutrition || {};
@@ -80,6 +80,9 @@ function calculateTotals(items) {
     totals.fiber += nutrition.fiber || 0;
     totals.sugar += nutrition.sugar || 0;
     totals.sodium += nutrition.sodium || 0;
+    // Real meal weight, needed by calculateNutriScore()'s per-100g
+    // normalization — see buildFoodItem() and buildUnifiedResponse().
+    totals.gramsEquivalent += item.gramsEquivalent || 0;
   });
 
   // Round values
@@ -441,17 +444,24 @@ export function buildFoodItem(raw, index = 0) {
   // Get cooking method for health score calculation
   const cookingMethod = raw.cookingMethod || raw.canonical?.cookingMethod || null;
 
-  // Calculate health score if not provided (using per-unit nutrition for accuracy)
+  // Real AI-estimated weight for this item — needed by calculateNutriScore()'s
+  // per-100g normalization (see its own comment). Without it, an item is
+  // scored as if it were 100g of food regardless of its actual size.
+  const gramsEquivalent = raw.gramsEquivalent ?? raw.portion?.gramsEquivalent ?? raw.portion?.estimatedGrams ?? 100;
+
+  // Calculate health score if not provided. Uses totalNutrition (post-quantity
+  // total), not the per-unit `nutrition` — a quantity>1 item (e.g. "2 eggs")
+  // was previously scored off a single unit's nutrition instead of the total.
   let healthScore = raw.healthScore ?? raw.canonical?.healthScore ?? null;
-  if (healthScore === null && nutrition.calories > 0) {
-    healthScore = calculateHealthScoreFromNutrition(nutrition, cookingMethod);
+  if (healthScore === null && totalNutrition.calories > 0) {
+    healthScore = calculateHealthScoreFromNutrition(totalNutrition, cookingMethod);
   }
 
   // Calculate NutriScore if not provided
   let nutriScore = raw.nutriScore ?? raw.canonical?.nutriScore ?? null;
   let nutriScoreValue = null;
-  if (nutriScore === null && nutrition.calories > 0) {
-    const nutriScoreResult = calculateNutriScore(nutrition);
+  if (nutriScore === null && totalNutrition.calories > 0) {
+    const nutriScoreResult = calculateNutriScore(totalNutrition, gramsEquivalent);
     nutriScore = nutriScoreResult.grade;
     nutriScoreValue = nutriScoreResult.score;
   }
@@ -499,6 +509,10 @@ export function buildFoodItem(raw, index = 0) {
     nutriScore: nutriScore,
     nutriScoreValue: nutriScoreValue,
 
+    // Real estimated weight — summed by calculateTotals() for the meal-level
+    // NutriScore normalization.
+    gramsEquivalent: gramsEquivalent,
+
     // Micronutrients
     micros: raw.micros || raw.canonical?.nutrition?.micros || {},
 
@@ -535,7 +549,7 @@ export function buildUnifiedResponse({ inputText, inputMode, mealType, rawItems 
   }
 
   // Calculate NutriScore from totals (proper European algorithm)
-  const nutriScoreResult = calculateNutriScore(totals);
+  const nutriScoreResult = calculateNutriScore(totals, totals.gramsEquivalent);
   const nutriScore = nutriScoreResult.grade;
   const nutriScoreValue = nutriScoreResult.score;
 

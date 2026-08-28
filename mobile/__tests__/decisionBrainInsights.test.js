@@ -75,6 +75,26 @@ describe('mapDecisionBrainInsights', () => {
     });
   });
 
+  it('preserves the backend rolling evidence window on every mapped item', () => {
+    const data = {
+      success: true,
+      window: { type: 'rolling', days: 14, correlationDays: [7, 14] },
+      patterns: [{ title: 'P', description: 'p' }],
+      correlations: [{ pattern: 'C', statement: 'c' }],
+      recommendations: [{ title: 'R', description: 'r' }],
+    };
+
+    expect(mapDecisionBrainInsights(data, 'mood')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ windowType: 'rolling', windowDays: 14, correlationDays: [7, 14] }),
+    ]));
+    expect(mapDecisionBrainInsights(data, 'mood').every((item) => item.windowDays === 14)).toBe(true);
+  });
+
+  it('uses the known 14-day rolling window while an older server is still deployed', () => {
+    const [result] = mapDecisionBrainInsights({ success: true, patterns: [{ title: 'P', description: 'p' }] }, 'activity');
+    expect(result).toMatchObject({ windowType: 'rolling', windowDays: 14, correlationDays: [7, 14] });
+  });
+
   it('concatenates all three arrays in patterns -> correlations -> recommendations order', () => {
     const data = {
       success: true,

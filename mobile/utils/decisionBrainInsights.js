@@ -19,6 +19,14 @@
 export function mapDecisionBrainInsights(data, domain) {
   if (!data?.success) return [];
 
+  // Older deployed servers used this same 14-day rolling window but did not
+  // describe it in the payload. Keep the fallback during rolling upgrades.
+  const windowContext = {
+    windowType: data.window?.type || 'rolling',
+    windowDays: data.window?.days || 14,
+    correlationDays: data.window?.correlationDays || [7, 14],
+  };
+
   const patterns = (data.patterns || []).map((p, i) => ({
     id: `${domain}-pattern-${i}`,
     domain,
@@ -27,6 +35,7 @@ export function mapDecisionBrainInsights(data, domain) {
     message: p.description,
     icon: p.icon,
     color: p.color,
+    ...windowContext,
     // Backend pattern generators return confidence as a 0-1 fraction (e.g.
     // 0.8); RecommendationCard's badge renders `{metric.confidence}%`
     // directly with no scaling of its own, so this must already be 0-100
@@ -42,6 +51,7 @@ export function mapDecisionBrainInsights(data, domain) {
     message: c.statement,
     metric: c.confidence !== undefined ? { confidence: c.confidence } : undefined,
     evidence: c.impactType ? { type: 'correlation', impactType: c.impactType } : undefined,
+    ...windowContext,
   }));
 
   const recs = (data.recommendations || []).map((r, i) => ({
@@ -51,6 +61,7 @@ export function mapDecisionBrainInsights(data, domain) {
     title: r.title,
     message: r.description,
     icon: r.icon,
+    ...windowContext,
   }));
 
   return [...patterns, ...correlations, ...recs];

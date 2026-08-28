@@ -107,7 +107,10 @@ export function useActivityLog() {
       return response;
     } catch (err) {
       console.error('[useActivityLog] Failed to fetch history:', err);
-      return { activities: [], total: 0, summary: {} };
+      // An outage or auth race is not an empty training history. Propagate the
+      // failure so React Query can retry and the screen can show its recovery
+      // action instead of presenting fabricated zero-state analytics.
+      throw err;
     }
   }, []);
 
@@ -180,6 +183,11 @@ export function useActivityLog() {
       // summary card and the activity-insights deep dive) so they don't serve
       // stale data after a log or delete.
       queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
+      // Activity intelligence and the recovery timeline are derived from the
+      // same sessions. Keep every insights surface coherent immediately after
+      // a log instead of waiting for their five-minute stale window.
+      queryClient.invalidateQueries({ queryKey: ['activityIntelligence'] });
+      queryClient.invalidateQueries({ queryKey: ['recoveryHistory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       // Your Progress reads these separately from the above — without this
       // a new activity entry wouldn't show there until a manual refresh.
@@ -297,6 +305,8 @@ export function useActivityLog() {
       // summary card and the activity-insights deep dive) so they don't serve
       // stale data after a log or delete.
       queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['activityIntelligence'] });
+      queryClient.invalidateQueries({ queryKey: ['recoveryHistory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
       queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
@@ -326,6 +336,8 @@ export function useActivityLog() {
         queryClient.invalidateQueries({ queryKey: ['activityToday'] });
         queryClient.invalidateQueries({ queryKey: ['activityWeek'] });
         queryClient.invalidateQueries({ queryKey: ['activityHistory'] });
+        queryClient.invalidateQueries({ queryKey: ['activityIntelligence'] });
+        queryClient.invalidateQueries({ queryKey: ['recoveryHistory'] });
         return null;
       }
       console.error('[useActivityLog] Failed to delete activity:', err);

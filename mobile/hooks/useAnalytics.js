@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import apiClient from '../services/apiClient';
 import { mapDecisionBrainInsights } from '../utils/decisionBrainInsights';
+import { calculateActivityStreak as calculateFullActivityStreak } from '../utils/activityAnalytics';
 
 const QUERY_KEYS = {
   analyticsRecommendations: (period) => ['analytics-recommendations', period],
@@ -76,6 +77,21 @@ export function useAnalytics(period = 'week') {
       const data = await apiClient.get('/activity/analytics/dashboard', { params: { days } });
       return data;
     },
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // Canonical calendar-week source shared with Dashboard and Activity
+  // Insights. The rolling 7-day analytics endpoint intentionally answers a
+  // different question and must not drive the Sunday-Saturday goal meter.
+  const activityTodayQuery = useQuery({
+    queryKey: [...QUERY_KEYS.analytics(period), 'activity-today'],
+    queryFn: async () => apiClient.get('/activity/today'),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const activityHistoryQuery = useQuery({
+    queryKey: [...QUERY_KEYS.analytics(period), 'activity-history-streak'],
+    queryFn: async () => apiClient.get('/activity/history', { params: { days: 90, limit: 200 } }),
     staleTime: 2 * 60 * 1000,
   });
 
@@ -270,7 +286,7 @@ export function useAnalytics(period = 'week') {
       // gets them via the separate `recommendations` prop (see the top-level
       // `recommendations` memo below and app/analytics/index.jsx).
     };
-  }, [nutritionQuery.data, recommendationsQuery.data]);
+  }, [nutritionQuery.data, period, recommendationsQuery.data]);
 
   // Process mood data
   const mood = useMemo(() => {
@@ -286,9 +302,18 @@ export function useAnalytics(period = 'week') {
     // from all-time mood logs), so preferring it here silently showed the
     // same "Avg Score" under every Day/Week/Month tab. entries is now the
     // source of truth.
-    const avgIntensity = entries.length > 0
-      ? entries.reduce((sum, e) => sum + (e.intensity || 0), 0) / entries.length
+    const weightedEntryCount = entries.reduce((sum, entry) => sum + (entry.count || 1), 0);
+    const avgIntensity = Number.isFinite(data?.averages?.intensity)
+      ? data.averages.intensity
+      : entries.length > 0
+        ? entries.reduce((sum, e) => sum + (e.intensity || 0) * (e.count || 1), 0) / weightedEntryCount
       : (recStats?.avgIntensity || 0);
+
+    const avgEnergy = Number.isFinite(data?.averages?.energy)
+      ? data.averages.energy
+      : entries.length > 0
+        ? entries.reduce((sum, e) => sum + (e.energy || 0) * (e.count || 1), 0) / weightedEntryCount
+        : 0;
 
     // Find dominant mood
     const moodCounts = {};
@@ -300,22 +325,66 @@ export function useAnalytics(period = 'week') {
     const dominantMood = Object.keys(moodCounts).sort((a, b) => moodCounts[b] - moodCounts[a])[0] || 'neutral';
 
     // Find best day
-    const bestEntry = entries.reduce((best, current) => {
+    const highestIntensityEntry = entries.reduce((best, current) => {
       return (current.intensity || 0) > (best?.intensity || 0) ? current : best;
     }, null);
     // /mood/trends returns day-aggregate rows as { date, mood, intensity, ... }
     // — no `loggedDate` field. Reading .loggedDate here produced Invalid Date.
-    const bestDay = bestEntry?.date
-      ? new Date(bestEntry.date).toLocaleDateString('en-US', { weekday: 'short' })
+    const highestIntensityDay = highestIntensityEntry?.date
+      ? new Date(`${highestIntensityEntry.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' })
       : null;
+
+    // New servers return raw check-in distribution. During a rolling deploy,
+    // rebuild it from per-day moodCounts; only fall back to dominant day moods
+    // for legacy responses that expose neither field.
+    const distributionCounts = {};
+    entries.forEach((entry) => {
+      if (entry.moodCounts && typeof entry.moodCounts === 'object') {
+        Object.entries(entry.moodCounts).forEach(([moodName, count]) => {
+          distributionCounts[moodName] = (distributionCounts[moodName] || 0) + Number(count || 0);
+        });
+      } else if (entry.mood) {
+        distributionCounts[entry.mood] = (distributionCounts[entry.mood] || 0) + (entry.count || 1);
+      }
+    });
+    const entriesLogged = data?.totalEntries ?? weightedEntryCount ?? recStats?.total ?? 0;
+    const moodDistribution = Array.isArray(data?.distribution) && data.distribution.length > 0
+      ? data.distribution
+      : Object.entries(distributionCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([moodName, count]) => ({
+          mood: moodName,
+          count,
+          percentage: entriesLogged > 0 ? Math.round((count / entriesLogged) * 100) : 0,
+        }));
+    const periodDays = getPeriodParams(period).days;
+    const trackedDays = data?.trackedDays ?? entries.length;
+    const firstIntensity = entries[0]?.intensity;
+    const lastIntensity = entries[entries.length - 1]?.intensity;
 
     return {
       avgScore: avgIntensity.toFixed(1),
+      avgIntensity: avgIntensity.toFixed(1),
+      avgEnergy: avgEnergy.toFixed(1),
       dominantMood,
       // recStats.total is mood_log's all-time row count — same bug as
       // avgIntensity above, entries.length is the period-scoped count.
-      entriesLogged: entries.length || recStats?.total || 0,
-      bestDay,
+      entriesLogged,
+      trackedDays,
+      periodDays,
+      coveragePercent: Math.min(100, Math.round((trackedDays / periodDays) * 100)),
+      highestIntensityDay,
+      highestIntensity: highestIntensityEntry?.intensity ?? null,
+      intensityRange: entries.length > 0
+        ? {
+            min: Math.min(...entries.map((entry) => entry.intensity || 0)),
+            max: Math.max(...entries.map((entry) => entry.intensity || 0)),
+          }
+        : null,
+      trendDelta: Number.isFinite(firstIntensity) && Number.isFinite(lastIntensity)
+        ? Math.round((lastIntensity - firstIntensity) * 10) / 10
+        : null,
+      distribution: moodDistribution,
       // Previously hardcoded to the last 7 entries regardless of the
       // selected period — Month showed the identical 7-point chart as Week.
       // entries is already the full period-scoped series from /mood/trends.
@@ -324,7 +393,7 @@ export function useAnalytics(period = 'week') {
       // Note: insight cards are NOT read from this object — MoodTab gets
       // them via the separate `recommendations` prop.
     };
-  }, [moodQuery.data, recommendationsQuery.data]);
+  }, [moodQuery.data, recommendationsQuery.data, period]);
 
   // Process activity data
   const activity = useMemo(() => {
@@ -340,12 +409,13 @@ export function useAnalytics(period = 'week') {
     const totalMinutes = weekData.reduce((sum, d) => sum + (d.minutes || 0), 0);
     const activeDays = weekData.filter(d => d.minutes > 0).length;
     const cdcGoal = recommendationsQuery.data?.stats?.goals?.activityGoalMinutes || 150;
-    // The CDC 150-min/week guideline is inherently weekly — recStats.weeklyMinutes
-    // is deliberately pinned to a literal trailing 7 days on the backend
-    // regardless of the Week/Month toggle. Kept as its own field (not reused
-    // as `totalMinutes`) so the UI can label it "this week" explicitly
-    // instead of silently showing a fixed number under every tab.
-    const weeklyGoalMinutes = recStats?.weeklyMinutes ?? totalMinutes;
+    // The 150-min/week guideline is inherently calendar-week based. Prefer
+    // /activity/today's Sunday-Saturday total (the same source as Dashboard
+    // and Activity Insights); the recommendation stat remains a compatibility
+    // fallback for older servers.
+    const weeklyGoalMinutes = activityTodayQuery.data?.weeklyProgress?.weeklyMinutes
+      ?? recStats?.weeklyMinutes
+      ?? totalMinutes;
 
     return {
       totalMinutes,
@@ -354,7 +424,10 @@ export function useAnalytics(period = 'week') {
       activeDays,
       weekData,
       persona: data?.persona,
-      streak: calculateStreak(weekData),
+      streak: activityTodayQuery.data?.streak?.current
+        ?? (activityHistoryQuery.data?.activities?.length
+          ? calculateFullActivityStreak(activityHistoryQuery.data.activities.map((row) => ({ timestamp: row.loggedAt }))).current
+          : calculateStreak(weekData)),
       // General profile field (not nutrition-specific), sourced from the same
       // already-fetched nutrition dashboard payload — no separate fetch needed.
       primaryGoal: nutritionQuery.data?.goals?.primaryGoal || null,
@@ -362,13 +435,15 @@ export function useAnalytics(period = 'week') {
       // Note: insight cards are NOT read from this object — ActivityTab
       // gets them via the separate `recommendations` prop.
     };
-  }, [activityQuery.data, recommendationsQuery.data, nutritionQuery.data]);
+  }, [activityHistoryQuery.data, activityQuery.data, activityTodayQuery.data, recommendationsQuery.data, nutritionQuery.data]);
 
   // Process hydration data
   const hydration = useMemo(() => {
     const recStats = recommendationsQuery.data?.stats?.water;
     const data = hydrationQuery.data;
     const dashData = nutritionQuery.data;
+
+    if (!recStats && !data && !dashData) return null;
 
     // Get today's water
     const todayWater = recStats?.todayMl || dashData?.water?.consumed || 0;
@@ -393,22 +468,28 @@ export function useAnalytics(period = 'week') {
 
   // Overall wellness recommendations
   const wellness = useMemo(() => {
+    if (!recommendationsQuery.data) return null;
     return {
       recommendations: recommendations?.wellness || [],
       stage: recommendations?.stage,
       stats: recommendations?.stats,
     };
-  }, [recommendations]);
+  }, [recommendations, recommendationsQuery.data]);
 
   const isLoading = recommendationsQuery.isLoading || nutritionQuery.isLoading ||
-    moodQuery.isLoading || activityQuery.isLoading || hydrationQuery.isLoading;
+    moodQuery.isLoading || activityQuery.isLoading || activityTodayQuery.isLoading || hydrationQuery.isLoading;
 
   const refetch = async () => {
-    await Promise.all([
+    // Refresh every source even if one domain is temporarily unavailable.
+    // React Query exposes each individual error to the active-domain state;
+    // a hydration outage must not cancel a successful mood refresh.
+    await Promise.allSettled([
       recommendationsQuery.refetch(),
       nutritionQuery.refetch(),
       moodQuery.refetch(),
       activityQuery.refetch(),
+      activityTodayQuery.refetch(),
+      activityHistoryQuery.refetch(),
       hydrationQuery.refetch(),
       moodInsightsQuery.refetch(),
       nutritionInsightsQuery.refetch(),
@@ -428,7 +509,9 @@ export function useAnalytics(period = 'week') {
       // Backend excludes accepted/rejected nudges from the next fetch (see
       // applyNudgeStatuses), so refetching is what actually makes the card
       // disappear — there's no client-side filtering to do here.
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.analyticsRecommendations(period) });
+      // A nudge status is global, not period-specific. Clear every cached
+      // Day/Week/Month response so switching ranges cannot resurrect it.
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
     },
   });
 
@@ -463,9 +546,12 @@ export function useAnalytics(period = 'week') {
     // Raw queries for granular control
     queries: {
       recommendations: recommendationsQuery,
+      wellness: recommendationsQuery,
       nutrition: nutritionQuery,
       mood: moodQuery,
       activity: activityQuery,
+      activityToday: activityTodayQuery,
+      activityHistory: activityHistoryQuery,
       hydration: hydrationQuery,
       moodInsights: moodInsightsQuery,
       nutritionInsights: nutritionInsightsQuery,

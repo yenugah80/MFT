@@ -130,6 +130,7 @@ export default function FloatingActionButton({
   waterGoal = 2.0,
   onWaterLogged,
   onMoodLogged,
+  hidden = false,
 }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -139,6 +140,16 @@ export default function FloatingActionButton({
   // Animations
   const rotation = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const visibility = useRef(new Animated.Value(hidden ? 0 : 1)).current;
+
+  React.useEffect(() => {
+    if (hidden) setMenuOpen(false);
+    Animated.timing(visibility, {
+      toValue: hidden ? 0 : 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [hidden, visibility]);
 
   const quickActions = [
     {
@@ -234,7 +245,10 @@ export default function FloatingActionButton({
       )}
 
       {/* Menu Items */}
-      <View style={styles.menuContainer} pointerEvents="box-none">
+      <View
+        style={styles.menuContainer}
+        pointerEvents={hidden || !menuOpen ? 'none' : 'box-none'}
+      >
         {quickActions.map((action, index) => (
           <QuickActionItem
             key={action.label}
@@ -250,10 +264,17 @@ export default function FloatingActionButton({
 
       {/* Main FAB Button */}
       <Animated.View
+        pointerEvents={hidden ? 'none' : 'auto'}
+        accessibilityElementsHidden={hidden}
+        importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
         style={[
           styles.fabContainer,
           {
-            transform: [{ scale }],
+            opacity: visibility,
+            transform: [
+              { translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+              { scale },
+            ],
           },
         ]}
       >

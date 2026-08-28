@@ -205,6 +205,7 @@ export default function DashboardContent() {
   const { logs: localFoodLogs, deleteLog } = useFoodLog(); // Get local SQLite logs + delete function
   const { profile: contextProfile } = useProfileContext(); // Get profile from context (eliminates duplicate /profile/me fetch)
   const [refreshing, setRefreshing] = useState(false);
+  const [isNearDashboardEnd, setIsNearDashboardEnd] = useState(false);
 
   // Yesterday fallback: When today is empty, show yesterday's data to avoid zeros
   const showYesterdayFallback = data?.showYesterdayFallback && data?.yesterday;
@@ -357,6 +358,22 @@ export default function DashboardContent() {
       setRefreshing(false);
     }
   };
+
+  // The quick-action button is useful while browsing, but at the end of the
+  // dashboard it competes with the final Mood actions and previously forced a
+  // permanent 120pt blank footer. Hide it before those controls enter its
+  // footprint so the page can finish with normal content spacing.
+  const handleDashboardScroll = useCallback(({ nativeEvent }) => {
+    const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+    const remainingDistance = Math.max(
+      0,
+      contentSize.height - layoutMeasurement.height - contentOffset.y
+    );
+    const nextIsNearEnd = remainingDistance <= 140;
+    setIsNearDashboardEnd((current) => (
+      current === nextIsNearEnd ? current : nextIsNearEnd
+    ));
+  }, []);
 
   // Behavioral Health Intelligence - Handlers
   const handleDismissRequest = useCallback((correlationId) => {
@@ -1417,12 +1434,14 @@ export default function DashboardContent() {
       >
         <ThemeTransition>
           <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
+            style={styles.scrollView}
+            contentContainerStyle={styles.content}
+            onScroll={handleDashboardScroll}
+            scrollEventThrottle={16}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
         {/* MINIMAL DASHBOARD HEADER - Headspace/Calm pattern */}
         {/* Invitation, not status report - no stats in greeting */}
         {/* Single tappable nudge with smart routing */}
@@ -1666,9 +1685,9 @@ export default function DashboardContent() {
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
-          onOpenMoodInsights={() => router.push('/analytics')}
+          onOpenMoodInsights={() => router.push({ pathname: '/analytics', params: { domain: 'mood' } })}
           onOpenFullMoodLogger={() => setDashMoodModalVisible(true)}
-          onViewMoodHistory={() => router.push('/analytics')}
+          onViewMoodHistory={() => router.push('/history/mood')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
           onViewHydrationHistory={() => router.push('/analytics/hydration')}
           moodInsights={moodInsightsData}
@@ -1939,6 +1958,7 @@ export default function DashboardContent() {
         waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
         onWaterLogged={() => refetch()}
         onMoodLogged={handleMoodLogged}
+        hidden={isNearDashboardEnd}
       />
 
       {/* Recommendation Detail Modal */}
@@ -2071,11 +2091,10 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING[5],
-    // Clears the 64pt floating action button and the tab bar. Was SPACING[28],
-    // which does not exist on this scale (it stops at 20), so paddingBottom was
-    // undefined and the last card sat permanently under the FAB with no way to
-    // scroll it clear. Literal, matching meal-plan.jsx — the other FAB screen.
-    paddingBottom: 120,
+    // The FAB now leaves before the final controls reach it, so only normal
+    // page-ending rhythm is required here. The tab navigator already owns its
+    // safe-area height outside this scroll viewport.
+    paddingBottom: SPACING[6],
   },
   // View Your Progress - Prominent link to Analytics
   progressLinkCard: {

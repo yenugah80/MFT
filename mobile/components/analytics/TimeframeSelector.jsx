@@ -8,7 +8,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/premiumTheme';
 
 // Keys match the app-wide period convention (useAnalytics.js's
 // getPeriodParams, backend query params) — not this component's own
@@ -26,7 +26,7 @@ const TimeframeSelector = ({
   style,
 }) => {
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, style]} accessibilityRole="tablist">
       {TIMEFRAMES.map((tf) => {
         const isSelected = selected === tf.key;
         return (
@@ -46,7 +46,7 @@ const TimeframeSelector = ({
           >
             <Ionicons
               name={tf.icon}
-              size={18}
+              size={16}
               color={isSelected ? BRAND.primary : TEXT.tertiary}
             />
             <Text
@@ -68,33 +68,36 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     backgroundColor: SURFACES.background.secondary,
-    borderRadius: 12,
+    borderRadius: RADIUS.lg,
     padding: 4,
     gap: 4,
+    borderWidth: 1,
+    borderColor: SURFACES.divider,
   },
   option: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    minHeight: 44,
+    gap: SPACING[1],
+    paddingVertical: 8,
+    paddingHorizontal: SPACING[3],
+    borderRadius: RADIUS.md,
   },
   optionSelected: {
-    backgroundColor: SURFACES.card.primary,
-    shadowColor: '#000',
+    backgroundColor: `${BRAND.primary}10`,
+    shadowColor: BRAND.primary,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 1,
   },
   optionDisabled: {
     opacity: 0.5,
   },
   optionLabel: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
   },

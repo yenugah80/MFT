@@ -154,8 +154,13 @@ export default function StressSummaryCard({ compact = true }) {
               <Text style={[styles.statusText, { color: stressColor }]}>{stressStatus.text}</Text>
             </View>
             {topTrigger && (
-              <Text style={styles.triggerText}>
-                Top trigger: {topTrigger}
+              <Text
+                style={styles.triggerText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                accessibilityLabel={`Top trigger: ${topTrigger}`}
+              >
+                {topTrigger}
               </Text>
             )}
           </View>
@@ -163,24 +168,40 @@ export default function StressSummaryCard({ compact = true }) {
           {/* Action Buttons */}
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              style={[styles.actionButton, { borderColor: `${stressColor}20` }]}
+              style={[
+                styles.actionButton,
+                styles.secondaryActionButton,
+                { backgroundColor: `${stressColor}0A`, borderColor: `${stressColor}28` },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/history/stress');
+              }}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open stress history"
+              accessibilityHint="Shows your previous stress check-ins"
+            >
+              <Ionicons name="time-outline" size={14} color={stressColor} />
+              <Text style={[styles.actionButtonText, { color: stressColor }]} numberOfLines={1}>History</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.primaryActionButton,
+                { backgroundColor: stressColor, borderColor: stressColor, shadowColor: stressColor },
+              ]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/insights/stress-patterns');
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open stress insights"
+              accessibilityHint="Shows trends and patterns from your stress check-ins"
             >
-              <Ionicons name="analytics-outline" size={14} color={stressColor} />
-              <Text style={styles.actionButtonText}>Insights</Text>
-              <Ionicons name="chevron-forward" size={12} color={TEXT.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { borderColor: `${stressColor}20` }]}
-              onPress={handleLogStress}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle-outline" size={14} color={stressColor} />
-              <Text style={styles.actionButtonText}>Log</Text>
+              <Ionicons name="analytics" size={14} color={TEXT.primary} />
+              <Text style={styles.actionButtonText} numberOfLines={1}>Insights</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -284,10 +305,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 4,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: SPACING[1],
     paddingVertical: SPACING[1],
     paddingHorizontal: SPACING[2],
@@ -299,13 +322,15 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
   },
   triggerText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
+    textAlign: 'right',
   },
   // Action Buttons
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: SPACING[2],
+    gap: 6,
     marginTop: SPACING[3],
   },
   actionButton: {
@@ -313,15 +338,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING[1],
-    backgroundColor: SURFACES.background.secondary,
+    gap: 4,
+    minHeight: 44,
     paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[2],
-    borderRadius: RADIUS.md,
+    paddingHorizontal: 6,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
   },
+  secondaryActionButton: {
+    backgroundColor: SURFACES.background.secondary,
+  },
+  primaryActionButton: {
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   actionButtonText: {
-    flex: 1,
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,

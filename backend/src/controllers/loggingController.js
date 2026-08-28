@@ -1,9 +1,11 @@
-import { foodLogTable, waterLogTable, moodLogTable, recommendationsHistoryTable } from "../db/schema.js";
+import { foodLogTable, waterLogTable, moodLogTable, recommendationsHistoryTable, dailyNutritionSummaryTable } from "../db/schema.js";
 import { db } from "../db/index.js";
+import { sql } from "drizzle-orm";
 import errors from "../utils/errorResponse.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
 import { invalidateCFCache } from "../services/collaborativeFilteringService.js";
+import { getLocalDateUTC, parseTimezoneOffsetMinutes, toDateStr } from "../utils/timezone.js";
 
 export async function logMeal(req, res) {
   try {
@@ -82,9 +84,15 @@ export async function logMeal(req, res) {
       );
     }
 
-    const result = await req.db
-      .insert(foodLogTable)
-      .values({
+    const safeLoggedDate = loggedDate ? new Date(loggedDate) : new Date();
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    let result;
+
+    // The food row and its denormalized daily summary are one logical write.
+    // /nutrition/log already maintained this summary, but /log/meal did not,
+    // leaving Quick Log charts and averages stale after a successful insert.
+    await req.db.transaction(async (tx) => {
+      result = await tx.insert(foodLogTable).values({
         userId,
         foodName,
         calories: effectiveCalories ?? null,
@@ -105,7 +113,7 @@ export async function logMeal(req, res) {
         ingredients: ingredients ?? [],
         barcode: barcode ?? null,
         imageUrl: imageUrl ?? null,
-        loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
+        loggedDate: safeLoggedDate,
         source,
         sourceMeta: {
           ...(clientSourceMeta && typeof clientSourceMeta === 'object' ? clientSourceMeta : {}),
@@ -113,8 +121,31 @@ export async function logMeal(req, res) {
           macroReconciled,
           ...(macroReconciled ? { originalCaloriesKcal } : {}),
         },
-      })
-      .returning();
+      }).returning();
+
+      if (!result || result.length === 0) throw new Error('Meal insert returned no row');
+
+      const localDate = getLocalDateUTC(offsetMinutes, safeLoggedDate);
+      await tx.insert(dailyNutritionSummaryTable)
+        .values({
+          userId,
+          date: toDateStr(localDate),
+          totalCalories: effectiveCalories || 0,
+          totalProtein: protein || 0,
+          totalCarbs: carbs || 0,
+          totalFats: fats || 0,
+        })
+        .onConflictDoUpdate({
+          target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
+          set: {
+            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${effectiveCalories || 0}`,
+            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
+            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
+            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,
+            updatedAt: new Date(),
+          },
+        });
+    });
 
     if (!result || result.length === 0) {
       return errors.database(res, "insert meal log");

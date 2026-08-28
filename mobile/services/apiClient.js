@@ -114,7 +114,16 @@ class ApiClient {
   async getToken() {
     if (!this.tokenProvider) return null;
     try {
-      return await this.tokenProvider();
+      // Clerk's getToken() has no built-in timeout — a stuck session refresh
+      // hangs this forever with no error, which means buildHeaders() never
+      // resolves and the request never fires. Every caller (food/mood/water/
+      // sleep/stress logging) just spins indefinitely with no feedback. Race
+      // it so a hung refresh falls back to an unauthenticated request, which
+      // fails fast with a real 401 the caller's existing catch block can show.
+      return await Promise.race([
+        this.tokenProvider(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Token fetch timed out')), 8000)),
+      ]);
     } catch (error) {
       if (__DEV__) console.warn('[API] Token error:', error.message);
       return null;

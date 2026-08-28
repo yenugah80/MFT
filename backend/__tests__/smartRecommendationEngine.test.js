@@ -1,4 +1,9 @@
-import { SMART_FOODS } from '../src/services/smartRecommendationEngine.js';
+import {
+  SMART_FOODS,
+  getCurrentMealType,
+  getLocalHourFromOffset,
+  resolveSmartNutritionGoals,
+} from '../src/services/smartRecommendationEngine.js';
 import { detectDietViolation, detectAllergenRisk } from '../src/services/foodKnowledgeGraphService.js';
 
 // Regression coverage for the Smart Food Picks catalogue. This is the "no
@@ -54,5 +59,32 @@ describe('SMART_FOODS catalogue diet-safety coverage', () => {
     const applePeanutButter = SMART_FOODS.find((f) => f.id === 'apple_peanut_butter');
     expect(detectDietViolation(applePeanutButter, ['vegan']).violates).toBe(false);
     expect(detectAllergenRisk(applePeanutButter, ['dairy']).hasRisk).toBe(false);
+  });
+});
+
+describe('Smart Food Picks live context', () => {
+  test('uses the canonical nutrition_goals field names', () => {
+    expect(resolveSmartNutritionGoals({
+      dailyCalories: 1800,
+      proteinG: 110,
+      carbsG: 180,
+      fatsG: 60,
+    })).toEqual({ dailyCalories: 1800, proteinG: 110, carbsG: 180, fatG: 60 });
+  });
+
+  test('keeps valid zero macro goals instead of replacing them with defaults', () => {
+    expect(resolveSmartNutritionGoals({ proteinG: 0, carbsG: 0, fatsG: 0 })).toMatchObject({
+      proteinG: 0,
+      carbsG: 0,
+      fatG: 0,
+    });
+  });
+
+  test('derives meal timing from the device timezone, not the server timezone', () => {
+    const noonUtc = new Date('2026-08-26T12:00:00.000Z');
+    expect(getLocalHourFromOffset(240, noonUtc)).toBe(8);
+    expect(getCurrentMealType(getLocalHourFromOffset(240, noonUtc))).toBe('breakfast');
+    expect(getLocalHourFromOffset(-330, noonUtc)).toBe(17);
+    expect(getCurrentMealType(getLocalHourFromOffset(-330, noonUtc))).toBe('dinner');
   });
 });

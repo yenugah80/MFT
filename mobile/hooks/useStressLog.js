@@ -5,8 +5,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import * as Crypto from 'expo-crypto';
 import apiClient from '../services/apiClient';
 
 /**
@@ -79,11 +79,60 @@ export function getStressColor(value) {
   return getStressLevel(value).color;
 }
 
+export function useStressHistory(days = 30) {
+  const queryClient = useQueryClient();
+  const historyQuery = useInfiniteQuery({
+    queryKey: ['stressHistory', days],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => apiClient.get(`/stress/history?days=${days}&limit=25&offset=${pageParam}`),
+    getNextPageParam: (lastPage) => lastPage.pagination?.hasMore
+      ? lastPage.pagination.offset + lastPage.pagination.limit
+      : undefined,
+    staleTime: 60000,
+    retry: 1,
+  });
+
+  const data = useMemo(() => {
+    const pages = historyQuery.data?.pages || [];
+    if (!pages.length) return undefined;
+    const stressLogs = [...new Map(
+      pages.flatMap((page) => page.stressLogs || []).map((entry) => [entry.id, entry])
+    ).values()];
+    return {
+      ...pages[0],
+      stressLogs,
+    };
+  }, [historyQuery.data]);
+
+  const deleteMutation = useMutation({
+    mutationFn: (stressId) => apiClient.delete(`/stress/${stressId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stressHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['stressToday'] });
+      queryClient.invalidateQueries({ queryKey: ['stressPatterns'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+
+  return {
+    data,
+    isLoading: historyQuery.isLoading,
+    isFetching: historyQuery.isFetching,
+    error: historyQuery.isError && !data ? historyQuery.error : null,
+    paginationError: historyQuery.isFetchNextPageError ? historyQuery.error : null,
+    refetch: historyQuery.refetch,
+    fetchNextPage: historyQuery.fetchNextPage,
+    hasNextPage: historyQuery.hasNextPage,
+    isFetchingNextPage: historyQuery.isFetchingNextPage,
+    deleteEntry: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
+  };
+}
+
 /**
  * Hook for stress logging operations
  */
-export function useStressLog() {
-  const { userId } = useAuth();
+export function useStressLog(patternDays = 30) {
   const queryClient = useQueryClient();
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState(null);
@@ -145,11 +194,12 @@ export function useStressLog() {
   const {
     data: patternsData,
     isLoading: isPatternsLoading,
+    error: patternsError,
     refetch: refetchPatterns,
   } = useQuery({
-    queryKey: ['stressPatterns'],
+    queryKey: ['stressPatterns', patternDays],
     queryFn: async () => {
-      const response = await apiClient.get('/stress/patterns?days=30');
+      const response = await apiClient.get(`/stress/patterns?days=${patternDays}`);
       return response;
     },
     staleTime: 300000, // 5 minutes
@@ -161,11 +211,7 @@ export function useStressLog() {
    */
   const logStressMutation = useMutation({
     mutationFn: async (stressData) => {
-      // Generate strong clientEventId for idempotency
-      const timestamp = Date.now();
-      const random1 = Math.random().toString(36).substring(2, 15);
-      const random2 = Math.random().toString(36).substring(2, 15);
-      const clientEventId = `${userId}-stress-${timestamp}-${random1}-${random2}`;
+      const clientEventId = stressData.clientEventId || Crypto.randomUUID();
 
       return await apiClient.post('/stress/log', {
         ...stressData,
@@ -195,6 +241,7 @@ export function useStressLog() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stressHistory'] });
       queryClient.invalidateQueries({ queryKey: ['stressToday'] });
       queryClient.invalidateQueries({ queryKey: ['stressPatterns'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -217,7 +264,7 @@ export function useStressLog() {
    * @returns {Promise<object>}
    */
   const logStress = useCallback(async (stressData) => {
-    const { level, triggers = [], physicalSymptoms = {}, copingUsed = [], notes } = stressData;
+    const { level, triggers = [], physicalSymptoms = {}, copingUsed = [], notes, clientEventId } = stressData;
 
     // Validation
     if (!level || level < 1 || level > 10) {
@@ -242,6 +289,7 @@ export function useStressLog() {
         physicalSymptoms,
         copingUsed: filteredCoping,
         notes,
+        clientEventId,
       });
       return result;
     } catch (err) {
@@ -268,6 +316,7 @@ export function useStressLog() {
       return await apiClient.delete(`/stress/${stressId}`);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stressHistory'] });
       queryClient.invalidateQueries({ queryKey: ['stressToday'] });
       queryClient.invalidateQueries({ queryKey: ['stressPatterns'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -355,6 +404,7 @@ export function useStressLog() {
     // Patterns
     patterns,
     isPatternsLoading,
+    patternsError,
 
     // History & Analysis
     fetchHistory,

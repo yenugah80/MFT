@@ -135,7 +135,7 @@ function headline(factors) {
     : `${label.charAt(0).toUpperCase()}${label.slice(1)} held it back today`;
 }
 
-export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPlanSession, trend }) {
+export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPlanSession, trend, detailOnly = false }) {
   // Detail is opt-in: the score and its main driver answer the daily question,
   // the five contribution rows are evidence for when it is questioned.
   const [showDetail, setShowDetail] = useState(false);
@@ -163,18 +163,64 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
     ...absent.map((factor) => ({ factor, weight: FALLBACK_WEIGHTS[factor] })),
   ];
 
-  const counted = coverage?.counted ?? countedFactors.length;
-  const total = coverage?.total ?? Object.keys(FALLBACK_WEIGHTS).length;
-  const missingWeight = coverage?.missingWeight ?? Math.round((1 - countedWeight) * 100);
+  const modelTotal = Object.keys(FALLBACK_WEIGHTS).length;
+  const total = Math.max(coverage?.total ?? 0, modelTotal);
+  const counted = Math.min(coverage?.counted ?? countedFactors.length, total);
+  const derivedMissingWeight = Math.round((1 - countedWeight) * 100);
+  const missingWeight = Math.max(coverage?.missingWeight ?? 0, derivedMissingWeight);
   const reliable = coverage?.isReliable ?? countedWeight >= 0.5;
 
-  const missingLabels = (coverage?.missing || missingFactors.map((f) => f.factor))
+  const reportedMissing = [
+    ...new Set([
+      ...(coverage?.missing || []),
+      ...missingFactors.map((f) => f.factor),
+    ]),
+  ];
+  const missingLabels = reportedMissing
     .map((key) => FACTOR_LABELS[key] || key)
     .join(' and ');
 
   // Tint the hero with the score's own colour, so readiness is legible before
   // a single number is read
   const accent = color || BRAND.primary;
+
+  if (detailOnly) {
+    return (
+      <Hero accent={accent}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.detailEyebrow}>RECOVERY EXPLAINED</Text>
+            <Text style={styles.title}>What shaped today&apos;s score</Text>
+          </View>
+          <View style={styles.coveragePill} accessibilityLabel={`${counted} of ${total} recovery signals available`}>
+            <Ionicons name={reliable ? 'ellipse' : 'ellipse-outline'} size={9} color={reliable ? SEMANTIC.success.base : SEMANTIC.warning.base} />
+            <Text style={styles.coverageText}>{counted}/{total} signals</Text>
+          </View>
+        </View>
+
+        {!!headline(hydrated) && <Text style={styles.detailLead}>{headline(hydrated)}</Text>}
+        {missingWeight > 0 && (
+          <Text style={styles.caveat}>{missingLabels} not logged — {missingWeight}% of the model had no data.</Text>
+        )}
+        <Text style={styles.sectionLabel}>SIGNAL CONTRIBUTIONS</Text>
+        {hydrated.map((factor) => <ContributionRow key={factor.factor} factor={factor} />)}
+        <Text style={styles.baseline}>Baseline {baseline} → today {reliable ? score : 'not enough data'}</Text>
+        {!!trend && <View style={styles.trendSlot}>{trend}</View>}
+        {!!strainTarget && (
+          <Strip onPress={onPlanSession} actionLabel="Plan a workout">
+            Ready for a {strainTarget.zone?.name?.toLowerCase() || 'moderate'} workout
+            {strainTarget.target ? ` — target strain ${strainTarget.target}` : ''}.
+          </Strip>
+        )}
+        {!reliable && !!onLogSignal && (
+          <TouchableOpacity style={styles.ghostButton} onPress={onLogSignal} activeOpacity={0.85}>
+            <Text style={styles.ghostButtonText}>Complete today&apos;s signals</Text>
+            <Ionicons name="chevron-forward" size={14} color={BRAND.primary} />
+          </TouchableOpacity>
+        )}
+      </Hero>
+    );
+  }
 
   return (
     <Hero accent={accent}>
@@ -262,8 +308,8 @@ export default function RecoveryHero({ recovery, strainTarget, onLogSignal, onPl
           {/* Readiness translated into a session length — a handoff, not a
               competing recommendation. The plan itself lives on Activity. */}
           {showDetail && !!strainTarget && (
-            <Strip onPress={onPlanSession} actionLabel="Plan a session">
-              Ready for a {strainTarget.zone?.name?.toLowerCase() || 'moderate'} session
+            <Strip onPress={onPlanSession} actionLabel="Plan a workout">
+              Ready for a {strainTarget.zone?.name?.toLowerCase() || 'moderate'} workout
               {strainTarget.target ? ` — target strain ${strainTarget.target}` : ''}.
             </Strip>
           )}
@@ -284,6 +330,20 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.lg,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
+  },
+  detailEyebrow: {
+    marginBottom: 2,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.tertiary,
+  },
+  detailLead: {
+    marginBottom: SPACING[2],
+    fontSize: TYPOGRAPHY.size.sm,
+    lineHeight: 19,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.secondary,
   },
   coveragePill: {
     flexDirection: 'row',

@@ -21,6 +21,7 @@ import {
 } from '../services/decisionBrainService.js';
 import { getLearningStateSummary } from '../services/learningStateService.js';
 import { errors } from '../utils/errorResponse.js';
+import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
 
 const router = express.Router();
 
@@ -81,6 +82,7 @@ router.get('/recommendations', async (req, res) => {
  * Response:
  * {
  *   success: boolean,
+ *   window: { type: 'rolling', days: 14, correlationDays: [7, 14] },
  *   hasEnoughData: boolean,
  *   stats: { avgMood, avgEnergy, moodVariance, isConsistent, trend, ... },
  *   trendData: [ { dayKey, day, hasData, intensity, entryCount, isToday }, ... ],
@@ -129,6 +131,7 @@ router.get('/mood-insights', async (req, res) => {
  * Response:
  * {
  *   success: boolean,
+ *   window: { type: 'rolling', days: 14, correlationDays: [7, 14] },
  *   hasEnoughData: boolean,
  *   stats: { avgCalories, avgProtein, calorieGoalAdherence, ... },
  *   trendData: [ { dayKey, calories, protein, ... }, ... ],
@@ -161,6 +164,7 @@ router.get('/nutrition-insights', async (req, res) => {
  * Response:
  * {
  *   success: boolean,
+ *   window: { type: 'rolling', days: 14, correlationDays: [7, 14] },
  *   hasEnoughData: boolean,
  *   stats: { avgDailyIntake, goalAdherence, todayProgress, ... },
  *   trendData: [ { dayKey, liters, ... }, ... ],
@@ -193,6 +197,7 @@ router.get('/hydration-insights', async (req, res) => {
  * Response:
  * {
  *   success: boolean,
+ *   window: { type: 'rolling', days: 14, correlationDays: [7, 14] },
  *   hasEnoughData: boolean,
  *   stats: { totalMinutesThisWeek, activeDays, moodImpact, ... },
  *   trendData: [ { dayKey, minutes, caloriesBurned, ... }, ... ],
@@ -208,7 +213,7 @@ router.get('/activity-insights', async (req, res) => {
 
     console.log(`[API] GET /decision-brain/activity-insights for user: ${userId}`);
 
-    const result = await generateActivityInsights(userId);
+    const result = await generateActivityInsights(userId, parseTimezoneOffsetMinutes(req));
 
     res.json(result);
   } catch (error) {

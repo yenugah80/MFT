@@ -16,9 +16,11 @@
 import {
   DEFAULT_WEEKLY_MINUTES_TARGET,
   calculateWeeklyGoalProgress,
+  calculateActivityStreak,
   getWeeklyPace,
   getSevenDayTrend,
   generateActivityRecommendations,
+  getNextSessionSuggestion,
 } from '../utils/activityAnalytics';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -100,6 +102,21 @@ describe('weekly pace', () => {
   it('is on pace once enough minutes are logged', () => {
     const pace = getWeeklyPace([session(0, { duration: 150 })]);
     expect(pace.onPace).toBe(true);
+  });
+});
+
+describe('activity streaks', () => {
+  it('stops the current streak at the first gap and keeps historical runs separate', () => {
+    const streak = calculateActivityStreak([
+      session(0),
+      session(1),
+      session(4),
+      session(5),
+      session(6),
+    ]);
+
+    expect(streak.current).toBe(2);
+    expect(streak.longest).toBe(3);
   });
 });
 
@@ -197,6 +214,30 @@ describe('recommendations are grounded in real numbers', () => {
       expect(r.message).not.toMatch(/NaN|undefined|null/);
       expect(r.title).not.toMatch(/NaN|undefined|null/);
     });
+  });
+});
+
+describe('live recommendation handoff', () => {
+  it('preserves API type, duration, intensity and reason for the logger', () => {
+    const suggestion = getNextSessionSuggestion(
+      { remainingMinutes: 30, daysLeft: 2, percentage: 80 },
+      {},
+      {
+        name: 'HIIT',
+        type: 'hiit',
+        duration: { minutes: 25 },
+        intensity: 'vigorous',
+        reasons: [{ text: 'Your recovery supports a harder session' }],
+      }
+    );
+
+    expect(suggestion).toMatchObject({
+      activity: 'HIIT',
+      exerciseType: 'hiit',
+      intensity: 'vigorous',
+      hasSuggestion: true,
+    });
+    expect(suggestion.reasons).toContain('Your recovery supports a harder session');
   });
 });
 
@@ -753,7 +794,7 @@ describe('session journal helpers', () => {
       withId(3, 2, { duration: 30, calories: 520 }),
     ]);
 
-    expect(highlights.get(2)).toBe('Longest session');
+    expect(highlights.get(2)).toBe('Longest workout');
     expect(highlights.get(3)).toBe('Biggest burn');
     expect(highlights.get(1)).toBeUndefined();
   });
@@ -768,7 +809,7 @@ describe('session journal helpers', () => {
 
     // The older of the two Leg Press sessions, not the most recent
     expect(highlights.get(2)).toBe('First Leg Press');
-    expect(highlights.get(3)).toBe('Longest session');
+    expect(highlights.get(3)).toBe('Longest workout');
   });
 
   it('produces no badges from a single session', () => {

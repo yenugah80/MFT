@@ -12,7 +12,41 @@ export async function ensureWaterLogTableShape() {
       sql`ALTER TABLE "water_log" ADD COLUMN IF NOT EXISTS "hydration_factor" numeric(3,2) DEFAULT 1.0;`
     );
     await db.execute(
-      sql`ALTER TABLE "water_log" ADD COLUMN IF NOT EXISTS "hydration_liters" numeric(3,1);`
+      sql`ALTER TABLE "water_log" ADD COLUMN IF NOT EXISTS "hydration_liters" numeric(5,3);`
+    );
+    // The original table shipped with numeric(3,1), which silently rounded a
+    // 150 ml quick add (0.150 L) to 200 ml. Widen both persisted measurements
+    // to 1 ml precision. The conditional avoids rewriting the table on every
+    // process restart after migration 0050 has landed.
+    await db.execute(
+      sql`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'water_log'
+              AND column_name = 'amount_liters'
+              AND (numeric_precision <> 5 OR numeric_scale <> 3)
+          ) THEN
+            ALTER TABLE "water_log"
+              ALTER COLUMN "amount_liters" TYPE numeric(5,3)
+              USING "amount_liters"::numeric(5,3);
+          END IF;
+
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'water_log'
+              AND column_name = 'hydration_liters'
+              AND (numeric_precision <> 5 OR numeric_scale <> 3)
+          ) THEN
+            ALTER TABLE "water_log"
+              ALTER COLUMN "hydration_liters" TYPE numeric(5,3)
+              USING "hydration_liters"::numeric(5,3);
+          END IF;
+        END $$;
+      `
     );
     waterLogTableEnsured = true;
     console.log("✅ Water log table schema verified and updated");

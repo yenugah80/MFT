@@ -1,343 +1,80 @@
-/**
- * ActivityTab - Enhanced analytics with personalized recommendations
- *
- * Displays:
- * - Key activity metrics (minutes, CDC goal, streak)
- * - Personalized recommendations from AI
- * - Activity-mood correlations
- * - Evidence-based insights
- */
-
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import MetricCard from './MetricCard';
-import RecommendationCard, { RecommendationSection } from './RecommendationCard';
-import ProgressRing from './ProgressRing';
-import MiniBarChart from './MiniBarChart';
-import MiniLineChart from './MiniLineChart';
+import { Dimensions, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+
 import AnalyticsEmptyState from './AnalyticsEmptyState';
+import MiniLineChart from './MiniLineChart';
+import RecommendationCard from './RecommendationCard';
+import { ActionRow, InsightList, MetricRow, MetricTile, PERIOD_COPY, ProgressAction, ProgressBar, ProgressCard, ProgressHero, SectionHeader, SectionIntro } from './ProgressUI';
+import { BRAND, SEMANTIC, SPACING, VIBRANT_WELLNESS } from '../../constants/premiumTheme';
 import { getActivityEmptySubtitle } from '../../utils/emptyStateCopy';
-import {
-  TEXT,
-  SURFACES,
-  SPACING,
-  TYPOGRAPHY,
-  CARD_SYSTEM,
-  SEMANTIC,
-  VIBRANT_WELLNESS,
-  BRAND,
-} from '../../constants/premiumTheme';
 
-// Per-day scaling reference for the weekly bar chart — matches the previous
-// hand-rolled bar's own assumption (60 min = a "full" day's bar).
-const DAY_BAR_MAX_MINUTES = 60;
-
-// MiniBarChart lays out one horizontal row per data point within a fixed
-// height; past ~10 rows the per-row height goes negative. Month view now
-// passes 30 days, so it switches to MiniLineChart instead.
-const MAX_BAR_CHART_DAYS = 10;
+const COLOR = VIBRANT_WELLNESS.activity.solid;
 const CHART_WIDTH = Dimensions.get('window').width - SPACING[4] * 4;
-
-const CDC_WEEKLY_GOAL = 150; // minutes
+const CDC_WEEKLY_GOAL = 150;
 
 export default function ActivityTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
-  // Empty state when no data and no recommendations
-  if (!data && recommendations.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="fitness-outline" size={48} color={TEXT.tertiary} />
-        <Text style={styles.emptyText}>No activity data yet</Text>
-        <Text style={styles.emptySubtext}>Log a workout to see your progress and get personalized insights</Text>
-      </View>
-    );
-  }
-
-  const { totalMinutes, weeklyGoalMinutes, cdcGoalPercent, activeDays, weekData, streak, primaryGoal, hasDataInPeriod } = data || {};
-  // Single source of truth for "does this tab have anything to show" — the
-  // same period-scoped signal the insight cards below are generated from.
-  const hasRealData = hasDataInPeriod ?? (totalMinutes || 0) > 0;
-  const periodLabel = period === 'today' ? 'today' : period === 'month' ? 'this month' : 'this week';
-
-  // Separate recommendations by type
-  const actionRecs = recommendations.filter(r => r.type === 'action');
-  const insightRecs = recommendations.filter(r => r.type === 'insight');
-  const patternRecs = recommendations.filter(r => r.type === 'pattern');
-  const suggestionRecs = recommendations.filter(r => r.type === 'suggestion');
+  const router = useRouter();
+  const copy = PERIOD_COPY[period] || PERIOD_COPY.week;
+  const { totalMinutes = 0, weeklyGoalMinutes = 0, cdcGoalPercent = 0, activeDays = 0, weekData = [], streak = 0, primaryGoal, hasDataInPeriod } = data || {};
+  const hasRealData = hasDataInPeriod ?? totalMinutes > 0;
+  const actionRecommendations = recommendations.filter((item) => item.type === 'action');
+  // The decision-brain endpoint historically called a rolling window “this
+  // week”. Drop that one goal card and replace it with the canonical
+  // Sunday-Saturday value already shown in this tab; keep its other genuine
+  // patterns (consistency, favorite activity, correlations).
+  const nonGoalRecommendations = recommendations.filter((item) => {
+    if (item.type === 'action') return false;
+    const copyText = `${item.title || ''} ${item.message || item.description || ''}`;
+    return !/meeting activity guidelines|minutes this week|\bthis week\b.*\bmin/i.test(copyText);
+  });
+  const canonicalWeeklyInsight = {
+    id: 'activity-current-calendar-week',
+    type: 'insight',
+    icon: cdcGoalPercent >= 100 ? 'checkmark-circle-outline' : 'walk-outline',
+    color: cdcGoalPercent >= 100 ? SEMANTIC.success.base : COLOR,
+    title: cdcGoalPercent >= 100 ? 'Current-week target reached' : `${Math.max(0, CDC_WEEKLY_GOAL - weeklyGoalMinutes)} minutes remain this week`,
+    message: `${weeklyGoalMinutes} of ${CDC_WEEKLY_GOAL} minutes in the current Sunday–Saturday week.`,
+  };
+  const insightRecommendations = [canonicalWeeklyInsight, ...nonGoalRecommendations].slice(0, 3);
+  const activeDayPercent = weekData.length ? Math.round((activeDays / weekData.length) * 100) : 0;
+  const navigate = (route) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(route); };
+  const fallbackInsights = [
+    { icon: cdcGoalPercent >= 100 ? 'checkmark-circle-outline' : 'walk-outline', color: cdcGoalPercent >= 100 ? SEMANTIC.success.base : COLOR, title: cdcGoalPercent >= 100 ? 'Weekly movement target reached' : `${Math.max(0, CDC_WEEKLY_GOAL - weeklyGoalMinutes)} minutes remain this week`, message: `${weeklyGoalMinutes} of ${CDC_WEEKLY_GOAL} minutes toward the fixed weekly guideline.` },
+    { icon: 'calendar-outline', color: '#6B82AD', title: `${activeDays} active day${activeDays === 1 ? '' : 's'} ${copy.noun}`, message: `${activeDayPercent}% of days in the selected range include logged movement.` },
+    { icon: 'flame-outline', color: '#D97706', title: streak > 0 ? `${streak}-day current streak` : 'Consistency starts with one entry', message: 'Streak is based on consecutive days with logged activity.' },
+  ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={BRAND.primary}
-          colors={[BRAND.primary]}
-        />
-      }
-    >
-      {/* Priority Actions */}
-      {actionRecs.length > 0 && (
-        <View style={styles.actionsSection}>
-          {actionRecs.map((rec, idx) => (
-            <RecommendationCard
-              key={rec.id || idx}
-              recommendation={rec}
-              onComplete={onCompleteRecommendation}
-              onDismiss={onDismissRecommendation}
-            />
-          ))}
-        </View>
-      )}
-
-      {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
-          a friendly empty state instead of a wall of "0" cards */}
-      {data && !hasRealData && (
-        <AnalyticsEmptyState
-          icon="fitness-outline"
-          iconColor={VIBRANT_WELLNESS.activity.solid}
-          title="No activity data yet"
-          subtitle={getActivityEmptySubtitle(primaryGoal) || 'Log a workout to see your progress and get personalized insights'}
-        />
-      )}
-
-      {data && hasRealData && (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND.primary} colors={[BRAND.primary]} />}>
+      {actionRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}
+      {data && !hasRealData ? <AnalyticsEmptyState icon="fitness-outline" iconColor={COLOR} title={`No activity logged ${copy.noun}`} subtitle={getActivityEmptySubtitle(primaryGoal) || 'Log a workout to begin seeing movement patterns.'} /> : data && (
         <>
-          <View style={styles.metricsRow}>
-            <MetricCard
-              value={totalMinutes || 0}
-              label="Minutes"
-              subtitle={periodLabel}
-              icon="time"
-              iconColor={VIBRANT_WELLNESS.activity.solid}
-            />
-            <MetricCard
-              value={`${Math.min(cdcGoalPercent || 0, 100)}%`}
-              label="CDC Goal"
-              subtitle="150 min/wk"
-              icon="ribbon"
-              iconColor={(cdcGoalPercent || 0) >= 100 ? SEMANTIC.success.base : VIBRANT_WELLNESS.activity.solid}
-            />
-            {/* CDC guideline is inherently weekly — this card intentionally
-                does not change with the Day/Week/Month toggle. */}
-            <MetricCard
-              value={activeDays || 0}
-              label="Active Days"
-              subtitle={`${streak || 0} day streak`}
-              icon="calendar"
-              iconColor={VIBRANT_WELLNESS.activity.solid}
-            />
-          </View>
-
-          {/* CDC Goal Progress — always "this week", regardless of the
-              Day/Week/Month toggle above (see weeklyGoalMinutes comment
-              in useAnalytics.js). */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Weekly Goal Progress</Text>
-            <View style={styles.goalContainer}>
-              <ProgressRing
-                value={weeklyGoalMinutes || 0}
-                goal={CDC_WEEKLY_GOAL}
-                color={getGoalColor(cdcGoalPercent || 0)}
-                centerValue={weeklyGoalMinutes || 0}
-                centerLabel={`of ${CDC_WEEKLY_GOAL} min`}
-              />
-              <Text style={styles.goalSubtext}>
-                {(cdcGoalPercent || 0) >= 100
-                  ? 'You hit your CDC goal!'
-                  : `${CDC_WEEKLY_GOAL - (weeklyGoalMinutes || 0)} minutes to go`}
-              </Text>
-            </View>
-          </View>
-
-          {/* Activity trend — genuinely reflects the selected period now.
-              MiniBarChart's one-row-per-day layout only works up to
-              MAX_BAR_CHART_DAYS; Month (30 days) switches to a line chart. */}
-          {weekData && weekData.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>
-                {period === 'today' ? 'Today' : period === 'month' ? 'This Month' : 'This Week'}
-              </Text>
-              {weekData.length <= MAX_BAR_CHART_DAYS ? (
-                <MiniBarChart
-                  data={weekData.map((day) => ({
-                    label: day.label,
-                    value: day.minutes || 0,
-                    maxValue: DAY_BAR_MAX_MINUTES,
-                    color: (day.minutes || 0) > 0 ? VIBRANT_WELLNESS.activity.solid : SURFACES.background.tertiary,
-                  }))}
-                  unit="min"
-                />
-              ) : (
-                <MiniLineChart
-                  data={weekData.map((day) => day.minutes || 0)}
-                  labels={weekData.map((day) => day.label)}
-                  width={CHART_WIDTH}
-                  color={VIBRANT_WELLNESS.activity.solid}
-                  showDots={false}
-                  showGrid
-                />
-              )}
-            </View>
-          )}
+          <ProgressHero color={COLOR} tint="#ECFDF5" eyebrow={`${copy.eyebrow} · MOVEMENT SNAPSHOT`} title={`${totalMinutes} active minute${totalMinutes === 1 ? '' : 's'}`} subtitle={`${activeDays} active day${activeDays === 1 ? '' : 's'} in the selected range.`} badge="Rolling-range totals and calendar-week goal are shown separately" icon="fitness" value={`${Math.min(cdcGoalPercent, 999)}%`} valueLabel="this week" />
+          <MetricRow>
+            <MetricTile icon="time-outline" color={COLOR} value={`${totalMinutes}`} label="Range minutes" hint={copy.noun} />
+            <MetricTile icon="calendar-clear-outline" color="#6B82AD" value={`${activeDays}/${weekData.length || (period === 'today' ? 1 : period === 'month' ? 30 : 7)}`} label="Active days" hint={`${activeDayPercent}% coverage`} />
+            <MetricTile icon="flame-outline" color="#D97706" value={`${streak}`} label="Day streak" hint="consecutive days" />
+          </MetricRow>
+          <ProgressCard>
+            <SectionHeader eyebrow="CURRENT WEEK" title="150-minute progress" subtitle="Sunday–Saturday calendar week, independent of the rolling range above" icon="ribbon-outline" color={COLOR} />
+            <ProgressBar label={`${weeklyGoalMinutes} of ${CDC_WEEKLY_GOAL} minutes`} value={cdcGoalPercent} displayValue={`${Math.round(cdcGoalPercent)}%`} color={cdcGoalPercent >= 100 ? SEMANTIC.success.base : COLOR} icon="walk-outline" />
+          </ProgressCard>
+          {weekData.length > 0 && <ProgressCard>
+            <SectionHeader eyebrow="MOVEMENT OVER TIME" title={`Daily minutes ${copy.noun}`} subtitle="Logged activity minutes by calendar day" icon="analytics-outline" color={COLOR} />
+            <MiniLineChart data={weekData.map((day) => Number(day.minutes || 0))} labels={weekData.map((day) => day.label)} width={CHART_WIDTH} height={132} color={COLOR} showGrid showDots={weekData.length <= 10} minDomain={0} maxLabels={period === 'month' ? 6 : 7} accessibilityLabel={`${copy.eyebrow.toLowerCase()} daily activity minutes`} />
+          </ProgressCard>}
+          <SectionIntro eyebrow="PERSONAL CONTEXT" title="What stands out" subtitle={insightRecommendations.length ? `Rolling ${insightRecommendations[0].windowDays || 14}-day observations from logged movement—not medical advice or proof of cause.` : `Selected-range observations from logged movement ${copy.noun}.`} color={COLOR} />
+          {insightRecommendations.length ? <View style={styles.recommendations}>{insightRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}</View> : <InsightList items={fallbackInsights} />}
+          <ActionRow>
+            <ProgressAction icon="analytics-outline" label="Activity insights" hint="Recovery & patterns" color={COLOR} onPress={() => navigate('/insights/activity-insights')} />
+            <ProgressAction icon="add-circle-outline" label="Log activity" hint="Add movement now" color={COLOR} onPress={() => navigate('/(tabs)/activity')} />
+          </ActionRow>
         </>
       )}
-
-      {/* AI Insights Section */}
-      {insightRecs.length > 0 && (
-        <RecommendationSection
-          title="Activity Insights"
-          subtitle="Understanding your movement"
-          recommendations={insightRecs}
-        />
-      )}
-
-      {/* Discovered Patterns */}
-      {patternRecs.length > 0 && (
-        <RecommendationSection
-          title="Activity Patterns"
-          subtitle="How movement affects you"
-          recommendations={patternRecs}
-        />
-      )}
-
-      {/* Smart Suggestions */}
-      {suggestionRecs.length > 0 && (
-        <RecommendationSection
-          title="Activity Ideas"
-          subtitle="Personalized tips"
-          recommendations={suggestionRecs}
-        />
-      )}
-
-      {/* Fallback static insights */}
-      {recommendations.length === 0 && data && hasRealData && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Insights</Text>
-          <View style={styles.insightsList}>
-            <InsightItem
-              icon={(cdcGoalPercent || 0) >= 100 ? 'checkmark-circle' : 'alert-circle'}
-              color={(cdcGoalPercent || 0) >= 100 ? SEMANTIC.success.base : SEMANTIC.warning.base}
-              text={
-                (cdcGoalPercent || 0) >= 100
-                  ? 'Meeting CDC recommendation of 150 min/week'
-                  : `${Math.round(cdcGoalPercent || 0)}% toward CDC weekly goal`
-              }
-            />
-            {(streak || 0) > 0 && (
-              <InsightItem
-                icon="flame"
-                color="#F97316"
-                text={`${streak} day activity streak - keep it up!`}
-              />
-            )}
-            {(activeDays || 0) >= 5 && (
-              <InsightItem
-                icon="trophy"
-                color="#FBBF24"
-                text="Great consistency - active 5+ days this week"
-              />
-            )}
-            {(totalMinutes || 0) > 0 && (totalMinutes || 0) < 30 && (
-              <InsightItem
-                icon="walk"
-                color={VIBRANT_WELLNESS.activity.solid}
-                text="Even a short walk counts toward your goal"
-              />
-            )}
-          </View>
-        </View>
-      )}
-
-      <View style={styles.bottomPadding} />
     </ScrollView>
   );
 }
 
-function InsightItem({ icon, color, text }) {
-  return (
-    <View style={styles.insightRow}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text style={styles.insightText}>{text}</Text>
-    </View>
-  );
-}
-
-function getGoalColor(percentage) {
-  if (percentage >= 100) return SEMANTIC.success.base;
-  if (percentage >= 70) return SEMANTIC.success.light;
-  if (percentage >= 40) return SEMANTIC.warning.base;
-  return SEMANTIC.danger.base;
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: SPACING[4],
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING[8],
-  },
-  emptyText: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: SPACING[4],
-  },
-  emptySubtext: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginTop: SPACING[2],
-    textAlign: 'center',
-  },
-  actionsSection: {
-    marginBottom: SPACING[2],
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-    marginBottom: SPACING[4],
-  },
-  card: {
-    ...CARD_SYSTEM.standard,
-    marginBottom: SPACING[4],
-  },
-  cardTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[3],
-  },
-  goalContainer: {
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  goalSubtext: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    textAlign: 'center',
-  },
-  insightsList: {
-    gap: SPACING[2],
-  },
-  insightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  insightText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    flex: 1,
-  },
-  bottomPadding: {
-    height: SPACING[8],
-  },
-});
+const styles = StyleSheet.create({ container: { flex: 1 }, content: { padding: SPACING[4], paddingBottom: SPACING[10] }, recommendations: { gap: SPACING[2] } });

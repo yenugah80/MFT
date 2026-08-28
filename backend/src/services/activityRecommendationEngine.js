@@ -27,6 +27,7 @@ import {
   nutritionGoalsTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql, avg } from 'drizzle-orm';
+import { getDayKey, getLocalDayRange } from '../utils/timezone.js';
 
 // ============================================================================
 // CONSTANTS & CONFIGURATION
@@ -167,7 +168,7 @@ const TIME_PREFERENCES = {
  * Build comprehensive user profile for recommendations
  * Returns default values for new users without data
  */
-async function buildUserProfile(userId) {
+async function buildUserProfile(userId, offsetMinutes = 0) {
   try {
     // Fetch user's basic profile (may not exist for new users)
     let profile = null;
@@ -202,7 +203,7 @@ async function buildUserProfile(userId) {
     const activityStats = await getActivityStats(userId, 30);
 
     // Get current health signals (returns empty object if no data)
-    const healthSignals = await getCurrentHealthSignals(userId);
+    const healthSignals = await getCurrentHealthSignals(userId, offsetMinutes);
 
     return {
       userId,
@@ -422,12 +423,10 @@ function calculateAvgIntensity(activities) {
  * Get current health signals for recovery calculation
  * Each query is wrapped individually to handle table-not-found errors
  */
-async function getCurrentHealthSignals(userId) {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0); // Start of yesterday
-  const todayStr = today.toISOString().split('T')[0];
+async function getCurrentHealthSignals(userId, offsetMinutes = 0) {
+  const now = new Date();
+  const todayStr = getDayKey(now, offsetMinutes);
+  const { start: todayStart } = getLocalDayRange(offsetMinutes, now);
 
   let sleep = null;
   let stressLogs = [];
@@ -455,7 +454,7 @@ async function getCurrentHealthSignals(userId) {
       .where(
         and(
           eq(stressLogTable.userId, userId),
-          eq(stressLogTable.loggedDate, todayStr)
+          eq(stressLogTable.dayKey, todayStr)
         )
       );
   } catch (e) {
@@ -467,7 +466,7 @@ async function getCurrentHealthSignals(userId) {
     const moodResults = await db
       .select()
       .from(moodLogTable)
-      .where(eq(moodLogTable.userId, userId))
+      .where(and(eq(moodLogTable.userId, userId), eq(moodLogTable.dayKey, todayStr)))
       .orderBy(desc(moodLogTable.loggedDate))
       .limit(1);
     mood = moodResults[0] || null;
@@ -475,7 +474,7 @@ async function getCurrentHealthSignals(userId) {
     console.log('[ActivityEngine] Mood data not available:', e.message);
   }
 
-  // Get recent hydration (compare with Date object since loggedDate is timestamp)
+  // Recovery reflects today's hydration, not yesterday plus today.
   try {
     waterLogs = await db
       .select()
@@ -483,7 +482,7 @@ async function getCurrentHealthSignals(userId) {
       .where(
         and(
           eq(waterLogTable.userId, userId),
-          gte(waterLogTable.loggedDate, yesterday)
+          gte(waterLogTable.loggedDate, todayStart)
         )
       );
   } catch (e) {
@@ -538,7 +537,7 @@ export const RECOVERY_FACTOR_WEIGHTS = {
 /** Score with no signals at all — deliberately not presented as a measurement */
 export const RECOVERY_BASELINE = 50;
 
-function calculateRecoveryScore(healthSignals, activityStats) {
+export function calculateRecoveryScore(healthSignals, activityStats) {
   let score = RECOVERY_BASELINE; // Baseline
   const factors = [];
 
@@ -651,7 +650,20 @@ function calculateRecoveryScore(healthSignals, activityStats) {
   // number. Without this the score is unexplainable: a factor with no data
   // contributes nothing, which drags the result toward the 50 baseline while
   // still presenting as a precise measurement.
-  const weighted = factors.map((factor) => {
+  // Every model input must be represented, including absent signals. Earlier
+  // responses only listed missing sleep; absent stress/hydration/mood/load were
+  // silently omitted, producing misleading coverage such as "4 of 4" while
+  // 25% of the configured model had no stress data.
+  const completeFactors = Object.keys(RECOVERY_FACTOR_WEIGHTS).map((factorName) => (
+    factors.find((factor) => factor.factor === factorName) || {
+      factor: factorName,
+      value: null,
+      impact: 'unknown',
+      detail: 'No data logged for this signal',
+    }
+  ));
+
+  const weighted = completeFactors.map((factor) => {
     const weight = RECOVERY_FACTOR_WEIGHTS[factor.factor] ?? 0;
     const counted = Number.isFinite(factor.value);
     return {
@@ -1171,12 +1183,12 @@ async function generateWeeklyInsights(userId, activityStats) {
 /**
  * Get comprehensive activity intelligence for user
  */
-export async function getActivityIntelligence(userId) {
+export async function getActivityIntelligence(userId, offsetMinutes = 0) {
   try {
     console.log('[ActivityEngine] Generating intelligence for user:', userId);
 
     // Build user profile (now always returns a valid profile with defaults)
-    const userProfile = await buildUserProfile(userId);
+    const userProfile = await buildUserProfile(userId, offsetMinutes);
 
     console.log('[ActivityEngine] User profile built:', {
       fitnessLevel: userProfile.fitnessLevel,

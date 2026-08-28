@@ -7,7 +7,7 @@
  * health data nobody entered. The static guard in uiContractGuards catches the
  * `useState` default coming back; this catches the behaviour actually breaking.
  */
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import SleepLogger from '../../components/SleepLogger';
 import StressLogger from '../../components/StressLogger';
@@ -90,6 +90,20 @@ describe('SleepLogger', () => {
     expect(screen.getByText('10')).toBeOnTheScreen();
     expect(screen.getByText('Excellent')).toBeOnTheScreen();
   });
+
+  test('shows a retryable error and reuses the idempotency key', async () => {
+    sleepMocks.logSleep.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({});
+    open();
+    fireEvent.press(screen.getByLabelText('Sleep quality 8 out of 10, Very Good'));
+    fireEvent.press(screen.getByText('Save Sleep'));
+
+    expect(await screen.findByText('Couldn’t save your sleep. Check your connection and try again.')).toBeOnTheScreen();
+    const firstEventId = sleepMocks.logSleep.mock.calls[0][0].clientEventId;
+
+    fireEvent.press(screen.getByText('Save Sleep'));
+    await waitFor(() => expect(sleepMocks.logSleep).toHaveBeenCalledTimes(2));
+    expect(sleepMocks.logSleep.mock.calls[1][0].clientEventId).toBe(firstEventId);
+  });
 });
 
 describe('StressLogger', () => {
@@ -99,7 +113,7 @@ describe('StressLogger', () => {
 
   test('opens unrated — prompt shown, no level 5 invented', () => {
     open();
-    expect(screen.getByText('Tap a number to rate your stress')).toBeOnTheScreen();
+    expect(screen.getByText('Choose 1–10')).toBeOnTheScreen();
     expect(screen.queryByText('5')).not.toBeOnTheScreen();
   });
 
@@ -125,5 +139,45 @@ describe('StressLogger', () => {
 
     expect(stressMocks.logStress).toHaveBeenCalledTimes(1);
     expect(stressMocks.logStress.mock.calls[0][0]).toMatchObject({ level: 2 });
+  });
+
+  test('wires symptoms and coping selections into the saved stress payload', () => {
+    open();
+    fireEvent.press(screen.getByLabelText('Stress level 8 out of 10'));
+
+    fireEvent.press(screen.getByText('Body'));
+    fireEvent.press(screen.getByText('Headache'));
+
+    fireEvent.press(screen.getByText('Relief'));
+    fireEvent.press(screen.getByText('Meditation'));
+    fireEvent.press(screen.getByText('Save Check-in'));
+
+    expect(stressMocks.logStress).toHaveBeenCalledTimes(1);
+    expect(stressMocks.logStress.mock.calls[0][0]).toMatchObject({
+      level: 8,
+      physicalSymptoms: {
+        headache: true,
+        tension: false,
+        fatigue: false,
+        heartRacing: false,
+        digestive: false,
+        insomnia: false,
+      },
+      copingUsed: ['meditation'],
+    });
+  });
+
+  test('shows a retryable error and reuses the idempotency key', async () => {
+    stressMocks.logStress.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({});
+    open();
+    fireEvent.press(screen.getByLabelText('Stress level 4 out of 10'));
+    fireEvent.press(saveButton());
+
+    expect(await screen.findByText('Couldn’t save your check-in. Check your connection and try again.')).toBeOnTheScreen();
+    const firstEventId = stressMocks.logStress.mock.calls[0][0].clientEventId;
+
+    fireEvent.press(saveButton());
+    await waitFor(() => expect(stressMocks.logStress).toHaveBeenCalledTimes(2));
+    expect(stressMocks.logStress.mock.calls[1][0].clientEventId).toBe(firstEventId);
   });
 });

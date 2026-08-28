@@ -22,6 +22,19 @@ export const getWeekStart = (reference = new Date()) => {
 };
 
 /**
+ * Calendar analytics must use the timezone-aware dayKey written by the API.
+ * Falling back to the event timestamp keeps legacy rows working, while noon
+ * avoids DST and UTC-midnight shifts when a dayKey is available.
+ */
+export const getActivityCalendarDate = (activity) => {
+  const dayKey = String(activity?.dayKey || '').slice(0, 10);
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(dayKey)
+    ? new Date(`${dayKey}T12:00:00`)
+    : new Date(activity?.timestamp);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+/**
  * Get activities from the current week (Sunday - Saturday)
  */
 export const getThisWeekActivities = (activities) => {
@@ -33,8 +46,8 @@ export const getThisWeekActivities = (activities) => {
   weekEnd.setHours(23, 59, 59, 999);
 
   return activities.filter(activity => {
-    const timestamp = new Date(activity?.timestamp);
-    if (Number.isNaN(timestamp.getTime())) return false;
+    const timestamp = getActivityCalendarDate(activity);
+    if (!timestamp) return false;
     return timestamp >= weekStart && timestamp <= weekEnd;
   });
 };
@@ -82,7 +95,7 @@ export const calculateWeeklyGoalProgress = (activities, options = {}) => {
     // Secondary facts, no invented denominator
     calories,
     workoutCount,
-    activeDays: new Set(thisWeek.map((a) => new Date(a.timestamp).toDateString())).size,
+    activeDays: new Set(thisWeek.map((a) => getActivityCalendarDate(a)?.toDateString()).filter(Boolean)).size,
   };
 };
 
@@ -285,55 +298,51 @@ export const calculateActivityStreak = (activities) => {
   }
 
   // Sort activities by date (most recent first)
-  const sortedActivities = [...activities].sort((a, b) =>
-    new Date(b.timestamp) - new Date(a.timestamp)
-  );
+  const sortedActivities = [...activities]
+    .filter((activity) => getActivityCalendarDate(activity))
+    .sort((a, b) => getActivityCalendarDate(b) - getActivityCalendarDate(a));
 
   // Get unique activity dates
   const activityDates = [...new Set(
-    sortedActivities.map(a => new Date(a.timestamp).toDateString())
+    sortedActivities.map(a => getActivityCalendarDate(a).toDateString())
   )].sort((a, b) => new Date(b) - new Date(a));
 
   let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
+  let longestStreak = activityDates.length > 0 ? 1 : 0;
+  let tempStreak = activityDates.length > 0 ? 1 : 0;
 
   const today = new Date().toDateString();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toDateString();
 
-  // Check if today or yesterday has activity
-  if (activityDates[0] === today || activityDates[0] === yesterdayStr) {
+  const currentIsOpen = activityDates[0] === today || activityDates[0] === yesterdayStr;
+  if (currentIsOpen) {
     currentStreak = 1;
-    tempStreak = 1;
+  }
 
-    // Count consecutive days
-    for (let i = 1; i < activityDates.length; i++) {
-      const currentDate = new Date(activityDates[i]);
-      const prevDate = new Date(activityDates[i - 1]);
-      const diffDays = Math.round((prevDate - currentDate) / (1000 * 60 * 60 * 24));
+  // Current streak ends at the first gap. Longest streak continues scanning
+  // every historical run, rather than accidentally adding separate runs.
+  let leadingRun = true;
+  for (let i = 1; i < activityDates.length; i++) {
+    const currentDate = new Date(activityDates[i]);
+    const prevDate = new Date(activityDates[i - 1]);
+    const diffDays = Math.round((prevDate - currentDate) / (1000 * 60 * 60 * 24));
 
-      if (diffDays === 1) {
-        currentStreak++;
-        tempStreak++;
-      } else {
-        if (tempStreak > longestStreak) {
-          longestStreak = tempStreak;
-        }
-        tempStreak = 1;
-      }
+    if (diffDays === 1) {
+      tempStreak += 1;
+      if (currentIsOpen && leadingRun) currentStreak += 1;
+    } else {
+      longestStreak = Math.max(longestStreak, tempStreak);
+      tempStreak = 1;
+      leadingRun = false;
     }
   }
-
-  // Check if temp streak is longest
-  if (tempStreak > longestStreak) {
-    longestStreak = tempStreak;
-  }
+  longestStreak = Math.max(longestStreak, tempStreak);
 
   return {
     current: currentStreak,
-    longest: Math.max(currentStreak, longestStreak),
+    longest: longestStreak,
   };
 };
 
@@ -376,7 +385,7 @@ export const generateActivityRecommendations = (activities, moodData = [], optio
       icon: 'trending-up',
       color: '#F59E0B',
       title: 'Behind pace',
-      message: `${pace.remainingMinutes} min left with ${pace.daysLeft} day${pace.daysLeft === 1 ? '' : 's'} to go — ${sessions} x ${perSession} min gets you there.`,
+      message: `${pace.remainingMinutes} min left with ${pace.daysLeft} day${pace.daysLeft === 1 ? '' : 's'} to go — ${sessions} workout${sessions === 1 ? '' : 's'} of ${perSession} min gets you there.`,
       action: 'Log Workout',
       priority: 1,
     });
@@ -552,8 +561,8 @@ export const getConsistencyGrid = (activities, options = {}) => {
   // Minutes and session count per calendar day
   const byDay = new Map();
   rows.forEach((activity) => {
-    const stamp = new Date(activity?.timestamp);
-    if (Number.isNaN(stamp.getTime())) return;
+    const stamp = getActivityCalendarDate(activity);
+    if (!stamp) return;
     const key = stamp.toDateString();
     const entry = byDay.get(key) || { minutes: 0, sessions: 0 };
     entry.minutes += activity.duration || 0;
@@ -968,6 +977,9 @@ export const getNextSessionSuggestion = (pace, balance, backendRecommendation) =
     focus,
     activity: typeof suggested?.name === 'string' ? suggested.name : null,
     exerciseType: suggested?.type || null,
+    intensity: ['light', 'moderate', 'vigorous'].includes(suggested?.intensity)
+      ? suggested.intensity
+      : null,
     minutes: Number.isFinite(suggestedMinutes)
       ? suggestedMinutes
       : Number.isFinite(backendMinutes)
@@ -1064,7 +1076,7 @@ export const getSessionHighlights = (activities) => {
     (Number(a.duration) || 0) > (Number(best.duration) || 0) ? a : best
   );
   if ((Number(longest.duration) || 0) > 0 && rows.length > 1) {
-    add(longest.id, 'Longest session');
+    add(longest.id, 'Longest workout');
   }
 
   const hardest = rows.reduce((best, a) =>
@@ -1178,8 +1190,8 @@ export const getMonthGrid = (activities, options = {}) => {
 
   const byDay = new Map();
   rows.forEach((activity) => {
-    const stamp = new Date(activity?.timestamp);
-    if (Number.isNaN(stamp.getTime())) return;
+    const stamp = getActivityCalendarDate(activity);
+    if (!stamp) return;
     const key = stamp.toDateString();
     const entry = byDay.get(key) || { minutes: 0, calories: 0, sessions: [] };
     entry.minutes += Number(activity.duration) || 0;
@@ -1286,18 +1298,21 @@ export const getPeriodStats = (activities, options = {}) => {
   end.setHours(23, 59, 59, 999);
 
   const inWindow = rows.filter((activity) => {
-    const stamp = new Date(activity?.timestamp);
-    if (Number.isNaN(stamp.getTime())) return false;
+    const stamp = getActivityCalendarDate(activity);
+    if (!stamp) return false;
     return stamp >= start && stamp <= end;
   });
 
-  // The equivalent window immediately before, for a like-for-like comparison
-  const span = end.getTime() - start.getTime();
+  // Compare like-for-like elapsed time. An unfinished Thursday cannot be
+  // compared against all seven days of the previous week.
+  const now = new Date();
+  const comparisonEnd = end < now ? end : now;
+  const span = Math.max(0, comparisonEnd.getTime() - start.getTime());
   const prevEnd = new Date(start.getTime() - 1);
   const prevStart = new Date(prevEnd.getTime() - span);
   const inPrevious = rows.filter((activity) => {
-    const stamp = new Date(activity?.timestamp);
-    if (Number.isNaN(stamp.getTime())) return false;
+    const stamp = getActivityCalendarDate(activity);
+    if (!stamp) return false;
     return stamp >= prevStart && stamp <= prevEnd;
   });
 
@@ -1308,10 +1323,9 @@ export const getPeriodStats = (activities, options = {}) => {
   const calories = Math.round(inWindow.reduce((sum, a) => sum + (Number(a.calories) || 0), 0));
 
   const activeDays = new Set(
-    inWindow.map((a) => new Date(a.timestamp).toDateString())
+    inWindow.map((a) => getActivityCalendarDate(a)?.toDateString()).filter(Boolean)
   ).size;
 
-  const now = new Date();
   const today = new Date(now);
   today.setHours(23, 59, 59, 999);
   const elapsedEnd = end > today ? today : end;

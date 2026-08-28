@@ -1,673 +1,117 @@
-/**
- * NutritionTab - Premium Analytics with Personalized Recommendations
- *
- * Design Principles:
- * 1. DELIGHT - Celebration animations on quick-log success
- * 2. CLARITY - Clear visual hierarchy for scanning
- * 3. PERSONALITY - Encouraging, time-contextual messaging
- * 4. PERFORMANCE - Skeleton loaders for perceived speed
- *
- * Features:
- * - Key nutrition metrics with circular progress
- * - Smart AI-powered food recommendations with quick-log
- * - Celebration animation on successful logging
- * - Pull-to-refresh capability
- * - Skeleton loading states
- */
-
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-  Dimensions,
-} from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Dimensions, LayoutAnimation, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import MetricCard from './MetricCard';
-import RecommendationCard, { RecommendationSection } from './RecommendationCard';
+
+import AnalyticsEmptyState from './AnalyticsEmptyState';
+import GoalRealityCheckCard from './GoalRealityCheckCard';
+import MiniLineChart from './MiniLineChart';
+import RecommendationCard from './RecommendationCard';
 import { SmartRecommendationSummary, SmartRecommendationsList } from './SmartRecommendationCard';
 import { SmartRecommendationsLoadingSkeleton } from './SkeletonLoader';
 import { useQuickLogCelebration } from './CelebrationAnimation';
-import MiniLineChart from './MiniLineChart';
-import AnalyticsEmptyState from './AnalyticsEmptyState';
-import GoalRealityCheckCard from './GoalRealityCheckCard';
+import { ActionRow, InsightList, MetricRow, MetricTile, PERIOD_COPY, ProgressAction, ProgressBar, ProgressCard, ProgressHero, SectionHeader, SectionIntro } from './ProgressUI';
+import { useSmartRecommendations } from '../../hooks/useRecommendations';
 import { getGoalPaceLabel } from '../../utils/goalFraming';
 import { getNutritionEmptySubtitle } from '../../utils/emptyStateCopy';
-import { useSmartRecommendations } from '../../hooks/useRecommendations';
-import {
-  TEXT,
-  SURFACES,
-  SPACING,
-  RADIUS,
-  TYPOGRAPHY,
-  CARD_SYSTEM,
-  VIBRANT_WELLNESS,
-  MACRO_COLORS,
-  BRAND,
-} from '../../constants/premiumTheme';
+import { BRAND, CARD_SYSTEM, MACRO_COLORS, RADIUS, SPACING, TEXT, TYPOGRAPHY, VIBRANT_WELLNESS } from '../../constants/premiumTheme';
 
-// Screen width minus the container's own horizontal padding (SPACING[4] * 2)
-// and the card's inner padding (CARD_SYSTEM.standard's SPACING[4] * 2).
+const COLOR = VIBRANT_WELLNESS.nutrition.solid;
 const CHART_WIDTH = Dimensions.get('window').width - SPACING[4] * 4;
 
-// Enable LayoutAnimation for Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) UIManager.setLayoutAnimationEnabledExperimental(true);
 
 export default function NutritionTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   const router = useRouter();
+  const copy = PERIOD_COPY[period] || PERIOD_COPY.week;
   const [showSmartRecs, setShowSmartRecs] = useState(false);
   const [loggingId, setLoggingId] = useState(null);
-
-  const handleViewFullAnalytics = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/analytics/nutrition');
-  }, [router]);
-
-  // Celebration hook for quick-log success
   const { celebrate, CelebrationComponent } = useQuickLogCelebration();
+  const { recommendations: smartRecs, summary, nutritionalStatus, loading: smartLoading, fetchRecommendations, quickLog, hasRecommendations: hasSmartRecs, blocked: smartRecsBlocked, blockedReason: smartRecsBlockedReason } = useSmartRecommendations({ enabled: showSmartRecs });
+  const { calories = {}, macros = {}, mealsLogged = 0, weekData = [], weeklyAverages, primaryGoal, hasDataInPeriod } = data || {};
+  const hasRealData = hasDataInPeriod ?? (calories.consumed || mealsLogged) > 0;
+  const hasTrend = weekData.some((day) => Number(day.calories) > 0);
+  const actionRecommendations = recommendations.filter((item) => item.type === 'action');
+  const insightRecommendations = recommendations.filter((item) => item.type !== 'action').slice(0, 3);
+  const averageCalories = Math.round(weeklyAverages?.avgCalories || calories.consumed || 0);
+  const todayPace = getGoalPaceLabel(calories.consumed || 0, calories.budget || 2000, primaryGoal);
+  const rangePace = getGoalPaceLabel(averageCalories, calories.budget || 2000, primaryGoal);
 
-  // Smart recommendations hook - only fetch when section is expanded
-  const {
-    recommendations: smartRecs,
-    summary,
-    nutritionalStatus,
-    loading: smartLoading,
-    fetchRecommendations,
-    quickLog,
-    hasRecommendations: hasSmartRecs,
-    blocked: smartRecsBlocked,
-    blockedReason: smartRecsBlockedReason,
-  } = useSmartRecommendations({ enabled: showSmartRecs });
+  const navigate = (route) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(route); };
+  const handleRefresh = useCallback(async () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); if (onRefresh) await onRefresh(); if (showSmartRecs) await fetchRecommendations(); }, [fetchRecommendations, onRefresh, showSmartRecs]);
+  const toggleSmartRecs = useCallback(() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); const next = !showSmartRecs; setShowSmartRecs(next); if (next && !hasSmartRecs) fetchRecommendations(); }, [fetchRecommendations, hasSmartRecs, showSmartRecs]);
+  const handleQuickLog = useCallback(async (recommendation) => { setLoggingId(recommendation.id); const result = await quickLog(recommendation); setLoggingId(null); if (result.success) celebrate(recommendation.name, recommendation.nutrition?.calories); else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); }, [celebrate, quickLog]);
 
-  // Handle pull-to-refresh — refreshing state is owned by the parent screen
-  // (same refreshing/onRefresh props all 5 tabs receive); this also refreshes
-  // smart recs alongside the shared refetch.
-  const handleRefresh = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (onRefresh) await onRefresh();
-    if (showSmartRecs) await fetchRecommendations();
-  }, [onRefresh, showSmartRecs, fetchRecommendations]);
-
-  // Handle toggling smart recommendations section
-  const handleToggleSmartRecs = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const newState = !showSmartRecs;
-    setShowSmartRecs(newState);
-    if (newState && !hasSmartRecs) {
-      fetchRecommendations();
-    }
-  }, [showSmartRecs, hasSmartRecs, fetchRecommendations]);
-
-  // Handle quick log from smart recommendation with celebration
-  const handleQuickLog = useCallback(async (recommendation) => {
-    setLoggingId(recommendation.id);
-    const result = await quickLog(recommendation);
-    setLoggingId(null);
-
-    if (result.success) {
-      // Trigger celebration animation
-      celebrate(recommendation.name, recommendation.nutrition?.calories);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-  }, [quickLog, celebrate]);
-
-  // Empty state when no data and no recommendations
-  if (!data && recommendations.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="nutrition-outline" size={48} color={TEXT.tertiary} />
-        <Text style={styles.emptyText}>No nutrition data yet</Text>
-        <Text style={styles.emptySubtext}>Log your meals to see analytics and personalized insights</Text>
-      </View>
-    );
-  }
-
-  const { calories, macros, mealsLogged, weekData = [], weeklyAverages, primaryGoal, hasDataInPeriod } = data || { calories: {}, macros: {}, mealsLogged: 0 };
-  const hasWeekTrend = weekData.some((d) => d.calories > 0);
-  // Single source of truth for "does this tab have anything to show" — the
-  // same period-scoped signal the insight cards below are generated from,
-  // so they can't disagree with this empty-state check (previously checked
-  // today-only calories, which could be 0 while period insights were not).
-  const hasRealData = hasDataInPeriod ?? ((calories.consumed || 0) > 0 || (mealsLogged || 0) > 0);
-  const goalPaceLabel = getGoalPaceLabel(calories.consumed || 0, calories.budget || 2000, primaryGoal);
-  const weeklyGoalPaceLabel = weeklyAverages
-    ? getGoalPaceLabel(weeklyAverages.avgCalories || 0, calories.budget || 2000, primaryGoal)
-    : '';
-  // weekData/weeklyAverages now genuinely reflect the selected period
-  // (previously always a fixed 7 days regardless of the toggle) — these
-  // labels follow suit instead of hardcoding "week".
-  const periodAdjective = period === 'today' ? 'Today’s' : period === 'month' ? 'Monthly' : 'Weekly';
-  const periodPhrase = period === 'today' ? 'today' : period === 'month' ? 'this month' : 'this week';
-
-  // Separate recommendations by type for organized display
-  const actionRecs = recommendations.filter(r => r.type === 'action');
-  const insightRecs = recommendations.filter(r => r.type === 'insight');
-  const patternRecs = recommendations.filter(r => r.type === 'pattern');
-  const suggestionRecs = recommendations.filter(r => r.type === 'suggestion');
+  const fallbackInsights = [
+    { icon: 'flame-outline', color: COLOR, title: period === 'today' ? `${calories.percentage || 0}% of today’s calorie target` : `${averageCalories.toLocaleString()} calorie daily average`, message: period === 'today' ? (todayPace || 'Compared with your configured daily calorie goal.') : `${rangePace || 'Compared with your configured goal'} ${copy.noun}.` },
+    { icon: 'restaurant-outline', color: '#6B82AD', title: `${mealsLogged} meal${mealsLogged === 1 ? '' : 's'} logged today`, message: 'Meal count is today-only and is not presented as a selected-range total.' },
+    { icon: 'information-circle-outline', color: '#D89B36', title: 'Logged intake is an estimate', message: 'Patterns depend on portion accuracy and how consistently meals are recorded.' },
+  ];
 
   return (
     <>
-      {/* Celebration overlay */}
       <CelebrationComponent />
-
-      <ScrollView
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={BRAND.primary}
-            colors={[BRAND.primary]}
-          />
-        }
-      >
-        {/* Nutrition has a dedicated analytics screen (calorie/macro trend,
-            goal reality check, over 7 or 30 days). This tab stays as the
-            today-focused summary with AI Smart Food Picks and hands off to
-            it — same pattern as HydrationTab's full-analytics link. */}
-        <TouchableOpacity
-          style={styles.fullAnalyticsLink}
-          onPress={handleViewFullAnalytics}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Full nutrition analytics. Calorie and macro trends, goal reality check, 7 or 30 days"
-        >
-          <View style={styles.fullAnalyticsIcon}>
-            <Ionicons name="stats-chart" size={18} color={VIBRANT_WELLNESS.nutrition.solid} />
-          </View>
-          <View style={styles.fullAnalyticsText}>
-            <Text style={styles.fullAnalyticsTitle}>Full nutrition analytics</Text>
-            <Text style={styles.fullAnalyticsSubtitle}>
-              Calorie & macro trends, goal reality check, 7 or 30 days
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-        </TouchableOpacity>
-
-        {/* Priority Actions - Show first if any */}
-        {actionRecs.length > 0 && (
-          <View style={styles.actionsSection}>
-            {actionRecs.map((rec, idx) => (
-              <RecommendationCard
-                key={rec.id || idx}
-                recommendation={rec}
-                onComplete={onCompleteRecommendation}
-                onDismiss={onDismissRecommendation}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
-            a friendly empty state instead of a wall of "0" cards */}
-        {data && !hasRealData && (
-          <AnalyticsEmptyState
-            icon="nutrition-outline"
-            iconColor={VIBRANT_WELLNESS.nutrition.solid}
-            title="No nutrition data yet"
-            subtitle={getNutritionEmptySubtitle(primaryGoal) || 'Log your meals to see analytics and personalized insights'}
-          />
-        )}
-
-        {data && hasRealData && (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} colors={[BRAND.primary]} />}>
+        {actionRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}
+        {data && !hasRealData ? <AnalyticsEmptyState icon="nutrition-outline" iconColor={COLOR} title="No nutrition data yet" subtitle={getNutritionEmptySubtitle(primaryGoal) || `No meals are logged ${copy.noun}. Log one to begin seeing calorie and macro patterns.`} /> : data && (
           <>
-            <View style={styles.metricsRow}>
-            <MetricCard
-              value={calories.consumed?.toLocaleString() || '0'}
-              label="Calories"
-              subtitle={`of ${calories.budget?.toLocaleString() || '2000'}`}
-              icon="flame"
-              iconColor={VIBRANT_WELLNESS.nutrition.solid}
-            />
-            <MetricCard
-              value={`${calories.percentage || 0}%`}
-              label="of Goal"
-              subtitle={goalPaceLabel || undefined}
-              icon="pie-chart"
-              iconColor={(calories.percentage || 0) >= 100 ? '#10B981' : VIBRANT_WELLNESS.nutrition.solid}
-            />
-            <MetricCard
-              value={mealsLogged || 0}
-              label="Meals"
-              subtitle={period === 'today' ? 'today' : 'logged'}
-              icon="restaurant"
-              iconColor={VIBRANT_WELLNESS.nutrition.solid}
-            />
-          </View>
-
-          {/* Weekly Trend — the dashboard's Nutrition card already shows today's
-              calorie ring in full detail, so this leans into what it doesn't:
-              how intake has moved across the week. */}
-          {hasWeekTrend && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{periodAdjective} Trend</Text>
-              <MiniLineChart
-                data={weekData.map((d) => d.calories)}
-                labels={weekData.map((d) => d.label)}
-                width={CHART_WIDTH}
-                color={VIBRANT_WELLNESS.nutrition.solid}
-                showGrid
-                showDots={weekData.length <= 10}
-              />
-              {weeklyAverages && (
-                <Text style={styles.trendSubtext}>
-                  Averaging {Math.round(weeklyAverages.avgCalories).toLocaleString()} cal/day {periodPhrase}
-                  {weeklyGoalPaceLabel ? ` — ${weeklyGoalPaceLabel}` : ''}
-                </Text>
-              )}
-            </View>
-          )}
-
-          <GoalRealityCheckCard
-            weeklyAverages={weeklyAverages}
-            primaryGoal={primaryGoal}
-            calorieGoal={calories.budget || 2000}
-          />
-
-          {/* Weekly Macro Averages — same protein/carbs/fat the dashboard card
-              tracks, but averaged across the week instead of restating today's
-              totals in a different widget shape. */}
-          {weeklyAverages && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{periodAdjective} Macro Averages</Text>
-              <View style={styles.macroList}>
-                <MacroBar
-                  name="Protein"
-                  consumed={Math.round(weeklyAverages.avgProtein || 0)}
-                  goal={macros.protein?.goal || 150}
-                  percentage={macroPercentage(weeklyAverages.avgProtein, macros.protein?.goal)}
-                  color={MACRO_COLORS.protein.base}
-                  unit="g"
-                />
-                <MacroBar
-                  name="Carbs"
-                  consumed={Math.round(weeklyAverages.avgCarbs || 0)}
-                  goal={macros.carbs?.goal || 250}
-                  percentage={macroPercentage(weeklyAverages.avgCarbs, macros.carbs?.goal)}
-                  color={MACRO_COLORS.carbs.base}
-                  unit="g"
-                />
-                <MacroBar
-                  name="Fat"
-                  consumed={Math.round(weeklyAverages.avgFats || 0)}
-                  goal={macros.fat?.goal || 65}
-                  percentage={macroPercentage(weeklyAverages.avgFats, macros.fat?.goal)}
-                  color={MACRO_COLORS.fat.base}
-                  unit="g"
-                />
-              </View>
-            </View>
-          )}
+            <ProgressHero color={COLOR} tint="#FFF4EC" eyebrow={`${copy.eyebrow} · NUTRITION SNAPSHOT`} title={period === 'today' ? `${Number(calories.consumed || 0).toLocaleString()} calories today` : `${averageCalories.toLocaleString()} daily average`} subtitle={period === 'today' ? `${mealsLogged} meal${mealsLogged === 1 ? '' : 's'} logged against a ${Number(calories.budget || 2000).toLocaleString()} calorie goal.` : `${rangePace || 'Your logged calorie pattern'} ${copy.noun}.`} badge={period === 'today' ? 'Today’s intake' : 'Average of logged days'} icon="nutrition" value={period === 'today' ? `${calories.percentage || 0}%` : `${Math.round((averageCalories / (calories.budget || 2000)) * 100)}%`} valueLabel="of daily goal" />
+            <MetricRow>
+              <MetricTile icon="flame-outline" color={COLOR} value={Number(calories.consumed || 0).toLocaleString()} label="Calories today" hint={`of ${Number(calories.budget || 2000).toLocaleString()}`} />
+              <MetricTile icon="stats-chart-outline" color="#6B82AD" value={averageCalories.toLocaleString()} label="Daily average" hint={copy.noun} />
+              <MetricTile icon="restaurant-outline" color="#D89B36" value={`${mealsLogged}`} label="Meals today" hint="today-only count" />
+            </MetricRow>
+            {hasTrend && period !== 'today' && <ProgressCard>
+              <SectionHeader eyebrow="CALORIES OVER TIME" title={`Daily logged intake ${copy.noun}`} subtitle="Calendar days without meals remain visible as zero-log days" icon="analytics-outline" color={COLOR} />
+              <MiniLineChart data={weekData.map((day) => Number(day.calories || 0))} labels={weekData.map((day) => day.label)} width={CHART_WIDTH} height={132} color={COLOR} showGrid showDots={weekData.length <= 10} minDomain={0} maxLabels={period === 'month' ? 6 : 7} accessibilityLabel={`${copy.eyebrow.toLowerCase()} logged calorie trend`} />
+            </ProgressCard>}
+            {weeklyAverages && <ProgressCard>
+              <SectionHeader eyebrow="DAILY MACRO AVERAGES" title={`Macro balance ${copy.noun}`} subtitle="Averages compared with your configured daily targets" icon="options-outline" color={COLOR} />
+              <ProgressBar label="Protein" value={macroPercentage(weeklyAverages.avgProtein, macros.protein?.goal)} displayValue={`${Math.round(weeklyAverages.avgProtein || 0)}g / ${macros.protein?.goal || 150}g`} color={MACRO_COLORS.protein.base} />
+              <ProgressBar label="Carbs" value={macroPercentage(weeklyAverages.avgCarbs, macros.carbs?.goal)} displayValue={`${Math.round(weeklyAverages.avgCarbs || 0)}g / ${macros.carbs?.goal || 250}g`} color={MACRO_COLORS.carbs.base} />
+              <ProgressBar label="Fat" value={macroPercentage(weeklyAverages.avgFats, macros.fat?.goal)} displayValue={`${Math.round(weeklyAverages.avgFats || 0)}g / ${macros.fat?.goal || 65}g`} color={MACRO_COLORS.fat.base} />
+            </ProgressCard>}
+            <GoalRealityCheckCard weeklyAverages={weeklyAverages} primaryGoal={primaryGoal} calorieGoal={calories.budget || 2000} />
           </>
         )}
 
-        {/* Smart Food Recommendations Section */}
-        <View style={styles.smartRecsSection}>
-          <TouchableOpacity
-            style={styles.smartRecsHeader}
-            onPress={handleToggleSmartRecs}
-            activeOpacity={0.7}
-          >
-            <View style={styles.smartRecsHeaderLeft}>
-              <View style={styles.smartRecsIcon}>
-                <Ionicons name="sparkles" size={18} color={BRAND.primary} />
-              </View>
-              <View>
-                <Text style={styles.smartRecsTitle}>Smart Food Picks</Text>
-                <Text style={styles.smartRecsSubtitle}>
-                  {showSmartRecs ? 'Tap to hide' : 'AI-powered recommendations based on your gaps'}
-                </Text>
-              </View>
-            </View>
-            <Ionicons
-              name={showSmartRecs ? 'chevron-up' : 'chevron-down'}
-              size={20}
-              color={TEXT.tertiary}
-            />
+        <View style={styles.smartCard}>
+          <TouchableOpacity style={styles.smartHeader} onPress={toggleSmartRecs} activeOpacity={0.75} accessibilityRole="button" accessibilityLabel="Smart Food Picks" accessibilityState={{ expanded: showSmartRecs }}>
+            <View style={styles.smartHeaderLeft}><View style={styles.smartIcon}><Ionicons name="sparkles" size={18} color={BRAND.primary} /></View><View style={styles.smartCopy}><Text style={styles.smartEyebrow}>OPTIONAL SUPPORT</Text><Text style={styles.smartTitle}>Smart Food Picks</Text><Text style={styles.smartSubtitle}>{showSmartRecs ? 'Personalized options based on logged nutrition gaps' : 'Open food ideas based on your logged gaps'}</Text></View></View>
+            <Ionicons name={showSmartRecs ? 'chevron-up' : 'chevron-down'} size={20} color={TEXT.tertiary} />
           </TouchableOpacity>
-
-          {showSmartRecs && (
-            <View style={styles.smartRecsContent}>
-              {smartLoading ? (
-                <SmartRecommendationsLoadingSkeleton cardCount={3} />
-              ) : smartRecsBlocked ? (
-                <View style={styles.smartRecsEmpty}>
-                  <Ionicons name="shield-outline" size={32} color={TEXT.tertiary} />
-                  <Text style={styles.smartRecsEmptyText}>
-                    {smartRecsBlockedReason || "Couldn't verify dietary safety right now — try again shortly"}
-                  </Text>
-                </View>
-              ) : hasSmartRecs ? (
-                <>
-                  {summary && (
-                    <SmartRecommendationSummary
-                      summary={summary}
-                      nutritionalStatus={nutritionalStatus}
-                    />
-                  )}
-                  <SmartRecommendationsList
-                    recommendations={smartRecs}
-                    onQuickLog={handleQuickLog}
-                    loggingId={loggingId}
-                  />
-                </>
-              ) : (
-                <View style={styles.smartRecsEmpty}>
-                  <Ionicons name="leaf-outline" size={32} color={TEXT.tertiary} />
-                  <Text style={styles.smartRecsEmptyText}>
-                    Log some meals to get personalized recommendations
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
+          {showSmartRecs && <View style={styles.smartContent}>{smartLoading ? <SmartRecommendationsLoadingSkeleton cardCount={3} /> : smartRecsBlocked ? <View style={styles.smartEmpty}><Ionicons name="shield-outline" size={30} color={TEXT.tertiary} /><Text style={styles.smartEmptyText}>{smartRecsBlockedReason || "Couldn't verify dietary safety right now — try again shortly"}</Text></View> : hasSmartRecs ? <>{summary && <SmartRecommendationSummary summary={summary} nutritionalStatus={nutritionalStatus} />}<SmartRecommendationsList recommendations={smartRecs} onQuickLog={handleQuickLog} loggingId={loggingId} /></> : <View style={styles.smartEmpty}><Ionicons name="leaf-outline" size={30} color={TEXT.tertiary} /><Text style={styles.smartEmptyText}>Log some meals to get personalized recommendations</Text></View>}</View>}
         </View>
 
-        {/* AI Insights Section */}
-        {insightRecs.length > 0 && (
-          <RecommendationSection
-            title="Nutrition Insights"
-            subtitle="Based on your data"
-            recommendations={insightRecs}
-          />
-        )}
-
-        {/* Discovered Patterns */}
-        {patternRecs.length > 0 && (
-          <RecommendationSection
-            title="Nutrition Patterns"
-            subtitle="Food-mood connections we found"
-            recommendations={patternRecs}
-          />
-        )}
-
-        {/* Smart Suggestions */}
-        {suggestionRecs.length > 0 && (
-          <RecommendationSection
-            title="Suggestions for You"
-            subtitle="Personalized tips"
-            recommendations={suggestionRecs}
-          />
-        )}
-
-        {/* Fallback static insights if no recommendations but have data */}
-        {recommendations.length === 0 && data && hasRealData && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Insights</Text>
-            <View style={styles.insightsList}>
-              <InsightItem
-                icon="checkmark-circle"
-                color="#10B981"
-                text={`${calories.percentage || 0}% of your calorie goal reached`}
-              />
-              {(macros?.protein?.percentage || 0) >= 80 && (
-                <InsightItem
-                  icon="thumbs-up"
-                  color="#10B981"
-                  text="Great protein intake today!"
-                />
-              )}
-              {(macros?.protein?.percentage || 0) < 50 && macros?.protein?.percentage !== undefined && (
-                <InsightItem
-                  icon="alert-circle"
-                  color="#F59E0B"
-                  text="Consider adding more protein-rich foods"
-                />
-              )}
-              {mealsLogged === 0 && (
-                <InsightItem
-                  icon="restaurant-outline"
-                  color="#3B82F6"
-                  text="Log your first meal to start tracking"
-                />
-              )}
-            </View>
-          </View>
-        )}
-
-        <View style={styles.bottomPadding} />
+        {data && hasRealData && <>
+          <SectionIntro eyebrow="PERSONAL CONTEXT" title="What stands out" subtitle={insightRecommendations.length ? `Rolling ${insightRecommendations[0].windowDays || 14}-day observations from logged meals—not medical advice or proof of cause.` : `Selected-range observations from logged meals ${copy.noun}.`} color={COLOR} />
+          {insightRecommendations.length ? <View style={styles.recommendations}>{insightRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}</View> : <InsightList items={fallbackInsights} />}
+        </>}
+        <ActionRow>
+          <ProgressAction icon="analytics-outline" label="Nutrition analytics" hint="Calories, macros & goals" color={COLOR} onPress={() => navigate('/analytics/nutrition')} />
+          <ProgressAction icon="add-circle-outline" label="Log food" hint="Add a meal now" color={COLOR} onPress={() => navigate('/(tabs)/log')} />
+        </ActionRow>
       </ScrollView>
     </>
   );
 }
 
-function MacroBar({ name, consumed, goal, percentage, color, unit }) {
-  return (
-    <View style={styles.macroRow}>
-      <View style={styles.macroHeader}>
-        <Text style={styles.macroName}>{name}</Text>
-        <Text style={styles.macroValue}>
-          {consumed}{unit} / {goal}{unit}
-        </Text>
-      </View>
-      <View style={styles.macroBarContainer}>
-        <View
-          style={[
-            styles.macroBarFill,
-            { width: `${Math.min(percentage, 100)}%`, backgroundColor: color },
-          ]}
-        />
-      </View>
-    </View>
-  );
-}
-
-function InsightItem({ icon, color, text }) {
-  return (
-    <View style={styles.insightRow}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text style={styles.insightText}>{text}</Text>
-    </View>
-  );
-}
-
-function macroPercentage(consumed, goal) {
-  return goal > 0 ? Math.min(((consumed || 0) / goal) * 100, 100) : 0;
-}
+function macroPercentage(consumed, goal) { return goal > 0 ? Math.min(((consumed || 0) / goal) * 100, 100) : 0; }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: SPACING[4],
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING[8],
-  },
-  emptyText: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: SPACING[4],
-  },
-  emptySubtext: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginTop: SPACING[2],
-    textAlign: 'center',
-  },
-  actionsSection: {
-    marginBottom: SPACING[2],
-  },
-  fullAnalyticsLink: {
-    ...CARD_SYSTEM.standard,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-    marginBottom: SPACING[4],
-  },
-  fullAnalyticsIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${VIBRANT_WELLNESS.nutrition.solid}15`,
-  },
-  fullAnalyticsText: {
-    flex: 1,
-  },
-  fullAnalyticsTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  fullAnalyticsSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 1,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-    marginBottom: SPACING[4],
-  },
-  card: {
-    ...CARD_SYSTEM.standard,
-    marginBottom: SPACING[4],
-  },
-  cardTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[3],
-  },
-  trendSubtext: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    textAlign: 'center',
-    marginTop: SPACING[3],
-  },
-  macroList: {
-    gap: SPACING[3],
-  },
-  macroRow: {
-    gap: SPACING[1],
-  },
-  macroHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  macroName: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.medium,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.primary,
-  },
-  macroValue: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-  },
-  macroBarContainer: {
-    height: 8,
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-  },
-  macroBarFill: {
-    height: '100%',
-    borderRadius: RADIUS.full,
-  },
-  insightsList: {
-    gap: SPACING[2],
-  },
-  insightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  insightText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    flex: 1,
-  },
-  // Smart Recommendations Section Styles
-  smartRecsSection: {
-    ...CARD_SYSTEM.standard,
-    marginBottom: SPACING[4],
-    padding: 0,
-    overflow: 'hidden',
-  },
-  smartRecsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: SPACING[4],
-    backgroundColor: BRAND.primary + '08',
-  },
-  smartRecsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  smartRecsIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.md,
-    backgroundColor: BRAND.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: SPACING[3],
-  },
-  smartRecsTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  smartRecsSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    marginTop: 2,
-  },
-  smartRecsContent: {
-    padding: SPACING[4],
-    paddingTop: 0,
-  },
-  smartRecsLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SPACING[6],
-    gap: SPACING[3],
-  },
-  smartRecsLoadingText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-  },
-  smartRecsEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SPACING[6],
-    gap: SPACING[2],
-  },
-  smartRecsEmptyText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-  },
-  bottomPadding: {
-    height: SPACING[8],
-  },
+  container: { flex: 1 },
+  content: { padding: SPACING[4], paddingBottom: SPACING[10] },
+  recommendations: { gap: SPACING[2] },
+  smartCard: { ...CARD_SYSTEM.standard, borderRadius: RADIUS['2xl'], padding: 0, overflow: 'hidden' },
+  smartHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SPACING[4], backgroundColor: `${BRAND.primary}08` },
+  smartHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  smartIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: `${BRAND.primary}12`, alignItems: 'center', justifyContent: 'center', marginRight: SPACING[3] },
+  smartCopy: { flex: 1, paddingRight: SPACING[2] },
+  smartEyebrow: { fontSize: 9, letterSpacing: 0.9, fontFamily: TYPOGRAPHY.family.bold, color: BRAND.primary },
+  smartTitle: { marginTop: 2, fontSize: TYPOGRAPHY.size.md, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.primary },
+  smartSubtitle: { marginTop: 3, fontSize: 11, lineHeight: 15, color: TEXT.tertiary },
+  smartContent: { padding: SPACING[4], paddingTop: 0 },
+  smartEmpty: { alignItems: 'center', justifyContent: 'center', padding: SPACING[6], gap: SPACING[2] },
+  smartEmptyText: { fontSize: TYPOGRAPHY.size.sm, color: TEXT.tertiary, textAlign: 'center' },
 });

@@ -10,7 +10,11 @@
  * Dashboard (useIntelligence.js) and, as of this session, the Your Progress
  * Activity tab.
  */
-import { calculateActivityStats, generateActivityTrendData } from '../src/services/decisionBrainService.js';
+import {
+  calculateActivityLogStreak,
+  calculateActivityStats,
+  generateActivityTrendData,
+} from '../src/services/decisionBrainService.js';
 
 const activityLog = (overrides) => ({
   durationMinutes: 30,
@@ -48,6 +52,49 @@ describe('calculateActivityStats', () => {
     const result = calculateActivityStats([], []);
     expect(result.activeDays).toBe(0);
     expect(result.mostActiveDay).toBeNull();
+  });
+
+  it('uses the user-local Sunday boundary for this-week minutes', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-27T16:00:00.000Z'));
+    const logs = [
+      activityLog({ loggedAt: new Date('2026-08-22T16:00:00.000Z'), durationMinutes: 180 }),
+      activityLog({ loggedAt: new Date('2026-08-23T16:00:00.000Z'), durationMinutes: 30 }),
+    ];
+
+    expect(calculateActivityStats(logs, [], 240).totalMinutesThisWeek).toBe(30);
+    jest.useRealTimers();
+  });
+});
+
+describe('calculateActivityLogStreak', () => {
+  it('uses persisted activity days instead of the unrelated gamification logging streak', () => {
+    const rows = [
+      activityLog({ dayKey: '2026-08-27', loggedAt: new Date('2026-08-27T08:00:00Z') }),
+      activityLog({ dayKey: '2026-08-26', loggedAt: new Date('2026-08-26T08:00:00Z') }),
+      activityLog({ dayKey: '2026-08-24', loggedAt: new Date('2026-08-24T08:00:00Z') }),
+      activityLog({ dayKey: '2026-08-23', loggedAt: new Date('2026-08-23T08:00:00Z') }),
+    ];
+
+    expect(calculateActivityLogStreak(rows, new Date('2026-08-27T16:00:00Z'), 240)).toBe(2);
+  });
+
+  it('keeps a streak open through today when the latest activity was yesterday', () => {
+    const rows = [
+      activityLog({ dayKey: '2026-08-26', loggedAt: new Date('2026-08-26T08:00:00Z') }),
+      activityLog({ dayKey: '2026-08-25', loggedAt: new Date('2026-08-25T08:00:00Z') }),
+    ];
+
+    expect(calculateActivityLogStreak(rows, new Date('2026-08-27T16:00:00Z'), 240)).toBe(2);
+  });
+
+  it('falls back to the user-local activity date for legacy rows without dayKey', () => {
+    const rows = [
+      activityLog({ dayKey: null, loggedAt: new Date('2026-08-27T02:00:00Z') }),
+      activityLog({ dayKey: null, loggedAt: new Date('2026-08-26T02:00:00Z') }),
+    ];
+
+    // UTC-4 maps these timestamps to Aug 26 and Aug 25.
+    expect(calculateActivityLogStreak(rows, new Date('2026-08-27T16:00:00Z'), 240)).toBe(2);
   });
 });
 

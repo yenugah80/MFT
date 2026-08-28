@@ -61,6 +61,31 @@ export function getLocalDayRange(offsetMinutes, baseDate = new Date()) {
   };
 }
 
+/**
+ * Get the Sunday-Saturday calendar week containing `baseDate` in the user's
+ * local timezone. The returned timestamps are UTC instants suitable for
+ * timestamp-column comparisons.
+ */
+export function getLocalWeekRange(offsetMinutes, baseDate = new Date()) {
+  const { start: todayStart } = getLocalDayRange(offsetMinutes, baseDate);
+
+  if (!Number.isFinite(offsetMinutes)) {
+    const start = new Date(todayStart);
+    start.setDate(start.getDate() - start.getDay());
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    end.setMilliseconds(end.getMilliseconds() - 1);
+    return { start, end };
+  }
+
+  const offsetMs = offsetMinutes * 60 * 1000;
+  const localTime = new Date(baseDate.getTime() - offsetMs);
+  const localWeekday = localTime.getUTCDay();
+  const start = new Date(todayStart.getTime() - localWeekday * 24 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+  return { start, end };
+}
+
 export function getLocalDateUTC(offsetMinutes, baseDate = new Date()) {
   if (!Number.isFinite(offsetMinutes)) {
     const date = new Date(baseDate);

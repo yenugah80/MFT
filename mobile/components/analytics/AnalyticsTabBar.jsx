@@ -23,67 +23,75 @@ export default function AnalyticsTabBar({ selected = 'nutrition', onSelect }) {
   };
 
   return (
-    <View style={styles.container}>
-      {TABS.map((tab) => {
-        const isActive = selected === tab.key;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, isActive && styles.tabActive]}
-            onPress={() => handleSelect(tab.key)}
-            activeOpacity={0.7}
-            accessibilityRole="tab"
-            accessibilityLabel={`${tab.label} tab`}
-            accessibilityState={{ selected: isActive }}
-          >
-            <Ionicons
-              name={tab.icon}
-              size={22}
-              color={isActive ? tab.color : TEXT.tertiary}
-            />
-            <Text style={[styles.label, isActive && { color: tab.color }]}>
-              {tab.label}
-            </Text>
-            {isActive && (
-              <View style={[styles.indicator, { backgroundColor: tab.color }]} />
-            )}
-          </TouchableOpacity>
-        );
-      })}
+    <View style={styles.shell}>
+      <View style={styles.container} accessibilityRole="tablist">
+        {TABS.map((tab) => {
+          const isActive = selected === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                styles.tab,
+                isActive && { backgroundColor: `${tab.color}12`, borderColor: `${tab.color}36` },
+              ]}
+              onPress={() => handleSelect(tab.key)}
+              activeOpacity={0.7}
+              accessibilityRole="tab"
+              accessibilityLabel={`${tab.label} progress`}
+              accessibilityState={{ selected: isActive }}
+            >
+              <View style={[styles.iconWrap, isActive && { backgroundColor: `${tab.color}16` }]}>
+                <Ionicons name={tab.icon} size={18} color={isActive ? tab.color : TEXT.tertiary} />
+              </View>
+              <Text style={[styles.label, isActive && { color: tab.color }]} numberOfLines={1}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
+  shell: {
     backgroundColor: SURFACES.card.primary,
     borderBottomWidth: 1,
     borderBottomColor: SURFACES.divider,
   },
+  container: {
+    flexDirection: 'row',
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[2],
+    gap: 4,
+  },
   tab: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 44,
     alignItems: 'center',
-    paddingVertical: SPACING[3],
-    gap: SPACING[1],
-    position: 'relative',
+    justifyContent: 'center',
+    gap: 2,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    paddingVertical: 5,
+    paddingHorizontal: 2,
   },
-  tabActive: {
-    backgroundColor: 'transparent',
+  iconWrap: {
+    width: 27,
+    height: 27,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   label: {
-    fontSize: TYPOGRAPHY.size.xs,
+    width: '100%',
+    textAlign: 'center',
+    fontSize: 9,
     fontWeight: TYPOGRAPHY.weight.medium,
     fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
-  },
-  indicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: SPACING[4],
-    right: SPACING[4],
-    height: 3,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
   },
 });

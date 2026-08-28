@@ -1510,8 +1510,10 @@ router.get("/history-stats", async (req, res) => {
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const today = getLocalDateUTC(offsetMinutes);
     const yesterday = addDaysUTC(today, -1);
-    const sevenDaysAgo = addDaysUTC(today, -7);
-    const thirtyDaysAgo = addDaysUTC(today, -30);
+    // Inclusive calendar ranges: today plus the previous 6/29 days.
+    // Using -7/-30 produced 8/31 dates and could claim “8 of the last 7 days”.
+    const sevenDaysAgo = addDaysUTC(today, -6);
+    const thirtyDaysAgo = addDaysUTC(today, -29);
 
     // Get today's date range for meals today count
     const { start: todayStart, end: todayEnd } = getLocalDayRange(offsetMinutes);

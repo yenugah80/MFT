@@ -38,6 +38,10 @@ export default function MiniLineChart({
   onPress = null,
   showDots = true,
   showGrid = false,
+  minDomain,
+  maxDomain,
+  maxLabels = 7,
+  accessibilityLabel,
 }) {
   if (data.length === 0) {
     return (
@@ -52,13 +56,17 @@ export default function MiniLineChart({
   const chartHeight = height - padding * 2;
 
   // Find min/max for scaling
-  const minValue = Math.min(...data);
-  const maxValue = Math.max(...data);
+  const observedMin = Math.min(...data);
+  const observedMax = Math.max(...data);
+  const minValue = Number.isFinite(minDomain) ? minDomain : observedMin;
+  const maxValue = Number.isFinite(maxDomain) ? maxDomain : observedMax;
   const valueRange = maxValue - minValue || 1; // Avoid division by zero
 
   // Generate points
   const points = data.map((value, index) => {
-    const x = padding + (index / (data.length - 1)) * chartWidth;
+    const x = data.length === 1
+      ? padding + chartWidth / 2
+      : padding + (index / (data.length - 1)) * chartWidth;
     const y = padding + chartHeight - ((value - minValue) / valueRange) * chartHeight;
     return { x, y, value };
   });
@@ -73,6 +81,9 @@ export default function MiniLineChart({
       style={[styles.container, { width, height }]}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
+      accessible
+      accessibilityRole={onPress ? 'button' : 'image'}
+      accessibilityLabel={accessibilityLabel || `Trend chart from ${observedMin.toFixed(1)} to ${observedMax.toFixed(1)}`}
     >
       <Svg width={width} height={height}>
         {/* Grid lines (optional) */}
@@ -119,6 +130,9 @@ export default function MiniLineChart({
         {/* Labels (if provided) */}
         {labels.length > 0 && labels.map((label, index) => {
           if (index >= points.length) return null;
+          const labelStep = Math.max(1, Math.ceil(labels.length / maxLabels));
+          const shouldShow = index === 0 || index === labels.length - 1 || index % labelStep === 0;
+          if (!shouldShow) return null;
           return (
             <SvgText
               key={index}
@@ -136,8 +150,8 @@ export default function MiniLineChart({
 
       {/* Min/Max indicators */}
       <View style={styles.indicators}>
-        <Text style={styles.maxLabel}>{maxValue.toFixed(1)}</Text>
-        <Text style={styles.minLabel}>{minValue.toFixed(1)}</Text>
+        <Text style={styles.maxLabel}>{maxValue.toFixed(0)}</Text>
+        <Text style={styles.minLabel}>{minValue.toFixed(0)}</Text>
       </View>
     </Wrapper>
   );

@@ -1,441 +1,64 @@
-/**
- * WellnessTab - Cross-Domain Intelligence Dashboard
- *
- * Displays:
- * - Overall wellness score
- * - Cross-domain correlations (food-mood, hydration-energy, activity-mood)
- * - Power formula insights
- * - Focus recommendations
- */
-
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import RecommendationCard, { RecommendationSection } from './RecommendationCard';
-import GaugeChart from './GaugeChart';
-import {
-  TEXT,
-  SURFACES,
-  SPACING,
-  RADIUS,
-  TYPOGRAPHY,
-  CARD_SYSTEM,
-  SEMANTIC,
-  VIBRANT_WELLNESS,
-  BRAND,
-} from '../../constants/premiumTheme';
 
-export default function WellnessTab({ data, period, recommendations = [], stats, onRefresh, refreshing = false }) {
+import AnalyticsEmptyState from './AnalyticsEmptyState';
+import RecommendationCard from './RecommendationCard';
+import { ActionRow, InsightList, MetricRow, MetricTile, PERIOD_COPY, ProgressAction, ProgressBar, ProgressCard, ProgressHero, SectionHeader, SectionIntro } from './ProgressUI';
+import { BRAND, SPACING, VIBRANT_WELLNESS } from '../../constants/premiumTheme';
+
+const WELLNESS_COLOR = BRAND.primary;
+const DOMAIN_ROWS = [
+  { key: 'nutrition', label: 'Nutrition', icon: 'nutrition', color: VIBRANT_WELLNESS.nutrition.solid },
+  { key: 'hydration', label: 'Hydration', icon: 'water', color: VIBRANT_WELLNESS.hydration.solid },
+  { key: 'activity', label: 'Activity', icon: 'fitness', color: VIBRANT_WELLNESS.activity.solid },
+  { key: 'mood', label: 'Mood', icon: 'happy', color: VIBRANT_WELLNESS.mood.solid },
+];
+
+export default function WellnessTab({ period, recommendations = [], onRefresh, refreshing = false }) {
   const router = useRouter();
-
-  const handleViewSleep = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/sleep-analytics');
-  };
-
-  const handleViewStress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/insights/stress-patterns');
-  };
-
-  // Empty state when no data and no recommendations
-  if (recommendations.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="heart-outline" size={48} color={TEXT.tertiary} />
-        <Text style={styles.emptyText}>Cross-Domain Insights Coming</Text>
-        <Text style={styles.emptySubtext}>
-          Log data across nutrition, mood, activity, and hydration to discover how they connect
-        </Text>
-        <View style={styles.emptyHint}>
-          <View style={styles.hintItem}>
-            <Ionicons name="nutrition" size={20} color={VIBRANT_WELLNESS.nutrition.solid} />
-            <Text style={styles.hintText}>Food</Text>
-          </View>
-          <Ionicons name="add" size={16} color={TEXT.tertiary} />
-          <View style={styles.hintItem}>
-            <Ionicons name="happy" size={20} color={VIBRANT_WELLNESS.mood.solid} />
-            <Text style={styles.hintText}>Mood</Text>
-          </View>
-          <Ionicons name="add" size={16} color={TEXT.tertiary} />
-          <View style={styles.hintItem}>
-            <Ionicons name="water" size={20} color={VIBRANT_WELLNESS.hydration.solid} />
-            <Text style={styles.hintText}>Water</Text>
-          </View>
-          <Ionicons name="add" size={16} color={TEXT.tertiary} />
-          <View style={styles.hintItem}>
-            <Ionicons name="fitness" size={20} color={VIBRANT_WELLNESS.activity.solid} />
-            <Text style={styles.hintText}>Activity</Text>
-          </View>
-        </View>
-
-        {/* Sleep/stress links belong here too, not just the populated state
-            below — a new user with no cross-domain data yet is exactly who
-            benefits most from discovering these screens exist. */}
-        <View style={styles.emptyStateLinks}>
-          <TouchableOpacity
-          style={styles.linkRow}
-          onPress={handleViewSleep}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Sleep analytics"
-        >
-            <Ionicons name="moon-outline" size={18} color={TEXT.primary} />
-            <Text style={styles.linkRowText}>Sleep Analytics</Text>
-            <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-          style={styles.linkRow}
-          onPress={handleViewStress}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Stress patterns"
-        >
-            <Ionicons name="pulse-outline" size={18} color={TEXT.primary} />
-            <Text style={styles.linkRowText}>Stress Patterns</Text>
-            <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  // Separate recommendations by type
-  const scoreRecs = recommendations.filter(r => r.id?.includes('wellness_score'));
-  const focusRecs = recommendations.filter(r => r.id?.includes('focus') || r.id?.includes('strength'));
-  const patternRecs = recommendations.filter(r => r.type === 'pattern');
-  const insightRecs = recommendations.filter(r => r.type === 'insight' && !r.id?.includes('wellness_score') && !r.id?.includes('strength'));
-
-  // Extract wellness score from the first score recommendation
-  const wellnessScoreRec = scoreRecs[0];
-  const wellnessScore = wellnessScoreRec?.metric?.overall || 0;
-  const breakdown = wellnessScoreRec?.metric?.breakdown || {};
+  const copy = PERIOD_COPY[period] || PERIOD_COPY.week;
+  const scoreRecommendation = recommendations.find((item) => item.id?.includes('wellness_score'));
+  const wellnessScore = Number(scoreRecommendation?.metric?.overall || 0);
+  const breakdown = scoreRecommendation?.metric?.breakdown || {};
+  const visibleDomains = DOMAIN_ROWS.filter((item) => Number(breakdown[item.key]) > 0);
+  const strongest = [...visibleDomains].sort((a, b) => Number(breakdown[b.key]) - Number(breakdown[a.key]))[0];
+  const focus = [...visibleDomains].sort((a, b) => Number(breakdown[a.key]) - Number(breakdown[b.key]))[0];
+  const contextRecommendations = recommendations.filter((item) => item !== scoreRecommendation && item.type !== 'action').slice(0, 3);
+  const navigate = (route) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(route); };
+  const hasScore = !!scoreRecommendation;
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={BRAND.primary}
-          colors={[BRAND.primary]}
-        />
-      }
-    >
-      {/* Wellness Score Card */}
-      {wellnessScoreRec && (
-        <View style={styles.scoreCard}>
-          <Text style={styles.scoreTitle}>Wellness Score</Text>
-          <Text style={styles.scoreSubtitle}>
-            {period === 'today' ? "Today's average" : period === 'month' ? 'This month\'s average' : "This week's average"}
-          </Text>
-          <View style={styles.gaugeWrapper}>
-            <GaugeChart value={wellnessScore} size={180} label="out of 100" />
-          </View>
-          <Text style={styles.scoreMessage}>{wellnessScoreRec.message}</Text>
-
-          {/* Breakdown Bars */}
-          <View style={styles.breakdownContainer}>
-            <BreakdownBar
-              label="Nutrition"
-              value={breakdown.nutrition || 0}
-              color={VIBRANT_WELLNESS.nutrition.solid}
-              icon="nutrition"
-            />
-            <BreakdownBar
-              label="Hydration"
-              value={breakdown.hydration || 0}
-              color={VIBRANT_WELLNESS.hydration.solid}
-              icon="water"
-            />
-            <BreakdownBar
-              label="Activity"
-              value={breakdown.activity || 0}
-              color={VIBRANT_WELLNESS.activity.solid}
-              icon="fitness"
-            />
-            <BreakdownBar
-              label="Mood"
-              value={breakdown.mood || 0}
-              color={VIBRANT_WELLNESS.mood.solid}
-              icon="happy"
-            />
-          </View>
-        </View>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND.primary} colors={[BRAND.primary]} />}>
+      {!hasScore ? (
+        <AnalyticsEmptyState icon="heart-outline" iconColor={WELLNESS_COLOR} title="Your wellness picture is still forming" subtitle="Log nutrition, hydration, activity, and mood to unlock a balanced cross-domain view." />
+      ) : (
+        <>
+          <ProgressHero color={WELLNESS_COLOR} tint="#F3F0FF" eyebrow={`${copy.eyebrow} · WHOLE-PERSON SNAPSHOT`} title={`${Math.round(wellnessScore)} out of 100`} subtitle={scoreRecommendation.message || 'A balanced view of four wellness signals.'} badge="An average of the four domain scores" icon="heart" value={wellnessScore >= 80 ? 'Strong' : wellnessScore >= 60 ? 'Steady' : wellnessScore >= 40 ? 'Building' : 'Starting'} valueLabel="overall balance" />
+          <MetricRow>
+            <MetricTile icon={strongest?.icon || 'sparkles-outline'} color={strongest?.color || WELLNESS_COLOR} value={strongest ? `${Math.round(breakdown[strongest.key])}%` : '—'} label="Strongest signal" hint={strongest?.label || 'More data needed'} />
+            <MetricTile icon={focus?.icon || 'compass-outline'} color={focus?.color || WELLNESS_COLOR} value={focus ? `${Math.round(breakdown[focus.key])}%` : '—'} label="Focus area" hint={focus?.label || 'More data needed'} />
+            <MetricTile icon="layers-outline" color={WELLNESS_COLOR} value={`${visibleDomains.length}/4`} label="Signals present" hint={copy.noun} />
+          </MetricRow>
+          <ProgressCard>
+            <SectionHeader eyebrow="BALANCE BY DOMAIN" title="The score, unpacked" subtitle="Each bar contributes equally to the overall average" icon="options-outline" color={WELLNESS_COLOR} />
+            {DOMAIN_ROWS.map((item) => <ProgressBar key={item.key} label={item.label} value={breakdown[item.key] || 0} color={item.color} icon={item.icon} />)}
+          </ProgressCard>
+          <SectionIntro eyebrow="PERSONAL CONTEXT" title="What stands out" subtitle="Observations from your logged data—not diagnoses or proof of cause." color={WELLNESS_COLOR} />
+          {contextRecommendations.length > 0 ? <View style={styles.recommendations}>{contextRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} compact />)}</View> : <InsightList items={[
+            { icon: strongest?.icon || 'checkmark-circle-outline', color: strongest?.color || WELLNESS_COLOR, title: strongest ? `${strongest.label} is supporting your score` : 'Keep logging across domains', message: strongest ? `${Math.round(breakdown[strongest.key])}% is the strongest observed domain in this range.` : 'Cross-domain observations become clearer as coverage grows.' },
+            { icon: focus?.icon || 'compass-outline', color: focus?.color || WELLNESS_COLOR, title: focus ? `${focus.label} has the most room to move` : 'No focus area yet', message: focus ? `At ${Math.round(breakdown[focus.key])}%, small consistent changes here may improve overall balance.` : 'The app will identify a focus after enough data is available.' },
+          ]} />}
+        </>
       )}
-
-      {/* Focus Areas */}
-      {focusRecs.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Focus & Strengths</Text>
-          {focusRecs.map((rec, idx) => (
-            <RecommendationCard key={rec.id || idx} recommendation={rec} />
-          ))}
-        </View>
-      )}
-
-      {/* Cross-Domain Patterns */}
-      {patternRecs.length > 0 && (
-        <RecommendationSection
-          title="Cross-Domain Patterns"
-          subtitle="Connections we found in your data"
-          recommendations={patternRecs}
-        />
-      )}
-
-      {/* Additional Insights */}
-      {insightRecs.length > 0 && (
-        <RecommendationSection
-          title="Wellness Insights"
-          subtitle="Understanding your overall health"
-          recommendations={insightRecs}
-        />
-      )}
-
-      {/* More Insights — sleep/stress deep-dives were previously reachable
-          only from Dashboard summary cards, with no path back into this
-          screen or /insights (see docs/architecture/recommendation-engine.md
-          UX consolidation notes). */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>More Insights</Text>
-        <TouchableOpacity
-          style={styles.linkRow}
-          onPress={handleViewSleep}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Sleep analytics"
-        >
-          <Ionicons name="moon-outline" size={18} color={TEXT.primary} />
-          <Text style={styles.linkRowText}>Sleep Analytics</Text>
-          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.linkRow}
-          onPress={handleViewStress}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Stress patterns"
-        >
-          <Ionicons name="pulse-outline" size={18} color={TEXT.primary} />
-          <Text style={styles.linkRowText}>Stress Patterns</Text>
-          <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* How It Works */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoHeader}>
-          <Ionicons name="information-circle" size={20} color={SEMANTIC.info.base} />
-          <Text style={styles.infoTitle}>How Wellness Score Works</Text>
-        </View>
-        <Text style={styles.infoText}>
-          Your wellness score combines nutrition, hydration, activity, and mood.
-          We analyze cross-domain patterns to discover what helps you feel your best.
-        </Text>
-        <View style={styles.infoExamples}>
-          <Text style={styles.infoExample}>Food + Mood = How diet affects your emotions</Text>
-          <Text style={styles.infoExample}>Water + Energy = How hydration impacts focus</Text>
-          <Text style={styles.infoExample}>Activity + Mood = How movement lifts your spirit</Text>
-        </View>
-      </View>
-
-      <View style={styles.bottomPadding} />
+      <SectionIntro eyebrow="DEEP DIVES" title="Explore your patterns" subtitle="Open the detailed history and pattern screens already connected to your data." color={WELLNESS_COLOR} />
+      <ActionRow>
+        <ProgressAction icon="moon-outline" label="Sleep analytics" hint="Rest trends & patterns" color={VIBRANT_WELLNESS.sleep.solid} onPress={() => navigate('/insights/sleep-analytics')} />
+        <ProgressAction icon="pulse-outline" label="Stress patterns" hint="Triggers & support" color={VIBRANT_WELLNESS.stress.solid} onPress={() => navigate('/insights/stress-patterns')} />
+      </ActionRow>
     </ScrollView>
   );
 }
 
-function BreakdownBar({ label, value, color, icon }) {
-  return (
-    <View style={styles.breakdownRow}>
-      <View style={styles.breakdownLabel}>
-        <Ionicons name={icon} size={16} color={color} />
-        <Text style={styles.breakdownLabelText}>{label}</Text>
-      </View>
-      <View style={styles.breakdownBarContainer}>
-        <View
-          style={[
-            styles.breakdownBarFill,
-            { width: `${Math.min(value, 100)}%`, backgroundColor: color },
-          ]}
-        />
-      </View>
-      <Text style={[styles.breakdownValue, { color }]}>{Math.round(value)}%</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: SPACING[4],
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING[8],
-  },
-  emptyText: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: SPACING[4],
-  },
-  emptySubtext: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    marginTop: SPACING[2],
-    textAlign: 'center',
-  },
-  emptyHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: SPACING[6],
-    gap: SPACING[2],
-  },
-  hintItem: {
-    alignItems: 'center',
-    gap: SPACING[1],
-  },
-  hintText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-  },
-  scoreCard: {
-    ...CARD_SYSTEM.standard,
-    marginBottom: SPACING[4],
-    alignItems: 'center',
-  },
-  scoreTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    alignSelf: 'flex-start',
-    marginBottom: SPACING[1],
-  },
-  scoreSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    alignSelf: 'flex-start',
-    marginBottom: SPACING[2],
-  },
-  gaugeWrapper: {
-    marginVertical: SPACING[2],
-  },
-  scoreMessage: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-    lineHeight: 20,
-    marginBottom: SPACING[4],
-    textAlign: 'center',
-  },
-  breakdownContainer: {
-    alignSelf: 'stretch',
-    gap: SPACING[3],
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  breakdownLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    width: 90,
-  },
-  breakdownLabelText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-  },
-  breakdownBarContainer: {
-    flex: 1,
-    height: 8,
-    backgroundColor: SURFACES.background.tertiary,
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-  },
-  breakdownBarFill: {
-    height: '100%',
-    borderRadius: RADIUS.full,
-  },
-  breakdownValue: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    width: 40,
-    textAlign: 'right',
-  },
-  section: {
-    marginBottom: SPACING[4],
-  },
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginBottom: SPACING[3],
-  },
-  emptyStateLinks: {
-    alignSelf: 'stretch',
-    marginTop: SPACING[8],
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    ...CARD_SYSTEM.standard,
-    marginBottom: SPACING[2],
-  },
-  linkRowText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  infoCard: {
-    ...CARD_SYSTEM.standard,
-    backgroundColor: SEMANTIC.info.bg,
-    borderColor: `${SEMANTIC.info.base}30`,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[2],
-  },
-  infoTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  infoText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
-    lineHeight: 20,
-    marginBottom: SPACING[3],
-  },
-  infoExamples: {
-    gap: SPACING[1],
-  },
-  infoExample: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-    paddingLeft: SPACING[2],
-    borderLeftWidth: 2,
-    borderLeftColor: `${SEMANTIC.info.base}30`,
-  },
-  bottomPadding: {
-    height: SPACING[8],
-  },
-});
+const styles = StyleSheet.create({ container: { flex: 1 }, content: { padding: SPACING[4], paddingBottom: SPACING[10] }, recommendations: { gap: SPACING[2] } });

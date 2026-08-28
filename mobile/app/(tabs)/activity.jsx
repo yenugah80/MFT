@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Modal, RefreshControl, Animated, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Modal, RefreshControl, Animated, ActivityIndicator, KeyboardAvoidingView, ScrollView, Pressable, Platform } from 'react-native';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
 import { useUser } from '@clerk/clerk-expo';
 import * as Haptics from 'expo-haptics';
 import useProfileForm from '../../hooks/useProfileForm';
@@ -10,6 +11,7 @@ import { useActivityLog } from '../../hooks/useActivityLog';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import {
   EXERCISE_CATEGORIES,
+  EXERCISES,
   FOCUS_FILTERS,
   INTENSITY_LEVELS,
   filterExercises,
@@ -23,8 +25,12 @@ import {
   SPACING,
   RADIUS,
   SEMANTIC,
-  BRAND,
+  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
+
+const ACTIVITY_COLOR = VIBRANT_WELLNESS.activity.solid;
+const QUICK_DURATIONS = [15, 30, 45, 60];
+const INTENSITY_ICONS = { LIGHT: 'leaf-outline', MODERATE: 'pulse-outline', VIGOROUS: 'flash-outline' };
 
 /**
  * Activity & Fitness Tracker
@@ -33,7 +39,9 @@ import {
  * Analytics (today's log, trends, recommendations) live on the Insights screen
  * reached from the Dashboard.
  */
-function ActivityScreen() {
+export function ActivityScreen() {
+  const insets = useSafeAreaInsets();
+  const routeParams = useLocalSearchParams();
   // Hooks - Get user profile for weight calculation
   const { user } = useUser();
   const { state: profileState } = useProfileForm(user);
@@ -67,6 +75,59 @@ function ActivityScreen() {
   const [intensity, setIntensity] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const appliedRecommendationRef = useRef(null);
+
+  // The Insights CTA passes the live recommendation API's activity, duration,
+  // intensity and focus. Exact catalogue matches can open immediately. Broad
+  // activities such as "Strength" or "Walking" filter the real catalogue and
+  // wait for the user to choose a specific exercise rather than guessing one.
+  useEffect(() => {
+    const first = (value) => Array.isArray(value) ? value[0] : value;
+    const recommendationKey = first(routeParams.requestId)
+      || [routeParams.activity, routeParams.type, routeParams.minutes, routeParams.intensity, routeParams.focus].map(first).join('|');
+    if (!recommendationKey || appliedRecommendationRef.current === recommendationKey) return;
+    appliedRecommendationRef.current = recommendationKey;
+
+    if (first(routeParams.recommended) !== '1') {
+      if (first(routeParams.source) === 'activity-insights') {
+        setSearchQuery('');
+        setSelectedCategory(null);
+        setSelectedFocus(null);
+        setSelectedExercise(null);
+        setModalVisible(false);
+        setDuration('');
+        setIntensity(null);
+      }
+      return;
+    }
+
+    const requestedMinutes = Number(first(routeParams.minutes));
+    if (Number.isInteger(requestedMinutes) && requestedMinutes > 0 && requestedMinutes <= 1440) {
+      setDuration(String(requestedMinutes));
+    }
+
+    const requestedIntensity = String(first(routeParams.intensity) || '').toUpperCase();
+    if (INTENSITY_LEVELS[requestedIntensity]) setIntensity(requestedIntensity);
+
+    const requestedName = String(first(routeParams.activity) || '').trim();
+    const requestedType = String(first(routeParams.type) || '').trim().toLowerCase();
+    const exactExercise = EXERCISES.find((exercise) =>
+      requestedName && exercise.name.toLowerCase() === requestedName.toLowerCase()
+    ) || EXERCISES.find((exercise) => requestedType && exercise.id === requestedType);
+
+    if (exactExercise) {
+      setSelectedExercise(exactExercise);
+      setModalVisible(true);
+      return;
+    }
+
+    const requestedFocus = String(first(routeParams.focus) || '').trim().toLowerCase();
+    const focusFilter = FOCUS_FILTERS.find((item) =>
+      item.key === requestedFocus || item.label.toLowerCase() === requestedFocus
+    );
+    if (focusFilter) setSelectedFocus(focusFilter.key);
+    if (requestedName || requestedType) setSearchQuery(requestedName || requestedType);
+  }, [routeParams]);
 
   // Fade in animation on mount
   useEffect(() => {
@@ -103,6 +164,9 @@ function ActivityScreen() {
   const isValidDuration =
     /^\d+$/.test(duration.trim()) && durationValue > 0 && durationValue <= 1440;
   const canLogActivity = !!selectedExercise && isValidDuration && !!intensity;
+  const estimatedCalories = canLogActivity
+    ? calculateCalories(selectedExercise, durationValue, userWeight, intensity)
+    : null;
 
   const handleLogActivity = async () => {
     if (!canLogActivity) return;
@@ -202,7 +266,7 @@ function ActivityScreen() {
       activeOpacity={0.9}
     >
       <View style={styles.exerciseIcon}>
-        <Ionicons name={item.icon} size={24} color={BRAND.primary} />
+        <Ionicons name={item.icon} size={24} color={ACTIVITY_COLOR} />
       </View>
       <View style={styles.exerciseInfo}>
         <Text style={styles.exerciseName}>{item.name}</Text>
@@ -246,7 +310,7 @@ function ActivityScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={BRAND.primary} />
+          <ActivityIndicator size="large" color={ACTIVITY_COLOR} />
           <Text style={styles.loadingText}>Loading activities...</Text>
         </View>
       </SafeAreaView>
@@ -258,7 +322,7 @@ function ActivityScreen() {
       {/* Header */}
       <Animated.View style={{ opacity: fadeAnim }}>
         <LinearGradient
-          colors={[BRAND.primary, `${BRAND.primary}CC`]}
+          colors={VIBRANT_WELLNESS.activity.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -333,8 +397,8 @@ function ActivityScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={BRAND.primary}
-            colors={[BRAND.primary]}
+            tintColor={ACTIVITY_COLOR}
+            colors={[ACTIVITY_COLOR]}
           />
         }
         ListEmptyComponent={renderEmptyState}
@@ -346,76 +410,99 @@ function ActivityScreen() {
         animationType="slide"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
+        statusBarTranslucent
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close activity log" />
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
             {selectedExercise && (
-              <>
-                <View style={styles.modalHeader}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.sheetHandle} />
+                <View style={styles.modalHeaderRow}>
                   <View style={styles.modalIconContainer}>
-                    <Ionicons name={selectedExercise.icon} size={32} color={BRAND.primary} />
+                    <Ionicons name={selectedExercise.icon} size={27} color={ACTIVITY_COLOR} />
                   </View>
-                  <Text style={styles.modalTitle}>{selectedExercise.name}</Text>
-                  <Text style={styles.modalSubtitle}>{selectedExercise.description}</Text>
+                  <View style={styles.modalHeaderCopy}>
+                    <Text style={styles.modalEyebrow}>LOG WORKOUT</Text>
+                    <Text style={styles.modalTitle}>{selectedExercise.name}</Text>
+                    <Text style={styles.modalSubtitle} numberOfLines={2}>{selectedExercise.description}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.modalCloseButton} onPress={() => setModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8}>
+                    <Ionicons name="close" size={21} color={TEXT.secondary} />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Duration Input */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Duration (minutes)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={duration}
-                    onChangeText={setDuration}
-                    keyboardType="numeric"
-                    placeholder="30"
-                    placeholderTextColor={TEXT.tertiary}
-                  />
+                <View style={styles.formSection}>
+                  <View style={styles.sectionLabelRow}>
+                    <View>
+                      <Text style={styles.inputLabel}>How long?</Text>
+                      <Text style={styles.inputHint}>Enter minutes or choose a shortcut</Text>
+                    </View>
+                    <View style={[styles.validityPill, isValidDuration && styles.validityPillReady]}>
+                      <Ionicons name={isValidDuration ? 'checkmark-circle' : 'time-outline'} size={14} color={isValidDuration ? ACTIVITY_COLOR : TEXT.tertiary} />
+                      <Text style={[styles.validityText, isValidDuration && styles.validityTextReady]}>{isValidDuration ? 'Ready' : 'Required'}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.durationInputShell, duration.length > 0 && !isValidDuration && styles.durationInputError]}>
+                    <TextInput style={styles.durationInput} value={duration} onChangeText={(value) => setDuration(value.replace(/[^0-9]/g, '').slice(0, 4))} keyboardType="number-pad" placeholder="—" placeholderTextColor={TEXT.tertiary} maxLength={4} accessibilityLabel="Duration in minutes" />
+                    <Text style={styles.durationUnit}>minutes</Text>
+                  </View>
+                  {duration.length > 0 && !isValidDuration && <Text style={styles.validationText}>Use a whole number from 1 to 1,440 minutes.</Text>}
+                  <View style={styles.quickDurationRow}>
+                    {QUICK_DURATIONS.map((minutes) => {
+                      const selected = durationValue === minutes && isValidDuration;
+                      return <TouchableOpacity key={minutes} style={[styles.quickDuration, selected && styles.quickDurationSelected]} onPress={() => { Haptics.selectionAsync(); setDuration(String(minutes)); }} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${minutes} minutes`}><Text style={[styles.quickDurationText, selected && styles.quickDurationTextSelected]}>{minutes}</Text></TouchableOpacity>;
+                    })}
+                  </View>
                 </View>
 
-                {/* Intensity Selection */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Intensity Level</Text>
+                <View style={styles.formSection}>
+                  <Text style={styles.inputLabel}>How hard did it feel?</Text>
+                  <Text style={styles.inputHint}>Choose the effort that best matches this session</Text>
                   <View style={styles.intensityButtons}>
                     {Object.entries(INTENSITY_LEVELS).map(([key, value]) => (
                       <TouchableOpacity
                         key={key}
                         style={[
                           styles.intensityButton,
-                          intensity === key && { backgroundColor: value.color + '20', borderColor: value.color }
+                          intensity === key && { backgroundColor: `${value.color}12`, borderColor: value.color }
                         ]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           setIntensity(key);
                         }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: intensity === key }}
+                        accessibilityLabel={`${value.label} intensity`}
                       >
+                        <View style={[styles.intensityIcon, { backgroundColor: `${value.color}14` }]}><Ionicons name={INTENSITY_ICONS[key]} size={18} color={value.color} /></View>
                         <Text style={[
                           styles.intensityButtonText,
                           intensity === key && { color: value.color, fontFamily: TYPOGRAPHY.family.bold }
                         ]}>
                           {value.label}
                         </Text>
+                        {intensity === key && <Ionicons name="checkmark-circle" size={16} color={value.color} />}
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
 
-                {/* Calories Preview */}
-                {/* Only estimate once both inputs are real — otherwise this
-                    rendered "~0 calories burned", which reads as a result. */}
-                <View style={styles.caloriesPreview}>
-                  <Ionicons name="flame" size={24} color={SEMANTIC.warning.base} />
-                  <Text style={styles.caloriesPreviewText}>
-                    {isValidDuration && intensity
-                      ? `~${calculateCalories(selectedExercise, durationValue, userWeight, intensity)} calories burned`
-                      : 'Enter a duration and intensity to estimate calories'}
-                  </Text>
+                <View style={[styles.caloriesPreview, estimatedCalories !== null && styles.caloriesPreviewReady]}>
+                  <View style={styles.caloriesIcon}><Ionicons name="flame" size={21} color={SEMANTIC.warning.base} /></View>
+                  <View style={styles.caloriesCopy}>
+                    <Text style={styles.caloriesLabel}>ESTIMATED ENERGY</Text>
+                    <Text style={styles.caloriesPreviewText}>{estimatedCalories !== null ? `About ${estimatedCalories} kcal` : 'Complete both fields for an estimate'}</Text>
+                    <Text style={styles.caloriesCaveat}>Personal estimate based on your profile—not a precise measurement.</Text>
+                  </View>
                 </View>
 
-                {/* Action Buttons */}
                 <View style={styles.modalActions}>
                   <TouchableOpacity
                     style={styles.cancelButton}
                     onPress={() => setModalVisible(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel"
                   >
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
@@ -423,6 +510,9 @@ function ActivityScreen() {
                     style={[styles.logButton, (!canLogActivity || isLogging) && styles.logButtonDisabled]}
                     onPress={handleLogActivity}
                     disabled={!canLogActivity || isLogging}
+                    accessibilityRole="button"
+                    accessibilityLabel="Log activity"
+                    accessibilityState={{ disabled: !canLogActivity || isLogging, busy: isLogging }}
                     accessibilityHint={
                       !isValidDuration
                         ? 'Enter a duration in minutes to log'
@@ -430,24 +520,24 @@ function ActivityScreen() {
                     }
                   >
                     <LinearGradient
-                      colors={[BRAND.primary, `${BRAND.primary}CC`]}
+                      colors={VIBRANT_WELLNESS.activity.gradient}
                       style={styles.logButtonGradient}
                     >
                       {isLogging ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
                         <>
-                          <Ionicons name="checkmark" size={20} color="#fff" />
-                          <Text style={styles.logButtonText}>Log Activity</Text>
+                          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                          <Text style={styles.logButtonText}>Save workout</Text>
                         </>
                       )}
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
-              </>
+              </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -546,7 +636,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   categoryChipSelected: {
-    backgroundColor: BRAND.primary,
+    backgroundColor: ACTIVITY_COLOR,
   },
   categoryText: {
     fontSize: 14,
@@ -575,7 +665,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: `${BRAND.primary}15`,
+    backgroundColor: `${ACTIVITY_COLOR}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -642,7 +732,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: BRAND.primary,
+    backgroundColor: ACTIVITY_COLOR,
     borderRadius: 12,
   },
   clearButtonText: {
@@ -652,101 +742,157 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(20, 24, 31, 0.54)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: SURFACES.background.primary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
+    maxHeight: '92%',
+    backgroundColor: SURFACES.card.primary,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: SPACING[4],
+    ...SHADOWS.lg,
   },
-  modalHeader: {
+  modalScrollContent: { paddingTop: 10 },
+  sheetHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: SURFACES.divider,
+    alignSelf: 'center',
+    marginBottom: SPACING[3],
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: SPACING[5],
+    gap: SPACING[3],
   },
   modalIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: `${BRAND.primary}15`,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: `${ACTIVITY_COLOR}12`,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
   },
+  modalHeaderCopy: { flex: 1, minWidth: 0 },
+  modalEyebrow: { fontSize: 9, letterSpacing: 1, fontFamily: TYPOGRAPHY.family.bold, color: ACTIVITY_COLOR },
   modalTitle: {
-    fontSize: 24,
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.xl,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
   modalSubtitle: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.size.xs,
+    lineHeight: 17,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
-    marginTop: 4,
-    textAlign: 'center',
+    marginTop: 2,
   },
-  inputGroup: {
-    marginBottom: 20,
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: SURFACES.background.tertiary,
   },
+  formSection: { marginBottom: SPACING[5] },
+  sectionLabelRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: SPACING[3] },
   inputLabel: {
-    fontSize: 14,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: SURFACES.background.secondary,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    fontFamily: TYPOGRAPHY.family.regular,
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
+  inputHint: { marginTop: 3, fontSize: 11, lineHeight: 15, fontFamily: TYPOGRAPHY.family.regular, color: TEXT.tertiary },
+  validityPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: SURFACES.background.tertiary },
+  validityPillReady: { backgroundColor: `${ACTIVITY_COLOR}10` },
+  validityText: { fontSize: 9, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.tertiary },
+  validityTextReady: { color: ACTIVITY_COLOR },
+  durationInputShell: {
+    minHeight: 66,
+    marginTop: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: SURFACES.card.border,
+    borderRadius: RADIUS.xl,
+    backgroundColor: SURFACES.background.primary,
+  },
+  durationInputError: { borderColor: SEMANTIC.danger.base },
+  durationInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 27,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  durationUnit: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.tertiary },
+  validationText: { marginTop: 6, fontSize: 10, color: SEMANTIC.danger.base },
+  quickDurationRow: { flexDirection: 'row', gap: SPACING[2], marginTop: SPACING[3] },
+  quickDuration: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.lg, borderWidth: 1, borderColor: SURFACES.card.border, backgroundColor: SURFACES.background.primary },
+  quickDurationSelected: { borderColor: ACTIVITY_COLOR, backgroundColor: `${ACTIVITY_COLOR}10` },
+  quickDurationText: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.secondary },
+  quickDurationTextSelected: { color: ACTIVITY_COLOR, fontFamily: TYPOGRAPHY.family.bold },
   intensityButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: SPACING[2],
+    marginTop: SPACING[3],
   },
   intensityButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: SURFACES.background.secondary,
+    minHeight: 92,
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.xl,
+    backgroundColor: SURFACES.background.primary,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: SURFACES.card.border,
+    gap: 5,
   },
+  intensityIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   intensityButtonText: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.secondary,
   },
   caloriesPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: `${SEMANTIC.warning.base}15`,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 24,
+    gap: SPACING[3],
+    backgroundColor: SURFACES.background.tertiary,
+    padding: SPACING[3],
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+    marginBottom: SPACING[5],
   },
+  caloriesPreviewReady: { backgroundColor: `${SEMANTIC.warning.base}0B`, borderColor: `${SEMANTIC.warning.base}25` },
+  caloriesIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: `${SEMANTIC.warning.base}14` },
+  caloriesCopy: { flex: 1 },
+  caloriesLabel: { fontSize: 9, letterSpacing: 0.8, fontFamily: TYPOGRAPHY.family.bold, color: SEMANTIC.warning.base },
   caloriesPreviewText: {
-    fontSize: 16,
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.base,
     fontFamily: TYPOGRAPHY.family.bold,
-    color: SEMANTIC.warning.base,
+    color: TEXT.primary,
   },
+  caloriesCaveat: { marginTop: 2, fontSize: 9, lineHeight: 13, fontFamily: TYPOGRAPHY.family.regular, color: TEXT.tertiary },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: SPACING[3],
   },
   cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: SURFACES.background.secondary,
+    minWidth: 98,
+    minHeight: 52,
+    borderRadius: RADIUS.lg,
+    backgroundColor: SURFACES.background.tertiary,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButtonText: {
     fontSize: 16,
@@ -754,19 +900,20 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
   },
   logButton: {
-    flex: 2,
-    borderRadius: 12,
+    flex: 1,
+    minHeight: 52,
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
   },
   logButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.42,
   },
   logButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
+    minHeight: 52,
   },
   logButtonText: {
     fontSize: 16,

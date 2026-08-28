@@ -22,14 +22,15 @@ import {
   Platform,
   Animated,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Crypto from 'expo-crypto';
 
 import {
   TEXT,
-  BRAND,
   SURFACES,
   SEMANTIC,
   SHADOWS,
@@ -69,6 +70,8 @@ export default function StressLogger({ visible, onClose }) {
   // Animation
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef(null);
+  const pendingEventIdRef = useRef(null);
 
   // Form state
   // Null until the user picks. The level IS the datum here — an untouched
@@ -78,6 +81,8 @@ export default function StressLogger({ visible, onClose }) {
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
   const [selectedCoping, setSelectedCoping] = useState([]);
   const [notes, setNotes] = useState('');
+  const [activeDetail, setActiveDetail] = useState('triggers');
+  const [saveError, setSaveError] = useState(null);
 
   // Animation effects
   useEffect(() => {
@@ -109,7 +114,7 @@ export default function StressLogger({ visible, onClose }) {
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, fadeAnim, slideAnim]);
 
   // Reset form when opening
   useEffect(() => {
@@ -119,8 +124,24 @@ export default function StressLogger({ visible, onClose }) {
       setSelectedSymptoms([]);
       setSelectedCoping([]);
       setNotes('');
+      setActiveDetail('triggers');
+      setSaveError(null);
+      pendingEventIdRef.current = null;
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [visible]);
+
+  const selectDetail = useCallback((key) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveDetail(key);
+  }, []);
 
   const handleLevelChange = useCallback((level) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -150,6 +171,7 @@ export default function StressLogger({ visible, onClose }) {
 
   const handleSave = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSaveError(null);
 
     // Build symptoms object
     const symptomsObject = {};
@@ -158,16 +180,23 @@ export default function StressLogger({ visible, onClose }) {
     });
 
     try {
+      // Keep the same key after an uncertain network failure. If the server
+      // committed but the response was lost, Retry resolves idempotently.
+      pendingEventIdRef.current ||= Crypto.randomUUID();
       await logStress({
         level: stressLevel,
         triggers: selectedTriggers,
         physicalSymptoms: symptomsObject,
         copingUsed: selectedCoping,
         notes: notes.trim() || null,
+        clientEventId: pendingEventIdRef.current,
       });
+      pendingEventIdRef.current = null;
       onClose();
     } catch (error) {
       console.error('Failed to log stress:', error);
+      setSaveError('Couldn’t save your check-in. Check your connection and try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
 
@@ -185,6 +214,13 @@ export default function StressLogger({ visible, onClose }) {
   // STRESS_COLORS encodes severity, so there is no honest colour for "not yet
   // rated". Fall back to the neutral Stress accent used on the dashboard card.
   const stressColor = hasLevel ? STRESS_COLORS[stressLevel - 1] : SEMANTIC.warning.base;
+  const detailCount = selectedTriggers.length + selectedSymptoms.length + selectedCoping.length + (notes.length ? 1 : 0);
+  const detailTabs = [
+    { key: 'triggers', label: 'Causes', icon: 'compass-outline', count: selectedTriggers.length, accent: stressColor },
+    { key: 'symptoms', label: 'Body', icon: 'body-outline', count: selectedSymptoms.length, accent: SEMANTIC.warning.base },
+    { key: 'coping', label: 'Relief', icon: 'leaf-outline', count: selectedCoping.length, accent: SEMANTIC.success.base },
+    { key: 'notes', label: 'Note', icon: 'create-outline', count: notes.length ? 1 : 0, accent: VIBRANT_WELLNESS.stress.solid },
+  ];
 
   return (
     <Modal
@@ -211,44 +247,58 @@ export default function StressLogger({ visible, onClose }) {
             { transform: [{ translateY: slideAnim }] }
           ]}
         >
-          {/* Header */}
+          {/* Compact hero keeps the check-in feeling quick, not clinical. */}
           <LinearGradient
-            colors={[stressColor, `${stressColor}DD`]}
+            colors={VIBRANT_WELLNESS.stress.gradient}
             style={styles.header}
           >
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#FFF" />
-            </TouchableOpacity>
-            <View style={styles.headerContent}>
-              <Ionicons name="pulse" size={32} color="#FFF" />
-              <Text style={styles.headerTitle}>Log Stress</Text>
-              <Text style={styles.headerSubtitle}>How are you feeling right now?</Text>
+            <View style={styles.headerTopRow}>
+              <View style={styles.headerIdentity}>
+                <View style={styles.pulseOrb}>
+                  <Ionicons name="pulse" size={22} color="#FFF" />
+                </View>
+                <View>
+                  <Text style={styles.headerEyebrow}>QUICK CHECK-IN</Text>
+                  <Text style={styles.headerTitle}>Log stress</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={handleClose} style={styles.closeButton} accessibilityLabel="Close stress logger">
+                <Ionicons name="close" size={22} color="#FFF" />
+              </TouchableOpacity>
             </View>
+            <Text style={styles.headerPrompt}>What’s your load right now?</Text>
           </LinearGradient>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.content}
             contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
           >
-            {/* Stress Level Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Stress Level</Text>
-
-              <View style={styles.levelDisplay}>
+            {/* Required intensity */}
+            <View style={[styles.section, styles.levelCard]}>
+              <View style={styles.sectionHeading}>
+                <View style={styles.levelQuestion}>
+                  <Text style={styles.sectionEyebrow}>INTENSITY</Text>
+                  <Text style={styles.sectionTitle}>How strong is it?</Text>
+                </View>
+                <View style={styles.levelDisplay}>
                 {hasLevel ? (
                   <>
-                    <View style={[styles.levelCircle, { backgroundColor: `${stressColor}20`, borderColor: stressColor }]}>
+                    <View style={[styles.levelCircle, { backgroundColor: `${stressColor}16`, borderColor: `${stressColor}45` }]}>
                       <Text style={[styles.levelValue, { color: stressColor }]}>
                         {stressLevel}
                       </Text>
                     </View>
-                    <Text style={styles.levelLabel}>{stressInfo.label}</Text>
-                    <Text style={styles.levelDescription}>{stressInfo.description}</Text>
+                    <View>
+                      <Text style={[styles.levelLabel, { color: stressColor }]}>{stressInfo.label}</Text>
+                      <Text style={styles.levelDescription}>{stressInfo.description}</Text>
+                    </View>
                   </>
                 ) : (
-                  <Text style={styles.levelPrompt}>Tap a number to rate your stress</Text>
+                      <Text style={styles.levelPrompt}>Choose 1–10</Text>
                 )}
+                </View>
               </View>
 
               <View style={styles.levelSlider}>
@@ -257,33 +307,70 @@ export default function StressLogger({ visible, onClose }) {
                     key={level}
                     style={[
                       styles.levelDot,
-                      { backgroundColor: STRESS_COLORS[level - 1] },
+                      { borderColor: STRESS_COLORS[level - 1] },
                       stressLevel === level && styles.levelDotActive,
+                      stressLevel === level && { backgroundColor: STRESS_COLORS[level - 1] },
                     ]}
                     onPress={() => handleLevelChange(level)}
                     accessibilityRole="button"
                     accessibilityLabel={`Stress level ${level} out of 10`}
                     accessibilityState={{ selected: stressLevel === level }}
                   >
-                    {stressLevel === level && (
-                      <View style={styles.levelDotInner} />
-                    )}
+                    {stressLevel === level && <Ionicons name="checkmark" size={14} color="#FFF" />}
                   </TouchableOpacity>
                 ))}
               </View>
 
               <View style={styles.levelLabels}>
-                <Text style={styles.levelEndLabel}>Calm</Text>
-                <Text style={styles.levelEndLabel}>Stressed</Text>
+                <Text style={styles.levelEndLabel}>1 · Calm</Text>
+                <Text style={[styles.levelSelectedLabel, hasLevel && { color: stressColor }]}>{stressInfo?.label || 'Choose one'}</Text>
+                <Text style={styles.levelEndLabel}>10 · Overwhelmed</Text>
               </View>
+
+              {stressLevel >= 7 && <Text style={styles.encouragementText}>Take it one step at a time — noticing it already helps.</Text>}
             </View>
 
-            {/* Triggers Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>What's Causing Stress?</Text>
-              <Text style={styles.sectionSubtitle}>Select all that apply</Text>
+            <View style={styles.detailsCard}>
+              <View style={styles.detailsHeading}>
+                <View>
+                  <Text style={styles.sectionEyebrow}>OPTIONAL DETAILS</Text>
+                  <Text style={styles.detailsTitle}>Add what feels useful</Text>
+                </View>
+                <View style={styles.detailsCount}>
+                  <Text style={styles.detailsCountText}>{detailCount ? `${detailCount} added` : 'Skip anytime'}</Text>
+                </View>
+              </View>
 
-              <View style={styles.tagsGrid}>
+              <View style={styles.detailTabs} accessibilityRole="tablist">
+                {detailTabs.map((tab) => {
+                  const isActive = activeDetail === tab.key;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[styles.detailTab, isActive && { backgroundColor: `${tab.accent}12` }]}
+                      onPress={() => selectDetail(tab.key)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      <View style={styles.detailTabIconWrap}>
+                        <Ionicons name={tab.icon} size={18} color={isActive ? tab.accent : TEXT.tertiary} />
+                        {!!tab.count && (
+                          <View style={[styles.tabBadge, { backgroundColor: tab.accent }]}>
+                            <Text style={styles.tabBadgeText}>{tab.count}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.detailTabLabel, isActive && { color: tab.accent }]}>{tab.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.detailBody}>
+                {activeDetail === 'triggers' && (
+                  <>
+                    <Text style={styles.detailPrompt}>What’s driving it?</Text>
+                    <View style={styles.tagsGrid}>
                 {STRESS_TRIGGERS.map((trigger) => {
                   const isSelected = selectedTriggers.includes(trigger.key);
                   return (
@@ -291,10 +378,7 @@ export default function StressLogger({ visible, onClose }) {
                       key={trigger.key}
                       style={[
                         styles.tagChip,
-                        isSelected && {
-                          backgroundColor: `${stressColor}15`,
-                          borderColor: stressColor
-                        }
+                        isSelected && { backgroundColor: `${stressColor}12`, borderColor: `${stressColor}60` }
                       ]}
                       onPress={() => handleTriggerToggle(trigger.key)}
                     >
@@ -312,15 +396,14 @@ export default function StressLogger({ visible, onClose }) {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            </View>
+                    </View>
+                  </>
+                )}
 
-            {/* Physical Symptoms Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Physical Symptoms</Text>
-              <Text style={styles.sectionSubtitle}>Are you experiencing any of these?</Text>
-
-              <View style={styles.symptomsGrid}>
+                {activeDetail === 'symptoms' && (
+                  <>
+                    <Text style={styles.detailPrompt}>What is your body saying?</Text>
+                    <View style={styles.symptomsGrid}>
                 {PHYSICAL_SYMPTOMS.map((symptom) => {
                   const isSelected = selectedSymptoms.includes(symptom.key);
                   return (
@@ -328,10 +411,7 @@ export default function StressLogger({ visible, onClose }) {
                       key={symptom.key}
                       style={[
                         styles.symptomChip,
-                        isSelected && {
-                          backgroundColor: `${SEMANTIC.warning.base}15`,
-                          borderColor: SEMANTIC.warning.base
-                        }
+                        isSelected && { backgroundColor: `${SEMANTIC.warning.base}12`, borderColor: `${SEMANTIC.warning.base}60` }
                       ]}
                       onPress={() => handleSymptomToggle(symptom.key)}
                     >
@@ -349,15 +429,14 @@ export default function StressLogger({ visible, onClose }) {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            </View>
+                    </View>
+                  </>
+                )}
 
-            {/* Coping Strategies Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>What's Helping?</Text>
-              <Text style={styles.sectionSubtitle}>Coping strategies you've used</Text>
-
-              <View style={styles.tagsGrid}>
+                {activeDetail === 'coping' && (
+                  <>
+                    <Text style={styles.detailPrompt}>What’s helping?</Text>
+                    <View style={styles.tagsGrid}>
                 {COPING_STRATEGIES.map((strategy) => {
                   const isSelected = selectedCoping.includes(strategy.key);
                   return (
@@ -365,10 +444,7 @@ export default function StressLogger({ visible, onClose }) {
                       key={strategy.key}
                       style={[
                         styles.tagChip,
-                        isSelected && {
-                          backgroundColor: `${SEMANTIC.success.base}15`,
-                          borderColor: SEMANTIC.success.base
-                        }
+                        isSelected && { backgroundColor: `${SEMANTIC.success.base}12`, borderColor: `${SEMANTIC.success.base}60` }
                       ]}
                       onPress={() => handleCopingToggle(strategy.key)}
                     >
@@ -386,67 +462,61 @@ export default function StressLogger({ visible, onClose }) {
                     </TouchableOpacity>
                   );
                 })}
+                    </View>
+                  </>
+                )}
+
+                {activeDetail === 'notes' && (
+                  <>
+                    <View style={styles.notesMeta}>
+                      <Text style={styles.detailPrompt}>Anything else?</Text>
+                      <Text style={styles.charCount}>{notes.length}/{MAX_NOTE_LENGTH}</Text>
+                    </View>
+                    <TextInput
+                      style={styles.notesInput}
+                      placeholder="Write what feels useful…"
+                      placeholderTextColor={TEXT.tertiary}
+                      value={notes}
+                      onChangeText={(text) => setNotes(text.slice(0, MAX_NOTE_LENGTH))}
+                      multiline
+                      numberOfLines={3}
+                      maxLength={MAX_NOTE_LENGTH}
+                    />
+                  </>
+                )}
               </View>
             </View>
-
-            {/* Notes Section */}
-            <View style={styles.section}>
-              <View style={styles.notesHeader}>
-                <Text style={styles.sectionTitle}>Notes</Text>
-                <Text style={styles.charCount}>
-                  {notes.length}/{MAX_NOTE_LENGTH}
-                </Text>
-              </View>
-              <TextInput
-                style={styles.notesInput}
-                placeholder="Anything else on your mind?"
-                placeholderTextColor={TEXT.tertiary}
-                value={notes}
-                onChangeText={(text) => setNotes(text.slice(0, MAX_NOTE_LENGTH))}
-                multiline
-                numberOfLines={3}
-                maxLength={MAX_NOTE_LENGTH}
-              />
-            </View>
-
-            {/* Encouragement Card */}
-            {stressLevel >= 7 && (
-              <View style={styles.encouragementCard}>
-                <Ionicons name="heart" size={20} color={SEMANTIC.info.base} />
-                <Text style={styles.encouragementText}>
-                  It's okay to feel stressed. Taking a moment to log this is already a positive step.
-                </Text>
-              </View>
-            )}
           </ScrollView>
 
-          {/* Action Buttons */}
+          {/* Anchored primary action */}
           <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleClose}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-
+            {!!saveError && (
+              <View style={styles.saveError} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                <Ionicons name="alert-circle" size={17} color={SEMANTIC.error.base} />
+                <Text style={styles.saveErrorText}>{saveError}</Text>
+              </View>
+            )}
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                isLogging && styles.saveButtonDisabled
+                (!hasLevel || isLogging) && styles.saveButtonDisabled
               ]}
               onPress={handleSave}
               disabled={!hasLevel || isLogging}
               accessibilityHint={hasLevel ? undefined : 'Choose a stress level to save'}
             >
               <LinearGradient
-                colors={[stressColor, `${stressColor}DD`]}
+                colors={hasLevel ? [stressColor, `${stressColor}DD`] : ['#D3C9B9', '#C3B8A7']}
                 style={styles.saveButtonGradient}
               >
                 {isLogging ? (
-                  <Text style={styles.saveButtonText}>Saving...</Text>
+                  <>
+                    <ActivityIndicator size="small" color="#FFF" />
+                    <Text style={styles.saveButtonText}>Saving…</Text>
+                  </>
                 ) : (
                   <>
-                    <Ionicons name="checkmark" size={20} color="#FFF" />
+                    <Ionicons name="checkmark-circle" size={21} color="#FFF" />
                     <Text style={styles.saveButtonText}>
                       {selectedCoping.length > 0 ? 'Save Check-in' : 'Save'}
                     </Text>
@@ -454,6 +524,7 @@ export default function StressLogger({ visible, onClose }) {
                 )}
               </LinearGradient>
             </TouchableOpacity>
+            <Text style={styles.actionHint}>{hasLevel ? 'Your stress check-in is ready' : 'Choose a stress level to continue'}</Text>
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -464,274 +535,97 @@ export default function StressLogger({ visible, onClose }) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(40, 32, 18, 0.55)',
   },
-  overlayTouch: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
+  overlayTouch: { flex: 1 },
+  keyboardView: { flex: 1, justifyContent: 'flex-end' },
   container: {
     backgroundColor: SURFACES.background.primary,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    height: SCREEN_HEIGHT * 0.9,
+    borderTopLeftRadius: RADIUS['3xl'],
+    borderTopRightRadius: RADIUS['3xl'],
+    height: SCREEN_HEIGHT * 0.94,
     overflow: 'hidden',
     ...SHADOWS.lg,
   },
-
-  // Header
-  header: {
-    paddingTop: SPACING[4],
-    paddingBottom: SPACING[5],
+  header: { paddingTop: SPACING[4], paddingBottom: SPACING[4], paddingHorizontal: SPACING[5], borderTopLeftRadius: RADIUS['3xl'], borderTopRightRadius: RADIUS['3xl'] },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: SPACING[3] },
+  headerEyebrow: { fontSize: 10, letterSpacing: 1.3, color: 'rgba(255,255,255,0.72)', fontFamily: TYPOGRAPHY.family.bold },
+  closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' },
+  pulseOrb: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' },
+  headerTitle: { marginTop: 1, fontSize: TYPOGRAPHY.size.xl, fontFamily: TYPOGRAPHY.family.bold, color: '#FFF' },
+  headerPrompt: { marginTop: SPACING[3], fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.family.semibold, color: 'rgba(255,255,255,0.9)' },
+  content: { flex: 1 },
+  contentContainer: { padding: SPACING[3], paddingTop: SPACING[3], paddingBottom: SPACING[3] },
+  section: { marginBottom: SPACING[3] },
+  levelCard: { backgroundColor: SURFACES.card.primary, borderRadius: RADIUS.xl, padding: SPACING[3], borderWidth: 1, borderColor: SURFACES.card.border, ...SHADOWS.sm },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING[2], marginBottom: SPACING[3] },
+  sectionEyebrow: { fontSize: 10, letterSpacing: 1.2, color: TEXT.tertiary, fontFamily: TYPOGRAPHY.family.bold },
+  levelQuestion: { flexShrink: 1 },
+  sectionTitle: { marginTop: 2, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.primary },
+  levelDisplay: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: SPACING[2] },
+  levelCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  levelValue: { fontSize: TYPOGRAPHY.size.lg, fontFamily: TYPOGRAPHY.family.bold },
+  levelPrompt: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary },
+  levelLabel: { fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  levelDescription: { marginTop: 2, maxWidth: 100, fontSize: 9, color: TEXT.tertiary },
+  levelSlider: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: SPACING[2] },
+  levelDot: { flex: 1, maxWidth: 31, aspectRatio: 1, borderRadius: 16, backgroundColor: SURFACES.background.tertiary, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  levelDotActive: { transform: [{ scale: 1.08 }] },
+  levelLabels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  levelEndLabel: { fontSize: 10, color: TEXT.tertiary },
+  levelSelectedLabel: { fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.tertiary },
+  encouragementText: { marginTop: SPACING[2], fontSize: 10, color: SEMANTIC.info.base, fontFamily: TYPOGRAPHY.family.medium },
+  detailsCard: { backgroundColor: SURFACES.card.primary, borderRadius: RADIUS.xl, padding: SPACING[3], borderWidth: 1, borderColor: SURFACES.card.border, ...SHADOWS.sm },
+  detailsHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING[3] },
+  detailsTitle: { marginTop: 2, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.primary },
+  detailsCount: { backgroundColor: SURFACES.background.tertiary, borderRadius: RADIUS.full, paddingHorizontal: SPACING[2], paddingVertical: 5 },
+  detailsCountText: { fontSize: 9, color: TEXT.tertiary, fontFamily: TYPOGRAPHY.family.medium },
+  detailTabs: { flexDirection: 'row', gap: SPACING[1], padding: 4, borderRadius: RADIUS.lg, backgroundColor: SURFACES.background.tertiary },
+  detailTab: { flex: 1, minHeight: 52, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  detailTabIconWrap: { position: 'relative' },
+  detailTabLabel: { fontSize: 10, color: TEXT.tertiary, fontFamily: TYPOGRAPHY.family.semibold },
+  tabBadge: { position: 'absolute', right: -10, top: -7, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
+  tabBadgeText: { color: '#FFF', fontSize: 8, fontFamily: TYPOGRAPHY.family.bold },
+  detailBody: { marginTop: SPACING[3], minHeight: 150 },
+  detailPrompt: { marginBottom: SPACING[2], fontSize: TYPOGRAPHY.size.sm, color: TEXT.secondary, fontFamily: TYPOGRAPHY.family.semibold },
+  tagsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[2] },
+  tagChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], paddingHorizontal: SPACING[3], paddingVertical: 7, borderRadius: RADIUS.full, backgroundColor: SURFACES.background.tertiary, borderWidth: 1, borderColor: SURFACES.card.border },
+  tagLabel: { fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.medium, color: TEXT.secondary },
+  symptomsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[2] },
+  symptomChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING[1], paddingHorizontal: SPACING[2], paddingVertical: 7, borderRadius: RADIUS.full, backgroundColor: SURFACES.background.tertiary, borderWidth: 1, borderColor: SURFACES.card.border },
+  symptomLabel: { fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.medium, color: TEXT.secondary },
+  notesMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  charCount: { fontSize: TYPOGRAPHY.size.xs, color: TEXT.tertiary },
+  notesInput: { backgroundColor: SURFACES.background.tertiary, borderRadius: RADIUS.md, padding: SPACING[3], fontFamily: TYPOGRAPHY.family.regular, fontSize: TYPOGRAPHY.size.sm, color: TEXT.primary, minHeight: 104, textAlignVertical: 'top' },
+  actions: {
     paddingHorizontal: SPACING[4],
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: SPACING[3],
-    right: SPACING[3],
-    padding: SPACING[2],
-    zIndex: 10,
-  },
-  headerContent: {
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#FFF',
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-
-  // Content
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: SPACING[4],
-    paddingBottom: SPACING[6],
-  },
-
-  // Sections
-  section: {
-    marginBottom: SPACING[5],
-  },
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[2],
-  },
-  sectionSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginBottom: SPACING[3],
-  },
-
-  // Level Section
-  levelDisplay: {
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginBottom: SPACING[4],
-  },
-  levelCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-  },
-  levelValue: {
-    fontSize: TYPOGRAPHY.size['3xl'],
-    fontWeight: TYPOGRAPHY.weight.bold,
-    fontFamily: TYPOGRAPHY.family.bold,
-  },
-  levelPrompt: {
-    fontSize: TYPOGRAPHY.size.base,
-    color: TEXT.tertiary,
-    paddingVertical: SPACING[5],
-    textAlign: 'center',
-  },
-  levelLabel: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  levelDescription: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    textAlign: 'center',
-  },
-  levelSlider: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING[2],
-    marginBottom: SPACING[2],
-  },
-  levelDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  levelDotActive: {
-    transform: [{ scale: 1.4 }],
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  levelDotInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFF',
-  },
-  levelLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING[1],
-  },
-  levelEndLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-  },
-
-  // Tags Grid
-  tagsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING[2],
-  },
-  tagChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[2],
-    borderRadius: RADIUS.full,
-    backgroundColor: SURFACES.background.secondary,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  tagLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-  },
-
-  // Symptoms Grid
-  symptomsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING[2],
-  },
-  symptomChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[1],
-    paddingHorizontal: SPACING[2],
-    paddingVertical: SPACING[2],
-    borderRadius: RADIUS.md,
-    backgroundColor: SURFACES.background.secondary,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  symptomLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
-  },
-
-  // Notes Section
-  notesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING[2],
-  },
-  charCount: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-  },
-  notesInput: {
+    paddingTop: SPACING[3],
+    paddingBottom: Platform.OS === 'ios' ? SPACING[6] : SPACING[4],
+    borderTopWidth: 1,
+    borderTopColor: SURFACES.divider,
     backgroundColor: SURFACES.card.primary,
-    borderRadius: RADIUS.md,
-    padding: SPACING[3],
-    fontSize: TYPOGRAPHY.size.base,
-    color: TEXT.primary,
-    minHeight: 80,
-    textAlignVertical: 'top',
+  },
+  saveError: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[2], paddingHorizontal: SPACING[2] },
+  saveErrorText: { flex: 1, fontSize: 10, lineHeight: 14, color: SEMANTIC.error.base, fontFamily: TYPOGRAPHY.family.medium },
+  saveButton: {
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
     ...SHADOWS.sm,
   },
-
-  // Encouragement Card
-  encouragementCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-    backgroundColor: `${SEMANTIC.info.base}10`,
-    padding: SPACING[3],
-    borderRadius: RADIUS.md,
-    marginTop: SPACING[2],
-  },
-  encouragementText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    lineHeight: 20,
-  },
-
-  // Actions
-  actions: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-    padding: SPACING[4],
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.background.secondary,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: SPACING[4],
-    borderRadius: RADIUS.md,
-    backgroundColor: SURFACES.background.secondary,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-  },
-  saveButton: {
-    flex: 2,
-    borderRadius: RADIUS.md,
-    overflow: 'hidden',
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
+  saveButtonDisabled: { opacity: 0.72 },
   saveButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING[2],
-    padding: SPACING[4],
+    minHeight: 52,
+    paddingHorizontal: SPACING[4],
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.size.base,
-    fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#FFF',
   },
+  actionHint: { marginTop: SPACING[2], textAlign: 'center', fontSize: 10, color: TEXT.tertiary },
 });

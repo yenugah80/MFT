@@ -76,6 +76,16 @@ export function normalizeMultiItemAnalysis(rawData) {
         dominantCuisine: rawData.mealSummary?.dominantCuisine || detectDominantCuisine(normalizedItems),
         mealType: validateMealType(rawData.mealSummary?.mealType),
         portionAssessment: validatePortionAssessment(rawData.mealSummary?.portionAssessment, totals.calories),
+        // NOTE: this ends up on mealSummary.healthScore, a nested field
+        // nothing in the app currently displays — the app reads the
+        // top-level healthScore/nutriScore that enrichWithHealthMetrics()
+        // (resolve.js) computes via unifiedResponseBuilder.js instead. If
+        // you ever wire this nested field up to a screen, route the
+        // calculation through unifiedResponseBuilder's
+        // calculateHealthScoreFromNutrition() rather than this local
+        // formula — two independent formulas producing two different
+        // numbers for the same meal is exactly the bug fixed in the
+        // Nutri-Score consistency pass this comment was added in.
         healthScore: validateNumber(rawData.mealSummary?.healthScore, calculateHealthScore(normalizedItems, totals), 0, 100),
         suggestions: Array.isArray(rawData.mealSummary?.suggestions) ? rawData.mealSummary.suggestions.slice(0, 5) : []
       },
@@ -138,7 +148,11 @@ function validateImageQuality(value) {
 }
 
 /**
- * Calculate health score based on meal composition
+ * Calculate health score based on meal composition.
+ *
+ * Fallback only, used when the vision model's own mealSummary.healthScore
+ * is missing/malformed — see the call site's NOTE for why this shouldn't
+ * be treated as a second canonical score source.
  */
 function calculateHealthScore(items, totals) {
   let score = 70; // Base score

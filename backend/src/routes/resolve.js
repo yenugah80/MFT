@@ -1388,6 +1388,11 @@ function enrichWithHealthMetrics(draft) {
     },
     healthScore: item.scores?.healthScore,
     nutriScore: item.scores?.nutriScore?.grade,
+    // Real AI-estimated meal weight, dropped here before this fix — without
+    // it, unifiedResponseBuilder.js's calculateNutriScore() defaults to 100g
+    // and scores a whole meal's absolute totals as if they were per-100g
+    // density, producing a far harsher grade than reality.
+    gramsEquivalent: item.portion?.gramsEquivalent || 100,
     cookingMethod: item.cookingMethod || null,
     confidence: item.sourceEvidence?.[0]?.confidence || 0.7,
     source: item.sourceEvidence?.[0]?.source || 'resolve'

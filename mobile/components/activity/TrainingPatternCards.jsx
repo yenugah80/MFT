@@ -22,8 +22,10 @@ import {
   RADIUS,
   SHADOWS,
   SEMANTIC,
-  BRAND,
+  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
+
+const ACTIVITY_COLOR = VIBRANT_WELLNESS.activity.solid;
 
 const INTENSITY_META = {
   light: { label: 'Light', color: SEMANTIC.success.base },
@@ -42,7 +44,7 @@ export function IntensityMixCard({ mix }) {
       <Text style={styles.title}>How hard you trained</Text>
 
       {!hasData ? (
-        <Text style={styles.empty}>No sessions with a duration logged yet.</Text>
+        <Text style={styles.empty}>No workouts with a duration logged yet.</Text>
       ) : (
         <>
           <View style={styles.stack}>
@@ -103,7 +105,7 @@ export function TimeOfDayCard({ pattern }) {
                     styles.bucketFill,
                     {
                       width: `${(bucket.sessions / peak) * 100}%`,
-                      backgroundColor: dominant?.key === bucket.key ? BRAND.primary : `${BRAND.primary}55`,
+                      backgroundColor: dominant?.key === bucket.key ? ACTIVITY_COLOR : `${ACTIVITY_COLOR}55`,
                     },
                   ]}
                 />
@@ -115,7 +117,7 @@ export function TimeOfDayCard({ pattern }) {
           <Text style={styles.note}>
             {hasPattern
               ? `You train ${dominant.label.toLowerCase()}s ${dominant.share}% of the time, averaging ${dominant.averageMinutes} min.`
-              : `${totalSessions} session${totalSessions === 1 ? '' : 's'} so far — a few more and a pattern will show here.`}
+              : `${totalSessions} workout${totalSessions === 1 ? '' : 's'} so far — a few more and a pattern will show here.`}
           </Text>
         </>
       )}
@@ -129,7 +131,7 @@ export function PersonalBestsCard({ bests, streak }) {
   const rows = [
     longestSession && {
       icon: 'time-outline',
-      label: 'Longest session',
+      label: 'Longest workout',
       value: `${longestSession.duration} min`,
       meta: shortDate(longestSession.timestamp),
     },
@@ -143,13 +145,13 @@ export function PersonalBestsCard({ bests, streak }) {
       icon: 'calendar-outline',
       label: 'Best week',
       value: `${bestWeek.minutes} min`,
-      meta: `${bestWeek.sessions} session${bestWeek.sessions === 1 ? '' : 's'}`,
+      meta: `${bestWeek.sessions} workout${bestWeek.sessions === 1 ? '' : 's'}`,
     },
     {
       icon: 'flash-outline',
-      label: 'Current streak',
-      value: `${streak?.current || 0} day${(streak?.current || 0) === 1 ? '' : 's'}`,
-      meta: streak?.longest ? `best ${streak.longest}` : null,
+      label: 'Longest streak',
+      value: `${streak?.longest || 0} day${(streak?.longest || 0) === 1 ? '' : 's'}`,
+      meta: 'personal best',
     },
   ].filter(Boolean);
 
@@ -158,12 +160,12 @@ export function PersonalBestsCard({ bests, streak }) {
       <Text style={styles.title}>Your bests</Text>
 
       {totalSessions === 0 ? (
-        <Text style={styles.empty}>Log a session and your records start here.</Text>
+        <Text style={styles.empty}>Log a workout and your personal bests start here.</Text>
       ) : (
         <>
           {rows.map((row) => (
             <View key={row.label} style={styles.bestRow}>
-              <Ionicons name={row.icon} size={17} color={BRAND.primary} />
+              <Ionicons name={row.icon} size={17} color={ACTIVITY_COLOR} />
               <Text style={styles.bestLabel}>{row.label}</Text>
               <Text style={styles.bestValue}>{row.value}</Text>
               {!!row.meta && <Text style={styles.bestMeta}>{row.meta}</Text>}
@@ -171,7 +173,7 @@ export function PersonalBestsCard({ bests, streak }) {
           ))}
           {totalSessions < 5 && (
             <Text style={styles.note}>
-              Based on {totalSessions} session{totalSessions === 1 ? '' : 's'} — these will move as you log more.
+              Based on {totalSessions} workout{totalSessions === 1 ? '' : 's'} — these will move as you log more.
             </Text>
           )}
         </>

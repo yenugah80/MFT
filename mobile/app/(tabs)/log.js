@@ -41,7 +41,7 @@ import { useTheme } from '../../providers/ThemeProvider';
 import useProfileForm from '../../hooks/useProfileForm';
 import { useUser } from '@clerk/clerk-expo';
 import { calculateDailyTargets } from '../../utils/nutritionTargets';
-import { hydrationMessages, moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
+import { moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
 import { getAllergenSeverity } from '../../utils/allergenDetection';
 
 // Components
@@ -169,6 +169,10 @@ export default function LogScreen() {
   const [isTextFocused, setIsTextFocused] = useState(false);
   const [showMealLogged, setShowMealLogged] = useState(false);
   const [loggedMeal, setLoggedMeal] = useState(null);
+  // Snapshot of the just-saved day's totals. The dashboard query invalidates
+  // after sync, but its previous cache can remain visible for a render; the
+  // confirmation must never show the pre-save 0% state during that gap.
+  const [loggedDailyTotals, setLoggedDailyTotals] = useState(null);
   const [showHydrationModal, setShowHydrationModal] = useState(false);
   const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
   const [hasManuallyClosedDetails, setHasManuallyClosedDetails] = useState(false);
@@ -285,6 +289,14 @@ export default function LogScreen() {
       case 'hydration':
         closeAllModals();
         setShowHydrationModal(true);
+        break;
+      case 'sleep':
+        closeAllModals();
+        setShowSleepModal(true);
+        break;
+      case 'stress':
+        closeAllModals();
+        setShowStressModal(true);
         break;
       case 'meal':
         closeAllModals();
@@ -612,6 +624,15 @@ export default function LogScreen() {
       healthAnalysis: matchingAnalysis?.healthAnalysis ?? null,
       originalAnalysis: analyzedFood || matchingAnalysis
     });
+    const current = dashboardData?.today?.nutrition || {};
+    setLoggedDailyTotals({
+      ...current,
+      totalCalories: (Number(current.totalCalories) || 0) + (Number(foodData.macros?.calories_kcal ?? foodData.calories) || 0),
+      totalProtein: (Number(current.totalProtein) || 0) + (Number(foodData.macros?.protein_g ?? foodData.protein) || 0),
+      totalCarbs: (Number(current.totalCarbs) || 0) + (Number(foodData.macros?.carbs_g ?? foodData.carbs) || 0),
+      totalFats: (Number(current.totalFats) || 0) + (Number(foodData.macros?.fat_g ?? foodData.fats ?? foodData.fat) || 0),
+      totalFiber: (Number(current.totalFiber) || 0) + (Number(foodData.macros?.fiber_g ?? foodData.fiber) || 0),
+    });
 
     InteractionManager.runAfterInteractions(() => {
       setTimeout(() => setShowMealLogged(true), 100);
@@ -786,6 +807,15 @@ export default function LogScreen() {
         source: analysisResult.source || 'text',
         mealType: effectiveMealType,
         originalAnalysis: analysisResult
+      });
+      const current = dashboardData?.today?.nutrition || {};
+      setLoggedDailyTotals({
+        ...current,
+        totalCalories: (Number(current.totalCalories) || 0) + totalCalories,
+        totalProtein: (Number(current.totalProtein) || 0) + totalProtein,
+        totalCarbs: (Number(current.totalCarbs) || 0) + totalCarbs,
+        totalFats: (Number(current.totalFats) || 0) + totalFat,
+        totalFiber: (Number(current.totalFiber) || 0) + totalFiber,
       });
 
       InteractionManager.runAfterInteractions(() => {
@@ -1083,11 +1113,14 @@ export default function LogScreen() {
       // FIX: Use entry.amount (raw ml), not entry.effectiveAmount (already factor-adjusted)
       // Backend water.js applies hydration factor: hydrationLiters = amountLiters * factor
       const amountLiters = entry.amount / 1000; // Convert raw ml to liters
-      await logWater(amountLiters, entry.type);
-      notify.success(hydrationMessages.logged(entry.amount, entry.type), { domain: 'hydration' });
+      // Return the persisted server record so HydrationTracker can undo this
+      // exact write. The compact inline confirmation is the single success
+      // surface for this action; a second global toast would be duplicate UI.
+      return await logWater(amountLiters, entry.type);
     } catch (error) {
       console.error('[LogScreen] Failed to log water:', error);
       notify.error(generalMessages.error());
+      throw error;
     }
   };
 
@@ -1096,11 +1129,11 @@ export default function LogScreen() {
    */
   const handleRemoveWater = async (entryId, amountLiters, hydrationLiters) => {
     try {
-      await removeWater(entryId, amountLiters, hydrationLiters);
-      notify.success(hydrationMessages.removed(), { domain: 'hydration' });
+      return await removeWater(entryId, amountLiters, hydrationLiters);
     } catch (error) {
       console.error('[LogScreen] Failed to remove water:', error);
       notify.error(generalMessages.error());
+      throw error;
     }
   };
 
@@ -1654,12 +1687,15 @@ export default function LogScreen() {
       <Modal
         visible={showMealLogged}
         animationType="none"
-        onRequestClose={() => setShowMealLogged(false)}
+        onRequestClose={() => {
+          setShowMealLogged(false);
+          setLoggedDailyTotals(null);
+        }}
       >
         {loggedMeal && (
           <MealLoggedCard
             meal={loggedMeal}
-            dailyTotals={dashboardData?.today?.nutrition}
+            dailyTotals={loggedDailyTotals || dashboardData?.today?.nutrition}
             dailyGoals={{
               dailyCalories: dashboardData?.goals?.dailyCalories || 2000,
               proteinG: dashboardData?.goals?.proteinG || 150,
@@ -1689,6 +1725,7 @@ export default function LogScreen() {
             onClose={() => {
               setShowMealLogged(false);
               setLoggedMeal(null);
+              setLoggedDailyTotals(null);
               notify.success(foodMessages.logged(), { domain: 'food' });
             }}
           />

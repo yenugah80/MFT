@@ -17,14 +17,15 @@ import {
   moodLogTable,
   waterLogTable,
   activityLogTable,
-  profilesTable,
+  nutritionGoalsTable,
   dietaryPreferencesTable,
   recommendationsHistoryTable,
 } from '../db/schema.js';
-import { eq, and, gte, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm';
 import { getUserSignals } from './userSignalCacheService.js';
 import { computeWindowedFoodMoodCorrelations } from './moodSignalService.js';
 import { detectAllergenRisk, detectDietViolation } from './foodKnowledgeGraphService.js';
+import { getLocalDayRange } from '../utils/timezone.js';
 
 // ============================================
 // NUTRITIONAL KNOWLEDGE BASE
@@ -430,7 +431,7 @@ export const SMART_FOODS = [
 /**
  * Get current meal type based on time
  */
-function getCurrentMealType(hour = new Date().getHours()) {
+export function getCurrentMealType(hour = new Date().getHours()) {
   if (hour >= 5 && hour < 10) return 'breakfast';
   if (hour >= 10 && hour < 12) return 'snack';
   if (hour >= 12 && hour < 14) return 'lunch';
@@ -439,12 +440,27 @@ function getCurrentMealType(hour = new Date().getHours()) {
   return 'snack'; // late night
 }
 
+export function getLocalHourFromOffset(timezoneOffset, now = new Date()) {
+  if (!Number.isFinite(timezoneOffset)) return now.getHours();
+  return new Date(now.getTime() - timezoneOffset * 60 * 1000).getUTCHours();
+}
+
+const finiteGoal = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
+export function resolveSmartNutritionGoals(goalRow) {
+  return {
+    dailyCalories: finiteGoal(goalRow?.dailyCalories, DAILY_VALUES.calories),
+    proteinG: finiteGoal(goalRow?.proteinG, DAILY_VALUES.protein),
+    carbsG: finiteGoal(goalRow?.carbsG, DAILY_VALUES.carbs),
+    fatG: finiteGoal(goalRow?.fatsG, DAILY_VALUES.fat),
+  };
+}
+
 /**
  * Calculate nutritional gaps for today
  */
-async function calculateNutritionalGaps(userId, goals) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function calculateNutritionalGaps(userId, goals, timezoneOffset) {
+  const { start: todayStart, end: todayEnd } = getLocalDayRange(timezoneOffset);
 
   // Get today's food logs
   const todayLogs = await db
@@ -453,7 +469,8 @@ async function calculateNutritionalGaps(userId, goals) {
     .where(
       and(
         eq(foodLogTable.userId, userId),
-        gte(foodLogTable.loggedDate, today)
+        gte(foodLogTable.loggedDate, todayStart),
+        lte(foodLogTable.loggedDate, todayEnd)
       )
     );
 
@@ -596,7 +613,7 @@ function scoreFood(food, context) {
   let score = 50; // Base score
   const reasons = [];
 
-  const { gaps, mealType, history, goals, currentMood, activityLevel, signals = {} } = context;
+  const { gaps, mealType, history, currentMood, activityLevel, signals = {}, currentHour } = context;
 
   // 1. Nutritional gap filling (most important)
   if (gaps.protein.status === 'low' && food.nutrition.protein >= 15) {
@@ -706,8 +723,7 @@ function scoreFood(food, context) {
   }
 
   // 8. Satiety for remaining meals
-  const hour = new Date().getHours();
-  if (hour < 14 && food.satiety >= 7) {
+  if (currentHour < 14 && food.satiety >= 7) {
     score += 5; // Prefer filling foods earlier in day
   }
 
@@ -730,19 +746,18 @@ function scoreFood(food, context) {
 export async function getSmartRecommendations(userId, options = {}) {
   const { limit = 5, mealType: forcedMealType, timezoneOffset } = options;
 
-  // 1. Get user profile and goals
-  const [profile] = await db
+  // 1. Read the canonical nutrition-goals row. The profile schema has no
+  // dailyCalorieGoal/proteinGoal fields; reading those silently forced every
+  // user to the generic 2000/50 defaults while Progress showed their actual
+  // configured goals from nutrition_goals.
+  const [goalRow] = await db
     .select()
-    .from(profilesTable)
-    .where(eq(profilesTable.userId, userId))
+    .from(nutritionGoalsTable)
+    .where(eq(nutritionGoalsTable.userId, userId))
     .limit(1);
 
-  const goals = {
-    dailyCalories: profile?.dailyCalorieGoal || 2000,
-    proteinG: profile?.proteinGoal || 50,
-    carbsG: profile?.carbsGoal || 300,
-    fatG: profile?.fatGoal || 65,
-  };
+  const goals = resolveSmartNutritionGoals(goalRow);
+  const currentHour = getLocalHourFromOffset(timezoneOffset);
 
   // 2-6. Parallelize all independent data fetches
   // dietaryResult uses .catch rather than joining the Promise.all's own
@@ -751,7 +766,7 @@ export async function getSmartRecommendations(userId, options = {}) {
   // indistinguishable from "we don't know this user's restrictions", which
   // is exactly the case the filter is written to treat as unsafe.
   const [gapsData, history, correlations, moodResults, activityResults, signals, dietaryResult] = await Promise.all([
-    calculateNutritionalGaps(userId, goals),
+    calculateNutritionalGaps(userId, goals, timezoneOffset),
     getUserFoodHistory(userId),
     getMoodFoodCorrelations(userId),
     db.select().from(moodLogTable).where(eq(moodLogTable.userId, userId)).orderBy(desc(moodLogTable.loggedDate)).limit(1),
@@ -768,7 +783,6 @@ export async function getSmartRecommendations(userId, options = {}) {
   const recentActivity = activityResults[0];
 
   // 5. Determine current context
-  const currentHour = new Date().getHours();
   const mealType = forcedMealType || getCurrentMealType(currentHour);
 
   const context = {
@@ -780,6 +794,7 @@ export async function getSmartRecommendations(userId, options = {}) {
     activityLevel: recentActivity?.intensity || 'moderate',
     correlations,
     signals,
+    currentHour,
   };
 
   // Screen the catalogue against allergies and declared diets BEFORE scoring.
@@ -803,7 +818,7 @@ export async function getSmartRecommendations(userId, options = {}) {
       blocked: true,
       reasoning: 'Unable to verify dietary safety right now — please try again shortly.',
       mealType,
-      currentHour: new Date().getHours(),
+      currentHour,
       recommendations: [],
       summary: null,
       nutritionalStatus: null,

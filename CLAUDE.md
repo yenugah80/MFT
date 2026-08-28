@@ -1,5 +1,10 @@
 # MFT : My Flourish Tracker - Project Guide for Claude
 
+> **Active handoff (2026-08-27):** Before changing the current dirty worktree, read
+> [`docs/architecture/claude-handoff-2026-08-27.md`](docs/architecture/claude-handoff-2026-08-27.md).
+> It records the user's full wellness redesign scope, verified work, live database
+> changes, remaining QA, and exact commands. Preserve all existing changes.
+
 ## Project Overview
 
 MFT (My Flourish Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.

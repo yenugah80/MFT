@@ -5,9 +5,10 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
-import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import * as Crypto from 'expo-crypto';
 import apiClient from '../services/apiClient';
+import { calculateSleepTrends } from '../utils/sleepTrends';
 
 /**
  * Sleep quality labels with icons and colors
@@ -51,11 +52,60 @@ export function getQualityColor(value) {
   return getQualityLabel(value).color;
 }
 
+export function useSleepHistory(days = 30) {
+  const queryClient = useQueryClient();
+  const historyQuery = useInfiniteQuery({
+    queryKey: ['sleepHistory', days],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => apiClient.get(`/sleep/history?days=${days}&limit=25&offset=${pageParam}`),
+    getNextPageParam: (lastPage) => lastPage.pagination?.hasMore
+      ? lastPage.pagination.offset + lastPage.pagination.limit
+      : undefined,
+    staleTime: 60000,
+    retry: 1,
+  });
+
+  const data = useMemo(() => {
+    const pages = historyQuery.data?.pages || [];
+    if (!pages.length) return undefined;
+    const sleepLogs = [...new Map(
+      pages.flatMap((page) => page.sleepLogs || []).map((entry) => [entry.id, entry])
+    ).values()];
+    return {
+      ...pages[0],
+      sleepLogs,
+    };
+  }, [historyQuery.data]);
+
+  const deleteMutation = useMutation({
+    mutationFn: (sleepId) => apiClient.delete(`/sleep/${sleepId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sleepHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['sleepToday'] });
+      queryClient.invalidateQueries({ queryKey: ['sleepTrends'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+
+  return {
+    data,
+    isLoading: historyQuery.isLoading,
+    isFetching: historyQuery.isFetching,
+    error: historyQuery.isError && !data ? historyQuery.error : null,
+    paginationError: historyQuery.isFetchNextPageError ? historyQuery.error : null,
+    refetch: historyQuery.refetch,
+    fetchNextPage: historyQuery.fetchNextPage,
+    hasNextPage: historyQuery.hasNextPage,
+    isFetchingNextPage: historyQuery.isFetchingNextPage,
+    deleteEntry: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
+  };
+}
+
 /**
  * Hook for sleep logging operations
  */
-export function useSleepLog() {
-  const { userId } = useAuth();
+export function useSleepLog(trendsDays = 30) {
   const queryClient = useQueryClient();
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState(null);
@@ -104,12 +154,35 @@ export function useSleepLog() {
   const {
     data: trendsData,
     isLoading: isTrendsLoading,
+    error: trendsError,
     refetch: refetchTrends,
   } = useQuery({
-    queryKey: ['sleepTrends'],
+    // Version the key so persisted clients do not keep serving the legacy
+    // linear bedtime aggregate after this calculation ships.
+    queryKey: ['sleepTrends', 'sleep-patterns-v3', trendsDays],
     queryFn: async () => {
-      const response = await apiClient.get('/sleep/trends?days=30');
-      return response;
+      // Read the raw history alongside the aggregate so analytics remain
+      // correct during rolling backend deployments and can recover if either
+      // endpoint is temporarily unavailable.
+      const [trendResult, historyResult] = await Promise.allSettled([
+        apiClient.get(`/sleep/trends?days=${trendsDays}`),
+        apiClient.get(`/sleep/history?days=${trendsDays}&limit=100&offset=0`),
+      ]);
+
+      const serverData = trendResult.status === 'fulfilled' ? trendResult.value : null;
+      const historyData = historyResult.status === 'fulfilled' ? historyResult.value : null;
+      const calculatedTrends = calculateSleepTrends(historyData?.sleepLogs || []);
+
+      if (!serverData && !calculatedTrends) {
+        throw trendResult.reason || historyResult.reason || new Error('Sleep analytics are unavailable');
+      }
+
+      return {
+        ...serverData,
+        // Raw records are the authoritative source when available. This also
+        // fixes legacy linear clock averaging around midnight.
+        trends: calculatedTrends || serverData?.trends || null,
+      };
     },
     staleTime: 300000, // 5 minutes
     retry: 1,
@@ -119,18 +192,7 @@ export function useSleepLog() {
    * Mutation for logging sleep to backend
    */
   const logSleepMutation = useMutation({
-    mutationFn: async (sleepData) => {
-      // Generate strong clientEventId for idempotency
-      const timestamp = Date.now();
-      const random1 = Math.random().toString(36).substring(2, 15);
-      const random2 = Math.random().toString(36).substring(2, 15);
-      const clientEventId = `${userId}-sleep-${timestamp}-${random1}-${random2}`;
-
-      return await apiClient.post('/sleep/log', {
-        ...sleepData,
-        clientEventId,
-      });
-    },
+    mutationFn: (sleepData) => apiClient.post('/sleep/log', sleepData),
     onMutate: async (sleepData) => {
       // Optimistic update
       await queryClient.cancelQueries({ queryKey: ['sleepToday'] });
@@ -153,6 +215,7 @@ export function useSleepLog() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sleepHistory'] });
       queryClient.invalidateQueries({ queryKey: ['sleepToday'] });
       queryClient.invalidateQueries({ queryKey: ['sleepTrends'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -176,15 +239,15 @@ export function useSleepLog() {
    * @returns {Promise<object>}
    */
   const logSleep = useCallback(async (sleepData) => {
-    const { bedTime, wakeTime, quality, tags = {}, notes, sleepDate } = sleepData;
+    const { bedTime, wakeTime, quality, tags = {}, notes, sleepDate, clientEventId } = sleepData;
 
     // Validation
     if (!bedTime || !wakeTime) {
       throw new Error('Bed time and wake time are required');
     }
 
-    if (!quality || quality < 1 || quality > 10) {
-      throw new Error('Quality must be between 1 and 10');
+    if (!Number.isInteger(quality) || quality < 1 || quality > 10) {
+      throw new Error('Quality must be an integer between 1 and 10');
     }
 
     // Calculate duration
@@ -208,6 +271,7 @@ export function useSleepLog() {
         notes,
         sleepDate,
         durationMinutes,
+        clientEventId: clientEventId || Crypto.randomUUID(),
       });
       return result;
     } catch (err) {
@@ -227,6 +291,7 @@ export function useSleepLog() {
       return await apiClient.delete(`/sleep/${sleepId}`);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sleepHistory'] });
       queryClient.invalidateQueries({ queryKey: ['sleepToday'] });
       queryClient.invalidateQueries({ queryKey: ['sleepTrends'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -302,6 +367,7 @@ export function useSleepLog() {
     // Trends
     trends,
     isTrendsLoading,
+    trendsError,
 
     // History
     fetchHistory,

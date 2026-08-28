@@ -2,7 +2,7 @@
  * Stress Patterns Screen
  *
  * Deep-dive on stress patterns: time-of-day and day-of-week breakdowns,
- * which coping strategies are actually working, and the overall trend.
+ * coping-strategy associations, and the overall trend.
  *
  * Wired to GET /api/stress/patterns?days=30 via useStressLog().patterns.
  */
@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -42,7 +42,11 @@ const TREND_META = {
 
 export default function StressPatternsScreen() {
   const router = useRouter();
-  const { patterns, isPatternsLoading, refetchPatterns } = useStressLog();
+  const { days } = useLocalSearchParams();
+  const requestedDays = Number(Array.isArray(days) ? days[0] : days);
+  const rangeDays = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+  const expandedRange = rangeDays < 30 ? 30 : (rangeDays < 90 ? 90 : null);
+  const { patterns, isPatternsLoading, patternsError, refetchPatterns } = useStressLog(rangeDays);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleBack = useCallback(() => {
@@ -96,13 +100,31 @@ export default function StressPatternsScreen() {
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.centerText}>Loading your stress patterns...</Text>
         </View>
+      ) : patternsError ? (
+        <View style={styles.centerContainer} accessibilityRole="alert">
+          <Ionicons name="cloud-offline-outline" size={48} color={TEXT.tertiary} />
+          <Text style={styles.errorTitle}>Stress insights are unavailable</Text>
+          <Text style={styles.centerText}>Check your connection and try again.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refetchPatterns} accessibilityRole="button">
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
       ) : !patterns ? (
         <View style={styles.centerContainer}>
           <Ionicons name="pulse-outline" size={48} color={TEXT.tertiary} />
-          <Text style={styles.errorTitle}>Not enough data yet</Text>
+          <Text style={styles.errorTitle}>Not enough data in this {rangeDays}-day view</Text>
           <Text style={styles.centerText}>
-            Log at least 5 stress entries to unlock pattern analysis.
+            This range needs at least 5 stress check-ins to calculate reliable patterns.
           </Text>
+          {!!expandedRange && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => router.replace(`/insights/stress-patterns?days=${expandedRange}`)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryButtonText}>View {expandedRange} days</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <ScrollView
@@ -137,6 +159,7 @@ export default function StressPatternsScreen() {
               <Text style={styles.statLabel}>Entries</Text>
             </View>
           </View>
+          <Text style={styles.evidenceText}>Based on {patterns.entriesCount} check-ins in this {rangeDays}-day view.</Text>
 
           {/* Time of day */}
           {Object.keys(patterns.timeOfDay || {}).length > 0 && (
@@ -196,16 +219,16 @@ export default function StressPatternsScreen() {
             </View>
           )}
 
-          {/* Coping effectiveness */}
+          {/* Coping associations — same-check-in data cannot establish causality. */}
           {patterns.copingStrategies?.length > 0 && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Ionicons name="bulb-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>What's Actually Helping</Text>
+                <Text style={styles.cardTitle}>Stress Alongside Support</Text>
               </View>
               <View style={styles.copingList}>
                 {patterns.copingStrategies.map((strategy) => {
-                  const isHelping = strategy.effectiveness > 0;
+                  const isLower = strategy.effectiveness > 0;
                   return (
                     <View key={strategy.key} style={styles.copingRow}>
                       <View style={[styles.copingIconBg, { backgroundColor: `${strategy.color || BRAND.primary}20` }]}>
@@ -215,15 +238,15 @@ export default function StressPatternsScreen() {
                         <Text style={styles.copingLabel}>{strategy.label}</Text>
                         <Text style={styles.copingMeta}>Used {strategy.timesUsed}x</Text>
                       </View>
-                      <Text style={[styles.copingEffect, { color: isHelping ? '#10B981' : '#EF4444' }]}>
-                        {isHelping ? '−' : '+'}{Math.abs(strategy.effectiveness)} pts
+                      <Text style={[styles.copingEffect, { color: isLower ? '#10B981' : TEXT.secondary }]}>
+                        {Math.abs(strategy.effectiveness)} pts {isLower ? 'lower' : 'higher'}
                       </Text>
                     </View>
                   );
                 })}
               </View>
               <Text style={styles.copingDisclaimer}>
-                Negative = stress level tends to be lower when you use this strategy.
+                This is an association from the same check-in, not proof that a strategy caused the change.
               </Text>
             </View>
           )}
@@ -268,10 +291,28 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
+  retryButton: {
+    marginTop: SPACING[2],
+    paddingHorizontal: SPACING[5],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.full,
+    backgroundColor: BRAND.primary,
+  },
+  retryButtonText: {
+    color: TEXT.white,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: TYPOGRAPHY.size.sm,
+  },
   statsRow: {
     flexDirection: 'row',
     gap: SPACING[3],
+    marginBottom: SPACING[2],
+  },
+  evidenceText: {
     marginBottom: SPACING[4],
+    color: TEXT.tertiary,
+    fontSize: TYPOGRAPHY.size.xs,
+    textAlign: 'center',
   },
   statCard: {
     flex: 1,
