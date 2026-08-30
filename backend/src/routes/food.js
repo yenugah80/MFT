@@ -8,7 +8,7 @@ import { aiEstimatedFoodsTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
-import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { checkNutritionPlausibility, checkMacroConsistency, SKIPPED_PLAUSIBILITY_RESULT } from "../services/nutritionPlausibilityChecker.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import { aggregateCanonicalTotals, normalizeMicros } from "../utils/canonicalNutrition.js";
 
@@ -387,15 +387,26 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
 
     // Absolute calorie-density plausibility check (same one used in the text path,
     // smartNutritionResolver.js) — confidence alone doesn't catch a result that's
-    // internally consistent but wrong by roughly a constant factor.
-    const portionAmount = rawItems[0]?.canonical?.portion?.amount;
-    const portionUnit = rawItems[0]?.canonical?.portion?.unit;
-    const servingGrams = portionUnit === 'g' && typeof portionAmount === 'number' ? portionAmount : undefined;
-    const plausibilityCheck = checkNutritionPlausibility({
-      foodName,
-      macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
-      servingGrams,
-    });
+    // internally consistent but wrong by roughly a constant factor. Skipped for
+    // multi-item meals: comparing the WHOLE meal's total against a single dish's
+    // per-100g density band (using only the dominant item's name/category) isn't
+    // meaningful — confirmed live that a correct 6-item, 6-food bowl still got
+    // flagged "severe" this way. The per-item retry above (which checks each
+    // item against its own name/calories/portion) is the real signal for
+    // multi-item meals; this top-level field just mirrors "skipped" for them.
+    let plausibilityCheck;
+    if (result.isMultiItem) {
+      plausibilityCheck = SKIPPED_PLAUSIBILITY_RESULT;
+    } else {
+      const portionAmount = rawItems[0]?.canonical?.portion?.amount;
+      const portionUnit = rawItems[0]?.canonical?.portion?.unit;
+      const servingGrams = portionUnit === 'g' && typeof portionAmount === 'number' ? portionAmount : undefined;
+      plausibilityCheck = checkNutritionPlausibility({
+        foodName,
+        macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
+        servingGrams,
+      });
+    }
 
     console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, foodName="${foodName}", healthScore=${unifiedResponse.healthScore}`);
 
@@ -773,11 +784,14 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
 
     // Same absolute calorie-density plausibility check as /analyze-image and the
     // text path (smartNutritionResolver.js) — catches internally-consistent-but-
-    // wrong-magnitude estimates that confidence scores alone don't.
-    const multimodalPlausibilityCheck = checkNutritionPlausibility({
-      foodName: rawItems[0]?.name || result.title || result.foodName || 'Unknown Food',
-      macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
-    });
+    // wrong-magnitude estimates that confidence scores alone don't. Skipped for
+    // multi-item meals — see the identical fix + comment in /analyze-image.
+    const multimodalPlausibilityCheck = result.isMultiItem
+      ? SKIPPED_PLAUSIBILITY_RESULT
+      : checkNutritionPlausibility({
+          foodName: rawItems[0]?.name || result.title || result.foodName || 'Unknown Food',
+          macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
+        });
     unifiedResponse.nutritionPlausible = multimodalPlausibilityCheck.plausible;
     unifiedResponse.plausibilityCheck = multimodalPlausibilityCheck;
     unifiedResponse.macroReconciled = macroReconciled;

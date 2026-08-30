@@ -244,6 +244,16 @@ export function getExpectedDensityForFood(foodName = '') {
   return null; // unrecognized → no confident anchor
 }
 
+// Shared "not evaluated" result — used both when this function has nothing
+// to check (no/zero calories) and by callers that skip the check entirely
+// for a reason of their own (e.g. a multi-item meal, where comparing the
+// WHOLE meal's total against a single dish's per-100g density band doesn't
+// mean anything; see food.js's multi-item branches).
+export const SKIPPED_PLAUSIBILITY_RESULT = {
+  plausible: true, tier: 'skipped', category: null, kcalPer100g: null,
+  expectedRange: null, matchedReference: null, referenceKcalPer100g: null, severity: 'none',
+};
+
 /**
  * @param {{ foodName?: string, macros?: { calories_kcal?: number }, servingGrams?: number }} estimation
  * @returns {{
@@ -261,11 +271,7 @@ export function checkNutritionPlausibility(estimation) {
   const calories = estimation?.macros?.calories_kcal;
   const foodName = estimation?.foodName || '';
 
-  const skipped = {
-    plausible: true, tier: 'skipped', category: null, kcalPer100g: null,
-    expectedRange: null, matchedReference: null, referenceKcalPer100g: null, severity: 'none',
-  };
-  if (typeof calories !== 'number' || calories <= 0) return skipped;
+  if (typeof calories !== 'number' || calories <= 0) return SKIPPED_PLAUSIBILITY_RESULT;
 
   // Fall back to a 100g assumption when no gram weight was given — matches the "~100g"
   // default the UI already shows for unspecified portions.
