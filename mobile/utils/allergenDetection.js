@@ -26,13 +26,30 @@ const ALLERGEN_PATTERNS = {
   'peanuts': {
     pattern: /\b(peanut|peanuts|groundnut)\b/i
   },
+  // "butter" alone matches nut/seed butters and fruit butters that contain
+  // no dairy at all (almond butter, peanut butter, cocoa butter, apple
+  // butter, ...) — excepted the same way "almond milk" etc. already are, so
+  // real dairy butter ("buttered toast", "butter chicken", "garlic butter
+  // sauce") still correctly matches while these don't.
   'dairy': {
-    pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|yoghurt|lactose|whey|casein|ghee|paneer|ricotta|mozzarella|cheddar|parmesan|brie|feta)\b/i,
-    exceptions: ['coconut milk', 'almond milk', 'oat milk', 'soy milk', 'rice milk', 'dairy-free', 'non-dairy']
+    pattern: /\b(milk|dairy|cheese|cream|butter\w*|yogurt|yoghurt|lactose|whey|casein|ghee|paneer|ricotta|mozzarella|cheddar|parmesan|brie|feta)\b/i,
+    exceptions: [
+      'coconut milk', 'almond milk', 'oat milk', 'soy milk', 'rice milk', 'dairy-free', 'non-dairy',
+      'peanut butter', 'almond butter', 'cashew butter', 'walnut butter', 'hazelnut butter',
+      'pistachio butter', 'macadamia butter', 'sunflower butter', 'sunflower seed butter',
+      'pumpkin seed butter', 'soy nut butter', 'soy butter', 'cocoa butter', 'shea butter',
+      'coconut butter', 'apple butter', 'nut butter', 'seed butter',
+    ]
   },
   'milk': {
-    pattern: /\b(milk|dairy|cheese|cream|butter|yogurt|lactose|whey|casein)\b/i,
-    exceptions: ['coconut milk', 'almond milk', 'oat milk', 'soy milk', 'rice milk']
+    pattern: /\b(milk|dairy|cheese|cream|butter\w*|yogurt|lactose|whey|casein)\b/i,
+    exceptions: [
+      'coconut milk', 'almond milk', 'oat milk', 'soy milk', 'rice milk',
+      'peanut butter', 'almond butter', 'cashew butter', 'walnut butter', 'hazelnut butter',
+      'pistachio butter', 'macadamia butter', 'sunflower butter', 'sunflower seed butter',
+      'pumpkin seed butter', 'soy nut butter', 'soy butter', 'cocoa butter', 'shea butter',
+      'coconut butter', 'apple butter', 'nut butter', 'seed butter',
+    ]
   },
   'eggs': {
     pattern: /\b(egg|eggs|mayonnaise|mayo|meringue|custard|aioli)\b/i,
@@ -256,6 +273,24 @@ export function containsAllergen(foodName, userAllergies) {
   if (!foodName || !userAllergies || userAllergies.length === 0) return false;
 
   return userAllergies.some(allergen => checkAllergenInFoodName(foodName, allergen));
+}
+
+/**
+ * Detect ALL FDA/EU allergen categories present in a food name — unlike
+ * getAllergenSeverity/containsAllergen (which only check against one user's
+ * allergy list), this scans against every category this module knows about.
+ * For informational "Contains Allergens" displays that aren't personalized
+ * to a specific user's profile (e.g. a meal-analysis summary screen), so
+ * they don't have to fall back to trusting the AI's own untrustworthy
+ * per-item allergen tagging.
+ * @param {string} foodName
+ * @returns {string[]} - allergen category keys detected (e.g. ['nuts', 'dairy'])
+ */
+export function detectAllergensInFoodName(foodName) {
+  if (!foodName) return [];
+  return Object.keys(ALLERGEN_PATTERNS).filter((allergen) =>
+    checkAllergenInFoodName(foodName, allergen)
+  );
 }
 
 /**

@@ -58,6 +58,7 @@ import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme'
 import { DAILY_VALUES } from '../../constants/dailyValues';
 // Import unified scoring function for consistency with MealSummaryScreen
 import { calculateMealScore as calculateUnifiedMealScore, getScoreLabel } from './MealSummary/MealScoreDial';
+import { detectAllergensInFoodName } from '../../utils/allergenDetection';
 
 // ============== UTILITY FUNCTIONS ==============
 
@@ -640,6 +641,7 @@ const ALLERGEN_CONFIG = {
   lactose: { icon: 'water', label: 'Lactose', color: '#3B82F6' },
   nuts: { icon: 'leaf', label: 'Tree Nuts', color: '#92400E' },
   treeNuts: { icon: 'leaf', label: 'Tree Nuts', color: '#92400E' },
+  tree_nuts: { icon: 'leaf', label: 'Tree Nuts', color: '#92400E' },
   peanuts: { icon: 'ellipse', label: 'Peanuts', color: '#B45309' },
   eggs: { icon: 'ellipse', label: 'Eggs', color: '#FBBF24' },
   egg: { icon: 'ellipse', label: 'Eggs', color: '#FBBF24' },
@@ -1232,8 +1234,19 @@ export default function UnifiedMealAnalysis({
   const allAllergens = useMemo(() => {
     const allergenSet = new Set();
     items.forEach(item => {
+      // AI-tagged allergens aren't reliable on their own (confirmed: this
+      // field is sometimes empty even when the item clearly contains one) —
+      // merge with the same deterministic pattern-matcher the pre-log
+      // confirmation dialog and dashboard warning card already use, so this
+      // summary doesn't show something weaker than what the rest of the app
+      // will catch a moment later.
       const itemAllergens = item.allergens || item.potentialAllergens || [];
       itemAllergens.forEach(a => allergenSet.add(a.toLowerCase()));
+
+      detectAllergensInFoodName(item.name).forEach(a => allergenSet.add(a));
+      (item.ingredients || []).forEach((ing) => {
+        detectAllergensInFoodName(ing?.name).forEach(a => allergenSet.add(a));
+      });
     });
     return Array.from(allergenSet);
   }, [items]);
