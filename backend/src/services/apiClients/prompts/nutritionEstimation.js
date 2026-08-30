@@ -783,11 +783,22 @@ OUTPUT SCHEMA (ENHANCED)
     "fat": { "low": number, "high": number }
   },
 
+  // MICRONUTRIENT UNITS — every value below must be in the unit shown, not
+  // whatever unit a nutrition label happened to use. Nothing downstream
+  // converts units, so a value returned in the wrong unit is silently wrong
+  // by roughly 1000x (µg/mg confusion) or ~3x (IU/µg-RAE confusion for
+  // vitaminA/vitaminD) with no way to detect it after the fact.
   "micros": {
-    "calcium": number, "iron": number, "magnesium": number,
-    "potassium": number, "zinc": number, "vitaminA": number,
-    "vitaminC": number, "vitaminD": number, "vitaminB12": number,
-    "folate": number
+    "calcium": number,   // mg
+    "iron": number,      // mg
+    "magnesium": number, // mg
+    "potassium": number, // mg
+    "zinc": number,      // mg
+    "vitaminA": number,  // mcg RAE (retinol activity equivalents) — NOT IU. If your source data is in IU, convert: mcg RAE ≈ IU / 3.33 for retinol, IU / 12 for beta-carotene.
+    "vitaminC": number,  // mg
+    "vitaminD": number,  // mcg — NOT IU. If your source data is in IU, convert: mcg = IU / 40.
+    "vitaminB12": number, // mcg
+    "folate": number      // mcg DFE (dietary folate equivalents)
   },
 
   "disambiguationNeeded": boolean,  // NEW: True if food name is ambiguous

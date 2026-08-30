@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { validateExtraction, isComplexDishInput } from '../services/canonicalIngredients.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
+import { smartNutritionResolver } from '../services/smartNutritionResolver.js';
 import { db } from '../config/db.js';
 import { aiEstimatedFoodsTable } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
@@ -9,6 +10,11 @@ import { requireAuth } from '../middleware/auth.js';
 import { attachOpenAIConsent, requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import crypto from 'crypto';
 import { buildUnifiedResponse } from '../utils/unifiedResponseBuilder.js';
+import { aggregateCanonicalTotals, normalizeMicros } from '../utils/canonicalNutrition.js';
+
+function normalizeItemMicros(items) {
+  return (items || []).map((item) => ({ ...item, micros: normalizeMicros(item.micros) }));
+}
 
 const router = express.Router();
 
@@ -88,13 +94,45 @@ router.post(
     // to prevent incorrect simplification. Force AI analysis for these.
     const isComplex = isComplexDishInput(text);
 
-    // Pass empty array [] so it treats ALL found keywords as "newly detected"
-    // This effectively turns the validator into a parser.
-    // Enable prefix matching only for partial (live) requests
+    // Pass empty array [] so it treats ALL found keywords as "newly detected".
+    // buildItemsFromKeywords actually turns the validator into a parser (it
+    // didn't before — see canonicalIngredients.js's validateExtraction doc
+    // comment: this call site used to always get [] back regardless of how
+    // many foods were unambiguously named in the text). Skipped for partial
+    // (live-typing) requests to keep those instant.
     // If complex, pass empty list to force fallback to AI
-    let detectedIngredients = isComplex ? [] : validateExtraction(text, [], { allowPrefix: isPartial });
+    let detectedIngredients = isComplex ? [] : validateExtraction(text, [], {
+      allowPrefix: isPartial,
+      buildItemsFromKeywords: !isPartial,
+    });
 
-    // FALLBACK: If local dictionary found nothing, try OpenAI
+    // Dictionary matching identifies WHAT was said (name/quantity/unit) but
+    // carries no nutrition data — resolve it here, through the same
+    // resolver text-mode logging uses, before falling through to a full
+    // free-text AI parse below. If this fails or consent is withheld,
+    // detectedIngredients reverts to [] and the existing fallback runs.
+    if (detectedIngredients.length > 0 && !isPartial && req.hasOpenAIConsent !== false) {
+      try {
+        const resolved = await smartNutritionResolver.resolveFoodsBatch(
+          detectedIngredients.map((item) => ({ name: item.name, portion: `${item.quantity} ${item.unit}` })),
+          (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId || null
+        );
+        detectedIngredients = detectedIngredients.map((item, i) => ({
+          name: item.name,
+          macros: resolved[i]?.macros || {},
+          micros: resolved[i]?.micros || {},
+          confidence: (resolved[i]?.sourceConfidence ?? item.confidence * 100) / 100,
+          source: resolved[i]?.source || 'local_dictionary',
+        }));
+        console.log(`[VoiceLog] Resolved nutrition for ${detectedIngredients.length} dictionary-identified item(s): ${detectedIngredients.map(i => i.name).join(', ')}`);
+      } catch (resolveError) {
+        console.error('[VoiceLog] Nutrition resolution for dictionary-identified items failed, falling back to free-text AI parse:', resolveError.message);
+        detectedIngredients = [];
+      }
+    }
+
+    // FALLBACK: If local dictionary found nothing (or resolution above
+    // failed), try OpenAI directly on the raw text
     // SKIP OpenAI for partial requests to ensure instant UI feedback
     // Skip the model entirely when the user has not consented. The local
     // dictionary result above (and the shared DB cache below) still stand, which
@@ -212,6 +250,16 @@ router.post(
       mealType: mealType || 'snack',
       rawItems: detectedIngredients
     });
+
+    // Same canonical totals shape resolve.js (text) and food.js (photo/
+    // barcode) send — buildUnifiedResponse's own totals is flat/unsuffixed
+    // (totals.calories) while every mobile consumer reads the suffixed,
+    // nested shape (totals.macros.calories_kcal). Voice was the mode that
+    // originally exposed this: log.js's mapVoiceResultToAnalysis had to
+    // silently re-derive totals client-side because the server's voice
+    // totals never matched what it needed.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
 
     // Zero items with AI available-but-skipped-for-consent is a different
     // situation from zero items after AI genuinely tried and found nothing:
@@ -381,6 +429,10 @@ router.post(
       mealType: mealType || 'snack',
       rawItems: detectedIngredients
     });
+
+    // Same canonical totals shape every other endpoint sends.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
 
     console.log(`[VoiceLog/Transcribe] Items: ${unifiedResponse.items.length}, Health: ${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse, text });

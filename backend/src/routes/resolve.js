@@ -22,6 +22,8 @@ import { buildDefaultPortion, getPortionAdjustmentOptions } from "../utils/porti
 import { getIngredientBreakdown, hasIngredientData } from "../services/ingredientEstimator.js";
 import { ingredientBreakdownService } from "../services/ingredientBreakdownService.js";
 import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { aggregateCanonicalTotals, normalizeMicros } from "../utils/canonicalNutrition.js";
+import { isNutrientsComplete, fillMissingNutrients, isMicrosComplete, mergeMissingMicros } from "../utils/nutrientCompleteness.js";
 
 const router = express.Router();
 router.use(requireAuth());
@@ -106,6 +108,21 @@ router.post("/", attachOpenAIConsent(), async (req, res) => {
     // Enrich items with micronutrients if missing (USDA FoodData Central + AI fallback)
     await enrichMissingMicronutrients(resolvedDraft);
 
+    // Normalize every item's micros into canonical {value, unit} form here,
+    // once, regardless of which resolver (text/photo/barcode) or enrichment
+    // path produced them — bare AI numbers, OFF/USDA unit-suffixed strings,
+    // and enrichment's bare numbers all land in different raw shapes (see
+    // canonicalNutrition.js's header comment). Previously only the meal-level
+    // totals.micros got this treatment; a single-item meal reads item.micros
+    // directly and depended on MicrosGrid's own unit-guessing fallback on
+    // mobile instead of a server-guaranteed unit.
+    if (resolvedDraft?.items) {
+      resolvedDraft.items = resolvedDraft.items.map((item) => ({
+        ...item,
+        micros: normalizeMicros(item.micros),
+      }));
+    }
+
     // Enrich with unified health metrics (healthScore, nutriScore, healthAnalysis)
     const enrichedDraft = enrichWithHealthMetrics(resolvedDraft);
 
@@ -140,14 +157,24 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     return createErrorDraft(draftId, 'barcode', 'Invalid product data received', mealType);
   }
 
-  // Validate required fields with safe defaults
+  // Validate required fields with safe defaults. calories/protein/carbs/fat/
+  // fiber/sugar/sodium are left `null` (not 0) when OFF never reported them —
+  // Math.max(0, null) would coerce to 0 and destroy that distinction, so
+  // null is checked and passed through before the floor is applied.
+  const safeNonNegative = (v) => (Number.isFinite(v) ? Math.max(0, v) : null);
+  const servingGrams = offProduct.servingGrams;
+  const scale = (v) => FoodService.scaleFromPer100g(safeNonNegative(v), servingGrams);
   const safeOffProduct = {
     title: typeof offProduct.title === 'string' ? offProduct.title : 'Unknown Product',
     servingSize: typeof offProduct.servingSize === 'string' ? offProduct.servingSize : '100g',
-    calories: Number.isFinite(offProduct.calories) ? Math.max(0, offProduct.calories) : 0,
-    protein: Number.isFinite(offProduct.protein) ? Math.max(0, offProduct.protein) : 0,
-    carbs: Number.isFinite(offProduct.carbs) ? Math.max(0, offProduct.carbs) : 0,
-    fat: Number.isFinite(offProduct.fats || offProduct.fat) ? Math.max(0, offProduct.fats || offProduct.fat) : 0,
+    servingGrams,
+    calories: scale(offProduct.caloriesPer100g),
+    protein: scale(offProduct.proteinPer100g),
+    carbs: scale(offProduct.carbsPer100g),
+    fat: scale(offProduct.fatPer100g),
+    fiber: scale(offProduct.fiberPer100g),
+    sugar: scale(offProduct.sugarPer100g),
+    sodium: scale(offProduct.sodiumMgPer100g),
     micros: (offProduct.micros && typeof offProduct.micros === 'object') ? offProduct.micros : {},
     ingredients: Array.isArray(offProduct.ingredients) ? offProduct.ingredients : [],
     allergens: Array.isArray(offProduct.allergens) ? offProduct.allergens : [],
@@ -166,14 +193,18 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     fieldsProvided: ['macros', 'micros', safeOffProduct.nutriscore !== 'UNKNOWN' ? 'nutriscore' : null].filter(Boolean)
   });
 
-  // Build item from validated OFF data
+  // Build item from validated OFF data. gramsEquivalent matches whichever
+  // basis the macros above were actually scaled to (real parsed serving
+  // size, or 100g when unparseable) — previously pinned to 100 regardless,
+  // while macros were the raw per-100g density, over/undercounting any
+  // product whose real serving size wasn't ~100g.
   const item = {
     itemId: uuidv4(),
     name: safeOffProduct.title,
     portion: {
       amount: 1,
-      unit: 'serving',
-      gramsEquivalent: 100,
+      unit: servingGrams ? 'serving' : '100g',
+      gramsEquivalent: servingGrams || 100,
       servingText: safeOffProduct.servingSize,
       isEstimated: false
     },
@@ -182,9 +213,9 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
       protein_g: safeOffProduct.protein,
       carbs_g: safeOffProduct.carbs,
       fat_g: safeOffProduct.fat,
-      fiber_g: 0,
-      sugar_g: 0,
-      sodium_mg: 0
+      fiber_g: safeOffProduct.fiber,
+      sugar_g: safeOffProduct.sugar,
+      sodium_mg: safeOffProduct.sodium,
     },
     micros: safeOffProduct.micros,
     ingredients: safeOffProduct.ingredients.map(i => (typeof i === 'object' && i.name) ? i.name : String(i)).filter(Boolean),
@@ -242,9 +273,17 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
 
   // Step 3: If nutrients incomplete, try USDA fallback
   if (!isNutrientsComplete(item.macros)) {
-    const usdaData = await FoodService.searchUSDAByName(item.name);
+    // searchUSDAByName returns an ARRAY of candidate matches, not a single
+    // result — passing it straight to fillMissingNutrients would read
+    // `usdaData.macros` off an array (always undefined) and throw on the
+    // first missing field. selectBestUSDAMatch (already used elsewhere in
+    // this file for the same purpose) picks the best-scoring candidate.
+    const usdaResults = await FoodService.searchUSDAByName(item.name);
+    const usdaData = Array.isArray(usdaResults) && usdaResults.length > 0
+      ? selectBestUSDAMatch(usdaResults, item.name)
+      : (usdaResults && !Array.isArray(usdaResults) ? usdaResults : null);
     if (usdaData) {
-      fillMissingNutrients(item, usdaData);
+      fillMissingNutrientsWithScaling(item, usdaData, item.portion?.gramsEquivalent);
       sourceEvidence.push({
         source: 'USDA',
         sourceId: usdaData.fdcId,
@@ -856,32 +895,6 @@ async function resolveGenericFood(parsedFood) {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * KEY MICRONUTRIENTS to track (matches micronutrientService.js)
- * These are the essential vitamins and minerals for health tracking
- */
-const KEY_MICRONUTRIENTS = [
-  'calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'sodium',
-  'vitaminA', 'vitaminC', 'vitaminD', 'vitaminB12', 'folate'
-];
-
-/**
- * Check if micros are complete (has at least 3 key micronutrients with non-zero values)
- */
-function isMicrosComplete(micros) {
-  if (!micros || typeof micros !== 'object') return false;
-
-  let nonZeroCount = 0;
-  for (const key of KEY_MICRONUTRIENTS) {
-    const value = micros[key];
-    const numValue = typeof value === 'number' ? value :
-                     (value?.value ? parseFloat(value.value) : 0);
-    if (numValue > 0) nonZeroCount++;
-  }
-
-  return nonZeroCount >= 3;
-}
-
-/**
  * Enrich food items with micronutrients if missing
  * Uses USDA FoodData Central as primary source, AI fallback
  */
@@ -908,18 +921,14 @@ async function enrichMissingMicronutrients(draft) {
       const estimatedMicros = await estimateMicronutrients(item.name, portion, macros);
 
       if (estimatedMicros && Object.keys(estimatedMicros).length > 0) {
-        // Merge estimated micros with existing (don't overwrite non-zero values)
-        item.micros = item.micros || {};
-        for (const [key, value] of Object.entries(estimatedMicros)) {
-          const existingValue = item.micros[key];
-          const existingNumValue = typeof existingValue === 'number' ? existingValue :
-                                   (existingValue?.value ? parseFloat(existingValue.value) : 0);
-
-          // Only fill in if existing value is 0 or missing
-          if (!existingNumValue || existingNumValue === 0) {
-            item.micros[key] = value;
-          }
-        }
+        // Merge estimated micros with existing — fill ONLY keys that are
+        // genuinely absent. A present value, including a confirmed zero, is
+        // a real reading from a source already trusted enough to have run
+        // first; a lower-confidence enrichment estimate must not overwrite
+        // it. The previous `!existingNumValue` check treated 0 the same as
+        // missing, so a food legitimately measured at 0mg sodium (or any
+        // other real zero) could get silently overwritten by an estimate.
+        item.micros = mergeMissingMicros(item.micros, estimatedMicros);
 
         // Add flag to indicate micros were enriched
         if (!item.flags) item.flags = [];
@@ -937,56 +946,21 @@ async function enrichMissingMicronutrients(draft) {
 
   await Promise.all(enrichmentPromises);
 
-  // Recalculate totals.micros after enrichment
+  // Recalculate totals after enrichment, through the same canonical
+  // aggregator used everywhere else — previously reimplemented its own
+  // flat-number micros summation here, which stomped the {value, unit}
+  // shape every other consumer expects right after it was computed.
   if (draft.totals) {
-    draft.totals.micros = {};
-    draft.items.forEach(item => {
-      if (item.micros && typeof item.micros === 'object') {
-        Object.entries(item.micros).forEach(([key, value]) => {
-          const numValue = typeof value === 'number' ? value :
-                           (value?.value ? parseFloat(value.value) : parseFloat(String(value).replace(/[^0-9.]/g, '')));
-          if (!isNaN(numValue) && numValue > 0) {
-            draft.totals.micros[key] = (draft.totals.micros[key] || 0) + numValue;
-          }
-        });
-      }
-    });
+    draft.totals = aggregateCanonicalTotals(draft.items);
   }
 }
 
-function isNutrientsComplete(macros) {
-  return macros.calories_kcal > 0 &&
-         macros.protein_g >= 0 &&
-         macros.carbs_g >= 0 &&
-         macros.fat_g >= 0;
-}
-
-function fillMissingNutrients(item, usdaData) {
-  // Only fill MISSING fields individually, don't overwrite existing values
-  if (!isNutrientsComplete(item.macros)) {
-    if (item.macros.calories_kcal === 0 && usdaData.macros.calories_kcal) {
-      item.macros.calories_kcal = usdaData.macros.calories_kcal;
-    }
-    if (item.macros.protein_g === 0 && usdaData.macros.protein_g) {
-      item.macros.protein_g = usdaData.macros.protein_g;
-    }
-    if (item.macros.carbs_g === 0 && usdaData.macros.carbs_g) {
-      item.macros.carbs_g = usdaData.macros.carbs_g;
-    }
-    if (item.macros.fat_g === 0 && usdaData.macros.fat_g) {
-      item.macros.fat_g = usdaData.macros.fat_g;
-    }
-    // Also fill optional macros if missing
-    if (!item.macros.fiber_g && usdaData.macros.fiber_g) {
-      item.macros.fiber_g = usdaData.macros.fiber_g;
-    }
-    if (!item.macros.sugar_g && usdaData.macros.sugar_g) {
-      item.macros.sugar_g = usdaData.macros.sugar_g;
-    }
-    if (!item.macros.sodium_mg && usdaData.macros.sodium_mg) {
-      item.macros.sodium_mg = usdaData.macros.sodium_mg;
-    }
-  }
+// isNutrientsComplete, fillMissingNutrients, isMicrosComplete, and
+// getMissingMicroKeys now live in utils/nutrientCompleteness.js (imported
+// above) so they're unit-testable independent of this route's module graph.
+// See that file's header comment for the field-aware rationale.
+function fillMissingNutrientsWithScaling(item, usdaData, itemServingGrams) {
+  return fillMissingNutrients(item, usdaData, itemServingGrams, FoodService.scaleFromPer100g);
 }
 
 function selectBestUSDAMatch(results, query) {
@@ -1184,39 +1158,12 @@ function calculateMatchScore(description, query) {
   return matches / queryWords.length;
 }
 
+// Thin wrapper kept for call-site compatibility: the real aggregation now
+// lives in canonicalNutrition.js so resolve.js, food.js, and voiceLog.js all
+// produce byte-identical totals shapes regardless of input mode (text,
+// photo, barcode, voice). See that module's header comment for why.
 function calculateTotals(items) {
-  const totals = {
-    macros: { calories_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-    micros: {}
-  };
-
-  items.forEach(item => {
-    totals.macros.calories_kcal += item.macros.calories_kcal || 0;
-    totals.macros.protein_g += item.macros.protein_g || 0;
-    totals.macros.carbs_g += item.macros.carbs_g || 0;
-    totals.macros.fat_g += item.macros.fat_g || 0;
-
-    if (item.micros && typeof item.micros === 'object') {
-      Object.entries(item.micros).forEach(([key, value]) => {
-        let numValue;
-        if (typeof value === 'number') {
-          numValue = value;
-        } else if (typeof value === 'string') {
-          numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
-        } else if (value && typeof value === 'object' && value.value !== undefined) {
-          numValue = typeof value.value === 'number'
-            ? value.value
-            : parseFloat(String(value.value).replace(/[^0-9.]/g, ''));
-        }
-
-        if (!isNaN(numValue) && numValue > 0) {
-          totals.micros[key] = (totals.micros[key] || 0) + numValue;
-        }
-      });
-    }
-  });
-
-  return totals;
+  return aggregateCanonicalTotals(items);
 }
 
 function assessDataQuality(items) {

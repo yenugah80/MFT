@@ -690,6 +690,30 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
     };
   },
 
+  // Parses OFF's free-text serving_size ("45 g", "1 bar (45g)", "1 cup (250 ml)")
+  // into a gram number. Returns null when unparseable rather than guessing —
+  // callers must treat null as "unknown serving size," not "0 grams."
+  parseServingGrams: (servingSizeText) => {
+    if (typeof servingSizeText !== 'string') return null;
+    // Prefer a parenthesized gram/ml amount ("1 bar (45g)") over a leading
+    // count ("1 bar") that isn't itself a weight.
+    const parenMatch = servingSizeText.match(/\(([\d.]+)\s*(g|ml)\)/i);
+    if (parenMatch) return parseFloat(parenMatch[1]);
+    const directMatch = servingSizeText.match(/^([\d.]+)\s*(g|ml)\b/i);
+    if (directMatch) return parseFloat(directMatch[1]);
+    return null;
+  },
+
+  // OFF/USDA report macros per 100g. A scanned product's true serving size
+  // is rarely 100g — a 45g bar scaled 1:1 would overcount by ~2.2x, a 385g
+  // packaged meal would undercount by ~3.85x. `null` in, `null` out —
+  // missing stays missing rather than becoming a scaled zero.
+  scaleFromPer100g: (valuePer100g, servingGrams) => {
+    if (valuePer100g === null || valuePer100g === undefined) return null;
+    const grams = Number.isFinite(servingGrams) && servingGrams > 0 ? servingGrams : 100;
+    return Math.round(valuePer100g * (grams / 100) * 100) / 100;
+  },
+
   transformProductData: (product) => {
     const n = product.nutriments || {};
     const nutri = computeNutriScoreFromNutriments(n);
@@ -705,16 +729,32 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       title: product.product_name || "Unknown Product",
       description: product.brands || "",
       image: product.image_front_small_url || product.image_front_url || null,
-      calories: Number.isFinite(n["energy-kcal_100g"])
+      // Every macro below is per 100g, per OFF's convention — the caller is
+      // responsible for scaling by the real consumed grams before treating
+      // these as a logged item's total nutrition. null (not 0) means OFF
+      // never reported the field, distinct from a confirmed zero.
+      caloriesPer100g: Number.isFinite(n["energy-kcal_100g"])
         ? Math.round(n["energy-kcal_100g"])
         : null,
-      protein: Number.isFinite(n.protein_100g)
-        ? Math.round(n.protein_100g)
+      // OFF's real field is "proteins_100g" (plural) — confirmed against the
+      // live API. The singular "protein_100g" this read before is never
+      // populated, so every barcode-scanned product has shown 0g protein
+      // regardless of the real product, for as long as this code existed.
+      // Caught only by an actual live API call, not by reading the code.
+      proteinPer100g: Number.isFinite(n.proteins_100g)
+        ? Math.round(n.proteins_100g)
         : null,
-      carbs: Number.isFinite(n.carbohydrates_100g)
+      carbsPer100g: Number.isFinite(n.carbohydrates_100g)
         ? Math.round(n.carbohydrates_100g)
         : null,
-      fats: Number.isFinite(n.fat_100g) ? Math.round(n.fat_100g) : null,
+      fatPer100g: Number.isFinite(n.fat_100g) ? Math.round(n.fat_100g) : null,
+      fiberPer100g: Number.isFinite(n.fiber_100g) ? Math.round(n.fiber_100g * 10) / 10 : null,
+      sugarPer100g: Number.isFinite(n.sugars_100g) ? Math.round(n.sugars_100g * 10) / 10 : null,
+      // OFF reports sodium_100g in GRAMS (same convention as salt_100g), not
+      // mg — every other nutrient/unit in this app is mg. Converting here,
+      // once, at the source, rather than leaving a x1000 error for a later
+      // consumer to introduce.
+      sodiumMgPer100g: Number.isFinite(n.sodium_100g) ? Math.round(n.sodium_100g * 1000) : null,
       nutriscore: nutri.grade,
       nutriscoreScore: nutri.score,
       ecoscore: product.ecoscore_grade ? product.ecoscore_grade.toUpperCase() : "UNKNOWN",
@@ -723,8 +763,9 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
         ? product.categories_tags[0].replace(/^..:/, "")
         : "General",
       servingSize: product.serving_size || "100g",
-      ingredients: product.ingredients_text 
-        ? [{ name: product.ingredients_text, amount: "see label" }] 
+      servingGrams: FoodService.parseServingGrams(product.serving_size),
+      ingredients: product.ingredients_text
+        ? [{ name: product.ingredients_text, amount: "see label" }]
         : [],
       micros: {
         calcium: getMicro("calcium_100g"),
@@ -775,10 +816,20 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
       description:
         food.brandOwner || food.additionalDescriptions || "USDA Food Item",
       image: null,
+      // NOTE (unresolved risk, not fixed here): USDA FoodData Central
+      // doesn't have a single reporting-basis convention the way OFF's
+      // `_100g` suffix does — foundation/sr_legacy entries are typically
+      // per-100g, but branded entries sometimes report per-serving. Scaling
+      // by a guessed basis risks being wrong in the opposite direction from
+      // doing nothing, so these are left unscaled — same behavior as
+      // before, now at least not silently dropping fiber/sugar/sodium.
       calories: Number.isFinite(kcal) ? Math.round(kcal) : null,
       protein: Number.isFinite(protein) ? Math.round(protein) : null,
       carbs: Number.isFinite(carbs) ? Math.round(carbs) : null,
       fats: Number.isFinite(fat) ? Math.round(fat) : null,
+      fiber: Number.isFinite(fiber) ? Math.round(fiber * 10) / 10 : null,
+      sugar: Number.isFinite(sugars) ? Math.round(sugars * 10) / 10 : null,
+      sodium: Number.isFinite(sodium) ? Math.round(sodium) : null, // USDA "Sodium, Na" is already mg
       nutriscore: nutri.grade,
       nutriscoreScore: nutri.score,
       ecoscore: "UNKNOWN", // USDA doesn't provide eco score

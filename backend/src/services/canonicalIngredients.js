@@ -316,6 +316,54 @@ export function canonicalize(userInput) {
   return result;
 }
 
+// Negation markers that, when found immediately before a matched keyword
+// (within a short word window, same clause), mean the food was explicitly
+// EXCLUDED rather than eaten — "toast without butter", "no butter", "hold
+// the butter", "minus the cheese". This is deliberately about explicit
+// exclusion of something the user DID name, not about inferring absence —
+// a food never mentioned at all was never a candidate in the first place.
+const NEGATION_MARKERS = ['without', 'no', 'not', 'minus', 'skip', 'hold', 'excluding', 'except'];
+
+/**
+ * True if `keyword`'s match in `text` is immediately preceded (within 3
+ * words, same clause — stops at ",", "and", "with") by a negation marker.
+ */
+export function isNegatedMention(text, keyword) {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+  const match = regex.exec(text);
+  if (!match) return false;
+
+  const prefix = text.slice(0, match.index).toLowerCase();
+  const words = prefix.split(/\s+/).filter(Boolean);
+  // Walk backward from the keyword until a clause boundary or 3 words.
+  for (let i = words.length - 1, steps = 0; i >= 0 && steps < 3; i--, steps++) {
+    const word = words[i].replace(/[^a-z]/g, '');
+    if (word === 'and' || word === 'with' || !word) break; // clause boundary — "eggs and toast" doesn't negate "eggs"
+    if (NEGATION_MARKERS.includes(word)) return true;
+    if (word === 'the' || word === 'of' || word === 'a' || word === 'an') continue; // skip fillers, keep looking
+    break; // any other real word breaks the adjacency (e.g. "wheat toast" shouldn't negate on an unrelated earlier word)
+  }
+  return false;
+}
+
+/**
+ * Build a detected-item stub (identity + portion, NOT nutrition — that's
+ * resolved separately) from a keyword that was found explicitly in the
+ * user's own text.
+ */
+function buildItemFromKeyword(userInput, keyword) {
+  const { qty, unit } = parseQuantityFromText(userInput, keyword);
+  const canonical = canonicalize(keyword);
+  return {
+    name: canonical.canonical_name || keyword,
+    quantity: qty || 1,
+    unit: unit || 'serving',
+    matchedKeyword: keyword,
+    confidence: canonical.matchType === 'exact' ? 0.8 : 0.6,
+  };
+}
+
 /**
  * Validate that all ingredients from user input were extracted
  * OPTIMIZED: Skip validation when AI has high confidence (target 70%+ skip rate)
@@ -324,7 +372,16 @@ export function canonicalize(userInput) {
  * @param {Array} extractedItems - Items extracted by AI
  * @param {Object} options - Validation options
  * @param {boolean} options.skipIfHighConfidence - Skip validation if AI confidence >= 0.9
- * @returns {Array} Validated items (auto-add disabled to avoid assumptions)
+ * @param {boolean} options.buildItemsFromKeywords - When true, a keyword found
+ *   explicitly in userInput and not already extracted is added as a real
+ *   detected item (name/quantity/unit only, no nutrition) instead of only
+ *   being logged. Opt-in and used ONLY by the voice /process "local
+ *   dictionary as parser" call site — the default (false) preserves the
+ *   original log-only behavior for callers (e.g. parseTextToFoods) that
+ *   pass real AI-extracted items and rely on this function purely as a
+ *   missed-ingredient guard, not a second parser, to avoid double-counting
+ *   a food the AI already itemized under a different name.
+ * @returns {Array} Validated (and, when opted in, completed) items
  */
 export function validateExtraction(userInput, extractedItems, options = {}) {
   if (isComplexDishInput(userInput)) {
@@ -357,9 +414,24 @@ export function validateExtraction(userInput, extractedItems, options = {}) {
 
     // Only flag as missed if it's present in the original input AND wasn't already extracted
     if (keywordRegex.test(userInput) && !alreadyExtracted) {
-      console.warn(`⚠️ [Validation] MISSED INGREDIENT: "${keyword}" from input "${userInput}"`);
+      if (isNegatedMention(userInput, keyword)) {
+        console.log(`[Validation] Skipping "${keyword}" — explicitly excluded in "${userInput}" (e.g. "without ${keyword}")`);
+        continue;
+      }
 
-      console.log(`⚠️ [Validation] Auto-add disabled for "${keyword}" to avoid silent assumptions.`);
+      if (options.buildItemsFromKeywords) {
+        // This used to only log a warning here — the comment at this
+        // call's origin (voiceLog.js) says calling with extractedItems=[]
+        // "turns the validator into a parser", but nothing ever actually
+        // constructed and added an item for a keyword found this way, so
+        // every explicitly-spoken food (however unambiguous) was silently
+        // dropped and the request came back with 0 items.
+        validated.push(buildItemFromKeyword(userInput, keyword));
+        console.log(`[Validation] Added explicitly-spoken ingredient "${keyword}" as a detected item.`);
+      } else {
+        console.warn(`⚠️ [Validation] MISSED INGREDIENT: "${keyword}" from input "${userInput}"`);
+        console.log(`⚠️ [Validation] Auto-add disabled for "${keyword}" to avoid silent assumptions.`);
+      }
     }
     // FIX: Deduplication - If we found a specific match (e.g. "fried eggs"),
     // remove generic partial matches (e.g. "egg") that might have been extracted incorrectly.
@@ -373,7 +445,7 @@ export function validateExtraction(userInput, extractedItems, options = {}) {
   }
 
   const validationTime = performance.now() - startTime;
-  console.log(`[Validation] ✓ Completed in ${validationTime.toFixed(2)}ms (${validated.length} items, auto-add disabled)`);
+  console.log(`[Validation] ✓ Completed in ${validationTime.toFixed(2)}ms (${validated.length} items)`);
 
   return validated;
 }

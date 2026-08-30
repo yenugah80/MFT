@@ -10,6 +10,15 @@ import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { aggregateCanonicalTotals, normalizeMicros } from "../utils/canonicalNutrition.js";
+
+// Normalizes every item's micros into canonical {value, unit} form — see
+// canonicalNutrition.js's header comment. A single-item meal reads
+// item.micros directly (not the meal-level totals.micros), so this needs to
+// run at the item level too, not just when totals are aggregated.
+function normalizeItemMicros(items) {
+  return (items || []).map((item) => ({ ...item, micros: normalizeMicros(item.micros) }));
+}
 
 // Macro/calorie self-consistency (Atwater), reconciled in place BEFORE totals are
 // built from it — same rule as the text-estimation and DB write-boundary paths (see
@@ -81,23 +90,37 @@ router.get("/barcode/:code", async (req, res) => {
     // Use consistent "No product found" message that frontend expects
     if (!product) return res.status(404).json({ error: "No product found for this barcode" });
 
-    // Transform to unified response format
+    // OFF/USDA report macros per 100g — scale to the product's real serving
+    // size when OFF's serving_size text parses to a gram value, otherwise
+    // report honestly as-is per 100g (gramsEquivalent below matches whichever
+    // basis was actually used, so density-based scoring never mismatches
+    // what the macros represent). Previously used a fixed 100g regardless of
+    // the product's real size, and never read fiber/sugar/sodium at all
+    // (every barcode-scanned product showed 0g/0g/0mg for these three
+    // regardless of what the label said).
+    const servingGrams = product.servingGrams; // null when unparseable
+    const scale = (v) => FoodService.scaleFromPer100g(v, servingGrams);
+
     const rawItems = [{
       name: product.title || 'Unknown Product',
       quantity: 1,
       unit: 'serving',
       canonical: {
         nutrition: {
-          calories: product.calories || 0,
-          protein: product.protein || 0,
-          carbs: product.carbs || 0,
-          fats: product.fats || product.fat || 0,
-          fiber: product.fiber || 0,
-          sugar: product.sugar || 0,
-          sodium: product.sodium || 0,
+          calories: scale(product.caloriesPer100g) ?? 0,
+          protein: scale(product.proteinPer100g) ?? 0,
+          carbs: scale(product.carbsPer100g) ?? 0,
+          fats: scale(product.fatPer100g) ?? 0,
+          fiber: scale(product.fiberPer100g) ?? 0,
+          sugar: scale(product.sugarPer100g) ?? 0,
+          sodium: scale(product.sodiumMgPer100g) ?? 0,
           micros: product.micros || {}
         },
-        portion: { amount: 1, unit: product.servingSize || 'serving' },
+        portion: {
+          amount: 1,
+          unit: servingGrams ? 'serving' : '100g',
+          gramsEquivalent: servingGrams || 100,
+        },
         healthScore: null,
         nutriScore: product.nutriscore || null,
         ingredients: product.ingredients || []
@@ -114,6 +137,16 @@ router.get("/barcode/:code", async (req, res) => {
       mealType: mealType,
       rawItems: rawItems
     });
+
+    // Replace buildUnifiedResponse's flat, unsuffixed totals (totals.calories,
+    // no .macros wrapper) with the same canonical shape resolve.js's text-mode
+    // endpoint sends — the two were structurally incompatible, so a barcode-
+    // logged meal reached Detailed Analysis/MealScoreDial/MicrosGrid in a
+    // shape those components don't read correctly. unifiedResponse.items
+    // already carries the right per-item .macros field names (buildFoodItem
+    // adds it for exactly this reason); only the meal-level totals differed.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
 
     console.log(`[FoodBarcode] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse });
@@ -275,6 +308,12 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
       rawItems: rawItems
     });
 
+    // Same canonical totals every input mode sends — see the barcode
+    // endpoint above for why buildUnifiedResponse's own totals shape can't
+    // be used directly.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+
     // CRITICAL FIX: Add top-level foodName for backwards compatibility
     // The frontend's buildFoodLog expects raw.foodName, but unifiedResponse has items[0].name
     const foodName = rawItems[0]?.name || result.title || result.foodName || 'Unknown Food';
@@ -298,7 +337,7 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
     const servingGrams = portionUnit === 'g' && typeof portionAmount === 'number' ? portionAmount : undefined;
     const plausibilityCheck = checkNutritionPlausibility({
       foodName,
-      macros: { calories_kcal: unifiedResponse.totals?.calories || 0 },
+      macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
       servingGrams,
     });
 
@@ -313,15 +352,18 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
         foodName,
         title: foodName,
         name: foodName,
-        calories: unifiedResponse.totals?.calories || 0,
-        protein: unifiedResponse.totals?.protein || 0,
-        carbs: unifiedResponse.totals?.carbs || 0,
-        fat: unifiedResponse.totals?.fat || 0,
-        fiber: unifiedResponse.totals?.fiber || 0,
-        sugar: unifiedResponse.totals?.sugar || 0,
-        sodium: unifiedResponse.totals?.sodium || 0,
+        calories: unifiedResponse.totals?.macros?.calories_kcal || 0,
+        protein: unifiedResponse.totals?.macros?.protein_g || 0,
+        carbs: unifiedResponse.totals?.macros?.carbs_g || 0,
+        fat: unifiedResponse.totals?.macros?.fat_g || 0,
+        fiber: unifiedResponse.totals?.macros?.fiber_g || 0,
+        sugar: unifiedResponse.totals?.macros?.sugar_g || 0,
+        sodium: unifiedResponse.totals?.macros?.sodium_mg || 0,
         servingSize: rawItems[0]?.canonical?.portion?.unit || 'serving',
-        micros: rawItems[0]?.canonical?.nutrition?.micros || {},
+        // Full-meal micronutrient aggregate, not just the first item — a
+        // multi-item photo meal (isMultiItem/itemCount above confirms these
+        // exist) previously reported only rawItems[0]'s micros here.
+        micros: unifiedResponse.totals?.micros || {},
         ingredients: rawItems[0]?.ingredients || [],
         // Enhanced analysis fields
         isMultiItem: result.isMultiItem || false,
@@ -645,6 +687,10 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
       rawItems: rawItems
     });
 
+    // Same canonical totals every input mode sends — see /barcode above.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+
     // Add multimodal and enhanced analysis metadata
     unifiedResponse.multimodal = {
       hasVoice: !!voiceTranscript,
@@ -667,7 +713,7 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
     // wrong-magnitude estimates that confidence scores alone don't.
     const multimodalPlausibilityCheck = checkNutritionPlausibility({
       foodName: rawItems[0]?.name || result.title || result.foodName || 'Unknown Food',
-      macros: { calories_kcal: unifiedResponse.totals?.calories || 0 },
+      macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
     });
     unifiedResponse.nutritionPlausible = multimodalPlausibilityCheck.plausible;
     unifiedResponse.plausibilityCheck = multimodalPlausibilityCheck;
@@ -675,7 +721,7 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
 
     console.log(`[FoodMultimodal] Enhanced response:`, {
       items: unifiedResponse.items?.length || 1,
-      calories: unifiedResponse.totals?.calories,
+      calories: unifiedResponse.totals?.macros?.calories_kcal,
       cuisine: unifiedResponse.cuisine,
       hasVoice: !!voiceTranscript,
       confidence: rawItems[0]?.confidence
