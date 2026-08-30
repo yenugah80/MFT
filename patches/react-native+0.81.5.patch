@@ -1,0 +1,31 @@
+diff --git a/node_modules/react-native/src/private/devsupport/devmenu/elementinspector/Inspector.js b/node_modules/react-native/src/private/devsupport/devmenu/elementinspector/Inspector.js
+index 98ba78f..56913b5 100644
+--- a/node_modules/react-native/src/private/devsupport/devmenu/elementinspector/Inspector.js
++++ b/node_modules/react-native/src/private/devsupport/devmenu/elementinspector/Inspector.js
+@@ -79,7 +79,25 @@ function Inspector({
+     }
+ 
+     // We pass in findNodeHandle as the method is injected
+-    const {measure, props} = hierarchyItem.getInspectorData(findNodeHandle);
++    let inspectorData;
++    try {
++      inspectorData = hierarchyItem.getInspectorData(findNodeHandle);
++    } catch (error) {
++      // A selected app node can unmount while the inspector breadcrumb still
++      // holds its previous hierarchy. Treat that development-only race as a
++      // stale selection instead of crashing the inspected application.
++      if (
++        error instanceof Error &&
++        error.message === 'Unable to find node on an unmounted component.'
++      ) {
++        setInspectedElement(null);
++        setSelectionIndex(null);
++        setElementsHierarchy(null);
++        return;
++      }
++      throw error;
++    }
++    const {measure, props} = inspectorData;
+ 
+     measure((x, y, width, height, left, top) => {
+       // $FlowFixMe[incompatible-call] `props` from InspectorData are defined as <string, string> dictionary, which is incompatible with ViewStyleProp

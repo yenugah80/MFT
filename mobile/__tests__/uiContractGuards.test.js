@@ -156,6 +156,22 @@ describe('API response codes match the server exactly', () => {
   });
 });
 
+describe('React Native element inspector tolerates stale selections', () => {
+  it('keeps the version-pinned unmounted-fiber guard installed', () => {
+    const patchPath = path.resolve(
+      MOBILE_ROOT,
+      '..',
+      'patches',
+      'react-native+0.81.5.patch'
+    );
+    const patch = fs.readFileSync(patchPath, 'utf8');
+
+    expect(patch).toContain('Unable to find node on an unmounted component.');
+    expect(patch).toContain('setElementsHierarchy(null);');
+    expect(patch).toContain('setInspectedElement(null);');
+  });
+});
+
 describe('subjective ratings are not pre-filled', () => {
   /**
    * A pre-filled subjective rating is indistinguishable in the database from a
