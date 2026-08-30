@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { computeIngredientNutrition, buildIngredientEditPayload } from './computeIngredientNutrition';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -44,45 +45,15 @@ const EditableIngredientsSection = ({
   const ingredients = ingredientBreakdown?.ingredients || [];
   const optionalAddOns = ingredientBreakdown?.optionalAddOns || [];
 
-  // Calculate current nutrition based on active ingredients (must be before early return)
-  const currentNutrition = useMemo(() => {
-    let calories = 0;
-    let protein = 0;
-    let carbs = 0;
-    let fat = 0;
-    let fiber = 0;
-
-    // Sum active ingredients
-    for (const ing of ingredients) {
-      if (!removedIngredients.has(ing.name)) {
-        calories += ing.calories || 0;
-        protein += ing.macros?.protein || 0;
-        carbs += ing.macros?.carbs || 0;
-        fat += ing.macros?.fat || 0;
-        fiber += ing.macros?.fiber || 0;
-      }
-    }
-
-    // Add selected add-ons
-    for (const addOnName of addedAddOns) {
-      const addOn = optionalAddOns?.find((a) => a.name === addOnName);
-      if (addOn) {
-        calories += addOn.calories || 0;
-        protein += addOn.macros?.protein || 0;
-        carbs += addOn.macros?.carbs || 0;
-        fat += addOn.macros?.fat || 0;
-        fiber += addOn.macros?.fiber || 0;
-      }
-    }
-
-    return {
-      calories: Math.round(calories),
-      protein: Math.round(protein * 10) / 10,
-      carbs: Math.round(carbs * 10) / 10,
-      fat: Math.round(fat * 10) / 10,
-      fiber: Math.round(fiber * 10) / 10,
-    };
-  }, [ingredients, optionalAddOns, removedIngredients, addedAddOns]);
+  // Calculate current nutrition based on active ingredients (must be before
+  // early return). Previously dropped sugar, sodium, and micros entirely —
+  // an ingredient toggle updated the calorie/protein/carbs/fat/fiber summary
+  // shown here, but sugar/sodium/micros silently stayed at whatever they
+  // were before any edit, since nothing here ever read or summed them.
+  const currentNutrition = useMemo(
+    () => computeIngredientNutrition({ ingredients, optionalAddOns, removedIngredients, addedAddOns }),
+    [ingredients, optionalAddOns, removedIngredients, addedAddOns]
+  );
 
   // Check if nutrition has been modified
   const isModified = removedIngredients.size > 0 || addedAddOns.size > 0;
@@ -127,15 +98,16 @@ const EditableIngredientsSection = ({
     [isEditable]
   );
 
-  // Notify parent of nutrition changes
+  // Notify parent of nutrition changes. Emits the app-wide canonical
+  // {macros: {..._g/_mg}, micros} shape — previously sent flat, unsuffixed
+  // fields (calories/protein/carbs/fat/fiber, no macros wrapper at all), so
+  // MealSummaryScreen's displayMacros (which reads modifiedNutrition.macros)
+  // never picked up an ingredient edit: it silently kept showing the
+  // pre-edit macro bars, MealScoreDial input, and prediction payload, while
+  // only the top-level calorie figure happened to update.
   React.useEffect(() => {
     if (onNutritionChange && isModified) {
-      onNutritionChange({
-        ...currentNutrition,
-        isModified: true,
-        removedIngredients: Array.from(removedIngredients),
-        addedAddOns: Array.from(addedAddOns),
-      });
+      onNutritionChange(buildIngredientEditPayload(currentNutrition, { removedIngredients, addedAddOns }));
     }
   }, [currentNutrition, isModified, onNutritionChange, removedIngredients, addedAddOns]);
 

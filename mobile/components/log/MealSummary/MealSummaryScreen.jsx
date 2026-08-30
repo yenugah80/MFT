@@ -32,109 +32,7 @@ import ActionButtons from './ActionButtons';
 import MealFeelingPrediction from '../MealFeelingPrediction';
 import QuantityAdjuster from '../QuantityAdjuster';
 import EditableIngredientsSection from '../EditableIngredientsSection';
-
-/**
- * Extract sodium from micros object (handles multiple formats)
- * Returns sodium value in mg, or 0 if not found
- */
-function extractSodiumFromMicros(micros) {
-  if (!micros) return 0;
-
-  // Try various key formats: sodium, sodium_mg, Sodium
-  const sodiumKeys = ['sodium', 'sodium_mg', 'Sodium'];
-  for (const key of sodiumKeys) {
-    const val = micros[key];
-    if (val !== undefined && val !== null) {
-      // Handle both {sodium: 1700} and {sodium: {value: 1700}}
-      if (typeof val === 'object' && val.value !== undefined) {
-        return val.value;
-      }
-      if (typeof val === 'number') {
-        return val;
-      }
-    }
-  }
-  return 0;
-}
-
-/**
- * Aggregate nutrition data from multiple items
- * FIX: Ensures sodium from micros is copied to macros for consistent display
- */
-function aggregateNutrition(analysisResult) {
-  if (!analysisResult?.items || analysisResult.items.length === 0) {
-    return null;
-  }
-
-  // Single item - return directly
-  if (analysisResult.items.length === 1) {
-    const item = analysisResult.items[0];
-    const macros = { ...(item.macros || {}) };
-    const micros = item.micros || {};
-
-    // FIX: If sodium_mg is missing or 0 in macros, copy from micros
-    if (!macros.sodium_mg || macros.sodium_mg === 0) {
-      const sodiumFromMicros = extractSodiumFromMicros(micros);
-      if (sodiumFromMicros > 0) {
-        macros.sodium_mg = sodiumFromMicros;
-      }
-    }
-
-    return {
-      item,
-      macros,
-      micros,
-      ingredients: item.ingredients || [],
-      isComplex: item.isComplex || false,
-      name: item.name,
-      portion: item.portion,
-      confidence: item.confidence,
-    };
-  }
-
-  // Multiple items - use totals
-  const totals = analysisResult.totals || {};
-  // Names aggregation available if needed for display
-  // const names = analysisResult.items.map(i => i.name).join(', ');
-
-  // Aggregate micros - handle both formats: {calcium: 15} and {calcium: {value: 15}}
-  const aggregatedMicros = {};
-  analysisResult.items.forEach(item => {
-    if (item.micros) {
-      Object.entries(item.micros).forEach(([key, val]) => {
-        // Handle both flat numbers and object format
-        const isObject = typeof val === 'object' && val !== null;
-        const value = isObject ? (val.value ?? 0) : (typeof val === 'number' ? val : 0);
-        const unit = isObject ? (val.unit || 'mg') : 'mg';
-
-        if (!aggregatedMicros[key]) {
-          aggregatedMicros[key] = { value: 0, unit };
-        }
-        aggregatedMicros[key].value += value;
-      });
-    }
-  });
-
-  // FIX: Ensure macros has sodium_mg from micros if missing
-  const macros = { ...(totals.macros || {}) };
-  if (!macros.sodium_mg || macros.sodium_mg === 0) {
-    const sodiumFromMicros = extractSodiumFromMicros(aggregatedMicros);
-    if (sodiumFromMicros > 0) {
-      macros.sodium_mg = sodiumFromMicros;
-    }
-  }
-
-  return {
-    item: analysisResult.items[0], // First item for confidence
-    macros,
-    micros: aggregatedMicros,
-    ingredients: analysisResult.items, // Use items as "ingredients" for multi-item meals
-    isComplex: true,
-    name: `Meal (${analysisResult.items.length} items)`,
-    portion: { servingText: `${analysisResult.items.length} items` },
-    confidence: analysisResult.items[0]?.confidence || 0.7,
-  };
-}
+import { aggregateNutrition, buildMealFeelingPayload, scaleNutritionByQuantity } from './aggregateNutrition';
 
 export default function MealSummaryScreen({
   visible,
@@ -165,14 +63,25 @@ export default function MealSummaryScreen({
   // Get ingredient breakdown from the first item (for single-item meals)
   const ingredientBreakdown = nutrition?.item?.ingredientBreakdown || null;
 
-  // Handle quantity change for countable foods
+  // Handle quantity change for countable foods. Scales the ORIGINAL complete
+  // macros/micros (nutrition.macros/nutrition.micros) by the quantity ratio,
+  // rather than trusting QuantityAdjuster's own narrow recompute — see
+  // scaleNutritionByQuantity's doc comment for why.
   const handleQuantityChange = (quantityData) => {
     setCurrentQuantity(quantityData.quantity);
-    if (quantityData.calories) {
+    const baseQuantity = portionInfo.amount || 1;
+    if (quantityData.quantity && baseQuantity > 0) {
+      const scaleFactor = quantityData.quantity / baseQuantity;
+      const { macros: scaledMacros, micros: scaledMicros } = scaleNutritionByQuantity(
+        nutrition.macros,
+        nutrition.micros,
+        scaleFactor
+      );
       setModifiedNutrition((prev) => ({
         ...prev,
-        calories: quantityData.calories,
-        macros: quantityData.macros,
+        calories: scaledMacros.calories_kcal ?? quantityData.calories,
+        macros: scaledMacros,
+        micros: scaledMicros,
         quantityChanged: true,
       }));
     }
@@ -190,6 +99,18 @@ export default function MealSummaryScreen({
   // Get display values (use modified if available)
   const displayCalories = modifiedNutrition?.calories || nutrition?.macros?.calories_kcal || nutrition?.macros?.calories;
   const displayMacros = modifiedNutrition?.macros || nutrition?.macros;
+  // Previously MicrosGrid always read nutrition.micros directly, so
+  // micronutrients stayed frozen at the pre-adjustment values no matter how
+  // far the quantity stepper moved.
+  const displayMicros = modifiedNutrition?.micros || nutrition?.micros;
+  // Previously MealScoreDial and the feeling-prediction payload always read
+  // the static original nutrition.item, so the score/prediction stayed
+  // frozen at pre-adjustment values after a quantity edit — this is the
+  // same "edits must invalidate derived data" requirement as the
+  // include/exclude-ingredient path already handles correctly elsewhere.
+  const displayItem = modifiedNutrition
+    ? { ...nutrition.item, macros: displayMacros, micros: displayMicros }
+    : nutrition.item;
 
   // Theme colors
   const cardBg = isDark ? 'rgba(30, 30, 35, 0.95)' : 'rgba(255, 255, 255, 0.98)';
@@ -258,21 +179,13 @@ export default function MealSummaryScreen({
           {/* DESIGN FIX: Removed NutriScoreCard to eliminate conflicting scores */}
           {/* MealScoreDial (0-100) is the single source of meal quality */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <MealScoreDial item={nutrition.item} />
+            <MealScoreDial item={displayItem} />
           </View>
 
           {/* How Will This Make Me Feel - DIFFERENTIATOR */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
             <MealFeelingPrediction
-              mealData={{
-                calories: displayCalories,
-                protein: displayMacros?.protein_g,
-                carbs: displayMacros?.carbs_g,
-                sugar: nutrition.micros?.sugar?.value || nutrition.micros?.sugar,
-                fiber: nutrition.micros?.fiber?.value || nutrition.micros?.fiber,
-                novaScore: nutrition.item?.novaScore,
-                mealType: nutrition.item?.mealType,
-              }}
+              mealData={buildMealFeelingPayload({ displayCalories, displayMacros, item: displayItem })}
             />
           </View>
 
@@ -320,9 +233,9 @@ export default function MealSummaryScreen({
           )}
 
           {/* Micronutrients Grid */}
-          {nutrition.micros && Object.keys(nutrition.micros).length > 0 && (
+          {displayMicros && Object.keys(displayMicros).length > 0 && (
             <View style={[styles.card, { backgroundColor: cardBg }]}>
-              <MicrosGrid micros={nutrition.micros} />
+              <MicrosGrid micros={displayMicros} />
             </View>
           )}
 

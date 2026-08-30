@@ -1111,11 +1111,15 @@ export default function UnifiedMealAnalysis({
     // If user has modified items, always recalculate from activeItems
     const hasExclusions = excludedItems.size > 0 || excludedIngredients.size > 0;
 
-    // Macros always come from summing the items (below), not from the
-    // top-level `totals` object — resolve.js's own calculateTotals() nests
-    // macros under totals.macros and only sums calories/protein/carbs/fat,
-    // silently dropping fiber/sugar/sodium. The item-level sum below is the
-    // only place those are computed correctly.
+    // Macros always come from summing activeItems (below), not from the
+    // top-level `totals` object — the backend's totals.macros is now
+    // reliable (canonicalNutrition.js includes fiber/sugar/sodium and is
+    // used by every input mode), but this screen supports excluding an item
+    // or a single ingredient before logging, which is a client-side-only
+    // edit the server has no round-trip for. This is the "genuinely
+    // required client-side aggregation for optimistic edits" case — it
+    // stays, using the same field names as the canonical totals it can't
+    // substitute for here.
     //
     // nutriScore/healthScore ARE reliable at the top level regardless
     // (enrichWithHealthMetrics adds them onto draft.totals directly), so
