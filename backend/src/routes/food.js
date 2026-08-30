@@ -225,6 +225,46 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
       }
     }
 
+    // Multi-item counterpart of the single-item correction above — same retry
+    // mechanism, checked per item instead of once against the meal total.
+    // Confirmed live that a real multi-item photo can get flagged "severe"
+    // implausible (a whole-bowl total compared as if it were a single 100g
+    // serving) with nothing acting on that signal, since the block above only
+    // ever ran for !result.isMultiItem.
+    if (process.env.ENABLE_PLAUSIBILITY_CORRECTION !== 'false' && result.isMultiItem && Array.isArray(result.items) && result.items.length > 0) {
+      const checkItem = (item) => checkNutritionPlausibility({
+        foodName: item.name,
+        macros: { calories_kcal: item.calories || 0 },
+        servingGrams: item.portion?.estimatedGrams,
+      });
+      const flagged = result.items
+        .map((item) => ({ item, check: checkItem(item) }))
+        .filter(({ check }) => !check.plausible && check.expectedRange);
+
+      if (flagged.length > 0) {
+        const hint =
+          `IMPORTANT — RE-ANALYZE: ${flagged.map(({ item, check }) => {
+            const dir = check.kcalPer100g < check.expectedRange.min ? 'low' : 'high';
+            return `"${item.name}" at ~${check.kcalPer100g} kcal/100g is implausibly ${dir} (typical ${check.expectedRange.min}-${check.expectedRange.max} kcal/100g)`;
+          }).join('; ')}. Re-examine the image and give REALISTIC per-item estimates, keeping macros internally consistent.`;
+        try {
+          const retry = await FoodService.analyzeImage(image, {
+            highAccuracy: true,
+            includeIngredients,
+            customInstructions: hint,
+          });
+          if (retry && retry.isMultiItem && Array.isArray(retry.items)) {
+            const retryFlaggedCount = retry.items.filter((item) => !checkItem(item).plausible).length;
+            console.log(`[FoodAnalyzeImage][correction] multi-item: ${flagged.length} implausible item(s) → retry has ${retryFlaggedCount} (${retryFlaggedCount < flagged.length ? '✅ improved' : '⚠️ not improved, keeping original'})`);
+            // Accept the retry only if it's strictly better than the first pass.
+            if (retryFlaggedCount < flagged.length) result = retry;
+          }
+        } catch (correctionErr) {
+          console.warn(`[FoodAnalyzeImage][correction] multi-item retry failed: ${correctionErr.message}`);
+        }
+      }
+    }
+
     // Macro-consistency reconciliation, mutated in place before totals are built from
     // it. Any item reconciled → surfaced as one top-level flag (mirrors how
     // nutritionPlausible/plausibilityCheck are also blended-totals, top-level signals
