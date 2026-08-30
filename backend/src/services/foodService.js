@@ -895,6 +895,13 @@ Important: Be accurate and realistic with nutrition values. If uncertain, use mo
           carbs: item.macros?.carbs || 0,
           fat: item.macros?.fat || 0,
           fiber: item.macros?.fiber || 0,
+          // sugar/sodium/micros were previously dropped here — every item in
+          // a multi-item photo/multimodal result silently reported 0g sugar,
+          // 0mg sodium, and no micros regardless of what the AI actually
+          // estimated, confirmed live against a real multi-item bowl photo.
+          sugar: item.macros?.sugar || 0,
+          sodium: item.macros?.sodium || 0,
+          micros: item.micros || {},
           portion: item.portion,
           cookingMethod: item.cookingMethod,
           cuisine: item.cuisine,

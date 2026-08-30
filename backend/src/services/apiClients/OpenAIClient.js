@@ -797,7 +797,13 @@ Return JSON:
     try {
       const json = await this.chatCompletionJSON(messages, {
         model: visionModel,
-        maxTokens: highAccuracy ? 2000 : 1000, // Increased for multi-item + per-ingredient breakdown
+        // A real multi-item photo (5-6 foods, each with macros + several
+        // micros) runs well past 2000 tokens and gets cut off mid-JSON —
+        // confirmed live against a real bowl photo, which failed with
+        // "Unterminated string in JSON" at ~6200 chars (~1 item's worth) in.
+        // 4096 is gpt-4o's completion ceiling, so this is the most headroom
+        // available rather than an arbitrary guess.
+        maxTokens: highAccuracy ? 4096 : 1000,
         temperature: 0.2, // Lower temperature for more consistent quality
       });
 
