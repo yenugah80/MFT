@@ -171,6 +171,56 @@ describe('normalizeMicros — unit resolution', () => {
   });
 });
 
+describe('normalizeMicros — key canonicalization (photo/AI-vision snake_case → canonical camelCase)', () => {
+  it('folds snake_case keys from the vision path into the canonical camelCase key', () => {
+    const result = normalizeMicros({ vitamin_a: 300, vitamin_b12: 2.4, vitamin_d: 5 });
+    expect(result.vitaminA).toEqual({ value: 300, unit: 'µg' });
+    expect(result.vitaminB12).toEqual({ value: 2.4, unit: 'µg' });
+    expect(result.vitaminD).toEqual({ value: 5, unit: 'µg' });
+    expect(result.vitamin_a).toBeUndefined();
+    expect(result.vitamin_b12).toBeUndefined();
+  });
+
+  it('folds kebab-case and title-case-with-spaces variants the same way', () => {
+    const result = normalizeMicros({ 'vitamin-c': 45, 'Vitamin A': 200 });
+    expect(result.vitaminC).toEqual({ value: 45, unit: 'mg' });
+    expect(result.vitaminA).toEqual({ value: 200, unit: 'µg' });
+  });
+
+  it('single-word nutrients are unaffected by canonicalization (already match)', () => {
+    const result = normalizeMicros({ calcium: 100, iron: 2 });
+    expect(result.calcium).toEqual({ value: 100, unit: 'mg' });
+    expect(result.iron).toEqual({ value: 2, unit: 'mg' });
+  });
+
+  it('preserves an unrecognized nutrient under its original key rather than mapping it away', () => {
+    const result = normalizeMicros({ some_exotic_compound: 42 });
+    expect(result.some_exotic_compound).toEqual({ value: 42, unit: null });
+    expect(Object.keys(result)).not.toContain('someExoticCompound');
+  });
+
+  it('a canonicalized key still gets its plausibility ceiling checked', () => {
+    const flags = [];
+    normalizeMicros({ vitamin_b12: 5000 }, { onImplausible: (f) => flags.push(f) });
+    expect(flags).toHaveLength(1);
+  });
+});
+
+describe('aggregateCanonicalTotals — canonicalized micro keys survive aggregation', () => {
+  it('snake_case micros from a photo-mode item sum correctly under the canonical key across a multi-item meal', () => {
+    const items = [
+      { macros: { calories_kcal: 100 }, micros: normalizeMicros({ vitamin_a: 100, calcium: 50 }) },
+      { macros: { calories_kcal: 100 }, micros: normalizeMicros({ vitaminA: 50, calcium: 25 }) },
+    ];
+    const totals = aggregateCanonicalTotals(items);
+    // Both items' vitamin A contribution lands under the SAME canonical key
+    // instead of splitting into vitamin_a (100) and vitaminA (50).
+    expect(totals.micros.vitaminA).toEqual({ value: 150, unit: 'µg' });
+    expect(totals.micros.calcium).toEqual({ value: 75, unit: 'mg' });
+    expect(totals.meta.conflictedMicros).toHaveLength(0);
+  });
+});
+
 describe('aggregateCanonicalTotals — macros: missing vs zero vs malformed', () => {
   it('sums all 7 macro fields across a single item', () => {
     const items = [{

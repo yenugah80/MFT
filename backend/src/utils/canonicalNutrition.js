@@ -255,7 +255,16 @@ export function normalizeMicros(rawMicros, { onImplausible, onInvalid } = {}) {
     }
 
     const unit = sourceUnit || canonicalUnitFor(key); // null when both are unresolved
-    result[key] = { value, unit };
+
+    // Fold spelling/casing variants (vitamin_a, vitamin-a, "Vitamin A") into
+    // the one canonical key every consumer (aggregation, %DV, meal-score
+    // micro bonus) keys off of — confirmed live that the AI vision path
+    // returns snake_case while everything downstream expects camelCase,
+    // silently splitting one nutrient into two never-matched keys. A
+    // nutrient this table doesn't recognize at all is kept under its
+    // original key rather than mapped away.
+    const canonicalKey = canonicalKeyFor(key) || key;
+    result[canonicalKey] = { value, unit };
 
     // Only flag plausibility against the canonical ceiling when the value is
     // actually tagged with the canonical unit — a value in a different
