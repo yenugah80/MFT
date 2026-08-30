@@ -624,6 +624,12 @@ Return JSON:
         confidence: 0.8,
         notes: "AI Estimated Nutrition",
         source: 'ai_estimate', // EXPLICIT DISCLAIMER
+        // The prompt above asks for "nutrition for the SPECIFIED quantity"
+        // (rule 4) — item.nutrition is already the total for `quantity`, not
+        // a per-unit value. unifiedResponseBuilder.js's buildFoodItem
+        // defaults to treating nutrition as per-unit and multiplying by
+        // quantity again, which silently inflated e.g. "3 eggs" by 3x.
+        nutritionIsPerUnit: false,
         // Construct a synthetic canonical object with the estimated nutrition
         canonical: {
           canonical: item.name,

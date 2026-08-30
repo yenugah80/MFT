@@ -1368,6 +1368,12 @@ function enrichWithHealthMetrics(draft) {
     name: item.name,
     quantity: item.portion?.amount || 1,
     unit: item.portion?.unit || 'serving',
+    // item.macros is already the resolved total for this item's described
+    // portion (not a per-unit value) — without this, buildFoodItem
+    // re-multiplies it by quantity, which only affects the healthScore/
+    // nutriScore borrowed from `unified` below (draft.totals, what's
+    // actually displayed, is untouched by this call).
+    nutritionIsPerUnit: false,
     nutrition: {
       calories: item.macros?.calories_kcal || 0,
       protein: item.macros?.protein_g || 0,

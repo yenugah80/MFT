@@ -284,6 +284,14 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
           name: item.name || 'Unknown Food',
           quantity: item.portion?.amount || 1,
           unit: item.portion?.unit || 'serving',
+          // The vision prompt asks the AI to "scale values to VISIBLE
+          // portion size" — item.calories etc. are already the total for
+          // this item's stated portion, not a per-unit value.
+          // unifiedResponseBuilder.js's buildFoodItem defaults to treating
+          // nutrition as per-unit and multiplying by quantity again, which
+          // silently inflated (e.g. "3oz" → 3x) or deflated (e.g. "0.5 cup"
+          // → half) every item whose portion.amount wasn't exactly 1.
+          nutritionIsPerUnit: false,
           canonical: {
             nutrition: {
               calories: item.calories || 0,
@@ -296,8 +304,16 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
               micros: item.micros || {}
             },
             portion: item.portion || { amount: 1, unit: 'serving' },
-            healthScore: result.healthScore || null,
-            nutriScore: result.nutriscore || null,
+            // Was result.healthScore/nutriscore (the MEAL-level aggregate),
+            // stamping the identical score onto every item regardless of
+            // its own composition, and suppressing buildFoodItem's own
+            // correct per-item fallback computation (which only runs when
+            // this is null). The AI schema doesn't produce a per-item score
+            // in multi-item mode, so item.healthScore is always undefined
+            // today — meaning this now correctly falls through to that
+            // per-item computation instead of the meal-level number.
+            healthScore: item.healthScore || null,
+            nutriScore: item.nutriScore || null,
             cookingMethod: item.cookingMethod || null,
             cuisine: item.cuisine || null,
             ingredients: item.ingredients || []
@@ -663,6 +679,10 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
           name: item.name || 'Unknown Food',
           quantity: item.portion?.amount || 1,
           unit: item.portion?.unit || 'serving',
+          // See the identical fix + comment in /analyze-image above — the
+          // vision AI already scales macros to the described portion, so
+          // this must not be re-multiplied by quantity.
+          nutritionIsPerUnit: false,
           canonical: {
             nutrition: {
               calories: item.calories || 0,
@@ -675,8 +695,11 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
               micros: item.micros || {}
             },
             portion: item.portion || { amount: 1, unit: 'serving' },
-            healthScore: result.healthScore || null,
-            nutriScore: result.nutriscore || null,
+            // See /analyze-image above — was the meal-level aggregate,
+            // stamped onto every item and suppressing buildFoodItem's
+            // per-item fallback computation.
+            healthScore: item.healthScore || null,
+            nutriScore: item.nutriScore || null,
             cookingMethod: cookingMethod || item.cookingMethod || null,
             cuisine: cuisinePreference || item.cuisine || null,
             ingredients: item.ingredients || []
