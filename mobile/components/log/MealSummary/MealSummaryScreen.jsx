@@ -109,8 +109,8 @@ export default function MealSummaryScreen({
   // same "edits must invalidate derived data" requirement as the
   // include/exclude-ingredient path already handles correctly elsewhere.
   const displayItem = modifiedNutrition
-    ? { ...nutrition.item, macros: displayMacros, micros: displayMicros }
-    : nutrition.item;
+    ? { ...nutrition?.item, macros: displayMacros, micros: displayMicros }
+    : nutrition?.item;
 
   // Theme colors
   const cardBg = isDark ? 'rgba(30, 30, 35, 0.95)' : 'rgba(255, 255, 255, 0.98)';
