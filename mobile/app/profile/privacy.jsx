@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityI
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import * as FileSystem from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import * as Haptics from "expo-haptics";
 import { useQueryClient } from "@tanstack/react-query";
@@ -270,12 +270,16 @@ export default function PrivacyScreen() {
       const data = await apiClient.get("/profile/export");
       const jsonString = JSON.stringify(data, null, 2);
       const fileName = `mft-data-${new Date().toISOString().split('T')[0]}.json`;
-      const filePath = `${FileSystem.cacheDirectory || ''}${fileName}`;
-
-      await FileSystem.writeAsStringAsync(filePath, jsonString);
+      // Expo 54's expo-file-system (v19) moved writeAsStringAsync/cacheDirectory
+      // behind a separate "expo-file-system/legacy" subpath — calling them from
+      // the default import throws at runtime instead of writing. File/Paths.cache
+      // is the current API.
+      const file = new File(Paths.cache, fileName);
+      file.create({ overwrite: true, intermediates: true });
+      file.write(jsonString);
 
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(filePath, {
+        await Sharing.shareAsync(file.uri, {
           mimeType: 'application/json',
           dialogTitle: 'Export Your Data',
         });

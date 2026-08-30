@@ -27,7 +27,6 @@ import { useFoodLog } from "../hooks/useFoodLog";
 import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
-import { useWellnessIntelligence } from "../hooks/useWellnessIntelligence";
 import useModalNavigation from "../hooks/useModalNavigation";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
@@ -316,22 +315,6 @@ export default function DashboardContent() {
   // Behavioral Health Intelligence - single fetch point
   const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestrator();
   const { mutate: sendCorrelationFeedback } = useCorrelationFeedback();
-
-  // Wellness Intelligence - Holistic wellness storytelling (uses summary for quick load)
-  const {
-    wellness: wellnessIntelligence,
-    wellnessScore: apiWellnessScore,
-    recoveryScore,
-    emoji: wellnessEmoji,
-    headline: wellnessHeadline,
-    flags: wellnessFlags,
-    narrative: wellnessNarrative,
-    guidance: wellnessGuidance,
-    correlations: wellnessCorrelations,
-    hasData: hasWellnessData,
-    isLoading: wellnessIntelligenceLoading,
-    prefetchFull: prefetchWellnessDetails,
-  } = useWellnessIntelligence({ enabled: true, includeSummary: true });
 
   useEffect(() => {
     let isActive = true;
