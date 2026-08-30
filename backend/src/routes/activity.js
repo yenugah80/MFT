@@ -383,20 +383,38 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid activity ID' });
     }
 
-    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
+    // Delete + streak reconciliation as one transaction: if reconciliation
+    // throws, the delete rolls back too, instead of leaving the entry gone
+    // with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
 
-    // Verify ownership and delete
-    const deleted = await db
-      .delete(activityLogTable)
-      .where(
-        and(
-          eq(activityLogTable.id, activityId),
-          eq(activityLogTable.userId, userId)
+      // Verify ownership and delete
+      const deleted = await tx
+        .delete(activityLogTable)
+        .where(
+          and(
+            eq(activityLogTable.id, activityId),
+            eq(activityLogTable.userId, userId)
+          )
         )
-      )
-      .returning();
+        .returning();
 
-    if (deleted.length === 0) {
+      if (deleted.length === 0) {
+        return { found: false };
+      }
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, deleted, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return res.status(404).json({ error: 'Activity not found or not owned by user' });
     }
 
@@ -404,17 +422,10 @@ router.delete('/:id', async (req, res) => {
       console.error('[Activity] AI recs cache invalidation failed (non-fatal):', err)
     );
 
-    const streakReconciliation = await reconcileStreakAfterDeletion({
-      userId,
-      beforeSnapshot: beforeStreak,
-      dbConn: db,
-      timezoneOffset: offsetMinutes,
-    });
-
     res.json({
       success: true,
-      deleted: deleted[0],
-      streak: streakReconciliation.streak,
+      deleted: txResult.deleted[0],
+      streak: txResult.streakReconciliation.streak,
       message: 'Activity deleted successfully',
     });
   } catch (error) {

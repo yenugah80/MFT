@@ -479,70 +479,81 @@ router.delete("/log/:id", async (req, res) => {
       return errors.invalidValue(res, 'id', 'must be a valid number');
     }
 
-    // 1. Fetch the existing entry before deletion
-    const [existingEntry] = await db.select()
-      .from(foodLogTable)
-      .where(
-        and(
-          eq(foodLogTable.id, logId),
-          eq(foodLogTable.userId, userId) // Security: ensure user owns this log
+    // Delete + daily-summary subtraction + streak reconciliation run as one
+    // transaction: if reconciliation throws, the delete rolls back too,
+    // instead of leaving the entry gone with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      // 1. Fetch the existing entry before deletion
+      const [existingEntry] = await tx.select()
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.id, logId),
+            eq(foodLogTable.userId, userId) // Security: ensure user owns this log
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!existingEntry) {
+      if (!existingEntry) {
+        return { found: false };
+      }
+
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
+
+      // 2. Delete the entry
+      await tx.delete(foodLogTable)
+        .where(eq(foodLogTable.id, logId));
+
+      // 3. Subtract from daily summary
+      const logDate = new Date(existingEntry.loggedDate);
+      logDate.setHours(0, 0, 0, 0);
+      const logDateStr = toDateStr(logDate);
+
+      await tx.update(dailyNutritionSummaryTable)
+        .set({
+          totalCalories: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0})`,
+          totalProtein: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0})`,
+          totalCarbs: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0})`,
+          totalFats: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0})`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(dailyNutritionSummaryTable.userId, userId),
+            eq(dailyNutritionSummaryTable.date, logDateStr)
+          )
+        );
+
+      // 4. Fetch updated daily total for frontend reconciliation
+      const [dailyTotal] = await tx.select()
+        .from(dailyNutritionSummaryTable)
+        .where(
+          and(
+            eq(dailyNutritionSummaryTable.userId, userId),
+            eq(dailyNutritionSummaryTable.date, logDateStr)
+          )
+        )
+        .limit(1);
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, existingEntry, dailyTotal, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return errors.notFound(res, 'Food log entry');
     }
 
-    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
-
-    // 2. Delete the entry
-    await db.delete(foodLogTable)
-      .where(eq(foodLogTable.id, logId));
-
-    // 3. Subtract from daily summary
-    const logDate = new Date(existingEntry.loggedDate);
-    logDate.setHours(0, 0, 0, 0);
-    const logDateStr = toDateStr(logDate);
-
-    await db.update(dailyNutritionSummaryTable)
-      .set({
-        totalCalories: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0})`,
-        totalProtein: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0})`,
-        totalCarbs: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0})`,
-        totalFats: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0})`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDateStr)
-        )
-      );
-
-    // 4. Fetch updated daily total for frontend reconciliation
-    const [dailyTotal] = await db.select()
-      .from(dailyNutritionSummaryTable)
-      .where(
-        and(
-          eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDateStr)
-        )
-      )
-      .limit(1);
-
-    const streakReconciliation = await reconcileStreakAfterDeletion({
-      userId,
-      beforeSnapshot: beforeStreak,
-      dbConn: db,
-      timezoneOffset: offsetMinutes,
-    });
-
     res.json({
       success: true,
-      deletedEntry: existingEntry,
-      streak: streakReconciliation.streak,
-      currentDailyTotal: dailyTotal || {
+      deletedEntry: txResult.existingEntry,
+      streak: txResult.streakReconciliation.streak,
+      currentDailyTotal: txResult.dailyTotal || {
         totalCalories: 0,
         totalProtein: 0,
         totalCarbs: 0,

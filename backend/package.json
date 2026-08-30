@@ -9,6 +9,7 @@
     "test:watch": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --coverage",
     "harness:nutrition": "node scripts/nutritionPlausibilityHarness.mjs && node scripts/nutritionMacroReconciliationHarness.mjs",
+    "harness:streak-atomicity": "node scripts/streakAtomicityHarness.mjs",
     "eval:nutrition": "node scripts/nutritionAccuracyEval.mjs",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "node -e \"console.error('drizzle-kit migrate is not used here \u2014 its journal stops at 0012 while migrations run to 0042. Use: npm run db:migrate'); process.exit(1)\"",
