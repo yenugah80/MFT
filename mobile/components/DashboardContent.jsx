@@ -28,6 +28,7 @@ import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
 import { useWellnessIntelligence } from "../hooks/useWellnessIntelligence";
+import useModalNavigation from "../hooks/useModalNavigation";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -38,7 +39,6 @@ import ThemeSettingsModal from "./ThemeSettingsModal";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import MoodLogger from "./MoodLogger";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
-import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import StreakRestoreModal from "./dashboard/StreakRestoreModal";
 // Snapchat-style streak components (floating banner)
@@ -205,7 +205,6 @@ export default function DashboardContent() {
   const { logs: localFoodLogs, deleteLog } = useFoodLog(); // Get local SQLite logs + delete function
   const { profile: contextProfile } = useProfileContext(); // Get profile from context (eliminates duplicate /profile/me fetch)
   const [refreshing, setRefreshing] = useState(false);
-  const [isNearDashboardEnd, setIsNearDashboardEnd] = useState(false);
 
   // Yesterday fallback: When today is empty, show yesterday's data to avoid zeros
   const showYesterdayFallback = data?.showYesterdayFallback && data?.yesterday;
@@ -230,6 +229,10 @@ export default function DashboardContent() {
   const [streakRestoreChecked, setStreakRestoreChecked] = useState(false);
   const notify = useNotification();
   const router = useRouter();
+  const {
+    navigateAfterModalClose,
+    handleModalDismiss,
+  } = useModalNavigation(router);
   const { user } = useUser();
   const { theme, colors } = useTheme();
   const queryClient = useQueryClient();
@@ -358,22 +361,6 @@ export default function DashboardContent() {
       setRefreshing(false);
     }
   };
-
-  // The quick-action button is useful while browsing, but at the end of the
-  // dashboard it competes with the final Mood actions and previously forced a
-  // permanent 120pt blank footer. Hide it before those controls enter its
-  // footprint so the page can finish with normal content spacing.
-  const handleDashboardScroll = useCallback(({ nativeEvent }) => {
-    const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
-    const remainingDistance = Math.max(
-      0,
-      contentSize.height - layoutMeasurement.height - contentOffset.y
-    );
-    const nextIsNearEnd = remainingDistance <= 140;
-    setIsNearDashboardEnd((current) => (
-      current === nextIsNearEnd ? current : nextIsNearEnd
-    ));
-  }, []);
 
   // Behavioral Health Intelligence - Handlers
   const handleDismissRequest = useCallback((correlationId) => {
@@ -1436,8 +1423,6 @@ export default function DashboardContent() {
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.content}
-            onScroll={handleDashboardScroll}
-            scrollEventThrottle={16}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
@@ -1950,15 +1935,11 @@ export default function DashboardContent() {
         visible={dashMoodModalVisible}
         onClose={() => setDashMoodModalVisible(false)}
         onSuccess={handleMoodLogged}
-      />
-
-      {/* Floating Action Button - Quick Actions */}
-      <FloatingActionButton
-        currentWater={parseLiters(today?.waterIntakeLiters || 0)}
-        waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
-        onWaterLogged={() => refetch()}
-        onMoodLogged={handleMoodLogged}
-        hidden={isNearDashboardEnd}
+        onViewHistory={() => navigateAfterModalClose(
+          () => setDashMoodModalVisible(false),
+          '/history/mood',
+        )}
+        onDismiss={handleModalDismiss}
       />
 
       {/* Recommendation Detail Modal */}

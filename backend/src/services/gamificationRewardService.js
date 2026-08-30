@@ -6,6 +6,7 @@ import { gamificationTable, gamificationAuditLogTable } from "../db/schema.js";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { normalizeDateUTC, addDaysUTC, getLocalDateUTC, getLocalDayRange } from "../utils/timezone.js";
 import { calculateLevel, checkLevelUp } from "../utils/levelCalculator.js";
+import { reconcileStreakAfterCreate } from './streakReconciliationService.js';
 import {
   sendStreakCelebration,
   sendUserNotification,
@@ -243,7 +244,8 @@ export async function awardXP(userId, xp, source = "meal_log", dbConn = db) {
 
 /**
  * Update user's streak based on logging activity (Snapchat-style)
- * Rules: ANY log (food, water, mood, activity) counts towards streak
+ * Rules: any food, water, mood, activity, sleep or stress log counts toward
+ * the account-wide streak.
  * @param {string} userId - User ID
  * @param {Date} date - Date of current log
  * @param {Object} dbConn - Database connection (can be transaction)
@@ -273,7 +275,7 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
     // dbConn.execute() on this postgres-js-backed Drizzle instance returns
     // the row array directly, not { rows: [...] } (that shape was
     // neon-http's, dropped 2026-06-22 — see backend/CLAUDE.md on the driver).
-    const currentGamification = selectResult[0] || null;
+    let currentGamification = selectResult[0] || null;
 
     if (!currentGamification) {
       // Initialize with streak of 1 for brand new user
@@ -307,14 +309,46 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
         }
       }
 
+      let reconciledStreak = 1;
+      try {
+        const reconciled = await reconcileStreakAfterCreate(
+          userId,
+          dbConn,
+          timezoneOffset,
+          date
+        );
+        reconciledStreak = reconciled.streak;
+      } catch (reconcileError) {
+        console.warn('[Streak] Initial canonical reconciliation failed:', reconcileError.message);
+      }
+
       return {
-        streak: 1,
+        streak: reconciledStreak,
         streakIncremented: true,
         previousStreak: 0,
         streakBroken: false,
         canRestore: false,
         isFirstLog: true,
       };
+    }
+
+    // Repair historical under-counts from actual qualifying days before the
+    // incremental transition. This is increase-only, so a legitimate freeze
+    // offset is never silently removed. Refetch when repaired so all logic
+    // below operates on the corrected projection.
+    try {
+      const reconciled = await reconcileStreakAfterCreate(
+        userId,
+        dbConn,
+        timezoneOffset,
+        date
+      );
+      if (reconciled.changed) {
+        const refreshed = await dbConn.execute(selectQuery);
+        currentGamification = refreshed[0] || currentGamification;
+      }
+    } catch (reconcileError) {
+      console.warn('[Streak] Canonical create reconciliation failed:', reconcileError.message);
     }
 
     const currentStreak = currentGamification.streak || 0;

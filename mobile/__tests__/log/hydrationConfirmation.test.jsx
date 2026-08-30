@@ -57,11 +57,14 @@ describe('Hydration transaction confirmation', () => {
     expect(screen.getByText('150 ml Juice added')).toBeTruthy();
     expect(screen.getByText('Undo')).toBeTruthy();
     expect(screen.getByLabelText('150 ml Juice added. Undo available.')).toBeTruthy();
-    expect(screen.getByLabelText('Undo hydration log')).toBeTruthy();
+    const undo = screen.getByLabelText('Undo hydration log');
+    expect(undo).toBeTruthy();
+    expect(screen.getByLabelText('150 ml Juice added. Undo available.').props.style)
+      .toEqual(expect.objectContaining({ bottom: 98 }));
     unmount();
   });
 
-  it('waits for persistence and undoes the exact returned server entry', async () => {
+  it('acknowledges immediately, then enables Undo for the exact server entry', async () => {
     let resolveLog;
     const onLogWater = jest.fn(() => new Promise((resolve) => { resolveLog = resolve; }));
     const onRemoveWater = jest.fn(() => Promise.resolve());
@@ -80,7 +83,10 @@ describe('Hydration transaction confirmation', () => {
       fireEvent.press(screen.getByLabelText('Add 150 milliliters of Water'));
       await Promise.resolve();
     });
-    expect(screen.queryByText('Hydration updated')).toBeNull();
+    expect(screen.getByText('Adding hydration')).toBeTruthy();
+    expect(screen.getByText('150 ml Water selected')).toBeTruthy();
+    expect(screen.getByLabelText('Saving hydration')).toBeTruthy();
+    expect(screen.queryByLabelText('Undo hydration log')).toBeNull();
 
     await act(async () => {
       resolveLog({
@@ -94,12 +100,70 @@ describe('Hydration transaction confirmation', () => {
     });
 
     await waitFor(() => expect(screen.getByText('Hydration updated')).toBeTruthy());
+    expect(screen.getByText('150 ml Water added')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Undo hydration log'));
 
     await waitFor(() => {
       expect(onRemoveWater).toHaveBeenCalledWith(412, 0.15, 0.15);
       expect(screen.queryByText('Hydration updated')).toBeNull();
     });
+    unmount();
+  });
+
+  it('keeps Undo available when the persisted delete fails', async () => {
+    const onLogWater = jest.fn(() => Promise.resolve({
+      entry: {
+        id: 413,
+        amountLiters: '0.150',
+        hydrationLiters: '0.150',
+        beverageType: 'water',
+      },
+    }));
+    const onRemoveWater = jest.fn(() => Promise.reject(new Error('Delete unavailable')));
+
+    const { unmount } = render(
+      <HydrationTracker
+        currentIntake={0}
+        dailyGoal={2.5}
+        onLogWater={onLogWater}
+        onRemoveWater={onRemoveWater}
+        beverageHistory={[]}
+      />
+    );
+
+    fireEvent.press(screen.getByLabelText('Add 150 milliliters of Water'));
+    await waitFor(() => expect(screen.getByLabelText('Undo hydration log')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Undo hydration log'));
+
+    await waitFor(() => expect(onRemoveWater).toHaveBeenCalledWith(413, 0.15, 0.15));
+    expect(screen.getByLabelText('Undo hydration log')).toBeTruthy();
+    unmount();
+  });
+
+  it('keeps analytics and editable entries out of the logger and routes to history', () => {
+    const onViewHistory = jest.fn();
+    const { unmount } = render(
+      <HydrationTracker
+        currentIntake={0.7}
+        dailyGoal={2.5}
+        onLogWater={jest.fn()}
+        onRemoveWater={jest.fn()}
+        beverageHistory={[{
+          id: 1,
+          amount: 150,
+          amountLiters: 0.15,
+          hydrationLiters: 0.15,
+          type: 'water',
+          timestamp: Date.now(),
+        }]}
+        onViewHistory={onViewHistory}
+      />
+    );
+
+    expect(screen.queryByText('Your Hydration Intel')).toBeNull();
+    expect(screen.queryByText('Your Hydration Story')).toBeNull();
+    fireEvent.press(screen.getByLabelText('View hydration history'));
+    expect(onViewHistory).toHaveBeenCalledTimes(1);
     unmount();
   });
 });

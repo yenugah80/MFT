@@ -17,7 +17,7 @@
  * same visual family as Dashboard, Log and Profile.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -147,6 +147,13 @@ export function CollapsibleSection({
   children,
 }) {
   const [openState, setOpenState] = useState(defaultOpen);
+
+  // Expo Router can reuse the same mounted screen when only search parameters
+  // change. Keep the uncontrolled section aligned with the new route mode so
+  // History opens its calendar even after navigating from Insights.
+  useEffect(() => {
+    if (openProp === undefined) setOpenState(defaultOpen);
+  }, [defaultOpen, openProp]);
 
   // Controlled when a parent passes `open` — lets a summary elsewhere on the
   // screen reveal the section it summarises.

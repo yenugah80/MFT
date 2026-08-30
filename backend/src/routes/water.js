@@ -19,6 +19,10 @@ import {
   getHydrationSignal,
   invalidateSignalCache,
 } from "../services/hydrationSignalService.js";
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -371,6 +375,8 @@ router.delete("/:id", async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { id } = req.params;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
+    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
 
     const [deleted] = await db
       .delete(waterLogTable)
@@ -386,7 +392,18 @@ router.delete("/:id", async (req, res) => {
       return errors.notFound(res, 'Water log');
     }
 
-    res.json({ message: "Water log deleted", deleted });
+    const streakReconciliation = await reconcileStreakAfterDeletion({
+      userId,
+      beforeSnapshot: beforeStreak,
+      dbConn: db,
+      timezoneOffset: offsetMinutes,
+    });
+
+    res.json({
+      message: "Water log deleted",
+      deleted,
+      streak: streakReconciliation.streak,
+    });
   } catch (error) {
     console.error("[WaterDelete] Error:", error);
     errors.internal(res, 'Failed to delete water log');

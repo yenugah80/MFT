@@ -33,6 +33,7 @@ import { useDashboard } from '../../hooks/useDashboard';
 import { useNotification } from '../../providers/NotificationProvider';
 import { useWaterLog } from '../../hooks/useWaterLog';
 import { usePreferences } from '../../hooks/usePreferences';
+import useModalNavigation from '../../hooks/useModalNavigation';
 import { announceFoodLogged, announceMealLogged } from '../../services/audioFeedback';
 import { calculateCaffeine, DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import { useQuery } from '@tanstack/react-query';
@@ -72,6 +73,7 @@ import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 import { TYPOGRAPHY, TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
 import { countDistinctMeals } from '../../utils/mealGrouping';
 import { aggregateMicros } from '../../utils/micronutrients';
+import { replaceIngredientTerm, unresolvedItems } from '../../utils/foodResolution';
 
 /**
  * Maps a VoiceModal analysis result (backend items shape, from /voice/process)
@@ -186,6 +188,10 @@ export default function LogScreen() {
 
   // Hooks
   const router = useRouter();
+  const {
+    navigateAfterModalClose,
+    handleModalDismiss,
+  } = useModalNavigation(router);
   const { focus, mealType, prefill } = useLocalSearchParams();
   const foodAnalysis = useFoodAnalysis();
   const voiceHook = useServerVoice({ mealType, voiceLanguage: preferences?.voiceLanguage || 'en' });
@@ -212,7 +218,7 @@ export default function LogScreen() {
       const response = await apiClient.get('/nutrition/micronutrient-trends?days=30');
       return response;
     },
-    staleTime: 15 * 60 * 1000, // 15 min — micros change slowly
+    staleTime: 15 * 60 * 1000, // 15 min because micros change slowly
     enabled: showTrendsModal,   // only fetch when modal is open
   });
 
@@ -229,7 +235,7 @@ export default function LogScreen() {
     setShowTrendsModal(false);
   }, []);
 
-  // Pulled out of foodLog so the effect below can depend on stable values —
+  // Pulled out of foodLog so the effect below can depend on stable values.
   // the hook returns a fresh object every render.
   const { blockedSyncCount, getBlockedSyncs, discardBlockedSync } = foodLog;
 
@@ -374,10 +380,10 @@ export default function LogScreen() {
     setAnalysisSource('photo');
 
     try {
-      // barcode/voiceTranscript come from CameraModal's onPhotoTaken(uri, barcode, voiceTranscript) —
+      // barcode/voiceTranscript come from CameraModal's onPhotoTaken(uri, barcode, voiceTranscript).
       // previously dropped here, which silently meant the multimodal (photo+voice) path never fired.
       // skipCompression: true because CameraModal already resized/recompressed the image before
-      // calling onPhotoTaken — re-running the same resize here would just waste CPU.
+      // calling onPhotoTaken. Re-running the same resize here would just waste CPU.
       await foodAnalysis.analyzePhoto(imageUri, barcode, voiceTranscript, { skipCompression: true });
       // Success - analysisResult will be set by the hook
     } catch (error) {
@@ -489,28 +495,29 @@ export default function LogScreen() {
   /**
    * Apply a "Did you mean?" suggestion
    */
-  const handleApplySuggestion = (itemId, suggestion) => {
-    if (!foodAnalysis.analysisResult) return;
+  const handleApplySuggestion = async (itemId, suggestion) => {
+    if (!foodAnalysis.analysisResult || foodAnalysis.isAnalyzing) return;
 
-    const updatedItems = foodAnalysis.analysisResult.items.map(item => {
-      if (item.itemId === itemId) {
-        return {
-          ...item,
-          name: suggestion.canonical,
-          // Update portion unit if the suggestion has a specific default
-          portion: {
-            ...item.portion,
-            unit: suggestion.portion?.unit || item.portion.unit
-          },
-          suggestions: [], // Clear suggestions after applying
-          confidence: 1.0, // User manually selected this, so high confidence
-          manualOverride: true // Flag for learning loop
-        };
-      }
-      return item;
-    });
+    const item = foodAnalysis.analysisResult.items.find(candidate => candidate.itemId === itemId);
+    const original = suggestion.original || item?.name;
+    const correctedInput = replaceIngredientTerm(
+      foodAnalysis.inputText,
+      original,
+      suggestion.canonical
+    );
 
-    foodAnalysis.setAnalysisResult({ ...foodAnalysis.analysisResult, items: updatedItems });
+    if (!correctedInput) {
+      notify.error('Could not apply that correction. Update the meal description and analyze again.');
+      return;
+    }
+
+    notify.info(`Rechecking ${suggestion.canonical} nutrition`);
+    try {
+      await foodAnalysis.analyzeCorrectedText(correctedInput);
+    } catch (error) {
+      console.error('[LogScreen] Ingredient correction failed:', error);
+      notify.error('Could not recheck that ingredient. Please try again.');
+    }
   };
 
   /**
@@ -584,7 +591,7 @@ export default function LogScreen() {
   };
 
   /**
-   * Core save logic — called after allergen check passes (or user overrides)
+   * Core save logic, called after allergen check passes (or user overrides)
    */
   const _doSaveLog = async (foodData) => {
     const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -610,7 +617,7 @@ export default function LogScreen() {
     setSelectedImage(null);
 
     // Top-level nutriScore/healthScore/healthAnalysis come from the backend's
-    // enrichWithHealthMetrics on the overall analysisResult, not per-item —
+    // enrichWithHealthMetrics on the overall analysisResult, not per-item.
     // buildLegacyFoodLog's item.nutriscore/item.healthScore reads were
     // reading fields that don't exist there, so MealLoggedCard's score chip
     // row (meal.nutriScore / meal.healthScore) silently never rendered post-log
@@ -640,10 +647,15 @@ export default function LogScreen() {
   };
 
   /**
-   * Save analyzed food to log — checks allergens BEFORE saving
+   * Save analyzed food to log. Checks allergens BEFORE saving.
    */
   const handleSaveLog = async (foodData) => {
     if (isSavingLog) return;
+
+    if (unresolvedItems([foodData]).length > 0) {
+      notify.error('Confirm or correct unresolved ingredients before logging this meal.');
+      return;
+    }
 
     const foodName = foodData.name || foodData.food || 'Food';
     const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
@@ -689,12 +701,19 @@ export default function LogScreen() {
    * foodAnalysis.analysisResult directly) so it can be called either from the
    * existing inline "Save" button (which has staged the result into that
    * state already) or directly from inside VoiceModal with a result that was
-   * never staged there — e.g. because the user saved without leaving the
+   * never staged there, for example because the user saved without leaving the
    * modal. Reading from a parameter avoids relying on state having propagated
    * into this closure by the time the caller runs.
    */
   const saveMealItems = async (analysisResult) => {
     if (isSavingLog || !analysisResult?.items?.length) return;
+
+    const itemsNeedingReview = unresolvedItems(analysisResult.items);
+    if (itemsNeedingReview.length > 0) {
+      const names = itemsNeedingReview.map(item => item.name).filter(Boolean).join(', ');
+      notify.error(`Review ${names || 'the unresolved ingredients'} before logging this meal.`);
+      return false;
+    }
 
     // ALLERGEN GATE: scan all items before saving anything
     const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
@@ -733,7 +752,7 @@ export default function LogScreen() {
       let totalSugar = 0;
       let totalSodium = 0;
       // Summed across items so the post-log MealLoggedCard's fiber/sugar
-      // tile and micronutrient section aren't empty for multi-item meals —
+      // tile and micronutrient section are not empty for multi-item meals.
       // each item.micros is per-item, MealLoggedCard needs the meal total.
       const aggregatedMicros = aggregateMicros(analysisResult.items);
 
@@ -798,7 +817,7 @@ export default function LogScreen() {
         sugar: totalSugar,
         sodium: totalSodium,
         micros: aggregatedMicros,
-        // Top-level fields from enrichWithHealthMetrics — same source
+        // Top-level fields from enrichWithHealthMetrics, from the same source
         // _doSaveLog now reads for the single-item flow (see above).
         nutriScore: analysisResult.nutriScore ?? null,
         healthScore: analysisResult.healthScore ?? null,
@@ -947,7 +966,7 @@ export default function LogScreen() {
 
   /**
    * Grants OpenAI consent, then re-runs the photo analysis that was blocked on
-   * it — one tap, photo still in hand, no trip through Settings.
+   * it with one tap, photo still in hand, and no trip through Settings.
    */
   const handleEnablePhotoConsent = async () => {
     setIsEnablingConsent(true);
@@ -1172,15 +1191,14 @@ export default function LogScreen() {
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
 
-  // Server truth (today's distinct MEALS, not food_log rows — a 3-item meal
+  // Server truth (today's distinct MEALS, not food_log rows; a 3-item meal
   // is one meal, see utils/mealGrouping.js), not the local offline-sync
-  // queue — that queue only ever grows when a meal is logged through this
+  // queue. That queue only ever grows when a meal is logged through this
   // app on this device, so a fresh install or a meal logged another way
   // (voice, another device) always read as 0 there even with a rich real
   // history. Falls back to a client-computed grouped count only while
   // dashboardData hasn't loaded yet (e.g. offline).
   const logCount = dashboardData?.today?.mealCount ?? countDistinctMeals(foodLog.logs);
-
   // P0-4 FIX: Wrap entire screen with ErrorBoundary to prevent data loss
   return (
     <AnimatedMeshGradient
@@ -1311,7 +1329,7 @@ export default function LogScreen() {
         ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 && !showAnalysisDetails ? (
           <View style={styles.resultsContainer}>
             {(analysisSource === 'photo' || analysisSource === 'barcode') ? (
-              /* Compact confirmation card, not the full editor — thumbnail, macro
+              /* Compact confirmation card, not the full editor: thumbnail, macro
                  breakdown, and a food-ID confidence badge (explicitly not a
                  nutrition-accuracy claim). Tap through for the full item-by-item
                  editor, or log directly. Matches how MyFitnessPal/Cronometer
@@ -1337,6 +1355,7 @@ export default function LogScreen() {
                   onSave={handleSaveMeal}
                   onEdit={handleCancel}
                   saving={isSavingLog}
+                  saveBlocked={unresolvedItems(foodAnalysis.analysisResult.items).length > 0}
                   analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
                   analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
                   analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
@@ -1349,10 +1368,15 @@ export default function LogScreen() {
                       <Ionicons name="help-buoy-outline" size={18} color="#F59E0B" />
                       <Text style={styles.suggestionsTitle}>Did you mean?</Text>
                     </View>
+                    <Text style={styles.suggestionReviewText}>
+                      Confirm the ingredient below. Nutrition will be recalculated before you can log the meal.
+                    </Text>
                     {foodAnalysis.analysisResult.items.map(item => (
                       item.suggestions?.length > 0 && (
                         <View key={item.itemId} style={styles.suggestionGroup}>
-                          <Text style={styles.suggestionLabel}>For &quot;{item.name}&quot;:</Text>
+                          <Text style={styles.suggestionLabel}>
+                            For &quot;{item.suggestions[0]?.original || item.name}&quot;:
+                          </Text>
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
                             {item.suggestions.map((suggestion, idx) => (
                               <TouchableOpacity
@@ -1424,7 +1448,7 @@ export default function LogScreen() {
         ) : null}
 
 
-        {/* Consent Display — blocked pending AI opt-in, not a failure. Neutral
+        {/* Consent Display is blocked pending AI opt-in, not a failure. Neutral
             tone on purpose: a routine privacy toggle shouldn't read like an error. */}
         {foodAnalysis.needsConsent ? (
           <View style={styles.consentCard}>
@@ -1620,6 +1644,11 @@ export default function LogScreen() {
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
         onSuccess={(mood) => notify.success(moodMessages.logged(mood), { domain: 'mood' })}
+        onViewHistory={() => navigateAfterModalClose(
+          () => setShowMoodModal(false),
+          '/history/mood',
+        )}
+        onDismiss={handleModalDismiss}
       />
 
       <SleepLogger
@@ -1653,6 +1682,7 @@ export default function LogScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowHydrationModal(false)}
+        onDismiss={handleModalDismiss}
       >
         <View style={styles.hydrationModalContainer}>
           <View style={styles.hydrationModalHeader}>
@@ -1673,13 +1703,13 @@ export default function LogScreen() {
             onRemoveWater={handleRemoveWater}
             beverageHistory={beverageHistory}
             totalCaffeine={totalCaffeine}
-            onViewHistory={() => {
-              setShowHydrationModal(false);
-              // Hydration has its own analytics screen — the unified /analytics
+            onViewHistory={() => navigateAfterModalClose(
+              () => setShowHydrationModal(false),
+              // Hydration has its own analytics screen. The unified /analytics
               // screen opens on the Nutrition tab and buries hydration behind a
               // tab bar, which isn't where a "History" tap should land.
-              router.push('/analytics/hydration');
-            }}
+              '/analytics/hydration',
+            )}
           />
         </View>
       </Modal>
@@ -1831,7 +1861,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   // Same badge pattern as the dashboard's notification bell
-  // (MinimalDashboardHeader.jsx) — reused here rather than a distinct new
+  // (MinimalDashboardHeader.jsx), reused here rather than a distinct new
   // style, plus SEMANTIC_ACTIONS.primary (warm orange) instead of that
   // badge's red, matching the flame/streak color this "meals logged" count
   // used before it was a standalone pill.
@@ -2376,6 +2406,13 @@ const styles = StyleSheet.create({
     color: '#B45309',
     fontFamily: TYPOGRAPHY.family.semibold,
   },
+  suggestionReviewText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#92400E',
+    marginBottom: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
   suggestionGroup: {
     marginBottom: 8,
   },
@@ -2465,7 +2502,7 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.bold,
   },
 
-  /* Consent Card — same layout as errorCard, neutral/brand tone instead of danger red */
+  /* Consent Card uses the errorCard layout with a neutral brand tone instead of danger red */
   consentCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: 18,

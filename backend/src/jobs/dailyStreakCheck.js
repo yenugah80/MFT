@@ -7,16 +7,25 @@
  * - This means all users get checked based on THEIR local day, not UTC
  *
  * STREAK LOGIC:
- * - ANY log (food, water, mood, activity) counts towards maintaining streak
+ * - ANY log (food, water, mood, activity, sleep, stress) maintains the streak
  * - If no activity: consume streak freeze OR reset streak (store previous for restore)
  * - Users without timezone are given a grace period (checked on next activity)
  */
 
 import cron from 'cron';
 import { db } from '../config/db.js';
-import { gamificationTable, foodLogTable, waterLogTable, moodLogTable, activityLogTable } from '../db/schema.js';
-import { eq, and, sql, or, gte, lte } from 'drizzle-orm';
-import { addDaysUTC, getLocalDayRange } from '../utils/timezone.js';
+import {
+  activityLogTable,
+  foodLogTable,
+  gamificationAuditLogTable,
+  gamificationTable,
+  moodLogTable,
+  sleepLogTable,
+  stressLogTable,
+  waterLogTable,
+} from '../db/schema.js';
+import { eq, and, sql, gte, lte } from 'drizzle-orm';
+import { addDaysUTC, getLocalDateUTC, getLocalDayRange } from '../utils/timezone.js';
 
 // Unified freeze award interval (consistent with gamificationService.js)
 const FREEZE_AWARD_INTERVAL = 7;
@@ -71,9 +80,10 @@ export function initStreakCronJob() {
             const offsetMinutes = timezoneOffset;
             const yesterdayBase = addDaysUTC(new Date(), -1);
             const { start: yesterdayStart, end: yesterdayEnd } = getLocalDayRange(offsetMinutes, yesterdayBase);
+            const protectedLocalDay = getLocalDateUTC(offsetMinutes, yesterdayBase);
 
             // Check if user logged ANY activity yesterday (Snapchat-style: any log counts)
-            // Includes: food, water, mood, AND activity logs
+            // Includes all six streak-eligible logging domains.
             //
             // gte/lte, not raw sql`` — a JS Date interpolated into a raw
             // template bypasses Drizzle's column-type serialization and
@@ -112,13 +122,26 @@ export function initStreakCronJob() {
                   gte(activityLogTable.loggedAt, yesterdayStart),
                   lte(activityLogTable.loggedAt, yesterdayEnd)
                 )),
+              db.select({ count: sql`count(*)::int` })
+                .from(sleepLogTable)
+                .where(and(
+                  eq(sleepLogTable.userId, userId),
+                  gte(sleepLogTable.wakeTime, yesterdayStart),
+                  lte(sleepLogTable.wakeTime, yesterdayEnd)
+                )),
+              db.select({ count: sql`count(*)::int` })
+                .from(stressLogTable)
+                .where(and(
+                  eq(stressLogTable.userId, userId),
+                  gte(stressLogTable.loggedAt, yesterdayStart),
+                  lte(stressLogTable.loggedAt, yesterdayEnd)
+                )),
             ]);
 
-            const totalActivityCount =
-              (activityCounts[0]?.[0]?.count || 0) +
-              (activityCounts[1]?.[0]?.count || 0) +
-              (activityCounts[2]?.[0]?.count || 0) +
-              (activityCounts[3]?.[0]?.count || 0);
+            const totalActivityCount = activityCounts.reduce(
+              (total, result) => total + (result?.[0]?.count || 0),
+              0
+            );
 
             if (totalActivityCount === 0) {
               // User missed yesterday - handle streak
@@ -128,11 +151,31 @@ export function initStreakCronJob() {
                   .update(gamificationTable)
                   .set({
                     streakFreezes: sql`${gamificationTable.streakFreezes} - 1`,
-                    // Mark that streak was saved by freeze (for UI notification)
                     streakSavedByFreeze: true,
+                    // The protected day advances continuity without increasing
+                    // the count. The next real log can therefore continue it.
+                    lastLogDate: protectedLocalDay,
+                    lastStreakUpdatedAt: protectedLocalDay,
                     updatedAt: new Date(),
                   })
                   .where(eq(gamificationTable.userId, userId));
+
+                await db.insert(gamificationAuditLogTable).values({
+                  userId,
+                  source: 'daily_streak_freeze',
+                  oldValues: {
+                    streak,
+                    streakFreezes,
+                    lastLogDate,
+                  },
+                  newValues: {
+                    streak,
+                    streakFreezes: streakFreezes - 1,
+                    lastLogDate: protectedLocalDay,
+                    streakSavedByFreeze: true,
+                  },
+                  callSite: 'dailyStreakCheck',
+                });
 
                 freezesUsed++;
                 console.log(`[Streak] ❄️ User ${userId}: Freeze auto-used (${streakFreezes - 1} remaining, streak ${streak} preserved)`);
@@ -149,6 +192,22 @@ export function initStreakCronJob() {
                     updatedAt: new Date(),
                   })
                   .where(eq(gamificationTable.userId, userId));
+
+                await db.insert(gamificationAuditLogTable).values({
+                  userId,
+                  source: 'daily_streak_reset',
+                  oldValues: {
+                    streak,
+                    previousStreak: 0,
+                    lastLogDate,
+                  },
+                  newValues: {
+                    streak: 0,
+                    previousStreak: streak,
+                    streakSavedByFreeze: false,
+                  },
+                  callSite: 'dailyStreakCheck',
+                });
 
                 streaksReset++;
                 console.log(`[Streak] 💔 User ${userId}: Streak reset (was ${streak} days, saved for 24h restore)`);

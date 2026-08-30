@@ -12,6 +12,7 @@ import {
   getNotifications,
   saveNotifications,
   getPrivacySettings,
+  getPrivacyAudit,
   savePrivacySettings,
   getPreferences,
   savePreferences,
@@ -60,7 +61,9 @@ router.post("/push-tokens", saveBothPushTokens);
 
 // Privacy settings
 router.get("/privacy", getPrivacySettings);
+router.get("/privacy/audit", getPrivacyAudit);
 router.post("/privacy", savePrivacySettings);
+router.patch("/privacy", savePrivacySettings);
 
 // App preferences
 router.get("/preferences", getPreferences);

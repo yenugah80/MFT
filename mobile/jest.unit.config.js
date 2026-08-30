@@ -14,6 +14,7 @@ module.exports = {
     '**/__tests__/**/sleepWindow.test.js',
     '**/__tests__/**/spacingScale.test.js',
     '**/__tests__/**/decisionBrainInsights.test.js',
+    '**/__tests__/**/foodResolution.test.js',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

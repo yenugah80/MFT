@@ -63,6 +63,57 @@ final result: passed
 
 ---
 
+# Dashboard Activity History entry point QA
+
+- Source visual truth: user-provided dashboard screenshot in the August 28, 2026 conversation, showing an Activity card with only one visible `Activity insights` action.
+- Source pixels: 1284 × 2778, representing the authenticated 428 × 926 pt iPhone viewport at 3× density.
+- Rendered implementation:
+  - `design-audits/activity-dashboard-history/current.png`
+  - `design-audits/activity-dashboard-history/history-loaded.png`
+  - `design-audits/activity-dashboard-history/insights-open.png`
+- Implementation pixels: 1284 × 2778 at the same 428 × 926 pt viewport and 3× density.
+- State: live authenticated dashboard, live 90-day Activity History response, and live Activity Insights response.
+
+## Full-view comparison evidence
+
+The source card exposed only Insights, so a user could not predictably reach workout records from the dashboard. The updated native card preserves the existing metrics, earned-calorie explanation, and weekly goal block while replacing the single full-width row with two balanced 48 pt actions. History opens a clearly titled training-record view and Insights opens the existing movement-and-recovery view. The card does not gain extra vertical weight beyond the existing action row.
+
+## Focused comparison evidence
+
+- Typography: both action labels use the existing Inter semibold treatment and fit on one line without truncation.
+- Spacing and layout: the actions share one row, equal width, an 8 pt gap, and 48 pt touch targets. The surrounding card padding and radii remain unchanged.
+- Colors and tokens: the secondary History action uses the existing white card surface. Insights uses a restrained brand tint rather than a competing filled CTA.
+- Assets: both controls use the existing Ionicons library. No generated, placeholder, or custom-drawn asset was introduced.
+- Copy: `History` and `Insights` are short and distinct. Accessibility hints explain records versus recovery, guidance, and patterns.
+- Live data: both states use the same authenticated `GET /api/activity/history` 90-day request and the same activity query cache. The history capture shows 41 workouts on 40 calendar days from Jul 13 through Aug 28, with the calendar expanded by default.
+
+## Findings and comparison history
+
+- Earlier P1: the dashboard had no visible Activity History action.
+  - Fix: added a dedicated History control with a separate history-focused route state.
+  - Post-fix evidence: `current.png` shows History and Insights together at equal visual weight.
+- Earlier P2: the top-right `Insights` badge repeated the only bottom action and made the card hierarchy ambiguous.
+  - Fix: replaced it with the neutral scope label `Today`.
+  - Post-fix evidence: the header now describes the metrics' scope while the bottom row contains navigation.
+- Earlier P2: the first history loading state still said `Loading your activity insights...`.
+  - Fix: the loading copy now follows the selected route state and says `Loading your activity history...` for History.
+  - Post-fix evidence: the final loaded history state is titled `Activity history`, labeled `TRAINING RECORD`, and opens `Calendar details` expanded.
+- No actionable P0, P1, or P2 findings remain.
+
+## Interaction and accessibility verification
+
+- Tapped History from the live dashboard and confirmed the route opened `Activity history` with the calendar expanded.
+- Confirmed Day, Week, and Month controls and the live workout/calendar-day counts are visible in the initial history state.
+- Tapped Insights from the live dashboard and confirmed the normal recovery, weekly progress, plan, and collapsed calendar state remained intact.
+- Native accessibility inspection reports separate `Activity history` and `Activity insights` buttons, both 169 × 48 pt, with distinct hints.
+- Mobile validation passed. All 168 unit tests and all 143 component tests passed. Jest still reports the repository's existing open-handle warning after the component run.
+
+## Final result
+
+final result: passed
+
+---
+
 # Hydration transaction notification design QA
 
 - Source visual truth: user-provided Hydration Tracker screenshot showing the large blue `+150ml / Winding down right!` overlay.

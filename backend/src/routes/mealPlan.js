@@ -1,8 +1,8 @@
 /**
  * Meal Planning Route
- * POST /api/meal-plan — generate a weekly meal plan + grocery list using OpenAI
- * GET  /api/meal-plan/saved — retrieve the user's last saved plan
- * POST /api/meal-plan/save  — persist a generated plan
+ * POST /api/meal-plan: generate a weekly meal plan and grocery list using OpenAI
+ * GET  /api/meal-plan/saved: retrieve the user's last saved plan
+ * POST /api/meal-plan/save: persist a generated plan
  */
 
 import express from 'express';
@@ -13,12 +13,13 @@ import { nutritionGoalsTable, dietaryPreferencesTable } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { safeJSONCompletion } from '../services/apiClients/SafeOpenAIWrapper.js';
 import { sql } from 'drizzle-orm';
+import { assignMealPlanDates } from '../utils/mealPlanDates.js';
 
 const router = express.Router();
 router.use(requireAuth());
 
 // ─────────────────────────────────────────────────────────────
-// POST /api/meal-plan  — generate a weekly plan
+// POST /api/meal-plan: generate a weekly plan
 // ─────────────────────────────────────────────────────────────
 router.post('/', aiLimiter, async (req, res) => {
   try {
@@ -28,10 +29,14 @@ router.post('/', aiLimiter, async (req, res) => {
       mealsPerDay = 3,
       cuisine,         // optional override
       goal,            // optional override: 'lose' | 'maintain' | 'gain'
+      startDate,       // user's local YYYY-MM-DD; day 1 begins here
     } = req.body;
 
     const safeDays = Math.min(Math.max(parseInt(days, 10) || 7, 1), 7);
     const safeMeals = Math.min(Math.max(parseInt(mealsPerDay, 10) || 3, 2), 5);
+    const safeStartDate = /^\d{4}-\d{2}-\d{2}$/.test(String(startDate || ''))
+      ? startDate
+      : new Date().toISOString().slice(0, 10);
 
     // Fetch user goals and dietary prefs in parallel
     const [goalsRow, prefsRow] = await Promise.all([
@@ -45,23 +50,30 @@ router.post('/', aiLimiter, async (req, res) => {
     const targetCalories = goals.dailyCalories || 2000;
     const targetProtein  = goals.proteinG      || 150;
     const targetCarbs    = goals.carbsG        || 250;
-    const targetFat      = goals.fatG          || 65;
-    const primaryGoal    = goal || goals.primaryGoal || 'maintain';
+    const targetFat      = goals.fatsG         || 65;
+    const requestedGoal  = String(goal || '').toLowerCase();
+    const primaryGoal    = ['lose', 'maintain', 'gain'].includes(requestedGoal)
+      ? requestedGoal
+      : goals.primaryGoal || 'maintain';
 
     const restrictions  = (Array.isArray(prefs.preferences) ? prefs.preferences : []).join(', ') || 'none';
     const allergens     = (Array.isArray(prefs.allergies)   ? prefs.allergies   : []).join(', ') || 'none';
     const dislikes      = (Array.isArray(prefs.dislikes)    ? prefs.dislikes    : []).join(', ') || 'none';
-    const cuisinePref   = cuisine || 'balanced (include variety)';
+    const cuisinePref   = String(cuisine || 'balanced (include variety)')
+      .replace(/[\r\n\t]/g, ' ')
+      .trim()
+      .slice(0, 60);
 
     const systemPrompt = `You are a registered dietitian creating personalized meal plans.
-Return ONLY valid JSON matching the schema below — no markdown, no explanations.
+Return ONLY valid JSON matching the schema below. Do not include markdown or explanations.
 
 Schema:
 {
   "plan": [
     {
-      "day": 1,
-      "date_label": "Monday",
+          "day": 1,
+          "date": "2026-08-28",
+          "date_label": "Monday",
       "meals": [
         {
           "meal_type": "breakfast"|"lunch"|"dinner"|"snack",
@@ -93,7 +105,7 @@ Schema:
   }
 }`;
 
-    const userPrompt = `Create a ${safeDays}-day meal plan with ${safeMeals} meals per day.
+    const userPrompt = `Create a ${safeDays}-day meal plan with ${safeMeals} meals per day, beginning on ${safeStartDate}.
 
 NUTRITION TARGETS (per day):
 - Calories: ${targetCalories} kcal
@@ -110,17 +122,18 @@ CONSTRAINTS:
 
 RULES:
 1. Each day's totals must sum within ±10% of daily targets
-2. Vary the meals — no repeated dishes across the week
+2. Vary the meals. Do not repeat dishes across the week
 3. Include realistic prep times
 4. Grocery list must cover ALL ingredients for all ${safeDays} days
-5. Keep meals practical for home cooking`;
+5. Keep meals practical for home cooking
+6. Day 1 must use date ${safeStartDate}; increment the ISO date for every following day and make date_label match that date`;
 
     const plan = await safeJSONCompletion(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: userPrompt },
       ],
-      { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 4000, maxRetries: 1 }
+      { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 7000, maxRetries: 1 }
     );
 
     // Basic validation
@@ -128,12 +141,31 @@ RULES:
       return res.status(500).json({ error: 'Failed to generate a valid meal plan. Please retry.' });
     }
 
+    // Calendar identity is application data, not creative AI output. Assign it
+    // deterministically so "Today" always maps to the user's requested local
+    // start date even if the model returns a wrong weekday or skips a date.
+    plan.plan = assignMealPlanDates(plan.plan, safeStartDate, safeDays);
+
     res.json({
       success: true,
       days: safeDays,
       mealsPerDay: safeMeals,
       generatedAt: new Date().toISOString(),
-      targetNutrition: { calories: targetCalories, protein_g: targetProtein, carbs_g: targetCarbs, fat_g: targetFat },
+      startDate: safeStartDate,
+      targetNutrition: {
+        calories: targetCalories,
+        protein_g: targetProtein,
+        carbs_g: targetCarbs,
+        fat_g: targetFat,
+        goal: primaryGoal,
+      },
+      personalization: {
+        goalSource: ['lose', 'maintain', 'gain'].includes(requestedGoal) ? 'plan_override' : 'saved_profile',
+        cuisine: cuisinePref,
+        dietaryRestrictions: Array.isArray(prefs.preferences) ? prefs.preferences : [],
+        allergens: Array.isArray(prefs.allergies) ? prefs.allergies : [],
+        dislikes: Array.isArray(prefs.dislikes) ? prefs.dislikes : [],
+      },
       ...plan,
     });
 
@@ -144,31 +176,37 @@ RULES:
 });
 
 // ─────────────────────────────────────────────────────────────
-// POST /api/meal-plan/save  — persist a plan for a user
+// POST /api/meal-plan/save: persist a plan for a user
 // ─────────────────────────────────────────────────────────────
 router.post('/save', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { plan } = req.body;
-    if (!plan) return res.status(400).json({ error: 'plan is required' });
+    const days = Array.isArray(plan) ? plan : plan?.plan;
+    if (!Array.isArray(days) || days.length < 1 || days.length > 7) {
+      return res.status(400).json({ error: 'plan must contain between 1 and 7 days' });
+    }
+    const serializedPlan = JSON.stringify(plan);
+    if (serializedPlan.length > 500_000) {
+      return res.status(413).json({ error: 'plan payload is too large' });
+    }
 
     await db.execute(sql`
       INSERT INTO saved_meal_plans (user_id, plan_data, saved_at)
-      VALUES (${userId}, ${JSON.stringify(plan)}::jsonb, NOW())
+      VALUES (${userId}, ${serializedPlan}::jsonb, NOW())
       ON CONFLICT (user_id)
-      DO UPDATE SET plan_data = ${JSON.stringify(plan)}::jsonb, saved_at = NOW()
+      DO UPDATE SET plan_data = ${serializedPlan}::jsonb, saved_at = NOW()
     `);
 
     res.json({ success: true });
   } catch (error) {
-    // Table may not exist yet — return success so mobile doesn't break
-    console.error('[MealPlan] Save error (table may not exist):', error.message);
-    res.json({ success: true, warning: 'Plan not persisted — table pending migration' });
+    console.error('[MealPlan] Save error:', error.message);
+    res.status(500).json({ error: 'Meal plan could not be saved. Please try again.' });
   }
 });
 
 // ─────────────────────────────────────────────────────────────
-// GET /api/meal-plan/saved  — retrieve latest saved plan
+// GET /api/meal-plan/saved: retrieve latest saved plan
 // ─────────────────────────────────────────────────────────────
 router.get('/saved', async (req, res) => {
   try {
@@ -182,7 +220,7 @@ router.get('/saved', async (req, res) => {
     `);
 
     // db.execute() on this postgres-js-backed Drizzle instance returns the
-    // row array directly, not { rows: [...] } — see gamificationRewardService.js.
+    // row array directly, not { rows: [...] }. See gamificationRewardService.js.
     if (result.length === 0) {
       return res.json({ plan: null });
     }
@@ -193,7 +231,7 @@ router.get('/saved', async (req, res) => {
     });
   } catch (error) {
     console.error('[MealPlan] Fetch error:', error.message);
-    res.json({ plan: null });
+    res.status(500).json({ error: 'Saved meal plan could not be loaded. Please try again.' });
   }
 });
 

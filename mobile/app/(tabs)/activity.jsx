@@ -444,7 +444,7 @@ export function ActivityScreen() {
                     </View>
                   </View>
                   <View style={[styles.durationInputShell, duration.length > 0 && !isValidDuration && styles.durationInputError]}>
-                    <TextInput style={styles.durationInput} value={duration} onChangeText={(value) => setDuration(value.replace(/[^0-9]/g, '').slice(0, 4))} keyboardType="number-pad" placeholder="—" placeholderTextColor={TEXT.tertiary} maxLength={4} accessibilityLabel="Duration in minutes" />
+                    <TextInput style={styles.durationInput} value={duration} onChangeText={(value) => setDuration(value.replace(/[^0-9]/g, '').slice(0, 4))} keyboardType="number-pad" placeholder="Minutes" placeholderTextColor={TEXT.tertiary} maxLength={4} accessibilityLabel="Duration in minutes" />
                     <Text style={styles.durationUnit}>minutes</Text>
                   </View>
                   {duration.length > 0 && !isValidDuration && <Text style={styles.validationText}>Use a whole number from 1 to 1,440 minutes.</Text>}

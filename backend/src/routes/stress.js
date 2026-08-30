@@ -25,6 +25,11 @@ import {
   normalizeHistoryQuery,
   summarizeStressHistory,
 } from '../utils/wellnessHistory.js';
+import { compareBinaryGroups, MIN_PATTERN_GROUP_SIZE } from '../utils/patternEvidence.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -518,18 +523,19 @@ router.get('/patterns', async (req, res) => {
     // Coping effectiveness
     const copingEffectiveness = {};
     COPING_STRATEGIES.forEach(strategy => {
-      const withCoping = stressLogs.filter(log =>
-        Array.isArray(log.copingUsed) && log.copingUsed.includes(strategy.key)
+      const comparison = compareBinaryGroups(
+        stressLogs,
+        (log) => Array.isArray(log.copingUsed) && log.copingUsed.includes(strategy.key),
+        (log) => log.level
       );
-
-      if (withCoping.length >= 2) {
-        const avgLevel = withCoping.reduce((sum, log) => sum + log.level, 0) / withCoping.length;
-        const overallAvg = stressLogs.reduce((sum, log) => sum + log.level, 0) / stressLogs.length;
+      if (comparison) {
         copingEffectiveness[strategy.key] = {
           ...strategy,
-          timesUsed: withCoping.length,
-          avgLevelWhenUsed: Math.round(avgLevel * 10) / 10,
-          effectiveness: Math.round((overallAvg - avgLevel) * 10) / 10, // Positive = helps reduce stress
+          timesUsed: comparison.countWith,
+          comparisonCount: comparison.countWithout,
+          avgLevelWhenUsed: comparison.averageWith,
+          avgLevelWithout: comparison.averageWithout,
+          effectiveness: Math.round(-comparison.difference * 10) / 10,
         };
       }
     });
@@ -564,6 +570,10 @@ router.get('/patterns', async (req, res) => {
         },
         overallAvg: Math.round((stressLogs.reduce((sum, log) => sum + log.level, 0) / stressLogs.length) * 10) / 10,
         entriesCount: stressLogs.length,
+        copingObservationCount: stressLogs.filter(
+          (log) => Array.isArray(log.copingUsed) && log.copingUsed.length > 0
+        ).length,
+        minimumAssociationGroupSize: MIN_PATTERN_GROUP_SIZE,
       },
     });
   } catch (error) {
@@ -580,10 +590,13 @@ router.delete('/:id', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const stressId = Number(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     if (!Number.isSafeInteger(stressId) || stressId <= 0) {
       return res.status(400).json({ error: 'Invalid stress ID' });
     }
+
+    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
 
     // Verify ownership and delete
     const deleted = await db
@@ -602,9 +615,17 @@ router.delete('/:id', async (req, res) => {
 
     clearPatternCache(userId);
 
+    const streakReconciliation = await reconcileStreakAfterDeletion({
+      userId,
+      beforeSnapshot: beforeStreak,
+      dbConn: db,
+      timezoneOffset: offsetMinutes,
+    });
+
     res.json({
       success: true,
       deleted: deleted[0],
+      streak: streakReconciliation.streak,
       message: 'Stress entry deleted successfully',
     });
   } catch (error) {

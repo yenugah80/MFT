@@ -180,7 +180,10 @@ router.get('/hydration-insights', async (req, res) => {
 
     console.log(`[API] GET /decision-brain/hydration-insights for user: ${userId}`);
 
-    const result = await generateHydrationInsights(userId);
+    const result = await generateHydrationInsights(
+      userId,
+      parseTimezoneOffsetMinutes(req) ?? 0
+    );
 
     res.json(result);
   } catch (error) {

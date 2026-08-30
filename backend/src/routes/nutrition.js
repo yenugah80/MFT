@@ -20,6 +20,11 @@ import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+  selectCreateProjection,
+} from '../services/streakReconciliationService.js';
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -468,6 +473,7 @@ router.delete("/log/:id", async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const logId = parseInt(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     if (isNaN(logId)) {
       return errors.invalidValue(res, 'id', 'must be a valid number');
@@ -487,6 +493,8 @@ router.delete("/log/:id", async (req, res) => {
     if (!existingEntry) {
       return errors.notFound(res, 'Food log entry');
     }
+
+    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
 
     // 2. Delete the entry
     await db.delete(foodLogTable)
@@ -523,9 +531,17 @@ router.delete("/log/:id", async (req, res) => {
       )
       .limit(1);
 
+    const streakReconciliation = await reconcileStreakAfterDeletion({
+      userId,
+      beforeSnapshot: beforeStreak,
+      dbConn: db,
+      timezoneOffset: offsetMinutes,
+    });
+
     res.json({
       success: true,
       deletedEntry: existingEntry,
+      streak: streakReconciliation.streak,
       currentDailyTotal: dailyTotal || {
         totalCalories: 0,
         totalProtein: 0,
@@ -938,9 +954,6 @@ router.get("/dashboard", async (req, res) => {
     // Get last 30 days date range
     const thirtyDaysAgo = addDaysUTC(today, -30);
 
-    // Get last 365 days date range for streaks
-    const streakWindowStart = addDaysUTC(today, -365);
-
     // Fetch all data in parallel for performance
     const [
       todaySummary,
@@ -949,9 +962,6 @@ router.get("/dashboard", async (req, res) => {
       todayWaterLogs,
       recentWeightEntries,
       todayMoodLogs,
-      streakFoodLogs,
-      streakWaterLogs,
-      streakMoodLogs,
       goals,
       gamification,
       todayActivityLogsResult,
@@ -1027,36 +1037,6 @@ router.get("/dashboard", async (req, res) => {
           )
         )
         .orderBy(desc(moodLogTable.loggedDate)),
-
-      // Streak window food logs (all activity days)
-      db.select({ loggedDate: foodLogTable.loggedDate })
-        .from(foodLogTable)
-        .where(
-          and(
-            eq(foodLogTable.userId, userId),
-            gte(foodLogTable.loggedDate, streakWindowStart)
-          )
-        ),
-
-      // Streak window water logs
-      db.select({ loggedDate: waterLogTable.loggedDate })
-        .from(waterLogTable)
-        .where(
-          and(
-            eq(waterLogTable.userId, userId),
-            gte(waterLogTable.loggedDate, streakWindowStart)
-          )
-        ),
-
-      // Streak window mood logs
-      db.select({ loggedDate: moodLogTable.loggedDate, timezoneOffset: moodLogTable.timezoneOffset })
-        .from(moodLogTable)
-        .where(
-          and(
-            eq(moodLogTable.userId, userId),
-            gte(moodLogTable.loggedDate, streakWindowStart)
-          )
-        ),
 
       // User's nutrition goals
       db.select()
@@ -1210,8 +1190,6 @@ router.get("/dashboard", async (req, res) => {
       ),
     } : null;
 
-    // Calculate streak (consecutive days with ANY activity)
-    const activityDays = new Set();
     // Use stored timezone from gamification if request header is missing
     // This ensures consistency with how updateStreak() calculates dates
     const storedTimezoneOffset = gamification[0]?.timezoneOffset;
@@ -1219,29 +1197,13 @@ router.get("/dashboard", async (req, res) => {
       ? offsetMinutes
       : (Number.isFinite(storedTimezoneOffset) ? storedTimezoneOffset : 0);
 
-    const addActivityDay = (loggedDate, tzOffset) => {
-      if (!loggedDate) return;
-      const offset = Number.isFinite(tzOffset) ? tzOffset : fallbackOffset;
-      const day = getLocalDateUTC(offset, loggedDate);
-      activityDays.add(day.getTime());
-    };
-
-    streakFoodLogs.forEach(log => addActivityDay(log.loggedDate, fallbackOffset));
-    streakWaterLogs.forEach(log => addActivityDay(log.loggedDate, fallbackOffset));
-    streakMoodLogs.forEach(log => addActivityDay(log.loggedDate, log.timezoneOffset));
-
-    let currentStreak = 0;
-    const hasTodayActivity = activityDays.has(today.getTime());
-    let checkDate = hasTodayActivity ? new Date(today) : addDaysUTC(today, -1);
-
-    for (let i = 0; i < 365; i++) {
-      if (activityDays.has(checkDate.getTime())) {
-        currentStreak++;
-        checkDate = addDaysUTC(checkDate, -1);
-      } else {
-        break;
-      }
-    }
+    const trackedDaySnapshot = await getTrackedDaySnapshot(
+      userId,
+      db,
+      fallbackOffset,
+      today
+    );
+    const currentStreak = trackedDaySnapshot.currentStreak;
 
     // Debug: Log when calculated streak differs from stored streak
     const storedStreak = gamification[0]?.streak ?? 0;
@@ -1264,14 +1226,13 @@ router.get("/dashboard", async (req, res) => {
     // Properly distinguishes brand new users from returning users who missed a day
     // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
     // ============================================================================
-    const totalDaysWithLogs = activityDays.size;  // Already computed for streak!
-    const hasLoggedToday = activityDays.has(today.getTime());
+    const totalDaysWithLogs = trackedDaySnapshot.lifetimeTrackedDays;
+    const hasLoggedToday = trackedDaySnapshot.hasLoggedToday;
 
     // Calculate days since last activity
     let lastActivityDate = null;
-    if (activityDays.size > 0) {
-      const sortedDays = Array.from(activityDays).sort((a, b) => b - a);
-      lastActivityDate = new Date(sortedDays[0]);
+    if (trackedDaySnapshot.latestTrackedDay) {
+      lastActivityDate = new Date(`${trackedDaySnapshot.latestTrackedDay}T00:00:00.000Z`);
     }
     const daysSinceLastLog = lastActivityDate
       ? Math.floor((today.getTime() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -1345,21 +1306,16 @@ router.get("/dashboard", async (req, res) => {
       canRestoreStreak = hoursSinceReset <= 24;
     }
 
-    // gamification.streak (storedStreak, above) is the source of truth:
-    // updateStreak() (in gamificationRewardService.js) maintains it
-    // incrementally across every logging route (activity/food/water/mood)
-    // with its own break/restore logic. currentStreak is only a same-request
-    // recomputation — logged as a diagnostic above when it disagrees — and it
-    // must never be trusted over the stored value: it undercounts (it never
-    // looks at activity_log, only food/water/mood) and is sensitive to
-    // day-boundary/timezone edge cases. A previous version of this route did
-    // treat it as authoritative, silently overwriting gamification.streak
-    // with this recomputed number whenever they disagreed, which corrupted a
-    // real 37-day streak down to 0 in production. Never write it back here.
+    // The response safely combines actual qualifying history with the stored
+    // projection. Actual history repairs an under-count. A larger stored value
+    // is retained because it may include a legitimate streak freeze.
     const gamificationWithLevel = {
       ...gamificationRow,
       totalMealsLogged: lifetimeMealsLogged,  // Real count; the DB column is never incremented
-      streak: gamificationRow?.streak ?? 0,   // Stored value — see comment above, do not use currentStreak here
+      // The stored projection may be higher because a freeze protected a day.
+      // Actual history may be higher when an older bug under-counted it. Use
+      // the safe maximum on reads while mutation reconciliation repairs DB.
+      streak: selectCreateProjection(gamificationRow?.streak, currentStreak),
       level: levelInfo.level,           // Override DB level with calculated level
       levelName: levelInfo.levelName,
       rank: levelInfo.rank,
@@ -1449,7 +1405,7 @@ router.get("/dashboard", async (req, res) => {
           totalFats: s.totalFats,
           mealCount: s.mealCount || 0,
         })),
-        currentStreak: gamificationRow?.streak ?? 0,
+        currentStreak: selectCreateProjection(gamificationRow?.streak, currentStreak),
       },
       recentWeight: recentWeightEntries,
       // USER LIFECYCLE - Single source of truth for user state detection

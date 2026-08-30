@@ -46,7 +46,7 @@ function DayCard({ day, expanded, onToggle }) {
           <Text style={styles.dayLabel}>{day.date_label}</Text>
         </View>
         <View style={styles.dayHeaderRight}>
-          <Text style={styles.dayCalories}>{day.day_totals?.calories ?? '—'} kcal</Text>
+          <Text style={styles.dayCalories}>{day.day_totals?.calories ?? 'Not set'} kcal</Text>
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={TEXT.tertiary} />
         </View>
       </TouchableOpacity>
@@ -159,11 +159,11 @@ function GenerateModal({ visible, onClose, onGenerate, loading }) {
           </View>
 
           <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>Days (1–7)</Text>
+            <Text style={styles.optionLabel}>Days (1 to 7)</Text>
             <TextInput style={styles.optionInput} value={days} onChangeText={setDays} keyboardType="numeric" maxLength={1} />
           </View>
           <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>Meals per day (2–5)</Text>
+            <Text style={styles.optionLabel}>Meals per day (2 to 5)</Text>
             <TextInput style={styles.optionInput} value={meals} onChangeText={setMeals} keyboardType="numeric" maxLength={1} />
           </View>
           <View style={styles.optionRow}>

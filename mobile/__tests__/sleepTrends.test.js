@@ -48,8 +48,8 @@ describe('sleep trend calculations', () => {
       daysTracked: 3,
     });
     expect(trends.consistencyScore).toBeGreaterThan(80);
-    expect(trends.tagImpact.exercise).toEqual({ impact: 3.5, occurrences: 2 });
-    expect(trends.tagImpact.screenTime).toEqual({ impact: -3.5, occurrences: 1 });
+    expect(trends.tagImpact).toEqual({});
+    expect(trends.minimumAssociationGroupSize).toBe(3);
     expect(trends.durationBuckets).toEqual({
       short: { label: 'Under 7h', count: 0, percentage: 0 },
       goal: { label: '7–9h', count: 3, percentage: 100 },
@@ -67,5 +67,22 @@ describe('sleep trend calculations', () => {
     expect(calculateSleepTrends([
       { bedTime: '2026-08-21T02:30:00.000Z', durationMinutes: 480, quality: 8 },
     ])).toBeNull();
+  });
+
+  test('shows tag associations only with enough evidence in both groups', () => {
+    const logs = [
+      { sleepDate: '2026-08-20', bedTime: '2026-08-21T03:00:00Z', wakeTime: '2026-08-21T11:00:00Z', durationMinutes: 480, quality: 8, tags: { exercise: true } },
+      { sleepDate: '2026-08-21', bedTime: '2026-08-22T03:00:00Z', wakeTime: '2026-08-22T11:00:00Z', durationMinutes: 480, quality: 9, tags: { exercise: true } },
+      { sleepDate: '2026-08-22', bedTime: '2026-08-23T03:00:00Z', wakeTime: '2026-08-23T11:00:00Z', durationMinutes: 480, quality: 7, tags: { exercise: true } },
+      { sleepDate: '2026-08-23', bedTime: '2026-08-24T03:00:00Z', wakeTime: '2026-08-24T10:00:00Z', durationMinutes: 420, quality: 5, tags: {} },
+      { sleepDate: '2026-08-24', bedTime: '2026-08-25T03:00:00Z', wakeTime: '2026-08-25T10:00:00Z', durationMinutes: 420, quality: 6, tags: {} },
+      { sleepDate: '2026-08-25', bedTime: '2026-08-26T03:00:00Z', wakeTime: '2026-08-26T10:00:00Z', durationMinutes: 420, quality: 4, tags: {} },
+    ];
+
+    expect(calculateSleepTrends(logs).tagImpact.exercise).toEqual({
+      impact: 3,
+      occurrences: 3,
+      comparisonOccurrences: 3,
+    });
   });
 });

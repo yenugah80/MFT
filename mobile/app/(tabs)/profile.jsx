@@ -44,7 +44,7 @@ const DIETARY_BY_ID = buildLookup(DIETARY_PREFERENCES);
 const ALLERGY_BY_ID = buildLookup(ALLERGIES);
 
 // WHO adult BMI bands. Used only to colour and label a value the user can
-// already compute from the weight and height they entered — the app shows it,
+// already compute from the weight and height they entered. The app shows it,
 // it does not diagnose. Medical disclaimers live in Terms and the insights screen.
 const BMI_BANDS = [
   { max: 18.5, label: 'Underweight', color: '#3B82F6' },
@@ -180,7 +180,7 @@ const AchievementsCard = ({ level, streak, daysLogged, onPress }) => {
       activeOpacity={0.8}
     >
       {/* White, not a purple gradient. Stacked directly under the purple hero,
-          a second purple block flattened the hierarchy — the header and this
+          a second purple block flattened the hierarchy. The header and this
           card competed instead of reading as chrome then content. */}
       <View style={styles.achievementsInner}>
         <View style={styles.achievementsContent}>
@@ -245,8 +245,8 @@ export default function ProfileScreen() {
   } = useProfileForm(user);
 
   const profile = state?.draft;
-  // Only block on the very first load. Once anything is on screen — cached or
-  // fresh — a background revalidation ('refreshing') must not swap it for a
+  // Only block on the very first load. Once anything is on screen, cached or
+  // fresh, a background revalidation ('refreshing') must not swap it for a
   // spinner, and a failed one must not swap it for an error page.
   const isProfileLoading = state?.status === 'loading' && !state?.hasData;
   const profileLoadError = state?.status === 'error' && !state?.hasData ? state.error : null;
@@ -258,8 +258,8 @@ export default function ProfileScreen() {
   const level = gamification?.level || 1;
   // Meal count, cross-checked against the logs themselves rather than trusting
   // one counter. `gamification.totalMealsLogged` used to be the only source and
-  // it read 0 for everyone — the column behind it is written once at signup and
-  // never incremented — which pinned the "Log your first meal" prompt on screen
+  // it read 0 for everyone. The column behind it is written once at signup and
+  // never incremented, which pinned the "Log your first meal" prompt on screen
   // permanently, even for users several meals in. Today's logs and the weekly
   // summaries are both subsets of the lifetime total, so the largest of the
   // three is a safe lower bound that can never overstate.
@@ -269,12 +269,11 @@ export default function ProfileScreen() {
     .reduce((sum, day) => sum + (day?.mealCount || 0), 0);
   const totalMeals = Math.max(reportedMeals, todayMealCount, weekMealCount);
   const streak = gamification?.streak || 0;
-  const daysLogged = userLifecycle?.totalDaysWithLogs || Math.floor(totalMeals / 3) || 0;
-  // Keyed on meals alone, deliberately. `daysLogged` falls back to a derived
-  // value and can read non-zero while nothing has actually been logged, which
-  // produced the contradictory "3 Days · 0 Meals · 0 Streak". Until a meal
-  // exists there is nothing meaningful to count, so show the prompt.
-  const hasActivity = totalMeals > 0;
+  const daysLogged = Math.max(0, Number(userLifecycle?.totalDaysWithLogs ?? 0));
+  // A tracked day may come from any streak-eligible domain, not only meals.
+  // Do not hide valid mood, hydration, activity, sleep or stress history from
+  // users who have not logged food yet.
+  const hasActivity = daysLogged > 0 || totalMeals > 0 || streak > 0;
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -297,7 +296,7 @@ export default function ProfileScreen() {
   }
 
   // A failed fetch used to fall back to DEFAULT_PROFILE, which rendered a full
-  // page of blank fields — indistinguishable from a genuinely empty account and
+  // page of blank fields, indistinguishable from a genuinely empty account and
   // impossible to recover from without restarting the app. Say what happened and
   // offer a retry instead.
   if (profileLoadError) {
@@ -375,7 +374,7 @@ export default function ProfileScreen() {
       >
         {/* Hero Section
             A soft tint rather than the previous saturated three-stop purple.
-            The header is chrome, not content — at full saturation it out-shouted
+            The header is chrome, not content. At full saturation it out-shouted
             the Body/Goals cards, which is where the user actually looks. */}
         <LinearGradient
           colors={['#F5F3FF', '#EDE9FE']}
@@ -425,7 +424,7 @@ export default function ProfileScreen() {
             <View style={styles.statsCard}>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{daysLogged}</Text>
-                <Text style={styles.statLabel}>Days</Text>
+                <Text style={styles.statLabel}>Days tracked</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
@@ -435,7 +434,7 @@ export default function ProfileScreen() {
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{streak}</Text>
-                <Text style={styles.statLabel}>Streak</Text>
+                <Text style={styles.statLabel}>Current streak</Text>
               </View>
             </View>
           ) : (
@@ -469,7 +468,7 @@ export default function ProfileScreen() {
             onPress={() => router.push('/achievements?from=profile')}
           />
 
-          {/* Earned badges — hidden entirely until at least one is unlocked, so
+          {/* Earned badges are hidden entirely until at least one is unlocked, so
               a new account sees no empty shelf. Reuses BadgeCard and the
               Achievements screen's query, so there is one source of truth. */}
           {earnedBadges.length > 0 && (
@@ -495,12 +494,12 @@ export default function ProfileScreen() {
           <View style={styles.card}>
             <SectionHeader title="My Body" actionText="Edit" onAction={() => router.push('/profile/body')} />
             <View style={styles.chipRow}>
-              <Chip icon="calendar-outline" value={age ? `${age} yrs` : '—'} label="Age" />
-              <Chip icon="scale-outline" value={weight ? `${weight} kg` : '—'} label="Weight" />
-              <Chip icon="resize-outline" value={height ? `${height} cm` : '—'} label="Height" />
+              <Chip icon="calendar-outline" value={age ? `${age} yrs` : 'Not set'} label="Age" />
+              <Chip icon="scale-outline" value={weight ? `${weight} kg` : 'Not set'} label="Weight" />
+              <Chip icon="resize-outline" value={height ? `${height} cm` : 'Not set'} label="Height" />
             </View>
 
-            {/* BMI meter — the one place on this screen that shows a value in
+            {/* BMI meter is the one place on this screen that shows a value in
                 context rather than in isolation. Derived entirely from the
                 weight and height above, so it needs no new data. */}
             {bmi && (
@@ -516,7 +515,7 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={styles.bmiTrack}>
-                  {/* Band segments, widths proportional to the 15–35 scale */}
+                  {/* Band segments, with widths proportional to the 15 to 35 scale */}
                   <View style={[styles.bmiSegment, { flex: 3.5, backgroundColor: '#3B82F633' }]} />
                   <View style={[styles.bmiSegment, { flex: 6.5, backgroundColor: '#10B98133' }]} />
                   <View style={[styles.bmiSegment, { flex: 5, backgroundColor: '#F59E0B33' }]} />
@@ -536,10 +535,10 @@ export default function ProfileScreen() {
           <View style={styles.card}>
             <SectionHeader title="My Goals" actionText="Edit" onAction={() => router.push('/profile/body')} />
             <View style={styles.goalChipGrid}>
-              <GoalChip icon="flame" value={calories || '—'} label="calories" color="#F97316" />
-              <GoalChip icon="barbell" value={protein ? `${protein}g` : '—'} label="protein" color="#3B82F6" />
-              <GoalChip icon="water" value={water ? `${water}L` : '—'} label="water" color="#10B981" />
-              <GoalChip icon="flag" value={goalLabels[primaryGoal] || '—'} label="goal" color="#8B5CF6" />
+              <GoalChip icon="flame" value={calories || 'Not set'} label="calories" color="#F97316" />
+              <GoalChip icon="barbell" value={protein ? `${protein}g` : 'Not set'} label="protein" color="#3B82F6" />
+              <GoalChip icon="water" value={water ? `${water}L` : 'Not set'} label="water" color="#10B981" />
+              <GoalChip icon="flag" value={goalLabels[primaryGoal] || 'Not set'} label="goal" color="#8B5CF6" />
             </View>
           </View>
 
@@ -606,7 +605,7 @@ export default function ProfileScreen() {
               subtitle="Reminders & alerts"
               onPress={() => router.push('/profile/notifications')}
             />
-            {/* Labelled for what the screen actually contains — Experience,
+            {/* Labelled for what the screen actually contains: Experience,
                 Units, Voice and Accessibility. It has no theme control, and
                 "Appearance / Theme & display" sent people looking for one. */}
             <SettingsRow
@@ -892,7 +891,7 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
   },
 
-  // Stats card — white, overlapping the gradient's bottom edge. The negative
+  // Stats card is white and overlaps the gradient's bottom edge. The negative
   // margin is why heroSection carries extra paddingBottom.
   statsCard: {
     flexDirection: 'row',

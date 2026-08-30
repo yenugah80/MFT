@@ -51,7 +51,7 @@ export default function HydrationTab({ data, period, recommendations = [], onRef
             <ProgressBar label="Days with hydration logged" value={coverage} displayValue={`${daysLoggedInPeriod}/${periodDays}`} color={COLOR} icon="create-outline" />
             <ProgressBar label="Goal days among logged days" value={daysLoggedInPeriod ? (daysGoalMetInPeriod / daysLoggedInPeriod) * 100 : 0} displayValue={`${daysGoalMetInPeriod}/${daysLoggedInPeriod}`} color={SEMANTIC.success.base} icon="checkmark-circle-outline" />
           </ProgressCard>}
-          <SectionIntro eyebrow="PERSONAL CONTEXT" title="What stands out" subtitle={insightRecommendations.length ? `Rolling ${insightRecommendations[0].windowDays || 14}-day observations from logged drinks—not medical advice or a diagnosis.` : `Selected-range observations from logged drinks ${copy.noun}.`} color={COLOR} />
+          <SectionIntro eyebrow="PERSONAL CONTEXT" title="What stands out" subtitle={insightRecommendations.length ? `Rolling ${insightRecommendations[0].windowDays || 14}-day observations from logged drinks. This is not medical advice or a diagnosis.` : `Selected-range observations from logged drinks ${copy.noun}.`} color={COLOR} />
           {insightRecommendations.length ? <View style={styles.recommendations}>{insightRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}</View> : <InsightList items={fallbackInsights} />}
           <ActionRow>
             <ProgressAction icon="analytics-outline" label="Hydration analytics" hint="Timing, mix & trends" color={COLOR} onPress={() => navigate('/analytics/hydration')} />

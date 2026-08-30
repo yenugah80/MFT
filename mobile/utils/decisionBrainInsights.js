@@ -16,8 +16,14 @@
  * @param {'mood'|'nutrition'|'hydration'|'activity'} domain
  * @returns {Array<object>}
  */
-export function mapDecisionBrainInsights(data, domain) {
+export function mapDecisionBrainInsights(data, domain, options = {}) {
   if (!data?.success) return [];
+
+  const canonicalTodayProgress = Number(options.canonicalTodayProgress);
+  const apiTodayProgress = Number(data.stats?.todayProgress);
+  const hasCanonicalTodayProgress = Number.isFinite(canonicalTodayProgress);
+  const todayProgressAgrees = !hasCanonicalTodayProgress
+    || (Number.isFinite(apiTodayProgress) && apiTodayProgress === canonicalTodayProgress);
 
   // Older deployed servers used this same 14-day rolling window but did not
   // describe it in the payload. Keep the fallback during rolling upgrades.
@@ -27,7 +33,9 @@ export function mapDecisionBrainInsights(data, domain) {
     correlationDays: data.window?.correlationDays || [7, 14],
   };
 
-  const patterns = (data.patterns || []).map((p, i) => ({
+  const patterns = (data.patterns || [])
+    .filter((pattern) => pattern?.category !== 'today' || todayProgressAgrees)
+    .map((p, i) => ({
     id: `${domain}-pattern-${i}`,
     domain,
     type: 'pattern',

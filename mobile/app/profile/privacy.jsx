@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,19 +13,85 @@ import { deleteAccountAndPurgeDevice } from "../../services/accountDeletion";
 import { useAuth } from "@clerk/clerk-expo";
 import { useBiometricLock } from "../../providers/BiometricLockProvider";
 
+const PRIVACY_DEFAULTS = Object.freeze({
+  usageAnalytics: true,
+  crossDomainInsights: false,
+  contextInInsights: false,
+  reflectionInInsights: false,
+  sensitiveInsights: false,
+  aiWellnessNarration: false,
+  weeklyReviewReminder: false,
+});
+
+const DEPENDENT_INSIGHT_KEYS = [
+  "contextInInsights",
+  "reflectionInInsights",
+  "sensitiveInsights",
+  "aiWellnessNarration",
+];
+
+const PRIVACY_LABELS = {
+  usageAnalytics: "Usage analytics",
+  crossDomainInsights: "Cross-feature patterns",
+  contextInInsights: "Context in patterns",
+  reflectionInInsights: "Reflections in patterns",
+  sensitiveInsights: "Sensitive context in patterns",
+  aiWellnessNarration: "AI-written reviews",
+  weeklyReviewReminder: "Weekly review reminder",
+};
+
+function normalizeApiPrivacy(data) {
+  return {
+    ...PRIVACY_DEFAULTS,
+    usageAnalytics: data?.usageAnalytics ?? data?.analytics ?? true,
+    crossDomainInsights: data?.crossDomainInsights ?? data?.shareInsights ?? false,
+    contextInInsights: data?.contextInInsights === true,
+    reflectionInInsights: data?.reflectionInInsights === true,
+    sensitiveInsights: data?.sensitiveInsights === true,
+    aiWellnessNarration: data?.aiWellnessNarration === true,
+    weeklyReviewReminder: data?.weeklyReviewReminder === true,
+  };
+}
+
+function applyPrivacyPatch(current, patch) {
+  const next = { ...current, ...patch };
+  if (patch.crossDomainInsights === false) {
+    DEPENDENT_INSIGHT_KEYS.forEach((key) => {
+      next[key] = false;
+    });
+  }
+  return next;
+}
+
+function PrivacyToggleRow({ title, description, value, onChange, disabled, isLast = false }) {
+  return (
+    <View style={[styles.row, !isLast && styles.rowDivider, disabled && styles.rowDisabled]}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowSubtitle}>{description}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        disabled={disabled}
+        trackColor={{ false: SURFACES.divider, true: BRAND.primary }}
+        ios_backgroundColor={SURFACES.divider}
+        accessibilityLabel={title}
+        accessibilityHint={description}
+      />
+    </View>
+  );
+}
+
 export default function PrivacyScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const queryClient = useQueryClient();
-  const [shareInsights, setShareInsights] = useState(false);
-  const [analytics, setAnalytics] = useState(true);
-  // Separate endpoint/table from the other two toggles above (`/consent/*`,
-  // not `/profile/privacy`) — this is the one AIConsentPrompt's "Not now"
-  // routes here for, so it has to actually exist on this screen.
+  const [privacy, setPrivacy] = useState(PRIVACY_DEFAULTS);
   const [aiAnalysisConsent, setAiAnalysisConsent] = useState(false);
   const [isTogglingAI, setIsTogglingAI] = useState(false);
   // App lock is enforced by BiometricLockProvider. The device (SecureStore) is
-  // the source of truth for whether this phone is gated — a server flag can't
+  // the source of truth for whether this phone is gated. A server flag cannot
   // be trusted to gate a cold start, and a device that can't authenticate must
   // not inherit "on" from another one. The server copy is written alongside so
   // the setting is visible across devices, but it never drives the gate.
@@ -36,14 +102,18 @@ export default function PrivacyScreen() {
   const [loadError, setLoadError] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [privacyHistory, setPrivacyHistory] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  const [isInsightDetailOpen, setIsInsightDetailOpen] = useState(false);
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
       const data = await apiClient.get("/profile/privacy");
-      setShareInsights(Boolean(data?.shareInsights));
-      setAnalytics(data?.analytics !== false);
+      setPrivacy(normalizeApiPrivacy(data));
     } catch (error) {
       console.error("[PrivacyScreen] Failed to load settings", error);
       setLoadError("Failed to load privacy settings");
@@ -51,8 +121,7 @@ export default function PrivacyScreen() {
       setIsLoading(false);
     }
 
-    // Separate try/catch: a failure here shouldn't block the two toggles
-    // above from loading, and vice versa — they're unrelated backends.
+    // Food analysis consent has its own processor-specific endpoint.
     try {
       const status = await apiClient.get("/consent/status");
       setAiAnalysisConsent(status?.consent?.hasConsent === true);
@@ -65,26 +134,61 @@ export default function PrivacyScreen() {
     loadSettings();
   }, [loadSettings]);
 
-  const persistPrivacy = async (nextState) => {
-    // Store old state for rollback on error
-    const oldState = { shareInsights, analytics };
+  const persistPrivacy = async (patch) => {
+    const oldState = privacy;
+    const nextState = applyPrivacyPatch(oldState, patch);
 
-    // Optimistic update
     setIsSaving(true);
-    setShareInsights(nextState.shareInsights);
-    setAnalytics(nextState.analytics);
+    setPrivacy(nextState);
 
     try {
-      await apiClient.post("/profile/privacy", { privacy: nextState });
+      const saved = await apiClient.patch("/profile/privacy", {
+        privacy: patch,
+        sourceScreen: "privacy-security",
+        devicePlatform: Platform.OS,
+      });
+      setPrivacy(normalizeApiPrivacy(saved));
+      if (patch.crossDomainInsights === true) setIsInsightDetailOpen(true);
+      if (patch.crossDomainInsights === false) setIsInsightDetailOpen(false);
+      if (isHistoryOpen) {
+        await loadPrivacyHistory();
+      } else {
+        // Force the next expansion to request the latest server-owned audit
+        // events instead of reusing a previously loaded snapshot.
+        setPrivacyHistory([]);
+      }
       console.log("[PrivacyScreen] Settings saved successfully");
     } catch (error) {
       console.error("[PrivacyScreen] Failed to save settings", error);
       // Rollback on error
-      setShareInsights(oldState.shareInsights);
-      setAnalytics(oldState.analytics);
+      setPrivacy(oldState);
       Alert.alert("Save Failed", "Could not save your privacy settings. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const loadPrivacyHistory = useCallback(async () => {
+    setIsHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const data = await apiClient.get("/profile/privacy/audit?limit=8");
+      setPrivacyHistory(Array.isArray(data?.events) ? data.events : []);
+    } catch (error) {
+      if (error?.response?.status !== 404) {
+        console.error("[PrivacyScreen] Failed to load privacy history", error);
+      }
+      setHistoryError("Privacy activity is temporarily unavailable.");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  const togglePrivacyHistory = () => {
+    const nextOpen = !isHistoryOpen;
+    setIsHistoryOpen(nextOpen);
+    if (nextOpen && privacyHistory.length === 0 && !isHistoryLoading) {
+      loadPrivacyHistory();
     }
   };
 
@@ -118,8 +222,10 @@ export default function PrivacyScreen() {
       // Mirror to the server so the choice is visible on the account. A failure
       // here must not revert the device gate, which is already applied.
       try {
-        await apiClient.post("/profile/privacy", {
-          privacy: { shareInsights, analytics, biometricLock: value },
+        await apiClient.patch("/profile/privacy", {
+          privacy: { biometricLock: value },
+          sourceScreen: "privacy-security",
+          devicePlatform: Platform.OS,
         });
       } catch (syncError) {
         console.warn("[PrivacyScreen] Lock setting saved locally but not synced", syncError);
@@ -136,7 +242,7 @@ export default function PrivacyScreen() {
     setAiAnalysisConsent(value);
     try {
       if (value) {
-        // `understand` must be exactly `true` — the backend rejects anything
+        // `understand` must be exactly `true`. The backend rejects anything
         // else (see requireAuth-gated POST /consent/give-openai-consent).
         await apiClient.post("/consent/give-openai-consent", {
           understand: true,
@@ -242,70 +348,51 @@ export default function PrivacyScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      <LinearGradient
-        colors={SURFACES.gradient.primary}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
-          accessibilityLabel="Back to Profile"
+      <ScrollView contentContainerStyle={styles.screenContent}>
+        <LinearGradient
+          colors={SURFACES.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
         >
-          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Privacy & Security</Text>
-          <Text style={styles.subtitle}>Control what stays private</Text>
-        </View>
-      </LinearGradient>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+            accessibilityLabel="Back to Profile"
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Privacy & Security</Text>
+            <Text style={styles.subtitle}>Control what stays private</Text>
+          </View>
+        </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.content}>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Privacy</Text>
-
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Share insights</Text>
-              <Text style={styles.rowSubtitle}>Allow anonymous insights to improve recommendations</Text>
+          <View style={styles.sectionHeading}>
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.info.bg }]} accessibilityElementsHidden>
+              <Ionicons name="analytics-outline" size={18} color={BRAND.primary} />
             </View>
-            <Switch
-              value={shareInsights}
-              onValueChange={(value) =>
-                persistPrivacy({
-                  shareInsights: value,
-                  analytics,
-                  biometricLock,
-                })
-              }
-              disabled={isSaving}
-            />
+            <View style={styles.rowText}>
+              <Text style={styles.sectionTitle}>Data use</Text>
+              <Text style={styles.sectionSubtitle}>Choose each purpose separately</Text>
+            </View>
           </View>
 
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Usage analytics</Text>
-              <Text style={styles.rowSubtitle}>Help us improve with anonymous usage data</Text>
-            </View>
-            <Switch
-              value={analytics}
-              onValueChange={(value) =>
-                persistPrivacy({
-                  shareInsights,
-                  analytics: value,
-                  biometricLock,
-                })
-              }
-              disabled={isSaving}
-            />
-          </View>
+          <PrivacyToggleRow
+            title="Usage analytics"
+            description="Share app performance and feature usage without wellness entries"
+            value={privacy.usageAnalytics}
+            onChange={(value) => persistPrivacy({ usageAnalytics: value })}
+            disabled={isSaving}
+          />
 
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>AI-assisted analysis</Text>
+              <Text style={styles.rowTitle}>AI food analysis</Text>
               <Text style={styles.rowSubtitle}>
-                Let AI read your food photos and voice notes to fill in nutrition. Sent to OpenAI, never used for training.
+                Send food photos and voice notes to OpenAI to estimate nutrition
               </Text>
             </View>
             {isTogglingAI ? (
@@ -315,14 +402,119 @@ export default function PrivacyScreen() {
                 value={aiAnalysisConsent}
                 onValueChange={handleToggleAIConsent}
                 disabled={isTogglingAI}
+                trackColor={{ false: SURFACES.divider, true: BRAND.primary }}
+                ios_backgroundColor={SURFACES.divider}
+                accessibilityLabel="AI food analysis"
               />
             )}
           </View>
         </View>
 
-        {/* Security */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Security</Text>
+          <View style={styles.sectionHeading}>
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.success.bg }]} accessibilityElementsHidden>
+              <Ionicons name="git-compare-outline" size={18} color={SEMANTIC.success.base} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.sectionTitle}>Wellness insights</Text>
+              <Text style={styles.sectionSubtitle}>Control how your wellness domains connect</Text>
+            </View>
+          </View>
+
+          <PrivacyToggleRow
+            title="Cross-feature patterns"
+            description="Compare domains such as sleep, stress, mood, hydration, and activity"
+            value={privacy.crossDomainInsights}
+            onChange={(value) => persistPrivacy({ crossDomainInsights: value })}
+            disabled={isSaving}
+          />
+
+          {!privacy.crossDomainInsights ? (
+            <View style={styles.privacyNotice}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={SEMANTIC.success.base} accessible={false} />
+              <Text style={styles.privacyNoticeText}>
+                Your wellness domains stay separate until you turn this on.
+              </Text>
+            </View>
+          ) : null}
+
+          {privacy.crossDomainInsights ? (
+            <>
+              <TouchableOpacity
+                style={styles.disclosureRow}
+                onPress={() => setIsInsightDetailOpen((open) => !open)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isInsightDetailOpen }}
+                accessibilityLabel="Pattern data controls"
+              >
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>Pattern data controls</Text>
+                  <Text style={styles.rowSubtitle}>
+                    {DEPENDENT_INSIGHT_KEYS.filter((key) => privacy[key]).length} of {DEPENDENT_INSIGHT_KEYS.length} optional sources on
+                  </Text>
+                </View>
+                <Ionicons
+                  name={isInsightDetailOpen ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={TEXT.tertiary}
+                />
+              </TouchableOpacity>
+
+              {isInsightDetailOpen ? (
+                <View style={styles.nestedSettings}>
+                  <PrivacyToggleRow
+                    title="Context in patterns"
+                    description="Use tags such as work, travel, illness, or routine changes"
+                    value={privacy.contextInInsights}
+                    onChange={(value) => persistPrivacy({ contextInInsights: value })}
+                    disabled={isSaving}
+                  />
+                  <PrivacyToggleRow
+                    title="Reflections in patterns"
+                    description="Include your private notes when finding personal patterns"
+                    value={privacy.reflectionInInsights}
+                    onChange={(value) => persistPrivacy({ reflectionInInsights: value })}
+                    disabled={isSaving}
+                  />
+                  <PrivacyToggleRow
+                    title="Sensitive context in patterns"
+                    description="Include health, relationship, and other sensitive context tags"
+                    value={privacy.sensitiveInsights}
+                    onChange={(value) => persistPrivacy({ sensitiveInsights: value })}
+                    disabled={isSaving}
+                  />
+                  <PrivacyToggleRow
+                    title="AI-written reviews"
+                    description="Use approved wellness data to draft weekly summaries"
+                    value={privacy.aiWellnessNarration}
+                    onChange={(value) => persistPrivacy({ aiWellnessNarration: value })}
+                    disabled={isSaving}
+                    isLast
+                  />
+                </View>
+              ) : null}
+            </>
+          ) : null}
+          <PrivacyToggleRow
+            title="Weekly review reminder"
+            description="Notify you when a new weekly review is ready"
+            value={privacy.weeklyReviewReminder}
+            onChange={(value) => persistPrivacy({ weeklyReviewReminder: value })}
+            disabled={isSaving}
+            isLast
+          />
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.sectionHeading}>
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.info.bg }]} accessibilityElementsHidden>
+              <Ionicons name="lock-closed-outline" size={18} color={BRAND.primary} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.sectionTitle}>Security</Text>
+              <Text style={styles.sectionSubtitle}>Protect access on this device</Text>
+            </View>
+          </View>
 
           <View style={styles.row}>
             <View style={styles.rowText}>
@@ -338,27 +530,94 @@ export default function PrivacyScreen() {
                 value={biometricLock}
                 onValueChange={handleToggleBiometricLock}
                 disabled={!isLockReady}
+                trackColor={{ false: SURFACES.divider, true: BRAND.primary }}
+                ios_backgroundColor={SURFACES.divider}
+                accessibilityLabel="App lock"
               />
             )}
           </View>
         </View>
 
-
-        {/* GDPR Data Rights */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Your Data</Text>
+          <View style={styles.sectionHeading}>
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.success.bg }]} accessibilityElementsHidden>
+              <Ionicons name="folder-open-outline" size={18} color={SEMANTIC.success.base} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.sectionTitle}>Your data</Text>
+              <Text style={styles.sectionSubtitle}>Review, export, or remove account data</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.dataRow}
+            onPress={togglePrivacyHistory}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isHistoryOpen }}
+            accessibilityLabel="Privacy activity"
+            accessibilityHint="See when each privacy purpose was turned on or off"
+          >
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.info.bg }]} accessibilityElementsHidden>
+              <Ionicons name="time-outline" size={18} color={BRAND.primary} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Privacy activity</Text>
+              <Text style={styles.rowSubtitle}>See when each purpose was turned on or off</Text>
+            </View>
+            <Ionicons
+              name={isHistoryOpen ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={TEXT.tertiary}
+            />
+          </TouchableOpacity>
+
+          {isHistoryOpen ? (
+            <View style={styles.historyPanel}>
+              {isHistoryLoading ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : historyError ? (
+                <View style={styles.historyEmpty}>
+                  <Text style={styles.historyEmptyText}>{historyError}</Text>
+                  <TouchableOpacity onPress={loadPrivacyHistory} accessibilityRole="button">
+                    <Text style={styles.retryInline}>Try again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : privacyHistory.length === 0 ? (
+                <Text style={styles.historyEmptyText}>No privacy changes recorded yet.</Text>
+              ) : privacyHistory.map((event) => (
+                <View key={event.id} style={styles.historyRow}>
+                  <View style={[
+                    styles.historyDot,
+                    { backgroundColor: event.newState ? SEMANTIC.success.base : TEXT.tertiary },
+                  ]} />
+                  <View style={styles.rowText}>
+                    <Text style={styles.historyTitle}>
+                      {PRIVACY_LABELS[event.purposeKey] || "Privacy purpose"} {event.newState ? "on" : "off"}
+                    </Text>
+                    <Text style={styles.historyDate}>
+                      {new Date(event.changedAt).toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={styles.dataRow}
             onPress={handleExportData}
             disabled={isExporting}
+            accessibilityRole="button"
+            accessible
+            accessibilityLabel="Download my data"
+            accessibilityHint="Export wellness records and privacy history as JSON"
           >
-            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.success.bg }]}>
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.success.bg }]} accessibilityElementsHidden>
               <Ionicons name="download-outline" size={18} color={SEMANTIC.success.base} />
             </View>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Download My Data</Text>
-              <Text style={styles.rowSubtitle}>Export all your data as JSON</Text>
+              <Text style={styles.rowTitle}>Download my data</Text>
+              <Text style={styles.rowSubtitle}>Export wellness records and privacy history as JSON</Text>
             </View>
             {isExporting ? (
               <ActivityIndicator size="small" color={BRAND.primary} />
@@ -371,12 +630,16 @@ export default function PrivacyScreen() {
             style={styles.dataRow}
             onPress={handleDeleteAccount}
             disabled={isDeleting}
+            accessibilityRole="button"
+            accessible
+            accessibilityLabel="Delete account"
+            accessibilityHint="Permanently remove all account data"
           >
-            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.danger.bg }]}>
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.danger.bg }]} accessibilityElementsHidden>
               <Ionicons name="trash-outline" size={18} color={SEMANTIC.danger.base} />
             </View>
             <View style={styles.rowText}>
-              <Text style={[styles.rowTitle, { color: SEMANTIC.danger.base }]}>Delete Account</Text>
+              <Text style={[styles.rowTitle, { color: SEMANTIC.danger.base }]}>Delete account</Text>
               <Text style={styles.rowSubtitle}>Permanently remove all your data</Text>
             </View>
             {isDeleting ? (
@@ -390,12 +653,16 @@ export default function PrivacyScreen() {
         <Text style={styles.footerNote}>
           Under GDPR, you have the right to access, export, and delete your personal data at any time.
         </Text>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenContent: {
+    paddingBottom: SPACING[5],
+  },
   header: {
     paddingHorizontal: SPACING[5],
     paddingTop: SPACING[4],
@@ -404,9 +671,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: RADIUS.xl,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
@@ -437,17 +704,37 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
     gap: SPACING[3],
   },
+  sectionHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING[3],
+    paddingBottom: SPACING[1],
+  },
   sectionTitle: {
     fontSize: TYPOGRAPHY.size.lg,
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
+  sectionSubtitle: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 2,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: SPACING[3],
+    minHeight: 54,
+    paddingVertical: SPACING[2],
+  },
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: SURFACES.divider,
+  },
+  rowDisabled: {
+    opacity: 0.48,
   },
   rowText: {
     flex: 1,
@@ -462,6 +749,36 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.secondary,
     marginTop: 4,
+    lineHeight: 18,
+  },
+  privacyNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING[2],
+    backgroundColor: SEMANTIC.success.bg,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[3],
+  },
+  privacyNoticeText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    color: SEMANTIC.success.dark,
+    lineHeight: 19,
+  },
+  disclosureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING[3],
+    minHeight: 54,
+    paddingVertical: SPACING[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: SURFACES.divider,
+  },
+  nestedSettings: {
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING[3],
   },
   loadingContainer: {
     flex: 1,
@@ -504,7 +821,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING[3],
-    paddingVertical: SPACING[2],
+    paddingVertical: SPACING[3],
+    minHeight: 56,
+  },
+  historyPanel: {
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING[3],
+    gap: SPACING[2],
+  },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING[3],
+    minHeight: 44,
+  },
+  historyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  historyTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.primary,
+  },
+  historyDate: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    marginTop: 2,
+  },
+  historyEmpty: {
+    alignItems: "center",
+    gap: SPACING[2],
+  },
+  historyEmptyText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.secondary,
+    textAlign: "center",
+  },
+  retryInline: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: BRAND.primary,
+    fontWeight: TYPOGRAPHY.weight.semibold,
   },
   iconCircle: {
     width: 36,

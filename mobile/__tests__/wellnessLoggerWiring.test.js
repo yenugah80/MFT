@@ -82,16 +82,14 @@ describe('sleep and stress logger entry-point wiring', () => {
     expect(cards[1]).toContain('ellipsizeMode="tail"');
   });
 
-  it('finishes the dashboard without a permanent blank footer or FAB overlap', () => {
+  it('finishes the dashboard without a FAB or permanent blank footer', () => {
     const dashboard = read('components/DashboardContent.jsx');
-    const fab = read('components/FloatingActionButton.jsx');
 
-    expect(dashboard).toContain('onScroll={handleDashboardScroll}');
-    expect(dashboard).toContain('hidden={isNearDashboardEnd}');
+    expect(dashboard).not.toContain('FloatingActionButton');
+    expect(dashboard).not.toContain('handleDashboardScroll');
+    expect(dashboard).not.toContain('isNearDashboardEnd');
     expect(dashboard).toContain('paddingBottom: SPACING[6]');
     expect(dashboard).not.toContain('paddingBottom: 120');
-    expect(fab).toContain("pointerEvents={hidden ? 'none' : 'auto'}");
-    expect(fab).toContain('accessibilityElementsHidden={hidden}');
   });
 
   it('keeps the mood quick check-in compact, truthful, and distinctly routed', () => {

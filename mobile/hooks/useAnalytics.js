@@ -137,6 +137,11 @@ export function useAnalytics(period = 'week') {
   // Process recommendations data
   const recommendations = useMemo(() => {
     const data = recommendationsQuery.data;
+    const hydrationTodayMl = Number(data?.stats?.water?.todayMl ?? nutritionQuery.data?.water?.consumed ?? 0);
+    const hydrationGoalMl = Number(data?.stats?.goals?.waterGoalMl ?? nutritionQuery.data?.water?.goal ?? 2000);
+    const canonicalHydrationProgress = hydrationGoalMl > 0
+      ? Math.round((hydrationTodayMl / hydrationGoalMl) * 100)
+      : 0;
 
     // The Food Engine still generates 4 static 'action'-type onboarding
     // nudges ("Log Your First Meal" etc., gated on zero logs ever) —
@@ -155,7 +160,12 @@ export function useAnalytics(period = 'week') {
       // app/analytics/index.jsx.
       nutrition: [...actionRecs('nutrition'), ...mapDecisionBrainInsights(nutritionInsightsQuery.data, 'nutrition')],
       mood: [...actionRecs('mood'), ...mapDecisionBrainInsights(moodInsightsQuery.data, 'mood')],
-      hydration: [...actionRecs('hydration'), ...mapDecisionBrainInsights(hydrationInsightsQuery.data, 'hydration')],
+      hydration: [
+        ...actionRecs('hydration'),
+        ...mapDecisionBrainInsights(hydrationInsightsQuery.data, 'hydration', {
+          canonicalTodayProgress: canonicalHydrationProgress,
+        }),
+      ],
       activity: [...actionRecs('activity'), ...mapDecisionBrainInsights(activityInsightsQuery.data, 'activity')],
       // Wellness tab migration is out of scope for this phase — its
       // "wellness score" gauge needs a shape decision-brain doesn't
@@ -172,6 +182,7 @@ export function useAnalytics(period = 'week') {
     moodInsightsQuery.data,
     hydrationInsightsQuery.data,
     activityInsightsQuery.data,
+    nutritionQuery.data,
   ]);
 
   // Process nutrition data for backward compatibility
@@ -446,8 +457,8 @@ export function useAnalytics(period = 'week') {
     if (!recStats && !data && !dashData) return null;
 
     // Get today's water
-    const todayWater = recStats?.todayMl || dashData?.water?.consumed || 0;
-    const waterGoal = recommendationsQuery.data?.stats?.goals?.waterGoalMl || dashData?.water?.goal || 2000;
+    const todayWater = recStats?.todayMl ?? dashData?.water?.consumed ?? 0;
+    const waterGoal = recommendationsQuery.data?.stats?.goals?.waterGoalMl ?? dashData?.water?.goal ?? 2000;
 
     return {
       todayMl: todayWater,

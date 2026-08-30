@@ -2014,6 +2014,27 @@ export function useFoodAnalysis() {
   }, [inputText, analyzeTextUniversal, getToken]);
 
   /**
+   * Re-run analysis after the user confirms a spelling correction.
+   * This recalculates nutrition from the corrected ingredient rather than
+   * renaming a result that still contains the old zero-value fallback.
+   */
+  const analyzeCorrectedText = useCallback(async (correctedText) => {
+    const text = correctedText?.trim();
+    if (!text) {
+      throw new Error('Corrected meal description is required');
+    }
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    suppressAutoAnalysisUntilRef.current = Date.now() + AUTO_ANALYSIS_DEBOUNCE_MS + 300;
+    setDebouncedText('');
+    setInputText(text);
+    await analyzeTextUniversal(text, { source: 'text_correction' });
+  }, [analyzeTextUniversal, setInputText]);
+
+  /**
    * Clear error state
    */
   const clearError = useCallback(() => {
@@ -2138,6 +2159,7 @@ export function useFoodAnalysis() {
     removeItem,
     removeIngredient,
     runAnalysis,
+    analyzeCorrectedText,
     cancelAnalysis,
 
     // Shared state

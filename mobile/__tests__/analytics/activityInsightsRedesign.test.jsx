@@ -100,6 +100,8 @@ describe('Activity Insights redesign', () => {
     expect(screen.getByText('Day')).toBeTruthy();
     expect(screen.getByText('Week')).toBeTruthy();
     expect(screen.getByText('Month')).toBeTruthy();
+    expect(screen.getByLabelText('Show previous month')).toBeTruthy();
+    expect(screen.getByLabelText('Show next month')).toBeDisabled();
     expect(screen.getByText(/Full ring ≈ \d+ min/)).toBeTruthy();
     expect(screen.getByText('Rest / upcoming')).toBeTruthy();
     expect(screen.getByText('Selected week')).toBeTruthy();
@@ -107,6 +109,29 @@ describe('Activity Insights redesign', () => {
     fireEvent.press(screen.getByLabelText('Smart insights, collapsed'));
     fireEvent.press(screen.getByText('Generate insights'));
     expect(onGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens a focused history view with the live calendar expanded', () => {
+    render(<ActivityInsightsView {...baseProps} mode="history" />);
+
+    expect(screen.getByText('See every workout in context')).toBeTruthy();
+    expect(screen.getByLabelText('Calendar details, expanded')).toBeTruthy();
+    expect(screen.getByText('Day')).toBeTruthy();
+    expect(screen.getByText('Week')).toBeTruthy();
+    expect(screen.getByText('Month')).toBeTruthy();
+    expect(screen.queryByText('Good day to move')).toBeNull();
+    expect(screen.queryByText('TODAY’S PLAN')).toBeNull();
+    expect(screen.queryByLabelText('Recovery details, collapsed')).toBeNull();
+    expect(screen.queryByLabelText('Smart insights, collapsed')).toBeNull();
+  });
+
+  it('opens the calendar when a mounted insights view changes to history', () => {
+    const { rerender } = render(<ActivityInsightsView {...baseProps} mode="insights" />);
+    expect(screen.getByLabelText('Calendar details, collapsed')).toBeTruthy();
+
+    rerender(<ActivityInsightsView {...baseProps} mode="history" />);
+    expect(screen.getByLabelText('Calendar details, expanded')).toBeTruthy();
+    expect(screen.getByText('Month')).toBeTruthy();
   });
 
   it('shows an actionable empty state without fabricating training patterns', () => {

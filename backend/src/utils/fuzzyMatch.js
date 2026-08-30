@@ -58,6 +58,12 @@ function similarityScore(a, b) {
   return 1 - (distance / maxLength);
 }
 
+function containsWholeFoodName(container, candidate) {
+  if (!container || !candidate) return false;
+  const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\b)${escaped}(?:$|\\b)`, 'i').test(container);
+}
+
 /**
  * Common food names dictionary for fuzzy matching
  * Organized by category for faster lookups
@@ -131,6 +137,13 @@ const COMMON_FOODS = {
     'juice', 'orange juice', 'apple juice', 'smoothie',
     'soda', 'cola', 'lemonade', 'lassi', 'buttermilk',
   ],
+  fatsOilsAndCondiments: [
+    'sesame oil', 'olive oil', 'extra virgin olive oil', 'vegetable oil',
+    'canola oil', 'coconut oil', 'avocado oil', 'sunflower oil',
+    'peanut oil', 'soybean oil', 'mustard oil', 'corn oil',
+    'butter', 'ghee', 'tahini', 'mayonnaise', 'soy sauce',
+    'hot sauce', 'tomato sauce', 'ketchup', 'mustard', 'vinegar',
+  ],
 };
 
 // Flatten all foods into a single array for searching
@@ -170,7 +183,10 @@ export function findSimilarFoods(query, options = {}) {
     const foodLower = item.name.toLowerCase();
 
     // Boost score if query is a substring
-    if (foodLower.includes(queryLower) || queryLower.includes(foodLower)) {
+    if (
+      containsWholeFoodName(foodLower, queryLower)
+      || containsWholeFoodName(queryLower, foodLower)
+    ) {
       item.score = Math.max(item.score, 0.8);
       item.partialMatch = true;
     }
@@ -230,7 +246,12 @@ export function analyzeSpelling(query) {
 
   // Determine if it's likely a spelling mistake
   const topMatch = suggestions[0];
-  const isLikelyMisspelling = topMatch && topMatch.score >= 0.7 && topMatch.score < 1;
+  const isLikelyMisspelling = Boolean(
+    topMatch
+    && !topMatch.partialMatch
+    && topMatch.score >= 0.7
+    && topMatch.score < 1
+  );
 
   return {
     isValid: true,
@@ -278,7 +299,7 @@ export function getSpellingSuggestions(query) {
   return {
     originalQuery: query,
     isRecognized: false,
-    needsCorrection: analysis.suggestions.length > 0,
+    needsCorrection: false,
     suggestions: analysis.suggestions.slice(0, 3),
     note: 'Could be a regional food or new item not in our database',
   };

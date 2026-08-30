@@ -191,7 +191,13 @@ export default function TrainingCalendar({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => step(1)} hitSlop={10} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={() => step(1)}
+          hitSlop={10}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Show previous month"
+        >
           <Ionicons name="chevron-back" size={18} color={TEXT.secondary} />
         </TouchableOpacity>
         <Text style={styles.month}>{month.monthLabel}</Text>
@@ -200,6 +206,9 @@ export default function TrainingCalendar({
           hitSlop={10}
           activeOpacity={0.7}
           disabled={!month.canGoForward}
+          accessibilityRole="button"
+          accessibilityLabel="Show next month"
+          accessibilityState={{ disabled: !month.canGoForward }}
         >
           <Ionicons
             name="chevron-forward"

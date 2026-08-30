@@ -38,6 +38,34 @@ describe('mapDecisionBrainInsights', () => {
     expect(result.id).toBe('activity-pattern-0');
   });
 
+  it('withholds a current-day hydration claim when it disagrees with canonical progress', () => {
+    const data = {
+      success: true,
+      stats: { todayProgress: 100 },
+      patterns: [
+        { title: 'Great day so far', description: "100% of today's goal", category: 'today' },
+        { title: 'Evening hydrator', description: 'You drink most water in the evening', category: 'timing' },
+      ],
+    };
+
+    const result = mapDecisionBrainInsights(data, 'hydration', { canonicalTodayProgress: 0 });
+
+    expect(result.map((item) => item.title)).toEqual(['Evening hydrator']);
+  });
+
+  it('keeps a current-day hydration claim when both sources agree', () => {
+    const data = {
+      success: true,
+      stats: { todayProgress: 80 },
+      patterns: [
+        { title: 'Great day so far', description: "80% of today's goal", category: 'today' },
+      ],
+    };
+
+    expect(mapDecisionBrainInsights(data, 'hydration', { canonicalTodayProgress: 80 }))
+      .toHaveLength(1);
+  });
+
   it('maps correlations[] to type "insight" with pattern/statement -> title/message, preserving the real id', () => {
     const data = {
       success: true,

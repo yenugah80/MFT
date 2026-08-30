@@ -69,6 +69,12 @@ export default function StressPatternsScreen() {
   }, [refetchPatterns]);
 
   const trendMeta = patterns?.trend ? (TREND_META[patterns.trend.direction] || TREND_META.stable) : null;
+  const eligibleCopingStrategies = (patterns?.copingStrategies || []).filter((strategy) => (
+    Number(strategy.timesUsed) >= (patterns.minimumAssociationGroupSize || 3)
+    && Number(strategy.comparisonCount) >= (patterns.minimumAssociationGroupSize || 3)
+  ));
+  const hasCopingObservations = Number(patterns?.copingObservationCount) > 0
+    || (patterns?.copingStrategies?.length || 0) > 0;
 
   return (
     <View style={styles.container}>
@@ -220,14 +226,14 @@ export default function StressPatternsScreen() {
           )}
 
           {/* Coping associations — same-check-in data cannot establish causality. */}
-          {patterns.copingStrategies?.length > 0 && (
+          {eligibleCopingStrategies.length > 0 && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Ionicons name="bulb-outline" size={20} color={BRAND.primary} />
                 <Text style={styles.cardTitle}>Stress Alongside Support</Text>
               </View>
               <View style={styles.copingList}>
-                {patterns.copingStrategies.map((strategy) => {
+                {eligibleCopingStrategies.map((strategy) => {
                   const isLower = strategy.effectiveness > 0;
                   return (
                     <View key={strategy.key} style={styles.copingRow}>
@@ -236,7 +242,9 @@ export default function StressPatternsScreen() {
                       </View>
                       <View style={styles.copingInfo}>
                         <Text style={styles.copingLabel}>{strategy.label}</Text>
-                        <Text style={styles.copingMeta}>Used {strategy.timesUsed}x</Text>
+                        <Text style={styles.copingMeta}>
+                          {strategy.timesUsed} with · {strategy.comparisonCount} without
+                        </Text>
                       </View>
                       <Text style={[styles.copingEffect, { color: isLower ? '#10B981' : TEXT.secondary }]}>
                         {Math.abs(strategy.effectiveness)} pts {isLower ? 'lower' : 'higher'}
@@ -246,7 +254,19 @@ export default function StressPatternsScreen() {
                 })}
               </View>
               <Text style={styles.copingDisclaimer}>
-                This is an association from the same check-in, not proof that a strategy caused the change.
+                Compares check-ins with and without each support. This is an association, not proof that a strategy caused the change.
+              </Text>
+            </View>
+          )}
+
+          {hasCopingObservations && eligibleCopingStrategies.length === 0 && (
+            <View style={styles.card} accessibilityRole="summary">
+              <View style={styles.cardHeader}>
+                <Ionicons name="bulb-outline" size={20} color={BRAND.primary} />
+                <Text style={styles.cardTitle}>Stress Alongside Support</Text>
+              </View>
+              <Text style={styles.insufficientEvidenceText}>
+                Keep logging what helped. A comparison appears after at least {patterns.minimumAssociationGroupSize || 3} check-ins with a support and {patterns.minimumAssociationGroupSize || 3} without it.
               </Text>
             </View>
           )}
@@ -425,6 +445,12 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.muted,
     marginTop: SPACING[3],
+  },
+  insufficientEvidenceText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    lineHeight: 20,
   },
   bottomPadding: {
     height: 40,

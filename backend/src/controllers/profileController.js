@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 import {
   profilesTable,
@@ -6,12 +6,20 @@ import {
   nutritionGoalsTable,
   gamificationTable,
   accountSettingsTable,
-  foodLogTable,
-  waterLogTable,
-  moodLogTable,
-  activityLogTable,
+  privacyConsentAuditTable,
 } from "../db/schema.js";
 import { sendDevError } from "../utils/sendDevError.js";
+import {
+  buildPrivacyAuditChanges,
+  buildStoredPrivacyPatch,
+  normalizePrivacySettings,
+  parsePrivacyPatch,
+  resolvePrivacyDependencies,
+} from "../utils/privacySettings.js";
+import {
+  buildProfileExportPayload,
+  CORE_WELLNESS_EXPORT_COLLECTIONS,
+} from "../utils/profileDataExport.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
@@ -434,16 +442,47 @@ export async function getPrivacySettings(req, res) {
       .where(eq(accountSettingsTable.userId, userId));
 
     if (!settings) {
-      return res.status(200).json({
-        shareInsights: false,
-        analytics: true,
-        biometricLock: false,
-      });
+      return res.status(200).json(normalizePrivacySettings(null));
     }
-    res.status(200).json(settings.privacy || {});
+    res.status(200).json(normalizePrivacySettings(settings.privacy));
   } catch (error) {
     console.log("Error fetching privacy settings", error);
     sendDevError(res, error);
+  }
+}
+
+const PRIVACY_SOURCE_SCREENS = new Set(["privacy-security", "onboarding", "unknown"]);
+const PRIVACY_DEVICE_PLATFORMS = new Set(["ios", "android", "web", "unknown"]);
+
+function parsePrivacyRequestMetadata(body) {
+  const sourceScreen = body?.sourceScreen ?? "unknown";
+  const devicePlatform = body?.devicePlatform ?? "unknown";
+
+  if (!PRIVACY_SOURCE_SCREENS.has(sourceScreen)) {
+    return { success: false, field: "sourceScreen" };
+  }
+  if (!PRIVACY_DEVICE_PLATFORMS.has(devicePlatform)) {
+    return { success: false, field: "devicePlatform" };
+  }
+  return { success: true, sourceScreen, devicePlatform };
+}
+
+function encodePrivacyAuditCursor(row) {
+  return Buffer.from(JSON.stringify({
+    changedAt: row.changedAt.toISOString(),
+    id: row.id,
+  })).toString("base64url");
+}
+
+function decodePrivacyAuditCursor(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    const changedAt = new Date(parsed.changedAt);
+    if (!Number.isInteger(parsed.id) || Number.isNaN(changedAt.getTime())) return null;
+    return { changedAt, id: parsed.id };
+  } catch {
+    return null;
   }
 }
 
@@ -451,27 +490,151 @@ export async function savePrivacySettings(req, res) {
   try {
     const { userId } = getAuth(req);
     const { privacy } = req.body;
-    if (typeof privacy !== "object" || privacy === null) {
-      return res.status(400).json({ error: "Invalid privacy object" });
+    const parsed = parsePrivacyPatch(privacy);
+    if (!parsed.success) {
+      return res.status(400).json({
+        code: "INVALID_PRIVACY_SETTINGS",
+        error: "Invalid privacy settings",
+        issues: parsed.issues,
+      });
     }
 
-    const updated = await req.db
-      .insert(accountSettingsTable)
-      .values({
-        userId,
-        privacy,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: accountSettingsTable.userId,
-        set: { privacy, updatedAt: new Date() },
-      })
-      .returning({ privacy: accountSettingsTable.privacy });
+    const requestedPrivacyPatch = parsed.data;
+    const metadata = parsePrivacyRequestMetadata(req.body);
+    if (!metadata.success) {
+      return res.status(400).json({
+        code: "INVALID_PRIVACY_METADATA",
+        error: `Invalid ${metadata.field}`,
+      });
+    }
+
+    const changedAt = new Date();
+    const result = await req.db.transaction(async (tx) => {
+      await tx
+        .insert(accountSettingsTable)
+        .values({
+          userId,
+          privacy: normalizePrivacySettings(null),
+          updatedAt: changedAt,
+        })
+        .onConflictDoNothing({ target: accountSettingsTable.userId });
+
+      const lockedRows = await tx.execute(sql`
+        SELECT privacy
+        FROM account_settings
+        WHERE user_id = ${userId}
+        FOR UPDATE
+      `);
+      const currentPrivacy = lockedRows?.[0]?.privacy || {};
+      const resolved = resolvePrivacyDependencies(currentPrivacy, requestedPrivacyPatch);
+      if (!resolved.success) {
+        return { dependencyIssues: resolved.issues, rows: [] };
+      }
+
+      const privacyPatch = resolved.data;
+      const storedPatch = buildStoredPrivacyPatch(privacyPatch);
+      const auditChanges = buildPrivacyAuditChanges(currentPrivacy, privacyPatch, changedAt);
+
+      const rows = await tx
+        .update(accountSettingsTable)
+        .set({
+          privacy: sql`(
+            COALESCE(${accountSettingsTable.privacy}, '{}'::json)::jsonb
+            || ${JSON.stringify(storedPatch)}::jsonb
+          )::json`,
+          updatedAt: changedAt,
+        })
+        .where(eq(accountSettingsTable.userId, userId))
+        .returning({ privacy: accountSettingsTable.privacy });
+
+      if (auditChanges.length > 0) {
+        await tx.insert(privacyConsentAuditTable).values(
+          auditChanges.map((change) => ({
+            ...change,
+            userId,
+            sourceScreen: metadata.sourceScreen,
+            devicePlatform: metadata.devicePlatform,
+          }))
+        );
+      }
+
+      return { dependencyIssues: null, rows };
+    });
+
+    if (result.dependencyIssues) {
+      return res.status(409).json({
+        code: "PRIVACY_DEPENDENCY_REQUIRED",
+        error: "A required privacy purpose is disabled",
+        issues: result.dependencyIssues,
+      });
+    }
+
+    const updated = result.rows;
 
     if (!updated[0]) return res.status(404).json({ error: "Settings not found" });
-    res.status(200).json(updated[0].privacy || {});
+    res.status(200).json(normalizePrivacySettings(updated[0].privacy));
   } catch (error) {
     console.log("Error saving privacy settings", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function getPrivacyAudit(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 100)
+      : 20;
+    const cursor = decodePrivacyAuditCursor(req.query.cursor);
+
+    if (req.query.cursor && !cursor) {
+      return res.status(400).json({
+        code: "INVALID_CURSOR",
+        error: "Invalid privacy history cursor",
+      });
+    }
+
+    const cursorCondition = cursor
+      ? or(
+          lt(privacyConsentAuditTable.changedAt, cursor.changedAt),
+          and(
+            eq(privacyConsentAuditTable.changedAt, cursor.changedAt),
+            lt(privacyConsentAuditTable.id, cursor.id)
+          )
+        )
+      : undefined;
+
+    const rows = await req.db
+      .select({
+        id: privacyConsentAuditTable.id,
+        purposeKey: privacyConsentAuditTable.purposeKey,
+        previousState: privacyConsentAuditTable.previousState,
+        newState: privacyConsentAuditTable.newState,
+        policyVersion: privacyConsentAuditTable.policyVersion,
+        sourceScreen: privacyConsentAuditTable.sourceScreen,
+        devicePlatform: privacyConsentAuditTable.devicePlatform,
+        changedAt: privacyConsentAuditTable.changedAt,
+        revokedAt: privacyConsentAuditTable.revokedAt,
+      })
+      .from(privacyConsentAuditTable)
+      .where(cursorCondition
+        ? and(eq(privacyConsentAuditTable.userId, userId), cursorCondition)
+        : eq(privacyConsentAuditTable.userId, userId))
+      .orderBy(desc(privacyConsentAuditTable.changedAt), desc(privacyConsentAuditTable.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const events = hasMore ? rows.slice(0, limit) : rows;
+    const lastEvent = events.at(-1);
+
+    return res.status(200).json({
+      schemaVersion: 1,
+      events,
+      nextCursor: hasMore && lastEvent ? encodePrivacyAuditCursor(lastEvent) : null,
+    });
+  } catch (error) {
+    console.log("Error fetching privacy history", error);
     sendDevError(res, error);
   }
 }
@@ -1277,47 +1440,37 @@ export async function exportUserData(req, res) {
     console.log(`[exportUserData] Exporting data for user ${userId}`);
 
     // Load all user data in parallel
-    const [profile, dietary, goals, gamification, settings, foodLogs, waterLogs, moodLogs, activityLogs] = await Promise.all([
+    const [
+      profile,
+      dietary,
+      goals,
+      gamification,
+      settings,
+      collectionEntries,
+    ] = await Promise.all([
       req.db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).then(r => r[0]),
       req.db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).then(r => r[0]),
       req.db.select().from(nutritionGoalsTable).where(eq(nutritionGoalsTable.userId, userId)).then(r => r[0]),
       req.db.select().from(gamificationTable).where(eq(gamificationTable.userId, userId)).then(r => r[0]),
       req.db.select().from(accountSettingsTable).where(eq(accountSettingsTable.userId, userId)).then(r => r[0]),
-      req.db.select().from(foodLogTable).where(eq(foodLogTable.userId, userId)),
-      req.db.select().from(waterLogTable).where(eq(waterLogTable.userId, userId)).catch(() => []),
-      req.db.select().from(moodLogTable).where(eq(moodLogTable.userId, userId)).catch(() => []),
-      req.db.select().from(activityLogTable).where(eq(activityLogTable.userId, userId)).catch(() => []),
+      Promise.all(CORE_WELLNESS_EXPORT_COLLECTIONS.map(async ({ key, table }) => [
+        key,
+        await req.db.select().from(table).where(eq(table.userId, userId)),
+      ])),
     ]);
+    const collections = Object.fromEntries(collectionEntries);
 
-    // Sanitize profile data (remove internal IDs)
-    const sanitizeRecord = (record) => {
-      if (!record) return null;
-      const { id, ...rest } = record;
-      return rest;
-    };
-
-    const exportData = {
-      exportedAt: new Date().toISOString(),
+    const exportData = buildProfileExportPayload({
       userId,
-      profile: sanitizeRecord(profile),
-      dietaryPreferences: sanitizeRecord(dietary),
-      nutritionGoals: sanitizeRecord(goals),
-      gamification: sanitizeRecord(gamification),
-      accountSettings: sanitizeRecord(settings),
-      foodLogs: foodLogs.map(sanitizeRecord),
-      waterLogs: waterLogs.map(sanitizeRecord),
-      moodLogs: moodLogs.map(sanitizeRecord),
-      activityLogs: activityLogs.map(sanitizeRecord),
-      summary: {
-        totalFoodLogs: foodLogs.length,
-        totalWaterLogs: waterLogs.length,
-        totalMoodLogs: moodLogs.length,
-        totalActivityLogs: activityLogs.length,
-        accountCreated: profile?.createdAt || null,
-      }
-    };
+      profile,
+      dietaryPreferences: dietary,
+      nutritionGoals: goals,
+      gamification,
+      accountSettings: settings,
+      collections,
+    });
 
-    console.log(`[exportUserData] ✅ Exported ${foodLogs.length} food logs, ${waterLogs.length} water logs for user ${userId}`);
+    console.log(`[exportUserData] Exported core wellness data for user ${userId}`);
     res.status(200).json(exportData);
   } catch (error) {
     console.error("[exportUserData] ❌ Error exporting user data:", error);

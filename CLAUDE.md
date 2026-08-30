@@ -5,6 +5,13 @@
 > It records the user's full wellness redesign scope, verified work, live database
 > changes, remaining QA, and exact commands. Preserve all existing changes.
 
+> **Approved planning source:** For unified wellness history, personal baselines,
+> change detection, context markers, daily timelines, explainable patterns,
+> weekly reviews, export, privacy, accessibility, and emotional safety, follow
+> [`docs/proposals/WELLNESS_HISTORY_PRODUCTION_PLAN.md`](docs/proposals/WELLNESS_HISTORY_PRODUCTION_PLAN.md).
+> Extend the existing Insight Engine and domain log tables. Do not create a
+> third recommendation engine or a duplicate master log store.
+
 ## Project Overview
 
 MFT (My Flourish Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.

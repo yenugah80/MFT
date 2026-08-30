@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useActivityLog } from '../../hooks/useActivityLog';
 import { getAdjustedCalorieGoal } from '../../utils/activityNutrition';
-import { TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY, SEMANTIC, BRAND } from '../../constants/premiumTheme';
+import { TEXT, SPACING, RADIUS, SHADOWS, TYPOGRAPHY, BRAND } from '../../constants/premiumTheme';
 
 /**
  * Activity Summary Card for Dashboard
@@ -20,12 +20,19 @@ export default function ActivitySummaryCard() {
     todaySummary,
     activities,
     weeklyProgress,
-    isTodayLoading: loading
   } = useActivityLog();
 
   const handleViewInsights = () => {
     Haptics.selectionAsync();
     router.push('/insights/activity-insights');
+  };
+
+  const handleViewHistory = () => {
+    Haptics.selectionAsync();
+    router.push({
+      pathname: '/insights/activity-insights',
+      params: { view: 'history' },
+    });
   };
 
   // Get today's stats from the hook
@@ -80,9 +87,8 @@ export default function ActivitySummaryCard() {
             <Ionicons name="fitness" size={20} color={BRAND.primary} />
             <Text style={styles.title}>Activity</Text>
           </View>
-          <View style={styles.insightsBadge}>
-            <Ionicons name="sparkles" size={12} color={BRAND.primary} />
-            <Text style={styles.insightsBadgeText}>Insights</Text>
+          <View style={styles.todayBadge}>
+            <Text style={styles.todayBadgeText}>Today</Text>
           </View>
         </View>
 
@@ -181,18 +187,31 @@ export default function ActivitySummaryCard() {
           )}
         </View>
 
-        {/* Single entry point into the activity deep-dive */}
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleViewInsights}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Open activity insights"
-        >
-          <Ionicons name="analytics-outline" size={16} color={BRAND.primary} />
-          <Text style={styles.actionButtonText}>Activity insights</Text>
-          <Ionicons name="chevron-forward" size={14} color={TEXT.tertiary} />
-        </TouchableOpacity>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleViewHistory}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Activity history"
+            accessibilityHint="Opens your live workout calendar and recorded sessions"
+          >
+            <Ionicons name="time-outline" size={17} color={BRAND.primary} />
+            <Text style={styles.actionButtonText} numberOfLines={1}>History</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.primaryActionButton]}
+            onPress={handleViewInsights}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Activity insights"
+            accessibilityHint="Opens recovery, training guidance, and activity patterns"
+          >
+            <Ionicons name="analytics-outline" size={17} color={BRAND.primary} />
+            <Text style={styles.actionButtonText} numberOfLines={1}>Insights</Text>
+          </TouchableOpacity>
+        </View>
 
       </LinearGradient>
     </View>
@@ -227,20 +246,16 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
-  insightsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${BRAND.primary}15`,
+  todayBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
     paddingHorizontal: SPACING[2],
     paddingVertical: 4,
     borderRadius: RADIUS.full,
-    gap: 4,
   },
-  insightsBadgeText: {
+  todayBadgeText: {
     fontSize: TYPOGRAPHY.size.xs,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: BRAND.primary,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.tertiary,
   },
   todayStats: {
     flexDirection: 'row',
@@ -375,8 +390,13 @@ const styles = StyleSheet.create({
     color: TEXT.secondary,
     marginTop: 2,
   },
-  // Action Buttons
+  actionsRow: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+  },
   actionButton: {
+    flex: 1,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -388,8 +408,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${BRAND.primary}20`,
   },
+  primaryActionButton: {
+    backgroundColor: `${BRAND.primary}0D`,
+    borderColor: `${BRAND.primary}32`,
+  },
   actionButtonText: {
-    flex: 1,
     fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,

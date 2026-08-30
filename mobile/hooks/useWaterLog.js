@@ -17,7 +17,11 @@ import {
  * Quick add presets (in liters)
  */
 // Import from single source of truth
-import { WATER_PRESETS, DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
+import {
+  WATER_PRESETS,
+  DEFAULT_WATER_GOAL_LITERS,
+  BEVERAGE_FACTORS,
+} from '../constants/beverageConstants';
 
 // Re-export for backwards compatibility
 export { WATER_PRESETS };
@@ -34,12 +38,7 @@ export function useWaterLog() {
    * Mutation for logging water to backend
    */
   const logWaterMutation = useMutation({
-    mutationFn: async ({ amountLiters, beverageType }) => {
-      // Backend requires clientEventId to be a valid UUID v4 (see water.js's
-      // UUID_RE check) — the old "userId-timestamp-random-random" format
-      // always failed that check, so every water log request 400'd.
-      const clientEventId = Crypto.randomUUID();
-
+    mutationFn: async ({ amountLiters, beverageType, clientEventId }) => {
       return await apiClient.post('/water/log', {
         amountLiters,
         loggedDate: new Date().toISOString(),
@@ -47,11 +46,20 @@ export function useWaterLog() {
         beverageType,
       });
     },
-    onMutate: async ({ amountLiters, beverageType }) => {
-      // Simplified optimistic update - just add raw amount, backend will calculate hydration factor
-      await queryClient.cancelQueries({ queryKey: ['dashboard'] });
-
+    onMutate: async ({ amountLiters, beverageType, clientEventId }) => {
+      // Paint the selected amount before any network work. Query cancellation
+      // still prevents an older response from overwriting the optimistic row,
+      // but it must not sit in front of the visible update.
       const previousData = queryClient.getQueryData(['dashboard']);
+      const previousWaterToday = queryClient.getQueryData(['waterToday']);
+      const hydrationFactor = BEVERAGE_FACTORS[beverageType] ?? 1;
+      const hydrationLiters = amountLiters * hydrationFactor;
+      const optimisticId = `optimistic-${clientEventId}`;
+
+      const cancellations = [
+        queryClient.cancelQueries({ queryKey: ['dashboard'] }),
+        queryClient.cancelQueries({ queryKey: ['waterToday'] }),
+      ];
 
       queryClient.setQueryData(['dashboard'], (old) => {
         if (!old) return old;
@@ -59,22 +67,67 @@ export function useWaterLog() {
           ...old,
           today: {
             ...old.today,
-            // Add raw amount optimistically - backend response will overwrite with correct hydration value
-            waterIntakeLiters: (old.today.waterIntakeLiters || 0) + amountLiters,
+            waterIntakeLiters: (old.today.waterIntakeLiters || 0) + hydrationLiters,
           },
         };
       });
 
-      return { previousData };
+      queryClient.setQueryData(['waterToday'], (old) => {
+        const current = old || { logs: [], totalLiters: 0, count: 0 };
+        const logs = current.logs || [];
+        return {
+          ...current,
+          logs: [
+            ...logs,
+            {
+              id: optimisticId,
+              clientEventId,
+              amountLiters,
+              hydrationFactor,
+              hydrationLiters,
+              beverageType,
+              loggedDate: new Date().toISOString(),
+              optimistic: true,
+            },
+          ],
+          totalLiters: Number(current.totalLiters || 0) + hydrationLiters,
+          count: Number(current.count ?? logs.length) + 1,
+        };
+      });
+
+      await Promise.all(cancellations);
+      return { previousData, previousWaterToday, optimisticId };
     },
     onError: (err, variables, context) => {
       // Rollback on error
       if (context?.previousData) {
         queryClient.setQueryData(['dashboard'], context.previousData);
       }
+      if (context?.previousWaterToday) {
+        queryClient.setQueryData(['waterToday'], context.previousWaterToday);
+      } else {
+        queryClient.removeQueries({ queryKey: ['waterToday'], exact: true });
+      }
     },
-    onSuccess: (data) => {
-      // Invalidate to get fresh data from server
+    onSuccess: (data, variables, context) => {
+      const persistedEntry = data?.entry ?? data?.data?.entry;
+      if (persistedEntry?.id && context?.optimisticId) {
+        queryClient.setQueryData(['waterToday'], (old) => {
+          if (!old?.logs) return old;
+          return {
+            ...old,
+            logs: old.logs.map((log) => (
+              log.id === context.optimisticId
+                ? { ...log, ...persistedEntry, optimistic: false }
+                : log
+            )),
+          };
+        });
+      }
+
+      // Revalidate in the background. The visible transaction is already
+      // reconciled by clientEventId, so these requests must not hold the tap
+      // confirmation open for another round trip.
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['waterToday'] });
       // Your Progress reads these separately — without this a new water
@@ -82,6 +135,7 @@ export function useWaterLog() {
       queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
       queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
       queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
+      queryClient.invalidateQueries({ queryKey: ['hydration-analytics'] });
 
       // Smart notifications: Cancel streak protection since user logged water today
       cancelStreakProtectionIfLoggedToday().catch(() => {});
@@ -130,7 +184,14 @@ export function useWaterLog() {
     setError(null);
 
     try {
-      const result = await logWaterMutation.mutateAsync({ amountLiters: amount, beverageType });
+      // Backend requires a valid UUID v4 for idempotency. Generate it before
+      // mutation so the optimistic cache row and persisted row share one key.
+      const clientEventId = Crypto.randomUUID();
+      const result = await logWaterMutation.mutateAsync({
+        amountLiters: amount,
+        beverageType,
+        clientEventId,
+      });
       return result;
     } catch (err) {
       console.error('[useWaterLog] Failed to log water:', err);
@@ -222,13 +283,18 @@ export function useWaterLog() {
         queryClient.setQueryData(['waterToday'], context.previousWaterToday);
       }
     },
-    onSuccess: () => {
-      // Invalidate to get fresh data from server
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['waterToday'] });
+    onSuccess: async () => {
+      // Undo is only complete when all active consumers have reconciled with
+      // the server. This keeps the tracker, history, dashboard, and Progress
+      // screen from showing different totals after the same deletion.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['waterToday'] }),
+      ]);
       queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
       queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
       queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
+      queryClient.invalidateQueries({ queryKey: ['hydration-analytics'] });
     },
   });
 
@@ -251,10 +317,19 @@ export function useWaterLog() {
       return result;
     } catch (err) {
       if (err?.response?.status === 404) {
-        // Entry already removed or stale ID; resync without surfacing an error.
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        queryClient.invalidateQueries({ queryKey: ['waterToday'] });
-        return null;
+        // A 404 can mean the row was already removed, but it can also mean an
+        // older backend does not expose the delete route. Confirm against the
+        // authoritative today feed before reporting Undo as successful.
+        const today = await apiClient.get('/water/today');
+        const stillExists = (today?.logs || []).some(
+          (log) => Number(log.id) === Number(entryId)
+        );
+        if (!stillExists) {
+          queryClient.setQueryData(['waterToday'], today);
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['hydration-analytics'] });
+          return null;
+        }
       }
       console.error('[useWaterLog] Failed to remove water:', err);
       setError(err.message || 'Failed to remove water entry');

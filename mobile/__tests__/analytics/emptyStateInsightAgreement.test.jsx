@@ -99,7 +99,7 @@ const hydrationTrendInsight = {
 // calls useQuery directly — needs a real QueryClient in the tree.
 function renderWithClient(ui) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }

@@ -217,6 +217,107 @@ describe('result provenance is not claimed by mode switches', () => {
   });
 });
 
+describe('logger history navigation stays single-purpose', () => {
+  it('hydration logger delegates analytics and editing to hydration history', () => {
+    const tracker = fs.readFileSync(path.join(MOBILE_ROOT, 'components/HydrationTracker.jsx'), 'utf8');
+    const logScreen = fs.readFileSync(path.join(MOBILE_ROOT, 'app/(tabs)/log.js'), 'utf8');
+
+    expect(tracker).toContain('View hydration history');
+    expect(tracker).not.toMatch(/<StatsCard\b/);
+    expect(tracker).not.toMatch(/<Timeline\b/);
+    expect(logScreen).toContain("'/analytics/hydration'");
+    expect(logScreen).toContain('navigateAfterModalClose(');
+    expect(logScreen).toContain('onDismiss={handleModalDismiss}');
+  });
+
+  it('mood logger delegates check-in history to the mood history screen', () => {
+    const logger = fs.readFileSync(path.join(MOBILE_ROOT, 'components/MoodLogger.jsx'), 'utf8');
+    const logScreen = fs.readFileSync(path.join(MOBILE_ROOT, 'app/(tabs)/log.js'), 'utf8');
+
+    expect(logger).toContain('accessibilityLabel="View mood history"');
+    expect(logger).toContain('pointerEvents="none"');
+    expect(logger).toMatch(/historyButton:\s*\{[\s\S]*?width:\s*44,[\s\S]*?height:\s*44,[\s\S]*?zIndex:\s*2,/);
+    expect(logScreen).toContain("'/history/mood'");
+    expect(logScreen).toContain('navigateAfterModalClose(');
+    expect(logScreen).toContain('onDismiss={handleModalDismiss}');
+  });
+});
+
+describe('profile engagement metrics remain distinct', () => {
+  it('labels lifetime tracked days separately from the current streak', () => {
+    const profile = fs.readFileSync(path.join(MOBILE_ROOT, 'app/(tabs)/profile.jsx'), 'utf8');
+
+    expect(profile).toContain('Days tracked');
+    expect(profile).toContain('Current streak');
+    expect(profile).toContain('userLifecycle?.totalDaysWithLogs ?? 0');
+    expect(profile).not.toContain('Math.floor(totalMeals / 3)');
+    expect(profile).toContain('daysLogged > 0 || totalMeals > 0 || streak > 0');
+  });
+});
+
+describe('hydration history is live and range-complete', () => {
+  it('uses live endpoints and exposes Day, 7, 30, and 90 day views', () => {
+    const screen = fs.readFileSync(path.join(MOBILE_ROOT, 'app/analytics/hydration.jsx'), 'utf8');
+    const ranges = fs.readFileSync(path.join(MOBILE_ROOT, 'utils/hydrationHistory.js'), 'utf8');
+
+    expect(screen).toContain('useHydrationHistory(90)');
+    expect(screen).toContain("apiClient.get('/water/today')");
+    expect(screen).toContain('removeWater(Number(entry.id)');
+    expect(screen).toContain("router.push('/(tabs)/log?focus=hydration')");
+    expect(screen.indexOf('<ScrollView')).toBeLessThan(screen.indexOf('<LinearGradient'));
+    expect(screen).toContain('useState(false)');
+    expect(screen).not.toMatch(/mock|fixture|sample hydration/i);
+
+    expect(ranges).toContain("label: 'Day'");
+    expect(ranges).toContain("label: '7 days'");
+    expect(ranges).toContain("label: '30 days'");
+    expect(ranges).toContain("label: '90 days'");
+  });
+});
+
+describe('privacy updates are field-level', () => {
+  it('uses purpose-specific PATCH settings with trace metadata', () => {
+    const screen = fs.readFileSync(path.join(MOBILE_ROOT, 'app/profile/privacy.jsx'), 'utf8');
+
+    expect(screen).toContain('apiClient.patch("/profile/privacy"');
+    expect(screen).not.toContain('apiClient.post("/profile/privacy"');
+    expect(screen).toContain('persistPrivacy({ crossDomainInsights: value })');
+    expect(screen).toContain('persistPrivacy({ usageAnalytics: value })');
+    expect(screen).toContain('persistPrivacy({ contextInInsights: value })');
+    expect(screen).toContain('persistPrivacy({ reflectionInInsights: value })');
+    expect(screen).toContain('persistPrivacy({ sensitiveInsights: value })');
+    expect(screen).toContain('persistPrivacy({ aiWellnessNarration: value })');
+    expect(screen).toContain('persistPrivacy({ weeklyReviewReminder: value })');
+    expect(screen).toContain('sourceScreen: "privacy-security"');
+    expect(screen).toContain('devicePlatform: Platform.OS');
+    expect(screen).not.toContain('<Text style={styles.rowTitle}>Share insights</Text>');
+    expect(screen).toContain('privacy: { biometricLock: value }');
+    expect(screen).toContain('apiClient.get("/profile/privacy/audit?limit=8")');
+    expect(screen).toContain('if (isHistoryOpen)');
+    expect(screen).toContain('await loadPrivacyHistory()');
+    expect(screen).toContain('setPrivacyHistory([])');
+  });
+});
+
+describe('wellness pattern evidence is sample-aware', () => {
+  it('withholds weak or legacy sleep and stress associations', () => {
+    const sleepPatterns = fs.readFileSync(
+      path.join(MOBILE_ROOT, 'app/insights/sleep-analytics.jsx'),
+      'utf8'
+    );
+    const stressPatterns = fs.readFileSync(
+      path.join(MOBILE_ROOT, 'app/insights/stress-patterns.jsx'),
+      'utf8'
+    );
+
+    expect(sleepPatterns).toContain('data.comparisonOccurrences');
+    expect(sleepPatterns).toContain('minimumAssociationGroupSize');
+    expect(stressPatterns).toContain('eligibleCopingStrategies');
+    expect(stressPatterns).toContain('Number(strategy.comparisonCount)');
+    expect(stressPatterns).toContain('with and without each support');
+  });
+});
+
 describe('scroll areas are not nested in content-hugging containers', () => {
   /**
    * Files where a hug-container and a flex:1 scroll style coexist but are in

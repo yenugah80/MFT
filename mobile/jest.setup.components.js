@@ -19,6 +19,30 @@ jest.mock('expo-constants', () => ({
   deviceName: 'TestDevice',
 }));
 
+// Importing Clerk's real browser/headless singleton starts a MessagePort even
+// when a test only renders a leaf component. That kept the entire component
+// suite alive after all assertions passed. Screen-level auth tests provide
+// their own richer per-file Clerk mocks, while ordinary component tests only
+// need stable signed-in hook values.
+jest.mock('@clerk/clerk-expo', () => ({
+  ClerkProvider: ({ children }) => children,
+  useAuth: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'test-user',
+    getToken: jest.fn(async () => 'test-token'),
+  }),
+  useUser: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    user: { id: 'test-user' },
+  }),
+  useClerk: () => ({ signOut: jest.fn(async () => undefined) }),
+  useOAuth: () => ({ startOAuthFlow: jest.fn() }),
+  useSignIn: () => ({ isLoaded: true, signIn: null, setActive: jest.fn() }),
+  useSignUp: () => ({ isLoaded: true, signUp: null, setActive: jest.fn() }),
+}));
+
 global.fetch = jest.fn();
 
 beforeEach(() => {

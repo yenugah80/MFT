@@ -32,7 +32,7 @@ import {
   stressLogTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql } from 'drizzle-orm';
-import { getLocalWeekRange } from '../utils/timezone.js';
+import { getDayKey, getLocalWeekRange } from '../utils/timezone.js';
 
 // Import ML component services
 import {
@@ -797,14 +797,14 @@ export async function generateNutritionInsights(userId) {
  * @param {string} userId - User ID
  * @returns {Promise<object>} Hydration insights with patterns and recommendations
  */
-export async function generateHydrationInsights(userId) {
+export async function generateHydrationInsights(userId, offsetMinutes = 0) {
   const startTime = Date.now();
 
   try {
     console.log(`[DecisionBrain] Generating hydration insights for user: ${userId}`);
 
     // Step 1: Gather hydration-specific data
-    const hydrationData = await gatherHydrationData(userId);
+    const hydrationData = await gatherHydrationData(userId, offsetMinutes);
 
     // Step 2: Check data sufficiency
     if (hydrationData.waterLogs.length < 3) {
@@ -836,7 +836,11 @@ export async function generateHydrationInsights(userId) {
     }
 
     // Step 4: Calculate hydration statistics
-    const hydrationStats = calculateHydrationStats(hydrationData.waterLogs, hydrationData.goal);
+    const hydrationStats = calculateHydrationStats(
+      hydrationData.waterLogs,
+      hydrationData.goal,
+      offsetMinutes
+    );
 
     // Step 5: Generate hydration patterns
     const patterns = generateHydrationPatterns(hydrationData, hydrationStats, hydrationCorrelations);
@@ -845,7 +849,7 @@ export async function generateHydrationInsights(userId) {
     const recommendations = generateHydrationRecommendations(hydrationStats, hydrationData);
 
     // Step 7: Get trend data
-    const trendData = generateHydrationTrendData(hydrationData.waterLogs);
+    const trendData = generateHydrationTrendData(hydrationData.waterLogs, offsetMinutes);
 
     // Step 8: Decision logic
     const decision = makeHydrationDecision(hydrationStats, hydrationCorrelations, hydrationData);
@@ -875,6 +879,7 @@ export async function generateHydrationInsights(userId) {
         isConsistent: hydrationStats.isConsistent,
         streak: hydrationData.streak,
         todayProgress: hydrationStats.todayProgress,
+        todayDayKey: hydrationStats.todayDayKey,
       },
 
       trendData,
@@ -2553,13 +2558,12 @@ async function gatherNutritionData(userId) {
   };
 }
 
-async function gatherHydrationData(userId) {
+async function gatherHydrationData(userId, offsetMinutes = 0) {
   const now = new Date();
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayKey = getDayKey(now, offsetMinutes);
 
   const [waterLogs, gamification, profile] = await Promise.all([
     db.select()
@@ -2583,10 +2587,9 @@ async function gatherHydrationData(userId) {
       .then(rows => rows[0] || {}),
   ]);
 
-  const todaysLogs = waterLogs.filter(log => {
-    const logDate = new Date(log.loggedDate);
-    return logDate >= today;
-  });
+  const todaysLogs = waterLogs.filter(
+    (log) => getDayKey(new Date(log.loggedDate), offsetMinutes) === todayKey
+  );
 
   const todaysIntake = todaysLogs.reduce((sum, log) =>
     sum + parseFloat(log.amountLiters || 0), 0);
@@ -2800,7 +2803,13 @@ function calculateNutritionStats(foodLogs, goals) {
   };
 }
 
-function calculateHydrationStats(waterLogs, goal) {
+export function calculateHydrationStats(
+  waterLogs,
+  goal,
+  offsetMinutes = 0,
+  reference = new Date()
+) {
+  const todayDayKey = getDayKey(reference, offsetMinutes);
   if (!waterLogs || waterLogs.length === 0) {
     return {
       avgDailyIntake: 0,
@@ -2814,13 +2823,14 @@ function calculateHydrationStats(waterLogs, goal) {
       hydrationHabit: 'building',
       peakHydrationTime: null,
       todayProgress: 0,
+      todayDayKey,
     };
   }
 
   // Group by day
   const byDay = {};
   waterLogs.forEach(log => {
-    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const dateKey = getDayKey(new Date(log.loggedDate), offsetMinutes);
     if (!byDay[dateKey]) {
       byDay[dateKey] = [];
     }
@@ -2882,7 +2892,8 @@ function calculateHydrationStats(waterLogs, goal) {
   // Peak hydration time
   const hourCounts = {};
   waterLogs.forEach(log => {
-    const hour = new Date(log.loggedDate).getHours();
+    const timestamp = new Date(log.loggedDate);
+    const hour = new Date(timestamp.getTime() - offsetMinutes * 60_000).getUTCHours();
     hourCounts[hour] = (hourCounts[hour] || 0) + 1;
   });
   const peakHour = Object.entries(hourCounts)
@@ -2892,9 +2903,10 @@ function calculateHydrationStats(waterLogs, goal) {
     : null;
 
   // Today's progress
-  const today = new Date().toISOString().split('T')[0];
-  const todayData = dailyTotals.find(d => d.date === today);
-  const todayProgress = todayData ? Math.min(100, Math.round((todayData.liters / goal) * 100)) : 0;
+  const todayData = dailyTotals.find(d => d.date === todayDayKey);
+  const todayProgress = todayData && goal > 0
+    ? Math.min(100, Math.round((todayData.liters / goal) * 100))
+    : 0;
 
   return {
     avgDailyIntake,
@@ -2908,6 +2920,7 @@ function calculateHydrationStats(waterLogs, goal) {
     hydrationHabit,
     peakHydrationTime,
     todayProgress,
+    todayDayKey,
   };
 }
 
@@ -3901,18 +3914,19 @@ function generateNutritionTrendData(foodLogs) {
   return trendData;
 }
 
-function generateHydrationTrendData(waterLogs) {
-  const now = new Date();
+function generateHydrationTrendData(waterLogs, offsetMinutes = 0, reference = new Date()) {
+  const todayKey = getDayKey(reference, offsetMinutes);
+  const today = new Date(`${todayKey}T00:00:00.000Z`);
   const trendData = [];
 
   for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const dateKey = date.toISOString().split('T')[0];
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() - i);
+    const dateKey = date.toISOString().slice(0, 10);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }).charAt(0);
 
     const dayLogs = waterLogs.filter(log => {
-      const logDate = new Date(log.loggedDate).toISOString().split('T')[0];
+      const logDate = getDayKey(new Date(log.loggedDate), offsetMinutes);
       return logDate === dateKey;
     });
 

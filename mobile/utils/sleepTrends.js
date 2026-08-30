@@ -1,4 +1,5 @@
 const MINUTES_PER_DAY = 24 * 60;
+export const MIN_SLEEP_ASSOCIATION_GROUP_SIZE = 3;
 
 function roundToTenth(value) {
   return Math.round(value * 10) / 10;
@@ -131,11 +132,18 @@ export function calculateSleepTrends(sleepLogs = [], fallbackOffsetMinutes = new
   Object.entries(tagCounts).forEach(([tag, occurrences]) => {
     const withTag = validLogs.filter((entry) => entry.tags?.[tag] === true);
     const withoutTag = validLogs.filter((entry) => entry.tags?.[tag] !== true);
-    if (!withTag.length || !withoutTag.length) return;
+    if (
+      withTag.length < MIN_SLEEP_ASSOCIATION_GROUP_SIZE
+      || withoutTag.length < MIN_SLEEP_ASSOCIATION_GROUP_SIZE
+    ) return;
 
     const avgWith = withTag.reduce((sum, entry) => sum + Number(entry.quality), 0) / withTag.length;
     const avgWithout = withoutTag.reduce((sum, entry) => sum + Number(entry.quality), 0) / withoutTag.length;
-    tagImpact[tag] = { impact: roundToTenth(avgWith - avgWithout), occurrences };
+    tagImpact[tag] = {
+      impact: roundToTenth(avgWith - avgWithout),
+      occurrences,
+      comparisonOccurrences: withoutTag.length,
+    };
   });
 
   const averageMinutes = clockSummary?.averageMinutes;
@@ -156,5 +164,6 @@ export function calculateSleepTrends(sleepLogs = [], fallbackOffsetMinutes = new
     durationBuckets,
     tagCounts,
     tagImpact,
+    minimumAssociationGroupSize: MIN_SLEEP_ASSOCIATION_GROUP_SIZE,
   };
 }

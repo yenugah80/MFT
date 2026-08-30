@@ -9,7 +9,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, SafeAreaView } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
@@ -56,9 +56,12 @@ function adaptActivity(row) {
 
 const CHART_WIDTH = Dimensions.get('window').width - 32 * 2 - 16;
 const ACTIVITY_COLOR = VIBRANT_WELLNESS.activity.solid;
+const firstParam = (value) => Array.isArray(value) ? value[0] : value;
 
 export default function ActivityInsightsScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams();
+  const viewMode = firstParam(routeParams.view) === 'history' ? 'history' : 'insights';
   const [refreshing, setRefreshing] = useState(false);
   const { fetchHistory, weeklyProgress, deleteActivity, isDeleting } = useActivityLog();
   // Per-day mood ratings for the movement/mood comparison
@@ -206,8 +209,8 @@ export default function ActivityInsightsScreen() {
           <Ionicons name="chevron-back" size={25} color={TEXT.primary} />
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.headerEyebrow}>MOVEMENT & RECOVERY</Text>
-          <Text style={styles.headerTitle}>Activity insights</Text>
+          <Text style={styles.headerEyebrow}>{viewMode === 'history' ? 'TRAINING RECORD' : 'MOVEMENT & RECOVERY'}</Text>
+          <Text style={styles.headerTitle}>{viewMode === 'history' ? 'Activity history' : 'Activity insights'}</Text>
         </View>
         <TouchableOpacity onPress={handleGenericLogWorkout} style={styles.headerAction} hitSlop={8} accessibilityRole="button" accessibilityLabel="Log a workout">
           <Ionicons name="add" size={22} color={ACTIVITY_COLOR} />
@@ -217,7 +220,9 @@ export default function ActivityInsightsScreen() {
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={ACTIVITY_COLOR} />
-          <Text style={styles.centerText}>Loading your activity insights...</Text>
+          <Text style={styles.centerText}>
+            {viewMode === 'history' ? 'Loading your activity history...' : 'Loading your activity insights...'}
+          </Text>
         </View>
       ) : isError ? (
         <View style={styles.centerContainer}>
@@ -230,6 +235,7 @@ export default function ActivityInsightsScreen() {
         </View>
       ) : (
         <ActivityInsightsView
+          mode={viewMode}
           activities={activities}
           onLogWorkout={handleRecommendedWorkout}
           targetMinutes={weeklyProgress?.target}

@@ -24,6 +24,11 @@ import {
   summarizeClockTimes,
   summarizeSleepHistory,
 } from '../utils/wellnessHistory.js';
+import { compareBinaryGroups, MIN_PATTERN_GROUP_SIZE } from '../utils/patternEvidence.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -472,14 +477,16 @@ router.get('/trends', async (req, res) => {
     // Analyze tag correlations with quality
     const tagImpact = {};
     Object.keys(tagCounts).forEach(tag => {
-      const withTag = sleepLogs.filter(log => log.tags?.[tag]);
-      const withoutTag = sleepLogs.filter(log => !log.tags?.[tag]);
-      if (withTag.length > 0 && withoutTag.length > 0) {
-        const avgWithTag = withTag.reduce((sum, log) => sum + log.quality, 0) / withTag.length;
-        const avgWithoutTag = withoutTag.reduce((sum, log) => sum + log.quality, 0) / withoutTag.length;
+      const comparison = compareBinaryGroups(
+        sleepLogs,
+        (log) => log.tags?.[tag] === true,
+        (log) => log.quality
+      );
+      if (comparison) {
         tagImpact[tag] = {
-          impact: Math.round((avgWithTag - avgWithoutTag) * 10) / 10,
-          occurrences: withTag.length,
+          impact: comparison.difference,
+          occurrences: comparison.countWith,
+          comparisonOccurrences: comparison.countWithout,
         };
       }
     });
@@ -495,6 +502,7 @@ router.get('/trends', async (req, res) => {
         daysTracked: sleepLogs.length,
         tagCounts,
         tagImpact,
+        minimumAssociationGroupSize: MIN_PATTERN_GROUP_SIZE,
       },
     });
   } catch (error) {
@@ -511,10 +519,13 @@ router.delete('/:id', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const sleepId = Number(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     if (!Number.isSafeInteger(sleepId) || sleepId <= 0) {
       return res.status(400).json({ error: 'Invalid sleep ID' });
     }
+
+    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
 
     // Verify ownership and delete
     const deleted = await db
@@ -533,9 +544,17 @@ router.delete('/:id', async (req, res) => {
 
     clearPatternCache(userId);
 
+    const streakReconciliation = await reconcileStreakAfterDeletion({
+      userId,
+      beforeSnapshot: beforeStreak,
+      dbConn: db,
+      timezoneOffset: offsetMinutes,
+    });
+
     res.json({
       success: true,
       deleted: deleted[0],
+      streak: streakReconciliation.streak,
       message: 'Sleep entry deleted successfully',
     });
   } catch (error) {

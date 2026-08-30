@@ -26,7 +26,9 @@ jest.mock('../../services/apiClient', () => ({ __esModule: true, default: { get:
 jest.mock('../../hooks/useRecommendations', () => ({ useSmartRecommendations: () => ({ recommendations: [], summary: null, nutritionalStatus: null, loading: false, fetchRecommendations: jest.fn(), quickLog: jest.fn(), hasRecommendations: false, blocked: false }) }));
 
 const renderWithClient = (ui) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Production's five-minute query GC timer is correct in-app, but it keeps
+  // Jest alive after this isolated render has unmounted.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 

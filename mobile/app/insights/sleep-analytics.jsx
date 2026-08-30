@@ -82,6 +82,7 @@ export default function SleepAnalyticsScreen() {
   const tagImpactEntries = trends?.tagImpact
     ? Object.entries(trends.tagImpact).sort((a, b) => Math.abs(b[1].impact) - Math.abs(a[1].impact))
     : [];
+  const hasTaggedNights = Object.values(trends?.tagCounts || {}).some((count) => count > 0);
   const trendMeta = trends?.trend ? (TREND_META[trends.trend.direction] || TREND_META.stable) : TREND_META.stable;
   const durationBuckets = trends?.durationBuckets ? Object.entries(trends.durationBuckets) : [];
 
@@ -259,10 +260,15 @@ export default function SleepAnalyticsScreen() {
                           size={16}
                           color={color}
                         />
-                        <Text style={styles.tagLabel}>{tagLabel(tag)}</Text>
+                        <View>
+                          <Text style={styles.tagLabel}>{tagLabel(tag)}</Text>
+                          <Text style={styles.tagEvidence}>
+                            {data.occurrences} with · {data.comparisonOccurrences} without
+                          </Text>
+                        </View>
                       </View>
                       <Text style={[styles.tagImpact, { color }]}>
-                        {isPositive ? '+' : ''}{data.impact} pts ({data.occurrences}x)
+                        {isPositive ? '+' : ''}{data.impact} pts
                       </Text>
                     </View>
                   );
@@ -270,6 +276,18 @@ export default function SleepAnalyticsScreen() {
               </View>
               <Text style={styles.tagDisclaimer}>
                 Compares nights with vs. without each tag. These are observational signals, not proof of cause.
+              </Text>
+            </View>
+          )}
+
+          {hasTaggedNights && tagImpactEntries.length === 0 && (
+            <View style={styles.card} accessibilityRole="summary">
+              <View style={styles.cardHeader}>
+                <Ionicons name="analytics-outline" size={20} color={BRAND.primary} />
+                <Text style={styles.cardTitle}>Sleep Quality Associations</Text>
+              </View>
+              <Text style={styles.insufficientEvidenceText}>
+                Keep logging context. A comparison appears after at least {trends.minimumAssociationGroupSize || 3} nights with a tag and {trends.minimumAssociationGroupSize || 3} nights without it.
               </Text>
             </View>
           )}
@@ -510,6 +528,12 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
+  tagEvidence: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+  },
   tagImpact: {
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.semibold,
@@ -519,6 +543,12 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.muted,
     marginTop: SPACING[2],
+  },
+  insufficientEvidenceText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    lineHeight: 20,
   },
   bottomPadding: {
     height: 40,

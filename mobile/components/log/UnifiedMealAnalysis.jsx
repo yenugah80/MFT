@@ -1042,6 +1042,7 @@ export default function UnifiedMealAnalysis({
   onEdit,
   onItemsChange,
   saving = false,
+  saveBlocked = false,
   // Backend plausibility verdict. Text/multi-item path attaches it per item;
   // photo/barcode path attaches it at the top level of the analysis result.
   analysisPlausible,
@@ -1367,9 +1368,10 @@ export default function UnifiedMealAnalysis({
         )}
         {onSave && (
           <TouchableOpacity
-            style={[styles.primaryButton, saving && styles.primaryButtonDisabled]}
+            style={[styles.primaryButton, (saving || saveBlocked) && styles.primaryButtonDisabled]}
             onPress={onSave}
-            disabled={saving}
+            disabled={saving || saveBlocked}
+            accessibilityState={{ disabled: saving || saveBlocked }}
           >
             <ExpoGradient
               colors={[BRAND.primary, BRAND.secondary || '#8B6EFF']}
@@ -1377,8 +1379,14 @@ export default function UnifiedMealAnalysis({
               end={{ x: 1, y: 0 }}
               style={styles.primaryButtonGradient}
             >
-              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Log Meal'}</Text>
+              <Ionicons
+                name={saveBlocked ? 'alert-circle' : 'checkmark-circle'}
+                size={20}
+                color="#FFFFFF"
+              />
+              <Text style={styles.primaryButtonText}>
+                {saving ? 'Saving...' : saveBlocked ? 'Confirm Ingredient First' : 'Log Meal'}
+              </Text>
             </ExpoGradient>
           </TouchableOpacity>
         )}

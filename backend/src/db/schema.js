@@ -67,6 +67,44 @@ export const accountSettingsTable = pgTable(
   }
 );
 
+// Append-only record of purpose-specific privacy choices. Current state remains
+// in account_settings for fast reads, while this table preserves when a person
+// granted or revoked each purpose for export, support, and compliance review.
+export const privacyConsentAuditTable = pgTable(
+  "privacy_consent_audit",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    purposeKey: text("purpose_key").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    previousState: boolean("previous_state").notNull(),
+    newState: boolean("new_state").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    sourceScreen: text("source_screen").notNull().default("unknown"),
+    devicePlatform: text("device_platform").notNull().default("unknown"),
+    changedAt: timestamp("changed_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => ({
+    userChangedAtIndex: index("privacy_consent_audit_user_changed_at_idx")
+      .on(table.userId, table.changedAt),
+    purposeCheck: check(
+      "privacy_consent_audit_purpose_check",
+      sql`${table.purposeKey} IN ('usageAnalytics', 'crossDomainInsights', 'contextInInsights', 'reflectionInInsights', 'sensitiveInsights', 'aiWellnessNarration', 'weeklyReviewReminder')`
+    ),
+    platformCheck: check(
+      "privacy_consent_audit_platform_check",
+      sql`${table.devicePlatform} IN ('ios', 'android', 'web', 'unknown')`
+    ),
+    stateChangedCheck: check(
+      "privacy_consent_audit_state_changed_check",
+      sql`${table.previousState} <> ${table.newState}`
+    ),
+  })
+);
+
 // Dietary preferences table
 export const dietaryPreferencesTable = pgTable(
   "dietary_preferences",

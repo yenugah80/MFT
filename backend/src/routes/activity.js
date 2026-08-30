@@ -37,6 +37,10 @@ import { ensureActivityLogTableShape, ensureRecoverySnapshotsTable } from '../ut
 import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
 import { invalidateActivityAIRecsCache } from '../services/activityAnalyticsService.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -373,10 +377,13 @@ router.delete('/:id', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const activityId = parseInt(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     if (!activityId || isNaN(activityId)) {
       return res.status(400).json({ error: 'Invalid activity ID' });
     }
+
+    const beforeStreak = await getTrackedDaySnapshot(userId, db, offsetMinutes);
 
     // Verify ownership and delete
     const deleted = await db
@@ -397,9 +404,17 @@ router.delete('/:id', async (req, res) => {
       console.error('[Activity] AI recs cache invalidation failed (non-fatal):', err)
     );
 
+    const streakReconciliation = await reconcileStreakAfterDeletion({
+      userId,
+      beforeSnapshot: beforeStreak,
+      dbConn: db,
+      timezoneOffset: offsetMinutes,
+    });
+
     res.json({
       success: true,
       deleted: deleted[0],
+      streak: streakReconciliation.streak,
       message: 'Activity deleted successfully',
     });
   } catch (error) {

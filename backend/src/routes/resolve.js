@@ -275,6 +275,58 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
  * NEW: Uses StrategicFoodParser with hybrid routing (rule-based vs AI)
  * Pipeline: StrategicFoodParser route → USDA search → OFF search → Best match selection
  */
+function spellingReviewFor(foodName) {
+  if (!foodName || typeof foodName !== 'string') return null;
+  const suggestion = getSpellingSuggestions(foodName);
+  if (!suggestion.needsCorrection || !suggestion.didYouMean) return null;
+
+  return {
+    original: foodName,
+    didYouMean: suggestion.didYouMean,
+    confidence: Math.round(suggestion.confidence * 100),
+    alternatives: suggestion.suggestions.slice(0, 3).map(candidate => candidate.name)
+  };
+}
+
+function ingredientNames(food) {
+  const values = [food?.name || food?.canonicalName];
+  for (const ingredient of food?.ingredients || food?.components || []) {
+    values.push(typeof ingredient === 'string'
+      ? ingredient
+      : ingredient?.name || ingredient?.foodName || ingredient?.canonicalName);
+  }
+  return values.filter(Boolean);
+}
+
+function attachSpellingReviews(parsedFood, resolvedItem, knownReviews) {
+  const candidates = Array.from(new Set([
+    ...ingredientNames(parsedFood),
+    ...ingredientNames(resolvedItem),
+  ]));
+  const reviews = candidates
+    .map(spellingReviewFor)
+    .filter(Boolean);
+
+  for (const review of reviews) {
+    if (!knownReviews.some(existing => existing.original.toLowerCase() === review.original.toLowerCase())) {
+      knownReviews.push(review);
+    }
+  }
+
+  if (reviews.length === 0) return;
+  resolvedItem.suggestions = reviews.map(review => ({
+    original: review.original,
+    canonical: review.didYouMean,
+    confidence: review.confidence,
+    alternatives: review.alternatives
+  }));
+  resolvedItem.requiresUserConfirmation = true;
+  resolvedItem.flags = Array.from(new Set([
+    ...(resolvedItem.flags || []),
+    'spelling_confirmation_required'
+  ]));
+}
+
 async function resolveTextMode(query, draftId, mealType, userId) {
   try {
     // Step 1: Parse text with StrategicFoodParser (handles hybrid routing based on user tier)
@@ -292,15 +344,10 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parseResult.items) {
       const foodName = parsedFood.name || parsedFood.canonicalName || '';
       if (foodName) {
-        const suggestion = getSpellingSuggestions(foodName);
-        if (suggestion.needsCorrection && suggestion.didYouMean) {
-          spellingSuggestions.push({
-            original: foodName,
-            didYouMean: suggestion.didYouMean,
-            confidence: Math.round(suggestion.confidence * 100),
-            alternatives: suggestion.suggestions.slice(0, 3).map(s => s.name)
-          });
-          console.log(`[Resolve] 🔍 Spelling suggestion for "${foodName}": Did you mean "${suggestion.didYouMean}"? (${Math.round(suggestion.confidence * 100)}% match)`);
+        const review = spellingReviewFor(foodName);
+        if (review) {
+          spellingSuggestions.push(review);
+          console.log(`[Resolve] 🔍 Spelling suggestion for "${foodName}": Did you mean "${review.didYouMean}"? (${review.confidence}% match)`);
         }
       }
     }
@@ -309,6 +356,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     const items = [];
     for (const parsedFood of parseResult.items) {
       const resolvedItem = await resolveGenericFood(parsedFood);
+      attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
       items.push(resolvedItem);
     }
 
@@ -323,6 +371,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       totals: calculateTotals(items),
       dataQuality,
       uiHints: generateUIHints(items, dataQuality),
+      hasUnresolvedItems: items.some(item => item.requiresUserConfirmation),
       // Strategic parsing metadata
       strategicParsing: {
         engine: parseResult.engine,
@@ -361,21 +410,15 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parsedFoods) {
       const foodName = parsedFood.name || parsedFood.canonicalName || '';
       if (foodName) {
-        const suggestion = getSpellingSuggestions(foodName);
-        if (suggestion.needsCorrection && suggestion.didYouMean) {
-          spellingSuggestions.push({
-            original: foodName,
-            didYouMean: suggestion.didYouMean,
-            confidence: Math.round(suggestion.confidence * 100),
-            alternatives: suggestion.suggestions.slice(0, 3).map(s => s.name)
-          });
-        }
+        const review = spellingReviewFor(foodName);
+        if (review) spellingSuggestions.push(review);
       }
     }
 
     const items = [];
     for (const parsedFood of parsedFoods) {
       const resolvedItem = await resolveGenericFood(parsedFood);
+      attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
       items.push(resolvedItem);
     }
 
@@ -402,6 +445,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       totals: calculateTotals(items),
       dataQuality,
       uiHints,
+      hasUnresolvedItems: items.some(item => item.requiresUserConfirmation),
       spellingSuggestions: spellingSuggestions.length > 0 ? spellingSuggestions : undefined,
       strategicParsing: {
         engine: 'fallback_legacy',

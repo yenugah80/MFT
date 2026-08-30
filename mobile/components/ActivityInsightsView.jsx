@@ -35,6 +35,7 @@ import {
  * Shows comprehensive analytics, trends, and recommendations for activities
  */
 export default function ActivityInsightsView({
+  mode = 'insights',
   activities,
   onLogWorkout,
   targetMinutes,
@@ -51,6 +52,7 @@ export default function ActivityInsightsView({
   onRefresh,
   refreshing = false,
 }) {
+  const isHistoryMode = mode === 'history';
   // Prefer the target the backend reports over the CDC default, so the screen
   // follows if that ever changes server-side.
   const goalOptions = { targetMinutes };
@@ -142,7 +144,7 @@ export default function ActivityInsightsView({
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={VIBRANT_WELLNESS.activity.solid} colors={[VIBRANT_WELLNESS.activity.solid]} />}
     >
-      <LinearGradient colors={['#F0FDF7', '#F8FBFF']} style={styles.overviewHero}>
+      {!isHistoryMode && <LinearGradient colors={['#F0FDF7', '#F8FBFF']} style={styles.overviewHero}>
         <View style={styles.heroTopRow}>
           <View style={styles.heroCopy}>
             <Text style={styles.eyebrow}>TODAY’S TRAINING OUTLOOK</Text>
@@ -154,12 +156,12 @@ export default function ActivityInsightsView({
             </Text>
           </View>
           <View style={[styles.recoveryOrb, { borderColor: recovery?.color || VIBRANT_WELLNESS.activity.solid }]}>
-            <Text style={[styles.recoveryValue, { color: recovery?.color || VIBRANT_WELLNESS.activity.solid }]}>{recoveryScore ?? '—'}</Text>
+            <Text style={[styles.recoveryValue, { color: recovery?.color || VIBRANT_WELLNESS.activity.solid }]}>{recoveryScore ?? 'N/A'}</Text>
             <Text style={styles.recoveryLabel}>recovery</Text>
           </View>
         </View>
 
-      </LinearGradient>
+      </LinearGradient>}
 
       {activities.length === 0 ? (
         <View style={styles.emptyState}>
@@ -170,6 +172,19 @@ export default function ActivityInsightsView({
         </View>
       ) : (
         <>
+          {isHistoryMode && (
+            <View style={styles.historyIntro}>
+              <Text style={styles.sectionEyebrow}>YOUR MOVEMENT RECORD</Text>
+              <Text style={styles.historyTitle}>See every workout in context</Text>
+              <Text
+                style={styles.sectionMeta}
+                accessibilityLabel={`${activities.length} workouts logged on ${historyActiveDays} calendar days from ${historyDateRange}`}
+              >
+                {activities.length} workouts logged on {historyActiveDays} calendar days · {historyDateRange}
+              </Text>
+            </View>
+          )}
+
           <View style={styles.weeklyCard} testID="weekly-training-card">
             <View style={styles.weeklyHeader}>
               <View style={styles.weeklyHeading}>
@@ -211,38 +226,43 @@ export default function ActivityInsightsView({
               subtitle="Inspect any day, week or month"
               icon="calendar-number-outline"
               accent={VIBRANT_WELLNESS.activity.solid}
+              defaultOpen={isHistoryMode}
             >
               <TrainingCalendar buildMonth={buildMonth} buildStats={buildStats} highlights={sessionHighlights} onDelete={onDeleteActivity} isDeleting={isDeleting} />
             </CollapsibleSection>
           </View>
 
-          <View style={styles.sectionIntro}>
-            <Text style={styles.sectionEyebrow}>TODAY’S PLAN</Text>
-          </View>
-          <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
+          {!isHistoryMode && (
+            <>
+              <View style={styles.sectionIntro}>
+                <Text style={styles.sectionEyebrow}>TODAY’S PLAN</Text>
+              </View>
+              <NextSessionCard suggestion={nextSession} onLogWorkout={onLogWorkout} />
 
-          {!!recovery && (
-            <CollapsibleSection title="Recovery details" subtitle="Signals, score factors and readiness trend" icon="pulse-outline" accent={recovery?.color || VIBRANT_WELLNESS.activity.solid} badge={`${recoverySignalCount}/${recoverySignalTotal}`}>
-              <RecoveryHero detailOnly recovery={recovery} strainTarget={strainTarget} onLogSignal={onLogSignal} trend={<RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />} />
-            </CollapsibleSection>
+              {!!recovery && (
+                <CollapsibleSection title="Recovery details" subtitle="Signals, score factors and readiness trend" icon="pulse-outline" accent={recovery?.color || VIBRANT_WELLNESS.activity.solid} badge={`${recoverySignalCount}/${recoverySignalTotal}`}>
+                  <RecoveryHero detailOnly recovery={recovery} strainTarget={strainTarget} onLogSignal={onLogSignal} trend={<RecoveryTrendCard history={recoveryHistory} chartWidth={chartWidth} />} />
+                </CollapsibleSection>
+              )}
+
+              <View style={styles.sectionIntro}>
+                <Text style={styles.sectionEyebrow}>HISTORY & PATTERNS</Text>
+                <Text style={styles.sectionTitle}>Your movement history</Text>
+                <Text
+                  style={styles.sectionMeta}
+                  accessibilityLabel={`${activities.length} workouts logged on ${historyActiveDays} calendar days from ${historyDateRange}`}
+                >
+                  {activities.length} workouts logged on {historyActiveDays} calendar days · {historyDateRange}
+                </Text>
+              </View>
+            </>
           )}
-
-          <View style={styles.sectionIntro}>
-            <Text style={styles.sectionEyebrow}>HISTORY & PATTERNS</Text>
-            <Text style={styles.sectionTitle}>Your movement history</Text>
-            <Text
-              style={styles.sectionMeta}
-              accessibilityLabel={`${activities.length} workouts logged on ${historyActiveDays} calendar days from ${historyDateRange}`}
-            >
-              {activities.length} workouts logged on {historyActiveDays} calendar days · {historyDateRange}
-            </Text>
-          </View>
           <CollapsibleSection title="Progress patterns" subtitle="Personal bests, streaks and movement–mood context" icon="trophy-outline" accent={VIBRANT_WELLNESS.activity.solid}>
             <PersonalBestsCard bests={bests} streak={streak} />
             <MoodActivityCard link={moodLink} />
           </CollapsibleSection>
 
-          {!!smartInsights && (
+          {!isHistoryMode && !!smartInsights && (
             <CollapsibleSection title="Smart insights" subtitle="Optional AI review of your last 30 days" icon="sparkles-outline" accent={VIBRANT_WELLNESS.activity.solid} badge={smartInsights.insights?.length ? `${smartInsights.insights.length}` : undefined}>
               <SmartInsightsCard embedded {...smartInsights} />
             </CollapsibleSection>
@@ -268,6 +288,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.background.secondary,
   },
   content: { padding: SPACING[4], paddingBottom: SPACING[10] },
+  historyIntro: { marginBottom: SPACING[3], paddingHorizontal: 2 },
+  historyTitle: { marginTop: 4, fontSize: TYPOGRAPHY.size.xl, lineHeight: 27, fontFamily: TYPOGRAPHY.family.bold, color: TEXT.primary },
   overviewHero: { borderRadius: RADIUS['2xl'], padding: SPACING[4], borderWidth: 1, borderColor: '#BDEAD6', marginBottom: SPACING[3], ...SHADOWS.sm },
   heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[3] },
   heroCopy: { flex: 1, minWidth: 0 },
