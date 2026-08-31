@@ -1222,8 +1222,93 @@ router.get("/dashboard", async (req, res) => {
     const yesterdayHasFood = yesterdayFoodLogs.length > 0;
     const yesterdayHasData = yesterdayHasNutrition || yesterdayHasWater || yesterdayHasMood || yesterdayHasFood;
 
-    // Show yesterday's data only when today is completely empty AND yesterday has data
-    const showYesterdayFallback = todayIsEmpty && yesterdayHasData;
+    // Fallback day to display when today is empty. Yesterday is checked
+    // first using the data already fetched above (zero extra cost on the
+    // common paths — today has data, or today's empty and yesterday
+    // covers it). Only when BOTH today and yesterday are empty do we walk
+    // further back, sequentially and bounded to 7 days, so an account
+    // that hasn't been logged in for a couple of days still shows its
+    // last real day instead of a bare zeroed dashboard with no
+    // explanation. See docs/architecture — this replaced a single-day-only
+    // fallback that left a multi-day-stale account with no banner at all.
+    let fallbackDay = yesterdayHasData
+      ? {
+          date: yesterday,
+          daysAgo: 1,
+          summary: yesterdaySummary[0],
+          foodLogs: yesterdayFoodLogs,
+          waterLogs: yesterdayWaterLogs,
+          waterTotal: yesterdayWaterTotal,
+          moodLogs: yesterdayMoodLogs,
+        }
+      : null;
+
+    if (todayIsEmpty && !fallbackDay) {
+      for (let daysAgo = 2; daysAgo <= 7; daysAgo++) {
+        const candidateDate = addDaysUTC(today, -daysAgo);
+        const { start: cStart, end: cEnd } = getLocalDayRange(offsetMinutes, candidateDate);
+
+        const [cSummary, cFoodLogs, cWaterLogs, cMoodLogs] = await Promise.all([
+          db.select()
+            .from(dailyNutritionSummaryTable)
+            .where(and(
+              eq(dailyNutritionSummaryTable.userId, userId),
+              eq(dailyNutritionSummaryTable.date, toDateStr(candidateDate))
+            ))
+            .limit(1),
+          db.selectDistinctOn([foodLogTable.clientEventId])
+            .from(foodLogTable)
+            .where(and(
+              eq(foodLogTable.userId, userId),
+              gte(foodLogTable.loggedDate, cStart),
+              lte(foodLogTable.loggedDate, cEnd)
+            ))
+            .orderBy(foodLogTable.clientEventId, desc(foodLogTable.loggedDate)),
+          db.select()
+            .from(waterLogTable)
+            .where(and(
+              eq(waterLogTable.userId, userId),
+              gte(waterLogTable.loggedDate, cStart),
+              lte(waterLogTable.loggedDate, cEnd)
+            )),
+          db.select()
+            .from(moodLogTable)
+            .where(and(
+              eq(moodLogTable.userId, userId),
+              gte(moodLogTable.loggedDate, cStart),
+              lte(moodLogTable.loggedDate, cEnd)
+            ))
+            .orderBy(desc(moodLogTable.loggedDate)),
+        ]);
+
+        const cWaterTotal = cWaterLogs.reduce((sum, log) => {
+          const hydrationValue = parseFloat(log.hydrationLiters || 0);
+          if (hydrationValue > 0) return sum + hydrationValue;
+          return sum + parseFloat(log.amountLiters || 0);
+        }, 0);
+        const cHasData = (cSummary[0]?.totalCalories || 0) > 0
+          || cWaterTotal > 0
+          || cMoodLogs.length > 0
+          || cFoodLogs.length > 0;
+
+        if (cHasData) {
+          fallbackDay = {
+            date: candidateDate,
+            daysAgo,
+            summary: cSummary[0],
+            foodLogs: cFoodLogs,
+            waterLogs: cWaterLogs,
+            waterTotal: cWaterTotal,
+            moodLogs: cMoodLogs,
+          };
+          break;
+        }
+      }
+    }
+
+    // Show the fallback day only when today is completely empty and a
+    // fallback day (yesterday or further back) was actually found.
+    const showYesterdayFallback = todayIsEmpty && !!fallbackDay;
 
     // Calculate weekly averages
     const weeklyAverages = weekSummaries.length > 0 ? {
@@ -1382,9 +1467,10 @@ router.get("/dashboard", async (req, res) => {
       lastLogDate: gamificationRow?.lastLogDate || gamificationRow?.last_log_date || null,
     };
 
-    // Aggregate yesterday's micronutrients for fallback
-    const yesterdayMicros = {};
-    yesterdayFoodLogs.forEach(log => {
+    // Aggregate the fallback day's micronutrients (yesterday, or further
+    // back — whichever day showYesterdayFallback actually resolved to).
+    const fallbackMicros = {};
+    (fallbackDay?.foodLogs || []).forEach(log => {
       if (log.micros && typeof log.micros === 'object') {
         Object.entries(log.micros).forEach(([key, value]) => {
           let numValue;
@@ -1396,7 +1482,7 @@ router.get("/dashboard", async (req, res) => {
             numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
           }
           if (!isNaN(numValue) && numValue > 0) {
-            yesterdayMicros[key] = (yesterdayMicros[key] || 0) + numValue;
+            fallbackMicros[key] = (fallbackMicros[key] || 0) + numValue;
           }
         });
       }
@@ -1425,24 +1511,28 @@ router.get("/dashboard", async (req, res) => {
         activityMinutes: todayActivityLogs.reduce((sum, log) => sum + (parseInt(log.duration_minutes) || 0), 0),
         hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
-      // Yesterday's data for fallback display when today is empty
+      // Fallback day's data for display when today is empty — usually
+      // yesterday (daysAgo: 1), but can be further back (up to 7 days) if
+      // yesterday was also empty. `date`/`daysAgo` reflect whichever day
+      // was actually found, not always literally "yesterday".
       yesterday: showYesterdayFallback ? {
-        date: yesterday,
+        date: fallbackDay.date,
+        daysAgo: fallbackDay.daysAgo,
         nutrition: {
-          ...(yesterdaySummary[0] || {
+          ...(fallbackDay.summary || {
             totalCalories: 0,
             totalProtein: 0,
             totalCarbs: 0,
             totalFats: 0,
           }),
-          micros: yesterdayMicros,
+          micros: fallbackMicros,
         },
-        waterIntakeLiters: yesterdayWaterTotal,
-        waterLogs: yesterdayWaterLogs,
-        foodLogs: yesterdayFoodLogs,
-        moodLogs: yesterdayMoodLogs,
+        waterIntakeLiters: fallbackDay.waterTotal,
+        waterLogs: fallbackDay.waterLogs,
+        foodLogs: fallbackDay.foodLogs,
+        moodLogs: fallbackDay.moodLogs,
       } : null,
-      // Flag to indicate frontend should show yesterday's data
+      // Flag to indicate frontend should show the fallback day's data
       showYesterdayFallback,
       goals: goals[0] || null,
       gamification: gamificationWithLevel,
