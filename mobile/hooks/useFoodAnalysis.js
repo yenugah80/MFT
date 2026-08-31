@@ -186,6 +186,75 @@ export function getMealTypeFromTime() {
   return 'snack';
 }
 
+/**
+ * Remove one ingredient from a food item, subtracting its macros AND micros
+ * from the item's totals. Returns a new item object; returns the original
+ * item unchanged if ingredientIndex is out of range.
+ * @param {object} item - Food item with ingredients/components, macros, micros
+ * @param {number} ingredientIndex - Index of ingredient to remove
+ * @returns {object} Updated item
+ */
+export function subtractIngredientFromItem(item, ingredientIndex) {
+  const ingredients = item.ingredients || item.components || [];
+  if (ingredientIndex < 0 || ingredientIndex >= ingredients.length) {
+    console.warn(`[useFoodAnalysis] Invalid ingredient index: ${ingredientIndex}`);
+    return item;
+  }
+
+  const removedIngredient = ingredients[ingredientIndex];
+
+  const removedMacros = {
+    calories_kcal: removedIngredient.calories || removedIngredient.calories_kcal || removedIngredient.macros?.calories_kcal || 0,
+    protein_g: removedIngredient.protein || removedIngredient.protein_g || removedIngredient.macros?.protein_g || 0,
+    carbs_g: removedIngredient.carbs || removedIngredient.carbs_g || removedIngredient.macros?.carbs_g || 0,
+    fat_g: removedIngredient.fat || removedIngredient.fat_g || removedIngredient.macros?.fat_g || 0,
+    fiber_g: removedIngredient.fiber || removedIngredient.fiber_g || removedIngredient.macros?.fiber_g || 0,
+    sugar_g: removedIngredient.sugar || removedIngredient.sugar_g || removedIngredient.macros?.sugar_g || 0,
+    sodium_mg: removedIngredient.sodium || removedIngredient.sodium_mg || removedIngredient.macros?.sodium_mg || 0,
+  };
+
+  const newIngredients = [...ingredients];
+  newIngredients.splice(ingredientIndex, 1);
+
+  const updatedMacros = {
+    calories_kcal: Math.max(0, (item.macros?.calories_kcal || 0) - removedMacros.calories_kcal),
+    protein_g: Math.max(0, (item.macros?.protein_g || 0) - removedMacros.protein_g),
+    carbs_g: Math.max(0, (item.macros?.carbs_g || 0) - removedMacros.carbs_g),
+    fat_g: Math.max(0, (item.macros?.fat_g || 0) - removedMacros.fat_g),
+    fiber_g: Math.max(0, (item.macros?.fiber_g || 0) - removedMacros.fiber_g),
+    sugar_g: Math.max(0, (item.macros?.sugar_g || 0) - removedMacros.sugar_g),
+    sodium_mg: Math.max(0, (item.macros?.sodium_mg || 0) - removedMacros.sodium_mg),
+  };
+
+  // Subtract the removed ingredient's own micros the same way macros are
+  // subtracted above, handling both {value, unit} and bare-number shapes
+  // (matches computeIngredientNutrition.js's handling). Without this, removing
+  // e.g. cheese correctly dropped calories/protein/fat but silently left
+  // calcium/etc. at the pre-removal total — overstated, not just missing.
+  const removedMicros = removedIngredient.micros || {};
+  const updatedMicros = {};
+  for (const [key, entry] of Object.entries(item.micros || {})) {
+    const isObjShape = entry && typeof entry === 'object';
+    const currentVal = isObjShape ? (entry.value || 0) : (entry || 0);
+    const removedEntry = removedMicros[key];
+    const removedVal = removedEntry && typeof removedEntry === 'object'
+      ? (removedEntry.value || 0)
+      : (removedEntry || 0);
+    const nextVal = Math.max(0, currentVal - removedVal);
+    updatedMicros[key] = isObjShape ? { ...entry, value: nextVal } : nextVal;
+  }
+
+  console.log(`[useFoodAnalysis] Removed ingredient "${removedIngredient.name || 'Unknown'}" from "${item.name}"`);
+
+  return {
+    ...item,
+    ingredients: item.ingredients ? newIngredients : undefined,
+    components: item.components ? newIngredients : undefined,
+    macros: updatedMacros,
+    micros: updatedMicros,
+  };
+}
+
 function looksLikeNutritionLabel(text) {
   if (!text || text.length < OCR_MIN_TEXT_LENGTH) return false;
   const lower = text.toLowerCase();
@@ -1881,51 +1950,7 @@ export function useFoodAnalysis() {
 
       const updatedItems = prev.items.map(item => {
         if (item.itemId !== itemId) return item;
-
-        // Get current ingredients array
-        const ingredients = item.ingredients || item.components || [];
-        if (ingredientIndex < 0 || ingredientIndex >= ingredients.length) {
-          console.warn(`[useFoodAnalysis] Invalid ingredient index: ${ingredientIndex}`);
-          return item;
-        }
-
-        // Get the ingredient being removed
-        const removedIngredient = ingredients[ingredientIndex];
-
-        // Calculate the macros to subtract
-        const removedMacros = {
-          calories_kcal: removedIngredient.calories || removedIngredient.calories_kcal || removedIngredient.macros?.calories_kcal || 0,
-          protein_g: removedIngredient.protein || removedIngredient.protein_g || removedIngredient.macros?.protein_g || 0,
-          carbs_g: removedIngredient.carbs || removedIngredient.carbs_g || removedIngredient.macros?.carbs_g || 0,
-          fat_g: removedIngredient.fat || removedIngredient.fat_g || removedIngredient.macros?.fat_g || 0,
-          fiber_g: removedIngredient.fiber || removedIngredient.fiber_g || removedIngredient.macros?.fiber_g || 0,
-          sugar_g: removedIngredient.sugar || removedIngredient.sugar_g || removedIngredient.macros?.sugar_g || 0,
-          sodium_mg: removedIngredient.sodium || removedIngredient.sodium_mg || removedIngredient.macros?.sodium_mg || 0,
-        };
-
-        // Create new ingredients array without the removed item
-        const newIngredients = [...ingredients];
-        newIngredients.splice(ingredientIndex, 1);
-
-        // Update the item's macros by subtracting the removed ingredient
-        const updatedMacros = {
-          calories_kcal: Math.max(0, (item.macros?.calories_kcal || 0) - removedMacros.calories_kcal),
-          protein_g: Math.max(0, (item.macros?.protein_g || 0) - removedMacros.protein_g),
-          carbs_g: Math.max(0, (item.macros?.carbs_g || 0) - removedMacros.carbs_g),
-          fat_g: Math.max(0, (item.macros?.fat_g || 0) - removedMacros.fat_g),
-          fiber_g: Math.max(0, (item.macros?.fiber_g || 0) - removedMacros.fiber_g),
-          sugar_g: Math.max(0, (item.macros?.sugar_g || 0) - removedMacros.sugar_g),
-          sodium_mg: Math.max(0, (item.macros?.sodium_mg || 0) - removedMacros.sodium_mg),
-        };
-
-        console.log(`[useFoodAnalysis] Removed ingredient "${removedIngredient.name || 'Unknown'}" from "${item.name}"`);
-
-        return {
-          ...item,
-          ingredients: item.ingredients ? newIngredients : undefined,
-          components: item.components ? newIngredients : undefined,
-          macros: updatedMacros,
-        };
+        return subtractIngredientFromItem(item, ingredientIndex);
       });
 
       return {
