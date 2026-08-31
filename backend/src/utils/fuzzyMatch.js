@@ -105,6 +105,7 @@ const COMMON_FOODS = {
   ],
   dairy: [
     'milk', 'whole milk', 'skim milk', 'almond milk', 'oat milk',
+    'coconut milk', 'light coconut milk', 'full-fat coconut milk', 'soy milk',
     'cheese', 'cheddar', 'mozzarella', 'parmesan', 'cottage cheese',
     'yogurt', 'greek yogurt', 'curd', 'buttermilk',
     'butter', 'ghee', 'cream', 'ice cream',
@@ -237,6 +238,30 @@ export function analyzeSpelling(query) {
       isValid: true,
       isExactMatch: true,
       matchedFood: exactMatch,
+      suggestions: [],
+    };
+  }
+
+  // Compound-term check: a multi-word query where every individual word
+  // is itself a recognized food term (e.g. "coconut milk" = "coconut" +
+  // "milk", both independently listed) is treated as valid without ever
+  // reaching the fuzzy-match step below. Without this, a real, common
+  // compound ingredient that simply isn't listed as its own phrase gets
+  // scored against the WHOLE word list by full-string edit distance —
+  // "coconut milk" scored 0.75+ similar to the unrelated "coconut oil"
+  // (both start with "coconut", both short second words) and got flagged
+  // as a likely misspelling of it, purely because the compound phrase
+  // itself wasn't in ALL_FOODS. Checking words independently instead of
+  // hand-listing every compound generalizes to any "known + known" term,
+  // not just the ones added to COMMON_FOODS by hand.
+  const queryWords = queryLower.split(/\s+/).filter(Boolean);
+  if (queryWords.length > 1 && queryWords.every(word =>
+    ALL_FOODS.some(food => food.toLowerCase() === word)
+  )) {
+    return {
+      isValid: true,
+      isExactMatch: true,
+      matchedFood: query,
       suggestions: [],
     };
   }
