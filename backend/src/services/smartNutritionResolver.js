@@ -22,6 +22,8 @@ import { safeJSONCompletion, getCacheKey, JSONParseError, OpenAIValidationError 
 import NodeCache from 'node-cache';
 import { cache as redisCache, isRedisAvailable } from '../config/redis.js';
 import { checkNutritionPlausibility, getExpectedDensityForFood, checkMacroConsistency } from './nutritionPlausibilityChecker.js';
+import { selectBestUSDAMatch } from '../utils/usdaMatching.js';
+import { ingredientBreakdownService } from './ingredientBreakdownService.js';
 
 // FIXED P1: Feature flags for dual-prompt system
 const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
@@ -224,137 +226,149 @@ class SmartNutritionResolver {
       // If cache key uses "banana" (canonical) but prompt uses "BANANA" (raw), mismatch occurs
       // ENHANCED: Pass context for modifier handling and preparation adjustments
       const openAIResult = await this._getOpenAIEstimation(canonicalQuery, portionToUse, context);
-
-      // Step 2: Check if this is an ingredient-specific food (protein/vegetable/grain)
       const hasSpecificIngredient = this._hasSpecificIngredient(canonicalQuery);
 
-      // Step 3: CRITICAL FIX #2 - Use validation, NOT confidence for correctness decisions
-      // Confidence is NOT accuracy and is explicitly unreliable (per review)
-      // ONLY validationPassed should gate USDA fallback
-      // For ingredient-specific foods: ALWAYS trust OpenAI (prevents "spinach" → "beef" errors)
-      // For generic foods: Use USDA ONLY if validation FAILED (not if confidence is low)
+      // Source-agnostic quality-based selection. Previously a binary gate
+      // (shouldTrustOpenAI) let openAIResult.validationPassed alone decide
+      // "trustworthy" — but that's only an Atwater sanity check (protein/
+      // carbs/fat roughly agree with calories); it says nothing about
+      // fiber/sugar/sodium/micros, which is exactly how "cooked pulao rice"
+      // passed through with sugar_g:0, sodium_mg:0 unquestioned (confirmed
+      // live). Now every candidate — OpenAI's own estimate, and exactly one
+      // more source chosen by dish shape — is scored the same way by
+      // _scoreNutritionCandidate, and the highest score wins. No source
+      // wins just because of which source it is; USDA stays fully optional
+      // (only consulted at all when ENABLE_USDA_VERIFICATION is set, and
+      // never required — if it's unavailable or scores low, the resolver
+      // continues normally on whatever else it has).
+      // Checked per-candidate, before scoring — not just on the eventual
+      // winner. Confirmed live this is necessary, not optional: "Banana
+      // chips" (severe, 519 kcal/100g) and "Beans and white rice" both
+      // out-scored the correct candidate on completeness/provenance alone;
+      // checking plausibility only after picking a winner never catches a
+      // wrong-food match that happens to look complete.
+      const plausibilityFor = (macros, servingGrams, foodName) =>
+        checkNutritionPlausibility({ foodName, macros, servingGrams }).severity;
 
-      // FEATURE FLAG: USDA verification disabled by default (validating OpenAI-only accuracy)
-      const shouldTrustOpenAI = !ENABLE_USDA_VERIFICATION || hasSpecificIngredient || openAIResult.validationPassed;
+      const candidates = [{
+        source: 'openai_estimation',
+        macros: openAIResult.macros,
+        raw: openAIResult,
+        quality: this._scoreNutritionCandidate(openAIResult.macros, {
+          source: 'openai_estimation',
+          hasMicros: !!(openAIResult.micros && Object.keys(openAIResult.micros).length > 0),
+          plausibilitySeverity: plausibilityFor(openAIResult.macros, openAIResult.servingGrams, canonicalQuery),
+        }),
+      }];
 
-      if (shouldTrustOpenAI) {
-        const reason = !ENABLE_USDA_VERIFICATION
-          ? 'USDA verification disabled (OpenAI-only mode)'
-          : hasSpecificIngredient
-          ? 'ingredient-specific food (preserving ingredients)'
-          : `validation passed (macros are consistent)`;
-
-        console.log(`[SmartResolver] ✅ Using OpenAI - ${reason} for "${foodQuery}"`);
-        this.stats.openaiEstimates++;
-
-        const portionConfidence = this._calculatePortionConfidence(portionToUse, portionSource);
-
-        const result = {
-          ...openAIResult,
-          // CRITICAL FIX: Source should reflect VALIDATION status, not confidence
-          // Confidence is unreliable; validationPassed is the source of truth
-          source: openAIResult.validationPassed ? 'openai_estimation' : 'openai_estimation_unvalidated',
-          sourceConfidence: openAIResult.validationPassed ? 95 : openAIResult.confidence,
-          reason: `OpenAI estimation (${reason})`,
-          limitation: !openAIResult.validationPassed ? 'Macros did not pass Atwater validation - values may be inaccurate' : null,
-          components: openAIResult.components || [], // Pass through components
-          isComplex: openAIResult.isComplex || false,
-          estimationTier: promptTier, // FIXED P0: Track which prompt tier was used
-          // NEW: Portion tracking
-          portion_source: portionSource,
-          portion_confidence: portionConfidence,
-          user_adjustment_count: 0,
-          can_learn: userId !== null,
-          cacheKey,
-        };
-
-        // FIXED P1: Track metrics
-        this._trackPromptMetrics(promptTier, result);
-
-        // CRITICAL FIX #3: ONLY cache valid results
-        // Invalid data (validationPassed=false) will poison cache and return wrong info forever
-        if (openAIResult.validationPassed) {
-          await this._cacheSet(cacheKey, result);
-          const cacheTarget = isRedisAvailable() ? 'Redis + Memory' : 'Memory only';
-          console.log(`[SmartResolver] Cached valid result for "${canonicalQuery}" (${cacheTarget})`);
-        } else {
-          console.warn(`[SmartResolver] NOT caching invalid result for "${canonicalQuery}" (validationPassed=false)`);
-          // CRITICAL FIX: Track invalid results for telemetry
-          this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
-        }
-
-        return result;
-      }
-
-      // Step 4: Validation failed + generic food - try USDA verification
-      // NOTE: This code path only executes when ENABLE_USDA_VERIFICATION=true
-      console.log(`[SmartResolver] 🔍 Validation failed for generic food - Checking USDA for "${canonicalQuery}"`);
-
-      const usdaResult = await this._getUSDAVerification(canonicalQuery);
-
-      if (usdaResult) {
-        // CRITICAL FIX: Validate USDA results before caching
-        // USDA data can be inconsistent, must pass same validation as OpenAI
+      // Gather exactly one more candidate, chosen by dish shape — not every
+      // source for every food, to avoid adding latency across the board.
+      if (isComplex) {
         try {
-          this._validateNutritionSchema(usdaResult);
-          this._validateMacros(usdaResult);
-          console.log(`[SmartResolver] ✅ USDA verification successful AND validated for "${canonicalQuery}"`);
-        } catch (error) {
-          console.error(`[SmartResolver] ❌ USDA result failed validation for "${canonicalQuery}":`, error.message);
-          usdaResult.validationPassed = false;
+          const breakdown = await ingredientBreakdownService.getIngredientBreakdown(canonicalQuery, { region: context.region });
+          if (breakdown?.totalNutrition) {
+            const t = breakdown.totalNutrition;
+            // ingredientBreakdownService's schema never asks for sugar —
+            // genuinely unknown for this candidate, not a confirmed 0.
+            const macros = {
+              calories_kcal: t.calories ?? null,
+              protein_g: t.protein ?? null,
+              carbs_g: t.carbs ?? null,
+              fat_g: t.fat ?? null,
+              fiber_g: t.fiber ?? null,
+              sugar_g: null,
+              sodium_mg: t.sodium ?? null,
+            };
+            candidates.push({
+              source: 'ingredient_breakdown',
+              macros,
+              raw: breakdown,
+              quality: this._scoreNutritionCandidate(macros, {
+                source: 'ingredient_breakdown',
+                ingredientCount: breakdown.ingredients?.length || 0,
+                plausibilitySeverity: plausibilityFor(macros, undefined, canonicalQuery),
+              }),
+            });
+          }
+        } catch (err) {
+          console.warn(`[SmartResolver] Ingredient breakdown unavailable for "${canonicalQuery}":`, err.message);
         }
-
-        this.stats.usdaVerifications++;
-
-        const usdaPlausibilityCheck = checkNutritionPlausibility(usdaResult);
-
-        const result = {
-          ...usdaResult,
-          source: usdaResult.validationPassed ? 'usda_verified' : 'usda_unvalidated',
-          sourceConfidence: usdaResult.validationPassed ? 95 : 40,
-          openaiBackup: openAIResult, // Keep OpenAI estimate as backup (includes components)
-          limitation: !usdaResult.validationPassed ? 'USDA data failed validation - may be inaccurate' : 'USDA data - may not match your specific brand',
-          components: [], // USDA doesn't have component breakdown
-          isComplex: false,
-          estimationTier: promptTier, // FIXED P0: Track which prompt tier
-          cacheKey,
-          nutritionPlausible: usdaPlausibilityCheck.plausible,
-          plausibilityCheck: usdaPlausibilityCheck,
-        };
-
-        // CRITICAL: Only cache valid USDA results, same as OpenAI
-        if (usdaResult.validationPassed) {
-          await this._cacheSet(cacheKey, result);
-        } else {
-          console.warn(`[SmartResolver] NOT caching unvalidated USDA result for "${canonicalQuery}"`);
-          // Track invalid USDA results
-          this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
+      } else if (ENABLE_USDA_VERIFICATION) {
+        const usdaResult = await this._getUSDAVerification(canonicalQuery);
+        if (usdaResult) {
+          try {
+            this._validateNutritionSchema(usdaResult);
+            this._validateMacros(usdaResult);
+          } catch (error) {
+            console.warn(`[SmartResolver] USDA result for "${canonicalQuery}" failed schema/macro validation (kept as a candidate, just scores lower):`, error.message);
+          }
+          candidates.push({
+            source: 'usda_verified',
+            macros: usdaResult.macros,
+            raw: usdaResult,
+            quality: this._scoreNutritionCandidate(usdaResult.macros, {
+              source: 'usda_verified',
+              hasMicros: !!(usdaResult.micros && Object.keys(usdaResult.micros).length > 0),
+              matchQuality: usdaResult.matchScore,
+              plausibilitySeverity: plausibilityFor(usdaResult.macros, usdaResult.servingGrams, canonicalQuery),
+            }),
+          });
         }
-        return result;
       }
 
-      // Step 5: USDA failed or invalid - use OpenAI estimate as final fallback
-      console.log(`[SmartResolver] ⚠️ USDA unavailable/invalid - Using OpenAI estimate for "${canonicalQuery}"`);
-      this.stats.openaiEstimates++;
+      candidates.sort((a, b) => b.quality.score - a.quality.score);
+      const winner = candidates[0];
+      const runnerUp = candidates[1] || null;
+
+      console.log(
+        `[SmartResolver] Candidates for "${canonicalQuery}": ` +
+        candidates.map(c => `${c.source}=${c.quality.score.toFixed(1)}`).join(', ') +
+        ` → winner: ${winner.source}`
+      );
+
+      const portionConfidence = this._calculatePortionConfidence(portionToUse, portionSource);
+      const macroConsistency = checkMacroConsistency({ foodName: canonicalQuery, macros: winner.macros });
+      const winnerPlausibility = checkNutritionPlausibility({ foodName: canonicalQuery, macros: winner.macros, servingGrams: winner.raw.servingGrams });
 
       const result = {
-        ...openAIResult,
-        source: 'openai_estimation_fallback',
-        sourceConfidence: openAIResult.confidence,
-        reason: 'OpenAI estimation (USDA unavailable)',
-        limitation: 'Estimated values - may not be exact',
-        components: openAIResult.components || [],
-        isComplex: openAIResult.isComplex || false,
-        estimationTier: promptTier, // FIXED P0: Track which prompt tier
+        ...winner.raw,
+        macros: winner.macros,
+        source: winner.source,
+        sourceConfidence: Math.round(winner.quality.score),
+        qualityBreakdown: winner.quality.breakdown,
+        runnerUpSource: runnerUp?.source || null,
+        runnerUpScore: runnerUp ? Math.round(runnerUp.quality.score) : null,
+        reason: `Highest-quality candidate (${winner.source}, score ${winner.quality.score.toFixed(1)}${runnerUp ? ` vs ${runnerUp.source} ${runnerUp.quality.score.toFixed(1)}` : ', no other candidate available'})`,
+        // Atwater is a sanity flag on the result, never a trust gate.
+        macroConsistent: macroConsistency.consistent,
+        nutritionPlausible: winnerPlausibility.plausible,
+        plausibilityCheck: winnerPlausibility,
+        openaiBackup: winner.source === 'openai_estimation' ? null : openAIResult,
+        components: winner.source === 'openai_estimation' ? (openAIResult.components || []) : [],
+        isComplex: isComplex,
+        estimationTier: promptTier,
+        portion_source: portionSource,
+        portion_confidence: portionConfidence,
+        user_adjustment_count: 0,
+        can_learn: userId !== null,
         cacheKey,
+        hasSpecificIngredient,
       };
 
-      // Only cache if OpenAI result is valid
-      if (openAIResult.validationPassed) {
+      this._trackPromptMetrics(promptTier, result);
+      if (winner.source === 'usda_verified') this.stats.usdaVerifications++;
+      else this.stats.openaiEstimates++;
+
+      // Cache only when the winning candidate has real completeness signal
+      // (>=4 of 7 macro fields present) — an empty/near-empty result would
+      // poison the cache the same way an unvalidated one used to.
+      if (winner.quality.breakdown.presentCount >= 4) {
         await this._cacheSet(cacheKey, result);
       } else {
+        console.warn(`[SmartResolver] NOT caching low-completeness result for "${canonicalQuery}" (${winner.quality.breakdown.presentCount}/7 macro fields present)`);
         this.stats.invalidResults = (this.stats.invalidResults || 0) + 1;
       }
+
       return result;
 
     } catch (error) {
@@ -437,6 +451,17 @@ class SmartNutritionResolver {
   _hasSpecificIngredient(foodQuery) {
     const query = foodQuery.toLowerCase().trim();
 
+    // BUG (found live-testing "chicken curry" — it never reached USDA or
+    // ingredient-breakdown because this returned true): the regexes below
+    // are start-anchored word matches only ("/^chicken\b/"), which match
+    // "chicken curry" and "fried rice" exactly as readily as "chicken
+    // breast" and "rice" alone — despite this function's own docstring
+    // explicitly listing "chicken curry → NO" and "fried rice → NO" as
+    // required exclusions. Nothing ever implemented that exclusion. Reuse
+    // the already-curated complex-dish list so a food never gets treated
+    // as "just a specific ingredient" when it's also known to be complex.
+    if (this._isLikelyComplex(query)) return false;
+
     // CRITICAL: Only match ingredients that appear at START of query
     // This prevents "pasta carbonara" from matching "pasta"
     const simpleIngredients = [
@@ -456,6 +481,80 @@ class SmartNutritionResolver {
     ];
 
     return simpleIngredients.some(regex => regex.test(query));
+  }
+
+  /**
+   * Source-agnostic quality score for a resolved nutrition candidate — no
+   * source wins just because of WHICH source it came from. Every candidate
+   * (OpenAI direct estimate, ingredient-breakdown totals, USDA record) is
+   * scored the same way and the highest score wins.
+   *
+   * Deliberately does NOT use Atwater validationPassed as a component: that
+   * check only proves protein/carbs/fat roughly agree with calories — it
+   * says nothing about fiber/sugar/sodium/micros/food-identity/serving
+   * size, so it must never by itself make a result "trustworthy" (the bug
+   * that let "cooked pulao rice" pass through with sugar_g:0, sodium_mg:0
+   * unquestioned). Completeness of the ACTUAL fields is what's scored here.
+   *
+   * @param {object|null} macros - canonical {calories_kcal, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg}
+   * @param {object} context
+   * @param {'openai_estimation'|'ingredient_breakdown'|'usda_verified'} context.source
+   * @param {boolean} [context.hasMicros] - whether this candidate reports any micronutrients
+   * @param {number|null} [context.matchQuality] - USDA's own 0-~180ish match score, when source is usda_verified
+   * @param {number|null} [context.ingredientCount] - ingredient-breakdown's decomposition size, when source is ingredient_breakdown
+   * @param {'none'|'moderate'|'severe'} [context.plausibilitySeverity] - calorie-density plausibility for THIS candidate specifically
+   * @returns {{score: number, breakdown: object}}
+   */
+  _scoreNutritionCandidate(macros, { source, hasMicros = false, matchQuality = null, ingredientCount = null, plausibilitySeverity = 'none' } = {}) {
+    if (!macros) return { score: 0, breakdown: { reason: 'no macros' } };
+
+    // Nutrient completeness (up to 50): a field present and non-null counts,
+    // REGARDLESS of whether its value is 0 — 0 can be a legitimate real
+    // value (see requirement: don't require fiber/sugar/sodium to be
+    // non-zero). Only null/undefined counts as missing.
+    const macroFields = ['calories_kcal', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g', 'sugar_g', 'sodium_mg'];
+    const presentCount = macroFields.filter((f) => macros[f] !== null && macros[f] !== undefined).length;
+    const completenessScore = (presentCount / macroFields.length) * 50;
+
+    // Micronutrients (up to 15) — a real but secondary signal; a candidate
+    // missing micros entirely isn't disqualified, just scores lower.
+    const microScore = hasMicros ? 15 : 0;
+
+    // Provenance (up to 20) — a bounded factor, not a gate. A record-based
+    // or decomposed source starts with an edge over a single opaque AI
+    // number, but a big completeness gap (the far larger 50-point factor
+    // above) can still make a less-complete record lose to a more-complete
+    // AI estimate, per "no source wins automatically."
+    const provenanceScore = { usda_verified: 20, ingredient_breakdown: 15, openai_estimation: 10 }[source] ?? 5;
+
+    // Match/representativeness quality (up to 15), source-specific signal
+    // for how well THIS candidate actually fits the query.
+    let matchScoreNormalized = 0;
+    if (source === 'usda_verified' && typeof matchQuality === 'number') {
+      matchScoreNormalized = Math.min(15, matchQuality / 10);
+    } else if (source === 'ingredient_breakdown' && typeof ingredientCount === 'number') {
+      matchScoreNormalized = Math.min(15, ingredientCount * 3);
+    } else if (source === 'openai_estimation') {
+      matchScoreNormalized = 10; // baseline — it always has some identification signal
+    }
+
+    // Plausibility penalty — the missing piece that let "Banana chips" win
+    // for "banana" (519 kcal/100g, flagged severe), "Beans and white rice"
+    // win for "white rice", and "POWERADE" win for "Coca-Cola": all three
+    // were confirmed live to score HIGHER than the correct alternative on
+    // completeness/provenance/match alone, because plausibility was only
+    // checked on the already-chosen winner, after the fact. A wrong-food
+    // match can still have complete-looking fields; this is what actually
+    // catches it before it wins, not just flags it afterward. Sized larger
+    // than any other single factor (up to 100) so a severe mismatch can't
+    // be masked by otherwise-strong completeness/provenance scores.
+    const plausibilityPenalty = plausibilitySeverity === 'severe' ? 100 : plausibilitySeverity === 'moderate' ? 40 : 0;
+
+    const score = completenessScore + microScore + provenanceScore + matchScoreNormalized - plausibilityPenalty;
+    return {
+      score,
+      breakdown: { completenessScore, microScore, provenanceScore, matchScoreNormalized, plausibilityPenalty, presentCount, totalFields: macroFields.length },
+    };
   }
 
   /**
@@ -1216,8 +1315,17 @@ class SmartNutritionResolver {
         return null;
       }
 
-      // Return best match
-      const bestMatch = results[0];
+      // Was: results[0] — the raw USDA API's own ranking, completely
+      // unchecked against the actual query. selectBestUSDAMatch scores
+      // every candidate (exact phrase, word order/coverage, ingredient-
+      // conflict detection, cooking-method alignment) and returns null if
+      // nothing clears a minimum quality bar, instead of confidently
+      // attaching some other food's real nutrition data to this query.
+      const bestMatch = selectBestUSDAMatch(results, foodQuery);
+      if (!bestMatch) {
+        console.warn(`[SmartResolver] No USDA match cleared the quality threshold for "${foodQuery}" — falling through.`);
+        return null;
+      }
 
       return {
         foodName: bestMatch.description,
@@ -1228,6 +1336,7 @@ class SmartNutritionResolver {
         micros: bestMatch.micros,
         fdcId: bestMatch.fdcId,
         dataType: bestMatch.dataType,
+        matchScore: bestMatch.matchScore, // for quality-scoring by the caller
       };
 
     } catch (error) {

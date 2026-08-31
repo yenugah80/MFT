@@ -341,6 +341,76 @@ function sumMicros(itemMicrosList) {
  * fallback label) for provenance, `.macros` with (a subset of) MACRO_FIELDS,
  * and `.micros` in any shape normalizeMicros() accepts.
  */
+// Sources backed by an actual resolved record (a real database entry or a
+// decomposed recipe), as opposed to a single opaque AI-generated number.
+const RECORD_BASED_SOURCES = new Set([
+  'usda_verified', 'ingredient_breakdown', 'canonical_dictionary', 'brand_database', 'off_verified',
+]);
+
+/**
+ * Item-level confidence tier — High/Medium/Low — derived from signals that
+ * already exist per resolution path (smartNutritionResolver's `source` and
+ * plausibility check for text mode; canonicalNutrition's own `meta` flags
+ * for photo/voice/multimodal, which don't yet have a multi-candidate
+ * comparison the way text mode does after Stage 2 — this is real, not a
+ * bug: those modes will get the same richer signal once Stage 1 gives them
+ * an equivalent candidate comparison).
+ *
+ *   High:   resolved from an actual record AND the quantity was stated
+ *           (not defaulted) AND nothing was flagged.
+ *   Medium: resolved from a record but the quantity was defaulted, OR an
+ *           AI estimate with nothing flagged.
+ *   Low:    a severe plausibility flag, OR missing/invalid field issues on
+ *           this item, OR the estimate never passed its own validation.
+ *
+ * @param {object} context
+ * @param {string} [context.source] - e.g. 'usda_verified', 'openai_estimation'
+ * @param {boolean} [context.portionIsEstimated] - true when quantity was defaulted, not stated
+ * @param {'none'|'moderate'|'severe'} [context.plausibilitySeverity]
+ * @param {boolean} [context.hasFieldIssues] - true if this item appears in meta.itemFieldIssues
+ * @param {boolean} [context.validated] - false if the estimate failed its own schema/macro validation
+ * @returns {'high'|'medium'|'low'}
+ */
+export function computeConfidenceTier({
+  source,
+  portionIsEstimated = false,
+  plausibilitySeverity = 'none',
+  hasFieldIssues = false,
+  validated = true,
+} = {}) {
+  if (plausibilitySeverity === 'severe' || hasFieldIssues || validated === false) return 'low';
+  if (RECORD_BASED_SOURCES.has(source) && !portionIsEstimated) return 'high';
+  return 'medium';
+}
+
+/**
+ * Attaches computeConfidenceTier's result to every item, for the modes
+ * (photo/voice/multimodal via food.js/voiceLog.js) that don't have text
+ * mode's richer per-candidate resolver signal — this is the leaner
+ * derivation the plan calls for: item.source/portion.isEstimated/
+ * plausibilityCheck plus whether aggregateCanonicalTotals's own meta
+ * flagged this item. Call with the `meta` returned by
+ * aggregateCanonicalTotals for the SAME items array.
+ * @param {Array} items
+ * @param {object} meta - the `meta` object from aggregateCanonicalTotals(items)
+ * @returns {Array} items, each with confidenceTier attached (does not mutate the input)
+ */
+export function attachConfidenceTiers(items, meta) {
+  const issueItemIds = new Set((meta?.itemFieldIssues || []).map((i) => i.itemId));
+  return (items || []).map((item) => {
+    const itemId = item?.itemId || item?.name;
+    return {
+      ...item,
+      confidenceTier: computeConfidenceTier({
+        source: item?.source || item?.resolutionSource || 'ai_estimate',
+        portionIsEstimated: item?.portion?.isEstimated ?? true,
+        plausibilitySeverity: item?.plausibilityCheck?.severity || 'none',
+        hasFieldIssues: issueItemIds.has(itemId),
+      }),
+    };
+  });
+}
+
 export function aggregateCanonicalTotals(items) {
   const macros = Object.fromEntries(MACRO_FIELDS.map((f) => [f, 0]));
   const missingMacroFields = new Set();

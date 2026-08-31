@@ -136,7 +136,11 @@ describe('scaleNutritionByQuantity — quantity-adjuster scaling', () => {
     // 1 roti -> 3 rotis
     const { macros: scaled } = scaleNutritionByQuantity(macros, {}, 3);
     expect(scaled.calories_kcal).toBe(360);
-    expect(scaled.sugar_g).toBeCloseTo(4.5);
+    // Whole numbers, not 2-decimal — foodLogTable's macro columns are all
+    // `integer`, so a value shown during editing must match what will
+    // actually be saved a moment later, not a precision that gets silently
+    // dropped at persistence.
+    expect(scaled.sugar_g).toBe(5); // 1.5 * 3 = 4.5, rounds to 5
     expect(scaled.sodium_mg).toBe(630);
   });
 

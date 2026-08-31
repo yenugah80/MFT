@@ -5,6 +5,7 @@ import {
   parseStrictNumber,
   parseNumberWithUnit,
   convertUnit,
+  computeConfidenceTier,
   MICRO_UNITS,
   MACRO_FIELDS,
 } from '../src/utils/canonicalNutrition.js';
@@ -429,5 +430,42 @@ describe('canonical field list stays in sync with mobile/constants/dailyValues.j
     for (const key of ['calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'sodium', 'vitaminC']) {
       expect(MICRO_UNITS[key]).toBe('mg');
     }
+  });
+});
+
+describe('computeConfidenceTier', () => {
+  it('High: record-based source, stated quantity, no flags', () => {
+    expect(computeConfidenceTier({ source: 'usda_verified', portionIsEstimated: false })).toBe('high');
+    expect(computeConfidenceTier({ source: 'ingredient_breakdown', portionIsEstimated: false })).toBe('high');
+  });
+
+  it('Medium: record-based source but a defaulted (estimated) quantity', () => {
+    expect(computeConfidenceTier({ source: 'usda_verified', portionIsEstimated: true })).toBe('medium');
+  });
+
+  it('Medium: AI estimate with nothing flagged', () => {
+    expect(computeConfidenceTier({ source: 'openai_estimation', portionIsEstimated: false })).toBe('medium');
+    expect(computeConfidenceTier({ source: 'openai_estimation', portionIsEstimated: true })).toBe('medium');
+  });
+
+  it('Low: severe plausibility overrides everything else, even a record-based source', () => {
+    expect(computeConfidenceTier({ source: 'usda_verified', portionIsEstimated: false, plausibilitySeverity: 'severe' })).toBe('low');
+  });
+
+  it('Low: item-level field issues override a record-based source', () => {
+    expect(computeConfidenceTier({ source: 'usda_verified', portionIsEstimated: false, hasFieldIssues: true })).toBe('low');
+  });
+
+  it('Low: an unvalidated estimate, even with no other flags', () => {
+    expect(computeConfidenceTier({ source: 'openai_estimation_unvalidated', validated: false })).toBe('low');
+  });
+
+  it('moderate plausibility alone does not demote to Low (only severe does)', () => {
+    expect(computeConfidenceTier({ source: 'usda_verified', portionIsEstimated: false, plausibilitySeverity: 'moderate' })).toBe('high');
+  });
+
+  it('defaults sensibly with no context at all', () => {
+    expect(computeConfidenceTier()).toBe('medium');
+    expect(computeConfidenceTier({})).toBe('medium');
   });
 });

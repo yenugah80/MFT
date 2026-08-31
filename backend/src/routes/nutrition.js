@@ -19,6 +19,7 @@ import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { computeConfidenceTier } from "../utils/canonicalNutrition.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import {
   getTrackedDaySnapshot,
@@ -126,12 +127,41 @@ router.post("/log", async (req, res) => {
         `source=${sourceMeta?.inputMode || sourceMeta?.source || 'unknown'} aiModel=${aiModel || 'n/a'}`
       );
     }
+    // Stage 3+7: a server-computed confidence tier, same rule as analysis
+    // time (computeConfidenceTier), using whatever signal actually exists
+    // at THIS boundary. This endpoint receives one flattened meal, not the
+    // per-item array analysis produced — if the client forwarded its own
+    // per-item confidenceTier/source/portionIsEstimated in sourceMeta, use
+    // that; otherwise this is a real, independently-computed fallback, not
+    // a placeholder, using the same plausibility/reconciliation signals
+    // already computed a few lines above.
+    const confidenceTier = computeConfidenceTier({
+      source: sourceMeta?.source || sourceMeta?.resolutionSource,
+      portionIsEstimated: sourceMeta?.portionIsEstimated ?? true,
+      plausibilitySeverity: plausibility.severity,
+      hasFieldIssues: false,
+      validated: macroConsistency.consistent || macroReconciled,
+    });
+
     const auditedSourceMeta = {
       ...(sourceMeta || {}),
       plausibility,
       macroReconciled,
+      confidenceTier,
       ...(macroReconciled ? { originalCaloriesKcal } : {}),
     };
+
+    // foodLogTable's macro columns are all `integer` (schema.js) — Postgres
+    // does NOT silently round a decimal on insert, it hard-rejects it
+    // ("invalid input syntax for type integer"), confirmed live: a
+    // completely realistic value (banana protein 1.3g) 500'd the whole
+    // request. Round here, once, right before persistence — matches the
+    // Stage 3c rounding policy (round once, at the point that determines
+    // what's saved) and is the ONE place in the entire pipeline every
+    // input mode's macro values converge before hitting this column type.
+    // null stays null (missing, not a confirmed zero) — Math.round(null)
+    // would silently coerce to 0 and destroy that distinction.
+    const roundOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
 
     // 3. Idempotent Insert: Use ON CONFLICT DO NOTHING
     // If (userId, clientEventId) already exists → returns empty array
@@ -139,13 +169,13 @@ router.post("/log", async (req, res) => {
       .values({
         userId,
         foodName,
-        calories: effectiveCalories,
-        protein,
-        carbs,
-        fats,
-        fiber: fiber ?? null,
-        sugar: sugar ?? null,
-        sodium: sodium ?? null,
+        calories: roundOrNull(effectiveCalories),
+        protein: roundOrNull(protein),
+        carbs: roundOrNull(carbs),
+        fats: roundOrNull(fats),
+        fiber: roundOrNull(fiber),
+        sugar: roundOrNull(sugar),
+        sodium: roundOrNull(sodium),
         servingSize,
         mealType,
         micros: micros || {},
@@ -187,22 +217,32 @@ router.post("/log", async (req, res) => {
     if (isNewEntry) {
       // First entry of the day → INSERT
       // Subsequent entries → UPDATE with additive increment
+      // Same integer-column constraint as foodLogTable above (this table's
+      // columns are integer too) — confirmed live this second insert crashes
+      // the same way on a realistic decimal macro value. This table's own
+      // 0-default semantics (a fresh day's running total) are unrelated to
+      // per-meal missing-vs-zero, so `|| 0` stays as the existing fallback;
+      // only the rounding is new.
+      const dailyCalories = Math.round(effectiveCalories || 0);
+      const dailyProtein = Math.round(protein || 0);
+      const dailyCarbs = Math.round(carbs || 0);
+      const dailyFats = Math.round(fats || 0);
       await db.insert(dailyNutritionSummaryTable)
         .values({
           userId,
           date: toDateStr(today),
-          totalCalories: effectiveCalories || 0,
-          totalProtein: protein || 0,
-          totalCarbs: carbs || 0,
-          totalFats: fats || 0,
+          totalCalories: dailyCalories,
+          totalProtein: dailyProtein,
+          totalCarbs: dailyCarbs,
+          totalFats: dailyFats,
         })
         .onConflictDoUpdate({
           target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
           set: {
-            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${effectiveCalories || 0}`,
-            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
-            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
-            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,
+            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${dailyCalories}`,
+            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${dailyProtein}`,
+            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${dailyCarbs}`,
+            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${dailyFats}`,
             updatedAt: new Date(),
           },
         });

@@ -10,7 +10,7 @@ import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
 import { checkNutritionPlausibility, checkMacroConsistency, SKIPPED_PLAUSIBILITY_RESULT } from "../services/nutritionPlausibilityChecker.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
-import { aggregateCanonicalTotals, normalizeMicros } from "../utils/canonicalNutrition.js";
+import { aggregateCanonicalTotals, normalizeMicros, attachConfidenceTiers } from "../utils/canonicalNutrition.js";
 
 // Normalizes every item's micros into canonical {value, unit} form — see
 // canonicalNutrition.js's header comment. A single-item meal reads
@@ -147,6 +147,7 @@ router.get("/barcode/:code", async (req, res) => {
     // adds it for exactly this reason); only the meal-level totals differed.
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
 
     console.log(`[FoodBarcode] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse });
@@ -369,6 +370,7 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
     // be used directly.
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
 
     // CRITICAL FIX: Add top-level foodName for backwards compatibility
     // The frontend's buildFoodLog expects raw.foodName, but unifiedResponse has items[0].name
@@ -764,6 +766,7 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
     // Same canonical totals every input mode sends — see /barcode above.
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
 
     // Add multimodal and enhanced analysis metadata
     unifiedResponse.multimodal = {

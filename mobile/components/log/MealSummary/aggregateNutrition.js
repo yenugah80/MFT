@@ -153,9 +153,15 @@ export function aggregateNutrition(analysisResult) {
  * whether or not QuantityAdjuster's static config has per-unit data for it.
  */
 export function scaleNutritionByQuantity(macros, micros, scaleFactor) {
+  // Whole numbers, not 2-decimal — foodLogTable's macro columns are all
+  // `integer` in the schema, so a value shown here to 2 decimal places
+  // during quantity editing (e.g. "82.5") never matches what actually gets
+  // saved a moment later ("83"). Round to what will actually persist, once,
+  // here — not differently at every display point downstream. Micros stay
+  // unrounded: they persist as a flexible JSON column, no integer mismatch.
   const scaledMacros = {};
   for (const [key, value] of Object.entries(macros || {})) {
-    scaledMacros[key] = typeof value === 'number' ? Math.round(value * scaleFactor * 100) / 100 : value;
+    scaledMacros[key] = typeof value === 'number' ? Math.round(value * scaleFactor) : value;
   }
 
   const scaledMicros = {};

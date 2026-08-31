@@ -10,7 +10,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { attachOpenAIConsent, requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import crypto from 'crypto';
 import { buildUnifiedResponse } from '../utils/unifiedResponseBuilder.js';
-import { aggregateCanonicalTotals, normalizeMicros } from '../utils/canonicalNutrition.js';
+import { aggregateCanonicalTotals, normalizeMicros, attachConfidenceTiers } from '../utils/canonicalNutrition.js';
 
 function normalizeItemMicros(items) {
   return (items || []).map((item) => ({ ...item, micros: normalizeMicros(item.micros) }));
@@ -260,6 +260,7 @@ router.post(
     // totals never matched what it needed.
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
 
     // Zero items with AI available-but-skipped-for-consent is a different
     // situation from zero items after AI genuinely tried and found nothing:
@@ -433,6 +434,7 @@ router.post(
     // Same canonical totals shape every other endpoint sends.
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
 
     console.log(`[VoiceLog/Transcribe] Items: ${unifiedResponse.items.length}, Health: ${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse, text });
