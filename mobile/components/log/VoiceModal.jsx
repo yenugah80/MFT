@@ -976,8 +976,16 @@ export function VoiceModal({
   // A recogniser that cannot initialise on this device will not initialise on
   // the next tap either, so offering "Try Again" is a dead end — it was shown
   // directly beneath a message telling the user to switch to text or photo.
+  // Same reasoning applies to a broken audio input format (see
+  // useServerVoice's isPermanentVoiceFailure) — a device that reports an
+  // invalid microphone format won't report a valid one a second later, so
+  // this also needs "Use Text Instead", not a "Try Again" that repeats the
+  // identical failure.
   const isUnrecoverable =
-    typeof displayError === 'string' && displayError.includes("isn't available on this device");
+    typeof displayError === 'string' && (
+      displayError.includes("isn't available on this device")
+      || displayError === "Your microphone isn't available right now. Try text or photo logging instead."
+    );
 
   // ─────────────────────────────────────────────
   // Dynamic styles based on mode
@@ -1234,10 +1242,19 @@ export function VoiceModal({
                     </TouchableOpacity>
                   ) : (
                     <>
-                      {/* Re-record Button */}
-                      <TouchableOpacity style={styles.reRecordButton} onPress={handleRerecord}>
+                      {/* Re-record — icon-only. "Re-record" as a label was eating
+                          enough fixed width (alongside "Edit") that Confirm, the
+                          only flex:1 button of the three, was left with too little
+                          room and wrapped mid-word ("Confi"/"rm") on a real device.
+                          The action is unambiguous from the icon plus its
+                          accessibility label. */}
+                      <TouchableOpacity
+                        style={styles.reRecordButton}
+                        onPress={handleRerecord}
+                        accessibilityLabel="Re-record"
+                        accessibilityRole="button"
+                      >
                         <Ionicons name="refresh" size={ICON_SIZES.md} color={TEXT.tertiary} />
-                        <Text style={styles.reRecordButtonText}>Re-record</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity style={styles.secondaryButton} onPress={handleEditTranscription}>
@@ -1253,7 +1270,7 @@ export function VoiceModal({
                           style={styles.primaryButtonGradient}
                         >
                           <Ionicons name="checkmark-circle" size={ICON_SIZES.md} color={TEXT.white} />
-                          <Text style={styles.primaryButtonText}>Confirm</Text>
+                          <Text style={styles.primaryButtonText} numberOfLines={1}>Confirm</Text>
                         </LinearGradient>
                       </TouchableOpacity>
                     </>

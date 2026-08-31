@@ -47,7 +47,16 @@ function isPermanentVoiceFailure(code, detail) {
     String(code) === '300' ||
     text.includes('failed to initialize recognizer') ||
     text.includes('not supported') ||
-    text.includes('restricted')
+    text.includes('restricted') ||
+    // AVFoundation's own internal assertion text when the audio input
+    // hardware reports an invalid format (0 channels/sample rate) — seen
+    // live as a raw "required condition is false:
+    // IsFormatSampleRateAndChannelCountValid(format)" string reaching a
+    // real user. Overwhelmingly a Simulator artifact (no real mic
+    // hardware routed to it), but on whatever device hits it, a retry
+    // asks the same broken input node the same question again.
+    text.includes('required condition is false') ||
+    text.includes('isformatsamplerateandchannelcountvalid')
   );
 }
 
@@ -74,6 +83,12 @@ function describeVoiceStartFailure(code, detail, locale) {
   }
   if (text.includes('recognizer') || text.includes('unavailable')) {
     return 'Speech recognition is unavailable right now. Please try again in a moment.';
+  }
+  // Raw AVFoundation assertion text (invalid audio input format) — a real
+  // user must never see "IsFormatSampleRateAndChannelCountValid(format)".
+  // Same category as the microphone genuinely being unusable right now.
+  if (text.includes('required condition is false') || text.includes('isformatsamplerateandchannelcountvalid')) {
+    return "Your microphone isn't available right now. Try text or photo logging instead.";
   }
   // Unknown: keep the underlying text visible rather than hiding it.
   return `Couldn't start voice recording${detail ? ` — ${detail}` : ''}. Try text or photo logging instead.`;
@@ -136,6 +151,15 @@ export const useServerVoice = (options = {}) => {
   // Refs for liveness and timer management
   const isActiveRef = useRef(false);
   const timersRef = useRef([]);
+  // Separate from isActiveRef (which tracks a mid-flight transcribe/analyze
+  // session, not the start call itself). Nothing previously stopped
+  // startRecording() from being re-entered while a first call was still
+  // awaiting Voice.start() — the exact class of bug that produced a real
+  // EXC_BAD_ACCESS crash in this same native module via a different hook.
+  // VoiceModal's own handleStart guard covers the current single caller,
+  // but the source of truth should refuse re-entry too, not rely solely on
+  // its one caller remembering to.
+  const isStartingRef = useRef(false);
 
   // Request deduplication and caching
   const pendingRequestsRef = useRef(new Map()); // Prevent duplicate concurrent requests
@@ -266,6 +290,16 @@ export const useServerVoice = (options = {}) => {
   };
 
   const startRecording = useCallback(async () => {
+    // Must be the very first thing this function does, synchronously,
+    // before any await — otherwise a second call arriving while the first
+    // is still mid-setup (awaiting requestRecordingPermissionsAsync,
+    // Voice.start(), etc.) races underneath it. See the comment on
+    // isStartingRef above for what that race actually does.
+    if (isStartingRef.current) {
+      console.warn('[useServerVoice] startRecording called while already starting — ignoring');
+      return;
+    }
+    isStartingRef.current = true;
     try {
       if (!Voice) {
         setError('Voice recording not available (requires development build)');
@@ -358,6 +392,13 @@ export const useServerVoice = (options = {}) => {
       if (audioRecorder.isRecording) {
         try { await audioRecorder.stop(); } catch {}
       }
+    } finally {
+      // Always released once this call settles, on every exit path (success,
+      // permission-denied early return, recogniser-unavailable-but-still-
+      // recording early return, or the general failure path) — the guard's
+      // only job is refusing a second call while this one is in flight, not
+      // permanently disabling the mic afterward.
+      isStartingRef.current = false;
     }
   }, [audioRecorder, speechLocale]);
 

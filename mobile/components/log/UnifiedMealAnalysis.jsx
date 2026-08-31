@@ -60,32 +60,9 @@ import { DAILY_VALUES } from '../../constants/dailyValues';
 import { calculateMealScore as calculateUnifiedMealScore, getScoreLabel } from './MealSummary/MealScoreDial';
 import { getMealAllergenWarnings } from '../../utils/allergenDetection';
 import QuantityAdjuster from './QuantityAdjuster';
+import { calculateActiveItemTotals } from './calculateActiveItemTotals';
 
 // ============== UTILITY FUNCTIONS ==============
-
-/**
- * Extract sodium from micros object (handles multiple formats)
- * Returns sodium value in mg, or 0 if not found
- */
-function extractSodiumFromMicros(micros) {
-  if (!micros) return 0;
-
-  // Try various key formats: sodium, sodium_mg, Sodium
-  const sodiumKeys = ['sodium', 'sodium_mg', 'Sodium'];
-  for (const key of sodiumKeys) {
-    const val = micros[key];
-    if (val !== undefined && val !== null) {
-      // Handle both {sodium: 1700} and {sodium: {value: 1700}}
-      if (typeof val === 'object' && val.value !== undefined) {
-        return val.value;
-      }
-      if (typeof val === 'number') {
-        return val;
-      }
-    }
-  }
-  return 0;
-}
 
 function calculateMacroPercentages(protein, carbs, fat) {
   const proteinCal = (protein || 0) * 4;
@@ -1211,64 +1188,9 @@ export default function UnifiedMealAnalysis({
         }
       : { nutriScore: null, nutriScoreValue: null, healthScore: null };
 
-    // Calculate from active items only (exclude removed items)
-    // Also need original item indices to check excluded ingredients
-    const activeIndices = items.map((_, idx) => idx).filter(idx => !excludedItems.has(idx));
-
-    const result = activeItems.reduce((acc, item, arrIdx) => {
-      const macros = item.macros || {};
-      const itemMicros = item.micros || {};
-      const originalIndex = activeIndices[arrIdx]; // Map back to original index
-
-      // Start with item's base macros
-      let itemCalories = macros.calories_kcal || macros.calories || 0;
-      let itemProtein = macros.protein_g || macros.protein || 0;
-      let itemCarbs = macros.carbs_g || macros.carbs || 0;
-      let itemFat = macros.fat_g || macros.fat || 0;
-      let itemFiber = macros.fiber_g || macros.fiber || 0;
-      let itemSugar = macros.sugar_g || macros.sugar || 0;
-
-      // CRITICAL FIX: Subtract excluded ingredients' nutrients
-      const itemIngredients = item.ingredients || [];
-      itemIngredients.forEach((ing, ingIdx) => {
-        const ingKey = `${originalIndex}-${ingIdx}`;
-        if (excludedIngredients.has(ingKey)) {
-          // Subtract this ingredient's calories and macros
-          itemCalories -= ing.calories || 0;
-          itemProtein -= ing.protein || 0;
-          itemCarbs -= ing.carbs || 0;
-          itemFat -= ing.fat || 0;
-          itemFiber -= ing.fiber || 0;
-          itemSugar -= ing.sugar || 0;
-        }
-      });
-
-      // Ensure we don't go negative
-      acc.calories += Math.max(0, itemCalories);
-      acc.protein += Math.max(0, itemProtein);
-      acc.carbs += Math.max(0, itemCarbs);
-      acc.fat += Math.max(0, itemFat);
-      acc.fiber += Math.max(0, itemFiber);
-      acc.sugar += Math.max(0, itemSugar);
-
-      // FIX: Get sodium from macros first, fallback to micros
-      let itemSodium = macros.sodium_mg || macros.sodium || 0;
-      if (itemSodium === 0) {
-        itemSodium = extractSodiumFromMicros(itemMicros);
-      }
-      acc.sodium += itemSodium;
-
-      // Aggregate micros
-      Object.entries(itemMicros).forEach(([key, val]) => {
-        const numVal = typeof val === 'object' ? val.value : val;
-        if (!acc.micros[key]) {
-          acc.micros[key] = { value: 0, unit: typeof val === 'object' ? val.unit : 'mg' };
-        }
-        acc.micros[key].value += numVal || 0;
-      });
-
-      return acc;
-    }, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, micros: {} });
+    // Calculate from active items only (exclude removed items), honoring
+    // per-ingredient exclusions too. See calculateActiveItemTotals above.
+    const result = calculateActiveItemTotals(items, activeItems, excludedItems, excludedIngredients);
 
     return { ...result, ...backendScore };
   }, [activeItems, totals, excludedItems, excludedIngredients]);
