@@ -339,6 +339,20 @@ function ingredientNames(food) {
 }
 
 function attachSpellingReviews(parsedFood, resolvedItem, knownReviews) {
+  // The resolver already ran this food through the AI parser and a real
+  // record lookup (USDA/canonical dictionary/ingredient breakdown) before
+  // this ever runs — confidenceTier reflects whether that already
+  // succeeded. Re-validating an already-confidently-resolved name against
+  // fuzzyMatch.js's fixed, necessarily-incomplete word list is how "parsley"
+  // got flagged as a misspelling of "barley" (71% match) and "beet" of
+  // "beef" (75%) — both real, common foods the resolver identified
+  // correctly, just not everything the word list happens to contain. Only
+  // fall through to the spelling check when the resolver's own confidence
+  // is Low — i.e. it's already unsure, so a second opinion is worth having.
+  if (resolvedItem.confidenceTier && resolvedItem.confidenceTier !== 'Low') {
+    return;
+  }
+
   const candidates = Array.from(new Set([
     ...ingredientNames(parsedFood),
     ...ingredientNames(resolvedItem),

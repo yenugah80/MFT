@@ -94,14 +94,22 @@ const COMMON_FOODS = {
     'bell pepper', 'capsicum', 'mushroom', 'mushrooms',
     'corn', 'peas', 'green beans', 'beans',
     'cauliflower', 'asparagus', 'celery',
+    'parsley', 'beet', 'beets', 'beetroot',
   ],
   fruits: [
     'apple', 'banana', 'orange', 'mango', 'grapes',
     'strawberry', 'strawberries', 'blueberry', 'blueberries', 'raspberry',
+    'cranberry', 'cranberries',
     'watermelon', 'cantaloupe', 'honeydew', 'melon',
     'pineapple', 'papaya', 'kiwi', 'peach', 'pear',
     'cherry', 'cherries', 'plum', 'apricot',
     'coconut', 'avocado', 'pomegranate',
+  ],
+  spicesAndHerbs: [
+    'cumin', 'turmeric', 'coriander', 'ginger', 'cardamom', 'cloves',
+    'cinnamon', 'nutmeg', 'paprika', 'chili powder', 'garam masala',
+    'cilantro', 'oregano', 'thyme', 'rosemary', 'mint', 'basil',
+    'bay leaf', 'black pepper', 'salt',
   ],
   dairy: [
     'milk', 'whole milk', 'skim milk', 'almond milk', 'oat milk',

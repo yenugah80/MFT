@@ -60,4 +60,24 @@ describe('ingredient spelling review', () => {
       didYouMean: 'chicken',
     });
   });
+
+  // Regression: found via a live audit of common ingredients across Indian/
+  // Mediterranean/American cuisine — each of these real, common foods was
+  // missing from COMMON_FOODS and its full-string edit distance to some
+  // unrelated word cleared the 0.7 threshold, producing an actively wrong
+  // correction (not just "unrecognized" — a specific, wrong suggestion).
+  test.each([
+    ['parsley', 'barley'],
+    ['beet', 'beef'],
+    ['beetroot', 'beef'],
+    ['cranberries', 'strawberries'],
+  ])('does not miscorrect %s to the unrelated %s', (food) => {
+    expect(getSpellingSuggestions(food).needsCorrection).toBe(false);
+  });
+
+  test('recognizes common spices and herbs previously missing from the known-foods list', () => {
+    for (const spice of ['cumin', 'turmeric', 'coriander', 'ginger', 'cardamom', 'cilantro']) {
+      expect(getSpellingSuggestions(spice).needsCorrection).toBe(false);
+    }
+  });
 });
