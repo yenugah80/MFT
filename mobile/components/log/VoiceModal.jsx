@@ -274,6 +274,13 @@ export function VoiceModal({
   const successTimeoutRef = useRef(null);
   const isCancelledRef = useRef(false);
   const stopCalledRef = useRef(false);
+  // A ref, not state — a second tap can land before React re-renders the
+  // button out of the idle view, and useInstantVoice's own hook-level guard
+  // only closes half the gap (it protects Voice.start() itself, but
+  // handleStart still does a consent-check network round trip and haptics
+  // first). Checked synchronously at the top of handleStart so the second
+  // tap never even reaches those await points.
+  const isStartingRef = useRef(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
   // ─────────────────────────────────────────────
@@ -336,44 +343,55 @@ export function VoiceModal({
   }, [clearError, onClose, audioPlayback, clearRecordingUri, state]);
 
   const handleStart = useCallback(async () => {
-    isCancelledRef.current = false;
-    stopCalledRef.current = false;
-    setLocalError(null);
+    if (isStartingRef.current) return;
+    isStartingRef.current = true;
+    try {
+      isCancelledRef.current = false;
+      stopCalledRef.current = false;
+      setLocalError(null);
 
-    // If we already know this device can't transcribe on its own, the recording
-    // can only be completed server-side — which needs consent. Resolve that
-    // BEFORE recording rather than after.
-    //
-    // Otherwise the user describes a whole meal, taps stop, and only then meets
-    // a wall. Having spoken into a void is the single most frustrating version
-    // of this feature, and it would hit every user on a device without an
-    // on-device recogniser. Asking first costs one tap; asking last costs the
-    // recording and, quite reasonably, their trust in the feature.
-    if (isVoiceUnsupported) {
-      try {
-        const status = await apiClient.get('/consent/status');
-        if (status?.consent?.hasConsent !== true) {
-          setPendingConsentUri(null);
-          setState('consent');
-          await triggerHaptic('light');
-          announceForAccessibility('Voice transcription needs AI to be enabled.');
-          return;
+      // If we already know this device can't transcribe on its own, the recording
+      // can only be completed server-side — which needs consent. Resolve that
+      // BEFORE recording rather than after.
+      //
+      // Otherwise the user describes a whole meal, taps stop, and only then meets
+      // a wall. Having spoken into a void is the single most frustrating version
+      // of this feature, and it would hit every user on a device without an
+      // on-device recogniser. Asking first costs one tap; asking last costs the
+      // recording and, quite reasonably, their trust in the feature.
+      if (isVoiceUnsupported) {
+        try {
+          const status = await apiClient.get('/consent/status');
+          if (status?.consent?.hasConsent !== true) {
+            setPendingConsentUri(null);
+            setState('consent');
+            await triggerHaptic('light');
+            announceForAccessibility('Voice transcription needs AI to be enabled.');
+            return;
+          }
+        } catch (err) {
+          // Can't reach the consent check — let the recording proceed rather than
+          // blocking on a network hiccup. The post-recording path still catches a
+          // 403 and keeps the audio.
+          console.warn('[VoiceModal] Consent pre-check failed, proceeding:', err?.message);
         }
-      } catch (err) {
-        // Can't reach the consent check — let the recording proceed rather than
-        // blocking on a network hiccup. The post-recording path still catches a
-        // 403 and keeps the audio.
-        console.warn('[VoiceModal] Consent pre-check failed, proceeding:', err?.message);
       }
+
+      // Track recording started
+      trackVoiceRecordingStarted(isElderly ? 'elderly' : 'standard');
+
+      clearError();
+      await triggerHaptic(isElderly ? 'heavy' : 'light');
+      announceForAccessibility('Recording started. Speak your meal now.');
+      await startRecording();
+    } finally {
+      // Always released once this call is done, success or not — the guard's
+      // only job is closing the synchronous race window while THIS
+      // invocation is in flight, not permanently locking the button. Once
+      // recording actually starts, state moves off 'idle' and the mic
+      // button unmounts anyway (see the idle-only render below).
+      isStartingRef.current = false;
     }
-
-    // Track recording started
-    trackVoiceRecordingStarted(isElderly ? 'elderly' : 'standard');
-
-    clearError();
-    await triggerHaptic(isElderly ? 'heavy' : 'light');
-    announceForAccessibility('Recording started. Speak your meal now.');
-    await startRecording();
   }, [clearError, startRecording, isElderly, isVoiceUnsupported]);
 
   /**
