@@ -1406,7 +1406,7 @@ export default function LogScreen() {
                       <Text style={styles.suggestionsTitle}>Did you mean?</Text>
                     </View>
                     <Text style={styles.suggestionReviewText}>
-                      Confirm the ingredient below. Nutrition will be recalculated before you can log the meal.
+                      Confirm the ingredient below, or keep what you typed if it&apos;s already correct.
                     </Text>
                     {foodAnalysis.analysisResult.items.map(item => (
                       item.suggestions?.length > 0 && (
@@ -1424,6 +1424,15 @@ export default function LogScreen() {
                                 <Text style={styles.suggestionChipText}>{suggestion.canonical}</Text>
                               </TouchableOpacity>
                             ))}
+                            <TouchableOpacity
+                              style={styles.suggestionKeepChip}
+                              onPress={() => foodAnalysis.confirmItemSpelling(item.itemId)}
+                              accessibilityLabel={`Keep "${item.suggestions[0]?.original || item.name}" as typed`}
+                            >
+                              <Text style={styles.suggestionKeepChipText}>
+                                Keep &quot;{item.suggestions[0]?.original || item.name}&quot;
+                              </Text>
+                            </TouchableOpacity>
                           </ScrollView>
                         </View>
                       )
@@ -2476,6 +2485,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#D97706',
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  suggestionKeepChip: {
+    backgroundColor: 'transparent',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#9CA3AF',
+  },
+  suggestionKeepChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
     fontFamily: TYPOGRAPHY.family.semibold,
   },
 

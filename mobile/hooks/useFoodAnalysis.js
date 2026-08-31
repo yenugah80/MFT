@@ -2022,6 +2022,38 @@ export function useFoodAnalysis() {
   }, [setAnalysisResult]);
 
   /**
+   * Dismiss a "Did you mean?" spelling suggestion, keeping the user's
+   * original ingredient/food name as-is instead of the backend's fuzzy-
+   * matched correction. Without this, an item flagged by the backend's
+   * spell-checker (utils/fuzzyMatch.js, a fixed known-foods word list —
+   * any real term missing from that list gets flagged as a "misspelling"
+   * of whatever it's closest to) had exactly one way out: accept the
+   * suggested rename and re-analyze. There was no way to say "no, my
+   * original term is correct" — excluding the ingredient from totals
+   * (a separate, unrelated mechanism) never touched this item's
+   * requiresUserConfirmation/flags, so "Log Meal" stayed permanently
+   * blocked. This clears the block without discarding or re-analyzing
+   * the item.
+   * @param {string} itemId
+   */
+  const confirmItemSpelling = useCallback((itemId) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+      const updatedItems = prev.items.map(item =>
+        item.itemId === itemId
+          ? {
+              ...item,
+              requiresUserConfirmation: false,
+              suggestions: [],
+              flags: (item.flags || []).filter(flag => flag !== 'spelling_confirmation_required'),
+            }
+          : item
+      );
+      return { ...prev, items: updatedItems };
+    });
+  }, [setAnalysisResult]);
+
+  /**
    * Remove item from analysis
    * @param {string} itemId - Item ID to remove
    */
@@ -2286,6 +2318,7 @@ export function useFoodAnalysis() {
     // Multi-item methods
     updateItemQuantity,
     updateItemMacros,
+    confirmItemSpelling,
     removeItem,
     removeIngredient,
     runAnalysis,

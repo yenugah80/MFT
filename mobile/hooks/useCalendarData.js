@@ -225,7 +225,14 @@ export function useCalendarData(options = {}) {
         : null;
       const goalReached = totalCals >= (calorieGoal * 0.9) && totalCals <= (calorieGoal * 1.1);
 
-      // Calculate wellness score
+      // Calculate wellness score. This is healthCalculations.js's
+      // deliberately SIMPLIFIED score (calories/protein/hydration/
+      // micronutrients/mood — no activity factor), a different metric
+      // from wellnessScore.js's full 4-domain score used by
+      // WellnessScoreCard on the main dashboard. Its real params are
+      // hydrationPercent/moodIntensity, not waterIntake/waterGoal/
+      // moodLogs — do not "fix" these to match wellnessScore.js's
+      // signature, that's a different function entirely.
       const wellnessScore = calculateWellnessScore({
         calories: totalCals,
         calorieGoal,
@@ -300,7 +307,9 @@ export function useCalendarData(options = {}) {
       const activityMinutes = dayActivityLogs.reduce((sum, log) =>
         sum + (log.durationMinutes || log.duration || 0), 0);
 
-      // Calculate COMPLETE wellness score with all 4 domains
+      // Simplified score (healthCalculations.js) — see the comment on
+      // the today-branch call above for why hydrationPercent/moodIntensity
+      // are the correct param names here, not waterIntake/moodLogs.
       const wellnessScore = calculateWellnessScore({
         calories: totalCals,
         calorieGoal,
