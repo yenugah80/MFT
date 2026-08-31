@@ -1,15 +1,25 @@
 /**
  * Smart Nutrition Resolver
- * OpenAI-first approach with intelligent fallback strategy
+ * Source-agnostic candidate scoring — no source is trusted by identity.
  *
  * Strategy:
- * 1. OpenAI estimates nutrition (fast, no rate limits for estimates)
- * 2. If confidence >= 80% → Use OpenAI result
- * 3. If confidence < 80% → Verify with USDA (fallback) [CURRENTLY DISABLED - validating OpenAI-only]
- * 4. Cache results aggressively (24h TTL)
+ * 1. Gather every candidate available for the query: an OpenAI numeric
+ *    estimate always, plus a USDA record (when ENABLE_USDA_VERIFICATION is
+ *    set and a match clears the quality threshold in usdaMatching.js) and/
+ *    or an ingredient-breakdown decomposition (for multi-ingredient dishes).
+ * 2. Score every candidate the same way regardless of source
+ *    (_scoreNutritionCandidate: completeness, micro coverage, provenance,
+ *    match quality, minus a plausibility penalty) and pick the highest
+ *    score. USDA is not preferred just for being USDA, and OpenAI is not
+ *    preferred just for being fast — this replaced an earlier binary
+ *    "OpenAI first, USDA only as a low-confidence fallback" gate that in
+ *    practice almost never reached USDA at all (see the git history / this
+ *    session's plan doc for the live-testing trace that found it).
+ * 3. Cache results aggressively (24h TTL), keyed off the winning candidate.
  *
- * USDA Verification: Disabled by default (set ENABLE_USDA_VERIFICATION=true to enable)
- * Current strategy: Trust OpenAI entirely, monitor accuracy, re-enable USDA later if needed
+ * USDA verification itself is still gated by ENABLE_USDA_VERIFICATION
+ * (disabled by default) — that flag controls whether a USDA candidate is
+ * fetched at all, not whether USDA is "the" priority source once fetched.
  */
 
 import { usdaClient } from './apiClients/USDAClient.js';
@@ -24,6 +34,7 @@ import { cache as redisCache, isRedisAvailable } from '../config/redis.js';
 import { checkNutritionPlausibility, getExpectedDensityForFood, checkMacroConsistency } from './nutritionPlausibilityChecker.js';
 import { selectBestUSDAMatch } from '../utils/usdaMatching.js';
 import { ingredientBreakdownService } from './ingredientBreakdownService.js';
+import { reconcileComponentTotals } from '../utils/reconcileComponents.js';
 
 // FIXED P1: Feature flags for dual-prompt system
 const ENABLE_DUAL_PROMPT_SYSTEM = process.env.ENABLE_DUAL_PROMPT_SYSTEM !== 'false'; // Default: enabled
@@ -151,10 +162,10 @@ class SmartNutritionResolver {
 
   /**
    * Resolve nutrition for a single food item
-   * OpenAI-first with optional USDA verification
-   *
-   * STRATEGY: Trust OpenAI for ingredient preservation (spinach stays spinach!)
-   * Only use USDA for generic foods where exact nutrient data is critical
+   * Gathers every available candidate (OpenAI estimate, USDA record when
+   * enabled and a match clears the quality threshold, ingredient-breakdown
+   * decomposition for composite dishes) and picks the highest-scoring one —
+   * see the file header for the full source-agnostic scoring strategy.
    *
    * @param {string} foodQuery - The food name/description
    * @param {string} portion - Portion size (default: '1 serving')
@@ -793,6 +804,18 @@ class SmartNutritionResolver {
     }
     const finalMacros = correctedMacros || adjustedMacros;
 
+    // Reconcile the ingredient/component breakdown against the FINAL total
+    // (post context-adjustment, post plausibility-correction) so the item's
+    // displayed total and its own ingredient list never silently disagree —
+    // confirmed live: "chicken gravy curry" showed 165+60=225 across its two
+    // components against a 180 total, a 25% gap _validateNutritionSchema
+    // already detects (>15% tolerance) but previously only logged as a
+    // warning nothing downstream ever reads (resolveGenericFood attaches it
+    // to item.warnings, but no mobile screen renders that field).
+    const finalComponents = estimation.isComplex
+      ? reconcileComponentTotals(estimation.components, finalMacros?.calories_kcal)
+      : (estimation.components || []);
+
     // Return validated and structured response with enhanced fields
     return {
       foodName: estimation.foodName,
@@ -820,7 +843,7 @@ class SmartNutritionResolver {
       micros: estimation.micros || {},
 
       // Components for complex foods
-      components: estimation.components || [],
+      components: finalComponents,
       isComplex: estimation.isComplex || false,
 
       // Disambiguation info
@@ -1111,7 +1134,12 @@ class SmartNutritionResolver {
       errors.push('components must be array when isComplex=true');
     }
 
-    // Validate component sum matches total (±10% tolerance)
+    // Validate component sum matches total (±15% tolerance). Rescaling
+    // happens later, in the caller, once the FINAL macros (post context-
+    // adjustment, post plausibility-correction) are known — rescaling here
+    // against the pre-adjustment estimation.macros.calories_kcal would go
+    // stale again if either of those later steps changes calories. Just
+    // warn here; see the rescale block after `finalMacros` is computed.
     if (estimation.isComplex && Array.isArray(estimation.components) && estimation.components.length > 0) {
       const componentCalories = estimation.components.reduce((sum, c) => sum + (c.calories || 0), 0);
       const totalCalories = estimation.macros?.calories_kcal || 0;

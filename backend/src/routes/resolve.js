@@ -704,13 +704,10 @@ async function resolveGenericFood(parsedFood) {
     const quantity = parsedFood.quantity || portionResult.quantity || 1;
     const ingredientBreakdown = getIngredientBreakdown(parsedFood.name, quantity);
 
-    // Determine ingredients: use our curated breakdown if available, else use AI components
-    const ingredients = ingredientBreakdown
-      ? ingredientBreakdown.ingredients
-      : (nutrition.components || []);
-
     // 🆕 PRODUCTION-GRADE: Get full editable ingredient breakdown from AI service
-    // This enables users to add/remove/modify ingredients and recalculate nutrition
+    // This enables users to add/remove/modify ingredients and recalculate nutrition.
+    // Fetched BEFORE `ingredients` below (moved up from after) so it can serve as a
+    // reliable third fallback tier — see comment there.
     let editableIngredientBreakdown = null;
     try {
       // Detect user region from headers or default to US
@@ -737,6 +734,30 @@ async function resolveGenericFood(parsedFood) {
       console.warn(`[Resolve] Ingredient breakdown service unavailable for "${finalName}":`, err.message);
       // Continue without editable breakdown - not a critical failure
     }
+
+    // Determine ingredients: curated breakdown -> AI's own components -> the
+    // dedicated ingredient-breakdown service. The middle tier is unreliable:
+    // confirmed live, two equally composite dishes analyzed in the same
+    // request ("coconut pulao" and "chicken gravy curry") — one came back
+    // with a real components array, the other with none, despite both
+    // clearly being multi-ingredient dishes. Falling through to
+    // editableIngredientBreakdown (already fetched above for every item,
+    // previously computed and shipped but only used for the separate
+    // edit-ingredients flow) means a complex item is no longer silently
+    // ingredient-less just because the whole-dish call happened not to
+    // self-report a breakdown this time.
+    const ingredients = ingredientBreakdown
+      ? ingredientBreakdown.ingredients
+      : (nutrition.components?.length > 0
+          ? nutrition.components
+          : (editableIngredientBreakdown?.ingredients || []).map((ing) => ({
+              name: ing.name,
+              portion: ing.portion,
+              calories: ing.nutrition?.calories ?? 0,
+              protein: ing.nutrition?.protein ?? 0,
+              carbs: ing.nutrition?.carbs ?? 0,
+              fat: ing.nutrition?.fat ?? 0,
+            })));
 
     return {
       itemId,

@@ -473,11 +473,21 @@ export function buildFoodItem(raw, index = 0) {
     quantity: quantity,
     unit: unit,
 
-    // Portion object for frontend compatibility
+    // Portion object for frontend compatibility. Was rebuilt from scratch
+    // here with only amount/unit/servingText — silently dropping
+    // `isEstimated` and `gramsEquivalent` even when the raw item (barcode/
+    // photo/multimodal, all routed through this function) had them. Two
+    // real consequences: the mobile "estimated quantity" badge had nothing
+    // to read for these input modes, and useFoodAnalysis.js's
+    // updateItemQuantity() requires gramsEquivalent to scale a quantity
+    // edit at all — it was refusing to work for every item that came
+    // through here, regardless of input mode.
     portion: {
       amount: quantity,
       unit: unit,
-      servingText: `${quantity} ${unit}`
+      servingText: `${quantity} ${unit}`,
+      gramsEquivalent,
+      isEstimated: raw.portion?.isEstimated ?? raw.canonical?.portion?.isEstimated ?? true,
     },
 
     // Nutrition for total quantity (standardized field names)

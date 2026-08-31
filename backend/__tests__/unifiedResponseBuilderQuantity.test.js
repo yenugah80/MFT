@@ -84,3 +84,52 @@ describe('buildFoodItem — per-item healthScore/nutriScore (meal-level stamping
     expect(item.nutriScore).toBe('A');
   });
 });
+
+describe('buildFoodItem — portion.isEstimated / gramsEquivalent forwarding (Stage 8e)', () => {
+  // buildFoodItem previously rebuilt `portion` from scratch with only
+  // amount/unit/servingText, silently dropping both fields even when the
+  // raw item (every barcode/photo/multimodal/voice item routes through
+  // this function via buildUnifiedResponse) had them. Two real
+  // consequences: mobile's "estimated quantity" badge had nothing to read
+  // for these input modes, and useFoodAnalysis.js's updateItemQuantity()
+  // requires gramsEquivalent to do anything at all — it silently refused
+  // to work for every item from these modes.
+  it('forwards gramsEquivalent from raw.portion', () => {
+    const item = buildFoodItem({
+      name: 'Chicken curry',
+      quantity: 1,
+      portion: { amount: 1, unit: 'serving', gramsEquivalent: 250 },
+      nutrition: { calories: 300, protein: 20, carbs: 10, fat: 15, fiber: 2, sugar: 1, sodium: 400 },
+    });
+    expect(item.portion.gramsEquivalent).toBe(250);
+  });
+
+  it('forwards isEstimated from raw.portion when explicitly false (a confirmed quantity)', () => {
+    const item = buildFoodItem({
+      name: 'Banana',
+      quantity: 1,
+      portion: { amount: 1, unit: 'banana', gramsEquivalent: 118, isEstimated: false },
+      nutrition: { calories: 105, protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1, sugar: 14, sodium: 1 },
+    });
+    expect(item.portion.isEstimated).toBe(false);
+  });
+
+  it('defaults isEstimated to true when neither raw.portion nor raw.canonical.portion say otherwise', () => {
+    const item = buildFoodItem({
+      name: 'Mystery item',
+      quantity: 1,
+      nutrition: { calories: 100, protein: 5, carbs: 10, fat: 5, fiber: 1, sugar: 1, sodium: 50 },
+    });
+    expect(item.portion.isEstimated).toBe(true);
+  });
+
+  it('reads isEstimated from raw.canonical.portion as a fallback (the voiceLog.js/food.js shape)', () => {
+    const item = buildFoodItem({
+      name: 'Rice',
+      quantity: 1,
+      canonical: { portion: { isEstimated: false } },
+      nutrition: { calories: 200, protein: 4, carbs: 44, fat: 0.5, fiber: 1, sugar: 0, sodium: 5 },
+    });
+    expect(item.portion.isEstimated).toBe(false);
+  });
+});

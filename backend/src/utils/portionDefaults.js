@@ -118,19 +118,29 @@ export function getPortionAdjustmentOptions(foodName, currentPortion) {
   const countableConfig = getCountableFoodConfig(foodName);
 
   if (!countableConfig) {
-    // Generic serving-based options
+    // Generic serving-based options. Every option here must be a multiple
+    // of the SAME unit ('serving') — the mobile quantity editor
+    // (QuantityAdjuster.jsx) only ever sends a bare number back, keeping
+    // whatever unit label it started with; it has no way to represent
+    // "the user actually meant a different unit than before." The two
+    // previous entries here ('1 cup', '100g') violated that: they implied
+    // a genuine unit change but carried a `multiplier` the same as their
+    // serving-count, which the client would have applied as if it still
+    // meant "servings" — e.g. tapping "100g" would have set quantity to 1
+    // *serving*, not 100 grams. Also previously used `multiplier` instead
+    // of `quantity` — QuantityAdjuster reads option.quantity specifically
+    // (matching the countable branch below), so every tap here resolved
+    // to undefined and silently broke the edit.
     return {
       isCountable: false,
       currentPortion,
       unitLabel: 'serving',
       itemName: foodName,
       suggestedOptions: [
-        { label: '0.5 serving', value: '0.5 serving', multiplier: 0.5 },
-        { label: '1 serving', value: '1 serving', multiplier: 1 },
-        { label: '1.5 servings', value: '1.5 servings', multiplier: 1.5 },
-        { label: '2 servings', value: '2 servings', multiplier: 2 },
-        { label: '1 cup', value: '1 cup', multiplier: 1 },
-        { label: '100g', value: '100g', multiplier: 1 },
+        { label: '0.5 serving', value: '0.5 serving', quantity: 0.5 },
+        { label: '1 serving', value: '1 serving', quantity: 1 },
+        { label: '1.5 servings', value: '1.5 servings', quantity: 1.5 },
+        { label: '2 servings', value: '2 servings', quantity: 2 },
       ],
     };
   }

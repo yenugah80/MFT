@@ -120,6 +120,11 @@ router.get("/barcode/:code", async (req, res) => {
           amount: 1,
           unit: servingGrams ? 'serving' : '100g',
           gramsEquivalent: servingGrams || 100,
+          // A default "1 serving" is still a guess about how much the user
+          // actually ate, not a confirmed amount — barcode products never
+          // set this before, unlike text mode which already distinguishes
+          // stated-vs-defaulted quantity.
+          isEstimated: true,
         },
         healthScore: null,
         nutriScore: product.nutriscore || null,
@@ -304,7 +309,12 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
               sodium: item.sodium || 0,
               micros: item.micros || {}
             },
-            portion: item.portion || { amount: 1, unit: 'serving' },
+            // Photo/multimodal has no mechanism for a user to state an
+            // exact quantity — always a visual estimate, so isEstimated is
+            // unconditionally true here (matching resolvePhotoMode in
+            // resolve.js), not derived from any "did they say an amount"
+            // signal the way text mode's flag is.
+            portion: { ...(item.portion || { amount: 1, unit: 'serving' }), isEstimated: true },
             // Was result.healthScore/nutriscore (the MEAL-level aggregate),
             // stamping the identical score onto every item regardless of
             // its own composition, and suppressing buildFoodItem's own
@@ -341,7 +351,7 @@ router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'ana
               sodium: result.sodium || 0,
               micros: result.micros || {}
             },
-            portion: { amount: 1, unit: result.servingSize || 'serving' },
+            portion: { amount: 1, unit: result.servingSize || 'serving', isEstimated: true },
             healthScore: result.healthScore || null,
             nutriScore: result.nutriscore || null,
             cookingMethod: result.cookingMethod || null,
@@ -707,7 +717,12 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
               sodium: item.sodium || 0,
               micros: item.micros || {}
             },
-            portion: item.portion || { amount: 1, unit: 'serving' },
+            // Photo/multimodal has no mechanism for a user to state an
+            // exact quantity — always a visual estimate, so isEstimated is
+            // unconditionally true here (matching resolvePhotoMode in
+            // resolve.js), not derived from any "did they say an amount"
+            // signal the way text mode's flag is.
+            portion: { ...(item.portion || { amount: 1, unit: 'serving' }), isEstimated: true },
             // See /analyze-image above — was the meal-level aggregate,
             // stamped onto every item and suppressing buildFoodItem's
             // per-item fallback computation.
@@ -739,7 +754,7 @@ router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose:
               sodium: result.sodium || 0,
               micros: result.micros || {}
             },
-            portion: { amount: 1, unit: result.servingSize || 'serving' },
+            portion: { amount: 1, unit: result.servingSize || 'serving', isEstimated: true },
             healthScore: result.healthScore || null,
             nutriScore: result.nutriscore || null,
             cookingMethod: cookingMethod || result.cookingMethod || null,
