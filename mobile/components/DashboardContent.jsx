@@ -1449,8 +1449,16 @@ export default function DashboardContent() {
                 <Ionicons name="time-outline" size={20} color={BRAND.primary} />
               </View>
               <View style={styles.yesterdayBannerText}>
-                <Text style={styles.yesterdayBannerTitle}>Showing yesterday&apos;s snapshot</Text>
-                <Text style={styles.yesterdayBannerSubtitle}>Tap to start logging today</Text>
+                {/* Only the stats above this banner (MinimalDashboardHeader)
+                    actually use the yesterday-fallback data — the Wellness
+                    Score card below deliberately shows its own true "nothing
+                    logged today" empty state (see isYesterdayFallback in
+                    WellnessScoreCard) rather than a score computed from
+                    yesterday. The old copy ("Showing yesterday's snapshot")
+                    read as if that applied to the whole page, directly
+                    contradicting the empty state a few cards down. */}
+                <Text style={styles.yesterdayBannerTitle}>Nothing logged yet today</Text>
+                <Text style={styles.yesterdayBannerSubtitle}>Yesterday&apos;s numbers shown above — log today to update your score</Text>
               </View>
               <Ionicons name="add-circle" size={28} color={BRAND.primary} />
             </View>

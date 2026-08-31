@@ -15,7 +15,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
+import { TYPOGRAPHY, SPACING, SEMANTIC_ACTIONS } from '../../../constants/premiumTheme';
 import { DAILY_VALUES } from '../../../constants/dailyValues';
 import { useTheme } from '../../../providers/ThemeProvider';
 
@@ -71,14 +71,14 @@ function getBarColor(microKey, dvPercentage) {
 
   // Sodium and limit nutrients: high is BAD
   if (config.isLimit) {
-    if (dvPercentage >= 50) return '#EF4444'; // Red - excessive
-    if (dvPercentage >= 30) return '#F59E0B'; // Amber - high
+    if (dvPercentage >= 50) return SEMANTIC_ACTIONS.danger; // Red - excessive
+    if (dvPercentage >= 30) return SEMANTIC_ACTIONS.warning; // Amber - high
     return '#9CA3AF'; // Gray - acceptable
   }
 
   // Check upper limit warnings (iron, vitamin A can be toxic in excess)
   if (config.upperLimit && dvPercentage >= config.upperLimit) {
-    return '#F59E0B'; // Amber - approaching limit
+    return SEMANTIC_ACTIONS.warning; // Amber - approaching limit
   }
 
   // Default: neutral gray (avoid "achievement" colors)
@@ -173,7 +173,7 @@ function MicroCell({ microKey, value, unit, detected = true }) {
           {/* Warning for upper limits */}
           {(hasUpperWarning || isLimitExceeded) && (
             <View style={styles.warningRow}>
-              <Ionicons name="alert-circle" size={12} color="#F59E0B" />
+              <Ionicons name="alert-circle" size={12} color={SEMANTIC_ACTIONS.warning} />
               <Text style={styles.warningText}>
                 {config.isLimit ? 'High for one meal' : 'Approaching limit'}
               </Text>

@@ -1,11 +1,18 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
+// Auto-width chips in a horizontal ScrollView, not flex:1 in a fixed row —
+// keeps room to add another chip later without ever squeezing labels.
 export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStressPress }) => {
   return (
-    <View style={styles.quickActionsBar}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.quickActionsBar}
+      contentContainerStyle={styles.quickActionsContent}
+    >
       <TouchableOpacity
         style={styles.quickActionChip}
         onPress={onMoodPress}
@@ -49,26 +56,28 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStr
         <Ionicons name="pulse-outline" size={20} color={BRAND.primary} />
         <Text style={styles.quickActionText} numberOfLines={1}>Stress</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   quickActionsBar: {
+    flexGrow: 0,
+  },
+  quickActionsContent: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 16,
   },
   quickActionChip: {
-    flex: 1,
     backgroundColor: SURFACES.card.primary,
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 6,
     shadowColor: TEXT.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,

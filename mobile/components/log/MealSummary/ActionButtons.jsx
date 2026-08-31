@@ -7,11 +7,15 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
+import { TYPOGRAPHY, SPACING, SEMANTIC_ACTIONS } from '../../../constants/premiumTheme';
 import { useTheme } from '../../../providers/ThemeProvider';
 
 /**
- * Action button configurations
+ * Action button configurations. `share` maps to the app's success token
+ * (a fitting semantic: sharing completes successfully). `edit`/`favorite`
+ * keep their own colors — neither the info-blue "edit" pencil nor the
+ * conventional heart-red "favorite" maps cleanly onto an existing semantic
+ * token (danger/warning/etc. would misdescribe what these actions mean).
  */
 const ACTIONS = {
   edit: {
@@ -30,7 +34,7 @@ const ACTIONS = {
   share: {
     icon: 'share-outline',
     label: 'Share',
-    color: '#10B981',
+    color: SEMANTIC_ACTIONS.success,
     bgColor: 'rgba(16, 185, 129, 0.1)',
   },
 };

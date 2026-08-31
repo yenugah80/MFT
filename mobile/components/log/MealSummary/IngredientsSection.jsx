@@ -8,16 +8,8 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
 import { useTheme } from '../../../providers/ThemeProvider';
-import { BRAND, TEXT, SURFACES, SEMANTIC_ACTIONS } from '../../../constants/premiumTheme';
-
-// Macro colors
-const MACRO_COLORS = {
-  protein: '#3B82F6', // Blue
-  carbs: '#10B981',   // Green
-  fat: '#F59E0B',     // Amber
-};
+import { TYPOGRAPHY, SPACING, BRAND, TEXT, SURFACES, SEMANTIC_ACTIONS, MACRO_COLORS } from '../../../constants/premiumTheme';
 
 /**
  * Single ingredient row with enhanced nutrition display
@@ -85,19 +77,19 @@ function IngredientRow({ ingredient, index, totalCalories }) {
         {hasNutrition && (protein > 0 || carbs > 0 || fat > 0) && (
           <View style={styles.macroRow}>
             <View style={styles.macroItem}>
-              <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.protein }]} />
+              <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.protein.base }]} />
               <Text style={[styles.macroText, { color: textSecondary }]}>
                 {Math.round(protein)}g P
               </Text>
             </View>
             <View style={styles.macroItem}>
-              <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.carbs }]} />
+              <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.carbs.base }]} />
               <Text style={[styles.macroText, { color: textSecondary }]}>
                 {Math.round(carbs)}g C
               </Text>
             </View>
             <View style={styles.macroItem}>
-              <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.fat }]} />
+              <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.fat.base }]} />
               <Text style={[styles.macroText, { color: textSecondary }]}>
                 {Math.round(fat)}g F
               </Text>

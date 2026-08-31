@@ -803,6 +803,13 @@ export default function LogScreen() {
           sugar: item.macros?.sugar_g || 0,
           sodium: item.macros?.sodium_mg || 0,
           micros: item.micros || {},
+          // Stage 8d: same silent-drop pattern Stage 8a already fixed once
+          // for sourceMeta on this exact code path, never extended to
+          // ingredients — the single-item save path (buildLegacyFoodLog)
+          // already forwards this, so a multi-item meal's per-item
+          // ingredient breakdown was the one case that never survived past
+          // the pre-save analysis screen.
+          ingredients: item.ingredients || [],
           sourceEvidence: item.sourceEvidence,
           confidence: item.sourceEvidence?.[0]?.confidence || 0.5,
         };
@@ -1267,8 +1274,8 @@ export default function LogScreen() {
             </TouchableOpacity>
             <Ionicons name="restaurant" size={28} color="#FFFFFF" />
             <View style={styles.headerText}>
-              <Text style={styles.title}>LOG Meal</Text>
-              <Text style={styles.subtitle}>At your convenient way</Text>
+              <Text style={styles.title}>LOG</Text>
+              <Text style={styles.subtitle}>Track your Day</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -1387,6 +1394,8 @@ export default function LogScreen() {
                   analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
                   analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
                   analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
+                  userAllergies={profileState?.savedProfile?.dietary?.allergies || []}
+                  onUpdateItemQuantity={foodAnalysis.updateItemQuantity}
                 />
 
                 {/* "Did you mean?" Suggestions - Only for text input */}
@@ -1812,6 +1821,8 @@ export default function LogScreen() {
         }}
         onShare={handleShare}
         isSaving={isSavingLog}
+        onUpdateItemQuantity={foodAnalysis.updateItemQuantity}
+        onUpdateItemMacros={foodAnalysis.updateItemMacros}
       />
     </KeyboardAvoidingView>
         </ErrorBoundary>

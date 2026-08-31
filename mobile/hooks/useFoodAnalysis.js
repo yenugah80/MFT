@@ -255,6 +255,102 @@ export function subtractIngredientFromItem(item, ingredientIndex) {
   };
 }
 
+/**
+ * Rescale a resolved item to a new quantity/unit — recomputes macros,
+ * micros, AND each sub-ingredient's own macros proportionally from the
+ * gram-weight ratio, and marks the portion as no longer estimated (the
+ * user just explicitly confirmed a real amount). Returns the item
+ * unchanged if it can't be scaled (missing gramsEquivalent on the
+ * original portion, or an unrecognized target unit).
+ *
+ * Grams are derived in priority order, food-specific first:
+ *  1. Same unit as the item's current portion: scale proportionally from
+ *     THIS item's own resolved amount->gramsEquivalent ratio (2 rotis
+ *     known to be 80g means 1 roti is 40g; "1 serving" of a chicken curry
+ *     already resolved to 350g means 2 servings is 700g). This is the
+ *     path every real UI control here actually takes — QuantityAdjuster's
+ *     stepper/quick-buttons/suggested-options never change the unit, only
+ *     the count — so it must never be skipped in favor of a guess.
+ *  2. Only when the unit is genuinely CHANGING to something convertToGrams
+ *     recognizes (g, oz, cup, "serving" as a bare fallback, ...): fall
+ *     back to that generic table. This is an approximation and is used
+ *     only because no food-specific ratio exists for the new unit.
+ * Previously checked convertToGrams FIRST unconditionally — meaning any
+ * item whose unit happened to be "serving" (the majority of non-countable
+ * foods) always got rescaled using convertToGrams's universal "1 serving
+ * = 100g" assumption instead of that food's own real resolved weight,
+ * even though the unit never actually changed. A chicken curry correctly
+ * resolved to 350g/serving would have silently been treated as 100g/
+ * serving the moment its quantity was edited — recreating exactly the
+ * "the app claims to know a gram amount nobody supplied" problem this
+ * whole feature exists to fix.
+ * @param {object} item - Food item with macros/micros/ingredients/portion
+ * @param {number} newAmount - New quantity
+ * @param {string} newUnit - New unit
+ * @returns {object} Updated item
+ */
+export function rescaleItemToQuantity(item, newAmount, newUnit) {
+  const originalGrams = item.portion?.gramsEquivalent;
+  const originalAmount = item.portion?.amount;
+  if (!originalGrams) {
+    console.warn(`[useFoodAnalysis] Cannot update quantity for ${item.itemId}: missing gramsEquivalent`);
+    return item;
+  }
+
+  const sameUnit = item.portion?.unit && newUnit &&
+    item.portion.unit.toLowerCase().trim() === newUnit.toLowerCase().trim();
+  const newGrams = (sameUnit && originalAmount > 0 ? (originalGrams / originalAmount) * newAmount : null)
+    ?? convertToGrams(newAmount, newUnit);
+  if (!newGrams) {
+    console.warn(`[useFoodAnalysis] Cannot convert ${newAmount} ${newUnit} to grams`);
+    return item;
+  }
+
+  const scaleFactor = newGrams / originalGrams;
+
+  const scaledMacros = {};
+  Object.entries(item.macros || {}).forEach(([key, value]) => {
+    scaledMacros[key] = value !== null ? value * scaleFactor : null;
+  });
+
+  const scaledMicros = {};
+  Object.entries(item.micros || {}).forEach(([key, micro]) => {
+    scaledMicros[key] = micro.value !== null
+      ? { value: micro.value * scaleFactor, unit: micro.unit }
+      : null;
+  });
+
+  // Scale each sub-ingredient's own macros by the same factor —
+  // previously only the item's aggregate macros/micros were rescaled,
+  // leaving the ingredient breakdown frozen at the pre-edit quantity (e.g.
+  // doubling "2 rotis" to "4 rotis" would double the item's calories but
+  // its ingredient list would still show the 2-roti flour/oil amounts).
+  const scaledIngredients = (item.ingredients || []).map((ing) => ({
+    ...ing,
+    calories: typeof ing.calories === 'number' ? ing.calories * scaleFactor : ing.calories,
+    protein: typeof ing.protein === 'number' ? ing.protein * scaleFactor : ing.protein,
+    carbs: typeof ing.carbs === 'number' ? ing.carbs * scaleFactor : ing.carbs,
+    fat: typeof ing.fat === 'number' ? ing.fat * scaleFactor : ing.fat,
+    fiber: typeof ing.fiber === 'number' ? ing.fiber * scaleFactor : ing.fiber,
+    sugar: typeof ing.sugar === 'number' ? ing.sugar * scaleFactor : ing.sugar,
+  }));
+
+  return {
+    ...item,
+    portion: {
+      amount: newAmount,
+      unit: newUnit,
+      gramsEquivalent: newGrams,
+      servingText: `${newAmount} ${newUnit}`,
+      isEstimated: false,
+    },
+    macros: scaledMacros,
+    micros: scaledMicros,
+    ingredients: scaledIngredients,
+    editedPortion: { amount: newAmount, unit: newUnit },
+  };
+}
+
 function looksLikeNutritionLabel(text) {
   if (!text || text.length < OCR_MIN_TEXT_LENGTH) return false;
   const lower = text.toLowerCase();
@@ -658,7 +754,7 @@ function mapBackendProductToItem(product, inputText) {
  * @param {Array<AnalysisItem>} items - Food items
  * @returns {{macros: Macros, micros: Object.<string, Micro>}} Aggregated totals
  */
-function calculateTotals(items) {
+export function calculateTotals(items) {
   if (!items || items.length === 0) {
     return {
       macros: {
@@ -687,10 +783,27 @@ function calculateTotals(items) {
     micros: {},
   };
 
+  // fiber_g/sugar_g/sodium_mg are optional per item — unlike
+  // calories/protein/carbs/fat, which the backend always validates as
+  // numeric, an item can genuinely never have reported one. If ANY item
+  // here is missing one, the running sum below is an undercount, not a
+  // real total, so it gets nulled out afterward instead of shown as a
+  // confident-looking number. This is the function that actually produces
+  // the persisted analysisResult.totals after every quantity/removal edit
+  // (updateItemQuantity, removeItem, removeIngredient all call it) — same
+  // fix already applied to aggregateNutrition.js's display-side totals,
+  // extended here to the totals that actually get saved.
+  const OPTIONAL_FIELDS = ['fiber_g', 'sugar_g', 'sodium_mg'];
+  const incomplete = { fiber_g: false, sugar_g: false, sodium_mg: false };
+
   items.forEach(item => {
     // Sum macros
     Object.keys(totals.macros).forEach(key => {
-      totals.macros[key] += item.macros?.[key] ?? 0;
+      const value = item.macros?.[key];
+      if (OPTIONAL_FIELDS.includes(key) && value == null) {
+        incomplete[key] = true;
+      }
+      totals.macros[key] += value ?? 0;
     });
 
     // Sum micros
@@ -704,6 +817,10 @@ function calculateTotals(items) {
         }
       });
     }
+  });
+
+  OPTIONAL_FIELDS.forEach((key) => {
+    if (incomplete[key]) totals.macros[key] = null;
   });
 
   return totals;
@@ -1480,7 +1597,10 @@ export function useFoodAnalysis() {
           fat_g: foodLog.fat ?? null,
           fiber_g: foodLog.fiber ?? null,
           sugar_g: foodLog.sugar ?? null,
-          sodium_mg: foodLog.micros?.sodium?.value || 0,
+          // Was `|| 0` — the one field here that didn't match its
+          // siblings' `?? null`, silently reporting "0mg sodium" (a
+          // confirmed value) whenever it was genuinely unknown.
+          sodium_mg: foodLog.micros?.sodium?.value ?? null,
         },
         micros: foodLog.micros || {},
         netCarbs: foodLog.netCarbs,
@@ -1795,7 +1915,7 @@ export function useFoodAnalysis() {
           fat_g: foodLog.fat ?? null,
           fiber_g: foodLog.fiber ?? null,
           sugar_g: foodLog.sugar ?? null,
-          sodium_mg: foodLog.micros?.sodium?.value || 0,
+          sodium_mg: foodLog.micros?.sodium?.value ?? null,
         },
         micros: foodLog.micros || {},
         netCarbs: foodLog.netCarbs,
@@ -1861,54 +1981,38 @@ export function useFoodAnalysis() {
   const updateItemQuantity = useCallback((itemId, newAmount, newUnit) => {
     setAnalysisResult(prev => {
       if (!prev) return null;
+      const updatedItems = prev.items.map(item =>
+        item.itemId === itemId ? rescaleItemToQuantity(item, newAmount, newUnit) : item
+      );
+      return {
+        ...prev,
+        items: updatedItems,
+        totals: calculateTotals(updatedItems),
+      };
+    });
+  }, [setAnalysisResult]);
 
-      const updatedItems = prev.items.map(item => {
-        if (item.itemId === itemId) {
-          const originalGrams = item.portion?.gramsEquivalent;
-
-          if (!originalGrams) {
-            console.warn(`[useFoodAnalysis] Cannot update quantity for ${itemId}: missing gramsEquivalent`);
-            return item;
-          }
-
-          const newGrams = convertToGrams(newAmount, newUnit);
-          if (!newGrams) {
-            console.warn(`[useFoodAnalysis] Cannot convert ${newAmount} ${newUnit} to grams`);
-            return item;
-          }
-
-          const scaleFactor = newGrams / originalGrams;
-
-          // Scale macros
-          const scaledMacros = {};
-          Object.entries(item.macros || {}).forEach(([key, value]) => {
-            scaledMacros[key] = value !== null ? value * scaleFactor : null;
-          });
-
-          // Scale micros
-          const scaledMicros = {};
-          Object.entries(item.micros || {}).forEach(([key, micro]) => {
-            scaledMicros[key] = micro.value !== null
-              ? { value: micro.value * scaleFactor, unit: micro.unit }
-              : null;
-          });
-
-          return {
-            ...item,
-            portion: {
-              amount: newAmount,
-              unit: newUnit,
-              gramsEquivalent: newGrams,
-              servingText: `${newAmount} ${newUnit}`,
-            },
-            macros: scaledMacros,
-            micros: scaledMicros,
-            editedPortion: { amount: newAmount, unit: newUnit },
-          };
-        }
-        return item;
-      });
-
+  /**
+   * Overwrite an item's final macros/micros with already-computed values —
+   * for editors (like EditableIngredientsSection's ingredient include/
+   * exclude flow) that compute their own final nutrition rather than a
+   * scale factor. Same shared-state pattern as updateItemQuantity: without
+   * this, an ingredient edit only ever reached a screen's own local display
+   * state, never the analysisResult save actually reads at "Confirm Log"
+   * time — the identical silent-save-loss bug already fixed for quantity
+   * edits, confirmed to also apply here.
+   * @param {string} itemId
+   * @param {object} macros - Canonical {calories_kcal, protein_g, ...}
+   * @param {object} [micros]
+   */
+  const updateItemMacros = useCallback((itemId, macros, micros) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+      const updatedItems = prev.items.map(item =>
+        item.itemId === itemId
+          ? { ...item, macros: { ...item.macros, ...macros }, ...(micros ? { micros } : {}) }
+          : item
+      );
       return {
         ...prev,
         items: updatedItems,
@@ -2181,6 +2285,7 @@ export function useFoodAnalysis() {
 
     // Multi-item methods
     updateItemQuantity,
+    updateItemMacros,
     removeItem,
     removeIngredient,
     runAnalysis,

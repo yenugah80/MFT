@@ -6,8 +6,8 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
+import Svg, { Circle } from 'react-native-svg';
+import { TYPOGRAPHY, SPACING } from '../../../constants/premiumTheme';
 import { useTheme } from '../../../providers/ThemeProvider';
 import { calculateMealScore, getScoreLabel, getArcColor } from './mealScoring';
 
@@ -32,14 +32,6 @@ export default function MealScoreDial({ item, size = 180 }) {
     <View style={styles.container}>
       <View style={[styles.dialWrapper, { width: size, height: size }]}>
         <Svg width={size} height={size}>
-          <Defs>
-            <LinearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#10B981" />
-              <Stop offset="50%" stopColor="#3B82F6" />
-              <Stop offset="100%" stopColor="#6B4EFF" />
-            </LinearGradient>
-          </Defs>
-
           {/* Background track */}
           <Circle
             cx={center}

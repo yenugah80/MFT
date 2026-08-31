@@ -15,12 +15,16 @@
  * Includes word boundaries to avoid false positives (e.g., "coconut" not matching "nut")
  */
 const ALLERGEN_PATTERNS = {
+  // \w* suffix on each nut name (same technique already used below for
+  // dairy's "butter\w*") — without it, \b(...)\b's exact word boundary
+  // means a food named just "Almonds" or "Walnuts" (plural, extremely
+  // common) never matched at all, a real miss for anyone with that allergy.
   'nuts': {
-    pattern: /\b(nut|nuts|almond|walnut|cashew|pecan|pistachio|macadamia|hazelnut|chestnut|brazil nut)\b/i,
+    pattern: /\b(nuts?|almonds?|walnuts?|cashews?|pecans?|pistachios?|macadamias?|hazelnuts?|chestnuts?|brazil nuts?)\b/i,
     exceptions: ['coconut', 'donut', 'doughnut', 'butternut squash', 'water chestnut']
   },
   'tree_nuts': {
-    pattern: /\b(almond|walnut|cashew|pecan|pistachio|macadamia|hazelnut|brazil nut)\b/i,
+    pattern: /\b(almonds?|walnuts?|cashews?|pecans?|pistachios?|macadamias?|hazelnuts?|brazil nuts?)\b/i,
     exceptions: ['coconut']
   },
   'peanuts': {
@@ -291,6 +295,59 @@ export function detectAllergensInFoodName(foodName) {
   return Object.keys(ALLERGEN_PATTERNS).filter((allergen) =>
     checkAllergenInFoodName(foodName, allergen)
   );
+}
+
+/**
+ * Meal-level allergen warnings, filtered to the user's own saved allergies —
+ * unlike detectAllergensInFoodName (which surfaces every category this
+ * module knows about, regardless of whether the user actually has that
+ * allergy), this only ever returns something the user has told the app they
+ * react to. Distinguishes two confidence levels per matched allergen:
+ *   - 'confirmed': the AI's own per-item allergen tagging named it directly.
+ *   - 'possible': no AI tag, but pattern-matching the item's or an
+ *     ingredient's name against this specific user allergen found a hit —
+ *     an uncertain, name-based signal, only surfaced because it matches
+ *     something already in the user's profile (never shown for an allergen
+ *     the user doesn't have).
+ * A 'confirmed' match always wins over a 'possible' one for the same
+ * allergen if both are found across the meal's items.
+ * @param {Array} items - Meal items, each with name/allergens/potentialAllergens/ingredients
+ * @param {Array} userAllergies - User's saved allergen list from profile
+ * @returns {Array<{allergen: string, status: 'confirmed'|'possible'}>}
+ */
+export function getMealAllergenWarnings(items, userAllergies) {
+  if (!items || items.length === 0 || !userAllergies || userAllergies.length === 0) return [];
+
+  const statusByAllergen = new Map();
+  const recordMatch = (allergen, status) => {
+    const key = allergen.toLowerCase().trim();
+    if (statusByAllergen.get(key) === 'confirmed') return; // confirmed already wins
+    statusByAllergen.set(key, status);
+  };
+
+  items.forEach((item) => {
+    const aiTagged = item.allergens || item.potentialAllergens || [];
+    userAllergies.forEach((userAllergen) => {
+      const userAllergenLower = userAllergen.toLowerCase().trim();
+
+      const aiConfirmed = aiTagged.some((a) => {
+        const al = a.toLowerCase().trim();
+        return al === userAllergenLower || al.includes(userAllergenLower) || userAllergenLower.includes(al);
+      });
+      if (aiConfirmed) {
+        recordMatch(userAllergen, 'confirmed');
+        return;
+      }
+
+      const nameMatch = checkAllergenInFoodName(item.name, userAllergen)
+        || (item.ingredients || []).some((ing) => checkAllergenInFoodName(ing?.name, userAllergen));
+      if (nameMatch) {
+        recordMatch(userAllergen, 'possible');
+      }
+    });
+  });
+
+  return Array.from(statusByAllergen.entries()).map(([allergen, status]) => ({ allergen, status }));
 }
 
 /**
