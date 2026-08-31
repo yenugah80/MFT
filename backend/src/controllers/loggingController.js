@@ -172,7 +172,11 @@ export async function logMeal(req, res) {
           protein: Math.round(protein ?? 0),
           carbs: Math.round(carbs ?? 0),
           fats: Math.round(fats ?? 0),
-          fiber: fiber ?? 0,
+          // Same integer-column constraint as the other 4 fields above —
+          // this one was missed (found via a full sweep for the exact bug
+          // class just found live in nutrition.js: an integer column
+          // silently rejecting a realistic fractional value).
+          fiber: Math.round(fiber ?? 0),
           recommendationType: 'SMART_PICK',
           mealType: mealType ?? null,
           interactionStatus: 'accepted',

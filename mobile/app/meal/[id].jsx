@@ -28,6 +28,7 @@ import {
   TYPOGRAPHY,
   SURFACES,
 } from '@/constants/premiumTheme';
+import { DAILY_VALUES } from '@/constants/dailyValues';
 
 // Source icons and labels
 const SOURCE_CONFIG = {
@@ -254,9 +255,21 @@ export default function MealDetailScreen() {
     return Math.round((macro / total) * 100);
   };
 
-  // Calculate scores on the fly (must be before early returns for hooks rules)
-  const healthScore = useMemo(() => meal ? calculateHealthScore(meal) : 50, [meal]);
-  const nutritionGrade = useMemo(() => meal ? calculateNutritionGrade(meal) : 'C', [meal]);
+  // Stage 8b: trust the score/grade already computed and stored at save
+  // time (same value shown on the post-log confirmation card and in
+  // history/index.jsx) instead of recomputing from a third, differently-
+  // weighted rubric — confirmed live this was producing a different score
+  // for the identical meal depending on which screen you viewed it from.
+  // Falls back to the local calculation only when a stored value is
+  // genuinely absent (older logs, or a local-only unsynced entry).
+  const healthScore = useMemo(() => {
+    if (meal?.healthScore > 0) return meal.healthScore;
+    return meal ? calculateHealthScore(meal) : 50;
+  }, [meal]);
+  const nutritionGrade = useMemo(() => {
+    if (meal?.nutriscore) return meal.nutriscore;
+    return meal ? calculateNutritionGrade(meal) : 'C';
+  }, [meal]);
 
   if (loading) {
     return (
@@ -455,14 +468,13 @@ export default function MealDetailScreen() {
                 const unit = typeof value === 'object' ? value.unit : 'mg';
                 const displayAmount = Math.round(amount || 0);
 
-                // Daily values for common nutrients
-                const dailyValues = {
-                  calcium: 1300, iron: 18, magnesium: 420, potassium: 4700,
-                  sodium: 2300, zinc: 11, vitaminA: 900, vitaminC: 90,
-                  vitaminD: 20, vitaminB12: 2.4, folate: 400,
-                };
+                // Stage 8b: was a separate, smaller (11-entry) hardcoded
+                // table that could silently drift from the canonical one —
+                // now the same DAILY_VALUES MicrosGrid.jsx already uses
+                // correctly, so %DV can't disagree between screens.
                 const dvKey = key.toLowerCase().replace(/[_\s]/g, '');
-                const dv = dailyValues[dvKey] || dailyValues[key] || 100;
+                const dvEntry = DAILY_VALUES[dvKey] || DAILY_VALUES[key];
+                const dv = dvEntry?.value || 100;
                 const dvPercent = Math.min(100, Math.round((displayAmount / dv) * 100));
 
                 // Color based on percentage

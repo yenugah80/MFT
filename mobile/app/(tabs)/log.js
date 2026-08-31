@@ -601,9 +601,18 @@ export default function LogScreen() {
       source: foodData.source || analysisSource,
       mealType: effectiveMealType,
       clientEventId,
+      // Stage 8a: forward whatever resolution signal is already on
+      // foodData (populated by buildLegacyFoodLog, or already present on
+      // a multi-item's individual item object) instead of the bare
+      // {source, timestamp} this used to send unconditionally.
       sourceMeta: {
         source: analysisSource,
         timestamp: new Date().toISOString(),
+        confidenceTier: foodData.confidenceTier ?? null,
+        resolutionSource: foodData.resolutionSource ?? null,
+        nutritionPlausible: foodData.nutritionPlausible ?? null,
+        plausibilityCheck: foodData.plausibilityCheck ?? null,
+        macroReconciled: foodData.macroReconciled ?? false,
       },
     };
 
@@ -767,10 +776,20 @@ export default function LogScreen() {
           status: 'pending',
           source: analysisResult.source || 'text',
           mealType: effectiveMealType,
+          // Stage 8a: forward the per-item resolution signal the backend
+          // already computed (confidenceTier/resolutionSource/plausibility)
+          // instead of the bare {source, type, timestamp} this used to send
+          // — previously this data existed only for the lifetime of the
+          // pre-save analysis screen and was silently dropped at save time.
           sourceMeta: {
             source: analysisResult.source || 'text',
             type: 'multi',
             timestamp: new Date().toISOString(),
+            confidenceTier: item.confidenceTier ?? null,
+            resolutionSource: item.resolutionSource ?? item.source ?? null,
+            nutritionPlausible: item.nutritionPlausible ?? null,
+            plausibilityCheck: item.plausibilityCheck ?? null,
+            macroReconciled: item.macroReconciled ?? false,
           },
           clientEventId: `${mealEventId}-${item.itemId}`,
           mealId: mealEventId,
@@ -901,6 +920,15 @@ export default function LogScreen() {
       novaScore: item.novaScore ?? null,
       dietLabels: item.dietLabels || [],
       allergens: item.allergens || [],
+      // Stage 8a: carried through to _doSaveLog's sourceMeta below — was
+      // previously dropped here entirely, even though it's already on
+      // `item` by the time this runs (attachConfidenceTiers/
+      // computeConfidenceTier on the backend).
+      confidenceTier: item.confidenceTier ?? null,
+      resolutionSource: item.resolutionSource ?? item.source ?? null,
+      nutritionPlausible: item.nutritionPlausible ?? null,
+      plausibilityCheck: item.plausibilityCheck ?? null,
+      macroReconciled: item.macroReconciled ?? false,
     };
   };
 

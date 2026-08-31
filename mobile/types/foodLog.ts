@@ -228,6 +228,14 @@ export function transformBackendToFoodLog(backendData: any): FoodLog {
       barcode: backendData.barcode,
       imageUrl: backendData.imageUrl || backendData.image_url,
 
+      // Stage 8a: this was never read here, so confidenceTier/plausibility/
+      // macroReconciled — all real, already computed and persisted
+      // server-side (nutrition.js's auditedSourceMeta) — never reached any
+      // screen that fetches a saved meal (history, detail, dashboard).
+      sourceMeta: (backendData.sourceMeta && typeof backendData.sourceMeta === 'object')
+        ? backendData.sourceMeta
+        : (backendData.source_meta && typeof backendData.source_meta === 'object' ? backendData.source_meta : {}),
+
       createdAt: backendData.createdAt ? new Date(backendData.createdAt) : undefined,
       updatedAt: backendData.updatedAt ? new Date(backendData.updatedAt) : undefined,
     };

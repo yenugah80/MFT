@@ -1105,9 +1105,16 @@ const SmartMealInsights = ({
     [historicalData]
   );
 
-  // Calculate total score from breakdown
-  const totalScore = scoreBreakdown.reduce((sum, item) => sum + item.score, 0);
+  // Stage 8c: the breakdown's own component sum used to be shown as the
+  // big total here — a second, independently-weighted score next to the
+  // real one (this component is rendered on the same post-log screen as
+  // MealLoggedCard, which already shows the trusted meal.healthScore).
+  // The per-factor breakdown rows below are still useful as an
+  // explanation of the score, so they're unchanged — only the headline
+  // number now matches the trusted value instead of its own separate sum.
+  const breakdownSum = scoreBreakdown.reduce((sum, item) => sum + item.score, 0);
   const maxScore = scoreBreakdown.reduce((sum, item) => sum + item.maxScore, 0);
+  const totalScore = meal?.healthScore > 0 ? Math.round(meal.healthScore) : breakdownSum;
 
   const toggleInsight = async (index) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
