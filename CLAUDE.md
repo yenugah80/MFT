@@ -1,8 +1,10 @@
-# MFT : My Food & Mood Tracker - Project Guide for Claude
+# MFT : My Flourish Tracker - Project Guide for Claude
 
 ## Project Overview
 
-MFT (My Food & Mood Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.
+MFT (My Flourish Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, sleep, and stress.
+
+**Naming:** the public name is `MFT : My Flourish Tracker`. Technical identifiers deliberately keep the older `my-food-tracker` / `com.zennxt.myfoodtracker` form — see `docs/branding/branding-boundaries.md` before renaming anything. `Food & Mood` also survives legitimately as a *feature* name (the food/mood correlation card) and in research citations; those are not brand references.
 
 ## Tech Stack
 
@@ -131,13 +133,30 @@ MFT/
 ```javascript
 // For dark text on light background (CORRECT for current theme)
 import { TEXT, SURFACES, BRAND } from '../constants/premiumTheme';
-// TEXT.primary = '#111827' (dark gray)
-// TEXT.secondary = '#4B5563' (medium gray)
-// TEXT.tertiary = '#6B7280' (light gray)
+// TEXT.primary   = '#2D2522' (warm charcoal)
+// TEXT.secondary = '#5D534D' (warm taupe)
+// TEXT.tertiary  = '#8A7F78' (warm stone)
+// TEXT.muted     = '#B5ACA5' (warm sand)
 
 // For dark backgrounds (OLD - causes white-on-white issues)
 import { COLORS } from '../constants/designTokens';
 // COLORS.text.primary = '#f8fafc' (white - DON'T USE for text on light bg)
+```
+
+The palette is warm-neutral, not the cool grays it used to be. Verify against
+`mobile/constants/premiumTheme.js` rather than trusting values quoted elsewhere.
+
+### Brand colors
+
+`BRAND` in `mobile/constants/premiumTheme.js` is the source of truth, and the
+marketing site's palette is derived from it:
+
+```javascript
+BRAND.primary      = '#6B4EFF'  // vibrant purple - main brand color
+BRAND.primaryLight = '#8B6EFF'
+BRAND.primaryDark  = '#5A3EE0'
+BRAND.secondary    = '#FF6B9D'  // vibrant pink
+BRAND.accent       = '#00D9FF'  // vibrant cyan
 ```
 
 ## Common Patterns
@@ -247,5 +266,5 @@ When testing food analysis with complex meals like "rice with chicken curry":
 ```bash
 git commit -m "fix: Description of fix
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```

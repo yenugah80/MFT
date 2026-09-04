@@ -1,6 +1,11 @@
 # Brand Rename Todos
 
-Target public name: `MFT : My Food & Mood Tracker`
+Target public name: `MFT : My Flourish Tracker`
+
+> Superseded: an earlier pass renamed the app to `MFT : My Food & Mood Tracker`.
+> The public name is now `MFT : My Flourish Tracker`, matching the marketing site.
+> The "Done" list below is from that earlier rename and is kept for history; the
+> technical identifiers it locked in (slug, bundle IDs, domains) are unchanged.
 
 ## Done
 
@@ -20,8 +25,9 @@ Target public name: `MFT : My Food & Mood Tracker`
 
 ## Queued
 
-- Set App Store Connect app name to `MFT : My Food & Mood Tracker`.
-- Set Google Play Console app name to `MFT : My Food & Mood Tracker`.
+- Set App Store Connect app name to `MFT : My Flourish Tracker`.
+- Set Google Play Console app name to `MFT : My Flourish Tracker`.
+- Re-check any store listing copy, screenshots, or metadata already drafted under the previous name.
 
 ## Keep Stable
 

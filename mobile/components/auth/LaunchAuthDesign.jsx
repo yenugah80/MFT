@@ -132,7 +132,7 @@ export function WelcomeBrand() {
         <Image source={require("../../assets/images/app-logo.png")} style={styles.heroLogo} contentFit="contain" />
       </View>
       <Text style={styles.heroBrand}>MFT</Text>
-      <Text style={styles.heroSubBrand}>My Food & Mood Tracker</Text>
+      <Text style={styles.heroSubBrand}>My Flourish Tracker</Text>
       <View style={styles.brandDivider}>
         <View style={styles.dividerLine} />
         <View style={styles.dividerDot} />

@@ -2,11 +2,13 @@
 
 ## Public Brand
 
-- Full brand: `MFT (My Food & Mood Tracker)`
-- Store-safe display name: `MFT : My Food & Mood Tracker`
+- Full brand: `MFT (My Flourish Tracker)`
+- Store-safe display name: `MFT : My Flourish Tracker`
 - Launcher label: `MFT`
 
-The store-safe display name is 28 characters, so it fits Apple and Google store name limits. Use this exact name in App Store Connect and Google Play Console, and use the full brand with parentheses in long-form copy when useful.
+The store-safe display name is 25 characters, so it fits Apple and Google store name limits. Use this exact name in App Store Connect and Google Play Console, and use the full brand with parentheses in long-form copy when useful.
+
+`Food & Mood` still appears legitimately as a *feature* name (the food/mood correlation card) and in research citations such as the Deakin Food & Mood Centre. Those are not brand references and should be left alone.
 
 ## Do Not Rename Without a Migration Plan
 
