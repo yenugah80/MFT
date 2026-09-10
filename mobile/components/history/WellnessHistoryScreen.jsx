@@ -97,7 +97,7 @@ function TrendChart({ entries, type, accent }) {
   );
 }
 
-function SleepEntry({ entry, onDelete, isDeleting, deleteDisabled }) {
+export function SleepEntry({ entry, onDelete, isDeleting, deleteDisabled }) {
   const quality = getQualityLabel(entry.quality);
   const tags = Object.entries(entry.tags || {})
     .filter(([, active]) => active)
@@ -131,7 +131,7 @@ function SleepEntry({ entry, onDelete, isDeleting, deleteDisabled }) {
   );
 }
 
-function StressEntry({ entry, onDelete, isDeleting, deleteDisabled }) {
+export function StressEntry({ entry, onDelete, isDeleting, deleteDisabled }) {
   const info = getStressLevel(entry.level);
   const triggers = (entry.triggers || []).map((key) => STRESS_TRIGGERS.find((item) => item.key === key)?.label || key);
   const coping = (entry.copingUsed || []).map((key) => COPING_STRATEGIES.find((item) => item.key === key)?.label || key);

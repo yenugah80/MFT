@@ -27,6 +27,8 @@ import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
 import { useCorrelations } from '../../hooks/useInsights';
+import { useMoodHistory } from '../../hooks/useMoodInsights';
+import { MoodEntry } from '../history/mood';
 
 const TYPE_META = {
   positive: { color: '#10B981', icon: 'trending-up' },
@@ -41,6 +43,11 @@ function capitalize(s) {
 export default function MoodFoodPatternsScreen() {
   const router = useRouter();
   const { correlations, isLoading, refetch } = useCorrelations({ limit: 20 });
+  // Correlations need cross-domain evidence (meal + mood on the same days,
+  // 5+ similar occurrences) that a near-new account won't have yet — but
+  // the mood log itself already exists, so show that instead of nothing.
+  const moodHistory = useMoodHistory(30);
+  const recentMoods = (moodHistory.data || []).slice(0, 10);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleBack = useCallback(() => {
@@ -92,7 +99,7 @@ export default function MoodFoodPatternsScreen() {
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.centerText}>Finding your patterns...</Text>
         </View>
-      ) : correlations.length === 0 ? (
+      ) : correlations.length === 0 && recentMoods.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="restaurant-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorTitle}>Not enough data yet</Text>
@@ -101,6 +108,26 @@ export default function MoodFoodPatternsScreen() {
             5 similar occurrences before we're confident enough to show them.
           </Text>
         </View>
+      ) : correlations.length === 0 ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
+          }
+        >
+          <View style={styles.card}>
+            <Text style={styles.insufficientEvidenceText}>
+              Mood-food patterns need at least 5 similar meal+mood occurrences on the same
+              days — keep logging both together. Here's your recent mood log in the meantime:
+            </Text>
+          </View>
+          <View style={styles.entryList}>
+            {recentMoods.map((entry) => <MoodEntry key={entry.id} entry={entry} />)}
+          </View>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -195,6 +222,15 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING[4],
     marginBottom: SPACING[3],
+  },
+  insufficientEvidenceText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    lineHeight: 20,
+  },
+  entryList: {
+    gap: SPACING[3],
   },
   cardHeader: {
     flexDirection: 'row',

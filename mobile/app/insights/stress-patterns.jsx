@@ -16,13 +16,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
-import { useStressLog } from '../../hooks/useStressLog';
+import { useStressLog, useStressHistory } from '../../hooks/useStressLog';
+import { StressEntry } from '../../components/history/WellnessHistoryScreen';
 
 const TIME_PERIOD_ORDER = ['morning', 'afternoon', 'evening', 'night'];
 const TIME_PERIOD_LABELS = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', night: 'Night' };
@@ -47,7 +49,15 @@ export default function StressPatternsScreen() {
   const rangeDays = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
   const expandedRange = rangeDays < 30 ? 30 : (rangeDays < 90 ? 90 : null);
   const { patterns, isPatternsLoading, patternsError, refetchPatterns } = useStressLog(rangeDays);
+  // Only fetched to power the raw-entries fallback below when there isn't
+  // enough data for full pattern analysis — the patterns endpoint itself
+  // already discards the raw rows it fetches once it decides there aren't
+  // enough of them (backend/src/routes/stress.js:472), so the "not enough
+  // data" screen used to have literally nothing else to show.
+  const rawHistory = useStressHistory(rangeDays);
+  const rawEntries = rawHistory.data?.stressLogs || [];
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -115,7 +125,7 @@ export default function StressPatternsScreen() {
             <Text style={styles.retryButtonText}>Try again</Text>
           </TouchableOpacity>
         </View>
-      ) : !patterns ? (
+      ) : !patterns && rawEntries.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="pulse-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorTitle}>Not enough data in this {rangeDays}-day view</Text>
@@ -132,6 +142,52 @@ export default function StressPatternsScreen() {
             </TouchableOpacity>
           )}
         </View>
+      ) : !patterns ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
+          }
+        >
+          <View style={styles.card}>
+            <Text style={styles.insufficientEvidenceText}>
+              Pattern analysis needs at least 5 check-ins in this {rangeDays}-day view — you have {rawEntries.length}
+              {' '}so far. Here's what you've logged:
+            </Text>
+          </View>
+          <View style={styles.entryList}>
+            {rawEntries.map((entry) => (
+              <StressEntry
+                key={entry.id}
+                entry={entry}
+                isDeleting={deletingId === entry.id}
+                deleteDisabled={deletingId !== null}
+                onDelete={() => Alert.alert(
+                  'Delete stress entry?',
+                  'This removes the check-in from your history and insights.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        setDeletingId(entry.id);
+                        try {
+                          await rawHistory.deleteEntry(entry.id);
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      },
+                    },
+                  ]
+                )}
+              />
+            ))}
+          </View>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -454,5 +510,8 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  entryList: {
+    gap: SPACING[3],
   },
 });

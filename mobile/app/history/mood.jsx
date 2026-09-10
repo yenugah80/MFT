@@ -56,7 +56,7 @@ function Metric({ icon, value, label }) {
   );
 }
 
-function MoodEntry({ entry }) {
+export function MoodEntry({ entry }) {
   const palette = MOOD_PALETTE[entry.mood] || MOOD_PALETTE.neutral;
   const activeTags = Object.entries(entry.tags || {})
     .filter(([, value]) => Boolean(value))

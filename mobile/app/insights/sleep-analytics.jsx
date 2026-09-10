@@ -16,13 +16,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
-import { useSleepLog, SLEEP_CONTEXT_TAGS } from '../../hooks/useSleepLog';
+import { useSleepLog, useSleepHistory, SLEEP_CONTEXT_TAGS } from '../../hooks/useSleepLog';
+import { SleepEntry } from '../../components/history/WellnessHistoryScreen';
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TREND_META = {
@@ -58,7 +60,14 @@ export default function SleepAnalyticsScreen() {
   const rangeDays = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
   const expandedRange = rangeDays < 30 ? 30 : (rangeDays < 90 ? 90 : null);
   const { trends, isTrendsLoading, trendsError, refetchTrends } = useSleepLog(rangeDays);
+  // Same fallback as Stress Patterns: the trends endpoint discards the raw
+  // nights it fetches once it decides there aren't enough for a reliable
+  // trend, so without this the "not enough data" screen had nothing else
+  // to show even though real logged nights exist.
+  const rawHistory = useSleepHistory(rangeDays);
+  const rawEntries = rawHistory.data?.sleepLogs || [];
   const [refreshing, setRefreshing] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState(null);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -125,7 +134,7 @@ export default function SleepAnalyticsScreen() {
             <Text style={styles.retryButtonText}>Try again</Text>
           </TouchableOpacity>
         </View>
-      ) : !trends ? (
+      ) : !trends && rawEntries.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="moon-outline" size={48} color={TEXT.tertiary} />
           <Text style={styles.errorTitle}>Not enough data in this {rangeDays}-day view</Text>
@@ -142,6 +151,52 @@ export default function SleepAnalyticsScreen() {
             </TouchableOpacity>
           )}
         </View>
+      ) : !trends ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
+          }
+        >
+          <View style={styles.card}>
+            <Text style={styles.insufficientEvidenceText}>
+              Sleep trends need at least 3 nights in this {rangeDays}-day view — you have {rawEntries.length}
+              {' '}so far. Here's what you've logged:
+            </Text>
+          </View>
+          <View style={styles.entryList}>
+            {rawEntries.map((entry) => (
+              <SleepEntry
+                key={entry.id}
+                entry={entry}
+                isDeleting={deletingId === entry.id}
+                deleteDisabled={deletingId !== null}
+                onDelete={() => Alert.alert(
+                  'Delete sleep entry?',
+                  'This removes the night from your history and insights.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        setDeletingId(entry.id);
+                        try {
+                          await rawHistory.deleteEntry(entry.id);
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      },
+                    },
+                  ]
+                )}
+              />
+            ))}
+          </View>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -552,5 +607,8 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  entryList: {
+    gap: SPACING[3],
   },
 });
