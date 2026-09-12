@@ -165,7 +165,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/91264355-29bc-4019-be18-08002c3180c2"
+      "url": "https://u.expo.dev/91264355-29bc-4019-be18-08002c3180c2",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }

@@ -1323,21 +1323,37 @@ export function VoiceModal({
                 </Text>
 
                 <ScrollView style={styles.reviewList} showsVerticalScrollIndicator={false}>
-                  {reviewResult.items.map((item, idx) => (
-                    <View key={item.itemId || idx} style={styles.reviewItemRow}>
-                      <View style={styles.reviewItemCopy}>
-                        <Text style={styles.reviewItemName} numberOfLines={1}>{item.name}</Text>
-                        {!!(item.portion?.servingText || item.portion?.amount) && (
-                          <Text style={styles.reviewItemPortion}>
-                            {item.portion?.servingText || `${item.portion.amount} ${item.portion.unit || ''}`}
-                          </Text>
-                        )}
+                  {reviewResult.items.map((item, idx) => {
+                    const macros = item.macros || {};
+                    const calories = macros.calories_kcal || macros.calories || 0;
+                    const protein = macros.protein_g || macros.protein || 0;
+                    const carbs = macros.carbs_g || macros.carbs || 0;
+                    const fat = macros.fat_g || macros.fat || 0;
+                    const macroParts = [
+                      protein > 0 && `${Math.round(protein)}g protein`,
+                      carbs > 0 && `${Math.round(carbs)}g carbs`,
+                      fat > 0 && `${Math.round(fat)}g fat`,
+                    ].filter(Boolean);
+
+                    return (
+                      <View key={item.itemId || idx} style={styles.reviewItemRow}>
+                        <View style={styles.reviewItemCopy}>
+                          <Text style={styles.reviewItemName} numberOfLines={1}>{item.name}</Text>
+                          {!!(item.portion?.servingText || item.portion?.amount) && (
+                            <Text style={styles.reviewItemPortion}>
+                              {item.portion?.servingText || `${item.portion.amount} ${item.portion.unit || ''}`}
+                            </Text>
+                          )}
+                          {macroParts.length > 0 && (
+                            <Text style={styles.reviewItemMacros}>{macroParts.join(' · ')}</Text>
+                          )}
+                        </View>
+                        <Text style={styles.reviewItemCalories}>
+                          {Math.round(calories)} kcal
+                        </Text>
                       </View>
-                      <Text style={styles.reviewItemCalories}>
-                        {Math.round(item.nutrition?.calories ?? item.macros?.calories_kcal ?? 0)} kcal
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </ScrollView>
 
                 <View style={styles.reviewTotalsRow}>
@@ -2155,6 +2171,11 @@ const styles = StyleSheet.create({
   },
   reviewItemPortion: {
     fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+    marginTop: 2,
+  },
+  reviewItemMacros: {
+    fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginTop: 2,
   },
