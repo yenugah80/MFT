@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityIndicator, Alert, Platform, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -552,6 +552,27 @@ export default function PrivacyScreen() {
               <Text style={styles.sectionSubtitle}>Review, export, or remove account data</Text>
             </View>
           </View>
+
+          {/* Apple requires a privacy policy link reachable inside the app
+              itself (Guideline 5.1.1), not just the App Store Connect
+              listing URL — this was previously only mentioned as plain,
+              unlinked text on the Terms screen. */}
+          <TouchableOpacity
+            style={styles.dataRow}
+            onPress={() => Linking.openURL("https://my-food-tracker.com/privacy")}
+            accessibilityRole="button"
+            accessibilityLabel="Privacy Policy"
+            accessibilityHint="Opens the full privacy policy in your browser"
+          >
+            <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.info.bg }]} accessibilityElementsHidden>
+              <Ionicons name="document-text-outline" size={18} color={BRAND.primary} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Privacy Policy</Text>
+              <Text style={styles.rowSubtitle}>How we collect, use, and protect your data</Text>
+            </View>
+            <Ionicons name="open-outline" size={20} color={TEXT.tertiary} />
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.dataRow}
