@@ -7,6 +7,11 @@ import {
   stressLogTable,
   waterLogTable,
   weightHistoryTable,
+  profilesTable,
+  dietaryPreferencesTable,
+  nutritionGoalsTable,
+  gamificationTable,
+  accountSettingsTable,
 } from '../db/schema.js';
 
 export const CORE_WELLNESS_EXPORT_COLLECTIONS = Object.freeze([
@@ -20,10 +25,29 @@ export const CORE_WELLNESS_EXPORT_COLLECTIONS = Object.freeze([
   Object.freeze({ key: 'privacyConsentHistory', summaryKey: 'totalPrivacyConsentChanges', table: privacyConsentAuditTable }),
 ]);
 
+// Single-record sections (one row per user, not a log collection), with
+// their table reference so an empty CSV can still emit real column headers
+// instead of a 0-byte file.
+export const SINGLE_RECORD_EXPORT_SECTIONS = Object.freeze([
+  Object.freeze({ key: 'profile', label: 'Profile', table: profilesTable }),
+  Object.freeze({ key: 'dietaryPreferences', label: 'Dietary Preferences', table: dietaryPreferencesTable }),
+  Object.freeze({ key: 'nutritionGoals', label: 'Nutrition Goals', table: nutritionGoalsTable }),
+  Object.freeze({ key: 'gamification', label: 'Gamification', table: gamificationTable }),
+  Object.freeze({ key: 'accountSettings', label: 'Account Settings', table: accountSettingsTable }),
+]);
+
+// Fields that must never leave the server in a user-facing export: internal
+// row ids, and device push tokens (not "credentials" in the login sense, but
+// a leaked token lets someone send fake pushes to that device — no reason to
+// hand it to the user as a downloadable file).
+export const EXCLUDED_EXPORT_FIELDS = ['id', 'expoPushToken', 'fcmToken'];
+
 export function sanitizeExportRecord(record) {
   if (!record) return null;
   const portableRecord = { ...record };
-  delete portableRecord.id;
+  for (const field of EXCLUDED_EXPORT_FIELDS) {
+    delete portableRecord[field];
+  }
   return portableRecord;
 }
 
