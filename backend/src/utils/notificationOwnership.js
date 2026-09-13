@@ -34,17 +34,18 @@ export function filterRemindersForDevice(reminders, ownedCategories, categoryRes
   });
 }
 
-// Maps smartReminderJob's getCategoryForType() buckets ('hydration' | 'food'
-// | 'mood' | 'activity' | 'motivation' | 'enabled') to the local
-// NOTIFICATION_CATEGORIES naming mobile's pushNotifications.js uses. Kept
-// separate from OWNABLE_CATEGORIES because the reminder job's own category
-// vocabulary is unrelated to the local scheduler's — this is the one place
-// that translates between them.
+// Maps smartReminderJob's getCategoryForType() output — the settings
+// screen's real preference-key names ('hydrationNudges' | 'dailyReminder' |
+// 'moodCheckins' | 'activityReminders' | 'streakProtection' | 'enabled') —
+// to the local NOTIFICATION_CATEGORIES naming mobile's pushNotifications.js
+// uses. Kept separate from OWNABLE_CATEGORIES because the reminder job's
+// preference-key vocabulary is unrelated to the local scheduler's — this is
+// the one place that translates between them.
 const REMINDER_JOB_CATEGORY_TO_LOCAL = {
-  hydration: 'hydration_nudge',
-  food: 'daily_reminder',
-  mood: 'mood_checkin',
-  activity: 'activity_reminder',
+  hydrationNudges: 'hydration_nudge',
+  dailyReminder: 'daily_reminder',
+  moodCheckins: 'mood_checkin',
+  activityReminders: 'activity_reminder',
 };
 
 export function mapReminderJobCategoryToLocalCategory(reminderJobCategory) {

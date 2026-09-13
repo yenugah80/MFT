@@ -420,13 +420,19 @@ function getScreenForType(type) {
 }
 
 /**
- * Map reminder type to Expo notification type
+ * Map reminder type to Expo notification type. REMINDER_TYPES values are
+ * lowercase snake_case (e.g. 'hydration_morning') — the previous version of
+ * this function checked uppercase substrings ('HYDRATION', 'FOOD', ...),
+ * which never matched anything, so every reminder silently fell through to
+ * DAILY_REMINDER regardless of its real category. Confirmed via a real
+ * regression test (toggleEnforcement.test.js) before this fix.
  */
-function mapTypeToExpo(reminderType) {
-  if (reminderType.includes('HYDRATION')) return NOTIFICATION_TYPES.HYDRATION_NUDGE;
-  if (reminderType.includes('FOOD')) return NOTIFICATION_TYPES.DAILY_REMINDER;
-  if (reminderType.includes('STREAK')) return NOTIFICATION_TYPES.STREAK_CELEBRATION;
-  if (reminderType.includes('MOOD') || reminderType.includes('ACTIVITY')) return NOTIFICATION_TYPES.INSIGHT_DROP;
+export function mapTypeToExpo(reminderType) {
+  if (reminderType.includes('hydration')) return NOTIFICATION_TYPES.HYDRATION_NUDGE;
+  if (reminderType.includes('food')) return NOTIFICATION_TYPES.DAILY_REMINDER;
+  if (reminderType.includes('mood')) return NOTIFICATION_TYPES.MOOD_CHECKIN;
+  if (reminderType.includes('activity')) return NOTIFICATION_TYPES.ACTIVITY_REMINDER;
+  if (reminderType.includes('streak')) return NOTIFICATION_TYPES.STREAK_CELEBRATION;
   return NOTIFICATION_TYPES.DAILY_REMINDER;
 }
 
@@ -610,14 +616,27 @@ async function processUserReminders(user, runMetrics) {
 }
 
 /**
- * Get notification category for preference checking
+ * Maps a REMINDER_TYPES value to the exact preference key the settings
+ * screen writes (mobile/app/profile/notifications.jsx's NOTIFICATION_TYPES
+ * config) — used both for the per-category enable/disable check below and,
+ * via mapReminderJobCategoryToLocalCategory, for translating into the local
+ * scheduler's ownership category names. Previously returned made-up bucket
+ * names ('hydration', 'food', 'mood', 'activity', 'motivation') that never
+ * matched any real preference key, so notifications?.[reminderCategory]
+ * below was always undefined !== false — i.e. never actually suppressed
+ * anything a user had turned off. Confirmed via a real regression test
+ * (toggleEnforcement.test.js) before this fix. STREAK_AT_RISK is the only
+ * type with an unambiguous existing toggle (streakProtection); the other
+ * engagement types (weekly_summary, achievement_close, comeback) have no
+ * dedicated toggle and fall through to the master 'enabled' switch, exactly
+ * as before.
  */
-function getCategoryForType(type) {
-  if (type.includes('HYDRATION') || type.includes('hydration')) return 'hydration';
-  if (type.includes('FOOD') || type.includes('food')) return 'food';
-  if (type.includes('MOOD') || type.includes('mood')) return 'mood';
-  if (type.includes('ACTIVITY') || type.includes('activity')) return 'activity';
-  if (type.includes('STREAK') || type.includes('COMEBACK')) return 'motivation';
+export function getCategoryForType(type) {
+  if (type.includes('hydration')) return 'hydrationNudges';
+  if (type.includes('food')) return 'dailyReminder';
+  if (type.includes('mood')) return 'moodCheckins';
+  if (type.includes('activity')) return 'activityReminders';
+  if (type === REMINDER_TYPES.STREAK_AT_RISK) return 'streakProtection';
   return 'enabled';
 }
 

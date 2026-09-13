@@ -17,12 +17,29 @@ import { getDevicesForUser } from '../utils/deviceRegistry.js';
 import WittyMessageEngine from './wittyMessageEngine.js';
 
 /**
- * FCM Notification types
- * Maps to user preference keys in accountSettingsTable.notifications JSON
+ * FCM Notification types.
+ *
+ * Values MUST exactly match the preference keys the settings screen writes
+ * to accountSettingsTable.notifications JSON (mobile/app/profile/notifications.jsx's
+ * NOTIFICATION_TYPES config: dailyReminder, hydrationNudges, activityReminders,
+ * moodCheckins, streakProtection, insightDrops, streakCelebrations) — this
+ * object's value is passed straight into sendUserFCMNotification's
+ * `prefs[notificationType] !== false` check. DAILY_REMINDER and
+ * HYDRATION_NUDGE previously held 'food'/'hydration', which never matched
+ * any real preference key, so turning those categories off in the app never
+ * actually stopped the backend from sending them — confirmed via a real
+ * end-to-end regression test (toggleEnforcement.test.js) before this fix.
+ * MOOD_CHECKIN and ACTIVITY_REMINDER previously didn't exist at all;
+ * sendMoodCheckInNotification/sendActivityNudgeNotification borrowed
+ * INSIGHT_DROP/DAILY_REMINDER instead, which had the same effect (and also
+ * corrupted the outgoing push's own data.type field, since this same value
+ * gets embedded there too — see sendFCMNotification).
  */
 export const FCM_NOTIFICATION_TYPES = {
-  DAILY_REMINDER: 'food',
-  HYDRATION_NUDGE: 'hydration',
+  DAILY_REMINDER: 'dailyReminder',
+  HYDRATION_NUDGE: 'hydrationNudges',
+  MOOD_CHECKIN: 'moodCheckins',
+  ACTIVITY_REMINDER: 'activityReminders',
   INSIGHT_DROP: 'insightDrops',          // granular preference key
   STREAK_CELEBRATION: 'streakCelebrations', // granular preference key
   STREAK_AT_RISK: 'streakProtection',    // granular preference key
@@ -612,7 +629,7 @@ export async function sendMoodCheckInNotification(db, userId, context = {}) {
     return { success: false, reason: 'no_relevant_message' };
   }
 
-  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.INSIGHT_DROP, {
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.MOOD_CHECKIN, {
     title: message.title,
     body: message.body,
     data: { screen: 'mood', type: 'mood_checkin', deliveryId: context.deliveryId },
@@ -635,7 +652,7 @@ export async function sendActivityNudgeNotification(db, userId, context = {}) {
     return { success: false, reason: 'no_relevant_message' };
   }
 
-  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.ACTIVITY_REMINDER, {
     title: message.title,
     body: message.body,
     data: { screen: 'activity', type: 'activity_nudge', deliveryId: context.deliveryId },

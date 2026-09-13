@@ -27,7 +27,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { useNotification } from '../../providers/NotificationProvider';
-import apiClient from '../../services/apiClient';
 import {
   BRAND,
   SURFACES,
@@ -360,29 +359,31 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Handle toggle
+  // Handle toggle. Applies immediately and is never rolled back — local
+  // scheduling reflects the change right away regardless of connectivity;
+  // notify.push.updatePreferences saves to the backend best-effort and
+  // queues a retry for reconnect if that part fails (see
+  // NotificationProvider's updateNotificationPreferences/
+  // retryPendingPreferenceSave). A failed backend save doesn't mean the
+  // toggle "didn't work" from the user's point of view, so this doesn't
+  // revert the switch or treat it as an error requiring their attention.
   const handleToggle = useCallback(async (key, value) => {
-    const oldSettings = { ...settings };
     const newSettings = { ...settings, [key]: value };
 
-    // Optimistic update
     setSettings(newSettings);
     setIsSaving(true);
 
     try {
-      await apiClient.post('/profile/notifications', { notifications: newSettings });
-
-      // Sync notification schedules (if available)
-      if (notify?.push?.syncSchedules) {
-        await notify.push.syncSchedules();
+      const result = await notify.push.updatePreferences(newSettings);
+      if (!result?.savedToBackend) {
+        notify?.info?.("Saved on this device — we'll sync it once you're back online");
       }
-
-      console.log('[NotificationsScreen] Settings saved:', newSettings);
+      console.log('[NotificationsScreen] Settings applied:', newSettings, result);
     } catch (error) {
-      console.error('[NotificationsScreen] Failed to save:', error);
-      // Rollback on error
-      setSettings(oldSettings);
-      notify?.error?.('Failed to save setting');
+      // updatePreferences itself doesn't throw (its internal steps each
+      // catch their own errors), but guard anyway rather than leave the
+      // toggle stuck disabled if something unexpected happens.
+      console.error('[NotificationsScreen] Unexpected error applying setting:', error);
     } finally {
       setIsSaving(false);
     }
@@ -471,6 +472,14 @@ export default function NotificationsScreen() {
           <Ionicons name="information-circle-outline" size={20} color={TEXT.tertiary} />
           <Text style={styles.infoText}>
             Notifications help you build healthy habits. You can change these settings anytime.
+          </Text>
+        </View>
+
+        <View style={styles.infoSection}>
+          <Ionicons name="phone-portrait-outline" size={20} color={TEXT.tertiary} />
+          <Text style={styles.infoText}>
+            These settings apply to your account and sync to every device where you&apos;re signed in.
+            Reminder times adjust automatically for each device based on when you actually log there.
           </Text>
         </View>
       </ScrollView>

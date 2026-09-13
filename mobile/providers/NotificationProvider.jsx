@@ -470,11 +470,57 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [addToast]);
 
-  // Update preferences and sync schedules
+  // Holds the most recent preferences object that failed to save to the
+  // backend, for retryPendingPreferenceSave to flush once connectivity
+  // returns (wired into the existing reconnect/foreground handlers below,
+  // alongside retryPendingTokenRegistration/retryPendingOwnership).
+  const pendingPreferencesRef = useRef(null);
+
+  const savePreferencesToBackend = useCallback(async (prefs) => {
+    try {
+      await apiClient.post('/profile/notifications', { notifications: prefs });
+      pendingPreferencesRef.current = null;
+      return true;
+    } catch (error) {
+      console.warn('[NotificationProvider] Failed to save preferences to backend, will retry on reconnect:', error?.message || error);
+      pendingPreferencesRef.current = prefs;
+      return false;
+    }
+  }, []);
+
+  const retryPendingPreferenceSave = useCallback(async () => {
+    if (!pendingPreferencesRef.current) return false;
+    return savePreferencesToBackend(pendingPreferencesRef.current);
+  }, [savePreferencesToBackend]);
+
+  /**
+   * Update preferences: apply locally and (re)schedule immediately — this
+   * works fully offline and is never rolled back — then save to the
+   * backend best-effort. A save failure here does NOT mean the toggle
+   * "didn't work": local scheduling is the actual source of truth for
+   * what the user experiences, and it already reflects the change. The
+   * backend save is just bookkeeping that catches up via
+   * retryPendingPreferenceSave once connectivity returns.
+   *
+   * Deliberately bypasses syncNotificationSchedules() (which does its own
+   * GET /profile/notifications first) — that GET would both fail offline
+   * (silently no-op'ing the whole sync, including local scheduling) and,
+   * even when it succeeds, could race with this save and use a stale
+   * server value instead of the preferences just chosen here.
+   */
   const updateNotificationPreferences = useCallback(async (newPrefs) => {
     setPreferences(newPrefs);
-    await syncNotificationSchedules();
-  }, [syncNotificationSchedules]);
+
+    const optimalTimes = await SmartNotificationEngine.getOptimalNotificationTimes().catch(() => ({}));
+    const scheduleResult = await syncAllNotificationSchedules(newPrefs, optimalTimes).catch((error) => {
+      console.warn('[NotificationProvider] Failed to sync local schedules:', error?.message || error);
+      return { scheduled: [], cancelled: [], error: error.message };
+    });
+
+    const savedToBackend = await savePreferencesToBackend(newPrefs);
+
+    return { ...scheduleResult, savedToBackend };
+  }, [savePreferencesToBackend]);
 
   // Check permission status
   const checkPermissionStatus = useCallback(async () => {
@@ -611,6 +657,11 @@ export const NotificationProvider = ({ children }) => {
         // bookkeeping, not fix anything the user would notice missing.
         retryPendingOwnership().catch(() => {});
 
+        // Same recovery for a notification-preference save (e.g. a toggle
+        // flipped in Settings) that failed to reach the backend while
+        // offline — local scheduling already reflects the change either way.
+        retryPendingPreferenceSave().catch(() => {});
+
         // Local/remote de-dup: the backend cron is the primary sender for
         // every reminder category whenever the device has connectivity —
         // local scheduling is only the offline fallback. If the server
@@ -666,6 +717,7 @@ export const NotificationProvider = ({ children }) => {
           retryPendingTokenRegistration().catch(() => {});
           fcmService.retryPendingFCMTokenRegistration().catch(() => {});
           retryPendingOwnership().catch(() => {});
+          retryPendingPreferenceSave().catch(() => {});
         }
       });
     } catch (err) {

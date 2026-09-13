@@ -36,6 +36,8 @@ function getExpoHeaders() {
 export const NOTIFICATION_TYPES = {
   DAILY_REMINDER: 'dailyReminder',
   HYDRATION_NUDGE: 'hydrationNudges',
+  MOOD_CHECKIN: 'moodCheckins',
+  ACTIVITY_REMINDER: 'activityReminders',
   INSIGHT_DROP: 'insightDrops',
   STREAK_CELEBRATION: 'streakCelebrations',
   GOAL_ACHIEVED: 'goalAchieved',

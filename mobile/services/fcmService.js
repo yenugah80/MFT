@@ -25,6 +25,16 @@ function isPhysicalDevice() {
   return Device.isDevice;
 }
 
+// Testing-only escape hatch, matching pushNotifications.js's
+// __setNotificationsClientForTesting: @react-native-firebase/messaging is a
+// native module loaded via dynamic import, which Jest cannot intercept via
+// jest.mock() (confirmed this session across multiple approaches), and
+// isPhysicalDevice() is always false under Jest anyway (no real device).
+// Directly assigning the module-level `messaging` variable sidesteps both.
+export function __setFirebaseMessagingForTesting(mockMessaging) {
+  messaging = mockMessaging;
+}
+
 /**
  * Lazily load Firebase messaging to prevent import-time crashes
  * in development or when native modules aren't available
@@ -220,22 +230,33 @@ export async function retryPendingFCMTokenRegistration() {
  * notifications (goal-achieved, insight-drop, etc.) could still reach the
  * new account's screen.
  *
- * The backend call gets two quick attempts (a brief blip shouldn't
- * permanently strand a stale device row) but no long-running retry beyond
- * that: unlike ownership registration, there is no safe way to retry this
- * AFTER signOut() tears down the auth session — retrying would need to
- * authenticate as the account that just signed out. If both attempts fail
- * (device is genuinely offline at the moment of sign-out), the device row
- * is left stale server-side. This is a bounded, self-healing residual risk,
- * not an open-ended one: local reminders are already cancelled by
- * deregisterAllPushChannels() regardless of this call's outcome (see
- * pushNotifications.js's cancelAllScheduledNotifications, called first and
- * unconditionally), so the only remaining exposure is a stale row possibly
- * still receiving an event-driven push (goal-achieved, insight-drop) for
- * the old account — until its token naturally invalidates (the existing
- * shouldRemove cleanup in fcmPushService.js/pushNotificationService.js
- * handles that) or the old account signs in again anywhere and the row
- * gets refreshed or replaced.
+ * Two independent safety nets, in order, each covering a different offline
+ * scenario:
+ *
+ * 1. `fcm.deleteToken()` runs FIRST, unconditionally — this talks to
+ *    Firebase directly, not our backend. It actively invalidates the old
+ *    token at the source: any later send attempt against it (from ANY
+ *    path, including a stale server-side row this function never reached)
+ *    fails with `messaging/registration-token-not-registered`, which the
+ *    existing shouldRemove cleanup already handles. This succeeds whenever
+ *    the device has ANY general connectivity, independent of whether OUR
+ *    backend specifically is reachable — covering the common case of "our
+ *    API is briefly down/slow" without needing our own retry logic at all.
+ * 2. Best-effort backend deregistration (two quick attempts — a brief blip
+ *    shouldn't permanently strand a stale row) removes the device row
+ *    outright. Unlike ownership registration, there is no safe way to
+ *    retry this AFTER signOut() tears down the auth session — retrying
+ *    would need to authenticate as the account that just signed out.
+ *
+ * The only genuinely open residual case is the device being fully offline
+ * (no connectivity at all, e.g. airplane mode) at the exact moment of
+ * sign-out — there, step 1 also fails, and the old token stays valid on a
+ * stale row until the old account signs in again anywhere (refreshing or
+ * replacing the row) or connectivity returns before the OS kills the
+ * token naturally. Local reminders are cancelled regardless of any of this
+ * (deregisterAllPushChannels calls cancelAllScheduledNotificationsAsync
+ * first and unconditionally, before either safety net runs) — this
+ * function only affects event-driven server pushes, not local reminders.
  */
 export async function unregisterFCMToken() {
   const fcm = await loadFirebaseMessaging();

@@ -52,6 +52,36 @@ beforeEach(() => {
   mockDelete.mockReset();
 });
 
+describe('offline-logout registration risk — fcm.deleteToken() as an independent safety net', () => {
+  test('deleteToken() runs and succeeds even when the backend deregistration call fails — token is invalidated regardless of our API being reachable', async () => {
+    const fcm = await import('../../services/fcmService');
+    const deleteToken = jest.fn(() => Promise.resolve());
+    fcm.__setFirebaseMessagingForTesting({ deleteToken });
+
+    mockPost.mockRejectedValue(new Error('our backend is down'));
+    mockDelete.mockRejectedValue(new Error('our backend is down'));
+
+    const result = await fcm.unregisterFCMToken();
+
+    expect(deleteToken).toHaveBeenCalledTimes(1); // Firebase-side invalidation happened
+    expect(result).toBe(false); // honestly reports the backend half didn't fully succeed
+  });
+
+  test('a device fully offline (Firebase also unreachable) fails cleanly without throwing', async () => {
+    const fcm = await import('../../services/fcmService');
+    const deleteToken = jest.fn(() => Promise.reject(new Error('no connectivity at all')));
+    fcm.__setFirebaseMessagingForTesting({ deleteToken });
+
+    mockPost.mockRejectedValue(new Error('no connectivity at all'));
+    mockDelete.mockRejectedValue(new Error('no connectivity at all'));
+
+    const result = await fcm.unregisterFCMToken();
+
+    expect(deleteToken).toHaveBeenCalledTimes(1);
+    expect(result).toBe(false);
+  });
+});
+
 describe('sign-out notification cleanup', () => {
   test('cancels every locally scheduled reminder across all categories on a normal (online) sign-out', async () => {
     const pn = await import('../../services/pushNotifications');
