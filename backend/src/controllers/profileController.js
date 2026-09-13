@@ -27,6 +27,7 @@ import {
   deregisterDevice,
   resolveDeviceRowId,
   setOwnership,
+  issueDeregisterToken,
 } from "../utils/deviceRegistry.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
@@ -312,6 +313,36 @@ export async function deregisterDeviceEndpoint(req, res) {
     res.status(200).json({ success: true, removed: result.removed });
   } catch (error) {
     console.error('[deregisterDeviceEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+/**
+ * Issues a fresh cleanup token for this device while the caller is still
+ * authenticated. Called on every successful FCM/Expo token registration
+ * (mobile side), not just at sign-out time — by the time a sign-out ever
+ * needs it, it must already be cached client-side, since a fresh one can't
+ * be requested from an offline sign-out with no session either. See
+ * deviceRegistry.js's issueDeregisterToken and routes/deviceDeregistration.js
+ * (the unauthenticated endpoint that consumes it) for the full mechanism.
+ */
+export async function issueDeregisterTokenEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+
+    const result = await issueDeregisterToken(req.db, userId, deviceId);
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Device not registered' });
+    }
+
+    res.status(200).json({ success: true, token: result.token, expiresAt: result.expiresAt });
+  } catch (error) {
+    console.error('[issueDeregisterTokenEndpoint] Error:', error);
     sendDevError(res, error);
   }
 }

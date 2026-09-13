@@ -9,8 +9,11 @@
  * /profile/devices/register. A user is resolved as either all-legacy (zero
  * rows in `devices`) or all-per-device (>=1 row) — see resolveSendTargets.
  */
-import { and, eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, eq, gt } from 'drizzle-orm';
 import { devicesTable, notificationOwnershipTable } from '../db/schema.js';
+
+const DEREGISTER_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushToken, platform }) {
   if (!deviceId || typeof deviceId !== 'string') {
@@ -61,6 +64,48 @@ export async function deregisterDevice(db, userId, deviceId) {
 
 export async function getDevicesForUser(db, userId) {
   return db.select().from(devicesTable).where(eq(devicesTable.userId, userId));
+}
+
+/**
+ * Issues a fresh, narrow, single-use cleanup credential for one device row
+ * — called only while the caller IS authenticated (on every successful FCM/
+ * Expo token registration; see fcmService.js/pushNotifications.js), so it's
+ * already cached client-side by the time it might ever be needed without a
+ * session. Overwrites any previous token for this device (only the latest
+ * is ever valid — an old cached client copy simply stops working, which is
+ * fine since the client refreshes its cached copy on every reissue too).
+ */
+export async function issueDeregisterToken(db, userId, deviceId) {
+  const deviceRowId = await resolveDeviceRowId(db, userId, deviceId);
+  if (!deviceRowId) return null;
+
+  const token = randomUUID();
+  const expiresAt = new Date(Date.now() + DEREGISTER_TOKEN_TTL_MS);
+  await db
+    .update(devicesTable)
+    .set({ deregisterToken: token, deregisterTokenExpiresAt: expiresAt })
+    .where(eq(devicesTable.id, deviceRowId));
+
+  return { token, expiresAt };
+}
+
+/**
+ * Deletes a device row by its cleanup token alone — deliberately the ONLY
+ * lookup key, with no userId/deviceId required, so this can run with zero
+ * session of any kind. Possession of the (securely random, 122-bit) token
+ * is the sole proof of authorization, the same trust model as a password-
+ * reset or unsubscribe link. Expired or already-consumed (row already
+ * deleted, or a newer token issued since) tokens simply match nothing —
+ * this function never distinguishes "wrong token" from "already handled,"
+ * both just report removed: false, so it can't be used to probe validity.
+ */
+export async function deregisterByToken(db, token) {
+  if (!token || typeof token !== 'string') return { removed: false };
+  const deleted = await db
+    .delete(devicesTable)
+    .where(and(eq(devicesTable.deregisterToken, token), gt(devicesTable.deregisterTokenExpiresAt, new Date())))
+    .returning({ id: devicesTable.id });
+  return { removed: deleted.length > 0 };
 }
 
 /**

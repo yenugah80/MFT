@@ -34,6 +34,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
 import SmartNotificationInitializer from "@/components/SmartNotificationInitializer";
+import ScheduledNotificationsDebugOverlay from "@/components/dev/ScheduledNotificationsDebugOverlay";
 import InitializationGuard from "@/components/InitializationGuard";
 import { cleanupAnalytics } from "@/services/analytics";
 import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
@@ -235,6 +236,7 @@ export default function RootLayout() {
                         <SafeScreen>
                           <Slot />
                         </SafeScreen>
+                        {__DEV__ && Platform.OS !== 'web' && <ScheduledNotificationsDebugOverlay />}
                       </SmartNotificationInitializer>
                     </InitializationGuard>
                   </ApiInitializer>

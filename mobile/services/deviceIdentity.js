@@ -56,3 +56,76 @@ export async function getOrCreateDeviceId() {
 export function __resetDeviceIdCacheForTesting() {
   cachedDeviceId = null;
 }
+
+/**
+ * Cache for the narrow, single-purpose device-deregistration token issued
+ * by POST /profile/devices/issue-deregister-token (see fcmService.js,
+ * called on every successful push-token registration — i.e. while online
+ * and authenticated, well before it's ever needed). This is what lets
+ * sign-out clean up this device's server-side row even after the account
+ * session is gone and offline at the moment of sign-out prevented the
+ * normal authenticated deregistration from completing. It is deliberately
+ * NOT a cached account session or API key — see devicesTable's
+ * deregisterToken comment in backend/src/db/schema.js for the full
+ * rationale (single action, single device, expires, single-use).
+ *
+ * A single global SecureStore key (not scoped per-account) is intentional
+ * and safe: whichever account is active when this gets used, using it only
+ * ever deletes the ONE row it was issued for — never anything belonging to
+ * whichever account happens to be signed in (or signed out) at the moment
+ * it's retried. The overwrite-on-every-reissue behavior means a fresh
+ * account's own registration naturally replaces a previous account's
+ * leftover token as soon as that fresh registration succeeds.
+ */
+const DEREGISTER_TOKEN_KEY = 'mft_device_deregister_token';
+
+export async function getCachedDeregisterToken() {
+  try {
+    const SecureStore = await import('expo-secure-store');
+    return await SecureStore.getItemAsync(DEREGISTER_TOKEN_KEY);
+  } catch (error) {
+    console.warn('[DeviceIdentity] Failed to read cached deregister token:', error?.message || error);
+    return null;
+  }
+}
+
+export async function setCachedDeregisterToken(token) {
+  try {
+    const SecureStore = await import('expo-secure-store');
+    await SecureStore.setItemAsync(DEREGISTER_TOKEN_KEY, token);
+  } catch (error) {
+    console.warn('[DeviceIdentity] Failed to cache deregister token:', error?.message || error);
+  }
+}
+
+export async function clearCachedDeregisterToken() {
+  try {
+    const SecureStore = await import('expo-secure-store');
+    await SecureStore.deleteItemAsync(DEREGISTER_TOKEN_KEY);
+  } catch (error) {
+    console.warn('[DeviceIdentity] Failed to clear cached deregister token:', error?.message || error);
+  }
+}
+
+/**
+ * Fetches a fresh deregistration token for this device and caches it —
+ * called after every successful FCM/Expo token registration (both
+ * fcmService.js and pushNotifications.js import this, which is why it
+ * lives here rather than in either of those: importing across those two
+ * modules directly would be circular, since fcmService.js already imports
+ * from pushNotifications.js for the sign-out cleanup flow).
+ */
+export async function issueAndCacheDeregisterToken(deviceId) {
+  if (!deviceId) return;
+  try {
+    const apiClient = (await import('./apiClient')).default;
+    const response = await apiClient.post('/profile/devices/issue-deregister-token', { deviceId });
+    if (response?.success && response?.token) {
+      await setCachedDeregisterToken(response.token);
+    }
+  } catch (error) {
+    // Non-critical: the previously-cached token (if any) simply stays in
+    // place until the next successful registration refreshes it.
+    console.warn('[DeviceIdentity] Failed to issue/cache deregister token:', error?.message || error);
+  }
+}

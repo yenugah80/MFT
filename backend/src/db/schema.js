@@ -1864,6 +1864,21 @@ export const devicesTable = pgTable(
     expoPushToken: text("expo_push_token"),
     expoPushTokenUpdatedAt: timestamp("expo_push_token_updated_at"),
     lastSeenAt: timestamp("last_seen_at").defaultNow(),
+    // Narrow, single-purpose credential for cleaning up this exact device
+    // row AFTER the account session that created it is gone — the whole
+    // reason it exists is that a normal deregistration call needs a valid
+    // Clerk session, and offline-at-sign-out means that session is torn
+    // down before the retry can ever succeed. Deliberately NOT a cached
+    // account session or API key: this token authorizes exactly one action
+    // (delete THIS row) via exact-match lookup, nothing else — it can't
+    // read any data, can't act as the user anywhere else, expires, and is
+    // consumed on first successful use. Issued while online+authenticated
+    // (mobile/services/fcmService.js, on every successful token
+    // registration) and cached client-side for later use with no session
+    // at all — see routes/deviceDeregistration.js, the one endpoint that
+    // accepts it without requireAuth().
+    deregisterToken: text("deregister_token").unique(),
+    deregisterTokenExpiresAt: timestamp("deregister_token_expires_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },

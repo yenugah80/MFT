@@ -646,6 +646,12 @@ export const NotificationProvider = ({ children }) => {
         retryPendingTokenRegistration().catch(() => {});
         fcmService.retryPendingFCMTokenRegistration().catch(() => {});
 
+        // Completes an offline-at-sign-out deregistration even with no
+        // session at all (e.g. sitting on the sign-in screen after a fully
+        // offline logout) — this fires regardless of isSignedIn, since this
+        // whole effect isn't gated on it. No-ops if nothing is cached.
+        fcmService.retryDeregistrationWithToken().catch(() => {});
+
         // Same recovery for local-ownership claims/releases that failed to
         // reach the backend (e.g. the user toggled a reminder off mid-flight
         // with no connectivity) — local scheduling itself was never gated on
@@ -712,6 +718,7 @@ export const NotificationProvider = ({ children }) => {
           console.log('[NotificationProvider] Network reconnected - retrying pending token registration');
           retryPendingTokenRegistration().catch(() => {});
           fcmService.retryPendingFCMTokenRegistration().catch(() => {});
+          fcmService.retryDeregistrationWithToken().catch(() => {});
           retryPendingOwnership().catch(() => {});
           retryPendingPreferenceSave().catch(() => {});
         }

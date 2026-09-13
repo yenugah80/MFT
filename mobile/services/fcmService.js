@@ -10,7 +10,12 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import apiClient from './apiClient';
-import { getOrCreateDeviceId } from './deviceIdentity';
+import {
+  getOrCreateDeviceId,
+  getCachedDeregisterToken,
+  clearCachedDeregisterToken,
+  issueAndCacheDeregisterToken,
+} from './deviceIdentity';
 import {
   unregisterPushToken,
   cancelAllScheduledNotifications,
@@ -182,6 +187,10 @@ export async function registerFCMTokenWithBackend(token, retryCount = 0) {
     if (response.success) {
       console.log('[FCM] Token registered with backend');
       pendingFCMToken = null;
+      // Refresh the cached cleanup token while we're online and
+      // authenticated — this is what makes offline-at-sign-out recovery
+      // possible later, when neither of those will be true anymore.
+      if (deviceId) issueAndCacheDeregisterToken(deviceId).catch(() => {});
       return true;
     }
 
@@ -235,8 +244,8 @@ export async function retryPendingFCMTokenRegistration() {
  * notifications (goal-achieved, insight-drop, etc.) could still reach the
  * new account's screen.
  *
- * Two independent safety nets, in order, each covering a different offline
- * scenario:
+ * Three independent safety nets, in order, each covering a different
+ * offline scenario:
  *
  * 1. `fcm.deleteToken()` runs FIRST, unconditionally — this talks to
  *    Firebase directly, not our backend. It actively invalidates the old
@@ -249,19 +258,23 @@ export async function retryPendingFCMTokenRegistration() {
  *    API is briefly down/slow" without needing our own retry logic at all.
  * 2. Best-effort backend deregistration (two quick attempts — a brief blip
  *    shouldn't permanently strand a stale row) removes the device row
- *    outright. Unlike ownership registration, there is no safe way to
- *    retry this AFTER signOut() tears down the auth session — retrying
- *    would need to authenticate as the account that just signed out.
+ *    outright, using the still-live account session.
+ * 3. If both of those fail — the device was fully offline (no connectivity
+ *    at all, not just "our API is down") at the exact moment of sign-out —
+ *    retryDeregistrationWithToken() below picks this up later, once
+ *    connectivity returns, using a narrow single-purpose token cached
+ *    while still authenticated (see deviceIdentity.js's
+ *    issueAndCacheDeregisterToken), specifically because retrying steps 1
+ *    or 2 at that point is impossible: there is no session left to
+ *    authenticate a normal deregistration call, and deliberately no
+ *    account credential of any kind is kept around to work around that —
+ *    the token can only ever delete this one already-identified row.
  *
- * The only genuinely open residual case is the device being fully offline
- * (no connectivity at all, e.g. airplane mode) at the exact moment of
- * sign-out — there, step 1 also fails, and the old token stays valid on a
- * stale row until the old account signs in again anywhere (refreshing or
- * replacing the row) or connectivity returns before the OS kills the
- * token naturally. Local reminders are cancelled regardless of any of this
+ * Local reminders are cancelled regardless of any of this
  * (deregisterAllPushChannels calls cancelAllScheduledNotificationsAsync
- * first and unconditionally, before either safety net runs) — this
- * function only affects event-driven server pushes, not local reminders.
+ * first and unconditionally, before any of these run) — none of these
+ * three steps affect local reminders, only event-driven and reminder
+ * pushes the BACKEND might otherwise still route to this device.
  */
 export async function unregisterFCMToken() {
   const fcm = await loadFirebaseMessaging();
@@ -287,6 +300,9 @@ export async function unregisterFCMToken() {
           await apiClient.delete('/profile/fcm-token');
         }
         console.log('[FCM] Token removed from backend');
+        // The row this token was scoped to is already gone — clear it so a
+        // later reconnect doesn't waste a call on an already-handled token.
+        if (deviceId) await clearCachedDeregisterToken();
         return true;
       } catch (attemptError) {
         if (attempt === 0) {
@@ -300,6 +316,43 @@ export async function unregisterFCMToken() {
     return true;
   } catch (error) {
     console.warn('[FCM] Failed to unregister token from backend (device is likely offline; local reminders are already cancelled regardless):', error?.message || error);
+    return false;
+  }
+}
+
+/**
+ * Completes an offline-at-sign-out deregistration that unregisterFCMToken
+ * couldn't finish — called with NO account session at all, which is exactly
+ * why it can't just retry unregisterFCMToken's own authenticated call.
+ * Wired into NotificationProvider's reconnect/foreground listeners, which
+ * stay mounted regardless of sign-in state (NotificationProvider sits above
+ * the auth gate in app/_layout.jsx), so this actually runs even while
+ * sitting on the sign-in screen post-logout — not just after signing back
+ * in. No-ops immediately if nothing is cached (the common case: either
+ * nothing ever failed, or a previous run of this already cleared it).
+ *
+ * Idempotent by construction: the backend's deregister-by-token endpoint
+ * treats "already deleted," "expired," and "wrong token" identically
+ * (removed: false, never an error), so calling this repeatedly — e.g. on
+ * every reconnect while sitting signed-out for a while — is always safe.
+ */
+export async function retryDeregistrationWithToken() {
+  const token = await getCachedDeregisterToken();
+  if (!token) return false;
+
+  try {
+    const response = await apiClient.post('/device-cleanup/deregister', { token });
+    if (response?.success) {
+      // removed:true means we just cleaned it up; removed:false means it
+      // was already handled some other way (e.g. the account signed back
+      // in and refreshed this same row). Either way, this token has
+      // nothing left to do.
+      await clearCachedDeregisterToken();
+      return response.removed === true;
+    }
+    return false;
+  } catch (error) {
+    console.warn('[FCM] Failed to retry token-based deregistration (will try again on next reconnect):', error?.message || error);
     return false;
   }
 }
@@ -499,6 +552,7 @@ export default {
   registerFCMTokenWithBackend,
   retryPendingFCMTokenRegistration,
   unregisterFCMToken,
+  retryDeregistrationWithToken,
   setupFCMListeners,
   setBackgroundMessageHandler,
   setupFCM,

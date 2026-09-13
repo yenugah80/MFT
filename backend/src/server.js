@@ -24,6 +24,7 @@ import complianceRouter from "./routes/compliance.js";
 import foodRouter from "./routes/food.js";
 import resolveRouter from "./routes/resolve.js";
 import profileRouter from "./routes/profile.js";
+import deviceDeregistrationRouter from "./routes/deviceDeregistration.js";
 import loggingRouter from "./routes/logging.js";
 import moodRouter from "./routes/mood.js";
 import waterRouter from "./routes/water.js";
@@ -964,6 +965,10 @@ app.use("/api/food/resolve", resolveRouter);
 
 // Mount Profile Router (modularized)
 app.use("/api/profile", profileRouter);
+
+// Deliberately unauthenticated — see routes/deviceDeregistration.js for why
+// and what it can (and can't) do.
+app.use("/api/device-cleanup", deviceDeregistrationRouter);
 
 // Mount Logging Router (modularized)
 app.use("/api/log", loggingRouter);

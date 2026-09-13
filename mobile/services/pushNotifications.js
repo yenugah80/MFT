@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
 import { NOTIFICATION_CATEGORIES } from '../constants/notificationTypes';
-import { getOrCreateDeviceId } from './deviceIdentity';
+import { getOrCreateDeviceId, issueAndCacheDeregisterToken } from './deviceIdentity';
 
 // Re-export for backward compatibility
 export { NOTIFICATION_CATEGORIES };
@@ -238,6 +238,9 @@ export async function registerPushTokenWithBackend(token, retryCount = 0) {
     if (response.success) {
       console.log('[PushNotifications] Token registered with backend');
       pendingToken = null;
+      // See deviceIdentity.js's issueAndCacheDeregisterToken — refreshes
+      // the cached offline-sign-out cleanup token while still authenticated.
+      if (deviceId) issueAndCacheDeregisterToken(deviceId).catch(() => {});
       return true;
     }
 

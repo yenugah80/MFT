@@ -27,6 +27,7 @@ import {
   acknowledgePushReceived,
   registerDeviceEndpoint,
   deregisterDeviceEndpoint,
+  issueDeregisterTokenEndpoint,
   setNotificationOwnershipEndpoint,
   exportUserData,
   deleteAccount,
@@ -75,6 +76,7 @@ router.post("/notifications/ack", acknowledgePushReceived);
 // unchanged; new builds use these instead. See deviceRegistry.js.
 router.post("/devices/register", registerDeviceEndpoint);
 router.post("/devices/deregister", deregisterDeviceEndpoint);
+router.post("/devices/issue-deregister-token", issueDeregisterTokenEndpoint);
 router.post("/notifications/ownership", setNotificationOwnershipEndpoint);
 
 // Privacy settings
