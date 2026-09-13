@@ -281,45 +281,6 @@ function getActivityMessage(type, context = {}) {
   return { ...fallbacks[type] || fallbacks.gentle_nudge, tone: TONE_STYLES.MOTIVATING };
 }
 
-// Legacy message objects for backward compatibility (now wrap the functions)
-const HYDRATION_MESSAGES = {
-  morning: [{ getMessage: (ctx) => getHydrationMessage('morning', ctx) }],
-  midday: [{ getMessage: (ctx) => getHydrationMessage('midday', ctx) }],
-  afternoon: [{ getMessage: (ctx) => getHydrationMessage('afternoon', ctx) }],
-  evening: [{ getMessage: (ctx) => getHydrationMessage('evening', ctx) }],
-  goal_reached: [{ getMessage: (ctx) => getHydrationMessage('goal_reached', ctx) }],
-};
-
-const FOOD_MESSAGES = {
-  breakfast: [{ getMessage: (ctx) => getFoodMessage('breakfast', ctx) }],
-  lunch: [{ getMessage: (ctx) => getFoodMessage('lunch', ctx) }],
-  dinner: [{ getMessage: (ctx) => getFoodMessage('dinner', ctx) }],
-  gentle_nudge: [{ getMessage: (ctx) => getFoodMessage('gentle_nudge', ctx) }],
-  streak: [{ getMessage: (ctx) => getFoodMessage('streak', ctx) }],
-};
-
-const MOOD_MESSAGES = {
-  morning: [{ getMessage: (ctx) => getMoodMessage('morning', ctx) }],
-  afternoon: [{ getMessage: (ctx) => getMoodMessage('afternoon', ctx) }],
-  evening: [{ getMessage: (ctx) => getMoodMessage('evening', ctx) }],
-  post_meal: [{ getMessage: (ctx) => getMoodMessage('post_meal', ctx) }],
-};
-
-const MOTIVATION_MESSAGES = {
-  streak_at_risk: [{ getMessage: (ctx) => getMotivationMessage('streak_at_risk', ctx) }],
-  comeback: [{ getMessage: (ctx) => getMotivationMessage('comeback', ctx) }],
-  achievement_close: [{ getMessage: (ctx) => getMotivationMessage('achievement_close', ctx) }],
-  weekly_summary: [{ getMessage: (ctx) => getMotivationMessage('weekly_summary', ctx) }],
-};
-
-const ACTIVITY_MESSAGES = {
-  movement: [{ getMessage: (ctx) => getActivityMessage('movement', ctx) }],
-  walk: [{ getMessage: (ctx) => getActivityMessage('walk', ctx) }],
-  post_workout: [{ getMessage: (ctx) => getActivityMessage('post_workout', ctx) }],
-  sedentary: [{ getMessage: (ctx) => getActivityMessage('sedentary', ctx) }],
-  gentle_nudge: [{ getMessage: (ctx) => getActivityMessage('gentle_nudge', ctx) }],
-};
-
 // ============================================================================
 // USER PATTERN LEARNING
 // ============================================================================
@@ -447,33 +408,67 @@ function findTypicalMealTime(logs, startHour, endHour) {
 /**
  * Detect quiet hours from user patterns
  */
-function detectQuietHours(patterns) {
+export function detectQuietHours(patterns) {
   const combined = patterns.food.hourlyDistribution.map((count, hour) =>
     count + patterns.water.hourlyDistribution[hour] + patterns.mood.hourlyDistribution[hour]
   );
 
-  // Find the longest stretch of zero/low activity
+  // Default (no reliable signal): typical overnight sleep window.
   let longestQuietStart = 22;
   let longestQuietEnd = 7;
 
-  // Look for hours with very low activity
   const quietThreshold = Math.max(...combined) * 0.1;
-  const quietHoursSet = combined.map((count, hour) => count <= quietThreshold ? hour : -1).filter(h => h >= 0);
+  const isQuietHourFlag = combined.map((count) => count <= quietThreshold);
+  const quietHoursSet = isQuietHourFlag.reduce((acc, isQuiet, hour) => (isQuiet ? [...acc, hour] : acc), []);
 
   if (quietHoursSet.length >= 4) {
-    // Find contiguous quiet periods
-    quietHoursSet.sort((a, b) => a - b);
-    // Simple heuristic: use typical sleep hours if detected
-    if (quietHoursSet.includes(22) || quietHoursSet.includes(23) || quietHoursSet.includes(0)) {
-      longestQuietStart = Math.min(...quietHoursSet.filter(h => h >= 20 || h <= 8));
-      longestQuietEnd = Math.max(...quietHoursSet.filter(h => h >= 20 || h <= 8));
+    // Find the longest run of consecutive quiet hours, wrapping past midnight
+    // (23 -> 0) since a sleep window is almost always contiguous but usually
+    // spans the day boundary. The previous implementation took a plain
+    // Math.min/Math.max over hours matching `h >= 20 || h <= 8` — a
+    // non-contiguous set by construction (it always includes hours from both
+    // the early-morning tail AND the late-night tail), so min() landed on 0
+    // and max() landed on 23 for nearly any real usage pattern. That made
+    // isQuietHour()'s `hour >= start && hour < end` check true for 23 of 24
+    // hours, silently blocking almost all reminder generation for almost
+    // every user with any concentrated activity — a confirmed, live bug,
+    // not a hypothetical one (reproduced with a test account logging at a
+    // consistent 8am/12pm/6pm).
+    let bestRunStart = null;
+    let bestRunLength = 0;
+    let runStart = null;
+    let runLength = 0;
+
+    // Walk 48 hours (twice around the clock) so a run that wraps past
+    // midnight is detected as one contiguous run instead of two fragments.
+    for (let i = 0; i < 48; i++) {
+      const hour = i % 24;
+      if (isQuietHourFlag[hour]) {
+        if (runStart === null) runStart = i;
+        runLength++;
+        if (runLength > bestRunLength) {
+          bestRunLength = runLength;
+          bestRunStart = runStart;
+        }
+      } else {
+        runStart = null;
+        runLength = 0;
+      }
+    }
+
+    // A run of all 24 hours (every hour equally quiet — no real signal,
+    // e.g. a brand-new account) isn't a meaningful "quiet window"; keep the
+    // sleep-hours default instead of claiming the whole day is quiet.
+    if (bestRunStart !== null && bestRunLength > 0 && bestRunLength < 24) {
+      longestQuietStart = bestRunStart % 24;
+      longestQuietEnd = (bestRunStart + bestRunLength) % 24;
     }
   }
 
   return {
     start: longestQuietStart,
     end: longestQuietEnd,
-    detected: quietHoursSet.length >= 4,
+    detected: quietHoursSet.length >= 4 && quietHoursSet.length < 24,
   };
 }
 
@@ -551,34 +546,25 @@ export async function getSmartReminders(userId) {
       notificationPrefs,
     };
 
-    // Hydration reminders
-    if (notificationPrefs.hydration !== false) {
-      const hydrationReminders = generateHydrationReminders(context);
-      reminders.push(...hydrationReminders);
-    }
+    // Each category is isolated: a bug generating one type of reminder must
+    // not silently discard every other type for this user's run (this is
+    // exactly how a template-shape bug in hydration once suppressed food/
+    // mood/motivation/activity reminders too, with no error surfaced).
+    const categories = [
+      ['hydration', generateHydrationReminders],
+      ['food', generateFoodReminders],
+      ['mood', generateMoodReminders],
+      ['motivation', generateMotivationReminders],
+      ['activity', generateActivityReminders],
+    ];
 
-    // Food reminders
-    if (notificationPrefs.food !== false) {
-      const foodReminders = generateFoodReminders(context);
-      reminders.push(...foodReminders);
-    }
-
-    // Mood reminders
-    if (notificationPrefs.mood !== false) {
-      const moodReminders = generateMoodReminders(context);
-      reminders.push(...moodReminders);
-    }
-
-    // Motivation/engagement reminders
-    if (notificationPrefs.motivation !== false) {
-      const motivationReminders = generateMotivationReminders(context);
-      reminders.push(...motivationReminders);
-    }
-
-    // Activity reminders
-    if (notificationPrefs.activity !== false) {
-      const activityReminders = generateActivityReminders(context);
-      reminders.push(...activityReminders);
+    for (const [key, generate] of categories) {
+      if (notificationPrefs[key] === false) continue;
+      try {
+        reminders.push(...generate(context));
+      } catch (categoryError) {
+        console.error(`[SmartReminder] ${key} reminder generation failed for user ${userId}:`, categoryError);
+      }
     }
 
     // Sort by priority and limit total
@@ -606,8 +592,8 @@ function isQuietHour(hour, quietHours) {
 /**
  * Generate hydration reminders
  */
-function generateHydrationReminders(context) {
-  const { currentHour, todayStats, goals, userName } = context;
+export function generateHydrationReminders(context) {
+  const { currentHour, todayStats, goals, gamification } = context;
   const reminders = [];
 
   const waterGoal = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
@@ -615,18 +601,27 @@ function generateHydrationReminders(context) {
   const percentage = Math.round((waterLogged / waterGoal) * 100);
   const remaining = Math.max(0, waterGoal - waterLogged);
   const remainingMl = Math.round(remaining * 1000);
+  const streak = gamification?.streak || 0;
 
   // Already hit goal today
   if (waterLogged >= waterGoal) {
     return []; // Don't remind if goal is met
   }
 
+  const hydrationContext = {
+    current: Math.round(waterLogged * 1000),
+    goal: Math.round(waterGoal * 1000),
+    remaining: remainingMl,
+    percentage,
+    streak,
+    logCount: todayStats.water.totalLogs,
+  };
+
   // Morning reminder (7-9 AM)
   if (currentHour >= 7 && currentHour <= 9 && todayStats.water.totalLogs === 0) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.morning);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_MORNING,
-      ...formatTemplate(template, { name: userName }),
+      ...getHydrationMessage('morning', hydrationContext),
       priority: 2,
       scheduledFor: null, // Now
     });
@@ -634,14 +629,9 @@ function generateHydrationReminders(context) {
 
   // Midday reminder (11 AM - 1 PM)
   if (currentHour >= 11 && currentHour <= 13 && percentage < 40) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.midday);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_MIDDAY,
-      ...formatTemplate(template, {
-        time: formatTime(currentHour),
-        current: Math.round(waterLogged * 1000),
-        percentage,
-      }),
+      ...getHydrationMessage('midday', hydrationContext),
       priority: 3,
       scheduledFor: null,
     });
@@ -649,10 +639,9 @@ function generateHydrationReminders(context) {
 
   // Afternoon reminder (3-5 PM)
   if (currentHour >= 15 && currentHour <= 17 && percentage < 70) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.afternoon);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_AFTERNOON,
-      ...formatTemplate(template, { remaining: remainingMl }),
+      ...getHydrationMessage('afternoon', hydrationContext),
       priority: 3,
       scheduledFor: null,
     });
@@ -660,10 +649,9 @@ function generateHydrationReminders(context) {
 
   // Evening reminder (7-9 PM)
   if (currentHour >= 19 && currentHour <= 21 && percentage < 90) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.evening);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_EVENING,
-      ...formatTemplate(template, { percentage, remaining: remainingMl }),
+      ...getHydrationMessage('evening', hydrationContext),
       priority: 4,
       scheduledFor: null,
     });
@@ -675,22 +663,27 @@ function generateHydrationReminders(context) {
 /**
  * Generate food reminders
  */
-function generateFoodReminders(context) {
-  const { currentHour, todayStats, patterns, gamification, userName } = context;
+export function generateFoodReminders(context) {
+  const { currentHour, todayStats, patterns, gamification } = context;
   const reminders = [];
 
   const mealsLogged = todayStats.food.totalMeals;
   const streak = gamification?.streak || 0;
+  const foodContext = {
+    mealsLogged,
+    totalCalories: todayStats.food.totalCalories || 0,
+    calorieGoal: context.goals?.dailyCalories || 2000,
+    streak,
+  };
 
   // Breakfast reminder (based on user's typical time)
   const breakfastTime = patterns.mealTimes.breakfast.hour;
   if (currentHour >= breakfastTime && currentHour <= breakfastTime + 2) {
     const hasBreakfast = todayStats.food.mealTypes?.breakfast > 0;
     if (!hasBreakfast) {
-      const template = selectRandomTemplate(FOOD_MESSAGES.breakfast);
       reminders.push({
         type: REMINDER_TYPES.FOOD_BREAKFAST,
-        ...formatTemplate(template, { name: userName }),
+        ...getFoodMessage('breakfast', foodContext),
         priority: 2,
         scheduledFor: null,
       });
@@ -702,10 +695,9 @@ function generateFoodReminders(context) {
   if (currentHour >= lunchTime && currentHour <= lunchTime + 2) {
     const hasLunch = todayStats.food.mealTypes?.lunch > 0;
     if (!hasLunch) {
-      const template = selectRandomTemplate(FOOD_MESSAGES.lunch);
       reminders.push({
         type: REMINDER_TYPES.FOOD_LUNCH,
-        ...formatTemplate(template, { name: userName }),
+        ...getFoodMessage('lunch', foodContext),
         priority: 3,
         scheduledFor: null,
       });
@@ -717,10 +709,9 @@ function generateFoodReminders(context) {
   if (currentHour >= dinnerTime && currentHour <= dinnerTime + 2) {
     const hasDinner = todayStats.food.mealTypes?.dinner > 0;
     if (!hasDinner) {
-      const template = selectRandomTemplate(FOOD_MESSAGES.dinner);
       reminders.push({
         type: REMINDER_TYPES.FOOD_DINNER,
-        ...formatTemplate(template, { name: userName }),
+        ...getFoodMessage('dinner', foodContext),
         priority: 3,
         scheduledFor: null,
       });
@@ -729,10 +720,9 @@ function generateFoodReminders(context) {
 
   // Streak protection reminder (evening if no logs today)
   if (currentHour >= 19 && currentHour <= 21 && mealsLogged === 0 && streak >= 3) {
-    const template = selectRandomTemplate(FOOD_MESSAGES.streak);
     reminders.push({
       type: REMINDER_TYPES.FOOD_STREAK,
-      ...formatTemplate(template, { streak }),
+      ...getFoodMessage('streak', foodContext),
       priority: 1, // High priority for streak protection
       scheduledFor: null,
     });
@@ -740,10 +730,9 @@ function generateFoodReminders(context) {
 
   // Gentle nudge if no logs by late afternoon
   if (currentHour >= 16 && currentHour <= 18 && mealsLogged === 0 && patterns.engagementLevel !== 'new') {
-    const template = selectRandomTemplate(FOOD_MESSAGES.gentle_nudge);
     reminders.push({
       type: REMINDER_TYPES.FOOD_LOG_REMINDER,
-      ...formatTemplate(template, {}),
+      ...getFoodMessage('gentle_nudge', foodContext),
       priority: 5,
       scheduledFor: null,
     });
@@ -755,11 +744,12 @@ function generateFoodReminders(context) {
 /**
  * Generate mood reminders
  */
-function generateMoodReminders(context) {
-  const { currentHour, todayStats, patterns, userName } = context;
+export function generateMoodReminders(context) {
+  const { currentHour, todayStats, patterns } = context;
   const reminders = [];
 
   const moodLogsToday = todayStats.mood.totalLogs;
+  const moodContext = { pattern: patterns?.patterns?.mood };
 
   // Only remind if engaged (not every user wants mood tracking)
   if (patterns.engagementLevel === 'new' && patterns.patterns.mood.peakHours.length === 0) {
@@ -768,10 +758,9 @@ function generateMoodReminders(context) {
 
   // Morning mood check (8-10 AM)
   if (currentHour >= 8 && currentHour <= 10 && moodLogsToday === 0) {
-    const template = selectRandomTemplate(MOOD_MESSAGES.morning);
     reminders.push({
       type: REMINDER_TYPES.MOOD_CHECKIN_MORNING,
-      ...formatTemplate(template, { name: userName }),
+      ...getMoodMessage('morning', moodContext),
       priority: 4,
       scheduledFor: null,
     });
@@ -779,10 +768,9 @@ function generateMoodReminders(context) {
 
   // Afternoon mood check (2-4 PM)
   if (currentHour >= 14 && currentHour <= 16 && moodLogsToday <= 1) {
-    const template = selectRandomTemplate(MOOD_MESSAGES.afternoon);
     reminders.push({
       type: REMINDER_TYPES.MOOD_CHECKIN_AFTERNOON,
-      ...formatTemplate(template, {}),
+      ...getMoodMessage('afternoon', moodContext),
       priority: 5,
       scheduledFor: null,
     });
@@ -790,10 +778,9 @@ function generateMoodReminders(context) {
 
   // Evening mood check (8-10 PM)
   if (currentHour >= 20 && currentHour <= 22 && moodLogsToday <= 2) {
-    const template = selectRandomTemplate(MOOD_MESSAGES.evening);
     reminders.push({
       type: REMINDER_TYPES.MOOD_CHECKIN_EVENING,
-      ...formatTemplate(template, {}),
+      ...getMoodMessage('evening', moodContext),
       priority: 5,
       scheduledFor: null,
     });
@@ -805,7 +792,7 @@ function generateMoodReminders(context) {
 /**
  * Generate motivation reminders
  */
-function generateMotivationReminders(context) {
+export function generateMotivationReminders(context) {
   const { currentHour, gamification, todayStats, patterns } = context;
   const reminders = [];
 
@@ -816,10 +803,9 @@ function generateMotivationReminders(context) {
   if (currentHour >= 20 && currentHour <= 22 && streak >= 3) {
     const totalLogsToday = todayStats.food.totalMeals + todayStats.water.totalLogs + todayStats.mood.totalLogs;
     if (totalLogsToday === 0) {
-      const template = selectRandomTemplate(MOTIVATION_MESSAGES.streak_at_risk);
       reminders.push({
         type: REMINDER_TYPES.STREAK_AT_RISK,
-        ...formatTemplate(template, { streak }),
+        ...getMotivationMessage('streak_at_risk', { streak }),
         priority: 1, // Highest priority
         scheduledFor: null,
       });
@@ -828,10 +814,9 @@ function generateMotivationReminders(context) {
 
   // Comeback reminder (if user hasn't logged in 2+ days)
   if (daysSinceLastLog >= 2 && daysSinceLastLog <= 7 && currentHour >= 10 && currentHour <= 14) {
-    const template = selectRandomTemplate(MOTIVATION_MESSAGES.comeback);
     reminders.push({
       type: REMINDER_TYPES.COMEBACK,
-      ...formatTemplate(template, {}),
+      ...getMotivationMessage('comeback', { daysInactive: daysSinceLastLog, previousStreak: streak }),
       priority: 3,
       scheduledFor: null,
     });
@@ -843,8 +828,8 @@ function generateMotivationReminders(context) {
 /**
  * Generate activity reminders
  */
-function generateActivityReminders(context) {
-  const { currentHour, todayStats, patterns, userName } = context;
+export function generateActivityReminders(context) {
+  const { currentHour, todayStats, patterns } = context;
   const reminders = [];
 
   const activityLogsToday = todayStats.activity?.totalLogs || 0;
@@ -859,10 +844,9 @@ function generateActivityReminders(context) {
 
   // Morning movement prompt (9-10 AM)
   if (currentHour >= 9 && currentHour <= 10 && steps < stepGoal * 0.1) {
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.movement);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
-      ...formatTemplate(template, { name: userName, sedentaryHours }),
+      ...getActivityMessage('movement', { steps, stepGoal, sedentaryHours }),
       priority: 4,
       scheduledFor: null,
     });
@@ -870,10 +854,9 @@ function generateActivityReminders(context) {
 
   // Midday walk reminder (12-2 PM)
   if (currentHour >= 12 && currentHour <= 14 && steps < stepGoal * 0.4) {
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.walk);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_WALK,
-      ...formatTemplate(template, { steps, stepGoal, percentage: Math.round((steps / stepGoal) * 100) }),
+      ...getActivityMessage('walk', { steps, stepGoal }),
       priority: 4,
       scheduledFor: null,
     });
@@ -881,10 +864,9 @@ function generateActivityReminders(context) {
 
   // Afternoon sedentary alert (3-5 PM)
   if (currentHour >= 15 && currentHour <= 17 && sedentaryHours >= 3) {
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.sedentary);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
-      ...formatTemplate(template, { sedentaryHours }),
+      ...getActivityMessage('sedentary', { steps, stepGoal, sedentaryHours }),
       priority: 3,
       scheduledFor: null,
     });
@@ -892,11 +874,9 @@ function generateActivityReminders(context) {
 
   // Evening step goal push (6-8 PM)
   if (currentHour >= 18 && currentHour <= 20 && steps >= stepGoal * 0.6 && steps < stepGoal) {
-    const remaining = stepGoal - steps;
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.gentle_nudge);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_WALK,
-      ...formatTemplate(template, { steps, stepGoal, remaining }),
+      ...getActivityMessage('gentle_nudge', { steps, stepGoal, sedentaryHours }),
       priority: 5,
       scheduledFor: null,
     });
@@ -908,42 +888,6 @@ function generateActivityReminders(context) {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Select a random template from array
- */
-function selectRandomTemplate(templates) {
-  return templates[Math.floor(Math.random() * templates.length)];
-}
-
-/**
- * Format template with variables
- */
-function formatTemplate(template, variables) {
-  let title = template.title;
-  let body = template.body;
-
-  for (const [key, value] of Object.entries(variables)) {
-    const placeholder = `{{${key}}}`;
-    title = title.replace(new RegExp(placeholder, 'g'), value);
-    body = body.replace(new RegExp(placeholder, 'g'), value);
-  }
-
-  return {
-    title,
-    body,
-    tone: template.tone,
-  };
-}
-
-/**
- * Format time for display
- */
-function formatTime(hour) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
-}
 
 /**
  * Calculate days since last log

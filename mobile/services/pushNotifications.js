@@ -13,6 +13,7 @@
 import { Platform } from 'react-native';
 import apiClient from './apiClient';
 import { NOTIFICATION_CATEGORIES } from '../constants/notificationTypes';
+import { getOrCreateDeviceId } from './deviceIdentity';
 
 // Re-export for backward compatibility
 export { NOTIFICATION_CATEGORIES };
@@ -70,6 +71,22 @@ async function loadNativeModules() {
 loadNativeModules().catch(err => {
   console.warn('[PushNotifications] Error loading native modules:', err.message);
 });
+
+// Testing-only escape hatch. The dynamic `await import('expo-notifications')`
+// above cannot be reliably intercepted by jest.mock() under this project's
+// babel-jest setup — confirmed empirically across every approach tried
+// (with/without `{virtual: true}`, jest-expo's own default native-module
+// mocks, and both the "unit" and "components" jest projects): all fail
+// identically with "Unexpected import statement in CJS module", a
+// Babel/Jest interop limitation specific to this dynamic-import pattern, not
+// something fixable by test configuration. This sidesteps the import
+// machinery entirely by letting a test set the module's own lazily-loaded
+// client directly, since every exported function below reads `Notifications`
+// via closure over this module-level binding. Never called from production
+// code — the dynamic import above is what always sets it there.
+export function __setNotificationsClientForTesting(client) {
+  Notifications = client;
+}
 
 /**
  * Check if push notifications are available on this device
@@ -193,7 +210,11 @@ let tokenRetryTimeout = null;
 let pendingToken = null;
 
 /**
- * Register push token with the backend
+ * Register push token with the backend, scoped to this specific device.
+ * Same /profile/devices/register endpoint fcmService.js's FCM registration
+ * uses — each call only supplies the field it has (fcmToken here is
+ * omitted), so calling both from two independent flows merges onto the
+ * same device row rather than clobbering the other token.
  * @param {string} token - The Expo push token
  * @param {number} retryCount - Current retry attempt (internal use)
  */
@@ -202,9 +223,16 @@ export async function registerPushTokenWithBackend(token, retryCount = 0) {
   const RETRY_DELAYS = [5000, 15000, 30000]; // 5s, 15s, 30s
 
   try {
-    const response = await apiClient.post('/profile/push-token', {
-      expoPushToken: token,
-    });
+    const deviceId = await getOrCreateDeviceId();
+    const response = deviceId
+      ? await apiClient.post('/profile/devices/register', {
+          deviceId,
+          expoPushToken: token,
+          platform: Platform.OS,
+        })
+      : await apiClient.post('/profile/push-token', {
+          expoPushToken: token,
+        });
 
     if (response.success) {
       console.log('[PushNotifications] Token registered with backend');
@@ -511,6 +539,221 @@ async function setupAndroidNotificationChannels() {
 
 // ============== Local Notification Scheduling ==============
 
+// Serializes cancel+schedule sequences per category. Without this, two
+// near-simultaneous callers (e.g. a preference toggle POST resolving at the
+// same moment an AppState foreground triggers a daily reset) can each read
+// "all scheduled notifications" before the other's cancel has landed, then
+// both schedule fresh ones — producing duplicate recurring notifications for
+// the same category that persist until manually cleared.
+const categoryLocks = new Map();
+
+function withCategoryLock(category, fn) {
+  const previous = categoryLocks.get(category) || Promise.resolve();
+  const next = previous.then(fn, fn);
+  categoryLocks.set(category, next.catch(() => {}));
+  return next;
+}
+
+// Only streak protection uses a rolling window (see scheduleRollingWindow).
+// The other 4 categories (daily/hydration/activity/mood) use plain,
+// permanent repeating triggers — deliberately reverted back to that design
+// after initially generalizing all 5 to rolling windows and reconsidering:
+// cross-system dedup for those four only ever matters when the device has
+// connectivity anyway (the backend can't send while offline, so there is
+// nothing to duplicate against), and that overlap is already handled by the
+// ack+background-handler mechanism (mobile/app/_layout.jsx) regardless of
+// whether the local side is a rolling window. What a rolling window cost
+// those four was real: unconditional, permanent offline coverage downgraded
+// to a fixed multi-day floor requiring periodic reconnection. For low-stakes
+// reminders, that trade was the wrong direction — see git history for the
+// full generalize-then-revert reasoning.
+//
+// Streak keeps the rolling window because per-day "cancel just today" was
+// the original, explicit requirement (a single repeating trigger has no such
+// primitive — cancelling it to suppress tonight's occurrence removes every
+// future occurrence too, permanently, which was a real, shipped bug), and
+// because the stakes (losing an actual streak) justify the complexity. 7
+// days of streak's single daily slot is 7 pending-notification slots total —
+// trivially safe against iOS's 64-pending cap even alongside the other four
+// categories' handful of permanent entries (at most 1+3+3+1 = 8, not
+// multiplied by days, since those are ordinary repeating triggers).
+const REMINDER_WINDOW_DAYS = {
+  [NOTIFICATION_CATEGORIES.STREAK_AT_RISK]: 7,
+  DEFAULT: 7,
+};
+
+export function windowDaysFor(category) {
+  return REMINDER_WINDOW_DAYS[category] ?? REMINDER_WINDOW_DAYS.DEFAULT;
+}
+
+export function localDateKey(date) {
+  // Local calendar date, not toISOString()'s UTC date — a naive UTC slice can
+  // land on the wrong day near midnight in negative-UTC-offset zones, which
+  // is exactly the class of bug this project has been bitten by before.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Schedules a rolling window of non-repeating, per-day-identified local
+ * notifications for one category. Shared by all 5 local reminder categories.
+ *
+ * @param {string} category - a NOTIFICATION_CATEGORIES value
+ * @param {(dayOffset: number, date: Date) => Array<{hour:number, minute?:number, title:string, body:string, data?:object}>} buildSlotsForDay
+ *   Returns the slot(s) to schedule for a given upcoming day (e.g. hydration
+ *   returns up to 3 slots/day; mood returns 1). Returning [] skips that day.
+ * @returns {Promise<string[]>} scheduled notification identifiers
+ */
+async function scheduleRollingWindow(category, buildSlotsForDay) {
+  if (!Notifications) {
+    console.warn('[PushNotifications] Cannot schedule - module not available');
+    return [];
+  }
+
+  return withCategoryLock(category, async () => {
+    try {
+      const existing = await Notifications.getAllScheduledNotificationsAsync();
+      const existingDateKeys = new Set(
+        existing
+          .filter((n) => n.content.data?.category === category)
+          .map((n) => n.content.data?.dateKey)
+          .filter(Boolean)
+      );
+
+      const identifiers = [];
+      const today = new Date();
+
+      const windowDays = windowDaysFor(category);
+      for (let offset = 0; offset < windowDays; offset++) {
+        const target = new Date(today);
+        target.setDate(target.getDate() + offset);
+        const dateKey = localDateKey(target);
+
+        if (existingDateKeys.has(dateKey)) continue; // already scheduled, leave it alone
+
+        const slots = buildSlotsForDay(offset, target) || [];
+        for (const slot of slots) {
+          const identifier = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: slot.title,
+              body: slot.body,
+              // hour is stored explicitly (not re-derived from the native
+              // trigger object later) so cancelNextOccurrenceForCategory can
+              // reliably find the soonest not-yet-fired same-day slot —
+              // needed for occurrence-level dedup on categories like
+              // hydration/activity that have multiple slots per day.
+              data: { category, dateKey, hour: slot.hour, ...(slot.data || {}) },
+              categoryIdentifier: category,
+            },
+            trigger: {
+              year: target.getFullYear(),
+              month: target.getMonth(), // CalendarTriggerInput follows JS Date's 0-indexed month
+              day: target.getDate(),
+              hour: slot.hour,
+              minute: slot.minute ?? 0,
+              repeats: false,
+            },
+          });
+          identifiers.push(identifier);
+        }
+      }
+
+      console.log(`[PushNotifications] ${category} window topped up: ${identifiers.length} new slot(s) scheduled`);
+      return identifiers;
+    } catch (error) {
+      console.warn(`[PushNotifications] Failed to schedule ${category} window:`, error?.message || error);
+      return [];
+    }
+  });
+}
+
+/**
+ * Cancels only TODAY's scheduled occurrence(s) for a category — every other
+ * day in its rolling window is untouched. Used both when the user logs
+ * something (the existing "don't nag about today" behavior) and when the
+ * backend confirms it already delivered today's version remotely (new —
+ * see applyRemoteDeliveryDedup).
+ */
+export async function cancelTodayForCategory(category) {
+  if (!Notifications) return;
+  return withCategoryLock(category, async () => {
+    try {
+      const todayKey = localDateKey(new Date());
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      const todaysNotifications = scheduled.filter(
+        (n) => n.content.data?.category === category && n.content.data?.dateKey === todayKey
+      );
+      for (const notification of todaysNotifications) {
+        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+      }
+      if (todaysNotifications.length > 0) {
+        console.log(`[PushNotifications] Cancelled ${todaysNotifications.length} ${category} notification(s) for today only`);
+      }
+    } catch (error) {
+      console.warn(`[PushNotifications] Failed to cancel today's ${category} notification(s):`, error?.message || error);
+    }
+  });
+}
+
+/**
+ * Cancels only the SOONEST not-yet-fired occurrence of a category today,
+ * leaving any later same-day slot untouched. Categories like hydration and
+ * activity can have up to 3 distinct slots/day (morning/midday/evening) —
+ * each is a separate, intentional reminder occasion, not a duplicate of the
+ * others. A remote hydration nudge corresponds to exactly ONE of those
+ * occasions; cancelling the whole day (cancelTodayForCategory) would wrongly
+ * suppress the user's remaining reminders for that day too. Categories with
+ * only one slot/day (daily, mood, streak) behave identically to
+ * cancelTodayForCategory here, since "next occurrence" and "today" are the
+ * same thing when there's only one.
+ */
+export async function cancelNextOccurrenceForCategory(category) {
+  if (!Notifications) return;
+  return withCategoryLock(category, async () => {
+    try {
+      const todayKey = localDateKey(new Date());
+      const currentHour = new Date().getHours();
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      const remainingToday = scheduled
+        .filter((n) => n.content.data?.category === category &&
+                       n.content.data?.dateKey === todayKey &&
+                       typeof n.content.data?.hour === 'number' &&
+                       n.content.data.hour >= currentHour)
+        .sort((a, b) => a.content.data.hour - b.content.data.hour);
+
+      const next = remainingToday[0];
+      if (next) {
+        await Notifications.cancelScheduledNotificationAsync(next.identifier);
+        console.log(`[PushNotifications] Cancelled the next ${category} occurrence today (hour=${next.content.data.hour}) — later same-day occurrences, if any, are untouched`);
+      }
+    } catch (error) {
+      console.warn(`[PushNotifications] Failed to cancel next ${category} occurrence:`, error?.message || error);
+    }
+  });
+}
+
+// Daily/hydration/activity/mood deliberately do NOT use scheduleRollingWindow
+// (unlike streak, below). Reasoning, reconsidered after generalizing all 5
+// categories to rolling windows initially: cross-system dedup for these four
+// only ever matters when the device has connectivity in the first place (if
+// truly offline, the backend never sends, so there is nothing to duplicate
+// against) — the ack+background-handler mechanism (mobile/app/_layout.jsx,
+// NotificationProvider.jsx) already suppresses the redundant local instance
+// whenever that connectivity-dependent overlap can occur, for ANY category,
+// including these. What the rolling-window generalization cost these four
+// specifically was worse: unconditional, permanent offline coverage (a plain
+// repeating trigger fires forever, needing zero app interaction, ever)
+// downgraded to a fixed multi-day floor requiring periodic reconnection to
+// keep extending. For low-stakes reminders (a missed hydration nudge is mild;
+// a missed streak-protection nudge risks losing an actual achievement), that
+// trade was the wrong direction. Reverted to permanent repeating triggers —
+// simpler, and strictly more offline-durable than the windowed version was.
+// Streak keeps the rolling window: it is the one category where per-day
+// "cancel just today" was the original, explicit ask, and where the stakes
+// justify the added complexity.
+
 /**
  * Schedule a daily reminder notification
  * @param {number} hour - Hour of day (0-23)
@@ -522,30 +765,27 @@ export async function scheduleDailyReminder(hour = 12, minute = 0) {
     return null;
   }
 
-  try {
-    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
+  return withCategoryLock(NOTIFICATION_CATEGORIES.DAILY_REMINDER, async () => {
+    try {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
 
-    const identifier = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🍽️ Time to log your meal!',
-        body: 'Keep your streak going - log what you ate today.',
-        data: { category: NOTIFICATION_CATEGORIES.DAILY_REMINDER },
-        categoryIdentifier: NOTIFICATION_CATEGORIES.DAILY_REMINDER,
-      },
-      trigger: {
-        hour,
-        minute,
-        repeats: true,
-      },
-    });
+      const identifier = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🍽️ Time to log your meal!',
+          body: 'Keep your streak going - log what you ate today.',
+          data: { category: NOTIFICATION_CATEGORIES.DAILY_REMINDER },
+          categoryIdentifier: NOTIFICATION_CATEGORIES.DAILY_REMINDER,
+        },
+        trigger: { hour, minute, repeats: true },
+      });
 
-    console.log('[PushNotifications] Daily reminder scheduled:', identifier);
-    return identifier;
-  } catch (error) {
-    // Use console.warn to avoid red error screen in development
-    console.warn('[PushNotifications] Failed to schedule daily reminder:', error?.message || error);
-    return null;
-  }
+      console.log('[PushNotifications] Daily reminder scheduled:', identifier);
+      return identifier;
+    } catch (error) {
+      console.warn('[PushNotifications] Failed to schedule daily reminder:', error?.message || error);
+      return null;
+    }
+  });
 }
 
 /**
@@ -558,40 +798,37 @@ export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
     return [];
   }
 
-  try {
-    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
+  return withCategoryLock(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, async () => {
+    try {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
 
-    const identifiers = [];
-    const messages = [
-      '💧 Stay hydrated! Time for some water.',
-      '🥤 How about a water break?',
-      '💦 Keep sipping! Your body will thank you.',
-    ];
+      const identifiers = [];
+      const messages = [
+        '💧 Stay hydrated! Time for some water.',
+        '🥤 How about a water break?',
+        '💦 Keep sipping! Your body will thank you.',
+      ];
 
-    for (let i = 0; i < hours.length; i++) {
-      const identifier = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Hydration Reminder',
-          body: messages[i % messages.length],
-          data: { category: NOTIFICATION_CATEGORIES.HYDRATION_NUDGE },
-          categoryIdentifier: NOTIFICATION_CATEGORIES.HYDRATION_NUDGE,
-        },
-        trigger: {
-          hour: hours[i],
-          minute: 0,
-          repeats: true,
-        },
-      });
-      identifiers.push(identifier);
+      for (let i = 0; i < hours.length; i++) {
+        const identifier = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Hydration Reminder',
+            body: messages[i % messages.length],
+            data: { category: NOTIFICATION_CATEGORIES.HYDRATION_NUDGE },
+            categoryIdentifier: NOTIFICATION_CATEGORIES.HYDRATION_NUDGE,
+          },
+          trigger: { hour: hours[i], minute: 0, repeats: true },
+        });
+        identifiers.push(identifier);
+      }
+
+      console.log('[PushNotifications] Hydration reminders scheduled:', identifiers);
+      return identifiers;
+    } catch (error) {
+      console.warn('[PushNotifications] Failed to schedule hydration reminders:', error?.message || error);
+      return [];
     }
-
-    console.log('[PushNotifications] Hydration reminders scheduled:', identifiers);
-    return identifiers;
-  } catch (error) {
-    // Use console.warn to avoid red error screen in development
-    console.warn('[PushNotifications] Failed to schedule hydration reminders:', error?.message || error);
-    return [];
-  }
+  });
 }
 
 /**
@@ -605,43 +842,38 @@ export async function scheduleActivityReminders(hours = [14, 17]) {
     return [];
   }
 
-  try {
-    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER);
+  return withCategoryLock(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, async () => {
+    try {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER);
 
-    const identifiers = [];
-    const messages = [
-      { title: 'Move break', body: 'A quick walk does wonders. Your body will thank you.' },
-      { title: 'Stretch time', body: "Been sitting a while? Let's get those steps in." },
-      { title: 'Activity check', body: 'How about a short walk? Even 10 minutes helps.' },
-    ];
+      const identifiers = [];
+      const messages = [
+        { title: 'Move break', body: 'A quick walk does wonders. Your body will thank you.' },
+        { title: 'Stretch time', body: "Been sitting a while? Let's get those steps in." },
+        { title: 'Activity check', body: 'How about a short walk? Even 10 minutes helps.' },
+      ];
 
-    for (let i = 0; i < hours.length; i++) {
-      const msg = messages[i % messages.length];
-      const identifier = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: msg.title,
-          body: msg.body,
-          data: {
-            category: NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER,
-            screen: 'activity',
+      for (let i = 0; i < hours.length; i++) {
+        const msg = messages[i % messages.length];
+        const identifier = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: msg.title,
+            body: msg.body,
+            data: { category: NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, screen: 'activity' },
+            categoryIdentifier: NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER,
           },
-          categoryIdentifier: NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER,
-        },
-        trigger: {
-          hour: hours[i],
-          minute: 0,
-          repeats: true,
-        },
-      });
-      identifiers.push(identifier);
-    }
+          trigger: { hour: hours[i], minute: 0, repeats: true },
+        });
+        identifiers.push(identifier);
+      }
 
-    console.log('[PushNotifications] Activity reminders scheduled:', identifiers);
-    return identifiers;
-  } catch (error) {
-    console.warn('[PushNotifications] Failed to schedule activity reminders:', error?.message || error);
-    return [];
-  }
+      console.log('[PushNotifications] Activity reminders scheduled:', identifiers);
+      return identifiers;
+    } catch (error) {
+      console.warn('[PushNotifications] Failed to schedule activity reminders:', error?.message || error);
+      return [];
+    }
+  });
 }
 
 /**
@@ -655,82 +887,122 @@ export async function scheduleMoodCheckIn(hour = 20) {
     return null;
   }
 
-  try {
-    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.MOOD_CHECKIN);
+  return withCategoryLock(NOTIFICATION_CATEGORIES.MOOD_CHECKIN, async () => {
+    try {
+      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.MOOD_CHECKIN);
 
-    const messages = [
-      { title: 'How are you feeling?', body: 'Take a moment to check in with yourself.' },
-      { title: 'Quick mood check', body: 'A few seconds of reflection goes a long way.' },
-      { title: 'Evening check-in', body: "How's your energy? Let's track it." },
-    ];
+      const messages = [
+        { title: 'How are you feeling?', body: 'Take a moment to check in with yourself.' },
+        { title: 'Quick mood check', body: 'A few seconds of reflection goes a long way.' },
+        { title: 'Evening check-in', body: "How's your energy? Let's track it." },
+      ];
+      const dayOfWeek = new Date().getDay();
+      const msg = messages[dayOfWeek % messages.length];
 
-    // Rotate messages based on day of week
-    const dayOfWeek = new Date().getDay();
-    const msg = messages[dayOfWeek % messages.length];
-
-    const identifier = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: msg.title,
-        body: msg.body,
-        data: {
-          category: NOTIFICATION_CATEGORIES.MOOD_CHECKIN,
-          screen: 'mood',
+      const identifier = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: msg.title,
+          body: msg.body,
+          data: { category: NOTIFICATION_CATEGORIES.MOOD_CHECKIN, screen: 'mood' },
+          categoryIdentifier: NOTIFICATION_CATEGORIES.MOOD_CHECKIN,
         },
-        categoryIdentifier: NOTIFICATION_CATEGORIES.MOOD_CHECKIN,
-      },
-      trigger: {
-        hour,
-        minute: 0,
-        repeats: true,
-      },
-    });
+        trigger: { hour, minute: 0, repeats: true },
+      });
 
-    console.log('[PushNotifications] Mood check-in scheduled:', identifier);
-    return identifier;
+      console.log('[PushNotifications] Mood check-in scheduled:', identifier);
+      return identifier;
+    } catch (error) {
+      console.warn('[PushNotifications] Failed to schedule mood check-in:', error?.message || error);
+      return null;
+    }
+  });
+}
+
+const STREAK_HOUR = 21;
+
+/**
+ * (Re)fills the streak-protection window: schedules one non-repeating
+ * reminder per day for the next STREAK_WINDOW_DAYS days (skipping any day
+ * that already has one scheduled, so calling this repeatedly — e.g. on every
+ * app foreground — doesn't create duplicates or disturb days already
+ * cancelled via cancelStreakProtectionIfLoggedToday()).
+ * @param {number} hour - Hour to fire (default: 9pm)
+ */
+export async function scheduleStreakProtectionReminder(hour = STREAK_HOUR) {
+  const identifiers = await scheduleRollingWindow(NOTIFICATION_CATEGORIES.STREAK_AT_RISK, () => [{
+    hour,
+    title: 'Your streak is at risk',
+    body: "Log something quick to keep your streak alive. Don't lose your momentum!",
+    data: { screen: 'log', priority: 'high' },
+  }]);
+  return identifiers[0] || null;
+}
+
+// Tracks the most recently DESIRED ownership state per category that
+// failed to reach the backend, so a later reconnect/foreground can retry
+// exactly what's still outstanding. Keyed by category, so a newer call
+// (e.g. the user flips a toggle again before the first failure ever
+// retried) simply overwrites the stale intent rather than replaying it —
+// only the latest desired state is ever worth converging on. This is what
+// makes ownership "eventually converge without repeated manual toggling":
+// local scheduling itself is never gated on this succeeding (it always ran
+// first, unconditionally), only the backend's bookkeeping of who owns what
+// needs to catch up once connectivity returns.
+const pendingOwnershipChanges = new Map(); // category -> owner
+
+/**
+ * Claims or releases this device's local-delivery ownership of a category
+ * with the backend (see backend/src/utils/deviceRegistry.js). Never throws
+ * — a failed call just leaves ownership at its previous state (defaulting
+ * to 'backend' for a device that has never successfully registered), which
+ * is the safe direction: the user still gets SOME reminder for that
+ * category rather than silently getting none. Failures are queued for
+ * retryPendingOwnership() to flush later.
+ */
+export async function registerLocalOwnership(category, owner) {
+  try {
+    const deviceId = await getOrCreateDeviceId();
+    if (!deviceId) {
+      pendingOwnershipChanges.set(category, owner);
+      return false;
+    }
+    const response = await apiClient.post('/profile/notifications/ownership', { deviceId, category, owner });
+    if (response?.success === true) {
+      pendingOwnershipChanges.delete(category);
+      return true;
+    }
+    pendingOwnershipChanges.set(category, owner);
+    return false;
   } catch (error) {
-    console.warn('[PushNotifications] Failed to schedule mood check-in:', error?.message || error);
-    return null;
+    console.warn(`[PushNotifications] Failed to register '${owner}' ownership for ${category}:`, error?.message || error);
+    pendingOwnershipChanges.set(category, owner);
+    return false;
   }
 }
 
 /**
- * Schedule streak protection reminder
- * Fires in the evening if user hasn't logged anything that day
- * @param {number} hour - Hour to check (default: 9pm)
+ * Retries every ownership claim/release that failed to reach the backend,
+ * called from NotificationProvider's reconnect and foreground handlers
+ * alongside the existing token-registration retries. No-ops immediately if
+ * nothing is pending. Each retry either clears itself from the queue on
+ * success or stays queued (registerLocalOwnership re-adds it) — a
+ * category that keeps failing simply gets retried again next time.
  */
-export async function scheduleStreakProtectionReminder(hour = 21) {
-  if (!Notifications) {
-    console.warn('[PushNotifications] Cannot schedule - module not available');
-    return null;
+export async function retryPendingOwnership() {
+  if (pendingOwnershipChanges.size === 0) return { retried: 0, succeeded: 0 };
+
+  const entries = Array.from(pendingOwnershipChanges.entries());
+  let succeeded = 0;
+  for (const [category, owner] of entries) {
+    const ok = await registerLocalOwnership(category, owner);
+    if (ok) succeeded++;
   }
+  return { retried: entries.length, succeeded };
+}
 
-  try {
-    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
-
-    const identifier = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Your streak is at risk',
-        body: "Log something quick to keep your streak alive. Don't lose your momentum!",
-        data: {
-          category: NOTIFICATION_CATEGORIES.STREAK_AT_RISK,
-          screen: 'log',
-          priority: 'high',
-        },
-        categoryIdentifier: NOTIFICATION_CATEGORIES.STREAK_AT_RISK,
-      },
-      trigger: {
-        hour,
-        minute: 0,
-        repeats: true,
-      },
-    });
-
-    console.log('[PushNotifications] Streak protection reminder scheduled:', identifier);
-    return identifier;
-  } catch (error) {
-    console.warn('[PushNotifications] Failed to schedule streak protection:', error?.message || error);
-    return null;
-  }
+// Testing-only escape hatch, matching __setNotificationsClientForTesting.
+export function __resetPendingOwnershipForTesting() {
+  pendingOwnershipChanges.clear();
 }
 
 /**
@@ -753,10 +1025,17 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
     if (preferences.dailyReminder !== false) {
       const mealHour = optimalTimes.meals?.[0] || 12;
       const id = await scheduleDailyReminder(mealHour, 0);
-      if (id) scheduled.push({ type: 'daily_reminder', hour: mealHour });
+      if (id) {
+        scheduled.push({ type: 'daily_reminder', hour: mealHour });
+        // Ownership is only claimed once scheduling is CONFIRMED successful
+        // (a real identifier came back) — a failed schedule leaves ownership
+        // at 'backend' so the user still gets some reminder for this category.
+        await registerLocalOwnership(NOTIFICATION_CATEGORIES.DAILY_REMINDER, 'local');
+      }
     } else {
-      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER);
+      await withCategoryLock(NOTIFICATION_CATEGORIES.DAILY_REMINDER, () => cancelScheduledNotifications(NOTIFICATION_CATEGORIES.DAILY_REMINDER));
       cancelled.push('daily_reminder');
+      await registerLocalOwnership(NOTIFICATION_CATEGORIES.DAILY_REMINDER, 'backend');
     }
 
     // Hydration reminders
@@ -765,10 +1044,14 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
         ? optimalTimes.hydration
         : [10, 14, 18];
       const ids = await scheduleHydrationReminders(hydrationHours);
-      if (ids.length) scheduled.push({ type: 'hydration', hours: hydrationHours });
+      if (ids.length) {
+        scheduled.push({ type: 'hydration', hours: hydrationHours });
+        await registerLocalOwnership(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, 'local');
+      }
     } else {
-      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
+      await withCategoryLock(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, () => cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE));
       cancelled.push('hydration');
+      await registerLocalOwnership(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, 'backend');
     }
 
     // Activity reminders
@@ -777,20 +1060,28 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
         ? optimalTimes.activity
         : [14, 17];
       const ids = await scheduleActivityReminders(activityHours);
-      if (ids.length) scheduled.push({ type: 'activity', hours: activityHours });
+      if (ids.length) {
+        scheduled.push({ type: 'activity', hours: activityHours });
+        await registerLocalOwnership(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, 'local');
+      }
     } else {
-      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER);
+      await withCategoryLock(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, () => cancelScheduledNotifications(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER));
       cancelled.push('activity');
+      await registerLocalOwnership(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, 'backend');
     }
 
     // Mood check-in
     if (preferences.moodCheckins !== false) {
       const moodHour = optimalTimes.mood || 20;
       const id = await scheduleMoodCheckIn(moodHour);
-      if (id) scheduled.push({ type: 'mood', hour: moodHour });
+      if (id) {
+        scheduled.push({ type: 'mood', hour: moodHour });
+        await registerLocalOwnership(NOTIFICATION_CATEGORIES.MOOD_CHECKIN, 'local');
+      }
     } else {
-      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.MOOD_CHECKIN);
+      await withCategoryLock(NOTIFICATION_CATEGORIES.MOOD_CHECKIN, () => cancelScheduledNotifications(NOTIFICATION_CATEGORIES.MOOD_CHECKIN));
       cancelled.push('mood');
+      await registerLocalOwnership(NOTIFICATION_CATEGORIES.MOOD_CHECKIN, 'backend');
     }
 
     // Streak protection (always on if user has a streak)
@@ -799,7 +1090,7 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
       const id = await scheduleStreakProtectionReminder(streakHour);
       if (id) scheduled.push({ type: 'streak_protection', hour: streakHour });
     } else {
-      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
+      await withCategoryLock(NOTIFICATION_CATEGORIES.STREAK_AT_RISK, () => cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK));
       cancelled.push('streak_protection');
     }
 
@@ -867,12 +1158,7 @@ export async function cancelScheduledNotifications(category) {
  * Call this after successful food/water/activity logging
  */
 export async function cancelStreakProtectionIfLoggedToday() {
-  try {
-    await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
-    console.log('[PushNotifications] Streak protection cancelled - user logged today');
-  } catch (error) {
-    console.warn('[PushNotifications] Failed to cancel streak protection:', error?.message || error);
-  }
+  return cancelTodayForCategory(NOTIFICATION_CATEGORIES.STREAK_AT_RISK);
 }
 
 /**
@@ -880,14 +1166,54 @@ export async function cancelStreakProtectionIfLoggedToday() {
  * @param {number} currentMl - Current water intake in ml
  * @param {number} goalMl - Daily water goal in ml
  */
-export async function cancelHydrationIfGoalReached(currentMl, goalMl) {
-  if (currentMl >= goalMl) {
-    try {
-      await cancelScheduledNotifications(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE);
-      console.log('[PushNotifications] Hydration reminders cancelled - goal reached');
-    } catch (error) {
-      console.warn('[PushNotifications] Failed to cancel hydration reminders:', error?.message || error);
+export async function cancelHydrationIfGoalReached(_currentMl, _goalMl) {
+  // Intentional no-op. Hydration reminders are a plain, permanent repeating
+  // trigger (see the comment above scheduleHydrationReminders for why —
+  // reverted from a per-day rolling window to preserve unconditional offline
+  // coverage). A repeating trigger has no "skip just today" primitive:
+  // cancelling it to suppress the rest of today's nudges after the goal is
+  // hit would silently end ALL future hydration reminders too, permanently —
+  // the exact bug class this function used to have (it called
+  // cancelTodayForCategory, which — after the revert — matches zero entries
+  // against a category with no per-day tags, and was silently a no-op in
+  // practice already; this makes that explicit rather than leaving
+  // dead-looking code with a misleading comment). The accepted trade-off:
+  // an occasional reminder after the goal is already met is a much smaller
+  // harm than losing all future hydration reminders — kept as a named,
+  // callable no-op (rather than removed) so useWaterLog.js's call site
+  // doesn't need to change, and so the intent stays documented at the one
+  // place a future change is most likely to be made.
+}
+
+/**
+ * De-duplicates local reminders against the backend's own delivery record.
+ * The backend cron is the primary sender for every category whenever the
+ * device has connectivity; local scheduling exists only as an offline
+ * fallback. Call this on app foreground: for any category the server
+ * confirms it already delivered today, cancel today's remaining local
+ * occurrence(s) so the user isn't nudged twice for the same thing. If the
+ * request fails, nothing is cancelled — the local reminder stays as the
+ * safe (at worst redundant, never silent) fallback.
+ * @param {(path: string) => Promise<any>} apiGet - an authenticated GET function, e.g. apiClient.get
+ */
+export async function applyRemoteDeliveryDedup(apiGet) {
+  try {
+    const response = await apiGet('/profile/notifications/delivered-today');
+    const deliveredToday = response?.deliveredToday || [];
+    for (const category of deliveredToday) {
+      // Occurrence-level, not full-day: the server confirmed ONE reminder
+      // reached the device, not that every remaining occasion today is
+      // redundant. cancelTodayForCategory (full-day) stays reserved for
+      // triggers where that IS the correct scope, e.g. cancelHydrationIfGoalReached.
+      await cancelNextOccurrenceForCategory(category);
     }
+    if (deliveredToday.length > 0) {
+      console.log('[PushNotifications] Suppressed today\'s local reminder(s) already delivered remotely:', deliveredToday);
+    }
+    return deliveredToday;
+  } catch (error) {
+    console.warn('[PushNotifications] Remote-delivery dedup check failed (local reminders remain as fallback):', error?.message || error);
+    return [];
   }
 }
 
@@ -896,19 +1222,14 @@ export async function cancelHydrationIfGoalReached(currentMl, goalMl) {
  * Call this at midnight or when app resumes after midnight
  */
 export async function resetDailyNotifications(preferences = {}, optimalTimes = {}) {
-  // Re-enable streak protection for new day
-  if (preferences.streakProtection !== false) {
-    await scheduleStreakProtectionReminder(21);
-  }
-
-  // Re-schedule hydration reminders
-  if (preferences.hydrationNudges !== false) {
-    const hydrationHours = optimalTimes.hydration?.length > 0
-      ? optimalTimes.hydration
-      : [10, 14, 18];
-    await scheduleHydrationReminders(hydrationHours);
-  }
-
+  // All 5 local categories are now rolling windows (see scheduleRollingWindow)
+  // and each needs periodic top-up as days pass out of its window — not just
+  // streak/hydration, which is what this function covered before that
+  // generalization. syncAllNotificationSchedules already does exactly this
+  // per-category top-up (schedule functions skip days already scheduled, so
+  // calling it repeatedly is safe/idempotent), so delegate to it rather than
+  // maintain a second, now-inconsistent partial list here.
+  await syncAllNotificationSchedules(preferences, optimalTimes);
   console.log('[PushNotifications] Daily notifications reset');
 }
 

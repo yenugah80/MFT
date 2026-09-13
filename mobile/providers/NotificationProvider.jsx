@@ -39,7 +39,11 @@ import {
   getScheduledNotifications,
   resetDailyNotifications,
   showLocalNotification,
+  retryPendingTokenRegistration,
+  retryPendingOwnership,
+  applyRemoteDeliveryDedup,
 } from '../services/pushNotifications';
+import { isUsableConnection } from '../utils/syncRetryPolicy';
 import {
   NOTIFICATION_CATEGORIES,
   DEFAULT_PREFERENCES,
@@ -48,8 +52,18 @@ import {
 } from '../constants/notificationTypes';
 import { router } from 'expo-router';
 import apiClient from '../services/apiClient';
+import { getOrCreateDeviceId } from '../services/deviceIdentity';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
 import fcmService from '../services/fcmService';
+
+// Lazy require, same pattern as useFoodLog.js's reconnect listener — avoids an
+// import-time crash if the native module isn't available in this environment.
+let Network = null;
+try {
+  Network = require('expo-network');
+} catch {
+  Network = null;
+}
 
 const NotificationContext = createContext(null);
 
@@ -247,6 +261,18 @@ export const NotificationProvider = ({ children }) => {
             message: message.body,
             duration: 5000,
           });
+
+          // Same ack + dedup as the background handler (mobile/app/_layout.jsx)
+          // — a push received while foregrounded is just as real a delivery
+          // confirmation as one received in the background, and needs the
+          // same "don't also fire the local fallback today" check.
+          const deliveryId = message.data?.deliveryId;
+          if (deliveryId) {
+            getOrCreateDeviceId().then((deviceId) => {
+              apiClient.post('/profile/notifications/ack', { deliveryId, deviceId }).catch(() => {});
+            }).catch(() => {});
+          }
+          applyRemoteDeliveryDedup(apiClient.get.bind(apiClient)).catch(() => {});
         },
         // Cold start handler (app was killed, opened from notification)
         (initialNotification) => {
@@ -550,13 +576,48 @@ export const NotificationProvider = ({ children }) => {
 
   // Handle app state changes (re-check permissions when app comes to foreground)
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
         // App has come to foreground - recheck permission status
-        checkPermissionStatus();
+        const status = await checkPermissionStatus();
+
+        // FCM and Expo notifications share the same OS-level permission on
+        // iOS. If the user denied it at first launch, initializeFCM() never
+        // registered a token — and nothing re-runs it later even if they
+        // grant permission afterward from Settings. Retry FCM setup here
+        // whenever we detect permission just became granted; initializeFCM()
+        // already tears down any stale listeners first, so re-calling it is
+        // safe even if it previously partially succeeded.
+        if (status === 'granted' && fcmStatus.permissionStatus !== 'granted') {
+          initializeFCM();
+        }
+
+        // Retry any token registration still pending after its 3 scheduled
+        // attempts exhausted (e.g. backend was briefly down, not a permission
+        // issue). Without this, a token that failed all 3 retries had no
+        // further recovery path until sign-out/sign-in or app restart —
+        // foregrounding the app is a reasonable, cheap point to try again.
+        // No-ops immediately if nothing is pending.
+        retryPendingTokenRegistration().catch(() => {});
+        fcmService.retryPendingFCMTokenRegistration().catch(() => {});
+
+        // Same recovery for local-ownership claims/releases that failed to
+        // reach the backend (e.g. the user toggled a reminder off mid-flight
+        // with no connectivity) — local scheduling itself was never gated on
+        // this succeeding, so this only needs to converge the backend's
+        // bookkeeping, not fix anything the user would notice missing.
+        retryPendingOwnership().catch(() => {});
+
+        // Local/remote de-dup: the backend cron is the primary sender for
+        // every reminder category whenever the device has connectivity —
+        // local scheduling is only the offline fallback. If the server
+        // confirms it already delivered today's version of a category,
+        // cancel today's remaining local occurrence(s) so the user isn't
+        // nudged twice. Safe no-op if the request fails or nothing's due.
+        applyRemoteDeliveryDedup(apiClient.get.bind(apiClient)).catch(() => {});
 
         // Check if it's a new day and reset daily notifications
         checkDailyReset().catch(() => {});
@@ -567,7 +628,55 @@ export const NotificationProvider = ({ children }) => {
     return () => {
       subscription.remove();
     };
-  }, [checkPermissionStatus, checkDailyReset]);
+  }, [checkPermissionStatus, checkDailyReset, fcmStatus.permissionStatus, initializeFCM]);
+
+  // Retry pending token registration on a genuine offline -> online
+  // transition, not just on app foreground — a device that stays foregrounded
+  // through a network drop (e.g. subway, elevator) would otherwise wait for
+  // the next background/foreground cycle to recover. Edge-triggered for the
+  // same reason as useFoodLog's sync-queue listener: expo-network fires on
+  // every network change (wifi<->cellular, IP reassignment), and retrying on
+  // each of those would be wasteful — only a real unusable->usable transition
+  // should trigger a retry.
+  useEffect(() => {
+    if (!Network?.addNetworkStateListener) return undefined;
+
+    let wasUsable = false;
+    let seeded = false;
+    let cancelled = false;
+
+    Network.getNetworkStateAsync?.()
+      .then((state) => {
+        if (cancelled || seeded) return;
+        wasUsable = isUsableConnection(state);
+        seeded = true;
+      })
+      .catch(() => {});
+
+    let subscription;
+    try {
+      subscription = Network.addNetworkStateListener((state) => {
+        const usable = isUsableConnection(state);
+        seeded = true;
+        const reconnected = usable && !wasUsable;
+        wasUsable = usable;
+
+        if (reconnected) {
+          console.log('[NotificationProvider] Network reconnected - retrying pending token registration');
+          retryPendingTokenRegistration().catch(() => {});
+          fcmService.retryPendingFCMTokenRegistration().catch(() => {});
+          retryPendingOwnership().catch(() => {});
+        }
+      });
+    } catch (err) {
+      console.warn('[NotificationProvider] Could not attach network listener:', err?.message);
+    }
+
+    return () => {
+      cancelled = true;
+      subscription?.remove?.();
+    };
+  }, []);
 
   // ============== Notify API ==============
   const notify = {

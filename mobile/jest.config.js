@@ -18,7 +18,7 @@ module.exports = {
       // Unchanged from before this file became a multi-project config —
       // every pre-existing test here still runs exactly as it did.
       testMatch: ['**/__tests__/**/*.test.{js,jsx,ts,tsx}'],
-      testPathIgnorePatterns: ['<rootDir>/__tests__/auth/', '<rootDir>/__tests__/consent/', '<rootDir>/__tests__/log/', '<rootDir>/__tests__/analytics/'],
+      testPathIgnorePatterns: ['<rootDir>/__tests__/auth/', '<rootDir>/__tests__/consent/', '<rootDir>/__tests__/log/', '<rootDir>/__tests__/analytics/', '<rootDir>/__tests__/notifications/'],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },
       testEnvironment: 'node',
@@ -38,6 +38,11 @@ module.exports = {
         '<rootDir>/__tests__/consent/**/*.test.{js,jsx,ts,tsx}',
         '<rootDir>/__tests__/log/**/*.test.{js,jsx,ts,tsx}',
         '<rootDir>/__tests__/analytics/**/*.test.{js,jsx,ts,tsx}',
+        // expo-notifications only loads (doesn't crash on import) under this
+        // project's fuller RN environment — the "unit" project's stripped
+        // react-native stub can't support it at all. See
+        // pushNotificationsScheduling.test.js for what this unlocks.
+        '<rootDir>/__tests__/notifications/**/*.test.{js,jsx,ts,tsx}',
       ],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.components.js'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },

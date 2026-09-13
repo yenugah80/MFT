@@ -26,6 +26,7 @@ import {
   SPACING,
   RADIUS,
 } from '../constants/premiumTheme';
+import { deregisterAllPushChannels } from '../services/fcmService';
 
 /** User-facing copy for the failure modes worth explaining. */
 const ERROR_COPY = {
@@ -80,6 +81,7 @@ export default function BiometricLockScreen({
           style: 'destructive',
           onPress: async () => {
             try {
+              await deregisterAllPushChannels().catch(() => {});
               await signOut();
             } catch (signOutError) {
               console.error('[BiometricLockScreen] Sign out failed', signOutError);

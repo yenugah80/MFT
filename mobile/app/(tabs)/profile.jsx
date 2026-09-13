@@ -30,6 +30,7 @@ import { useBadges } from "../../hooks/useGamification";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../../constants/premiumTheme";
 import { DIETARY_PREFERENCES, ALLERGIES } from "../../constants/onboardingConfig";
 import { useResponsiveLayout } from "../../utils/responsiveLayout";
+import { deregisterAllPushChannels } from "../../services/fcmService";
 
 // The API stores dietary preferences and allergies by id ("low_carb"), which was
 // being rendered straight to screen. Resolve against the same catalogue the
@@ -278,6 +279,8 @@ export default function ProfileScreen() {
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
+      // Best-effort — a failed deregistration must not block sign-out.
+      await deregisterAllPushChannels().catch(() => {});
       await signOut();
     } catch (error) {
       console.error("Sign out error:", error);

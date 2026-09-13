@@ -14,10 +14,10 @@
 
 import { CronJob } from 'cron';
 import { db } from '../config/db.js';
-import { foodLogTable, accountSettingsTable } from '../db/schema.js';
+import { foodLogTable, accountSettingsTable, profilesTable, devicesTable } from '../db/schema.js';
 import { eq, and, gte, isNotNull, or, sql } from 'drizzle-orm';
-import { sendPushNotification } from '../services/pushNotificationService.js';
-import { sendFCMNotification } from '../services/fcmPushService.js';
+import { sendUserNotification, NOTIFICATION_TYPES } from '../services/pushNotificationService.js';
+import { sendUserFCMNotification, FCM_NOTIFICATION_TYPES } from '../services/fcmPushService.js';
 import { notificationDeliveryLogTable } from '../db/schema.js';
 
 // DB-backed 48-hour throttle — survives server restarts.
@@ -79,19 +79,29 @@ const MAX_USERS_PER_RUN = 500;
 
 // ─── Core logic ──────────────────────────────────────────────────────────────
 
+/**
+ * Base table is profilesTable, not accountSettingsTable — same reason as
+ * smartReminderJob.js's getEligibleUsersBatched: a user who has only ever
+ * called /profile/devices/register (never the legacy /profile/fcm-token or
+ * /profile/notifications) has no accountSettingsTable row at all, and
+ * selecting FROM it would silently exclude them regardless of the WHERE
+ * clause. Actual token resolution happens per-user inside
+ * sendUserNotification/sendUserFCMNotification below, which are
+ * device-aware — this query only needs to decide who's even worth checking.
+ */
 async function getUsersWithPushTokens() {
   return db
     .select({
-      userId: accountSettingsTable.userId,
-      expoPushToken: accountSettingsTable.expoPushToken,
-      fcmToken: accountSettingsTable.fcmToken,
+      userId: profilesTable.userId,
       notifications: accountSettingsTable.notifications,
     })
-    .from(accountSettingsTable)
+    .from(profilesTable)
+    .leftJoin(accountSettingsTable, eq(profilesTable.userId, accountSettingsTable.userId))
     .where(
       or(
         isNotNull(accountSettingsTable.expoPushToken),
-        isNotNull(accountSettingsTable.fcmToken)
+        isNotNull(accountSettingsTable.fcmToken),
+        sql`EXISTS (SELECT 1 FROM ${devicesTable} WHERE ${devicesTable.userId} = ${profilesTable.userId})`
       )
     )
     .limit(MAX_USERS_PER_RUN);
@@ -212,12 +222,16 @@ async function runNutrientDeficitJob() {
       const notification = buildNotification(deficits);
       if (!notification) { skipped++; continue; }
 
-      // Try Expo first; fall back to FCM for users without an Expo token
-      let result;
-      if (user.expoPushToken) {
-        result = await sendPushNotification(user.expoPushToken, notification);
-      } else if (user.fcmToken) {
-        result = await sendFCMNotification(user.fcmToken, notification);
+      // Try Expo first; fall back to FCM. Both are device-aware: they fan
+      // out to every real device row for this user, or fall back to the
+      // legacy accountSettingsTable column only if the user has zero
+      // device rows — never both, so a migrated user's stale legacy token
+      // can't fire alongside their real device row's current one.
+      let result = await sendUserNotification(db, user.userId, NOTIFICATION_TYPES.INSIGHT_DROP, notification);
+      let channel = result?.success ? 'expo' : null;
+      if (!result?.success) {
+        result = await sendUserFCMNotification(db, user.userId, FCM_NOTIFICATION_TYPES.INSIGHT_DROP, notification);
+        channel = result?.success ? 'fcm' : null;
       }
 
       if (result?.success) {
@@ -230,7 +244,7 @@ async function runNutrientDeficitJob() {
             notificationType: 'nutrient_deficit',
             title: notification.title,
             body: notification.body,
-            channel: user.expoPushToken ? 'expo' : 'fcm',
+            channel,
             priority: 3,
             deliveryStatus: 'sent',
           });

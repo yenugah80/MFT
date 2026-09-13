@@ -23,6 +23,11 @@ import {
   deleteFCMToken,
   getFCMTokenStatus,
   saveBothPushTokens,
+  getDeliveredToday,
+  acknowledgePushReceived,
+  registerDeviceEndpoint,
+  deregisterDeviceEndpoint,
+  setNotificationOwnershipEndpoint,
   exportUserData,
   deleteAccount,
 } from "../controllers/profileController.js";
@@ -58,6 +63,19 @@ router.delete("/fcm-token", deleteFCMToken);
 
 // Combined token endpoint (register both Expo and FCM tokens)
 router.post("/push-tokens", saveBothPushTokens);
+
+// Local/remote reminder de-duplication: which local categories already had
+// a real server-sent notification today (see getDeliveredToday for the
+// ownership model this implements)
+router.get("/notifications/delivered-today", getDeliveredToday);
+router.post("/notifications/ack", acknowledgePushReceived);
+
+// Per-device registration and local-delivery ownership. Additive alongside
+// /fcm-token and /push-token above — old app builds keep using those
+// unchanged; new builds use these instead. See deviceRegistry.js.
+router.post("/devices/register", registerDeviceEndpoint);
+router.post("/devices/deregister", deregisterDeviceEndpoint);
+router.post("/notifications/ownership", setNotificationOwnershipEndpoint);
 
 // Privacy settings
 router.get("/privacy", getPrivacySettings);

@@ -20,6 +20,14 @@ import {
   buildProfileExportPayload,
   CORE_WELLNESS_EXPORT_COLLECTIONS,
 } from "../utils/profileDataExport.js";
+import { buildExportZip, buildExportPDF } from "../utils/exportFormatters.js";
+import { getDeliveredTodayForUser, acknowledgeDelivery } from "../utils/deliveryAck.js";
+import {
+  registerDevice,
+  deregisterDevice,
+  resolveDeviceRowId,
+  setOwnership,
+} from "../utils/deviceRegistry.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
@@ -158,6 +166,186 @@ export async function getPushTokenStatus(req, res) {
     });
   } catch (error) {
     console.error('[getPushTokenStatus] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+// --- Local/remote reminder de-duplication ---
+//
+// Ownership model: the backend's smart-reminder cron (smartReminderJob.js) is
+// the PRIMARY sender for every local reminder category whenever the device
+// has connectivity — it has real-time server data (today's actual logs,
+// current streak) that an on-device schedule fixed hours in advance cannot.
+// The device's local expo-notifications schedule (pushNotifications.js)
+// exists ONLY as an offline fallback, for the case where connectivity isn't
+// available when the remote send would have happened.
+//
+// notification_delivery_log's "sent" status means Firebase/APNs ACCEPTED the
+// send request — it is NOT confirmation the device received anything.
+// Cancelling the user's only remaining reminder based on a merely-accepted
+// send risks a silent miss, which is worse than an occasional duplicate.
+//
+// Confirmation is message-specific, not a timestamp window: each send gets
+// a unique deliveryId (generated in smartReminderJob.js's
+// deliverNotification, embedded in the push's own data payload), stored on
+// its own notification_delivery_log row. The receiving device acknowledges
+// that exact ID; acked_at is only ever set once per row (first ack wins —
+// see acknowledgePushReceived), so repeated acks from one device, or acks
+// from a second device signed into the same account, are all safely
+// idempotent instead of each counting as a fresh confirmation. An earlier
+// version of this correlated by "any ack within 10 minutes of any send" at
+// the account level — that could incorrectly confirm an unrelated send in
+// the same window and had no way to validate the acker owns this specific
+// delivery. Replaced outright before this was ever deployed.
+export async function getDeliveredToday(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const deliveredToday = await getDeliveredTodayForUser(req.db, userId);
+    res.status(200).json({ deliveredToday });
+  } catch (error) {
+    console.error('[getDeliveredToday] Error:', error);
+    // Fail toward "nothing confirmed delivered" — the local reminder stays
+    // scheduled and fires. A missed dedup means at most one redundant
+    // notification; a false "already delivered" would suppress the only
+    // reminder the user gets that day. Same asymmetry the consent gate
+    // resolves the same way (fail toward the safer redundant outcome).
+    res.status(200).json({ deliveredToday: [] });
+  }
+}
+
+/**
+ * Called by the client whenever its JS runtime actually processes a push
+ * (foreground onMessage, or the background message handler — which can run
+ * even while the app is fully closed, given `content-available: 1` on iOS).
+ * This is the real "device receipt" signal getDeliveredToday requires before
+ * treating a category as safe to cancel locally. See acknowledgeDelivery for
+ * the ownership + idempotency logic.
+ */
+export async function acknowledgePushReceived(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deliveryId, deviceId } = req.body || {};
+
+    if (!deliveryId || typeof deliveryId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deliveryId is required' });
+    }
+
+    // deviceId here is the client's own string id (SecureStore) — resolve it
+    // to the real devices.id row so acknowledgeDelivery can check it against
+    // the delivery log's numeric deviceId. Absent for pre-device-model
+    // clients, which keeps today's userId-only ack check for them.
+    const ackingDeviceRowId = deviceId ? await resolveDeviceRowId(req.db, userId, deviceId) : null;
+
+    const result = await acknowledgeDelivery(req.db, userId, deliveryId, ackingDeviceRowId);
+
+    if (result.ownershipViolation) {
+      console.warn(`[acknowledgePushReceived] Ownership mismatch: user ${userId} tried to ack a delivery belonging to another device/account`);
+      return res.status(403).json({ success: false, error: 'Not your delivery' });
+    }
+
+    return res.status(200).json({ success: result.ok, alreadyAcked: result.alreadyAcked });
+  } catch (error) {
+    console.error('[acknowledgePushReceived] Error:', error);
+    // Non-critical: worst case, this send is treated as unconfirmed and the
+    // local fallback stays scheduled — the safe direction to fail in.
+    res.status(200).json({ success: false });
+  }
+}
+
+// --- Device Registry & Per-Device Notification Ownership ---
+//
+// Additive alongside the legacy FCM/Expo token endpoints below, which stay
+// untouched for app builds that haven't adopted this flow yet. See
+// deviceRegistry.js and docs/architecture for the backward-compat design.
+
+export async function registerDeviceEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId, fcmToken, expoPushToken, platform } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+    if (!fcmToken && !expoPushToken) {
+      return res.status(400).json({ success: false, error: 'fcmToken or expoPushToken is required' });
+    }
+
+    // Same profile-not-ready race saveFCMToken already guards against.
+    const [profile] = await req.db
+      .select({ userId: profilesTable.userId })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (!profile) {
+      return res.status(202).json({
+        success: false,
+        registered: false,
+        message: 'Profile not ready yet, device will be registered after profile creation',
+        retryAfterProfileCreation: true,
+      });
+    }
+
+    await registerDevice(req.db, userId, { deviceId, fcmToken, expoPushToken, platform });
+    console.log(`[registerDeviceEndpoint] Registered device ${deviceId} for user ${userId} (${platform || 'unknown platform'})`);
+    res.status(200).json({ success: true, registered: true });
+  } catch (error) {
+    if (error.code === '23503') {
+      return res.status(202).json({ success: false, registered: false, retryAfterProfileCreation: true });
+    }
+    console.error('[registerDeviceEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+export async function deregisterDeviceEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+
+    const result = await deregisterDevice(req.db, userId, deviceId);
+    console.log(`[deregisterDeviceEndpoint] Deregistered device ${deviceId} for user ${userId}: ${result.removed}`);
+    res.status(200).json({ success: true, removed: result.removed });
+  } catch (error) {
+    console.error('[deregisterDeviceEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+const VALID_OWNABLE_CATEGORIES = ['hydration_nudge', 'daily_reminder', 'mood_checkin', 'activity_reminder'];
+const VALID_OWNERS = ['local', 'backend'];
+
+export async function setNotificationOwnershipEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId, category, owner } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+    if (!VALID_OWNABLE_CATEGORIES.includes(category)) {
+      return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+    if (!VALID_OWNERS.includes(owner)) {
+      return res.status(400).json({ success: false, error: 'Invalid owner' });
+    }
+
+    const deviceRowId = await resolveDeviceRowId(req.db, userId, deviceId);
+    if (!deviceRowId) {
+      // The device must register itself before claiming ownership — this
+      // ordering (register, confirm local scheduling succeeded, THEN claim
+      // ownership) is what mobile's syncAllNotificationSchedules follows.
+      return res.status(404).json({ success: false, error: 'Device not registered' });
+    }
+
+    await setOwnership(req.db, deviceRowId, category, owner);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[setNotificationOwnershipEndpoint] Error:', error);
     sendDevError(res, error);
   }
 }
@@ -1471,6 +1659,24 @@ export async function exportUserData(req, res) {
     });
 
     console.log(`[exportUserData] Exported core wellness data for user ${userId}`);
+
+    const format = String(req.query.format || "json").toLowerCase();
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    if (format === "csv") {
+      const zipBuffer = await buildExportZip(exportData);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="mft-export-${dateStamp}.zip"`);
+      return res.status(200).send(zipBuffer);
+    }
+
+    if (format === "pdf") {
+      const pdfBuffer = await buildExportPDF(exportData);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="mft-export-${dateStamp}.pdf"`);
+      return res.status(200).send(pdfBuffer);
+    }
+
     res.status(200).json(exportData);
   } catch (error) {
     console.error("[exportUserData] ❌ Error exporting user data:", error);

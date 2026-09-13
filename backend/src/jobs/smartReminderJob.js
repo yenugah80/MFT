@@ -30,6 +30,7 @@
  */
 
 import cron from 'cron';
+import { randomUUID } from 'node:crypto';
 import { db } from '../config/db.js';
 import {
   accountSettingsTable,
@@ -38,6 +39,7 @@ import {
   waterLogTable,
   nutritionGoalsTable,
   notificationDeliveryLogTable,
+  devicesTable,
 } from '../db/schema.js';
 import { eq, isNotNull, or, and, sql, gte, lte, isNull } from 'drizzle-orm';
 import { getSmartReminders, REMINDER_TYPES } from '../services/smartReminderService.js';
@@ -56,6 +58,8 @@ import {
   NOTIFICATION_TYPES
 } from '../services/pushNotificationService.js';
 import { isFirebaseReady } from '../config/firebase.js';
+import { resolveSendTargets, getOwnedCategoriesForDevice } from '../utils/deviceRegistry.js';
+import { filterRemindersForDevice, mapReminderJobCategoryToLocalCategory } from '../utils/notificationOwnership.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -189,7 +193,21 @@ function clearOldRateLimits() {
 
 /**
  * Get users eligible for notifications in batches
- * Filters: has push token, notifications enabled, not in quiet hours
+ * Filters: has a push token (legacy column OR at least one registered
+ * device), notifications enabled, not in quiet hours
+ *
+ * Base table is deliberately profilesTable, not accountSettingsTable: a
+ * user who has only ever called /profile/devices/register (never touched
+ * /profile/notifications or the legacy /profile/fcm-token, which are what
+ * actually create an accountSettingsTable row) would have NO row there at
+ * all — selecting FROM accountSettingsTable would silently exclude them
+ * regardless of what the WHERE clause checks, since a left-joined table can
+ * never appear in a query's own FROM-driven row set. profilesTable is safe
+ * as the base: registerDeviceEndpoint requires a profile to already exist
+ * before it will create a device row, so every device-registered user is
+ * guaranteed to have one. Caught by _verifyEligibleQuery.mjs against real
+ * Postgres — the original accountSettingsTable-rooted version returned zero
+ * rows for a device-only user even with the EXISTS clause present.
  */
 async function* getEligibleUsersBatched() {
   let offset = 0;
@@ -197,7 +215,7 @@ async function* getEligibleUsersBatched() {
   while (true) {
     const users = await db
       .select({
-        userId: accountSettingsTable.userId,
+        userId: profilesTable.userId,
         expoPushToken: accountSettingsTable.expoPushToken,
         fcmToken: accountSettingsTable.fcmToken,
         notifications: accountSettingsTable.notifications,
@@ -205,13 +223,14 @@ async function* getEligibleUsersBatched() {
         streak: gamificationTable.streak,
         fullName: profilesTable.fullName,
       })
-      .from(accountSettingsTable)
-      .leftJoin(gamificationTable, eq(accountSettingsTable.userId, gamificationTable.userId))
-      .leftJoin(profilesTable, eq(accountSettingsTable.userId, profilesTable.userId))
+      .from(profilesTable)
+      .leftJoin(accountSettingsTable, eq(profilesTable.userId, accountSettingsTable.userId))
+      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
       .where(
         or(
           isNotNull(accountSettingsTable.expoPushToken),
-          isNotNull(accountSettingsTable.fcmToken)
+          isNotNull(accountSettingsTable.fcmToken),
+          sql`EXISTS (SELECT 1 FROM ${devicesTable} WHERE ${devicesTable.userId} = ${profilesTable.userId})`
         )
       )
       .limit(CONFIG.BATCH_SIZE)
@@ -283,11 +302,22 @@ async function getTodayHydration(userId) {
 }
 
 /**
- * Send notification via both FCM and Expo (with fallback)
+ * Send notification via both FCM and Expo (with fallback) to ONE specific
+ * device. `device` is either a real `devices` row (has a real `id`) or the
+ * legacy pseudo-device shape from resolveSendTargets (`id: null`) — both
+ * carry the same {id, fcmToken, expoPushToken} shape so this function never
+ * needs to branch on which kind it got.
  */
-async function deliverNotification(user, reminder) {
-  const { userId, fcmToken, expoPushToken, streak } = user;
+async function deliverNotification(user, device, reminder) {
+  const { userId, streak } = user;
+  const { id: deviceId, fcmToken, expoPushToken } = device;
   const { type, title, body, priority } = reminder;
+
+  // Unique per send, embedded in the push itself so the receiving device can
+  // acknowledge THIS specific message. A timestamp-window correlation can't
+  // tell two sends close together apart and can't validate the acker
+  // actually owns this delivery — see acknowledgePushReceived.
+  const deliveryId = randomUUID();
 
   const notification = {
     title,
@@ -296,6 +326,7 @@ async function deliverNotification(user, reminder) {
       type,
       priority: String(priority),
       screen: getScreenForType(type),
+      deliveryId,
     },
   };
 
@@ -312,26 +343,26 @@ async function deliverNotification(user, reminder) {
       switch (fcmType) {
         case 'hydration': {
           const { currentMl, goalMl } = await getTodayHydration(userId);
-          result = await sendHydrationNudgeNotification(db, userId, currentMl, goalMl, { streak });
+          result = await sendHydrationNudgeNotification(db, userId, currentMl, goalMl, { streak, deliveryId, deviceId });
           break;
         }
         case 'meal':
-          result = await sendMealReminderNotification(db, userId, { streak });
+          result = await sendMealReminderNotification(db, userId, { streak, deliveryId, deviceId });
           break;
         case 'mood':
-          result = await sendMoodCheckInNotification(db, userId, {});
+          result = await sendMoodCheckInNotification(db, userId, { deliveryId, deviceId });
           break;
         case 'activity':
-          result = await sendActivityNudgeNotification(db, userId, {});
+          result = await sendActivityNudgeNotification(db, userId, { deliveryId, deviceId });
           break;
         case 'streak':
-          result = await sendStreakCelebrationNotification(db, userId, streak || 0);
+          result = await sendStreakCelebrationNotification(db, userId, streak || 0, { deliveryId, deviceId });
           break;
         case 'reengagement':
-          result = await sendReengagementNotification(db, userId, {});
+          result = await sendReengagementNotification(db, userId, { deliveryId, deviceId });
           break;
         default:
-          result = await sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, notification);
+          result = await sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, notification, { deviceId });
       }
 
       fcmSuccess = result?.success === true;
@@ -343,7 +374,7 @@ async function deliverNotification(user, reminder) {
   // Fallback to Expo if FCM failed or unavailable
   if (!fcmSuccess && expoPushToken) {
     try {
-      const result = await sendUserNotification(db, userId, mapTypeToExpo(type), notification);
+      const result = await sendUserNotification(db, userId, mapTypeToExpo(type), notification, { deviceId });
       expoSuccess = result?.success === true;
     } catch (err) {
       console.warn(`[SmartReminderJob] Expo delivery failed for ${userId}:`, err.message);
@@ -353,17 +384,20 @@ async function deliverNotification(user, reminder) {
   const delivered = fcmSuccess || expoSuccess;
 
   // Log every successful delivery to the DB — this is the source of truth for
-  // the DB-backed rate limiter (checkRateLimitFromDB) and analytics.
+  // the DB-backed rate limiter (checkRateLimitFromDB) and analytics, and for
+  // the delivery-id-based ack (acknowledgePushReceived/getDeliveredToday).
   if (delivered) {
     try {
       await db.insert(notificationDeliveryLogTable).values({
         userId,
+        deviceId,
         notificationType: type,
         title,
         body,
         channel: fcmSuccess ? 'fcm' : 'expo',
         priority: reminder.priority || 3,
         deliveryStatus: 'sent',
+        deliveryId,
       });
     } catch (logErr) {
       console.warn('[SmartReminderJob] Failed to log delivery (non-critical):', logErr.message);
@@ -513,32 +547,60 @@ async function processUserReminders(user, runMetrics) {
   }
 
   try {
-    // Get smart reminders for this user
+    // Reminders reflect account-level patterns (not per-device state), so
+    // they're computed once and then filtered independently per device.
     const reminders = await getSmartReminders(userId);
 
     if (!reminders || reminders.length === 0) {
-      return;
-    }
-
-    // Send only the highest priority reminder to avoid spam
-    const topReminder = reminders[0];
-
-    // Check if this reminder type is enabled for user
-    const reminderCategory = getCategoryForType(topReminder.type);
-    if (notifications?.[reminderCategory] === false) {
       runMetrics.skipped++;
       return;
     }
 
-    // Deliver the notification
-    const success = await deliverNotification(user, topReminder);
+    // Real devices from the new per-device model, or the one legacy
+    // pseudo-device wrapping accountSettingsTable's single token — never
+    // both (see resolveSendTargets).
+    const targets = await resolveSendTargets(db, userId, user);
+    if (targets.length === 0) {
+      runMetrics.skipped++;
+      return;
+    }
 
-    if (success) {
-      runMetrics.sent++;
-      runMetrics.byType[topReminder.type] = (runMetrics.byType[topReminder.type] || 0) + 1;
-      console.log(`[SmartReminderJob] Sent ${topReminder.type} to user ${userId}`);
-    } else {
-      runMetrics.failed++;
+    for (const device of targets) {
+      // Legacy pseudo-devices (device.id === null) never own anything —
+      // getOwnedCategoriesForDevice returns an empty set for them, so they
+      // always see the full candidate list, exactly like every device did
+      // before this feature existed.
+      const ownedCategories = await getOwnedCategoriesForDevice(db, device.id);
+      const candidates = filterRemindersForDevice(
+        reminders,
+        ownedCategories,
+        (type) => mapReminderJobCategoryToLocalCategory(getCategoryForType(type))
+      );
+
+      if (candidates.length === 0) {
+        // Every candidate reminder for this device this cycle falls under a
+        // category it owns locally — correct suppression, not a failure.
+        continue;
+      }
+
+      // Send only the highest priority remaining reminder to avoid spam
+      const topReminder = candidates[0];
+
+      // Check if this reminder type is enabled for user (account-level pref)
+      const reminderCategory = getCategoryForType(topReminder.type);
+      if (notifications?.[reminderCategory] === false) {
+        continue;
+      }
+
+      const success = await deliverNotification(user, device, topReminder);
+
+      if (success) {
+        runMetrics.sent++;
+        runMetrics.byType[topReminder.type] = (runMetrics.byType[topReminder.type] || 0) + 1;
+        console.log(`[SmartReminderJob] Sent ${topReminder.type} to user ${userId} (device ${device.id ?? 'legacy'})`);
+      } else {
+        runMetrics.failed++;
+      }
     }
 
   } catch (error) {

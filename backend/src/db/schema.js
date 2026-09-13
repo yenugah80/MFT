@@ -1838,6 +1838,61 @@ export const pendingCheckInsTable = pgTable(
 );
 
 // ============================================================================
+// DEVICE REGISTRY & PER-DEVICE NOTIFICATION OWNERSHIP
+//
+// Additive, backward-compatible per-device model. accountSettingsTable still
+// holds exactly one fcmToken/expoPushToken per account for old app builds
+// that have never called /profile/devices/register — that legacy column is
+// intentionally left untouched. A user is resolved as EITHER all-legacy
+// (zero rows here) or all-per-device (>=1 row here); see deviceRegistry.js.
+// ============================================================================
+
+export const devicesTable = pgTable(
+  "devices",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
+    // Client-generated stable UUID, persisted once per install (SecureStore).
+    // Not itself unique across accounts by design — the same physical
+    // device switching accounts (sign-out, sign-in as someone else) produces
+    // a second row keyed by the same deviceId under the new userId, keeping
+    // ownership/tokens fully isolated per account.
+    deviceId: text("device_id").notNull(),
+    platform: text("platform"), // 'ios' | 'android'
+    fcmToken: text("fcm_token"),
+    fcmTokenUpdatedAt: timestamp("fcm_token_updated_at"),
+    expoPushToken: text("expo_push_token"),
+    expoPushTokenUpdatedAt: timestamp("expo_push_token_updated_at"),
+    lastSeenAt: timestamp("last_seen_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userDeviceUnique: unique("devices_user_device_unique").on(table.userId, table.deviceId),
+    userIdIdx: index("devices_user_id_idx").on(table.userId),
+  })
+);
+
+// Per-device, per-category delivery ownership. A row with owner='local'
+// means the device's own repeating expo-notifications schedule is the sole
+// intended source for that category — the backend reminder job must not
+// also send it there. Absence of a row (the default) means the backend
+// owns delivery, exactly like every device did before this table existed.
+export const notificationOwnershipTable = pgTable(
+  "notification_ownership",
+  {
+    id: serial("id").primaryKey(),
+    deviceId: integer("device_id").notNull().references(() => devicesTable.id, { onDelete: "cascade" }),
+    category: text("category").notNull(), // 'hydration_nudge' | 'daily_reminder' | 'mood_checkin' | 'activity_reminder'
+    owner: text("owner").notNull().default("backend"), // 'local' | 'backend'
+    registeredAt: timestamp("registered_at").defaultNow(),
+  },
+  (table) => ({
+    deviceCategoryUnique: unique("notification_ownership_device_category_unique").on(table.deviceId, table.category),
+  })
+);
+
+// ============================================================================
 // NOTIFICATION DELIVERY & TRACKING TABLES
 // Added for smart reminder system with snooze/dismiss persistence
 // ============================================================================
@@ -1848,6 +1903,11 @@ export const notificationDeliveryLogTable = pgTable(
   {
     id: serial("id").primaryKey(),
     userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
+    // Which device this was sent to, when sent via the per-device path.
+    // NULL for legacy single-token sends and for account-wide broadcasts
+    // (goal-achieved/insight-drop fan-out) — those keep today's userId-only
+    // ack ownership check; see acknowledgeDelivery in deliveryAck.js.
+    deviceId: integer("device_id").references(() => devicesTable.id, { onDelete: "set null" }),
     notificationType: text("notification_type").notNull(),
     title: text("title").notNull(),
     body: text("body"),
@@ -1857,6 +1917,17 @@ export const notificationDeliveryLogTable = pgTable(
     errorMessage: text("error_message"),
     clickedAt: timestamp("clicked_at"),
     screenNavigated: text("screen_navigated"),
+    // Unique per send, embedded in the push's own data payload so the
+    // receiving device can acknowledge THIS specific message rather than
+    // merely "some push arrived within a time window" — a timestamp-only
+    // correlation can't tell two different sends close together apart, and
+    // can't validate that the acker actually owns this delivery.
+    deliveryId: text("delivery_id").unique(),
+    // Set only on the first ack for this row (see acknowledgePushReceived) —
+    // NOT the same as deliveryStatus='sent', which only means Firebase/APNs
+    // accepted the request. This is the actual "the device's JS runtime
+    // processed this specific push" confirmation.
+    ackedAt: timestamp("acked_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({

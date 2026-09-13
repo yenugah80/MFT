@@ -10,6 +10,8 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import apiClient from './apiClient';
+import { getOrCreateDeviceId } from './deviceIdentity';
+import { unregisterPushToken, cancelAllScheduledNotifications } from './pushNotifications';
 
 let messaging = null;
 let firebaseApp = null;
@@ -126,39 +128,114 @@ export async function getFCMToken() {
   }
 }
 
+// Track pending retry for FCM token registration — mirrors the Expo push
+// token retry pattern in pushNotifications.js. Without this, a single
+// transient failure (network blip, backend cold start, profile not yet
+// created) permanently drops the token: NotificationProvider only calls
+// setupFCM() once per sign-in (gated on !fcmStatus.initialized, which gets
+// set to true even on failure), so nothing else was ever retrying this.
+let fcmTokenRetryTimeout = null;
+let pendingFCMToken = null;
+
 /**
- * Register FCM token with backend
+ * Register FCM token with backend, scoped to this specific device.
  * @param {string} token - The FCM device token
+ * @param {number} retryCount - Current retry attempt (internal use)
  */
-export async function registerFCMTokenWithBackend(token) {
+export async function registerFCMTokenWithBackend(token, retryCount = 0) {
   if (!token) return false;
 
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [5000, 15000, 30000]; // 5s, 15s, 30s
+
   try {
-    const response = await apiClient.post('/profile/fcm-token', {
-      fcmToken: token,
-      platform: Platform.OS,
-    });
+    const deviceId = await getOrCreateDeviceId();
+    // deviceId can only fail to resolve if SecureStore itself is broken —
+    // fall back to the legacy account-wide endpoint rather than dropping
+    // the token registration entirely.
+    const response = deviceId
+      ? await apiClient.post('/profile/devices/register', {
+          deviceId,
+          fcmToken: token,
+          platform: Platform.OS,
+        })
+      : await apiClient.post('/profile/fcm-token', {
+          fcmToken: token,
+          platform: Platform.OS,
+        });
 
     if (response.success) {
       console.log('[FCM] Token registered with backend');
+      pendingFCMToken = null;
       return true;
     }
 
     // Handle retry scenario (profile not ready)
     if (response.retryAfterProfileCreation) {
-      console.log('[FCM] Profile not ready, will retry later');
+      console.log('[FCM] Profile not ready, scheduling retry');
+      pendingFCMToken = token;
+
+      if (retryCount < MAX_RETRIES) {
+        if (fcmTokenRetryTimeout) clearTimeout(fcmTokenRetryTimeout);
+        const delay = RETRY_DELAYS[retryCount] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+        fcmTokenRetryTimeout = setTimeout(() => {
+          registerFCMTokenWithBackend(token, retryCount + 1);
+        }, delay);
+      }
       return false;
     }
 
     return false;
   } catch (error) {
     console.warn('[FCM] Token registration failed:', error?.message || error);
+
+    if (retryCount < MAX_RETRIES) {
+      pendingFCMToken = token;
+      const delay = RETRY_DELAYS[retryCount] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+      fcmTokenRetryTimeout = setTimeout(() => {
+        registerFCMTokenWithBackend(token, retryCount + 1);
+      }, delay);
+    }
+
     return false;
   }
 }
 
 /**
- * Unregister FCM token (call on logout)
+ * Manually trigger FCM token registration retry (e.g. after profile creation)
+ */
+export async function retryPendingFCMTokenRegistration() {
+  if (pendingFCMToken) {
+    return registerFCMTokenWithBackend(pendingFCMToken, 0);
+  }
+  return false;
+}
+
+/**
+ * Unregister FCM token (call on logout) — deregisters THIS device's row so
+ * a different account signing into the same physical phone next doesn't
+ * share a still-live device row with the account that just signed out.
+ * Without this, both accounts would resolve to the same underlying
+ * Firebase installation token, and the signed-out account's event-driven
+ * notifications (goal-achieved, insight-drop, etc.) could still reach the
+ * new account's screen.
+ *
+ * The backend call gets two quick attempts (a brief blip shouldn't
+ * permanently strand a stale device row) but no long-running retry beyond
+ * that: unlike ownership registration, there is no safe way to retry this
+ * AFTER signOut() tears down the auth session — retrying would need to
+ * authenticate as the account that just signed out. If both attempts fail
+ * (device is genuinely offline at the moment of sign-out), the device row
+ * is left stale server-side. This is a bounded, self-healing residual risk,
+ * not an open-ended one: local reminders are already cancelled by
+ * deregisterAllPushChannels() regardless of this call's outcome (see
+ * pushNotifications.js's cancelAllScheduledNotifications, called first and
+ * unconditionally), so the only remaining exposure is a stale row possibly
+ * still receiving an event-driven push (goal-achieved, insight-drop) for
+ * the old account — until its token naturally invalidates (the existing
+ * shouldRemove cleanup in fcmPushService.js/pushNotificationService.js
+ * handles that) or the old account signs in again anywhere and the row
+ * gets refreshed or replaced.
  */
 export async function unregisterFCMToken() {
   const fcm = await loadFirebaseMessaging();
@@ -170,15 +247,65 @@ export async function unregisterFCMToken() {
       console.log('[FCM] Token deleted from Firebase');
     }
 
-    // Remove from backend
-    await apiClient.delete('/profile/fcm-token');
-    console.log('[FCM] Token removed from backend');
+    // Remove this device's registration from the backend — one quick retry
+    // for a brief connectivity blip, no more (see docstring above).
+    const deviceId = await getOrCreateDeviceId();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (deviceId) {
+          await apiClient.post('/profile/devices/deregister', { deviceId });
+        } else {
+          // Fallback for the (should-be-rare) case SecureStore couldn't
+          // resolve a device id — clears the legacy account-wide column so
+          // there's at least no stale live token left behind.
+          await apiClient.delete('/profile/fcm-token');
+        }
+        console.log('[FCM] Token removed from backend');
+        return true;
+      } catch (attemptError) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } else {
+          throw attemptError;
+        }
+      }
+    }
 
     return true;
   } catch (error) {
-    console.warn('[FCM] Failed to unregister token:', error?.message || error);
+    console.warn('[FCM] Failed to unregister token from backend (device is likely offline; local reminders are already cancelled regardless):', error?.message || error);
     return false;
   }
+}
+
+/**
+ * Full sign-out notification cleanup, called from every sign-out site right
+ * before signOut() itself. Two genuinely different guarantees, in a
+ * specific order:
+ *
+ * 1. Cancel every locally scheduled notification FIRST, synchronously and
+ *    unconditionally. This is what actually protects a second account
+ *    signing into this same physical device next from seeing the first
+ *    account's hydration/meal/mood/activity/streak reminders — it needs
+ *    zero connectivity and must never be skipped or reordered after the
+ *    network calls below, including when this whole function is invoked
+ *    while offline. Without this, a device switching accounts would keep
+ *    firing the PREVIOUS account's local reminders indefinitely, since
+ *    nothing else in the app ever calls cancelAllScheduledNotifications.
+ * 2. Best-effort server deregistration (unregisterFCMToken covers the new
+ *    per-device model's whole row; unregisterPushToken clears the legacy
+ *    account-wide Expo column, harmless for pre-device-model installs).
+ *    This part can fail if offline at the moment of sign-out — see
+ *    unregisterFCMToken's docstring for why that residual risk is bounded
+ *    and self-healing rather than something this function can fully
+ *    guarantee. Never throws either way: a failed deregistration must not
+ *    block sign-out.
+ */
+export async function deregisterAllPushChannels() {
+  await cancelAllScheduledNotifications().catch(() => {});
+
+  const results = await Promise.allSettled([unregisterFCMToken(), unregisterPushToken()]);
+  return results.every((r) => r.status === 'fulfilled' && r.value === true);
 }
 
 /**
@@ -327,6 +454,7 @@ export default {
   checkFCMPermission,
   getFCMToken,
   registerFCMTokenWithBackend,
+  retryPendingFCMTokenRegistration,
   unregisterFCMToken,
   setupFCMListeners,
   setBackgroundMessageHandler,
