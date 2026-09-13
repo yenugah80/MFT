@@ -1652,6 +1652,37 @@ export async function completeOnboarding(req, res) {
   }
 }
 
+/**
+ * Dev-only: un-sets onboardingCompletedAt so a test account replays the
+ * full opening sequence (auth screen's first-time copy + onboarding
+ * steps 1-4) on next sign-in, without deleting and recreating the account.
+ * Refuses outright unless NODE_ENV is explicitly 'development' — fails
+ * closed, not just "not production," so a misconfigured or unset
+ * environment variable can never accidentally leave this reachable. There
+ * is no equivalent of this endpoint reachable against the real production
+ * backend regardless of what any client build sends.
+ */
+export async function devResetOnboarding(req, res) {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ success: false, error: 'Not available' });
+  }
+
+  try {
+    const { userId } = getAuth(req);
+
+    await req.db
+      .update(profilesTable)
+      .set({ onboardingCompletedAt: null, updatedAt: new Date() })
+      .where(eq(profilesTable.userId, userId));
+
+    console.log(`[devResetOnboarding] Reset onboarding for ${userId} (dev only)`);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[devResetOnboarding] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
 // --- GDPR Data Export ---
 export async function exportUserData(req, res) {
   try {

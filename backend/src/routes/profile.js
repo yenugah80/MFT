@@ -9,6 +9,7 @@ import {
   saveGoals,
   saveGamification,
   completeOnboarding,
+  devResetOnboarding,
   getNotifications,
   saveNotifications,
   getPrivacySettings,
@@ -47,6 +48,7 @@ router.post("/basics", saveBasics);
 router.post("/dietary", saveDietary);
 router.post("/goals", saveGoals);
 router.post("/onboarding-complete", completeOnboarding);
+router.post("/dev/reset-onboarding", devResetOnboarding); // refuses unless NODE_ENV=development, see controller
 
 // Notification preferences
 router.get("/notifications", getNotifications);

@@ -1,23 +1,37 @@
 /**
- * Dev-only floating inspector for locally scheduled notifications —
- * reachable regardless of sign-in state, unlike the equivalent inspector
- * in app/profile/notifications.jsx (behind the auth gate). Exists
- * specifically to verify "did local reminders actually cancel immediately
- * at sign-out" at the one moment that matters: right after signing out,
- * before signing back in, when Settings isn't reachable at all.
+ * Dev-only floating overlay, two unrelated tools sharing one entry point
+ * since both are __DEV__-only and reachable regardless of sign-in state:
+ *
+ * 1. Scheduled-notification inspector — verifies "did local reminders
+ *    actually cancel immediately at sign-out" at the one moment that
+ *    matters (right after signing out, before signing back in, when
+ *    Settings isn't reachable at all).
+ * 2. "Replay opening sequence" — resets HAS_SIGNED_IN_KEY (so the auth
+ *    screen shows its first-time hero copy again) and onboardingCompletedAt
+ *    (so the account replays onboarding steps 1-4) without deleting and
+ *    recreating the account, for recording the app's opening sequence
+ *    repeatedly. Calls a dev-only backend endpoint that refuses outright
+ *    unless the backend's NODE_ENV is explicitly 'development' — there is
+ *    no path to this against the real production backend.
  *
  * Mounted once at the root layout (app/_layout.jsx), gated by __DEV__ —
  * absent from any build that isn't a development build.
  */
 import { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useClerk } from '@clerk/clerk-expo';
 import { useNotification } from '../../providers/NotificationProvider';
+import apiClient from '../../services/apiClient';
+import { HAS_SIGNED_IN_KEY } from '../../app/(auth)/sign-in';
 
 export default function ScheduledNotificationsDebugOverlay() {
   const notify = useNotification();
+  const { signOut } = useClerk();
   const [visible, setVisible] = useState(false);
   const [scheduled, setScheduled] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [replaying, setReplaying] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -32,6 +46,29 @@ export default function ScheduledNotificationsDebugOverlay() {
   const open = () => {
     setVisible(true);
     refresh();
+  };
+
+  const replayOpeningSequence = async () => {
+    setReplaying(true);
+    try {
+      // Best-effort — if the backend refuses (not NODE_ENV=development) or
+      // the request fails, still proceed to sign out so the auth hero at
+      // least resets, rather than leaving the user stuck mid-action.
+      const response = await apiClient.post('/profile/dev/reset-onboarding', {}).catch((error) => {
+        console.warn('[DevTools] reset-onboarding failed (continuing anyway):', error?.message || error);
+        return null;
+      });
+      await AsyncStorage.removeItem(HAS_SIGNED_IN_KEY);
+      setVisible(false);
+      await signOut();
+      if (response && !response.success) {
+        Alert.alert('Note', 'Onboarding reset was refused by the backend (not running in development mode) — sign-in hero was still reset.');
+      }
+    } catch (error) {
+      Alert.alert('Replay failed', error?.message || String(error));
+    } finally {
+      setReplaying(false);
+    }
   };
 
   return (
@@ -74,6 +111,27 @@ export default function ScheduledNotificationsDebugOverlay() {
               ))
             )}
           </ScrollView>
+
+          <View style={styles.divider} />
+          <Text style={styles.title}>Replay Opening Sequence</Text>
+          <Text style={styles.subtitle}>
+            Resets the first-time sign-in hero and onboarding completion for this account, then signs
+            out — for recording the app's opening sequence without deleting and recreating the account.
+          </Text>
+          <TouchableOpacity
+            style={[styles.refreshButton, styles.replayButton]}
+            onPress={() => Alert.alert(
+              'Replay opening sequence?',
+              'Signs out and resets onboarding for this account.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Replay', style: 'destructive', onPress: replayOpeningSequence },
+              ]
+            )}
+            disabled={replaying}
+          >
+            <Text style={styles.refreshText}>{replaying ? 'Resetting…' : 'Replay Opening Sequence'}</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </>
@@ -137,6 +195,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
+  },
+  replayButton: {
+    backgroundColor: '#FEE2E2',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 16,
   },
   list: {
     flex: 1,
