@@ -11,6 +11,7 @@
  */
 
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
 import { NOTIFICATION_CATEGORIES } from '../constants/notificationTypes';
 import { getOrCreateDeviceId } from './deviceIdentity';
@@ -1005,6 +1006,104 @@ export function __resetPendingOwnershipForTesting() {
   pendingOwnershipChanges.clear();
 }
 
+// ============================================================================
+// NOTIFICATION PREFERENCE PERSISTENCE (survives app termination)
+//
+// Unlike pendingOwnershipChanges above (an in-memory Map, safe to lose on
+// app kill because the next normal sync re-derives and re-claims ownership
+// from scratch regardless), a preference save has no equivalent self-heal:
+// the next sync on relaunch does a GET, not a re-push of local state, so a
+// save that failed and was then forgotten would silently make the user's
+// last toggle disappear on restart, overwritten by the stale server value.
+// This is persisted to AsyncStorage specifically so it survives that case.
+// ============================================================================
+
+const PENDING_PREFERENCES_KEY = 'mft_pending_notification_preferences';
+
+// In-memory cache mirrors AsyncStorage so repeated reads within one process
+// lifetime don't round-trip to disk; undefined means "not loaded yet",
+// distinct from null ("loaded, nothing pending").
+let cachedPendingPreferences;
+
+async function loadPendingPreferences() {
+  if (cachedPendingPreferences !== undefined) return cachedPendingPreferences;
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_PREFERENCES_KEY);
+    cachedPendingPreferences = raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to read pending preferences:', error?.message || error);
+    cachedPendingPreferences = null;
+  }
+  return cachedPendingPreferences;
+}
+
+async function setPendingPreferences(prefs) {
+  cachedPendingPreferences = prefs;
+  try {
+    if (prefs === null) {
+      await AsyncStorage.removeItem(PENDING_PREFERENCES_KEY);
+    } else {
+      await AsyncStorage.setItem(PENDING_PREFERENCES_KEY, JSON.stringify(prefs));
+    }
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to persist pending preferences:', error?.message || error);
+  }
+}
+
+/**
+ * Saves notification preferences to the backend. On failure, persists the
+ * attempted value so retryPendingPreferenceSave (called on reconnect,
+ * foreground, and app launch — see NotificationProvider.jsx) can complete
+ * it later, even across an app restart in between.
+ */
+export async function savePreferencesToBackend(prefs) {
+  try {
+    await apiClient.post('/profile/notifications', { notifications: prefs });
+    await setPendingPreferences(null);
+    return true;
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to save preferences to backend, will retry:', error?.message || error);
+    await setPendingPreferences(prefs);
+    return false;
+  }
+}
+
+export async function retryPendingPreferenceSave() {
+  const pending = await loadPendingPreferences();
+  if (!pending) return false;
+  return savePreferencesToBackend(pending);
+}
+
+/**
+ * Returns the pending (not-yet-saved) preferences if one exists, else null.
+ * Used on app launch to decide whether to trust a fresh GET from the
+ * backend or a not-yet-synced local choice from before the last kill.
+ */
+export async function getPendingPreferences() {
+  return loadPendingPreferences();
+}
+
+/**
+ * Discards any pending preference save without attempting to send it —
+ * called on sign-out, after one last save attempt already ran. Required
+ * because this storage key is not scoped per-account: without clearing it,
+ * a different account signing into the same device would inherit the
+ * previous account's unsent preference change on its own next sync.
+ */
+export async function clearPendingPreferencesForSignOut() {
+  cachedPendingPreferences = null;
+  try {
+    await AsyncStorage.removeItem(PENDING_PREFERENCES_KEY);
+  } catch (error) {
+    console.warn('[PushNotifications] Failed to clear pending preferences on sign-out:', error?.message || error);
+  }
+}
+
+// Testing-only escape hatch.
+export function __resetPendingPreferencesForTesting() {
+  cachedPendingPreferences = undefined;
+}
+
 /**
  * Sync all notification schedules based on user preferences
  * Call this when preferences change or on app launch
@@ -1119,6 +1218,13 @@ export async function getScheduledNotifications() {
       body: n.content.body,
       category: n.content.data?.category,
       screen: n.content.data?.screen,
+      // dateKey/hour are only present on rolling-window entries (currently
+      // just streak_at_risk) — undefined here for the permanent repeating
+      // categories (hydration/meal/mood/activity), which is itself
+      // diagnostic: it's how you tell the two scheduling models apart when
+      // inspecting this list during device testing.
+      dateKey: n.content.data?.dateKey,
+      hour: n.content.data?.hour,
       trigger: n.trigger,
     }));
   } catch (error) {

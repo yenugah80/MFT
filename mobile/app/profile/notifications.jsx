@@ -316,6 +316,23 @@ export default function NotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  // Dev-only diagnostic: the underlying getScheduledNotifications() function
+  // already existed (notify.push.getScheduled) but had no UI caller anywhere
+  // — inspecting it required attaching a JS debugger. This surfaces it
+  // directly for device acceptance testing; __DEV__ keeps it out of
+  // production builds entirely.
+  const [debugScheduled, setDebugScheduled] = useState(null);
+  const [isLoadingDebug, setIsLoadingDebug] = useState(false);
+
+  const handleViewScheduled = useCallback(async () => {
+    setIsLoadingDebug(true);
+    try {
+      const scheduled = await notify.push.getScheduled();
+      setDebugScheduled(scheduled);
+    } finally {
+      setIsLoadingDebug(false);
+    }
+  }, [notify]);
 
   // Load permission status on mount (no duplicate API fetch for preferences)
   useEffect(() => {
@@ -466,6 +483,40 @@ export default function NotificationsScreen() {
             ))}
           </View>
         </View>
+
+        {/* Debug: scheduled-notification inspector (dev builds only) */}
+        {__DEV__ && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Debug: Scheduled Notifications</Text>
+            <Text style={styles.sectionSubtitle}>
+              Lists every notification currently registered with the OS on this device — for verifying
+              ownership and occurrence-level cancellation during testing. Not shown in production builds.
+            </Text>
+            <TouchableOpacity style={styles.debugButton} onPress={handleViewScheduled} disabled={isLoadingDebug}>
+              {isLoadingDebug ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <Text style={styles.debugButtonText}>Refresh scheduled list</Text>
+              )}
+            </TouchableOpacity>
+            {debugScheduled !== null && (
+              debugScheduled.length === 0 ? (
+                <Text style={styles.debugEmptyText}>No notifications currently scheduled.</Text>
+              ) : (
+                <View style={styles.debugList}>
+                  {debugScheduled.map((n) => (
+                    <View key={n.id} style={styles.debugRow}>
+                      <Text style={styles.debugRowTitle}>{n.category || '(no category)'}{n.dateKey ? ` — ${n.dateKey}` : ' — permanent repeating'}</Text>
+                      <Text style={styles.debugRowDetail}>id: {n.id}</Text>
+                      <Text style={styles.debugRowDetail}>screen: {n.screen || '—'}{n.hour !== undefined ? `  hour: ${n.hour}` : ''}</Text>
+                      <Text style={styles.debugRowDetail}>trigger: {JSON.stringify(n.trigger)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )
+            )}
+          </View>
+        )}
 
         {/* Info Footer */}
         <View style={styles.infoSection}>
@@ -667,5 +718,46 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
     lineHeight: 20,
+  },
+  debugButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[4],
+    borderRadius: RADIUS.full,
+    backgroundColor: SURFACES.card.primary,
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+  },
+  debugButtonText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: BRAND.primary,
+  },
+  debugEmptyText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+  },
+  debugList: {
+    gap: SPACING[2],
+  },
+  debugRow: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.md,
+    padding: SPACING[3],
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+    gap: 2,
+  },
+  debugRowTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  debugRowDetail: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    fontFamily: 'monospace',
   },
 });

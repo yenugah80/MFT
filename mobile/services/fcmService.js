@@ -11,7 +11,12 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import apiClient from './apiClient';
 import { getOrCreateDeviceId } from './deviceIdentity';
-import { unregisterPushToken, cancelAllScheduledNotifications } from './pushNotifications';
+import {
+  unregisterPushToken,
+  cancelAllScheduledNotifications,
+  retryPendingPreferenceSave,
+  clearPendingPreferencesForSignOut,
+} from './pushNotifications';
 
 let messaging = null;
 let firebaseApp = null;
@@ -321,11 +326,28 @@ export async function unregisterFCMToken() {
  *    and self-healing rather than something this function can fully
  *    guarantee. Never throws either way: a failed deregistration must not
  *    block sign-out.
+ * 3. One last attempt at any still-pending preference save (see
+ *    pushNotifications.js's retryPendingPreferenceSave), then discard it
+ *    regardless of whether that attempt succeeded. It cannot be retried
+ *    after this point the way ownership/token registration can, because
+ *    retrying would need to authenticate as the account that just signed
+ *    out — and it must not be left sitting in storage either, since that
+ *    storage key isn't scoped per-account: a different person signing into
+ *    this same physical device would otherwise inherit this account's
+ *    unsent preference change on their own next sync. A genuinely offline
+ *    sign-out with a pending save queued means that specific toggle is
+ *    lost — recoverable by re-toggling after signing back in, which is a
+ *    minor inconvenience next to the alternative of leaking one account's
+ *    preference into another's.
  */
 export async function deregisterAllPushChannels() {
   await cancelAllScheduledNotifications().catch(() => {});
 
   const results = await Promise.allSettled([unregisterFCMToken(), unregisterPushToken()]);
+
+  await retryPendingPreferenceSave().catch(() => {});
+  await clearPendingPreferencesForSignOut().catch(() => {});
+
   return results.every((r) => r.status === 'fulfilled' && r.value === true);
 }
 

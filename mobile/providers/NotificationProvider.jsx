@@ -42,6 +42,10 @@ import {
   retryPendingTokenRegistration,
   retryPendingOwnership,
   applyRemoteDeliveryDedup,
+  savePreferencesToBackend,
+  retryPendingPreferenceSave,
+  getPendingPreferences,
+  clearPendingPreferencesForSignOut,
 } from '../services/pushNotifications';
 import { isUsableConnection } from '../utils/syncRetryPolicy';
 import {
@@ -304,20 +308,35 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [isSignedIn, addToast, navigateFromNotification]);
 
-  // Sync notification schedules with user preferences
+  // Sync notification schedules with user preferences. Checks for a
+  // preference change that never made it to the backend (e.g. the app was
+  // killed right after a toggle, before the save/retry completed) BEFORE
+  // trusting a fresh GET — otherwise this would silently overwrite the
+  // user's last choice with the stale server value on every relaunch.
   const syncNotificationSchedules = useCallback(async () => {
     try {
-      // Fetch current preferences from backend
-      const data = await apiClient.get('/profile/notifications');
-      const prefs = {
-        dailyReminder: data?.dailyReminder !== false,
-        hydrationNudges: data?.hydrationNudges !== false,
-        activityReminders: data?.activityReminders !== false,
-        moodCheckins: data?.moodCheckins !== false,
-        streakProtection: data?.streakProtection !== false,
-        insightDrops: data?.insightDrops !== false,
-        streakCelebrations: data?.streakCelebrations !== false,
-      };
+      const pending = await getPendingPreferences();
+      let prefs;
+
+      if (pending) {
+        prefs = pending;
+        // Now that the app is running again (and, if this ran from the
+        // network-reconnect/foreground paths, connectivity is back), try
+        // to finish the save this same pass rather than waiting for a
+        // separate retry trigger.
+        retryPendingPreferenceSave().catch(() => {});
+      } else {
+        const data = await apiClient.get('/profile/notifications');
+        prefs = {
+          dailyReminder: data?.dailyReminder !== false,
+          hydrationNudges: data?.hydrationNudges !== false,
+          activityReminders: data?.activityReminders !== false,
+          moodCheckins: data?.moodCheckins !== false,
+          streakProtection: data?.streakProtection !== false,
+          insightDrops: data?.insightDrops !== false,
+          streakCelebrations: data?.streakCelebrations !== false,
+        };
+      }
 
       setPreferences(prefs);
 
@@ -470,29 +489,6 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [addToast]);
 
-  // Holds the most recent preferences object that failed to save to the
-  // backend, for retryPendingPreferenceSave to flush once connectivity
-  // returns (wired into the existing reconnect/foreground handlers below,
-  // alongside retryPendingTokenRegistration/retryPendingOwnership).
-  const pendingPreferencesRef = useRef(null);
-
-  const savePreferencesToBackend = useCallback(async (prefs) => {
-    try {
-      await apiClient.post('/profile/notifications', { notifications: prefs });
-      pendingPreferencesRef.current = null;
-      return true;
-    } catch (error) {
-      console.warn('[NotificationProvider] Failed to save preferences to backend, will retry on reconnect:', error?.message || error);
-      pendingPreferencesRef.current = prefs;
-      return false;
-    }
-  }, []);
-
-  const retryPendingPreferenceSave = useCallback(async () => {
-    if (!pendingPreferencesRef.current) return false;
-    return savePreferencesToBackend(pendingPreferencesRef.current);
-  }, [savePreferencesToBackend]);
-
   /**
    * Update preferences: apply locally and (re)schedule immediately — this
    * works fully offline and is never rolled back — then save to the
@@ -520,7 +516,7 @@ export const NotificationProvider = ({ children }) => {
     const savedToBackend = await savePreferencesToBackend(newPrefs);
 
     return { ...scheduleResult, savedToBackend };
-  }, [savePreferencesToBackend]);
+  }, []);
 
   // Check permission status
   const checkPermissionStatus = useCallback(async () => {

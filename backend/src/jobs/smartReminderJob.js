@@ -586,6 +586,11 @@ async function processUserReminders(user, runMetrics) {
       if (candidates.length === 0) {
         // Every candidate reminder for this device this cycle falls under a
         // category it owns locally — correct suppression, not a failure.
+        // Logged (not just commented) so this decision is actually
+        // observable during device acceptance testing, not just inferred.
+        if (ownedCategories.size > 0) {
+          console.log(`[SmartReminderJob] Suppressed for user ${userId} (device ${device.id ?? 'legacy'}) — locally owned: ${[...ownedCategories].join(', ')}`);
+        }
         continue;
       }
 
@@ -595,6 +600,7 @@ async function processUserReminders(user, runMetrics) {
       // Check if this reminder type is enabled for user (account-level pref)
       const reminderCategory = getCategoryForType(topReminder.type);
       if (notifications?.[reminderCategory] === false) {
+        console.log(`[SmartReminderJob] Suppressed ${topReminder.type} for user ${userId} (device ${device.id ?? 'legacy'}) — ${reminderCategory} disabled`);
         continue;
       }
 
