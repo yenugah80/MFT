@@ -52,9 +52,9 @@ export const accountSettingsTable = pgTable(
       .notNull()
       .unique()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    privacy: json("privacy").default({}),
-    notifications: json("notifications").default({}),
-    preferences: json("preferences").default({}),
+    privacy: jsonb("privacy").default({}),
+    notifications: jsonb("notifications").default({}),
+    preferences: jsonb("preferences").default({}),
     // Push notification token from Expo
     expoPushToken: text("expo_push_token"),
     pushTokenUpdatedAt: timestamp("push_token_updated_at"),

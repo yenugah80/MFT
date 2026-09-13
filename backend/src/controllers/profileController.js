@@ -757,10 +757,16 @@ export async function savePrivacySettings(req, res) {
       const rows = await tx
         .update(accountSettingsTable)
         .set({
+          // The column is genuinely jsonb (confirmed against the live schema
+          // after this exact mismatch broke every save with "COALESCE could
+          // not convert type json to jsonb" — json/jsonb only have an
+          // assignment cast between them, not an implicit one, so COALESCE's
+          // type unification rejects mixing them even though a plain
+          // assignment would have silently coerced). Keep this all jsonb.
           privacy: sql`(
-            COALESCE(${accountSettingsTable.privacy}, '{}'::json)::jsonb
+            COALESCE(${accountSettingsTable.privacy}, '{}'::jsonb)
             || ${JSON.stringify(storedPatch)}::jsonb
-          )::json`,
+          )`,
           updatedAt: changedAt,
         })
         .where(eq(accountSettingsTable.userId, userId))
