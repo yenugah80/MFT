@@ -669,15 +669,17 @@ export default function MealLoggedCard({
                   icon="nutrition"
                   delay={50}
                 />
-                <MacroTile
-                  label="Fat"
-                  value={meal.fats}
-                  unit="g"
-                  color={MODERN_MACROS.fat.base}
-                  goal={dailyGoals?.fatG}
-                  icon="flame"
-                  delay={100}
-                />
+                {meal.fats !== null && meal.fats !== undefined && (
+                  <MacroTile
+                    label="Fat"
+                    value={meal.fats}
+                    unit="g"
+                    color={MODERN_MACROS.fat.base}
+                    goal={dailyGoals?.fatG}
+                    icon="flame"
+                    delay={100}
+                  />
+                )}
                 {meal.fiber !== null && meal.fiber !== undefined && (
                   <MacroTile
                     label="Fiber"
@@ -708,14 +710,16 @@ export default function MealLoggedCard({
                   goal={dailyGoals?.carbsG}
                   icon="nutrition"
                 />
-                <StaticMacroTile
-                  label="Fat"
-                  value={meal.fats}
-                  unit="g"
-                  color={MODERN_MACROS.fat.base}
-                  goal={dailyGoals?.fatG}
-                  icon="flame"
-                />
+                {meal.fats !== null && meal.fats !== undefined && (
+                  <StaticMacroTile
+                    label="Fat"
+                    value={meal.fats}
+                    unit="g"
+                    color={MODERN_MACROS.fat.base}
+                    goal={dailyGoals?.fatG}
+                    icon="flame"
+                  />
+                )}
                 {meal.fiber !== null && meal.fiber !== undefined && (
                   <StaticMacroTile
                     label="Fiber"

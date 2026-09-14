@@ -738,6 +738,13 @@ export default function LogScreen() {
       let totalFiber = 0;
       let totalSugar = 0;
       let totalSodium = 0;
+      // Same "missing vs. zero" distinction as macroFieldResolver's
+      // aggregateNormalizedMacroTotals, tracked separately here since this
+      // is a plain accumulator, not that function — a meal where no item
+      // ever reports fat (real case: an AI estimate that never mentioned
+      // it) must save/display as unknown, not a fabricated 0.0g that looks
+      // identical to a genuinely fat-free meal.
+      const totalReported = { calories: false, protein: false, carbs: false, fat: false, fiber: false, sugar: false, sodium: false };
       // Summed across items so the post-log MealLoggedCard's fiber/sugar
       // tile and micronutrient section are not empty for multi-item meals.
       // each item.micros is per-item, MealLoggedCard needs the meal total.
@@ -797,13 +804,13 @@ export default function LogScreen() {
           confidence: item.sourceEvidence?.[0]?.confidence || 0.5,
         };
 
-        totalCalories += foodLogData.calories || 0;
-        totalProtein += foodLogData.protein || 0;
-        totalCarbs += foodLogData.carbs || 0;
-        totalFat += foodLogData.fats || 0;
-        totalFiber += foodLogData.fiber || 0;
-        totalSugar += foodLogData.sugar || 0;
-        totalSodium += foodLogData.sodium || 0;
+        if (foodLogData.calories !== null) { totalCalories += foodLogData.calories; totalReported.calories = true; }
+        if (foodLogData.protein !== null) { totalProtein += foodLogData.protein; totalReported.protein = true; }
+        if (foodLogData.carbs !== null) { totalCarbs += foodLogData.carbs; totalReported.carbs = true; }
+        if (foodLogData.fats !== null) { totalFat += foodLogData.fats; totalReported.fat = true; }
+        if (foodLogData.fiber !== null) { totalFiber += foodLogData.fiber; totalReported.fiber = true; }
+        if (foodLogData.sugar !== null) { totalSugar += foodLogData.sugar; totalReported.sugar = true; }
+        if (foodLogData.sodium !== null) { totalSodium += foodLogData.sodium; totalReported.sodium = true; }
 
         return foodLog.addLog(foodLogData);
       });
@@ -817,14 +824,14 @@ export default function LogScreen() {
       foodAnalysis.setAnalysisResult(null);
 
       setLoggedMeal({
-        foodName: `Meal (${itemCount} items)`,
-        calories: totalCalories,
-        protein: totalProtein,
-        carbs: totalCarbs,
-        fats: totalFat,
-        fiber: totalFiber,
-        sugar: totalSugar,
-        sodium: totalSodium,
+        foodName: `Meal (${itemCount} item${itemCount === 1 ? '' : 's'})`,
+        calories: totalReported.calories ? totalCalories : null,
+        protein: totalReported.protein ? totalProtein : null,
+        carbs: totalReported.carbs ? totalCarbs : null,
+        fats: totalReported.fat ? totalFat : null,
+        fiber: totalReported.fiber ? totalFiber : null,
+        sugar: totalReported.sugar ? totalSugar : null,
+        sodium: totalReported.sodium ? totalSodium : null,
         micros: aggregatedMicros,
         // Top-level fields from enrichWithHealthMetrics, from the same source
         // _doSaveLog now reads for the single-item flow (see above).

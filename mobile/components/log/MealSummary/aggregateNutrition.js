@@ -245,8 +245,8 @@ export function aggregateNutrition(analysisResult, exclusions = {}) {
     micros: finalMicros,
     ingredients: flattenedIngredients,
     isComplex: true,
-    name: `Meal (${activeEntries.length} items)`,
-    portion: { servingText: `${activeEntries.length} items` },
+    name: `Meal (${activeEntries.length} item${activeEntries.length === 1 ? '' : 's'})`,
+    portion: { servingText: `${activeEntries.length} item${activeEntries.length === 1 ? '' : 's'}` },
     confidence: avgConfidence,
   };
 }
