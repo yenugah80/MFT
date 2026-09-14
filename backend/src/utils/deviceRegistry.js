@@ -10,7 +10,7 @@
  * rows in `devices`) or all-per-device (>=1 row) — see resolveSendTargets.
  */
 import { randomUUID } from 'node:crypto';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, ne } from 'drizzle-orm';
 import { devicesTable, notificationOwnershipTable } from '../db/schema.js';
 
 const DEREGISTER_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -49,6 +49,30 @@ export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushT
       set: updateData,
     })
     .returning();
+
+  // deviceId is a client-persisted UUID that survives an ordinary sign-out
+  // (only account deletion clears it — see accountDeletion.js), so the same
+  // physical device signing into a different account reuses the same
+  // deviceId. The (userId, deviceId) composite key means that's a distinct
+  // row, not an overwrite — if the PREVIOUS account's deregisterDevice call
+  // never ran (predates this feature, or failed silently), its row and
+  // token stay live indefinitely, sending that account's own reminders to
+  // a device it no longer owns. Same backstop as savePushToken/
+  // saveFCMToken: clear the matching token from any other row for this
+  // exact deviceId, regardless of whether that account ever formally
+  // deregisters.
+  if (fcmToken) {
+    await db
+      .update(devicesTable)
+      .set({ fcmToken: null, fcmTokenUpdatedAt: now, updatedAt: now })
+      .where(and(eq(devicesTable.deviceId, deviceId), eq(devicesTable.fcmToken, fcmToken), ne(devicesTable.userId, userId)));
+  }
+  if (expoPushToken) {
+    await db
+      .update(devicesTable)
+      .set({ expoPushToken: null, expoPushTokenUpdatedAt: now, updatedAt: now })
+      .where(and(eq(devicesTable.deviceId, deviceId), eq(devicesTable.expoPushToken, expoPushToken), ne(devicesTable.userId, userId)));
+  }
 
   return row;
 }

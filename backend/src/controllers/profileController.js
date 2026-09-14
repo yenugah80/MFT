@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, ne, or, sql } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 import {
   profilesTable,
@@ -105,6 +105,27 @@ export async function savePushToken(req, res) {
         },
       })
       .returning({ expoPushToken: accountSettingsTable.expoPushToken });
+
+    // A push token identifies one physical app installation. If it was
+    // previously registered to a DIFFERENT account — e.g. that account's
+    // own sign-out deregistration never ran (predates when that client-side
+    // fix shipped, or failed silently — deregisterAllPushChannels swallows
+    // errors so the app can still sign out) — that stale row would keep
+    // independently sending its own reminders to this same device forever,
+    // with no visible link between the two accounts. Live incident: a
+    // 10-month-old account and an app-review account both still held this
+    // exact token and both kept sending hydration reminders to one phone.
+    // Clearing it here doesn't depend on that other client ever coming
+    // back online to clean up after itself.
+    const staleOwners = await req.db
+      .update(accountSettingsTable)
+      .set({ expoPushToken: null, pushTokenUpdatedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(accountSettingsTable.expoPushToken, expoPushToken), ne(accountSettingsTable.userId, userId)))
+      .returning({ userId: accountSettingsTable.userId });
+
+    if (staleOwners.length > 0) {
+      console.log(`[savePushToken] Cleared stale token from ${staleOwners.length} other account(s): ${staleOwners.map((r) => r.userId).join(', ')}`);
+    }
 
     console.log(`[savePushToken] Saved push token for user ${userId}`);
     res.status(200).json({
@@ -435,6 +456,18 @@ export async function saveFCMToken(req, res) {
         },
       })
       .returning({ fcmToken: accountSettingsTable.fcmToken });
+
+    // Same stale-token backstop as savePushToken — see that function's
+    // comment for the live incident this addresses.
+    const staleOwners = await req.db
+      .update(accountSettingsTable)
+      .set({ fcmToken: null, fcmTokenUpdatedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(accountSettingsTable.fcmToken, fcmToken), ne(accountSettingsTable.userId, userId)))
+      .returning({ userId: accountSettingsTable.userId });
+
+    if (staleOwners.length > 0) {
+      console.log(`[saveFCMToken] Cleared stale token from ${staleOwners.length} other account(s): ${staleOwners.map((r) => r.userId).join(', ')}`);
+    }
 
     console.log(`[saveFCMToken] Saved FCM token for user ${userId} (${platform || 'unknown platform'})`);
     res.status(200).json({
