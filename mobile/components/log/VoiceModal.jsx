@@ -34,6 +34,8 @@ import {
   Linking,
   ActivityIndicator,
   ScrollView,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -269,11 +271,22 @@ export function VoiceModal({
   // send it straight to the backend without leaving the modal.
   const [reviewResult, setReviewResult] = useState(null);
   const [isSavingResult, setIsSavingResult] = useState(false);
+  // Which step produced the current 'error' state: 'analysis' means the
+  // transcript was already reviewed/edited and only the analyze call failed,
+  // so retry must re-run analysis on that same text — not the recording-
+  // failure default (retry = start a new recording), which would silently
+  // throw away corrections the user just typed.
+  const [errorContext, setErrorContext] = useState(null);
 
   // Refs for cleanup and guards
   const successTimeoutRef = useRef(null);
   const isCancelledRef = useRef(false);
   const stopCalledRef = useRef(false);
+  // Guards handleConfirm's analyzeTranscript response against a stale result
+  // landing after a newer attempt has already started (defense in depth —
+  // the button is also disabled mid-flight, but this holds even if that
+  // guard is ever bypassed).
+  const analysisRequestIdRef = useRef(0);
   // A ref, not state — a second tap can land before React re-renders the
   // button out of the idle view, and useInstantVoice's own hook-level guard
   // only closes half the gap (it protects Voice.start() itself, but
@@ -324,6 +337,7 @@ export function VoiceModal({
 
     clearError();
     setLocalError(null);
+    setErrorContext(null);
     setState('idle');
     setTranscription('');
     setOriginalTranscription('');
@@ -711,9 +725,17 @@ export function VoiceModal({
       trackVoiceTranscriptionEdited(originalTranscription, transcription);
     }
 
+    const requestId = ++analysisRequestIdRef.current;
+    const isStale = () => analysisRequestIdRef.current !== requestId;
+    // Confirm can be tapped while the on-screen keyboard is still up — commit
+    // it first so the review/error screens that follow have the full sheet
+    // to themselves instead of half-covering under the keyboard.
+    Keyboard.dismiss();
+
     try {
       setIsSubmitting(true);
       setLocalError(null);
+      setErrorContext(null);
       setState('analyzing');
       await triggerHaptic();
       announceForAccessibility('Analyzing nutrition. Please wait.');
@@ -723,7 +745,7 @@ export function VoiceModal({
 
       const nutritionResult = await analyzeTranscript(transcription);
 
-      if (isCancelledRef.current) {
+      if (isCancelledRef.current || isStale()) {
         return;
       }
 
@@ -747,6 +769,7 @@ export function VoiceModal({
 
         // Use error from hook if available, otherwise generic message
         setLocalError(error || 'Failed to analyze nutrition. Please try again.');
+        setErrorContext('analysis');
         setState('error');
         await triggerHaptic('error');
         setIsSubmitting(false);
@@ -773,6 +796,10 @@ export function VoiceModal({
             ? 'Local matching couldn’t find that. Enable AI analysis in Privacy & Data for better accuracy.'
             : "Couldn't identify any food in that. Try recording again with more detail."
         );
+        // Not tagged 'analysis' — a zero-item result means re-analyzing this
+        // exact text won't help either way. Retry should re-record (the
+        // errorContext default), matching what the message above tells the
+        // user to do.
         setState('error');
         await triggerHaptic('error');
         announceForAccessibility(
@@ -801,9 +828,10 @@ export function VoiceModal({
       // Track analysis failed
       trackVoiceAnalysisFailed('exception', err.message);
 
-      if (!isCancelledRef.current) {
+      if (!isCancelledRef.current && !isStale()) {
         const errorMsg = err.message || 'Failed to analyze nutrition';
         setLocalError(errorMsg);
+        setErrorContext('analysis');
         setState('error');
         announceForAccessibility(`Error: ${errorMsg}. Tap Try Again to retry.`);
       }
@@ -875,6 +903,7 @@ export function VoiceModal({
     setOriginalTranscription('');
     setConfidence(null);
     setIsEditing(false);
+    setErrorContext(null);
     stopCalledRef.current = false;
 
     // Restart recording
@@ -1002,7 +1031,10 @@ export function VoiceModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={modalStyle}>
           {/* ─────────────────────────────────────────── */}
           {/* IDLE STATE */}
@@ -1174,67 +1206,102 @@ export function VoiceModal({
                 </TouchableOpacity>
               </View>
 
-              <View style={contentStyle}>
-                <Text style={styles.statusText}>Transcription</Text>
+              {/* flex:1, not the shared centered `contentStyle` — this state needs
+                  a scrollable body plus a footer that stays pinned above the
+                  keyboard, rather than content vertically centered in a fixed
+                  minHeight box. */}
+              <View style={styles.transcribedContent}>
+                <ScrollView
+                  style={styles.transcribedScroll}
+                  contentContainerStyle={styles.transcribedScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.statusText}>Transcription</Text>
 
-                {/* Audio Playback Controls */}
-                {audioPlayback.audioUri && (
-                  <View style={styles.playbackContainer}>
-                    <TouchableOpacity
-                      style={styles.playbackButton}
-                      onPress={handlePlaybackToggle}
-                    >
-                      <Ionicons
-                        name={audioPlayback.isPlaying ? 'pause' : 'play'}
-                        size={ICON_SIZES.lg}
-                        color={BRAND.primary}
-                      />
-                    </TouchableOpacity>
+                  {/* Audio Playback Controls */}
+                  {audioPlayback.audioUri && (
+                    <View style={styles.playbackContainer}>
+                      <TouchableOpacity
+                        style={styles.playbackButton}
+                        onPress={handlePlaybackToggle}
+                      >
+                        <Ionicons
+                          name={audioPlayback.isPlaying ? 'pause' : 'play'}
+                          size={ICON_SIZES.lg}
+                          color={BRAND.primary}
+                        />
+                      </TouchableOpacity>
 
-                    <View style={styles.progressBarContainer}>
-                      <View
-                        style={[
-                          styles.progressBar,
-                          { width: `${audioPlayback.progressPercent}%` }
-                        ]}
-                      />
+                      <View style={styles.progressBarContainer}>
+                        <View
+                          style={[
+                            styles.progressBar,
+                            { width: `${audioPlayback.progressPercent}%` }
+                          ]}
+                        />
+                      </View>
+
+                      <Text style={styles.playbackTime}>
+                        {formatDuration(audioPlayback.playbackProgress * 1000)} / {formatDuration(audioPlayback.duration * 1000)}
+                      </Text>
                     </View>
+                  )}
 
-                    <Text style={styles.playbackTime}>
-                      {formatDuration(audioPlayback.playbackProgress * 1000)} / {formatDuration(audioPlayback.duration * 1000)}
-                    </Text>
-                  </View>
-                )}
+                  {confidence !== null && (
+                    <View style={styles.confidenceContainer}>
+                      <Ionicons
+                        name={confidence >= 0.8 ? 'checkmark-circle' : confidence >= 0.6 ? 'alert-circle' : 'warning'}
+                        size={ICON_SIZES.sm}
+                        color={getConfidenceColor(confidence)}
+                      />
+                      <Text style={[styles.confidenceText, { color: getConfidenceColor(confidence) }]}>
+                        {getConfidenceLabel(confidence)} ({Math.round(confidence * 100)}%)
+                      </Text>
+                    </View>
+                  )}
 
-                {confidence !== null && (
-                  <View style={styles.confidenceContainer}>
-                    <Ionicons
-                      name={confidence >= 0.8 ? 'checkmark-circle' : confidence >= 0.6 ? 'alert-circle' : 'warning'}
-                      size={ICON_SIZES.sm}
-                      color={getConfidenceColor(confidence)}
-                    />
-                    <Text style={[styles.confidenceText, { color: getConfidenceColor(confidence) }]}>
-                      {getConfidenceLabel(confidence)} ({Math.round(confidence * 100)}%)
-                    </Text>
-                  </View>
-                )}
+                  {isEditing ? (
+                    <>
+                      <View style={styles.editingToolbar}>
+                        <Text style={styles.editingToolbarLabel}>Editing</Text>
+                        {/* The only way to get the keyboard out of the way without
+                            leaving edit mode or discarding what's been typed —
+                            tapping outside the input would normally do this, but
+                            the input fills most of the sheet, leaving nowhere
+                            obvious to tap. */}
+                        <TouchableOpacity
+                          onPress={() => Keyboard.dismiss()}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Dismiss keyboard"
+                        >
+                          <Text style={styles.dismissKeyboardText}>Done</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <TextInput
+                        style={styles.transcriptionInput}
+                        value={transcription}
+                        onChangeText={setTranscription}
+                        multiline
+                        autoFocus
+                        placeholder="Refine transcription (optional)"
+                      />
+                    </>
+                  ) : (
+                    <View style={styles.transcriptionContainer}>
+                      <Text style={styles.transcriptionText}>{transcription}</Text>
+                    </View>
+                  )}
+                </ScrollView>
 
-                {isEditing ? (
-                  <TextInput
-                    style={styles.transcriptionInput}
-                    value={transcription}
-                    onChangeText={setTranscription}
-                    multiline
-                    autoFocus
-                    placeholder="Refine transcription (optional)"
-                  />
-                ) : (
-                  <View style={styles.transcriptionContainer}>
-                    <Text style={styles.transcriptionText}>{transcription}</Text>
-                  </View>
-                )}
-
-                <View style={styles.transcriptionActions}>
+                {/* Outside the ScrollView, inside the KeyboardAvoidingView — this
+                    row stays pinned just above the keyboard instead of scrolling
+                    out of reach with the rest of the content. Confirm is always
+                    rendered here (not gated behind isEditing/Save like before) so
+                    there's no forced extra tap, and no state where the only
+                    reachable control is hidden under the keyboard. */}
+                <View style={styles.transcribedActions}>
                   {isEditing ? (
                     <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveEdit}>
                       <Ionicons name="checkmark" size={ICON_SIZES.md} color={BRAND.primary} />
@@ -1261,20 +1328,36 @@ export function VoiceModal({
                         <Ionicons name="create-outline" size={ICON_SIZES.md} color={BRAND.primary} />
                         <Text style={styles.secondaryButtonText}>Edit</Text>
                       </TouchableOpacity>
-
-                      <TouchableOpacity style={styles.primaryButton} onPress={handleConfirm}>
-                        <LinearGradient
-                          colors={SURFACES.gradient.primary}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.primaryButtonGradient}
-                        >
-                          <Ionicons name="checkmark-circle" size={ICON_SIZES.md} color={TEXT.white} />
-                          <Text style={styles.primaryButtonText} numberOfLines={1}>Confirm</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
                     </>
                   )}
+
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={handleConfirm}
+                    disabled={isSubmitting || !transcription.trim()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm and analyze"
+                    accessibilityState={{ disabled: isSubmitting || !transcription.trim() }}
+                  >
+                    <LinearGradient
+                      colors={SURFACES.gradient.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[
+                        styles.primaryButtonGradient,
+                        (isSubmitting || !transcription.trim()) && styles.primaryButtonGradientDisabled,
+                      ]}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color={TEXT.white} />
+                      ) : (
+                        <Ionicons name="checkmark-circle" size={ICON_SIZES.md} color={TEXT.white} />
+                      )}
+                      <Text style={styles.primaryButtonText} numberOfLines={1}>
+                        {isSubmitting ? 'Analyzing…' : 'Confirm'}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
                 </View>
               </View>
             </>
@@ -1457,13 +1540,16 @@ export function VoiceModal({
                   Turn on voice logging
                 </Text>
 
-                {/* One line, not a disclosure notice. Explaining that the device
-                    lacks a recogniser and naming the processor made a routine
-                    feature toggle read like a warning — users decline things
-                    that sound like a warning. Detail lives behind "Learn more",
-                    which is where informed consent needs it, not on the button. */}
+                {/* Kept short deliberately — naming the processor/device
+                    limitation in full made this read like a warning and hurt
+                    adoption. But it must still say plainly that this is the
+                    SAME global setting as Privacy & Security's AI Food
+                    Analysis toggle: tapping it here silently re-enabling a
+                    setting the user turned off elsewhere is a real, reported
+                    point of confusion, not a hypothetical one. */}
                 <Text style={isElderly ? styles.errorMessageElderly : styles.consentNote}>
                   Uses AI to turn speech into text. Your recordings are never used for training.
+                  This is the same "AI Food Analysis" setting in Profile → Privacy & Security.
                 </Text>
 
                 <TouchableOpacity
@@ -1555,9 +1641,14 @@ export function VoiceModal({
 
                 <TouchableOpacity
                   style={isElderly ? styles.retryButtonElderly : styles.retryButton}
+                  disabled={isSubmitting}
                   onPress={
                     isUnrecoverable ? handleClose
                     : isMicPermissionError ? () => Linking.openSettings()
+                    // The transcript survived this failure (it's still sitting in
+                    // `transcription`, untouched) — re-run analysis on it instead of
+                    // handleStart, which would silently discard whatever the user typed.
+                    : errorContext === 'analysis' ? handleConfirm
                     : handleStart
                   }
                 >
@@ -1579,13 +1670,17 @@ export function VoiceModal({
                       end={{ x: 1, y: 1 }}
                       style={styles.retryButtonGradient}
                     >
-                      <Ionicons
-                        name={isUnrecoverable ? 'create-outline' : isMicPermissionError ? 'settings-outline' : 'refresh'}
-                        size={ICON_SIZES.md}
-                        color={TEXT.white}
-                      />
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color={TEXT.white} />
+                      ) : (
+                        <Ionicons
+                          name={isUnrecoverable ? 'create-outline' : isMicPermissionError ? 'settings-outline' : 'refresh'}
+                          size={ICON_SIZES.md}
+                          color={TEXT.white}
+                        />
+                      )}
                       <Text style={styles.retryButtonText}>
-                        {isUnrecoverable ? 'Use Text Instead' : isMicPermissionError ? 'Open Settings' : 'Try Again'}
+                        {isSubmitting ? 'Retrying…' : isUnrecoverable ? 'Use Text Instead' : isMicPermissionError ? 'Open Settings' : 'Try Again'}
                       </Text>
                     </LinearGradient>
                   )}
@@ -1601,7 +1696,7 @@ export function VoiceModal({
             </>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1710,6 +1805,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 450,
     justifyContent: 'center',
+  },
+  // Transcribed state only: flex fills whatever height the modal has left
+  // (which shrinks correctly above the keyboard via the outer
+  // KeyboardAvoidingView) so the ScrollView below has real bounds to scroll
+  // within, instead of `content`'s centered/minHeight box, which has no
+  // fixed height for a ScrollView to measure against.
+  transcribedContent: {
+    flex: 1,
+    width: '100%',
+  },
+  transcribedScroll: {
+    flex: 1,
+  },
+  transcribedScrollContent: {
+    padding: SPACING[6],
+    paddingBottom: SPACING[3],
   },
 
   // ─────────────────────────────────────────────
@@ -2096,10 +2207,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND.primary,
   },
+  editingToolbar: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING[4],
+  },
+  editingToolbarLabel: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.tertiary,
+  },
+  dismissKeyboardText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: BRAND.primary,
+  },
   transcriptionActions: {
     flexDirection: 'row',
     gap: SPACING[3],
     marginTop: SPACING[4],
+  },
+  // Transcribed state's footer sits directly in transcribedContent (no
+  // padding of its own, unlike reviewContent, which transcriptionActions
+  // normally relies on for its insets) — so this one carries its own.
+  transcribedActions: {
+    flexDirection: 'row',
+    gap: SPACING[3],
+    paddingHorizontal: SPACING[6],
+    paddingTop: SPACING[3],
+    paddingBottom: SPACING[6],
   },
   secondaryButton: {
     flexDirection: 'row',
@@ -2131,6 +2271,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[3],
     paddingHorizontal: SPACING[5],
     borderRadius: RADIUS.lg,
+  },
+  primaryButtonGradientDisabled: {
+    opacity: 0.5,
   },
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.md,

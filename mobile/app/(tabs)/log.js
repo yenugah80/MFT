@@ -1504,6 +1504,8 @@ export default function LogScreen() {
             </View>
             <Text style={styles.consentMessage}>
               Uses AI to identify food and estimate nutrition from your photo. Your photos are never used for training.
+              This turns on the same "AI Food Analysis" setting found in Profile → Privacy & Security — it applies to
+              photo and voice logging until you turn it off there.
             </Text>
 
             <View style={styles.errorActions}>
