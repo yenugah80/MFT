@@ -298,6 +298,52 @@ describe('aggregateCanonicalTotals — macros: missing vs zero vs malformed', ()
   });
 });
 
+describe('aggregateCanonicalTotals — legacy unsuffixed macro keys (nutritionSchema.js\'s voice-path output shape)', () => {
+  // Reported bug: an item correctly displayed 95 kcal (mobile reads
+  // `macros.calories_kcal || macros.calories`), but the meal summary showed
+  // 0 — because this aggregator only ever read the suffixed key.
+  it('an item carrying unsuffixed macros.calories (not calories_kcal) still contributes to the total', () => {
+    const items = [{ macros: { calories: 95, protein: 3, carbs: 12, fat: 4, fiber: 1, sugar: 2, sodium: 40 }, micros: {} }];
+    const { macros, meta } = aggregateCanonicalTotals(items);
+    expect(macros.calories_kcal).toBe(95);
+    expect(macros.protein_g).toBe(3);
+    expect(macros.carbs_g).toBe(12);
+    expect(macros.fat_g).toBe(4);
+    expect(macros.fiber_g).toBe(1);
+    expect(macros.sugar_g).toBe(2);
+    expect(macros.sodium_mg).toBe(40);
+    expect(meta.missingMacroFields).toEqual([]);
+  });
+
+  it('a mixed meal (one canonical item, one legacy-shaped item) sums both correctly', () => {
+    const items = [
+      { macros: { calories_kcal: 205, protein_g: 4, carbs_g: 45, fat_g: 0.4, fiber_g: 0.6, sugar_g: 0.1, sodium_mg: 2 }, micros: {} },
+      { macros: { calories: 95, protein: 0.5, carbs: 25, fat: 0.3, fiber: 4.4, sugar: 19, sodium: 2 }, micros: {} },
+    ];
+    const { macros } = aggregateCanonicalTotals(items);
+    expect(macros.calories_kcal).toBe(300);
+    expect(macros.fiber_g).toBeCloseTo(5);
+  });
+
+  it('the suffixed key wins when an item somehow carries both', () => {
+    const items = [{ macros: { calories_kcal: 205, calories: 999 }, micros: {} }];
+    const { macros } = aggregateCanonicalTotals(items);
+    expect(macros.calories_kcal).toBe(205);
+  });
+
+  it('a legitimate zero under the legacy key is not treated as missing', () => {
+    const items = [{ macros: { calories: 100, protein: 5, carbs: 10, fat: 2, fiber: 0, sugar: 0, sodium: 0 }, micros: {} }];
+    const { meta } = aggregateCanonicalTotals(items);
+    expect(meta.missingMacroFields).toEqual([]);
+  });
+
+  it('still flags a field missing under both names', () => {
+    const items = [{ macros: { calories_kcal: 100 }, micros: {} }]; // no protein under either name
+    const { meta } = aggregateCanonicalTotals(items);
+    expect(meta.missingMacroFields).toContain('protein_g');
+  });
+});
+
 describe('aggregateCanonicalTotals — item-level provenance', () => {
   it('records which specific item is missing which field, not just the meal-level union', () => {
     const items = [

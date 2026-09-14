@@ -34,6 +34,25 @@ export const MACRO_FIELDS = [
   'sodium_mg',
 ];
 
+// Some producers (nutritionSchema.js's multi-item AI validator output, used
+// on the voice path) emit unsuffixed macro keys instead of these canonical
+// suffixed ones. Most callers re-key through unifiedResponseBuilder.js's
+// normalizeNutrition first, but any item that reaches this aggregator
+// without going through that step carries e.g. `macros.calories` instead of
+// `macros.calories_kcal` — reading only the suffixed name then finds
+// "nothing," and every macro for that item silently sums as 0 even though
+// the item itself displays its real value elsewhere. This is exactly the
+// "item shows 95 kcal, meal total shows 0" bug.
+const LEGACY_MACRO_ALIASES = {
+  calories_kcal: 'calories',
+  protein_g: 'protein',
+  carbs_g: 'carbs',
+  fat_g: 'fat',
+  fiber_g: 'fiber',
+  sugar_g: 'sugar',
+  sodium_mg: 'sodium',
+};
+
 // Canonical unit per micronutrient — must match mobile/constants/dailyValues.js
 // exactly, since %DV there is computed as `value / DAILY_VALUES[key].value`
 // with NO unit conversion in between (dailyValues.js's own convertUnit() is
@@ -431,10 +450,18 @@ export function aggregateCanonicalTotals(items) {
     const itemInvalid = [];
 
     for (const field of MACRO_FIELDS) {
-      const raw = itemMacros[field];
+      let raw = itemMacros[field];
       if (raw === undefined || raw === null) {
-        // The source never reported this field for this item — distinct
-        // from the item explicitly reporting 0.
+        const aliasField = LEGACY_MACRO_ALIASES[field];
+        const aliasRaw = aliasField ? itemMacros[aliasField] : undefined;
+        if (aliasRaw !== undefined && aliasRaw !== null) {
+          raw = aliasRaw;
+        }
+      }
+      if (raw === undefined || raw === null) {
+        // The source never reported this field (under either its canonical
+        // or legacy unsuffixed name) for this item — distinct from the item
+        // explicitly reporting 0.
         missingMacroFields.add(field);
         itemMissing.push(field);
         continue;

@@ -48,6 +48,28 @@ function normalizeNutrition(raw) {
   };
 }
 
+// Every alias normalizeNutrition() checks per field, so buildFoodItem can
+// tell "the source never reported this at all" apart from "reported and
+// it's 0" — normalizeNutrition's own `?? 0` chain collapses that distinction
+// for its internal totalNutrition math (fine for health/NutriScore, which
+// need a number), but the final macros object below must not silently turn
+// an AI response that never asked about fiber/sugar/sodium (see
+// estimateNutritionForText's prompt) into "measured, and it's zero."
+const NUTRITION_FIELD_ALIASES = {
+  calories: ['calories', 'calories_kcal', 'kcal'],
+  protein: ['protein', 'protein_g', 'proteins'],
+  carbs: ['carbs', 'carbs_g', 'carbohydrates'],
+  fat: ['fat', 'fat_g', 'fats'],
+  fiber: ['fiber', 'fiber_g'],
+  sugar: ['sugar', 'sugar_g', 'sugars'],
+  sodium: ['sodium', 'sodium_mg'],
+};
+
+function isNutritionFieldMissing(raw, field) {
+  if (!raw) return true;
+  return !NUTRITION_FIELD_ALIASES[field].some((key) => raw[key] !== undefined && raw[key] !== null);
+}
+
 /**
  * Calculate per-unit nutrition for quantity adjustments
  */
@@ -493,15 +515,20 @@ export function buildFoodItem(raw, index = 0) {
     // Nutrition for total quantity (standardized field names)
     nutrition: totalNutrition,
 
-    // Macros with legacy field names for frontend compatibility
+    // Macros with legacy field names for frontend compatibility. null (not
+    // 0) when the source never reported the field under any known name —
+    // aggregateCanonicalTotals and the mobile client both already treat
+    // null as "unknown, don't sum a fake zero" and 0 as a real reported
+    // value; this is the one place that distinction has to be decided,
+    // since totalNutrition itself has already defaulted everything to 0.
     macros: {
-      calories_kcal: totalNutrition.calories,
-      protein_g: totalNutrition.protein,
-      carbs_g: totalNutrition.carbs,
-      fat_g: totalNutrition.fat,
-      fiber_g: totalNutrition.fiber,
-      sugar_g: totalNutrition.sugar,
-      sodium_mg: totalNutrition.sodium
+      calories_kcal: isNutritionFieldMissing(rawNutrition, 'calories') ? null : totalNutrition.calories,
+      protein_g: isNutritionFieldMissing(rawNutrition, 'protein') ? null : totalNutrition.protein,
+      carbs_g: isNutritionFieldMissing(rawNutrition, 'carbs') ? null : totalNutrition.carbs,
+      fat_g: isNutritionFieldMissing(rawNutrition, 'fat') ? null : totalNutrition.fat,
+      fiber_g: isNutritionFieldMissing(rawNutrition, 'fiber') ? null : totalNutrition.fiber,
+      sugar_g: isNutritionFieldMissing(rawNutrition, 'sugar') ? null : totalNutrition.sugar,
+      sodium_mg: isNutritionFieldMissing(rawNutrition, 'sodium') ? null : totalNutrition.sodium
     },
 
     // Per-unit nutrition for quantity adjustments

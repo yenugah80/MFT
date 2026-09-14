@@ -561,7 +561,7 @@ Rules:
 2. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
 3. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
 4. Estimate nutrition for the SPECIFIED quantity and cooking method
-5. Include macros: calories, protein (g), carbs (g), fat (g)
+5. Include macros: calories, protein (g), carbs (g), fat (g), fiber (g), sugar (g), sodium (mg). Estimate these too — do not omit them.
 6. Include detailed INGREDIENTS breakdown (what makes up this dish)
 7. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (µg), potassium (mg)
 8. Calculate Health Score (0-100) and NutriScore (A-E) based on:
@@ -586,6 +586,9 @@ Return JSON:
         "protein": number,
         "carbs": number,
         "fat": number,
+        "fiber": number,
+        "sugar": number,
+        "sodium": number,
         "micros": { "calcium": { "value": 10, "unit": "mg" }, "iron": { "value": 2, "unit": "mg" } }
       },
       "🆕 ingredients": [
