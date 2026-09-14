@@ -10,10 +10,10 @@
  * <MomentumCardWrapper dashboardData={data} gamification={data.gamification} />
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import MomentumCard from './MomentumCard';
 import { shouldShowMomentumCard, getLastMomentumShown } from './MomentumEngine';
-import { getItem, setItem } from '../../../utils/storage';
+import { getItem, setItem, STORAGE_KEYS } from '../../../utils/storage';
 import { DEFAULT_WATER_GOAL_LITERS } from '../../../constants/beverageConstants';
 
 const DISMISSED_KEY = 'momentumCardDismissed';
@@ -123,6 +123,55 @@ export default function MomentumCardWrapper({
   const [isDismissed, setIsDismissed] = useState(true); // Start dismissed until we verify
   const [shouldShow, setShouldShow] = useState(false);
 
+  // In-app level-up detection. This is the primary way an active user
+  // learns about a level-up — immediate, unaffected by quiet hours, no
+  // network round trip. The equivalent push notification
+  // (gamificationRewardService.js's sendGatedCelebration) exists only as a
+  // backup for when the user is NOT looking (backgrounded/closed app) and
+  // does respect quiet hours; the two are deliberately not the same
+  // channel with the same rules.
+  //
+  // previousLevelRef starts undefined (baseline not yet loaded this
+  // session). On the first render where a real level value is available,
+  // it's seeded from AsyncStorage — or, if nothing was ever persisted
+  // (fresh install, or first run after this feature shipped for an
+  // existing user), seeded to the CURRENT level so a pre-existing level
+  // is never retroactively flagged as "just" earned. Only a later INCREASE
+  // over that baseline sets justLeveledUp, and it stays true for the rest
+  // of this mounted session (dismissal is MomentumCard's own 24h mechanism
+  // below, unrelated to this flag) — the persisted baseline itself is
+  // updated immediately, so a fresh app launch after this won't re-detect
+  // the same level-up.
+  const previousLevelRef = useRef(undefined);
+  const [levelUpInfo, setLevelUpInfo] = useState({ justLeveledUp: false, newLevel: null });
+
+  useEffect(() => {
+    const currentLevel = gamification?.level;
+    if (currentLevel == null) return;
+
+    let cancelled = false;
+    (async () => {
+      if (previousLevelRef.current === undefined) {
+        const stored = await getItem(STORAGE_KEYS.LAST_KNOWN_LEVEL);
+        if (cancelled) return;
+        if (stored != null) {
+          previousLevelRef.current = parseInt(stored, 10);
+        } else {
+          previousLevelRef.current = currentLevel;
+          await setItem(STORAGE_KEYS.LAST_KNOWN_LEVEL, String(currentLevel));
+        }
+      }
+
+      if (!cancelled && currentLevel > previousLevelRef.current) {
+        previousLevelRef.current = currentLevel;
+        setLevelUpInfo({ justLeveledUp: true, newLevel: currentLevel });
+        await setItem(STORAGE_KEYS.LAST_KNOWN_LEVEL, String(currentLevel));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [gamification?.level]);
+
   // Extract metrics from dashboard data
   const metrics = useMemo(() => {
     if (!dashboardData) return null;
@@ -137,8 +186,8 @@ export default function MomentumCardWrapper({
       level: gamification?.level || 1,
       xp: gamification?.xp || 0,
       streakFreezes: gamification?.streakFreezes || 0,
-      justLeveledUp: false, // Would need to track previous level
-      newLevel: null,
+      justLeveledUp: levelUpInfo.justLeveledUp,
+      newLevel: levelUpInfo.newLevel,
 
       // Nutrition
       calorieProgress:
@@ -179,7 +228,7 @@ export default function MomentumCardWrapper({
           : 50,
       justLostStreak: false,
     };
-  }, [dashboardData, gamification, goals, calendarData, weeklyFoodLogs]);
+  }, [dashboardData, gamification, goals, calendarData, weeklyFoodLogs, levelUpInfo]);
 
   // Check dismissal state and determine if we should show
   useEffect(() => {

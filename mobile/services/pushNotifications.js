@@ -19,6 +19,66 @@ import { getOrCreateDeviceId, issueAndCacheDeregisterToken } from './deviceIdent
 // Re-export for backward compatibility
 export { NOTIFICATION_CATEGORIES };
 
+/**
+ * Fixed shares of the account-wide combined daily budget
+ * (backend's NOTIFICATION_POLICY.MAX_NOTIFICATIONS_PER_USER_PER_DAY = 6)
+ * that local scheduling is allowed to claim per category. Enforced here,
+ * at schedule-creation time — the scheduling functions below clamp to
+ * these caps regardless of how many hours a caller (or the backend's
+ * optimal-times suggestion) passes in.
+ *
+ * MUST stay numerically identical to backend/src/utils/notificationOwnership.js's
+ * LOCAL_ALLOCATION — no shared package exists between mobile and backend
+ * for these values (same as every other category-name translation between
+ * the two). Sums to exactly 6, the full daily cap: STREAK_AT_RISK is
+ * included here (fixed 2026-09 — it was previously left out on the theory
+ * that its own dedup-on-delivery, applyRemoteDeliveryDedup, made counting
+ * it unnecessary; that dedup depends on the device being online and its
+ * foreground/background handler running at the right moment, neither
+ * guaranteed, so it is a best-effort backstop, not something safe to
+ * build the budget arithmetic on). scheduleStreakProtectionReminder always
+ * schedules this locally by default, so leaving it uncounted meant the
+ * true local total (5 allocated + 1 uncounted streak) plus whatever the
+ * backend's own effective cap still permitted could exceed 6 combined.
+ *
+ * All five categories here are USER-REQUESTED reminders — each is gated by
+ * its own Settings toggle (hydrationNudges/dailyReminder/moodCheckins/
+ * activityReminders/streakProtection) and, once enabled, keeps firing at
+ * this fixed allocation regardless of how active or inactive the user has
+ * been — that's intentional, not a bug: the user explicitly asked for
+ * these, so reducing them based on an inactivity guess would override
+ * stated intent. This is distinct from AUTOMATIC nudges — backend-generated
+ * content like the comeback/re-engagement message
+ * (smartReminderService.js's REMINDER_TYPES.COMEBACK) that the user never
+ * opted into by name — which is the category that backs off with
+ * sustained inactivity (see generateMotivationReminders' comment).
+ *
+ * KNOWN, UNRESOLVED TRADEOFF: these five local categories are permanent
+ * repeating OS-level triggers. Once scheduled, they keep firing at this
+ * exact frequency indefinitely — there is no mechanism to remotely throttle
+ * or reduce them for a user who has gone inactive and stopped opening the
+ * app, because doing so requires this file's own code to run again
+ * (syncAllNotificationSchedules), which only happens on foreground/app
+ * open. A user who never reopens the app keeps receiving all 6 local
+ * touches/day at full frequency, forever, with no backend involvement and
+ * no way for the backend to intervene. Closing this gap for real would
+ * need OS background-execution capability (iOS BGTaskScheduler / Android
+ * WorkManager) to periodically re-run schedule sync without a foreground
+ * app open — not implemented; a real architecture addition, not a policy
+ * tweak. What IS implemented: on the next actual foreground/reopen,
+ * syncAllNotificationSchedules re-evaluates and re-applies the current
+ * allocation (so a returning user's schedule is always fresh), and the one
+ * AUTOMATIC nudge type reachable from the backend (comeback) does back off
+ * with sustained inactivity, per the distinction above.
+ */
+export const LOCAL_ALLOCATION = {
+  [NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]: 2,
+  [NOTIFICATION_CATEGORIES.DAILY_REMINDER]: 1,
+  [NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]: 1,
+  [NOTIFICATION_CATEGORIES.MOOD_CHECKIN]: 1,
+  [NOTIFICATION_CATEGORIES.STREAK_AT_RISK]: 1,
+};
+
 // Lazy-load all native modules to prevent import-time crashes
 let Device = null;
 let Constants = null;
@@ -814,13 +874,17 @@ export async function scheduleDailyReminder(hour = 12, minute = 0) {
 
 /**
  * Schedule hydration reminder notifications
- * @param {number[]} hours - Array of hours to remind (e.g., [10, 14, 18])
+ * @param {number[]} hours - Array of hours to remind (e.g., [10, 15]). Clamped
+ *   to LOCAL_ALLOCATION[HYDRATION_NUDGE] regardless of how many are passed —
+ *   enforced here, not just by trusting callers, since optimalTimes.hydration
+ *   comes from the backend's smart-times suggestion and could return more.
  */
-export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
+export async function scheduleHydrationReminders(hours = [10, 15]) {
   if (!Notifications) {
     console.warn('[PushNotifications] Cannot schedule - module not available');
     return [];
   }
+  hours = hours.slice(0, LOCAL_ALLOCATION[NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]);
 
   return withCategoryLock(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, async () => {
     try {
@@ -858,13 +922,15 @@ export async function scheduleHydrationReminders(hours = [10, 14, 18]) {
 /**
  * Schedule activity reminder notifications
  * Nudges users to move at optimal times based on their patterns
- * @param {number[]} hours - Array of hours to remind (default: afternoon/evening)
+ * @param {number[]} hours - Array of hours to remind (default: afternoon). Clamped
+ *   to LOCAL_ALLOCATION[ACTIVITY_REMINDER] — see scheduleHydrationReminders.
  */
-export async function scheduleActivityReminders(hours = [14, 17]) {
+export async function scheduleActivityReminders(hours = [16]) {
   if (!Notifications) {
     console.warn('[PushNotifications] Cannot schedule - module not available');
     return [];
   }
+  hours = hours.slice(0, LOCAL_ALLOCATION[NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]);
 
   return withCategoryLock(NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER, async () => {
     try {
@@ -1160,11 +1226,14 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
       await registerLocalOwnership(NOTIFICATION_CATEGORIES.DAILY_REMINDER, 'backend');
     }
 
-    // Hydration reminders
+    // Hydration reminders — clamped to LOCAL_ALLOCATION here too so the
+    // `scheduled` summary below reports what was actually scheduled, not
+    // an unclamped optimalTimes array (scheduleHydrationReminders itself
+    // also clamps, so this is redundant for correctness, not for accuracy
+    // of this function's own return value).
     if (preferences.hydrationNudges !== false) {
-      const hydrationHours = optimalTimes.hydration?.length > 0
-        ? optimalTimes.hydration
-        : [10, 14, 18];
+      const hydrationHours = (optimalTimes.hydration?.length > 0 ? optimalTimes.hydration : [10, 15])
+        .slice(0, LOCAL_ALLOCATION[NOTIFICATION_CATEGORIES.HYDRATION_NUDGE]);
       const ids = await scheduleHydrationReminders(hydrationHours);
       if (ids.length) {
         scheduled.push({ type: 'hydration', hours: hydrationHours });
@@ -1176,11 +1245,10 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
       await registerLocalOwnership(NOTIFICATION_CATEGORIES.HYDRATION_NUDGE, 'backend');
     }
 
-    // Activity reminders
+    // Activity reminders — same clamping rationale as hydration above.
     if (preferences.activityReminders !== false) {
-      const activityHours = optimalTimes.activity?.length > 0
-        ? optimalTimes.activity
-        : [14, 17];
+      const activityHours = (optimalTimes.activity?.length > 0 ? optimalTimes.activity : [16])
+        .slice(0, LOCAL_ALLOCATION[NOTIFICATION_CATEGORIES.ACTIVITY_REMINDER]);
       const ids = await scheduleActivityReminders(activityHours);
       if (ids.length) {
         scheduled.push({ type: 'activity', hours: activityHours });
@@ -1206,14 +1274,22 @@ export async function syncAllNotificationSchedules(preferences = {}, optimalTime
       await registerLocalOwnership(NOTIFICATION_CATEGORIES.MOOD_CHECKIN, 'backend');
     }
 
-    // Streak protection (always on if user has a streak)
+    // Streak protection (always on if user has a streak). Now registers
+    // local ownership like the other four categories (2026-09 fix) — this
+    // is what lets the backend's own streak_at_risk candidate (smartReminderService.js)
+    // be excluded via ownership instead of relying solely on best-effort
+    // delivery-time dedup for a device that's already covering it locally.
     if (preferences.streakProtection !== false) {
       const streakHour = 21;
       const id = await scheduleStreakProtectionReminder(streakHour);
-      if (id) scheduled.push({ type: 'streak_protection', hour: streakHour });
+      if (id) {
+        scheduled.push({ type: 'streak_protection', hour: streakHour });
+        await registerLocalOwnership(NOTIFICATION_CATEGORIES.STREAK_AT_RISK, 'local');
+      }
     } else {
       await withCategoryLock(NOTIFICATION_CATEGORIES.STREAK_AT_RISK, () => cancelScheduledNotifications(NOTIFICATION_CATEGORIES.STREAK_AT_RISK));
       cancelled.push('streak_protection');
+      await registerLocalOwnership(NOTIFICATION_CATEGORIES.STREAK_AT_RISK, 'backend');
     }
 
     console.log('[PushNotifications] Sync complete:', { scheduled: scheduled.length, cancelled: cancelled.length });
@@ -1316,13 +1392,23 @@ export async function cancelHydrationIfGoalReached(_currentMl, _goalMl) {
 
 /**
  * De-duplicates local reminders against the backend's own delivery record.
- * The backend cron is the primary sender for every category whenever the
- * device has connectivity; local scheduling exists only as an offline
- * fallback. Call this on app foreground: for any category the server
- * confirms it already delivered today, cancel today's remaining local
- * occurrence(s) so the user isn't nudged twice for the same thing. If the
- * request fails, nothing is cancelled — the local reminder stays as the
- * safe (at worst redundant, never silent) fallback.
+ * BEST-EFFORT ONLY — this is a backstop, not the primary duplicate-prevention
+ * mechanism. For the five categories in LOCAL_ALLOCATION (hydration/food/
+ * mood/activity/streak), ownership exclusivity is now the primary
+ * mechanism: once a device registers local ownership of a category, the
+ * backend never generates a candidate for it at all (filterRemindersForDevice,
+ * backend/src/utils/notificationOwnership.js), so there is structurally
+ * nothing for this function to deduplicate against for an owned category in
+ * the common case. This function exists for the gap ownership doesn't
+ * cover: registration hasn't completed yet (fresh install mid-registration,
+ * a request that failed and is still queued in pendingOwnershipChanges), or
+ * a legacy app build that predates the ownership feature entirely. It can
+ * only work if the device is online AND this is actually called (on app
+ * foreground) AND the server request succeeds — none of which are
+ * guaranteed, which is why it must never be the only thing standing
+ * between a user and a duplicate notification. If the request fails,
+ * nothing is cancelled — the local reminder stays as the safe (at worst
+ * redundant, never silent) fallback.
  * @param {(path: string) => Promise<any>} apiGet - an authenticated GET function, e.g. apiClient.get
  */
 export async function applyRemoteDeliveryDedup(apiGet) {

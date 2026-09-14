@@ -21,6 +21,7 @@ export const STORAGE_KEYS = {
   HYDRATION_DAILY_INSIGHT: 'hydration-daily-insight',
   INSIGHTS_FILTER_DAYS: 'insights-filter-days',
   THEME_PREFERENCE: 'theme-preference',
+  LAST_KNOWN_LEVEL: 'last-known-gamification-level',
 };
 
 /**
