@@ -86,6 +86,35 @@ export function getLocalWeekRange(offsetMinutes, baseDate = new Date()) {
   return { start, end };
 }
 
+/**
+ * Get the hour-of-day (0-23) in the user's local time.
+ *
+ * Same offsetMinutes convention as every other function in this file
+ * (Date.getTimezoneOffset(): positive = west of UTC). Exists because
+ * notification content-selection code (smartReminderService.js,
+ * wittyMessageEngine.js) had several independent, ad-hoc hour computations
+ * — some using the server's raw UTC hour with no offset at all, one
+ * (smartReminderJob.js's isInQuietHours) applying the offset with the wrong
+ * sign — so a "midday" (11am-1pm local) message could fire at 9am for an
+ * EDT user, or quiet hours could be evaluated against a local hour several
+ * hours off from reality. One correct implementation, reused everywhere.
+ *
+ * @param {number} offsetMinutes - User's timezone offset (REQUIRED for correct calculation)
+ * @param {Date} baseDate - The reference instant
+ * @returns {number} 0-23
+ *
+ * WARNING: If offsetMinutes is not finite, falls back to SERVER's local hour.
+ */
+export function getLocalHour(offsetMinutes, baseDate = new Date()) {
+  if (!Number.isFinite(offsetMinutes)) {
+    console.warn('[Timezone] getLocalHour called without valid offset - using server local time');
+    return baseDate.getHours();
+  }
+  const offsetMs = offsetMinutes * 60 * 1000;
+  const localTime = new Date(baseDate.getTime() - offsetMs);
+  return localTime.getUTCHours();
+}
+
 export function getLocalDateUTC(offsetMinutes, baseDate = new Date()) {
   if (!Number.isFinite(offsetMinutes)) {
     const date = new Date(baseDate);

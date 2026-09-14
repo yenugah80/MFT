@@ -28,6 +28,7 @@ import {
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import WittyMessageEngine from './wittyMessageEngine.js';
 import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
+import { getLocalHour, getLocalDayRange } from '../utils/timezone.js';
 
 // ============================================================================
 // REMINDER TYPES & CONFIGURATION
@@ -122,6 +123,7 @@ function getHydrationMessage(timeSlot, context = {}) {
     streak,
     logCount,
     hoursSinceLastLog: context.hoursSinceLastLog,
+    hour: context.hour,
   });
 
   if (wittyMessage) {
@@ -154,6 +156,7 @@ function getFoodMessage(mealType, context = {}) {
     totalCalories,
     calorieGoal,
     streak,
+    hour: context.hour,
   });
 
   if (wittyMessage) {
@@ -179,7 +182,7 @@ function getFoodMessage(mealType, context = {}) {
  */
 function getMoodMessage(timeSlot, context = {}) {
   const wittyMessage = WittyMessageEngine.getMoodMessage({
-    hour: new Date().getHours(),
+    hour: context.hour,
     pattern: context.pattern,
   });
 
@@ -262,6 +265,7 @@ function getActivityMessage(type, context = {}) {
     justWorkedOut: type === 'post_workout',
     activityType,
     duration,
+    hour: context.hour,
   });
 
   if (wittyMessage) {
@@ -508,18 +512,29 @@ function getDefaultPatterns(userId) {
  */
 export async function getSmartReminders(userId) {
   try {
-    // Get user data in parallel
-    const [patterns, profile, goals, gamification, todayStats] = await Promise.all([
+    // gamification is fetched first, on its own, because timezoneOffset
+    // lives on it and getTodayStats needs that offset to compute the
+    // user's actual local day boundary — see getTodayStats below for why
+    // that matters independently of the currentHour fix.
+    const gamification = await getGamificationData(userId);
+    const timezoneOffset = Number.isFinite(gamification?.timezoneOffset) ? gamification.timezoneOffset : null;
+
+    const [patterns, profile, goals, todayStats] = await Promise.all([
       learnUserPatterns(userId),
       getProfileData(userId),
       getGoalsData(userId),
-      getGamificationData(userId),
-      getTodayStats(userId),
+      getTodayStats(userId, timezoneOffset),
     ]);
 
     const reminders = [];
-    const now = new Date();
-    const currentHour = now.getHours();
+    // The server process's own hour (new Date().getHours(), pinned to UTC
+    // in production — see CLAUDE.md) used to be used directly here with no
+    // per-user adjustment at all. Every category generator below gates its
+    // messaging on "is it morning/midday/afternoon" in terms of this hour,
+    // so an EDT user got "It's past noon" content while their real local
+    // time was 9am — UTC late-morning (11am-1pm) lines up with EDT's own
+    // early morning (7-9am), not midday.
+    const currentHour = getLocalHour(timezoneOffset);
 
     // Check if we're in quiet hours
     if (isQuietHour(currentHour, patterns.quietHours)) {
@@ -615,6 +630,7 @@ export function generateHydrationReminders(context) {
     percentage,
     streak,
     logCount: todayStats.water.totalLogs,
+    hour: currentHour,
   };
 
   // Morning reminder (7-9 AM)
@@ -674,6 +690,7 @@ export function generateFoodReminders(context) {
     totalCalories: todayStats.food.totalCalories || 0,
     calorieGoal: context.goals?.dailyCalories || 2000,
     streak,
+    hour: currentHour,
   };
 
   // Breakfast reminder (based on user's typical time)
@@ -749,7 +766,7 @@ export function generateMoodReminders(context) {
   const reminders = [];
 
   const moodLogsToday = todayStats.mood.totalLogs;
-  const moodContext = { pattern: patterns?.patterns?.mood };
+  const moodContext = { pattern: patterns?.patterns?.mood, hour: currentHour };
 
   // Only remind if engaged (not every user wants mood tracking)
   if (patterns.engagementLevel === 'new' && patterns.patterns.mood.peakHours.length === 0) {
@@ -846,7 +863,7 @@ export function generateActivityReminders(context) {
   if (currentHour >= 9 && currentHour <= 10 && steps < stepGoal * 0.1) {
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
-      ...getActivityMessage('movement', { steps, stepGoal, sedentaryHours }),
+      ...getActivityMessage('movement', { steps, stepGoal, sedentaryHours, hour: currentHour }),
       priority: 4,
       scheduledFor: null,
     });
@@ -856,7 +873,7 @@ export function generateActivityReminders(context) {
   if (currentHour >= 12 && currentHour <= 14 && steps < stepGoal * 0.4) {
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_WALK,
-      ...getActivityMessage('walk', { steps, stepGoal }),
+      ...getActivityMessage('walk', { steps, stepGoal, hour: currentHour }),
       priority: 4,
       scheduledFor: null,
     });
@@ -866,7 +883,7 @@ export function generateActivityReminders(context) {
   if (currentHour >= 15 && currentHour <= 17 && sedentaryHours >= 3) {
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
-      ...getActivityMessage('sedentary', { steps, stepGoal, sedentaryHours }),
+      ...getActivityMessage('sedentary', { steps, stepGoal, sedentaryHours, hour: currentHour }),
       priority: 3,
       scheduledFor: null,
     });
@@ -876,7 +893,7 @@ export function generateActivityReminders(context) {
   if (currentHour >= 18 && currentHour <= 20 && steps >= stepGoal * 0.6 && steps < stepGoal) {
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_WALK,
-      ...getActivityMessage('gentle_nudge', { steps, stepGoal, sedentaryHours }),
+      ...getActivityMessage('gentle_nudge', { steps, stepGoal, sedentaryHours, hour: currentHour }),
       priority: 5,
       scheduledFor: null,
     });
@@ -951,12 +968,18 @@ async function getGamificationData(userId) {
 
 /**
  * Get today's stats for all domains
+ *
+ * timezoneOffset determines what "today" actually means for this user —
+ * without it (the previous behavior), "today" was the server's own UTC
+ * calendar day, not the user's. For anyone west of UTC (any US timezone),
+ * server-UTC midnight falls in the middle of their previous evening, so a
+ * water log made right after real local midnight could still count toward
+ * the wrong "today", and logCount could read as 0 for a user who had
+ * already logged — which the hydration "no logs today, still no water?"
+ * copy takes as a literal claim.
  */
-async function getTodayStats(userId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+async function getTodayStats(userId, timezoneOffset = null) {
+  const { start: today, end: tomorrow } = getLocalDayRange(timezoneOffset, new Date());
 
   try {
     const [foodStats, waterStats, moodStats, activityStats] = await Promise.all([

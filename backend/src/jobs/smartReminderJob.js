@@ -58,6 +58,7 @@ import {
   NOTIFICATION_TYPES
 } from '../services/pushNotificationService.js';
 import { isFirebaseReady } from '../config/firebase.js';
+import { getLocalHour } from '../utils/timezone.js';
 import { resolveSendTargets, getOwnedCategoriesForDevice } from '../utils/deviceRegistry.js';
 import { filterRemindersForDevice, mapReminderJobCategoryToLocalCategory } from '../utils/notificationOwnership.js';
 
@@ -447,11 +448,14 @@ function isInQuietHours(user) {
     end: CONFIG.DEFAULT_QUIET_END,
   };
 
-  // Calculate user's local hour
+  // Calculate user's local hour. Previously added offsetMinutes directly —
+  // the opposite sign from every other timezone computation in this
+  // codebase (getLocalDayRange, getLocalDateUTC: local = UTC - offset,
+  // per Date.getTimezoneOffset()'s convention where positive = west of
+  // UTC). For any real US timezone (all positive offsets), that inversion
+  // put localHour several hours in the wrong direction from the truth.
   const offsetMinutes = user.timezoneOffset || 0;
-  const now = new Date();
-  // Double modulo handles negative offsets (e.g. UTC-5): JS % can return negative values.
-  const localHour = ((now.getUTCHours() + Math.floor(offsetMinutes / 60)) % 24 + 24) % 24;
+  const localHour = getLocalHour(offsetMinutes);
 
   const { start, end } = quietHours;
 
