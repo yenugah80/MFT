@@ -10,7 +10,7 @@
  * rows in `devices`) or all-per-device (>=1 row) — see resolveSendTargets.
  */
 import { randomUUID } from 'node:crypto';
-import { and, eq, gt, lt, ne } from 'drizzle-orm';
+import { and, eq, gt, lt, ne, sql } from 'drizzle-orm';
 import { devicesTable, notificationOwnershipTable } from '../db/schema.js';
 
 const DEREGISTER_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -20,15 +20,21 @@ export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushT
     throw new Error('registerDevice requires a string deviceId');
   }
 
-  const now = new Date();
-  const updateData = { lastSeenAt: now, updatedAt: now };
+  // now() is the DATABASE's clock, not the app server's — see
+  // savePushToken in profileController.js for why that's the single
+  // source of truth this ordering needs regardless of how many app server
+  // instances are handling requests. updatedAt is unconditionally written
+  // every call, so reading it back after the upsert gives one consistent
+  // "now" for this whole request even when only one of fcmToken/
+  // expoPushToken was actually supplied.
+  const updateData = { lastSeenAt: sql`now()`, updatedAt: sql`now()` };
   if (fcmToken) {
     updateData.fcmToken = fcmToken;
-    updateData.fcmTokenUpdatedAt = now;
+    updateData.fcmTokenUpdatedAt = sql`now()`;
   }
   if (expoPushToken) {
     updateData.expoPushToken = expoPushToken;
-    updateData.expoPushTokenUpdatedAt = now;
+    updateData.expoPushTokenUpdatedAt = sql`now()`;
   }
   if (platform) updateData.platform = platform;
 
@@ -39,16 +45,17 @@ export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushT
       deviceId,
       platform: platform || null,
       fcmToken: fcmToken || null,
-      fcmTokenUpdatedAt: fcmToken ? now : null,
+      fcmTokenUpdatedAt: fcmToken ? sql`now()` : null,
       expoPushToken: expoPushToken || null,
-      expoPushTokenUpdatedAt: expoPushToken ? now : null,
-      lastSeenAt: now,
+      expoPushTokenUpdatedAt: expoPushToken ? sql`now()` : null,
+      lastSeenAt: sql`now()`,
     })
     .onConflictDoUpdate({
       target: [devicesTable.userId, devicesTable.deviceId],
       set: updateData,
     })
     .returning();
+  const now = row.updatedAt;
 
   // deviceId is a client-persisted UUID that survives an ordinary sign-out
   // (only account deletion clears it — see accountDeletion.js), so the same
@@ -64,13 +71,27 @@ export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushT
   //
   // The <now guard on each backstop is the same concurrent-registration
   // protection as savePushToken/saveFCMToken: only clear a row whose own
-  // token timestamp is strictly older than this request's write, so two
-  // near-simultaneous registrations for different accounts can never both
-  // wipe each other out — whichever is genuinely most recent always wins.
+  // token timestamp is strictly older (never <=) than this request's
+  // write. Defined behavior for an exact tie: neither side clears the
+  // other, so both rows stay live until either account's NEXT
+  // registration — Postgres's now() is microsecond-precision and each
+  // registration is a separate statement/round trip, so two independent
+  // requests landing on the exact same instant is not realistically
+  // reachable in practice; this is a documented fallback, not an expected
+  // path. A <= comparison would be worse, not better: both sides would
+  // then satisfy "the other is <= me" simultaneously and clear each other,
+  // which is the original bug this guard exists to prevent. Concurrent
+  // writes for genuinely different timestamps are handled correctly
+  // regardless of which request's UPDATE executes first, because each
+  // compares against its OWN captured `now`, not a live re-read at
+  // execution time — see the probe verification in the commit for this
+  // fix, which deliberately ran the backstops in reverse chronological
+  // order and confirmed the later registration still survives —
+  // whichever registration is genuinely most recent always wins.
   if (fcmToken) {
     await db
       .update(devicesTable)
-      .set({ fcmToken: null, fcmTokenUpdatedAt: now, updatedAt: now })
+      .set({ fcmToken: null, fcmTokenUpdatedAt: sql`now()`, updatedAt: sql`now()` })
       .where(and(
         eq(devicesTable.deviceId, deviceId),
         eq(devicesTable.fcmToken, fcmToken),
@@ -81,7 +102,7 @@ export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushT
   if (expoPushToken) {
     await db
       .update(devicesTable)
-      .set({ expoPushToken: null, expoPushTokenUpdatedAt: now, updatedAt: now })
+      .set({ expoPushToken: null, expoPushTokenUpdatedAt: sql`now()`, updatedAt: sql`now()` })
       .where(and(
         eq(devicesTable.deviceId, deviceId),
         eq(devicesTable.expoPushToken, expoPushToken),

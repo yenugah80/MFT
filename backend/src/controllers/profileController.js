@@ -88,24 +88,32 @@ export async function savePushToken(req, res) {
       });
     }
 
-    const now = new Date();
-    const updated = await req.db
+    // now() is the DATABASE's clock, not the API server's — with a single
+    // Postgres instance this also means a single source of truth for
+    // registration ordering regardless of which (or how many) app server
+    // processes handle concurrent requests; two Railway instances with
+    // clocks that had drifted relative to each other would otherwise be
+    // able to disagree about which registration was actually "later."
+    // .returning() captures the exact value Postgres assigned, rather than
+    // guessing what now() evaluated to.
+    const [updated] = await req.db
       .insert(accountSettingsTable)
       .values({
         userId,
         expoPushToken,
-        pushTokenUpdatedAt: now,
-        updatedAt: now,
+        pushTokenUpdatedAt: sql`now()`,
+        updatedAt: sql`now()`,
       })
       .onConflictDoUpdate({
         target: accountSettingsTable.userId,
         set: {
           expoPushToken,
-          pushTokenUpdatedAt: now,
-          updatedAt: now
+          pushTokenUpdatedAt: sql`now()`,
+          updatedAt: sql`now()`
         },
       })
-      .returning({ expoPushToken: accountSettingsTable.expoPushToken });
+      .returning({ expoPushToken: accountSettingsTable.expoPushToken, pushTokenUpdatedAt: accountSettingsTable.pushTokenUpdatedAt });
+    const now = updated.pushTokenUpdatedAt;
 
     // A push token identifies one physical app installation. If it was
     // previously registered to a DIFFERENT account — e.g. that account's
@@ -130,7 +138,7 @@ export async function savePushToken(req, res) {
     // recent always survives, regardless of interleaving.
     const staleOwners = await req.db
       .update(accountSettingsTable)
-      .set({ expoPushToken: null, pushTokenUpdatedAt: now, updatedAt: now })
+      .set({ expoPushToken: null, pushTokenUpdatedAt: sql`now()`, updatedAt: sql`now()` })
       .where(and(
         eq(accountSettingsTable.expoPushToken, expoPushToken),
         ne(accountSettingsTable.userId, userId),
@@ -146,7 +154,7 @@ export async function savePushToken(req, res) {
     res.status(200).json({
       success: true,
       tokenRegistered: true,
-      expoPushToken: updated[0]?.expoPushToken
+      expoPushToken: updated?.expoPushToken
     });
   } catch (error) {
     // Handle foreign key constraint violation gracefully
@@ -452,26 +460,30 @@ export async function saveFCMToken(req, res) {
       });
     }
 
-    const now = new Date();
-    const updated = await req.db
+    // See savePushToken for why this uses the database's now() rather than
+    // the API server's own clock — a single source of truth for
+    // registration ordering regardless of which app server instance
+    // handles the request.
+    const [updated] = await req.db
       .insert(accountSettingsTable)
       .values({
         userId,
         fcmToken,
-        fcmTokenUpdatedAt: now,
+        fcmTokenUpdatedAt: sql`now()`,
         fcmTokenPlatform: platform || null,
-        updatedAt: now,
+        updatedAt: sql`now()`,
       })
       .onConflictDoUpdate({
         target: accountSettingsTable.userId,
         set: {
           fcmToken,
-          fcmTokenUpdatedAt: now,
+          fcmTokenUpdatedAt: sql`now()`,
           fcmTokenPlatform: platform || null,
-          updatedAt: now
+          updatedAt: sql`now()`
         },
       })
-      .returning({ fcmToken: accountSettingsTable.fcmToken });
+      .returning({ fcmToken: accountSettingsTable.fcmToken, fcmTokenUpdatedAt: accountSettingsTable.fcmTokenUpdatedAt });
+    const now = updated.fcmTokenUpdatedAt;
 
     // Same stale-token backstop as savePushToken, including the same
     // concurrent-registration guard (fcmTokenUpdatedAt < now) — see that
@@ -479,7 +491,7 @@ export async function saveFCMToken(req, res) {
     // protects against.
     const staleOwners = await req.db
       .update(accountSettingsTable)
-      .set({ fcmToken: null, fcmTokenUpdatedAt: now, updatedAt: now })
+      .set({ fcmToken: null, fcmTokenUpdatedAt: sql`now()`, updatedAt: sql`now()` })
       .where(and(
         eq(accountSettingsTable.fcmToken, fcmToken),
         ne(accountSettingsTable.userId, userId),
