@@ -71,3 +71,60 @@ describe('calculateActiveItemTotals — ingredient exclusion drops sodium and mi
     expect(result.micros.potassium.value).toBe(400);
   });
 });
+
+describe('calculateActiveItemTotals — adjustedItems (per-item, not just aggregate)', () => {
+  // Regression coverage for a second bug found alongside the sodium/micros
+  // one: even with the aggregate correct, the REVIEW SCREEN's own
+  // onItemsChange callback was passing the raw, unadjusted `activeItems`
+  // up to the parent — each item's own .macros still held its ORIGINAL,
+  // pre-exclusion values. saveMealItems (log.js) persists one record PER
+  // ITEM, reading each item's .macros directly — so an excluded ingredient
+  // changed what the review screen displayed but not what got saved.
+  // adjustedItems is what closes that: the same per-item subtraction this
+  // function already does for the aggregate, exposed per item too.
+  it('returns adjustedItems with each item\'s own macros reflecting its ingredient exclusions', () => {
+    const items = [makeItem()];
+    const excludedIngredients = new Set(['0-1']); // exclude "soy sauce" (20 cal, 800mg sodium)
+
+    const result = calculateActiveItemTotals(items, items, new Set(), excludedIngredients);
+
+    expect(result.adjustedItems).toHaveLength(1);
+    const adjusted = result.adjustedItems[0];
+    expect(adjusted.macros.calories_kcal).toBe(300 - 20);
+    expect(adjusted.macros.sodium_mg).toBe(900 - 800);
+    // Sum of adjustedItems' own macros must equal the aggregate — this is
+    // the actual invariant the save path depends on (N per-item records,
+    // summed by the backend/dashboard, must equal what the review screen
+    // showed as the meal total).
+    expect(adjusted.macros.calories_kcal).toBe(result.calories);
+  });
+
+  it('adjustedItems drops the excluded ingredient from that item\'s own ingredients list', () => {
+    const items = [makeItem()];
+    const excludedIngredients = new Set(['0-1']); // exclude "soy sauce"
+
+    const result = calculateActiveItemTotals(items, items, new Set(), excludedIngredients);
+
+    const adjusted = result.adjustedItems[0];
+    expect(adjusted.ingredients.map((i) => i.name)).toEqual(['chicken', 'rice']);
+  });
+
+  it('with multiple items, only the item with an excluded ingredient is changed in adjustedItems', () => {
+    const items = [makeItem(), makeItem({ macros: { calories_kcal: 100, protein_g: 5, carbs_g: 10, fat_g: 2, fiber_g: 1, sugar_g: 1, sodium_mg: 50 }, ingredients: [] })];
+    const excludedIngredients = new Set(['0-1']); // exclude "soy sauce" on item 0 only
+
+    const result = calculateActiveItemTotals(items, items, new Set(), excludedIngredients);
+
+    expect(result.adjustedItems[0].macros.calories_kcal).toBe(300 - 20);
+    expect(result.adjustedItems[1].macros.calories_kcal).toBe(100); // untouched
+  });
+
+  it('with no exclusions at all, adjustedItems still mirrors the original macros exactly', () => {
+    const items = [makeItem()];
+
+    const result = calculateActiveItemTotals(items, items, new Set(), new Set());
+
+    expect(result.adjustedItems[0].macros.calories_kcal).toBe(300);
+    expect(result.adjustedItems[0].ingredients).toHaveLength(3);
+  });
+});
