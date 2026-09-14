@@ -512,7 +512,15 @@ const generateInsights = (meal, userGoals, historicalData) => {
   // MEAL TIMING INSIGHTS (Enhanced with eating window context)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const hour = new Date().getHours();
+  // meal.loggedAt is when this meal was actually saved — used instead of
+  // "now" so the timing insight reflects when it was eaten, not whenever
+  // this card happens to render. Without it, reopening or re-rendering a
+  // saved meal near/after 10pm could relabel an earlier dinner as a "Late
+  // Night Snack" purely because the CURRENT clock is late, contradicting
+  // the meal's own already-assigned mealType shown elsewhere (e.g. the
+  // Details screen), which is computed once at log time and doesn't drift.
+  const loggedAt = meal.loggedAt ? new Date(meal.loggedAt) : new Date();
+  const hour = loggedAt.getHours();
 
   // Late night eating (affects sleep, digestion, weight)
   if (hour >= 21 && calories > 500) {
@@ -526,11 +534,15 @@ const generateInsights = (meal, userGoals, historicalData) => {
       priority: 2,
     });
   } else if (hour >= 22 && calories > 200) {
+    // Titled to describe the eating window, not to recategorize the meal —
+    // this can legitimately fire for a meal whose own mealType is "Dinner"
+    // (eaten late), and "Late Night Snack" as a title reads as contradicting
+    // that label rather than adding timing context to it.
     insights.push({
       type: 'info',
       category: 'timing',
       icon: 'moon-outline',
-      title: 'Late Night Snack',
+      title: 'Late-Night Eating',
       message: 'Late eating may reduce overnight fat burning.',
       detail: 'Your body naturally shifts to fat-burning mode during sleep; eating late can interrupt this.',
       priority: 4,

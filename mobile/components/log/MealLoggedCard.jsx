@@ -758,6 +758,7 @@ export default function MealLoggedCard({
             healthScore: meal.healthScore,
             nutriScore: meal.nutriScore,
             micros: meal.micros,
+            loggedAt: meal.loggedAt,
           }}
           userGoals={dailyGoals}
           historicalData={historicalData}

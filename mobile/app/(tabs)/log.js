@@ -613,6 +613,10 @@ export default function LogScreen() {
 
     setLoggedMeal({
       ...foodDataWithId,
+      // SmartMealInsights' late-night timing check needs the moment this
+      // meal was actually logged, not whenever that card next renders —
+      // reuse the same timestamp already captured in sourceMeta above.
+      loggedAt: foodDataWithId.sourceMeta.timestamp,
       nutriScore: matchingAnalysis?.nutriScore ?? foodData.nutriscore ?? null,
       healthScore: foodDataWithId.healthScore ?? matchingAnalysis?.healthScore ?? null,
       healthAnalysis: matchingAnalysis?.healthAnalysis ?? null,
@@ -825,6 +829,9 @@ export default function LogScreen() {
 
       setLoggedMeal({
         foodName: `Meal (${itemCount} item${itemCount === 1 ? '' : 's'})`,
+        // See the single-item save path above for why this is captured
+        // here rather than left to SmartMealInsights to infer from "now".
+        loggedAt: new Date().toISOString(),
         calories: totalReported.calories ? totalCalories : null,
         protein: totalReported.protein ? totalProtein : null,
         carbs: totalReported.carbs ? totalCarbs : null,
