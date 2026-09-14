@@ -12,6 +12,77 @@ import {
   sendUserNotification,
   NOTIFICATION_TYPES,
 } from "./pushNotificationService.js";
+import { withReservedNotificationSlot, NOTIFICATION_POLICY } from "../utils/notificationPolicy.js";
+import { getAccountEffectiveDailyCap } from "../utils/deviceRegistry.js";
+
+/**
+ * Gate + deliver for this file's two event-driven PUSH notifications
+ * (level-up, streak milestone). Quiet hours apply here like every other
+ * push — a user who is awake right now (they just logged something) may
+ * still not want their phone lighting up at 2 AM; the push channel doesn't
+ * get to assume otherwise just because its trigger was a live action. The
+ * daily cap and 60-minute spacing floor apply too, so a celebration can't
+ * stack directly on top of a reminder that just fired. Reserved atomically
+ * (withReservedNotificationSlot) so a concurrent job's send for the same
+ * user can't race past this one — see notificationPolicy.js.
+ *
+ * This is deliberately NOT the only way the user learns about a level-up
+ * or streak milestone during active use — the API response from
+ * awardXP/updateStreak already carries { leveledUp, newLevel } /
+ * { isMilestone, streak } synchronously, and the mobile client (
+ * MomentumCard's justLeveledUp/streak-milestone highlight) surfaces that
+ * in-app immediately, unaffected by quiet hours, whether or not this push
+ * ever fires. The push exists for when the user is NOT looking (backgrounded/
+ * closed app) — that is exactly the case quiet hours needs to gate.
+ *
+ * Neither of these call sites previously wrote to
+ * notificationDeliveryLogTable at all — invisible to every other job's
+ * rate-limit accounting, and to each other's. The reservation closes that.
+ */
+async function sendGatedCelebration(dbConn, userId, notificationType, notification, deliveryLogType) {
+  const effectiveDailyCap = await getAccountEffectiveDailyCap(dbConn, userId, null, NOTIFICATION_POLICY.MAX_NOTIFICATIONS_PER_USER_PER_DAY);
+  const result = await withReservedNotificationSlot(dbConn, userId, { maxPerDay: effectiveDailyCap }, async () => {
+    const sendResult = await sendUserNotification(dbConn, userId, notificationType, notification);
+    return {
+      success: sendResult?.success === true,
+      deliveryLog: {
+        notificationType: deliveryLogType,
+        title: notification.title,
+        body: notification.body,
+        channel: 'expo',
+        priority: 2,
+      },
+    };
+  });
+  if (result.held) {
+    console.log(`[GamificationReward] Notification for ${userId} held (${result.held})`);
+  }
+  return result;
+}
+
+// Same gate as sendGatedCelebration, but wraps sendStreakCelebration
+// directly since its per-milestone message text is built internally in
+// pushNotificationService.js rather than passed in here.
+async function sendGatedStreakCelebration(dbConn, userId, streakDays) {
+  const effectiveDailyCap = await getAccountEffectiveDailyCap(dbConn, userId, null, NOTIFICATION_POLICY.MAX_NOTIFICATIONS_PER_USER_PER_DAY);
+  const result = await withReservedNotificationSlot(dbConn, userId, { maxPerDay: effectiveDailyCap }, async () => {
+    const sendResult = await sendStreakCelebration(dbConn, userId, streakDays);
+    return {
+      success: sendResult?.success === true,
+      deliveryLog: {
+        notificationType: 'streak_celebration',
+        title: `${streakDays} Day Streak!`,
+        body: `${streakDays} day streak milestone`,
+        channel: 'expo',
+        priority: 2,
+      },
+    };
+  });
+  if (result.held) {
+    console.log(`[GamificationReward] Streak notification for ${userId} held (${result.held})`);
+  }
+  return result;
+}
 
 // Streak milestones that trigger celebrations
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 150, 200, 365];
@@ -218,12 +289,12 @@ export async function awardXP(userId, xp, source = "meal_log", dbConn = db) {
 
     // Send push notification for level up
     if (levelUpInfo.leveledUp) {
-      sendUserNotification(dbConn, userId, NOTIFICATION_TYPES.GOAL_ACHIEVED, {
+      sendGatedCelebration(dbConn, userId, NOTIFICATION_TYPES.GOAL_ACHIEVED, {
         title: `🎉 Level ${levelInfo.level}!`,
         body: `Congratulations! You've reached Level ${levelInfo.level}. Keep up the great work!`,
         data: { type: 'level_up', newLevel: levelInfo.level, screen: 'profile' },
         channelId: 'insights',
-      }).catch((err) => {
+      }, 'level_up').catch((err) => {
         console.error(`[GamificationReward] Failed to send level-up notification:`, err);
       });
     }
@@ -471,7 +542,7 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
     // Push notifications are external I/O, not state — sent after the
     // transaction commits, fire-and-forget, same as before.
     if (outcome.streakIncremented && !outcome.streakBroken && STREAK_MILESTONES.includes(outcome.streak)) {
-      sendStreakCelebration(dbConn, userId, outcome.streak).catch((err) => {
+      sendGatedStreakCelebration(dbConn, userId, outcome.streak).catch((err) => {
         console.error(`[GamificationReward] Failed to send streak notification:`, err);
       });
     }

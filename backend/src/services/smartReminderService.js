@@ -28,7 +28,7 @@ import {
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import WittyMessageEngine from './wittyMessageEngine.js';
 import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
-import { getLocalHour, getLocalDayRange } from '../utils/timezone.js';
+import { getLocalHour, getLocalDayRange, getLocalDateUTC } from '../utils/timezone.js';
 
 // ============================================================================
 // REMINDER TYPES & CONFIGURATION
@@ -814,10 +814,17 @@ export function generateMotivationReminders(context) {
   const reminders = [];
 
   const streak = gamification?.streak || 0;
-  const daysSinceLastLog = calculateDaysSinceLastLog(todayStats);
+  const daysSinceLastLog = calculateDaysSinceLastLog(todayStats, gamification);
 
-  // Streak at risk (evening, has streak, no logs today)
-  if (currentHour >= 20 && currentHour <= 22 && streak >= 3) {
+  // Streak at risk (evening, has streak, no logs today). Window is 19:00
+  // only (was 20-22) — narrowed to stay >60 minutes clear of mobile's
+  // fixed local streak-backup hour (STREAK_HOUR = 21, pushNotifications.js).
+  // streak_at_risk is now in OWNABLE_CATEGORIES, so a device that has
+  // registered local ownership never sees this candidate at all — this
+  // narrower window is defense-in-depth for the case ownership hasn't
+  // registered yet (fresh install mid-registration, legacy pre-ownership
+  // app build), not the primary mechanism.
+  if (currentHour === 19 && streak >= 3) {
     const totalLogsToday = todayStats.food.totalMeals + todayStats.water.totalLogs + todayStats.mood.totalLogs;
     if (totalLogsToday === 0) {
       reminders.push({
@@ -829,8 +836,20 @@ export function generateMotivationReminders(context) {
     }
   }
 
-  // Comeback reminder (if user hasn't logged in 2+ days)
-  if (daysSinceLastLog >= 2 && daysSinceLastLog <= 7 && currentHour >= 10 && currentHour <= 14) {
+  // Comeback reminder (if user hasn't logged in 2+ days). Previously fired
+  // on every eligible day from 2 through 7 — up to 6 consecutive daily
+  // "come back!" messages to someone who, by definition, isn't responding.
+  // Backed off to specific days (2, 4, 7) instead of every day: still
+  // reaches the user at 3 meaningfully-spaced points during the window
+  // where re-engagement is most plausible, without repeating the identical
+  // automatic nudge daily regardless of a lack of response. This is
+  // specifically about COMEBACK — a system-generated automatic nudge the
+  // user never asked for by name — and does not touch the user-requested
+  // categories (hydration/food/mood/activity, opted into via Settings
+  // toggles), which are unaffected by inactivity by design: a user who
+  // explicitly asked for hydration reminders keeps getting them whether or
+  // not they're currently logging anything else.
+  if ([2, 4, 7].includes(daysSinceLastLog) && currentHour >= 10 && currentHour <= 14) {
     reminders.push({
       type: REMINDER_TYPES.COMEBACK,
       ...getMotivationMessage('comeback', { daysInactive: daysSinceLastLog, previousStreak: streak }),
@@ -907,15 +926,32 @@ export function generateActivityReminders(context) {
 // ============================================================================
 
 /**
- * Calculate days since last log
+ * Calculate days since last log, using the account's real lastLogDate
+ * (gamificationTable.lastLogDate) compared against the user's own local
+ * calendar day. Previously a stub that only checked TODAY's stats and
+ * could only ever return 0 or 1 — meaning generateMotivationReminders'
+ * comeback branch (daysSinceLastLog >= 2) was structurally unreachable
+ * dead code: no inactive user could ever trigger it, regardless of how
+ * long they'd actually been gone. Fixed 2026-09 alongside the comeback
+ * backoff (days 2/4/7 instead of every day) — that backoff has no effect
+ * without a real day count feeding it.
  */
-function calculateDaysSinceLastLog(todayStats) {
-  // If there are logs today, return 0
+function calculateDaysSinceLastLog(todayStats, gamification) {
+  // If there are logs today, the account is active today — 0 regardless of
+  // what lastLogDate says (it may not have been updated yet this request).
   if (todayStats.food.totalMeals > 0 || todayStats.water.totalLogs > 0 || todayStats.mood.totalLogs > 0) {
     return 0;
   }
-  // This would need last log date from stats - simplified for now
-  return 1;
+
+  const lastLogDate = gamification?.lastLogDate;
+  if (!lastLogDate) return 0; // no history at all — not "inactive", just new/unknown
+
+  const offsetMinutes = gamification?.timezoneOffset || 0;
+  const lastLocalDay = getLocalDateUTC(offsetMinutes, new Date(lastLogDate));
+  const todayLocalDay = getLocalDateUTC(offsetMinutes, new Date());
+
+  const diffMs = todayLocalDay.getTime() - lastLocalDay.getTime();
+  return Math.max(0, Math.round(diffMs / (24 * 60 * 60 * 1000)));
 }
 
 /**

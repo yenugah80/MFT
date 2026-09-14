@@ -38,7 +38,6 @@ import {
   profilesTable,
   waterLogTable,
   nutritionGoalsTable,
-  notificationDeliveryLogTable,
   devicesTable,
 } from '../db/schema.js';
 import { eq, isNotNull, or, and, sql, gte, lte, isNull } from 'drizzle-orm';
@@ -58,9 +57,19 @@ import {
   NOTIFICATION_TYPES
 } from '../services/pushNotificationService.js';
 import { isFirebaseReady } from '../config/firebase.js';
-import { getLocalHour } from '../utils/timezone.js';
 import { resolveSendTargets, getOwnedCategoriesForDevice } from '../utils/deviceRegistry.js';
-import { filterRemindersForDevice, mapReminderJobCategoryToLocalCategory } from '../utils/notificationOwnership.js';
+import {
+  filterRemindersForDevice,
+  mapReminderJobCategoryToLocalCategory,
+  getEffectiveDailyCap,
+} from '../utils/notificationOwnership.js';
+import {
+  NOTIFICATION_POLICY,
+  checkHourlyRateLimit,
+  checkMinSpacing,
+  isInQuietHours,
+  withReservedNotificationSlot,
+} from '../utils/notificationPolicy.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -71,35 +80,14 @@ const CONFIG = {
   BATCH_SIZE: 100,
   BATCH_DELAY_MS: 1000, // 1 second between batches to avoid overwhelming
 
-  // Rate limiting — reassessed, not inherited as given. The prior values
-  // were two separate problems, not one policy:
-  //
-  // 1. MAX_NOTIFICATIONS_PER_USER_PER_DAY was declared here but never
-  //    actually checked anywhere in this file — checkRateLimit only ever
-  //    enforced the hourly cap. A user could legitimately receive one
-  //    notification every 15-minute cron tick, twice an hour, for every
-  //    non-quiet hour of the day — tens of notifications, not 8. Now
-  //    actually enforced via checkDailyRateLimit, the same DB-backed
-  //    rolling-window pattern the hourly check already uses.
-  // 2. Neither cap prevented two DIFFERENT categories from firing in
-  //    consecutive cron ticks — "2 per hour" allows minute-0 and minute-16
-  //    of the same rolling hour, which is exactly the felt-spam pattern
-  //    from the incident this was investigated from (multiple distinct
-  //    messages ~15-20 minutes apart). Added MIN_SPACING_MINUTES as an
-  //    explicit floor between ANY two notifications for a user, regardless
-  //    of category — the hourly/daily caps bound total volume; this bounds
-  //    how close together any two of them can land.
-  //
-  // Numbers: hourly cap kept at 2 (now largely subsumed by the spacing
-  // floor below, but kept as a belt-and-suspenders bound). Daily cap
-  // brought down from the declared-but-unenforced 8 to 6 — five reminder
-  // categories exist (hydration/food/mood/activity/motivation), each
-  // already gated on real need (e.g. hydration skips entirely once the
-  // day's goal is met), so 6 real touches/day is generous headroom for a
-  // fully-engaged user without implying every category should fire daily.
-  MAX_NOTIFICATIONS_PER_USER_PER_HOUR: 2,
-  MAX_NOTIFICATIONS_PER_USER_PER_DAY: 6,
-  MIN_SPACING_MINUTES: 60,
+  // Rate limiting / quiet hours — moved to utils/notificationPolicy.js so
+  // every backend send path (this cron, nutrientDeficitJob.js,
+  // predictionLearningService.js, gamificationRewardService.js) shares one
+  // definition instead of each enforcing its own subset. See that file's
+  // header for the full history (the daily cap used to be declared here
+  // but never actually checked; the spacing floor was added after the
+  // felt-spam incident this was investigated from).
+  ...NOTIFICATION_POLICY,
 
   // Circuit breaker
   FAILURE_THRESHOLD: 10, // Consecutive failures before opening circuit
@@ -107,10 +95,6 @@ const CONFIG = {
 
   // Scheduling
   CRON_SCHEDULE: '*/15 * * * *', // Every 15 minutes
-
-  // Quiet hours (default, can be overridden per user)
-  DEFAULT_QUIET_START: 22, // 10 PM
-  DEFAULT_QUIET_END: 7,    // 7 AM
 };
 
 // ============================================================================
@@ -185,69 +169,23 @@ function checkRateLimitInMemory(userId) {
   return true;
 }
 
-async function checkRateLimitFromDB(userId) {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const [row] = await db
-    .select({ count: sql`COUNT(*)::int` })
-    .from(notificationDeliveryLogTable)
-    .where(
-      and(
-        eq(notificationDeliveryLogTable.userId, userId),
-        gte(notificationDeliveryLogTable.createdAt, oneHourAgo)
-      )
-    );
-  return (row?.count ?? 0) < CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_HOUR;
-}
-
-// Was declared in CONFIG but never actually checked anywhere — see the
-// comment on MAX_NOTIFICATIONS_PER_USER_PER_DAY above. Same rolling-window
-// pattern as the hourly check, just over 24 hours.
-async function checkDailyRateLimit(userId) {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [row] = await db
-    .select({ count: sql`COUNT(*)::int` })
-    .from(notificationDeliveryLogTable)
-    .where(
-      and(
-        eq(notificationDeliveryLogTable.userId, userId),
-        gte(notificationDeliveryLogTable.createdAt, oneDayAgo)
-      )
-    );
-  return (row?.count ?? 0) < CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_DAY;
-}
-
-// The hourly/daily caps bound total volume but never bounded how CLOSE
-// TOGETHER any two notifications could land — "2 per hour" allows one at
-// minute 0 and another at minute 16 of the same rolling window, which is
-// the exact multi-message-within-20-minutes pattern the original incident
-// showed. This is a floor on the gap since the user's MOST RECENT
-// notification of any category/type, not a per-category cooldown.
-async function checkMinSpacing(userId) {
-  const cutoff = new Date(Date.now() - CONFIG.MIN_SPACING_MINUTES * 60 * 1000);
-  const [row] = await db
-    .select({ count: sql`COUNT(*)::int` })
-    .from(notificationDeliveryLogTable)
-    .where(
-      and(
-        eq(notificationDeliveryLogTable.userId, userId),
-        gte(notificationDeliveryLogTable.createdAt, cutoff)
-      )
-    );
-  return (row?.count ?? 0) === 0;
-}
-
 async function checkRateLimit(userId) {
   // Fast path: in-memory check (avoids DB round-trip on most calls)
   if (!checkRateLimitInMemory(userId)) return false;
-  // Authoritative path: DB-backed, survives server restarts. All three
-  // must pass — hourly burst cap, daily total cap, and minimum spacing
-  // are three different failure modes, not interchangeable checks.
-  const [hourlyOk, dailyOk, spacingOk] = await Promise.all([
-    checkRateLimitFromDB(userId),
-    checkDailyRateLimit(userId),
-    checkMinSpacing(userId),
+  // Authoritative, account-level PRE-filter — cheap early exit for a user
+  // obviously over the hourly burst cap or inside the spacing floor, before
+  // spending any work computing reminders or resolving devices. These two
+  // aren't affected by per-device local allocation (they bound how often
+  // the BACKEND sends, not the combined total), so checking them once per
+  // user here is correct. The DAILY cap is NOT checked here — it now
+  // depends on each device's local-schedule allocation (getEffectiveDailyCap)
+  // and is enforced per-device, atomically, via reserveNotificationSlot
+  // inside the device loop in processUserReminders.
+  const [hourlyOk, spacingOk] = await Promise.all([
+    checkHourlyRateLimit(db, userId),
+    checkMinSpacing(db, userId),
   ]);
-  return hourlyOk && dailyOk && spacingOk;
+  return hourlyOk && spacingOk;
 }
 
 function clearOldRateLimits() {
@@ -454,28 +392,23 @@ async function deliverNotification(user, device, reminder) {
 
   const delivered = fcmSuccess || expoSuccess;
 
-  // Log every successful delivery to the DB — this is the source of truth for
-  // the DB-backed rate limiter (checkRateLimitFromDB) and analytics, and for
-  // the delivery-id-based ack (acknowledgePushReceived/getDeliveredToday).
-  if (delivered) {
-    try {
-      await db.insert(notificationDeliveryLogTable).values({
-        userId,
-        deviceId,
-        notificationType: type,
-        title,
-        body,
-        channel: fcmSuccess ? 'fcm' : 'expo',
-        priority: reminder.priority || 3,
-        deliveryStatus: 'sent',
-        deliveryId,
-      });
-    } catch (logErr) {
-      console.warn('[SmartReminderJob] Failed to log delivery (non-critical):', logErr.message);
-    }
-  }
-
-  return delivered;
+  // Delivery logging is the caller's job now (withReservedNotificationSlot
+  // finalizes the reservation with this deliveryLog on success, or deletes
+  // it on failure) — this function only reports what happened. The
+  // deliveryId is what the delivery-id-based ack (acknowledgePushReceived/
+  // getDeliveredToday) correlates against once the row exists.
+  return {
+    success: delivered,
+    deliveryLog: {
+      deviceId,
+      notificationType: type,
+      title,
+      body,
+      channel: fcmSuccess ? 'fcm' : 'expo',
+      priority: reminder.priority || 3,
+      deliveryId,
+    },
+  };
 }
 
 /**
@@ -511,30 +444,11 @@ export function mapTypeToExpo(reminderType) {
 // QUIET HOURS CHECK
 // ============================================================================
 
-function isInQuietHours(user) {
-  const notifications = user.notifications || {};
-  const quietHours = notifications.quietHours || {
-    start: CONFIG.DEFAULT_QUIET_START,
-    end: CONFIG.DEFAULT_QUIET_END,
-  };
-
-  // Calculate user's local hour. Previously added offsetMinutes directly —
-  // the opposite sign from every other timezone computation in this
-  // codebase (getLocalDayRange, getLocalDateUTC: local = UTC - offset,
-  // per Date.getTimezoneOffset()'s convention where positive = west of
-  // UTC). For any real US timezone (all positive offsets), that inversion
-  // put localHour several hours in the wrong direction from the truth.
-  const offsetMinutes = user.timezoneOffset || 0;
-  const localHour = getLocalHour(offsetMinutes);
-
-  const { start, end } = quietHours;
-
-  // Handle overnight quiet hours (e.g., 22:00 to 07:00)
-  if (start > end) {
-    return localHour >= start || localHour < end;
-  }
-  return localHour >= start && localHour < end;
-}
+// isInQuietHours(user) is now imported from utils/notificationPolicy.js —
+// same pure function (takes { notifications, timezoneOffset }), shared with
+// every other backend send path. Kept as a batched-fetch call here since
+// getEligibleUsersBatched already joins these fields for the whole batch;
+// see isInQuietHoursForUser in that module for callers that don't.
 
 // ============================================================================
 // MAIN JOB LOGIC
@@ -678,9 +592,27 @@ async function processUserReminders(user, runMetrics) {
         continue;
       }
 
-      const success = await deliverNotification(user, device, topReminder);
+      // The backend's own daily cap for THIS device is reduced by whatever
+      // its local schedule already claims for its owned categories — see
+      // getEffectiveDailyCap. Reservation is atomic (advisory-lock-serialized
+      // per userId in notificationPolicy.js), so a concurrent send for this
+      // same user — another device in this same loop, or a different job
+      // entirely (nutrientDeficitJob, a gamification event) — cannot race
+      // past this check.
+      const effectiveDailyCap = getEffectiveDailyCap(CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_DAY, ownedCategories);
+      const result = await withReservedNotificationSlot(
+        db,
+        userId,
+        { maxPerDay: effectiveDailyCap },
+        () => deliverNotification(user, device, topReminder)
+      );
 
-      if (success) {
+      if (result.held) {
+        const capNote = result.held === 'daily_cap'
+          ? ` (effective cap ${effectiveDailyCap}/day — ${CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_DAY - effectiveDailyCap} reserved for local schedule)`
+          : '';
+        console.log(`[SmartReminderJob] Held ${topReminder.type} for user ${userId} (device ${device.id ?? 'legacy'}) — ${result.held}${capNote}`);
+      } else if (result.success) {
         runMetrics.sent++;
         runMetrics.byType[topReminder.type] = (runMetrics.byType[topReminder.type] || 0) + 1;
         console.log(`[SmartReminderJob] Sent ${topReminder.type} to user ${userId} (device ${device.id ?? 'legacy'})`);

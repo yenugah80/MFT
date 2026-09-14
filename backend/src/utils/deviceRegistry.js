@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { devicesTable, notificationOwnershipTable } from '../db/schema.js';
 import { claimTokenOwnership, releaseTokenOwnership } from './pushTokenOwnership.js';
+import { getEffectiveDailyCap } from './notificationOwnership.js';
 
 const DEREGISTER_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -203,6 +204,52 @@ export async function getOwnedCategoriesForDevice(db, deviceId) {
     .from(notificationOwnershipTable)
     .where(and(eq(notificationOwnershipTable.deviceId, deviceId), eq(notificationOwnershipTable.owner, 'local')));
   return new Set(rows.map((r) => r.category));
+}
+
+/**
+ * Account-level effective daily cap for send paths that don't target one
+ * specific device (nutrientDeficitJob.js, predictionLearningService.js,
+ * gamificationRewardService.js) — sendUserFCMNotification/sendUserNotification
+ * with no deviceId fan out to EVERY real device row the account has, so one
+ * account-level send lands on every device simultaneously. The cap that
+ * matters is the MOST RESTRICTIVE (smallest) effective cap across all of
+ * the account's devices — using a looser device's cap would risk exceeding
+ * the budget on a stricter device that owns more locally. A user with zero
+ * real device rows (legacy pseudo-device only — never owns anything, per
+ * getOwnedCategoriesForDevice) or zero devices at all gets the flat,
+ * unreduced maxPerDay back unchanged.
+ *
+ * How this interacts with reserveNotificationSlot's per-account advisory
+ * lock (notificationPolicy.js): the LOCK and the COUNTED ROWS are always
+ * account-scoped — one lock per userId, one shared pool of
+ * notificationDeliveryLogTable rows for that userId, regardless of which
+ * job or which device triggered any given row. The CAP THRESHOLD compared
+ * against that shared count is what varies per caller: smartReminderJob.js
+ * computes a cap specific to the ONE device it's currently sending to (via
+ * getEffectiveDailyCap directly, no account-wide resolution needed); this
+ * function computes a cap for an account-level send with no specific
+ * device. Because the count is shared but the threshold can differ between
+ * two concurrent callers for the same user, processing ORDER matters: if
+ * device A's cap is looser than device B's and A's reservation commits
+ * first, B may see the pool already closer to exhaustion than if B had
+ * gone first. This is an inherent property of "one shared pool, per-caller
+ * threshold" — not a bug, and not eliminable without giving every device
+ * its own separate counted sub-pool, which would then need its own
+ * cross-device reconciliation to keep the account total at the real cap —
+ * strictly more complex for no behavioral benefit at this scale.
+ */
+export async function getAccountEffectiveDailyCap(db, userId, accountSettingsRow, maxPerDay) {
+  const targets = await resolveSendTargets(db, userId, accountSettingsRow);
+  const realDevices = targets.filter((d) => d.id !== null);
+  if (realDevices.length === 0) return maxPerDay;
+
+  const caps = await Promise.all(
+    realDevices.map(async (device) => {
+      const owned = await getOwnedCategoriesForDevice(db, device.id);
+      return getEffectiveDailyCap(maxPerDay, owned);
+    })
+  );
+  return Math.min(...caps);
 }
 
 export async function setOwnership(db, deviceId, category, owner) {

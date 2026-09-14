@@ -22,6 +22,8 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql, isNull } from 'drizzle-orm';
 import { sendUserFCMNotification, FCM_NOTIFICATION_TYPES } from './fcmPushService.js';
+import { withReservedNotificationSlot, NOTIFICATION_POLICY } from '../utils/notificationPolicy.js';
+import { getAccountEffectiveDailyCap } from '../utils/deviceRegistry.js';
 
 // ============================================================================
 // CONSTANTS
@@ -695,23 +697,57 @@ export async function processPendingCheckIns() {
  */
 async function sendCheckInNotification(checkIn) {
   try {
-    const result = await sendUserFCMNotification(
-      db,
-      checkIn.userId,
-      FCM_NOTIFICATION_TYPES.REAL_TIME_ALERT,
-      {
-        title: checkIn.title,
-        body: checkIn.body,
-        data: {
-          type: 'prediction_check_in',
-          predictionId: String(checkIn.predictionId),
-          checkInId: String(checkIn.id),
-          buttons: JSON.stringify(checkIn.actionButtons),
-          screen: 'check_in',
+    // Atomically reserves the slot (quiet hours, daily cap, minimum spacing,
+    // race-safe against smartReminderJob's/nutrientDeficitJob's own
+    // concurrent runs — see notificationPolicy.js) and only sends if
+    // granted. A check-in is a scheduled follow-up to a PAST event
+    // (15-90 min after a predicted risk), not a live user action, so it can
+    // legitimately land in quiet hours if the triggering event was itself
+    // late — quiet-hours suppression applies here. A held reservation
+    // leaves the check-in 'pending' (not marked failed) below:
+    // processPendingCheckIns is re-invoked externally on its own schedule,
+    // so this naturally retries on the next call until it either sends or
+    // its windowEnd expires it.
+    // Effective cap reduced by whatever this account's devices already
+    // claim locally (most restrictive device wins) — no specific device
+    // target here either, same reasoning as nutrientDeficitJob.js.
+    const effectiveDailyCap = await getAccountEffectiveDailyCap(db, checkIn.userId, null, NOTIFICATION_POLICY.MAX_NOTIFICATIONS_PER_USER_PER_DAY);
+
+    const result = await withReservedNotificationSlot(db, checkIn.userId, { maxPerDay: effectiveDailyCap }, async () => {
+      const sendResult = await sendUserFCMNotification(
+        db,
+        checkIn.userId,
+        FCM_NOTIFICATION_TYPES.REAL_TIME_ALERT,
+        {
+          title: checkIn.title,
+          body: checkIn.body,
+          data: {
+            type: 'prediction_check_in',
+            predictionId: String(checkIn.predictionId),
+            checkInId: String(checkIn.id),
+            buttons: JSON.stringify(checkIn.actionButtons),
+            screen: 'check_in',
+          },
+          channelId: 'predictions',
+        }
+      );
+      return {
+        success: sendResult?.success === true,
+        error: sendResult?.error,
+        deliveryLog: {
+          notificationType: 'prediction_check_in',
+          title: checkIn.title,
+          body: checkIn.body,
+          channel: 'fcm',
+          priority: 3,
         },
-        channelId: 'predictions',
-      }
-    );
+      };
+    });
+
+    if (result.held) {
+      console.log(`[PredictionLearning] Check-in ${checkIn.id} for ${checkIn.userId} held (${result.held})`);
+      return;
+    }
 
     // Update check-in status
     await db
