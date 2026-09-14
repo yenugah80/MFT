@@ -862,22 +862,49 @@ export function useFoodLog() {
    */
   const deleteLog = useCallback(async (logId) => {
     try {
+      // Look up the row's real identity BEFORE deleting anything. Callers
+      // (e.g. log.js's "Edit" flow, which deletes the just-saved entry so
+      // the user can resubmit it with a corrected quantity) only ever have
+      // the clientEventId string available — the numeric backend id is
+      // assigned later, by processSyncQueue, and overwrites this row's own
+      // `id` column once synced. The old `typeof logId === 'number'` gate
+      // assumed a caller would sometimes have that numeric id; in practice
+      // none do, so the backend DELETE below never fired for an
+      // already-synced entry. The local row vanished from the UI, but its
+      // server-side row — and its contribution to dailyNutritionSummaryTable
+      // — stayed, and the resave added a second, corrected entry on top:
+      // a real double-count invisible in the app, only visible in the
+      // dashboard's daily total.
+      const row = await db.getFirstAsync(
+        'SELECT id, status FROM food_logs WHERE id = ? OR timestamp = ? OR clientEventId = ?',
+        [logId, logId, String(logId)]
+      );
+
       // Remove from sync queue first — the lookup joins on food_logs, so it
       // must run before that row is gone or it always matches nothing,
       // leaving an orphaned queue entry that retries a meal that no longer
       // exists locally.
-      await db.runAsync('DELETE FROM sync_queue WHERE clientEventId IN (SELECT clientEventId FROM food_logs WHERE id = ? OR timestamp = ?)', [logId, logId]);
+      await db.runAsync(
+        'DELETE FROM sync_queue WHERE clientEventId IN (SELECT clientEventId FROM food_logs WHERE id = ? OR timestamp = ? OR clientEventId = ?)',
+        [logId, logId, String(logId)]
+      );
 
       // Delete from local DB
-      await db.runAsync('DELETE FROM food_logs WHERE id = ? OR timestamp = ?', [logId, logId]);
+      await db.runAsync(
+        'DELETE FROM food_logs WHERE id = ? OR timestamp = ? OR clientEventId = ?',
+        [logId, logId, String(logId)]
+      );
 
       await loadLocalLogs();
       await updateSyncCount();
 
-      // If synced, delete from backend
+      // If synced, delete from backend — using the row's OWN numeric id
+      // (ground truth from the lookup above), not whatever type of value
+      // the caller happened to pass in.
+      const backendId = row?.status === 'synced' ? Number(row.id) : NaN;
       const token = await getToken();
-      if (token && typeof logId === 'number') {
-        await fetch(`${API_URL}/nutrition/log/${logId}`, {
+      if (token && Number.isFinite(backendId)) {
+        await fetch(`${API_URL}/nutrition/log/${backendId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
