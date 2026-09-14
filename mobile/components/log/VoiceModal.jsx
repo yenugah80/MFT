@@ -67,6 +67,7 @@ import {
 // ============================================================================
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 const WAVEFORM_BARS_STANDARD = 30;
 const WAVEFORM_BARS_ELDERLY = 15;
 const MAX_RECORDING_DURATION_MS = 60000; // 60 seconds
@@ -1806,17 +1807,21 @@ const styles = StyleSheet.create({
     minHeight: 450,
     justifyContent: 'center',
   },
-  // Transcribed state only: flex fills whatever height the modal has left
-  // (which shrinks correctly above the keyboard via the outer
-  // KeyboardAvoidingView) so the ScrollView below has real bounds to scroll
-  // within, instead of `content`'s centered/minHeight box, which has no
-  // fixed height for a ScrollView to measure against.
+  // Transcribed state only. Deliberately NOT flex:1 anywhere in this
+  // subtree: `modal`/`modalElderly` cap size with maxHeight but never set an
+  // explicit height, and a flex:1 child inside a maxHeight-without-height
+  // parent has no definite size to grow into — AddIngredientModal.jsx hit
+  // this exact case already (see its ingredientsList style comment) and its
+  // fix is the same one used here: give the scrollable child a real,
+  // calculated maxHeight instead, so it has bounds to measure against no
+  // matter what. transcribedContent itself needs no explicit sizing — it
+  // just stacks the (now bounded) scroll area and the footer to their
+  // natural heights, capped overall by the modal's own maxHeight/overflow.
   transcribedContent: {
-    flex: 1,
     width: '100%',
   },
   transcribedScroll: {
-    flex: 1,
+    maxHeight: SCREEN_HEIGHT * 0.42,
   },
   transcribedScrollContent: {
     padding: SPACING[6],

@@ -42,6 +42,7 @@ import { useTheme } from '../../providers/ThemeProvider';
 import useProfileForm from '../../hooks/useProfileForm';
 import { useUser } from '@clerk/clerk-expo';
 import { calculateDailyTargets } from '../../utils/nutritionTargets';
+import { resolveMacroField, normalizeItemMacros, aggregateNormalizedMacroTotals } from '../../utils/macroFieldResolver';
 import { moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
 import { getAllergenSeverity } from '../../utils/allergenDetection';
 
@@ -82,66 +83,43 @@ import { replaceIngredientTerm, unresolvedItems } from '../../utils/foodResoluti
  * (saves one directly from inside VoiceModal) so the two never drift apart.
  * Returns null when there is nothing to log.
  */
-function mapVoiceResultToAnalysis(voiceResult) {
-  const { items, totals } = voiceResult || {};
+export function mapVoiceResultToAnalysis(voiceResult) {
+  const { items } = voiceResult || {};
   if (!items || items.length === 0) return null;
 
   const mappedItems = items.map((item, idx) => ({
     itemId: item.itemId || `voice-${idx}`,
     name: item.name || item.foodName,
     portion: item.portion || { amount: 1, unit: 'serving' },
-    macros: item.macros || {
-      calories_kcal: item.calories || 0,
-      protein_g: item.protein || 0,
-      carbs_g: item.carbs || 0,
-      fat_g: item.fat || item.fats || 0,
-      fiber_g: item.fiber || 0,
-      sugar_g: item.sugar || 0,
-      sodium_mg: item.sodium || 0,
-    },
+    macros: normalizeItemMacros(item),
     micros: item.micros || {},
     confidence: item.confidence || 0.9,
     source: item.source || 'voice',
   }));
 
-  const calculatedTotals = {
-    macros: {
-      calories_kcal: 0,
-      protein_g: 0,
-      carbs_g: 0,
-      fat_g: 0,
-      fiber_g: 0,
-      sugar_g: 0,
-      sodium_mg: 0,
-    },
-    micros: {},
-  };
-
+  const micros = {};
   mappedItems.forEach((item) => {
-    const m = item.macros || {};
-    calculatedTotals.macros.calories_kcal += m.calories_kcal || 0;
-    calculatedTotals.macros.protein_g += m.protein_g || 0;
-    calculatedTotals.macros.carbs_g += m.carbs_g || 0;
-    calculatedTotals.macros.fat_g += m.fat_g || 0;
-    calculatedTotals.macros.fiber_g += m.fiber_g || 0;
-    calculatedTotals.macros.sugar_g += m.sugar_g || 0;
-    calculatedTotals.macros.sodium_mg += m.sodium_mg || 0;
-
     if (item.micros) {
       Object.entries(item.micros).forEach(([key, value]) => {
-        if (!calculatedTotals.micros[key]) {
-          calculatedTotals.micros[key] = { value: 0, unit: value?.unit || '' };
+        if (!micros[key]) {
+          micros[key] = { value: 0, unit: value?.unit || '' };
         }
-        calculatedTotals.micros[key].value += value?.value || 0;
+        micros[key].value += value?.value || 0;
       });
     }
   });
 
-  const finalTotals = (totals?.macros && Object.keys(totals.macros).length > 0)
-    ? totals
-    : calculatedTotals;
+  // Totals are always reconciled from these same normalized items — never a
+  // separately-sourced server total that could silently diverge from what's
+  // actually displayed per item and then saved. That exact divergence (an
+  // item correctly showing 95 kcal while a competing, unreconciled total
+  // showed 0) is the reported bug; a single source of truth for both the
+  // per-item values and the sum structurally rules it out, rather than
+  // guessing which of two sums to trust by whether it happens to be
+  // positive. The backend's own totals are intentionally not read here.
+  const totals = { macros: aggregateNormalizedMacroTotals(mappedItems), micros };
 
-  return { items: mappedItems, totals: finalTotals, source: 'voice' };
+  return { items: mappedItems, totals, source: 'voice' };
 }
 
 export default function LogScreen() {
@@ -795,13 +773,18 @@ export default function LogScreen() {
           mealId: mealEventId,
           foodName: item.name,
           servingSize: servingText,
-          calories: item.macros?.calories_kcal || 0,
-          protein: item.macros?.protein_g || 0,
-          carbs: item.macros?.carbs_g || 0,
-          fats: item.macros?.fat_g || 0,
-          fiber: item.macros?.fiber_g || 0,
-          sugar: item.macros?.sugar_g || 0,
-          sodium: item.macros?.sodium_mg || 0,
+          // resolveMacroField preserves missing-vs-zero (null vs 0) and
+          // checks legacy unsuffixed keys — a bare `item.macros?.calories_kcal
+          // || 0` here previously turned any item whose macros used the
+          // alternate shape into a silent, saved 0, even though the same
+          // item displayed its real value throughout review.
+          calories: resolveMacroField(item, 'calories_kcal'),
+          protein: resolveMacroField(item, 'protein_g'),
+          carbs: resolveMacroField(item, 'carbs_g'),
+          fats: resolveMacroField(item, 'fat_g'),
+          fiber: resolveMacroField(item, 'fiber_g'),
+          sugar: resolveMacroField(item, 'sugar_g'),
+          sodium: resolveMacroField(item, 'sodium_mg'),
           micros: item.micros || {},
           // Stage 8d: same silent-drop pattern Stage 8a already fixed once
           // for sourceMeta on this exact code path, never extended to
@@ -905,12 +888,12 @@ export default function LogScreen() {
       servingSize: item.portion?.amount && item.portion?.unit
         ? `${item.portion.amount}${item.portion.unit}`
         : null,
-      calories: item.macros?.calories_kcal ?? null,
-      protein: item.macros?.protein_g ?? null,
-      carbs: item.macros?.carbs_g ?? null,
-      fats: item.macros?.fat_g ?? null,
-      fiber: item.macros?.fiber_g ?? null,
-      sugar: item.macros?.sugar_g ?? null,
+      calories: resolveMacroField(item, 'calories_kcal'),
+      protein: resolveMacroField(item, 'protein_g'),
+      carbs: resolveMacroField(item, 'carbs_g'),
+      fats: resolveMacroField(item, 'fat_g'),
+      fiber: resolveMacroField(item, 'fiber_g'),
+      sugar: resolveMacroField(item, 'sugar_g'),
       sugarAlcohols: item.macros?.sugarAlcohols_g ?? null,
       netCarbs: item.netCarbs ?? null,
       micronutrients: item.micros ? Object.entries(item.micros).map(([key, value]) => ({
