@@ -29,6 +29,7 @@ import { API_URL } from '../constants/api';
 import { calculateNetCarbs } from '../types/foodLog';
 import { normalizeNutritionData, detectAggregatedData } from '../utils/nutritionNormalizer';
 import { normalizeFoodName } from '../utils/displayText';
+import { getMealTypeFromTime as getMealTypeFromTimeShared } from '../utils/mealTypeFromTime';
 
 // Module-level cache to persist analysis result across component remounts
 // This prevents loss of analysis data when the tabs layout re-renders
@@ -177,13 +178,12 @@ const OCR_KEYWORDS = ['calories', 'protein', 'carb', 'fat', 'serving', 'nutritio
  * Detect meal type based on current time
  * @returns {'breakfast'|'lunch'|'dinner'|'snack'} Meal type
  */
+// Re-exported for existing importers (see mobile/utils/mealTypeFromTime.js
+// for why this now delegates to a single shared implementation instead of
+// keeping its own boundary logic — this one used to disagree with the
+// display-time classifiers for anything logged at or after 22:00).
 export function getMealTypeFromTime() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return 'breakfast';
-  if (hour >= 11 && hour < 15) return 'lunch';
-  if (hour >= 15 && hour < 17) return 'snack';
-  if (hour >= 17 && hour < 22) return 'dinner';
-  return 'snack';
+  return getMealTypeFromTimeShared();
 }
 
 /**

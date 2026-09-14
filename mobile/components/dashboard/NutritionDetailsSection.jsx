@@ -19,6 +19,7 @@ import { TEXT, SURFACES, CARD_SYSTEM, BRAND, SEMANTIC } from '../../constants/pr
 import { MODERN_MACROS } from '../../constants/modernColorPalette';
 import { generateInsights } from '../../utils/healthCalculations';
 import { getCalorieFramingText } from '../../utils/goalFraming';
+import { getMealTypeFromTime } from '../../utils/mealTypeFromTime';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -33,11 +34,7 @@ const FAT_COLOR = SEMANTIC.info.base;
 // touching it just to add an export would be an unrelated change.
 function detectMealType(timestamp) {
   if (!timestamp) return 'snack';
-  const hour = new Date(timestamp).getHours();
-  if (hour >= 5 && hour < 11) return 'breakfast';
-  if (hour >= 11 && hour < 16) return 'lunch';
-  if (hour >= 18 || hour < 1) return 'dinner';
-  return 'snack';
+  return getMealTypeFromTime(new Date(timestamp));
 }
 
 const MEAL_SLOTS = [

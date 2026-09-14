@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
 
 import { getMealById } from '@/services/database';
+import { getMealTypeFromTime } from '@/utils/mealTypeFromTime';
 import {
   TEXT,
   BRAND,
@@ -63,17 +64,6 @@ const GRADE_CONFIG = {
  * Dinner: 6pm - 11:59pm (including late dinners)
  * Late night: 12am - 4:59am (treated as snack)
  */
-function detectMealType(timestamp) {
-  if (!timestamp) return 'snack';
-  const date = new Date(timestamp);
-  const hour = date.getHours();
-
-  if (hour >= 5 && hour < 11) return 'breakfast';
-  if (hour >= 11 && hour < 16) return 'lunch';
-  if (hour >= 18 || hour < 1) return 'dinner'; // 6pm-12:59am
-  return 'snack'; // 4-5:59pm or 1-4:59am
-}
-
 /**
  * Calculate meal health score (0-100)
  */
@@ -302,7 +292,7 @@ export default function MealDetailScreen() {
   const netCarbs = Math.max(0, carbs - fiber);
 
   // Always detect meal type from timestamp (stored value may be incorrect)
-  const mealType = detectMealType(meal.timestamp);
+  const mealType = meal.timestamp ? getMealTypeFromTime(new Date(meal.timestamp)) : 'snack';
   const mealConfig = MEAL_TYPE_CONFIG[mealType] || MEAL_TYPE_CONFIG.snack;
 
   // Source info
