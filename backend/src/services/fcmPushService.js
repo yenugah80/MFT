@@ -14,6 +14,7 @@ import { eq, isNotNull } from 'drizzle-orm';
 import { accountSettingsTable, devicesTable } from '../db/schema.js';
 import { getMessaging, isFirebaseReady } from '../config/firebase.js';
 import { getDevicesForUser } from '../utils/deviceRegistry.js';
+import { isCurrentTokenOwner } from '../utils/pushTokenOwnership.js';
 import WittyMessageEngine from './wittyMessageEngine.js';
 
 /**
@@ -246,7 +247,24 @@ export async function sendUserFCMNotification(db, userId, notificationType, noti
       return { success: false, reason: 'preference_disabled' };
     }
 
-    const targets = await resolveFCMSendTargets(db, userId, options.deviceId, settings);
+    const resolvedTargets = await resolveFCMSendTargets(db, userId, options.deviceId, settings);
+
+    // Authoritative delivery gate: accountSettingsTable/devicesTable rows
+    // resolved above are per-account bookkeeping and can be transiently
+    // stale (this account's own copy of a token another account has since
+    // atomically claimed isn't retroactively corrected until this
+    // account's own next registration). push_token_ownership is checked
+    // fresh, right before dispatch, so a stale resolved target is silently
+    // skipped rather than delivered to someone else's now-owned device.
+    const ownershipChecks = await Promise.all(
+      resolvedTargets.map((t) => isCurrentTokenOwner(db, t.fcmToken, userId))
+    );
+    const targets = resolvedTargets.filter((_, i) => ownershipChecks[i]);
+    const skipped = resolvedTargets.length - targets.length;
+    if (skipped > 0) {
+      console.log(`[FCMService] Skipped ${skipped} target(s) for user ${userId} — token no longer owned by this account`);
+    }
+
     if (targets.length === 0) {
       console.log(`[FCMService] User ${userId} has no FCM token`);
       return { success: false, reason: 'no_fcm_token' };

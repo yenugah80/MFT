@@ -1,5 +1,5 @@
 // Existing imports already include text, integer, timestamp, etc.
-import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, jsonb, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, bigint, uniqueIndex, decimal, json, jsonb, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // User profiles table - stores personal information
@@ -1904,6 +1904,33 @@ export const notificationOwnershipTable = pgTable(
   },
   (table) => ({
     deviceCategoryUnique: unique("notification_ownership_device_category_unique").on(table.deviceId, table.category),
+  })
+);
+
+// Atomic, single-owner-per-token model — see migration 0055 for the full
+// rationale. accountSettingsTable.fcmToken/expoPushToken and devicesTable's
+// per-device columns remain per-account bookkeeping; this table is the
+// authoritative, race-free answer to which account should actually receive
+// a push to a given token right now. The UNIQUE constraint on token is what
+// makes "two accounts both own this token" structurally impossible — reads
+// and writes against it go through utils/pushTokenOwnership.js's
+// claimTokenOwnership, never a plain insert/update here.
+export const pushTokenOwnershipTable = pgTable(
+  "push_token_ownership",
+  {
+    id: serial("id").primaryKey(),
+    token: text("token").notNull(),
+    tokenType: text("token_type").notNull(), // 'fcm' | 'expo'
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
+    deviceId: text("device_id"),
+    // Clerk JWT `iat` (unix seconds) of the request that won this claim.
+    issuedAt: bigint("issued_at", { mode: "number" }).notNull(),
+    claimedAt: timestamp("claimed_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenUnique: unique("push_token_ownership_token_unique").on(table.token),
+    userIdIdx: index("push_token_ownership_user_id_idx").on(table.userId),
   })
 );
 

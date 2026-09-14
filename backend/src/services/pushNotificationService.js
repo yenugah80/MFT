@@ -12,6 +12,7 @@
 import { eq, and, isNotNull } from 'drizzle-orm';
 import { accountSettingsTable, devicesTable } from '../db/schema.js';
 import { getDevicesForUser } from '../utils/deviceRegistry.js';
+import { isCurrentTokenOwner } from '../utils/pushTokenOwnership.js';
 
 // Expo Push Notification API endpoint
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -186,7 +187,21 @@ export async function sendUserNotification(db, userId, notificationType, notific
       return { success: false, reason: 'preference_disabled' };
     }
 
-    const targets = await resolveExpoSendTargets(db, userId, options.deviceId, settings);
+    const resolvedTargets = await resolveExpoSendTargets(db, userId, options.deviceId, settings);
+
+    // Authoritative delivery gate — see sendUserFCMNotification in
+    // fcmPushService.js for the full rationale. Checked fresh right before
+    // dispatch, since the resolved targets above are per-account
+    // bookkeeping that can be transiently stale.
+    const ownershipChecks = await Promise.all(
+      resolvedTargets.map((t) => isCurrentTokenOwner(db, t.expoPushToken, userId))
+    );
+    const targets = resolvedTargets.filter((_, i) => ownershipChecks[i]);
+    const skipped = resolvedTargets.length - targets.length;
+    if (skipped > 0) {
+      console.log(`[PushService] Skipped ${skipped} target(s) for user ${userId} — token no longer owned by this account`);
+    }
+
     if (targets.length === 0) {
       console.log(`[PushService] User ${userId} has no push token`);
       return { success: false, reason: 'no_token' };

@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 import {
   profilesTable,
@@ -29,6 +29,7 @@ import {
   setOwnership,
   issueDeregisterToken,
 } from "../utils/deviceRegistry.js";
+import { claimTokenOwnership, releaseTokenOwnership } from "../utils/pushTokenOwnership.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
@@ -54,7 +55,7 @@ const VALID_CUISINE_PREFERENCES = [
 // --- Push Token Management ---
 export async function savePushToken(req, res) {
   try {
-    const { userId } = getAuth(req);
+    const { userId, sessionClaims } = getAuth(req);
     const { expoPushToken } = req.body;
 
     if (!expoPushToken || typeof expoPushToken !== 'string') {
@@ -115,39 +116,33 @@ export async function savePushToken(req, res) {
       .returning({ expoPushToken: accountSettingsTable.expoPushToken, pushTokenUpdatedAt: accountSettingsTable.pushTokenUpdatedAt });
     const now = updated.pushTokenUpdatedAt;
 
-    // A push token identifies one physical app installation. If it was
-    // previously registered to a DIFFERENT account — e.g. that account's
-    // own sign-out deregistration never ran (predates when that client-side
-    // fix shipped, or failed silently — deregisterAllPushChannels swallows
-    // errors so the app can still sign out) — that stale row would keep
-    // independently sending its own reminders to this same device forever,
-    // with no visible link between the two accounts. Live incident: a
-    // 10-month-old account and an app-review account both still held this
-    // exact token and both kept sending hydration reminders to one phone.
-    // Clearing it here doesn't depend on that other client ever coming
-    // back online to clean up after itself.
-    //
-    // pushTokenUpdatedAt < now guards against two near-concurrent
-    // registrations for different accounts (e.g. an old session's token
-    // refresh landing right as a new account signs in on the same device):
-    // without it, A's backstop could clear B's just-written row and B's
-    // backstop could clear A's, leaving BOTH rows empty — worse than the
-    // original bug, and a violation of "the current registration must
-    // never be removed." Only clearing rows strictly older than this
-    // request's own write means whichever registration is genuinely most
-    // recent always survives, regardless of interleaving.
-    const staleOwners = await req.db
-      .update(accountSettingsTable)
-      .set({ expoPushToken: null, pushTokenUpdatedAt: sql`now()`, updatedAt: sql`now()` })
-      .where(and(
-        eq(accountSettingsTable.expoPushToken, expoPushToken),
-        ne(accountSettingsTable.userId, userId),
-        lt(accountSettingsTable.pushTokenUpdatedAt, now)
-      ))
-      .returning({ userId: accountSettingsTable.userId });
-
-    if (staleOwners.length > 0) {
-      console.log(`[savePushToken] Cleared stale token from ${staleOwners.length} other account(s): ${staleOwners.map((r) => r.userId).join(', ')}`);
+    // accountSettingsTable above is per-account bookkeeping only — it does
+    // not, by itself, decide who may actually receive a push to this
+    // token. That decision is atomic and lives in push_token_ownership,
+    // enforced by its UNIQUE(token) constraint (structurally impossible for
+    // two accounts to both hold the winning row) and ordered by this
+    // request's JWT issued-at, not by when it happens to reach the
+    // database — see claimTokenOwnership's docstring for why that
+    // specifically defeats a registration request still in flight from an
+    // account that has since signed out. Live incident this whole feature
+    // traces back to: a 10-month-old account and an app-review account
+    // both still held this exact token and both kept sending hydration
+    // reminders to one phone.
+    const issuedAtSeconds = sessionClaims?.iat;
+    if (Number.isFinite(issuedAtSeconds)) {
+      const claim = await claimTokenOwnership(req.db, {
+        token: expoPushToken,
+        tokenType: 'expo',
+        userId,
+        issuedAtSeconds,
+      });
+      if (!claim.claimed) {
+        console.log(`[savePushToken] Ownership claim lost to a newer registration (current owner: ${claim.ownerUserId}) — this account's own token bookkeeping was still saved.`);
+      }
+    } else {
+      // No iat on the auth claims is not expected for a real Clerk-signed
+      // request, but fail safe rather than skip the atomic claim silently.
+      console.warn(`[savePushToken] No sessionClaims.iat available for user ${userId} — skipping atomic ownership claim this call.`);
     }
 
     console.log(`[savePushToken] Saved push token for user ${userId}`);
@@ -176,6 +171,12 @@ export async function deletePushToken(req, res) {
   try {
     const { userId } = getAuth(req);
 
+    const [existing] = await req.db
+      .select({ expoPushToken: accountSettingsTable.expoPushToken })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId))
+      .limit(1);
+
     await req.db
       .update(accountSettingsTable)
       .set({
@@ -184,6 +185,13 @@ export async function deletePushToken(req, res) {
         updatedAt: new Date()
       })
       .where(eq(accountSettingsTable.userId, userId));
+
+    // Scoped to (token, this userId) — a safe no-op if ownership was
+    // already reclaimed by a different account since this token was
+    // registered (see releaseTokenOwnership's docstring).
+    if (existing?.expoPushToken) {
+      await releaseTokenOwnership(req.db, existing.expoPushToken, userId);
+    }
 
     console.log(`[deletePushToken] Removed push token for user ${userId}`);
     res.status(200).json({ success: true, tokenRegistered: false });
@@ -305,7 +313,7 @@ export async function acknowledgePushReceived(req, res) {
 
 export async function registerDeviceEndpoint(req, res) {
   try {
-    const { userId } = getAuth(req);
+    const { userId, sessionClaims } = getAuth(req);
     const { deviceId, fcmToken, expoPushToken, platform } = req.body || {};
 
     if (!deviceId || typeof deviceId !== 'string') {
@@ -331,7 +339,7 @@ export async function registerDeviceEndpoint(req, res) {
       });
     }
 
-    await registerDevice(req.db, userId, { deviceId, fcmToken, expoPushToken, platform });
+    await registerDevice(req.db, userId, { deviceId, fcmToken, expoPushToken, platform, issuedAtSeconds: sessionClaims?.iat });
     console.log(`[registerDeviceEndpoint] Registered device ${deviceId} for user ${userId} (${platform || 'unknown platform'})`);
     res.status(200).json({ success: true, registered: true });
   } catch (error) {
@@ -428,7 +436,7 @@ export async function setNotificationOwnershipEndpoint(req, res) {
 // --- FCM Token Management (Firebase Cloud Messaging) ---
 export async function saveFCMToken(req, res) {
   try {
-    const { userId } = getAuth(req);
+    const { userId, sessionClaims } = getAuth(req);
     const { fcmToken, platform } = req.body;
 
     if (!fcmToken || typeof fcmToken !== 'string') {
@@ -482,25 +490,25 @@ export async function saveFCMToken(req, res) {
           updatedAt: sql`now()`
         },
       })
-      .returning({ fcmToken: accountSettingsTable.fcmToken, fcmTokenUpdatedAt: accountSettingsTable.fcmTokenUpdatedAt });
-    const now = updated.fcmTokenUpdatedAt;
+      .returning({ fcmToken: accountSettingsTable.fcmToken });
 
-    // Same stale-token backstop as savePushToken, including the same
-    // concurrent-registration guard (fcmTokenUpdatedAt < now) — see that
-    // function's comment for both the live incident and the race it
-    // protects against.
-    const staleOwners = await req.db
-      .update(accountSettingsTable)
-      .set({ fcmToken: null, fcmTokenUpdatedAt: sql`now()`, updatedAt: sql`now()` })
-      .where(and(
-        eq(accountSettingsTable.fcmToken, fcmToken),
-        ne(accountSettingsTable.userId, userId),
-        lt(accountSettingsTable.fcmTokenUpdatedAt, now)
-      ))
-      .returning({ userId: accountSettingsTable.userId });
-
-    if (staleOwners.length > 0) {
-      console.log(`[saveFCMToken] Cleared stale token from ${staleOwners.length} other account(s): ${staleOwners.map((r) => r.userId).join(', ')}`);
+    // See savePushToken for the full rationale — accountSettingsTable is
+    // per-account bookkeeping only; push_token_ownership's atomic,
+    // iat-ordered claim is what actually decides who may receive a push to
+    // this token.
+    const issuedAtSeconds = sessionClaims?.iat;
+    if (Number.isFinite(issuedAtSeconds)) {
+      const claim = await claimTokenOwnership(req.db, {
+        token: fcmToken,
+        tokenType: 'fcm',
+        userId,
+        issuedAtSeconds,
+      });
+      if (!claim.claimed) {
+        console.log(`[saveFCMToken] Ownership claim lost to a newer registration (current owner: ${claim.ownerUserId}) — this account's own token bookkeeping was still saved.`);
+      }
+    } else {
+      console.warn(`[saveFCMToken] No sessionClaims.iat available for user ${userId} — skipping atomic ownership claim this call.`);
     }
 
     console.log(`[saveFCMToken] Saved FCM token for user ${userId} (${platform || 'unknown platform'})`);
@@ -528,6 +536,12 @@ export async function deleteFCMToken(req, res) {
   try {
     const { userId } = getAuth(req);
 
+    const [existing] = await req.db
+      .select({ fcmToken: accountSettingsTable.fcmToken })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId))
+      .limit(1);
+
     await req.db
       .update(accountSettingsTable)
       .set({
@@ -537,6 +551,10 @@ export async function deleteFCMToken(req, res) {
         updatedAt: new Date()
       })
       .where(eq(accountSettingsTable.userId, userId));
+
+    if (existing?.fcmToken) {
+      await releaseTokenOwnership(req.db, existing.fcmToken, userId);
+    }
 
     console.log(`[deleteFCMToken] Removed FCM token for user ${userId}`);
     res.status(200).json({ success: true, tokenRegistered: false });
