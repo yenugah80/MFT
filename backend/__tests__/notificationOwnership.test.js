@@ -21,15 +21,21 @@ function categoryForType(type) {
 const resolver = (type) => mapReminderJobCategoryToLocalCategory(categoryForType(type));
 
 describe('mapReminderJobCategoryToLocalCategory', () => {
-  test('maps every real preference key to the local scheduler category name', () => {
+  test('maps every real preference key to the local scheduler category name, including streakProtection', () => {
     expect(mapReminderJobCategoryToLocalCategory('hydrationNudges')).toBe('hydration_nudge');
     expect(mapReminderJobCategoryToLocalCategory('dailyReminder')).toBe('daily_reminder');
     expect(mapReminderJobCategoryToLocalCategory('moodCheckins')).toBe('mood_checkin');
     expect(mapReminderJobCategoryToLocalCategory('activityReminders')).toBe('activity_reminder');
+    // Fixed 2026-09: this mapping was previously missing, so
+    // mapReminderJobCategoryToLocalCategory('streakProtection') fell through
+    // to its no-match fallback and returned 'streakProtection' unchanged —
+    // which never matched OWNABLE_CATEGORIES regardless of what was in it,
+    // silently defeating ownership for this category. See
+    // notificationOwnership.js's REMINDER_JOB_CATEGORY_TO_LOCAL docstring.
+    expect(mapReminderJobCategoryToLocalCategory('streakProtection')).toBe('streak_at_risk');
   });
 
-  test('passes through unmapped keys unchanged (streakProtection/enabled are never ownable)', () => {
-    expect(mapReminderJobCategoryToLocalCategory('streakProtection')).toBe('streakProtection');
+  test('passes through a genuinely unmapped key unchanged (enabled has no local-category equivalent)', () => {
     expect(mapReminderJobCategoryToLocalCategory('enabled')).toBe('enabled');
   });
 });
@@ -47,20 +53,22 @@ describe('filterRemindersForDevice', () => {
     expect(result.map((r) => r.type)).toEqual(['streak_at_risk', 'food_lunch']);
   });
 
-  test('streak_at_risk is never suppressed, even if somehow passed as an owned category', () => {
-    const reminders = [reminder('streak_at_risk')];
-    // 'streakProtection'/'streak_at_risk' is not in OWNABLE_CATEGORIES, so
-    // even a (deliberately invalid) attempt to own it has no suppression
-    // effect — this is the structural guarantee that streak stays untouched
-    // by this feature, not just a convention callers are expected to follow.
-    const result = filterRemindersForDevice(reminders, new Set(['streakProtection', 'streak_at_risk']), resolver);
-    expect(result).toEqual(reminders);
+  test('streak_at_risk IS suppressed when the device owns it locally (2026-09: brought into ownership, no longer dedup-only)', () => {
+    const reminders = [reminder('streak_at_risk'), reminder('food_lunch')];
+    // streak_at_risk is now in OWNABLE_CATEGORIES — a device that has
+    // registered local ownership of it (owner stored as the LOCAL category
+    // name 'streak_at_risk', per setOwnership/getOwnedCategoriesForDevice)
+    // never sees the backend's own candidate for it, structurally, not via
+    // best-effort delivery-time dedup.
+    const result = filterRemindersForDevice(reminders, new Set(['streak_at_risk']), resolver);
+    expect(result.map((r) => r.type)).toEqual(['food_lunch']);
   });
 
-  test('a device owning ALL four ownable categories ends up with zero candidates when only those types are due', () => {
-    const reminders = [reminder('hydration_morning'), reminder('food_lunch'), reminder('mood_checkin_morning'), reminder('activity_walk')];
+  test('a device owning ALL FIVE ownable categories (including streak_at_risk) ends up with zero candidates when only those types are due', () => {
+    const reminders = [reminder('hydration_morning'), reminder('food_lunch'), reminder('mood_checkin_morning'), reminder('activity_walk'), reminder('streak_at_risk')];
     const result = filterRemindersForDevice(reminders, new Set(OWNABLE_CATEGORIES), resolver);
     expect(result).toEqual([]);
+    expect(OWNABLE_CATEGORIES.size).toBe(5); // guards against silently adding/removing a category without updating this test
   });
 
   test('repeated filtering calls are pure/idempotent — same input, same output, no mutation', () => {

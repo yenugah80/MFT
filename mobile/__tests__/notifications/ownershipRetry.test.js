@@ -115,9 +115,9 @@ describe('ownership retry convergence', () => {
 
     mockPost.mockRejectedValue(new Error('backend unreachable'));
 
-    const ids = await pn.scheduleHydrationReminders([10, 14, 18]);
+    const ids = await pn.scheduleHydrationReminders([10, 15]);
 
-    expect(ids.length).toBe(3);
-    expect(fake.scheduled.length).toBe(3);
+    expect(ids.length).toBe(2);
+    expect(fake.scheduled.length).toBe(2);
   });
 });

@@ -42,10 +42,10 @@ describe('local scheduling is never gated on the ownership-registration network 
     const fake = createFakeNotifications();
     pn.__setNotificationsClientForTesting(fake);
 
-    const ids = await pn.scheduleHydrationReminders([10, 14, 18]);
+    const ids = await pn.scheduleHydrationReminders([10, 15]);
 
-    expect(ids.length).toBe(3);
-    expect(fake.scheduled.length).toBe(3);
+    expect(ids.length).toBe(2);
+    expect(fake.scheduled.length).toBe(2);
   });
 
   test('registerLocalOwnership degrades safely (returns false, never throws) on network failure', async () => {

@@ -120,8 +120,8 @@ describe('cancelHydrationIfGoalReached — must not remove the repeating schedul
     const fake = createFakeNotifications();
     pn.__setNotificationsClientForTesting(fake);
 
-    await pn.scheduleHydrationReminders([10, 14, 18]);
-    expect(fake.scheduled.length).toBe(3);
+    await pn.scheduleHydrationReminders([10, 15]);
+    expect(fake.scheduled.length).toBe(2);
     const before = fake.scheduled.map((n) => n.identifier).sort();
 
     // This used to call cancelTodayForCategory, which — for a permanent
@@ -131,7 +131,7 @@ describe('cancelHydrationIfGoalReached — must not remove the repeating schedul
     // directly: reaching the goal must leave the repeating schedule intact.
     await pn.cancelHydrationIfGoalReached(2000, 2000); // goal reached exactly
 
-    expect(fake.scheduled.length).toBe(3);
+    expect(fake.scheduled.length).toBe(2);
     expect(fake.scheduled.map((n) => n.identifier).sort()).toEqual(before);
   });
 
@@ -140,9 +140,9 @@ describe('cancelHydrationIfGoalReached — must not remove the repeating schedul
     const fake = createFakeNotifications();
     pn.__setNotificationsClientForTesting(fake);
 
-    await pn.scheduleHydrationReminders([10, 14, 18]);
+    await pn.scheduleHydrationReminders([10, 15]);
     await pn.cancelHydrationIfGoalReached(3000, 2000); // 150% of goal
-    expect(fake.scheduled.length).toBe(3);
+    expect(fake.scheduled.length).toBe(2);
   });
 });
 
@@ -152,8 +152,8 @@ describe('scheduleHydrationReminders / scheduleActivityReminders / scheduleMoodC
     const fake = createFakeNotifications();
     pn.__setNotificationsClientForTesting(fake);
 
-    await pn.scheduleHydrationReminders([10, 14, 18]);
-    expect(fake.scheduled.length).toBe(3);
+    await pn.scheduleHydrationReminders([10, 15]);
+    expect(fake.scheduled.length).toBe(2);
     fake.scheduled.forEach((n) => expect(n.trigger.repeats).toBe(true));
     // No per-day tagging on these — confirms they are NOT part of the
     // rolling-window mechanism and therefore immune to the "cancel just
@@ -167,8 +167,22 @@ describe('scheduleHydrationReminders / scheduleActivityReminders / scheduleMoodC
     const fake = createFakeNotifications();
     pn.__setNotificationsClientForTesting(fake);
 
+    await pn.scheduleHydrationReminders([10, 15]);
+    await pn.scheduleHydrationReminders([10, 15]);
+    expect(fake.scheduled.length).toBe(2); // not 4
+  });
+
+  test('more hours than the local allocation are clamped, not all scheduled', async () => {
+    const pn = await import('../../services/pushNotifications');
+    const fake = createFakeNotifications();
+    pn.__setNotificationsClientForTesting(fake);
+
+    // Allocation for hydration is 2 (see LOCAL_ALLOCATION) — passing 3
+    // hours must still only schedule 2, enforced inside the function
+    // itself regardless of what a caller (or the backend's optimal-times
+    // suggestion) passes in.
     await pn.scheduleHydrationReminders([10, 14, 18]);
-    await pn.scheduleHydrationReminders([10, 14, 18]);
-    expect(fake.scheduled.length).toBe(3); // not 6
+    expect(fake.scheduled.length).toBe(2);
+    expect(fake.scheduled.map((n) => n.trigger.hour).sort((a, b) => a - b)).toEqual([10, 14]);
   });
 });
