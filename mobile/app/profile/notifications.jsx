@@ -323,6 +323,23 @@ export default function NotificationsScreen() {
   // production builds entirely.
   const [debugScheduled, setDebugScheduled] = useState(null);
   const [isLoadingDebug, setIsLoadingDebug] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  // Same reasoning as handleViewScheduled: notify.push.sendTest already
+  // existed (it wraps showLocalNotification, a real local OS notification
+  // with trigger: null — fires through the exact same platform pathway as
+  // every scheduled reminder, just immediately instead of at a future
+  // hour) but had no UI caller. Surfaces it for acceptance testing —
+  // specifically, confirming local delivery works with zero connectivity
+  // without waiting for a real reminder's fixed clock hour.
+  const handleSendTest = useCallback(async () => {
+    setIsSendingTest(true);
+    try {
+      await notify.push.sendTest();
+    } finally {
+      setIsSendingTest(false);
+    }
+  }, [notify]);
 
   const handleViewScheduled = useCallback(async () => {
     setIsLoadingDebug(true);
@@ -497,6 +514,13 @@ export default function NotificationsScreen() {
                 <ActivityIndicator size="small" color={BRAND.primary} />
               ) : (
                 <Text style={styles.debugButtonText}>Refresh scheduled list</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.debugButton, { marginTop: SPACING.sm }]} onPress={handleSendTest} disabled={isSendingTest}>
+              {isSendingTest ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <Text style={styles.debugButtonText}>Send test notification now</Text>
               )}
             </TouchableOpacity>
             {debugScheduled !== null && (
