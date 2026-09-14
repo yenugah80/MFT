@@ -8,8 +8,18 @@
  */
 
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { API_URL } from '../constants/api';
+
+// Usage-analytics consent (Privacy & Security → Data use → Usage analytics).
+// Cached locally so even the very first event of a session (app_opened, fired
+// from initAnalytics before Privacy & Security has ever been fetched this
+// session) respects the user's last-known choice rather than always
+// defaulting to on. True matches the server's own default for a user who has
+// never touched this toggle at all.
+const ANALYTICS_CONSENT_STORAGE_KEY = '@mft:usageAnalyticsConsent';
+let analyticsConsentEnabled = true;
 
 // Event queue for batching
 let eventQueue = [];
@@ -39,6 +49,15 @@ let initializeError = null;
  */
 export const initAnalytics = async () => {
   try {
+    // Best-effort — falls through to the `true` default declared above if
+    // nothing was ever stored (new install, or a user who never opted out).
+    try {
+      const stored = await AsyncStorage.getItem(ANALYTICS_CONSENT_STORAGE_KEY);
+      if (stored !== null) analyticsConsentEnabled = stored === 'true';
+    } catch {
+      // Storage unavailable — keep the default rather than block init.
+    }
+
     // ✅ Only create session once - prevent duplicate sessions on re-initialization
     if (!sessionId) {
       sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -89,6 +108,9 @@ export const trackEvent = (eventName, properties = {}) => {
     // Analytics not initialized yet, skip
     return;
   }
+  if (!analyticsConsentEnabled) {
+    return;
+  }
 
   try {
     const event = {
@@ -132,6 +154,13 @@ export const trackEvent = (eventName, properties = {}) => {
  */
 const flushEvents = async () => {
   if (eventQueue.length === 0 || isFlushing) return;
+  // Defensive: covers the narrow window where events were queued just before
+  // the user turned this off mid-session (trackEvent's own gate stops new
+  // ones, but anything already queued would otherwise still go out).
+  if (!analyticsConsentEnabled) {
+    eventQueue = [];
+    return;
+  }
 
   isFlushing = true;
   const eventsToSend = [...eventQueue];
@@ -167,6 +196,21 @@ const flushEvents = async () => {
     eventQueue = [...eventsToSend, ...eventQueue].slice(0, MAX_QUEUE_HISTORY);
   } finally {
     isFlushing = false;
+  }
+};
+
+/**
+ * Update the usage-analytics consent gate. Called from the Privacy &
+ * Security screen on load (so it reflects the server's real value, not
+ * whatever this module defaulted to before that fetch resolved) and again
+ * immediately after a successful save (so turning the toggle off stops
+ * tracking without waiting for a screen reload).
+ */
+export const setAnalyticsConsent = (enabled) => {
+  analyticsConsentEnabled = enabled === true;
+  AsyncStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, String(analyticsConsentEnabled)).catch(() => {});
+  if (!analyticsConsentEnabled) {
+    eventQueue = [];
   }
 };
 
@@ -338,6 +382,7 @@ export default {
   initAnalytics,
   trackEvent,
   trackScreen,
+  setAnalyticsConsent,
   setUserProperties,
   identifyUser,
   clearUser,

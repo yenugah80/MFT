@@ -9,6 +9,7 @@ import * as Haptics from "expo-haptics";
 import { useQueryClient } from "@tanstack/react-query";
 import { BRAND, SURFACES, TEXT, TYPOGRAPHY, SPACING, RADIUS, SHADOWS, SEMANTIC } from "../../constants/premiumTheme";
 import apiClient from "../../services/apiClient";
+import { setAnalyticsConsent } from "../../services/analytics";
 import { deleteAccountAndPurgeDevice } from "../../services/accountDeletion";
 import { useAuth } from "@clerk/clerk-expo";
 import { useBiometricLock } from "../../providers/BiometricLockProvider";
@@ -123,7 +124,9 @@ export default function PrivacyScreen() {
     ]);
 
     if (privacyResult.status === "fulfilled") {
-      setPrivacy(normalizeApiPrivacy(privacyResult.value));
+      const normalized = normalizeApiPrivacy(privacyResult.value);
+      setPrivacy(normalized);
+      setAnalyticsConsent(normalized.usageAnalytics);
     } else {
       console.error("[PrivacyScreen] Failed to load settings", privacyResult.reason);
       setLoadError("Failed to load privacy settings");
@@ -164,7 +167,9 @@ export default function PrivacyScreen() {
         sourceScreen: "privacy-security",
         devicePlatform: Platform.OS,
       });
-      setPrivacy(normalizeApiPrivacy(saved));
+      const normalizedSaved = normalizeApiPrivacy(saved);
+      setPrivacy(normalizedSaved);
+      setAnalyticsConsent(normalizedSaved.usageAnalytics);
       if (patch.crossDomainInsights === true) setIsInsightDetailOpen(true);
       if (patch.crossDomainInsights === false) setIsInsightDetailOpen(false);
       if (isHistoryOpen) {
