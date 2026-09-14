@@ -13,7 +13,7 @@ import { createClient } from 'redis';
 import OpenAI, { toFile } from 'openai';
 import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
-import { buildImageAnalysisPrompt, QUANTITY_FROM_REPETITION_GUIDANCE } from './prompts/nutritionAnalysis.js';
+import { buildImageAnalysisPrompt, QUANTITY_FROM_REPETITION_GUIDANCE, UNRECOGNIZED_FOOD_GUIDANCE } from './prompts/nutritionAnalysis.js';
 import { normalizeNutritionAnalysis, normalizeMultiItemAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
 import { canonicalize, validateExtraction, isComplexDishInput } from '../canonicalIngredients.js';
 
@@ -611,12 +611,14 @@ Rules:
 9. Identify the "cookingMethod" (fried, steamed, grilled, boiled, baked, raw)
 10. Identify the "cuisine" (South Indian, American, Italian, etc.)
 11. Provide a short analysis note explaining the score
+12. ${UNRECOGNIZED_FOOD_GUIDANCE}
 
 Return JSON:
 {
   "foods": [
     {
       "name": "food name",
+      "recognized": true | false,
       "quantity": number,
       "unit": "unit",
       "quantitySource": "stated" | "assumed",
@@ -693,6 +695,11 @@ Return JSON:
       // Map to application structure
       const results = json.foods.map(item => ({
         name: item.name,
+        // Defaults to true (recognized) — a model that omits the field
+        // entirely (e.g. an older cached response, or a schema deviation)
+        // should not retroactively become "unrecognized" for every food;
+        // only an explicit false blocks the item for review.
+        recognized: item.recognized !== false,
         quantity: item.quantity || 1,
         unit: item.unit || 'serving',
         // Whether the model found an explicit count/amount for this food in

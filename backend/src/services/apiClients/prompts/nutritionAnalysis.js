@@ -40,6 +40,45 @@ word or counting phrase in the text that justifies it. If none exists, use
 quantity 1.`;
 
 /**
+ * Shared guidance against silently substituting a different, plausible-
+ * sounding real food when the input word is garbled, misheard, or simply
+ * not a real food/dish at all. Found via a live device test: a nonsense
+ * word spoken alongside real foods ("... and some kind of blorptato
+ * thing") came back as a fully-detailed, confident item named "potato
+ * dish" — complete macros, ingredients, health score. Because the response
+ * was structurally complete and nutritionally plausible, none of the
+ * existing low-confidence signals (near-zero calories, severe plausibility
+ * failure) ever fired, so it was never flagged for review — it would have
+ * saved silently as a food the user never said. This is the same failure
+ * class as the earlier "Mondal"/"moong dal" case, just reproduced with an
+ * invented word to confirm it isn't specific to any one food or accent:
+ * asked to always return a complete nutrition profile, an LLM will treat
+ * "estimate the nutrition" as "find the closest real food" rather than
+ * "tell me if you don't actually know what this is." The fix has to be an
+ * explicit escape hatch in the schema itself, not a macro-based heuristic
+ * after the fact — a confidently-invented substitute has no numeric
+ * fingerprint to catch.
+ */
+export const UNRECOGNIZED_FOOD_GUIDANCE = `UNRECOGNIZED FOOD NAMES — READ CAREFULLY: some input words won't correspond
+to any real food or dish — a mis-transcription, a typo, background noise
+transcribed as a word, or something you simply don't recognize in any
+cuisine. When that happens, set "recognized": false for that item and keep
+its "name" EXACTLY as given in the input — do NOT substitute the closest-
+sounding real food and do NOT invent plausible nutrition for a guess. Still
+provide your best-effort nutrition estimate in case it's useful, but the
+"recognized" flag is what tells the app to ask the user to confirm or
+correct this item instead of saving it silently.
+WRONG: input mentions "blorptato" → {"name": "potato dish", "recognized": true, ...}
+(wrong — silently swapped in a different, unrequested food).
+RIGHT: {"name": "blorptato", "recognized": false, ...} (best-effort estimate
+still fine, but the name is preserved and recognized is false).
+RIGHT: "chicken curry" → {"name": "chicken curry", "recognized": true, ...}
+(a real, identifiable dish — no ambiguity here).
+Set "recognized": true for every ordinary, identifiable food or regional
+dish, even an unfamiliar one you don't have precise data for — this flag is
+about NAME IDENTITY, not about how confident the nutrition numbers are.`;
+
+/**
  * System prompt for food image analysis
  * PRECISE: Use USDA-standard values for known foods
  * ENHANCED v2: Better portion estimation, cooking method detection, regional awareness

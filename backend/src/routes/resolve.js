@@ -345,6 +345,28 @@ function flagUnrecognizedLowEstimate(source, calories) {
   return null;
 }
 
+/**
+ * Flags an item the AI explicitly marked as unidentified (recognized:
+ * false — see UNRECOGNIZED_FOOD_GUIDANCE in nutritionAnalysis.js), the
+ * companion check to flagUnrecognizedLowEstimate above. That check only
+ * catches an AI guess that comes back near-zero-calorie; it cannot catch a
+ * CONFIDENT wrong guess — a garbled/nonsense input the model silently
+ * renamed to a plausible real food with a full, non-trivial nutrition
+ * profile (found via a live device test: "blorptato" → "potato dish",
+ * 150 kcal, complete macros/ingredients — nothing about that response
+ * looked low-confidence to any macro-based heuristic). This is authoritative
+ * because it's the model's own explicit signal, not inferred after the
+ * fact from the numbers it happened to return.
+ *
+ * @returns {string|null} 'unrecognized_food_name' or null
+ */
+function flagUnidentifiedFoodName(recognized) {
+  if (recognized === false) {
+    return 'unrecognized_food_name';
+  }
+  return null;
+}
+
 function spellingReviewFor(foodName) {
   if (!foodName || typeof foodName !== 'string') return null;
   const suggestion = getSpellingSuggestions(foodName);
@@ -452,6 +474,9 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parseResult.items) {
       const resolvedItem = await resolveGenericFood(parsedFood);
       attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
+      if (resolvedItem.flags?.includes('unrecognized_food_name')) {
+        resolvedItem.requiresUserConfirmation = true;
+      }
       items.push(resolvedItem);
     }
 
@@ -514,6 +539,9 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parsedFoods) {
       const resolvedItem = await resolveGenericFood(parsedFood);
       attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
+      if (resolvedItem.flags?.includes('unrecognized_food_name')) {
+        resolvedItem.requiresUserConfirmation = true;
+      }
       items.push(resolvedItem);
     }
 
@@ -727,6 +755,17 @@ async function resolveGenericFood(parsedFood) {
         flags.push('ai_estimated_nutrients');
       }
     }
+    // Text mode's own estimator prompt (nutritionEstimation.js) already asks
+    // the model to self-report recognitionStatus: "unknown" when it can't
+    // identify the food at all — that signal existed but only ever produced
+    // a dismissible "gentle warning" (see buildInsights below), never
+    // anything that actually blocked Save the way a spelling-confirmation
+    // or near-zero-estimate item does. Route it through the same shared
+    // flag/function voice mode uses for its equivalent signal so "the AI
+    // says it doesn't know what this is" behaves identically everywhere,
+    // instead of being a softer, non-blocking warning only in text mode.
+    const nameFlag = flagUnidentifiedFoodName(nutrition.recognitionStatus !== 'unknown');
+    if (nameFlag) flags.push(nameFlag);
     if (nutrition.warning) flags.push('needs_verification');
     // Absolute calorie-density plausibility (attached by smartNutritionResolver).
     // A severe miss means the estimate is likely wrong by ~2x+ — surface it so the
@@ -1338,4 +1377,4 @@ function enrichWithHealthMetrics(draft) {
 }
 
 export default router;
-export { attachSpellingReviews, flagUnrecognizedLowEstimate };
+export { attachSpellingReviews, flagUnrecognizedLowEstimate, flagUnidentifiedFoodName };

@@ -563,8 +563,66 @@ export function buildFoodItem(raw, index = 0) {
     // Data quality
     confidence: raw.confidence ?? 0.7,
     source: raw.source || 'ai_estimate',
-    isEstimated: raw.source === 'ai_estimate' || raw.source === 'ai_estimated' || raw.isEstimated === true
+    isEstimated: raw.source === 'ai_estimate' || raw.source === 'ai_estimated' || raw.isEstimated === true,
+
+    // Whether the AI could actually identify this as a real food/dish, vs.
+    // a garbled or nonsense input it estimated a best-effort guess for
+    // anyway (see UNRECOGNIZED_FOOD_GUIDANCE). Defaults to true — most raw
+    // items (DB cache, dictionary matches, older/other-shaped sources) never
+    // set this field at all and must not become blocked-for-review just
+    // because the field is absent.
+    recognized: raw.recognized !== false,
   };
+}
+
+function normalizeNameForDedup(name) {
+  return (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Collapses two items with the identical name into one.
+ *
+ * Found via a live device test: the same transcript ("...cooked rice with
+ * Rasam and cooked rice and some kind of blue potato thing") sometimes came
+ * back with "cooked rice" as ONE item, and sometimes as TWO separate
+ * 200-kcal entries — the model satisfying "don't set quantity>1 for a
+ * repeated mention" (QUANTITY_FROM_REPETITION_GUIDANCE) by instead emitting
+ * two quantity:1 array entries for the same food, which still silently
+ * doubles the meal total. A prompt instruction alone can't guarantee this
+ * never happens again — it's demonstrably non-deterministic at this
+ * temperature — so this is a deterministic code-level backstop: the app's
+ * own data model has no legitimate reason for the same exact food name to
+ * appear as two separate rows in one meal (a real repeat is "quantity: 2"
+ * on ONE row, never two rows), so any exact-name duplicate here is the bug,
+ * not a valid case.
+ *
+ * Scoped to text/voice only, not photo/barcode: a photo can genuinely show
+ * two distinct plates/instances of the same-named food side by side, and a
+ * vision model splitting that into two rows is a real observation, not a
+ * language model re-parsing a repeated word.
+ */
+function dedupeRepeatedFoodMentions(items, inputMode) {
+  if (inputMode === 'photo' || inputMode === 'barcode') return items;
+  const seenAt = new Map();
+  const deduped = [];
+  for (const item of items) {
+    const key = normalizeNameForDedup(item.name);
+    if (!key) {
+      deduped.push(item);
+      continue;
+    }
+    const existingIndex = seenAt.get(key);
+    if (existingIndex === undefined) {
+      seenAt.set(key, deduped.length);
+      deduped.push(item);
+    } else if ((item.quantity || 1) > (deduped[existingIndex].quantity || 1)) {
+      // Keep whichever occurrence claims the larger quantity — the more
+      // likely to reflect an actually-stated repeat rather than the
+      // spurious duplicate.
+      deduped[existingIndex] = item;
+    }
+  }
+  return deduped;
 }
 
 /**
@@ -579,7 +637,10 @@ export function buildFoodItem(raw, index = 0) {
  */
 export function buildUnifiedResponse({ inputText, inputMode, mealType, rawItems }) {
   // Build standardized items
-  const items = (rawItems || []).map((raw, idx) => buildFoodItem(raw, idx));
+  const items = dedupeRepeatedFoodMentions(
+    (rawItems || []).map((raw, idx) => buildFoodItem(raw, idx)),
+    inputMode
+  );
 
   // Calculate totals (always server-side!)
   const totals = calculateTotals(items);

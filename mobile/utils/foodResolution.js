@@ -10,6 +10,14 @@ const BLOCKING_RESOLUTION_FLAGS = new Set([
   // 0-calorie item instead of being routed to the same "needs
   // clarification" review path as an outright resolution failure.
   'unrecognized_food_low_estimate',
+  // Backend sets this when the AI itself explicitly reports it could not
+  // identify the food (voice: recognized:false; text: recognitionStatus
+  // "unknown") — distinct from the low-estimate flag above because a
+  // confidently-wrong guess (e.g. a garbled word silently renamed to a
+  // real, plausible-sounding dish with normal, non-zero macros) has no
+  // numeric signature to catch after the fact. This is the model's own
+  // signal, not inferred from the numbers it happened to return.
+  'unrecognized_food_name',
 ]);
 
 export function replaceIngredientTerm(input, original, canonical) {

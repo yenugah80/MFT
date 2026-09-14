@@ -11,7 +11,7 @@ import { attachOpenAIConsent, requireOpenAIConsent } from '../middleware/require
 import crypto from 'crypto';
 import { buildUnifiedResponse } from '../utils/unifiedResponseBuilder.js';
 import { aggregateCanonicalTotals, normalizeMicros, attachConfidenceTiers } from '../utils/canonicalNutrition.js';
-import { attachSpellingReviews, flagUnrecognizedLowEstimate } from './resolve.js';
+import { attachSpellingReviews, flagUnrecognizedLowEstimate, flagUnidentifiedFoodName } from './resolve.js';
 
 function normalizeItemMicros(items) {
   return (items || []).map((item) => ({ ...item, micros: normalizeMicros(item.micros) }));
@@ -38,6 +38,16 @@ function applySharedResolutionChecks(items) {
         item.flags = Array.from(new Set([...(item.flags || []), lowEstimateFlag]));
         item.requiresUserConfirmation = true;
       }
+    }
+    // The AI's own explicit "I don't actually recognize this as a food"
+    // signal (see UNRECOGNIZED_FOOD_GUIDANCE) — authoritative regardless of
+    // what nutrition numbers came back, unlike the near-zero-calorie check
+    // above which only catches an unconfident guess, not a confidently
+    // wrong one.
+    const nameFlag = flagUnidentifiedFoodName(item.recognized);
+    if (nameFlag && !item.flags?.includes(nameFlag)) {
+      item.flags = Array.from(new Set([...(item.flags || []), nameFlag]));
+      item.requiresUserConfirmation = true;
     }
   }
   return items;

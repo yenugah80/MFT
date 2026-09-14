@@ -13,7 +13,7 @@ jest.mock('redis', () => ({
   }),
 }));
 
-const { attachSpellingReviews, flagUnrecognizedLowEstimate } = await import('../src/routes/resolve.js');
+const { attachSpellingReviews, flagUnrecognizedLowEstimate, flagUnidentifiedFoodName } = await import('../src/routes/resolve.js');
 
 // Regression coverage for a universal (not food-specific) bug found 2026-09
 // while investigating a "moongsal"/"Mondal" (typo/mis-transcription of
@@ -127,5 +127,29 @@ describe('flagUnrecognizedLowEstimate — shared between text and voice resoluti
     expect(flagUnrecognizedLowEstimate(null, 2)).toBeNull();
     expect(flagUnrecognizedLowEstimate('ai_estimate', null)).toBeNull();
     expect(flagUnrecognizedLowEstimate('ai_estimate', undefined)).toBeNull();
+  });
+});
+
+describe('flagUnidentifiedFoodName — catches a confidently-WRONG guess, not just a low-confidence one', () => {
+  // Regression coverage for a real device test: a nonsense word spoken
+  // alongside real foods ("... and some kind of blorptato thing") came back
+  // from estimateNutritionForText as a fully-detailed, plausible item named
+  // "potato dish" — 150 kcal, complete macros/ingredients. Neither
+  // flagUnrecognizedLowEstimate (calories weren't low) nor a low
+  // confidenceTier (the response was structurally complete) ever caught it.
+  // The fix is a new explicit model self-report — "recognized" for voice's
+  // estimateNutritionForText, "recognitionStatus" for text's separate
+  // estimator — and this function is the single place both signals funnel
+  // through to the same blocking flag.
+  test('flags when the AI explicitly reports it did not recognize the food (recognized: false)', () => {
+    expect(flagUnidentifiedFoodName(false)).toBe('unrecognized_food_name');
+  });
+
+  test('does not flag a normal recognized food', () => {
+    expect(flagUnidentifiedFoodName(true)).toBeNull();
+  });
+
+  test('does not flag when the signal is absent (undefined) — only an explicit false blocks', () => {
+    expect(flagUnidentifiedFoodName(undefined)).toBeNull();
   });
 });
