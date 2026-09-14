@@ -2710,6 +2710,7 @@ router.post('/pairings', requireAuth(), async (req, res) => {
     ]);
 
     const allergies = Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [];
+    const diets = Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [];
 
     // What today still needs, after this meal.
     const gaps = {
@@ -2754,7 +2755,20 @@ router.post('/pairings', requireAuth(), async (req, res) => {
     // risky foods, but this endpoint feeds a screen that shows food directly to
     // someone who told us what could hospitalise them — worth being certain
     // rather than trusting a single upstream filter.
-    const safe = candidates.filter((c) => !detectAllergenRisk(c.name || c.foodName || '', allergies).hasRisk);
+    //
+    // Diet-preference check added alongside it: generateCandidates has no
+    // diet awareness at all (confirmed — it screens neither excludedDiets
+    // nor declared preferences), and this route previously fetched
+    // dietaryRow.preferences without ever reading it. The mobile fallback
+    // (utils/pairingSelector.js's filterSafeCandidates) already checks diets
+    // — this endpoint, tried first whenever the backend is reachable, was
+    // the less-safe path despite being primary.
+    const safe = candidates.filter((c) => {
+      const name = c.name || c.foodName || '';
+      if (detectAllergenRisk(name, allergies).hasRisk) return false;
+      if (diets.length > 0 && detectDietViolation(c, diets).violates) return false;
+      return true;
+    });
 
     // Keep only things that actually close a gap this meal left open.
     const scored = safe
