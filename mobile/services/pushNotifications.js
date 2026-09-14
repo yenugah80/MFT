@@ -296,6 +296,26 @@ export async function retryPendingTokenRegistration() {
 }
 
 /**
+ * Cancel any pending delayed retry (up to 30s out — see RETRY_DELAYS above)
+ * scheduled by a registration attempt that hit "profile not ready" or a
+ * network error. Call this on sign-out, before unregisterPushToken: without
+ * it, a retry scheduled under the account signing out can still fire up to
+ * 30s later — by then apiClient's token provider resolves to whatever
+ * account is CURRENTLY signed in, so the delayed call doesn't register as
+ * the old (now-signed-out) account, but it silently re-submits that old,
+ * possibly-stale captured token value under the new account's identity,
+ * clobbering whatever fresh token the new account's own registration flow
+ * already wrote.
+ */
+export function cancelPendingTokenRetry() {
+  if (tokenRetryTimeout) {
+    clearTimeout(tokenRetryTimeout);
+    tokenRetryTimeout = null;
+  }
+  pendingToken = null;
+}
+
+/**
  * Remove push token from backend (e.g., on logout)
  */
 export async function unregisterPushToken() {

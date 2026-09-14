@@ -21,6 +21,7 @@ import {
   cancelAllScheduledNotifications,
   retryPendingPreferenceSave,
   clearPendingPreferencesForSignOut,
+  cancelPendingTokenRetry,
 } from './pushNotifications';
 
 let messaging = null;
@@ -236,6 +237,25 @@ export async function retryPendingFCMTokenRegistration() {
 }
 
 /**
+ * Cancel any pending delayed retry (up to 30s out) scheduled by a
+ * registration attempt that hit "profile not ready" or a network error.
+ * Call this on sign-out, before unregisterFCMToken — see
+ * pushNotifications.js's cancelPendingTokenRetry for why an uncancelled
+ * retry is a real risk, not just a wasted timer: apiClient re-resolves the
+ * auth token at call time, so a retry left running past sign-out fires
+ * under whichever account is signed in when it goes off, silently
+ * clobbering that new account's own already-registered token with a stale
+ * captured value from the old flow.
+ */
+export function cancelPendingFCMTokenRetry() {
+  if (fcmTokenRetryTimeout) {
+    clearTimeout(fcmTokenRetryTimeout);
+    fcmTokenRetryTimeout = null;
+  }
+  pendingFCMToken = null;
+}
+
+/**
  * Unregister FCM token (call on logout) — deregisters THIS device's row so
  * a different account signing into the same physical phone next doesn't
  * share a still-live device row with the account that just signed out.
@@ -395,6 +415,15 @@ export async function retryDeregistrationWithToken() {
  */
 export async function deregisterAllPushChannels() {
   await cancelAllScheduledNotifications().catch(() => {});
+
+  // Cancel any in-flight delayed retry BEFORE unregistering — a retry left
+  // running past this point fires under whatever account is signed in when
+  // its timer elapses (apiClient re-resolves auth at call time), silently
+  // clobbering that next account's own fresh registration with a stale
+  // captured token value from this session. See cancelPendingFCMTokenRetry/
+  // cancelPendingTokenRetry for the full explanation.
+  cancelPendingFCMTokenRetry();
+  cancelPendingTokenRetry();
 
   const results = await Promise.allSettled([unregisterFCMToken(), unregisterPushToken()]);
 
