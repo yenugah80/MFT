@@ -8,6 +8,38 @@
  */
 
 /**
+ * Shared guidance against inferring extra portions from repeated words —
+ * every text-derived food-analysis prompt in this codebase (text parsing,
+ * text/voice nutrition estimation, and voice context attached to a photo)
+ * independently risks the same failure: transcribed or typed text that
+ * mentions a food twice (a stutter, a corrected restart, transcription
+ * noise, or just re-referencing it in a later sentence) gets read as "the
+ * user had two servings." One shared string, referenced everywhere text
+ * reaches a food-analysis prompt, instead of three separately-drifting
+ * copies of the same instruction.
+ */
+export const QUANTITY_FROM_REPETITION_GUIDANCE = `QUANTITY FROM REPETITION — READ CAREFULLY: text (especially a voice
+transcript) frequently repeats a food name because of a stutter, a
+corrected restart, disfluency, or transcription noise — NOT because the
+person had a second serving. Merely SEEING a food word twice is NEVER, BY
+ITSELF, evidence of 2 servings — treat every repeated mention of the same
+food as referring to the SAME single serving unless a number word or
+counting phrase is attached to it.
+WRONG: "I had rice with dal and rice again" → rice quantity: 2 (wrong —
+nothing here COUNTS servings, it just mentions the word twice).
+RIGHT: rice quantity: 1 (unless another rule here already covers marking it
+as an estimate rather than a stated amount).
+WRONG: "cooked rice ... and cooked rice among ..." (rambling repetition,
+no number attached) → quantity: 2.
+RIGHT: quantity: 1.
+RIGHT (quantity 2 IS correct here): "two cups of rice", "a second cup of
+rice", "I had rice, then later had rice again" — an actual number word,
+counting phrase, or language explicitly marking a separate occasion.
+Before assigning a quantity above 1 for any food, find the exact number
+word or counting phrase in the text that justifies it. If none exists, use
+quantity 1.`;
+
+/**
  * System prompt for food image analysis
  * PRECISE: Use USDA-standard values for known foods
  * ENHANCED v2: Better portion estimation, cooking method detection, regional awareness
@@ -252,6 +284,7 @@ export function buildImageAnalysisPrompt(options = {}) {
     userPrompt += `\n- Identify specific dishes mentioned`;
     userPrompt += `\n- Adjust portions based on descriptions`;
     userPrompt += `\n- Account for mentioned ingredients/modifications`;
+    userPrompt += `\n\n${QUANTITY_FROM_REPETITION_GUIDANCE}`;
   }
 
   return {

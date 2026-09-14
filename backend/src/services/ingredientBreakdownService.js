@@ -224,7 +224,7 @@ const CUSTOMIZATION_IMPACTS = {
  * Build prompt for AI-powered ingredient extraction
  * This enables UNLIMITED menu coverage - any food can be broken down
  */
-function buildIngredientBreakdownPrompt(foodName, brandHint = null, regionHint = null) {
+function buildIngredientBreakdownPrompt(foodName, brandHint = null, regionHint = null, existingNutrition = null) {
   return {
     system: `You are an expert food analyst specializing in restaurant menu items and ingredient decomposition.
 
@@ -236,6 +236,15 @@ CRITICAL RULES:
 3. Sum of ingredient calories MUST approximately equal the total food calories (±10%)
 4. Account for cooking methods (frying adds oil, grilling doesn't)
 5. Be specific about portions (not "some lettuce" but "2 leaves of iceberg lettuce")
+${existingNutrition?.calories ? `6. CRITICAL — SERVING SIZE, NOT A RECIPE: this breakdown is for the ONE SERVING
+   the person is actually eating, already known to total ~${Math.round(existingNutrition.calories)} kcal
+   (protein ${existingNutrition.protein ?? '?'}g, carbs ${existingNutrition.carbs ?? '?'}g, fat ${existingNutrition.fat ?? '?'}g).
+   Every ingredient portion (e.g. "2 tomatoes", "500ml water") must be sized for
+   THIS ONE SERVING, not a full recipe batch that serves several people — do not
+   list a whole pot's worth of an ingredient and then only report a fraction of
+   its calories. If a dish is normally cooked in bulk, scale every listed portion
+   down to this person's single serving BEFORE estimating its nutrition, so the
+   portion text and the nutrition numbers agree with each other.` : ''}
 
 ${regionHint ? `REGIONAL CONTEXT: ${regionHint}
 - Adjust ingredients for regional availability
@@ -335,7 +344,7 @@ class IngredientBreakdownService {
 
     try {
       // Use AI to break down the food
-      const prompt = buildIngredientBreakdownPrompt(foodName, brand, region);
+      const prompt = buildIngredientBreakdownPrompt(foodName, brand, region, existingNutrition);
 
       const breakdown = await safeJSONCompletion(
         [

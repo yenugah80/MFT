@@ -13,7 +13,7 @@ import { createClient } from 'redis';
 import OpenAI, { toFile } from 'openai';
 import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
-import { buildImageAnalysisPrompt } from './prompts/nutritionAnalysis.js';
+import { buildImageAnalysisPrompt, QUANTITY_FROM_REPETITION_GUIDANCE } from './prompts/nutritionAnalysis.js';
 import { normalizeNutritionAnalysis, normalizeMultiItemAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
 import { canonicalize, validateExtraction, isComplexDishInput } from '../canonicalIngredients.js';
 
@@ -363,6 +363,7 @@ CRITICAL RULES:
 8. Treat named dishes as single items (e.g., "chicken curry", "beef tacos", "pad thai")
 9. Split into multiple items when user lists separate foods (commas, "and", "with")
 10. NEVER hallucinate or guess different foods - use EXACTLY what the user wrote
+11. ${QUANTITY_FROM_REPETITION_GUIDANCE}
 
 Examples:
 - "five eggs" → {"name": "eggs", "quantity": 5, "unit": "serving"}
@@ -593,6 +594,11 @@ Rules:
    - Split on: "and", commas, "with" (when listing separate items or a
      named accompaniment/side)
 2. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
+2a. ${QUANTITY_FROM_REPETITION_GUIDANCE}
+    Set "quantitySource" to "stated" only when you found that exact number
+    word/counting phrase; otherwise set it to "assumed" (this applies even
+    when quantity is 1 by default — 1 is still an assumption unless the
+    text actually says "one").
 3. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
 4. Estimate nutrition for the SPECIFIED quantity and cooking method
 5. Include macros: calories, protein (g), carbs (g), fat (g), fiber (g), sugar (g), sodium (mg). Estimate these too — do not omit them.
@@ -613,6 +619,7 @@ Return JSON:
       "name": "food name",
       "quantity": number,
       "unit": "unit",
+      "quantitySource": "stated" | "assumed",
       "cuisine": "South Indian" | "American" | "Other",
       "cookingMethod": "fried" | "steamed" | "grilled" | "boiled" | "baked" | "raw",
       "nutrition": {
@@ -663,8 +670,24 @@ Return JSON:
         maxTokens,
       });
 
-      if (!json.foods || !Array.isArray(json.foods)) {
-        return [];
+      // A genuinely-parsed response whose `foods` field is missing or not
+      // an array is a SHAPE mismatch, not the model saying "no food here" —
+      // those are different failure modes and must not be reported to the
+      // user identically. (A parse failure inside chatCompletionJSON itself
+      // is already re-thrown rather than swallowed, for the same reason —
+      // see its own comment. This closes the equivalent gap one level up:
+      // valid JSON that just doesn't have the field we asked for.)
+      // Array.isArray(json.foods) && length === 0 is the one legitimate
+      // "AI looked and found nothing" case — that alone still returns [].
+      if (!json.foods) {
+        const err = new Error('AI response missing "foods" field');
+        err.code = 'MALFORMED_AI_RESPONSE';
+        throw err;
+      }
+      if (!Array.isArray(json.foods)) {
+        const err = new Error(`AI response "foods" field was ${typeof json.foods}, not an array`);
+        err.code = 'MALFORMED_AI_RESPONSE';
+        throw err;
       }
 
       // Map to application structure
@@ -672,6 +695,13 @@ Return JSON:
         name: item.name,
         quantity: item.quantity || 1,
         unit: item.unit || 'serving',
+        // Whether the model found an explicit count/amount for this food in
+        // the text, or defaulted to a single serving — see rule 2a above.
+        // Not yet surfaced in the mobile UI (existing QuantityAdjuster
+        // already lets the user freely correct any quantity regardless);
+        // carried through so a later pass can build a proactive "confirm
+        // this" indicator without another backend change.
+        quantitySource: item.quantitySource === 'stated' ? 'stated' : 'assumed',
         confidence: 0.8,
         notes: "AI Estimated Nutrition",
         source: 'ai_estimate', // EXPLICIT DISCLAIMER
