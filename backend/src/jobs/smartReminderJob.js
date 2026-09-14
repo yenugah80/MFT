@@ -71,9 +71,35 @@ const CONFIG = {
   BATCH_SIZE: 100,
   BATCH_DELAY_MS: 1000, // 1 second between batches to avoid overwhelming
 
-  // Rate limiting
+  // Rate limiting — reassessed, not inherited as given. The prior values
+  // were two separate problems, not one policy:
+  //
+  // 1. MAX_NOTIFICATIONS_PER_USER_PER_DAY was declared here but never
+  //    actually checked anywhere in this file — checkRateLimit only ever
+  //    enforced the hourly cap. A user could legitimately receive one
+  //    notification every 15-minute cron tick, twice an hour, for every
+  //    non-quiet hour of the day — tens of notifications, not 8. Now
+  //    actually enforced via checkDailyRateLimit, the same DB-backed
+  //    rolling-window pattern the hourly check already uses.
+  // 2. Neither cap prevented two DIFFERENT categories from firing in
+  //    consecutive cron ticks — "2 per hour" allows minute-0 and minute-16
+  //    of the same rolling hour, which is exactly the felt-spam pattern
+  //    from the incident this was investigated from (multiple distinct
+  //    messages ~15-20 minutes apart). Added MIN_SPACING_MINUTES as an
+  //    explicit floor between ANY two notifications for a user, regardless
+  //    of category — the hourly/daily caps bound total volume; this bounds
+  //    how close together any two of them can land.
+  //
+  // Numbers: hourly cap kept at 2 (now largely subsumed by the spacing
+  // floor below, but kept as a belt-and-suspenders bound). Daily cap
+  // brought down from the declared-but-unenforced 8 to 6 — five reminder
+  // categories exist (hydration/food/mood/activity/motivation), each
+  // already gated on real need (e.g. hydration skips entirely once the
+  // day's goal is met), so 6 real touches/day is generous headroom for a
+  // fully-engaged user without implying every category should fire daily.
   MAX_NOTIFICATIONS_PER_USER_PER_HOUR: 2,
-  MAX_NOTIFICATIONS_PER_USER_PER_DAY: 8,
+  MAX_NOTIFICATIONS_PER_USER_PER_DAY: 6,
+  MIN_SPACING_MINUTES: 60,
 
   // Circuit breaker
   FAILURE_THRESHOLD: 10, // Consecutive failures before opening circuit
@@ -173,11 +199,55 @@ async function checkRateLimitFromDB(userId) {
   return (row?.count ?? 0) < CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_HOUR;
 }
 
+// Was declared in CONFIG but never actually checked anywhere — see the
+// comment on MAX_NOTIFICATIONS_PER_USER_PER_DAY above. Same rolling-window
+// pattern as the hourly check, just over 24 hours.
+async function checkDailyRateLimit(userId) {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [row] = await db
+    .select({ count: sql`COUNT(*)::int` })
+    .from(notificationDeliveryLogTable)
+    .where(
+      and(
+        eq(notificationDeliveryLogTable.userId, userId),
+        gte(notificationDeliveryLogTable.createdAt, oneDayAgo)
+      )
+    );
+  return (row?.count ?? 0) < CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_DAY;
+}
+
+// The hourly/daily caps bound total volume but never bounded how CLOSE
+// TOGETHER any two notifications could land — "2 per hour" allows one at
+// minute 0 and another at minute 16 of the same rolling window, which is
+// the exact multi-message-within-20-minutes pattern the original incident
+// showed. This is a floor on the gap since the user's MOST RECENT
+// notification of any category/type, not a per-category cooldown.
+async function checkMinSpacing(userId) {
+  const cutoff = new Date(Date.now() - CONFIG.MIN_SPACING_MINUTES * 60 * 1000);
+  const [row] = await db
+    .select({ count: sql`COUNT(*)::int` })
+    .from(notificationDeliveryLogTable)
+    .where(
+      and(
+        eq(notificationDeliveryLogTable.userId, userId),
+        gte(notificationDeliveryLogTable.createdAt, cutoff)
+      )
+    );
+  return (row?.count ?? 0) === 0;
+}
+
 async function checkRateLimit(userId) {
   // Fast path: in-memory check (avoids DB round-trip on most calls)
   if (!checkRateLimitInMemory(userId)) return false;
-  // Authoritative path: DB check survives server restarts
-  return checkRateLimitFromDB(userId);
+  // Authoritative path: DB-backed, survives server restarts. All three
+  // must pass — hourly burst cap, daily total cap, and minimum spacing
+  // are three different failure modes, not interchangeable checks.
+  const [hourlyOk, dailyOk, spacingOk] = await Promise.all([
+    checkRateLimitFromDB(userId),
+    checkDailyRateLimit(userId),
+    checkMinSpacing(userId),
+  ]);
+  return hourlyOk && dailyOk && spacingOk;
 }
 
 function clearOldRateLimits() {
