@@ -88,20 +88,21 @@ export async function savePushToken(req, res) {
       });
     }
 
+    const now = new Date();
     const updated = await req.db
       .insert(accountSettingsTable)
       .values({
         userId,
         expoPushToken,
-        pushTokenUpdatedAt: new Date(),
-        updatedAt: new Date(),
+        pushTokenUpdatedAt: now,
+        updatedAt: now,
       })
       .onConflictDoUpdate({
         target: accountSettingsTable.userId,
         set: {
           expoPushToken,
-          pushTokenUpdatedAt: new Date(),
-          updatedAt: new Date()
+          pushTokenUpdatedAt: now,
+          updatedAt: now
         },
       })
       .returning({ expoPushToken: accountSettingsTable.expoPushToken });
@@ -117,10 +118,24 @@ export async function savePushToken(req, res) {
     // exact token and both kept sending hydration reminders to one phone.
     // Clearing it here doesn't depend on that other client ever coming
     // back online to clean up after itself.
+    //
+    // pushTokenUpdatedAt < now guards against two near-concurrent
+    // registrations for different accounts (e.g. an old session's token
+    // refresh landing right as a new account signs in on the same device):
+    // without it, A's backstop could clear B's just-written row and B's
+    // backstop could clear A's, leaving BOTH rows empty — worse than the
+    // original bug, and a violation of "the current registration must
+    // never be removed." Only clearing rows strictly older than this
+    // request's own write means whichever registration is genuinely most
+    // recent always survives, regardless of interleaving.
     const staleOwners = await req.db
       .update(accountSettingsTable)
-      .set({ expoPushToken: null, pushTokenUpdatedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(accountSettingsTable.expoPushToken, expoPushToken), ne(accountSettingsTable.userId, userId)))
+      .set({ expoPushToken: null, pushTokenUpdatedAt: now, updatedAt: now })
+      .where(and(
+        eq(accountSettingsTable.expoPushToken, expoPushToken),
+        ne(accountSettingsTable.userId, userId),
+        lt(accountSettingsTable.pushTokenUpdatedAt, now)
+      ))
       .returning({ userId: accountSettingsTable.userId });
 
     if (staleOwners.length > 0) {
@@ -437,32 +452,39 @@ export async function saveFCMToken(req, res) {
       });
     }
 
+    const now = new Date();
     const updated = await req.db
       .insert(accountSettingsTable)
       .values({
         userId,
         fcmToken,
-        fcmTokenUpdatedAt: new Date(),
+        fcmTokenUpdatedAt: now,
         fcmTokenPlatform: platform || null,
-        updatedAt: new Date(),
+        updatedAt: now,
       })
       .onConflictDoUpdate({
         target: accountSettingsTable.userId,
         set: {
           fcmToken,
-          fcmTokenUpdatedAt: new Date(),
+          fcmTokenUpdatedAt: now,
           fcmTokenPlatform: platform || null,
-          updatedAt: new Date()
+          updatedAt: now
         },
       })
       .returning({ fcmToken: accountSettingsTable.fcmToken });
 
-    // Same stale-token backstop as savePushToken — see that function's
-    // comment for the live incident this addresses.
+    // Same stale-token backstop as savePushToken, including the same
+    // concurrent-registration guard (fcmTokenUpdatedAt < now) — see that
+    // function's comment for both the live incident and the race it
+    // protects against.
     const staleOwners = await req.db
       .update(accountSettingsTable)
-      .set({ fcmToken: null, fcmTokenUpdatedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(accountSettingsTable.fcmToken, fcmToken), ne(accountSettingsTable.userId, userId)))
+      .set({ fcmToken: null, fcmTokenUpdatedAt: now, updatedAt: now })
+      .where(and(
+        eq(accountSettingsTable.fcmToken, fcmToken),
+        ne(accountSettingsTable.userId, userId),
+        lt(accountSettingsTable.fcmTokenUpdatedAt, now)
+      ))
       .returning({ userId: accountSettingsTable.userId });
 
     if (staleOwners.length > 0) {

@@ -1139,16 +1139,24 @@ async function getNotificationPreferences(userId) {
  */
 export async function scheduleUserReminders(userId) {
   try {
-    const patterns = await learnUserPatterns(userId);
-    const preferences = await getNotificationPreferences(userId);
+    const [patterns, preferences, gamification] = await Promise.all([
+      learnUserPatterns(userId),
+      getNotificationPreferences(userId),
+      getGamificationData(userId),
+    ]);
 
     if (!preferences.enabled) {
       return [];
     }
 
     const scheduled = [];
-    const now = new Date();
-    const currentHour = now.getHours();
+    // Same fix as getSmartReminders — this is the user-facing "what's
+    // coming up today" preview (GET /api/reminders/schedule), not the
+    // delivery cron, but it independently had the identical bug: comparing
+    // candidate hours against the server's raw UTC hour instead of this
+    // user's actual local hour.
+    const timezoneOffset = Number.isFinite(gamification?.timezoneOffset) ? gamification.timezoneOffset : null;
+    const currentHour = getLocalHour(timezoneOffset);
 
     // Schedule hydration reminders based on patterns
     if (preferences.hydration) {
@@ -1158,7 +1166,7 @@ export async function scheduleUserReminders(userId) {
           scheduled.push({
             type: 'hydration',
             scheduledHour: hour,
-            estimatedTime: getScheduledTime(hour),
+            estimatedTime: getScheduledTime(hour, timezoneOffset),
           });
         }
       }
@@ -1174,7 +1182,7 @@ export async function scheduleUserReminders(userId) {
             type: 'food',
             meal,
             scheduledHour: reminderHour,
-            estimatedTime: getScheduledTime(reminderHour),
+            estimatedTime: getScheduledTime(reminderHour, timezoneOffset),
           });
         }
       }
@@ -1188,7 +1196,7 @@ export async function scheduleUserReminders(userId) {
           scheduled.push({
             type: 'mood',
             scheduledHour: hour,
-            estimatedTime: getScheduledTime(hour),
+            estimatedTime: getScheduledTime(hour, timezoneOffset),
           });
         }
       }
@@ -1204,11 +1212,18 @@ export async function scheduleUserReminders(userId) {
 /**
  * Get scheduled time for an hour
  */
-function getScheduledTime(hour) {
-  const scheduled = new Date();
-  scheduled.setHours(hour, 0, 0, 0);
+// `hour` is the user's LOCAL hour (see scheduleUserReminders above) — the
+// old scheduled.setHours(hour, ...) set it as the SERVER's local hour (UTC
+// in production) instead, so a preview reminder the user expects at their
+// own 3pm would carry a timestamp for 3pm UTC. Anchoring off
+// getLocalDayRange's already-correct local-midnight boundary and adding
+// pure millisecond offsets (never calendar-component setters) keeps this
+// correct regardless of what timezone the server itself is running in.
+function getScheduledTime(hour, offsetMinutes = null) {
+  const { start } = getLocalDayRange(offsetMinutes, new Date());
+  let scheduled = new Date(start.getTime() + hour * 60 * 60 * 1000);
   if (scheduled < new Date()) {
-    scheduled.setDate(scheduled.getDate() + 1);
+    scheduled = new Date(scheduled.getTime() + 24 * 60 * 60 * 1000);
   }
   return scheduled.toISOString();
 }

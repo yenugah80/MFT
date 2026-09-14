@@ -10,7 +10,7 @@
  * rows in `devices`) or all-per-device (>=1 row) — see resolveSendTargets.
  */
 import { randomUUID } from 'node:crypto';
-import { and, eq, gt, ne } from 'drizzle-orm';
+import { and, eq, gt, lt, ne } from 'drizzle-orm';
 import { devicesTable, notificationOwnershipTable } from '../db/schema.js';
 
 const DEREGISTER_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -61,17 +61,33 @@ export async function registerDevice(db, userId, { deviceId, fcmToken, expoPushT
   // saveFCMToken: clear the matching token from any other row for this
   // exact deviceId, regardless of whether that account ever formally
   // deregisters.
+  //
+  // The <now guard on each backstop is the same concurrent-registration
+  // protection as savePushToken/saveFCMToken: only clear a row whose own
+  // token timestamp is strictly older than this request's write, so two
+  // near-simultaneous registrations for different accounts can never both
+  // wipe each other out — whichever is genuinely most recent always wins.
   if (fcmToken) {
     await db
       .update(devicesTable)
       .set({ fcmToken: null, fcmTokenUpdatedAt: now, updatedAt: now })
-      .where(and(eq(devicesTable.deviceId, deviceId), eq(devicesTable.fcmToken, fcmToken), ne(devicesTable.userId, userId)));
+      .where(and(
+        eq(devicesTable.deviceId, deviceId),
+        eq(devicesTable.fcmToken, fcmToken),
+        ne(devicesTable.userId, userId),
+        lt(devicesTable.fcmTokenUpdatedAt, now)
+      ));
   }
   if (expoPushToken) {
     await db
       .update(devicesTable)
       .set({ expoPushToken: null, expoPushTokenUpdatedAt: now, updatedAt: now })
-      .where(and(eq(devicesTable.deviceId, deviceId), eq(devicesTable.expoPushToken, expoPushToken), ne(devicesTable.userId, userId)));
+      .where(and(
+        eq(devicesTable.deviceId, deviceId),
+        eq(devicesTable.expoPushToken, expoPushToken),
+        ne(devicesTable.userId, userId),
+        lt(devicesTable.expoPushTokenUpdatedAt, now)
+      ));
   }
 
   return row;
