@@ -1442,13 +1442,25 @@ export function VoiceModal({
 
                 <View style={styles.reviewTotalsRow}>
                   {[
-                    { label: 'Calories', value: Math.round(reviewResult.totals?.macros?.calories_kcal || 0), unit: '' },
-                    { label: 'Protein', value: Math.round(reviewResult.totals?.macros?.protein_g || 0), unit: 'g' },
-                    { label: 'Carbs', value: Math.round(reviewResult.totals?.macros?.carbs_g || 0), unit: 'g' },
-                    { label: 'Fat', value: Math.round(reviewResult.totals?.macros?.fat_g || 0), unit: 'g' },
-                  ].map((stat) => (
+                    { label: 'Calories', raw: reviewResult.totals?.macros?.calories_kcal, unit: '' },
+                    { label: 'Protein', raw: reviewResult.totals?.macros?.protein_g, unit: 'g' },
+                    { label: 'Carbs', raw: reviewResult.totals?.macros?.carbs_g, unit: 'g' },
+                    { label: 'Fat', raw: reviewResult.totals?.macros?.fat_g, unit: 'g' },
+                  ].map((stat) => {
+                    // null means no item in this meal ever reported the
+                    // field under any known name — genuinely unknown, not a
+                    // confirmed zero (aggregateCanonicalTotals/
+                    // macroFieldResolver both already preserve this
+                    // distinction upstream; this is the one place it has to
+                    // actually render differently, or "unknown fat" and "0g
+                    // fat" look identical to whoever's reviewing the meal).
+                    const isUnknown = stat.raw === null || stat.raw === undefined;
+                    return { ...stat, isUnknown, value: isUnknown ? null : Math.round(stat.raw) };
+                  }).map((stat) => (
                     <View key={stat.label} style={styles.reviewTotalStat}>
-                      <Text style={styles.reviewTotalValue}>{stat.value}{stat.unit}</Text>
+                      <Text style={styles.reviewTotalValue}>
+                        {stat.isUnknown ? '—' : `${stat.value}${stat.unit}`}
+                      </Text>
                       <Text style={styles.reviewTotalLabel}>{stat.label}</Text>
                     </View>
                   ))}

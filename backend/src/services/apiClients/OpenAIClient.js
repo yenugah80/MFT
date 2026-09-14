@@ -557,7 +557,15 @@ Rules:
 1. CRITICAL: Split multiple foods into SEPARATE items in the foods array
    - "5 eggs and 2 toast" → foods: [{name: "eggs", quantity: 5}, {name: "toast", quantity: 2}]
    - "Indian vadas and chicken curry" → foods: [{name: "Indian vadas"}, {name: "chicken curry"}]
-   - Split on: "and", commas, "with" (when listing separate items)
+   - "with" often introduces a distinct accompaniment, not an ingredient of
+     the main dish — split these too: "biryani with raita" → foods:
+     [{name: "vegetable biryani"}, {name: "raita"}]; "dosa with sambar and
+     chutney" → three separate items. Only treat "with X" as part of the
+     SAME item when X is genuinely mixed into it, not served alongside it
+     (e.g. "rice with butter" stays one item — the butter isn't a separate
+     component on the plate).
+   - Split on: "and", commas, "with" (when listing separate items or a
+     named accompaniment/side)
 2. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
 3. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
 4. Estimate nutrition for the SPECIFIED quantity and cooking method
@@ -662,7 +670,19 @@ Return JSON:
 
     } catch (error) {
       console.error(`[OpenAI] Nutrition estimation failed:`, error.message);
-      return [];
+      // Was `return []` — indistinguishable from the model genuinely
+      // finding no food in the text. voiceLog.js's callers then treated a
+      // truncated/malformed response (e.g. "Unterminated string in JSON",
+      // seen in practice on longer transcripts with corrections/exclusions
+      // hitting the token budget) as "couldn't identify any food, try
+      // rewording" — telling the user their input was the problem when a
+      // plain retry of the same text would likely succeed. Throwing here
+      // lets voiceLog.js's existing catch-and-retry-once fallback run (it
+      // already calls this function a second time on any failure), and if
+      // that also fails, its outer error handler returns a real "please
+      // try again" response instead of a misleadingly confident zero-items
+      // result.
+      throw error;
     }
   }
 

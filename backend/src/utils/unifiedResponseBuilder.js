@@ -443,8 +443,15 @@ function generateSmartSuggestions(items, totals) {
  * Build a standardized food item
  */
 export function buildFoodItem(raw, index = 0) {
-  const quantity = raw.quantity || raw.portion?.amount || 1;
-  const unit = raw.unit || raw.portion?.unit || 'serving';
+  // The nutrition fallback below already checks raw.canonical?.nutrition —
+  // this one didn't check raw.canonical?.portion, even though the DB-cache
+  // hit path (voiceLog.js's dbMatch branch) puts the AI's actual estimated
+  // portion there (e.g. {amount:1, unit:'bowl'}) and never sets raw.portion
+  // directly. A spoken "one bowl of X" silently became "1 serving" — not a
+  // parsing failure, just this fallback chain never looking in the one
+  // place a cached result actually puts it.
+  const quantity = raw.quantity || raw.portion?.amount || raw.canonical?.portion?.amount || 1;
+  const unit = raw.unit || raw.portion?.unit || raw.canonical?.portion?.unit || 'serving';
   const name = raw.name || raw.foodName || 'Unknown Food';
 
   // Normalize nutrition
