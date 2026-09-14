@@ -16,6 +16,7 @@
 import { db } from '../config/db.js';
 import { sql } from 'drizzle-orm';
 import NodeCache from 'node-cache';
+import { isCurrentTokenOwner } from '../utils/pushTokenOwnership.js';
 // expo-server-sdk was imported but never actually added as a dependency
 // (not in package.json, not installed) — this made the whole module fail
 // to load with MODULE_NOT_FOUND. Only one method was used (a token-format
@@ -664,6 +665,17 @@ async function sendPushNotification(userId, content, deepLink, priority) {
   if (!pushToken.startsWith('ExponentPushToken[') && !pushToken.startsWith('ExpoPushToken[')) {
     console.warn('[SmartNotification] Invalid Expo push token:', pushToken);
     return { success: false, reason: 'invalid_token' };
+  }
+
+  // Not currently reachable from any route or job (confirmed via import
+  // graph — this whole module is unused dead code today), but it queries
+  // account_settings and dispatches directly, entirely bypassing
+  // sendUserFCMNotification/sendUserNotification's ownership gate. Adding
+  // the same check here so this can never become a live cross-account-
+  // delivery path if it's ever wired up later without this being noticed.
+  if (!(await isCurrentTokenOwner(db, pushToken, userId))) {
+    console.log(`[SmartNotification] Skipping send for user ${userId} — token no longer owned by this account`);
+    return { success: false, reason: 'not_token_owner' };
   }
 
   const message = {
