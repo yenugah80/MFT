@@ -11,9 +11,36 @@ import { attachOpenAIConsent, requireOpenAIConsent } from '../middleware/require
 import crypto from 'crypto';
 import { buildUnifiedResponse } from '../utils/unifiedResponseBuilder.js';
 import { aggregateCanonicalTotals, normalizeMicros, attachConfidenceTiers } from '../utils/canonicalNutrition.js';
+import { attachSpellingReviews, flagUnrecognizedLowEstimate } from './resolve.js';
 
 function normalizeItemMicros(items) {
   return (items || []).map((item) => ({ ...item, micros: normalizeMicros(item.micros) }));
+}
+
+/**
+ * Voice items previously never went through attachSpellingReviews or the
+ * unrecognized-low-estimate check at all — both were only wired into
+ * resolve.js's text-mode path. A misspelled/garbled voice-transcribed food
+ * name (any food, any language — "moongsal", "Mondal", or anything else)
+ * could reach a near-zero-calorie AI guess and still be shown as a normal
+ * confirmed item, with no spelling suggestion and no clarification prompt,
+ * purely because it arrived via voice instead of text. Shared functions
+ * (resolve.js) applied here too, so the same behavior — and the same fix —
+ * covers both input paths instead of drifting independently.
+ */
+function applySharedResolutionChecks(items) {
+  const knownReviews = [];
+  for (const item of items) {
+    attachSpellingReviews(item, item, knownReviews);
+    if (!item.flags?.includes('unrecognized_food_low_estimate')) {
+      const lowEstimateFlag = flagUnrecognizedLowEstimate(item.source || item.resolutionSource, item.macros?.calories_kcal);
+      if (lowEstimateFlag) {
+        item.flags = Array.from(new Set([...(item.flags || []), lowEstimateFlag]));
+        item.requiresUserConfirmation = true;
+      }
+    }
+  }
+  return items;
 }
 
 const router = express.Router();
@@ -261,6 +288,7 @@ router.post(
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
     unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
+    unifiedResponse.items = applySharedResolutionChecks(unifiedResponse.items);
 
     // Zero items with AI available-but-skipped-for-consent is a different
     // situation from zero items after AI genuinely tried and found nothing:
@@ -288,6 +316,17 @@ router.post(
 
     if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT') {
       return res.status(504).json({ error: "Request timed out. Please try again.", code: 'TIMEOUT' });
+    }
+
+    // The AI call succeeded but its response didn't have the shape we
+    // asked for (OpenAIClient.estimateNutritionForText's own comment has
+    // the full reasoning). This is a real, distinct failure mode — not the
+    // model looking at the text and finding no food — so it gets its own
+    // code/message instead of falling through to the generic 500, which
+    // the mobile client would otherwise be unable to tell apart from a
+    // genuine "nothing recognizable" result.
+    if (error.code === 'MALFORMED_AI_RESPONSE') {
+      return res.status(502).json({ error: "AI response was malformed. Please try again.", code: 'MALFORMED_AI_RESPONSE' });
     }
 
     res.status(500).json({ error: "Failed to process voice input", code: 'INTERNAL_ERROR' });
@@ -435,6 +474,7 @@ router.post(
     unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
     unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
     unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
+    unifiedResponse.items = applySharedResolutionChecks(unifiedResponse.items);
 
     console.log(`[VoiceLog/Transcribe] Items: ${unifiedResponse.items.length}, Health: ${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse, text });

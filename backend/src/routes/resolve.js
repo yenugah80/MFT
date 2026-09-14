@@ -315,6 +315,36 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
  * NEW: Uses StrategicFoodParser with hybrid routing (rule-based vs AI)
  * Pipeline: StrategicFoodParser route → USDA search → OFF search → Best match selection
  */
+/**
+ * A near-zero calorie estimate from the AI-estimation path is not a
+ * legitimately low-calorie food — at virtually any normal portion, a real,
+ * recognized food has non-trivial calories. This is the signature of the
+ * model not actually recognizing the name (a misspelling/garbled
+ * transcription, in any language, for any food — not specific to any one
+ * ingredient) and returning a placeholder/empty guess that still
+ * "succeeds" (no exception thrown), which was previously only ever
+ * soft-flagged as low-confidence and shown as a normal confirmed item.
+ * Shared across every route that resolves an AI-estimated food (text via
+ * resolveGenericFood below, voice via voiceLog.js) so the threshold and
+ * the flag name can't drift between them.
+ *
+ * @returns {string|null} 'unrecognized_food_low_estimate' or null
+ */
+function flagUnrecognizedLowEstimate(source, calories) {
+  // 'estimat' (not 'estimation') deliberately — text-mode's resolver uses
+  // 'openai_estimation'/'openai_estimation_low_confidence'
+  // (smartNutritionResolver.js), voice-mode's uses 'ai_estimate'
+  // (OpenAIClient.js's estimateNutritionForText) — two different words for
+  // the same "this came from an AI guess, not a real record lookup"
+  // concept. Matching only 'estimation' silently never matched voice's
+  // 'ai_estimate' at all, so this check never actually ran for voice input.
+  if (!source || !source.includes('estimat')) return null;
+  if (typeof calories === 'number' && calories < 5) {
+    return 'unrecognized_food_low_estimate';
+  }
+  return null;
+}
+
 function spellingReviewFor(foodName) {
   if (!foodName || typeof foodName !== 'string') return null;
   const suggestion = getSpellingSuggestions(foodName);
@@ -349,7 +379,18 @@ function attachSpellingReviews(parsedFood, resolvedItem, knownReviews) {
   // correctly, just not everything the word list happens to contain. Only
   // fall through to the spelling check when the resolver's own confidence
   // is Low — i.e. it's already unsure, so a second opinion is worth having.
-  if (resolvedItem.confidenceTier && resolvedItem.confidenceTier !== 'Low') {
+  // BUG FOUND 2026-09: computeConfidenceTier (canonicalNutrition.js) returns
+  // the lowercase strings 'low' | 'medium' | 'high'. This guard compared
+  // against 'Low' (capital L) — a value computeConfidenceTier never
+  // produces — so `confidenceTier !== 'Low'` was true for every possible
+  // tier, including a genuine 'low', and this function returned early on
+  // every call. The spelling-suggestion system (fuzzyMatch.js's
+  // findSimilarFoods, which correctly matches "moongsal" -> "moong dal" at
+  // 78% and "Mondal" -> "moong dal" at 67%, confirmed directly) never
+  // actually ran for ANY food through this path, for any user — not a
+  // per-food gap, a total outage of the feature caused by one string
+  // literal's casing.
+  if (resolvedItem.confidenceTier && resolvedItem.confidenceTier !== 'low') {
     return;
   }
 
@@ -677,7 +718,10 @@ async function resolveGenericFood(parsedFood) {
     const flags = [];
     if (!parsedFood.quantity) flags.push('portion_estimated');
     if (nutrition.source.includes('estimation')) {
-      if (nutrition.sourceConfidence < 80) {
+      const lowEstimateFlag = flagUnrecognizedLowEstimate(nutrition.source, nutrition.macros?.calories_kcal);
+      if (lowEstimateFlag) {
+        flags.push(lowEstimateFlag);
+      } else if (nutrition.sourceConfidence < 80) {
         flags.push('estimated_nutrients_low_confidence');
       } else {
         flags.push('ai_estimated_nutrients');
@@ -1294,3 +1338,4 @@ function enrichWithHealthMetrics(draft) {
 }
 
 export default router;
+export { attachSpellingReviews, flagUnrecognizedLowEstimate };
