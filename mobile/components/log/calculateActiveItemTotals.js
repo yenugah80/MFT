@@ -36,8 +36,16 @@ function extractSodiumFromMicros(micros) {
  */
 export function calculateActiveItemTotals(items, activeItems, excludedItems, excludedIngredients) {
   const activeIndices = items.map((_, idx) => idx).filter(idx => !excludedItems.has(idx));
+  // Per-item post-exclusion macros, built alongside the aggregate below —
+  // same subtraction math, just also kept per-item instead of only summed.
+  // Exists because saveMealItems (log.js) persists ONE record PER ITEM,
+  // reading each item's OWN macros directly — a correct aggregate here
+  // never reached that save path (activeItems, as filtered, still carried
+  // each surviving item's ORIGINAL pre-exclusion macros), so excluding an
+  // ingredient changed the review screen's numbers but not what got saved.
+  const adjustedItems = [];
 
-  return activeItems.reduce((acc, item, arrIdx) => {
+  const result = activeItems.reduce((acc, item, arrIdx) => {
     const macros = item.macros || {};
     const itemMicros = item.micros || {};
     const originalIndex = activeIndices[arrIdx]; // Map back to original index
@@ -112,6 +120,29 @@ export function calculateActiveItemTotals(items, activeItems, excludedItems, exc
       acc.micros[key].value += value;
     });
 
+    // Same values just accumulated above, kept per-item too. Excluded
+    // ingredients are dropped from the adjusted item's own ingredients
+    // list as well, so the saved/persisted item stays internally
+    // consistent (its macros and its ingredient breakdown agree) rather
+    // than a corrected total sitting next to a stale, pre-exclusion list.
+    adjustedItems.push({
+      ...item,
+      macros: {
+        ...macros,
+        calories_kcal: Math.max(0, itemCalories),
+        protein_g: Math.max(0, itemProtein),
+        carbs_g: Math.max(0, itemCarbs),
+        fat_g: Math.max(0, itemFat),
+        fiber_g: Math.max(0, itemFiber),
+        sugar_g: Math.max(0, itemSugar),
+        sodium_mg: itemSodium,
+      },
+      micros: Object.fromEntries(Object.entries(runningMicros).map(([key, { value, unit }]) => [key, { value, unit }])),
+      ingredients: itemIngredients.filter((_, ingIdx) => !excludedIngredients.has(`${originalIndex}-${ingIdx}`)),
+    });
+
     return acc;
   }, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, micros: {} });
+
+  return { ...result, adjustedItems };
 }

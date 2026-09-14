@@ -294,9 +294,17 @@ const NutrientIcon = ({ type, size = 20, color = '#6B7280' }) => {
 /**
  * Donut Chart for Macro Distribution
  */
-const MacroDonutChart = ({ protein, carbs, fat, size = 140, strokeWidth = 20 }) => {
+const MacroDonutChart = ({ protein, carbs, fat, calories, size = 140, strokeWidth = 20 }) => {
   const pct = calculateMacroPercentages(protein, carbs, fat);
-  const totalCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  // Previously derived from macro grams via Atwater (protein*4 + carbs*4 +
+  // fat*9) instead of using the actual summed item calories — the two are
+  // not guaranteed to agree (rounding, non-4/4/9 AI-estimated items, fiber),
+  // so the headline could show a different total than the item list summed
+  // to (626 vs. 605 in one observed case). calories is the same value
+  // calculatedTotals.calories already uses for the item badges — this just
+  // stops recomputing a second, independently-driftable number for the
+  // same thing.
+  const totalCalories = calories;
 
   const cx = size / 2;
   const cy = size / 2;
@@ -1153,13 +1161,6 @@ export default function UnifiedMealAnalysis({
     });
   };
 
-  // Notify parent when active items change
-  React.useEffect(() => {
-    if (onItemsChange && (excludedItems.size > 0 || excludedIngredients.size > 0)) {
-      onItemsChange(activeItems, calculatedTotals);
-    }
-  }, [activeItems, calculatedTotals, onItemsChange, excludedItems.size, excludedIngredients.size]);
-
   const calculatedTotals = useMemo(() => {
     // If user has modified items, always recalculate from activeItems
     const hasExclusions = excludedItems.size > 0 || excludedIngredients.size > 0;
@@ -1194,6 +1195,27 @@ export default function UnifiedMealAnalysis({
 
     return { ...result, ...backendScore };
   }, [activeItems, totals, excludedItems, excludedIngredients]);
+
+  // Notify parent when active items change — declared after calculatedTotals
+  // (previously referenced it above its own declaration, a temporal-dead-zone
+  // bug that made this effect's dependency tracking on calculatedTotals
+  // unreliable regardless of onItemsChange being wired). This is how
+  // exclusions (item removal, ingredient exclusion) reach the parent's
+  // canonical analysisResult — see log.js's onItemsChange wiring, which
+  // keeps handleSaveMeal's save payload in sync with what this screen
+  // actually displays, instead of saving the pre-exclusion original.
+  React.useEffect(() => {
+    if (onItemsChange && (excludedItems.size > 0 || excludedIngredients.size > 0)) {
+      // calculatedTotals.adjustedItems, not the raw activeItems — each
+      // adjusted item's own macros already reflect its ingredient
+      // exclusions (calculateActiveItemTotals), which activeItems (a plain
+      // filter of the original items) does not. Passing activeItems here
+      // was the reason an excluded ingredient changed the review screen's
+      // numbers but the saved per-item record still hit the original,
+      // pre-exclusion values.
+      onItemsChange(calculatedTotals.adjustedItems, calculatedTotals);
+    }
+  }, [activeItems, calculatedTotals, onItemsChange, excludedItems.size, excludedIngredients.size]);
 
   // Calculate average confidence first (needed for unified scoring)
   const avgConfidence = items.reduce((sum, i) => sum + (i.sourceEvidence?.[0]?.confidence || i.confidence || 0.7), 0) / (items.length || 1);
@@ -1250,6 +1272,7 @@ export default function UnifiedMealAnalysis({
           protein={calculatedTotals.protein}
           carbs={calculatedTotals.carbs}
           fat={calculatedTotals.fat}
+          calories={calculatedTotals.calories}
           size={140}
         />
         <View style={styles.scoreSection}>

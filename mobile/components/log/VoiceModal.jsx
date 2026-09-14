@@ -47,6 +47,7 @@ import { useRouter } from 'expo-router';
 import apiClient from '../../services/apiClient';
 import { useAudioPlayback } from '../../hooks/useAudioPlayback';
 import { getTTSCode } from '../../constants/languages';
+import { unresolvedItems } from '../../utils/foodResolution';
 import {
   trackVoiceRecordingStarted,
   trackVoiceRecordingCompleted,
@@ -177,11 +178,19 @@ function getConfidenceColor(confidence) {
   return SEMANTIC.danger.base;
 }
 
+// `confidence` here is derived from transcript word count (useServerVoice.js),
+// not any real per-utterance signal from the speech recognizer — neither
+// react-native-voice's on-device path nor the server transcription fallback
+// expose one; both are hardcoded/heuristic. It says nothing about whether
+// the FOOD in the transcript will be correctly recognized — a long,
+// perfectly-transcribed, but garbled or noise-padded sentence scores exactly
+// the same as a long, clear one. Labeled and displayed accordingly: no
+// percentage (which would imply a precision this number doesn't have), and
+// wording about the transcript itself, not "recognition" of its contents.
 function getConfidenceLabel(confidence) {
-  // Clarify this is food recognition confidence, not nutrition accuracy
-  if (confidence >= 0.8) return 'Clear Recognition';
-  if (confidence >= 0.6) return 'Partial Recognition';
-  return 'Uncertain Recognition';
+  if (confidence >= 0.8) return 'Transcript captured';
+  if (confidence >= 0.6) return 'Short transcript — check it’s complete';
+  return 'Very short — check it’s complete';
 }
 
 async function triggerHaptic(type = 'light') {
@@ -259,6 +268,12 @@ export function VoiceModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
+  // A zero-items analysis result on the transcribed screen — distinct from
+  // localError, which drives the separate full-screen error state where the
+  // transcript isn't visible/editable at all. This stays on the transcribed
+  // screen instead, so the user can fix the text (e.g. a garbled word) and
+  // retry without re-recording. Cleared on a fresh recording/edit/retry.
+  const [analysisWarning, setAnalysisWarning] = useState(null);
   // Audio held across the consent prompt so agreeing resumes with the original
   // recording instead of asking the user to say it all again.
   const [pendingConsentUri, setPendingConsentUri] = useState(null);
@@ -339,6 +354,7 @@ export function VoiceModal({
     clearError();
     setLocalError(null);
     setErrorContext(null);
+    setAnalysisWarning(null);
     setState('idle');
     setTranscription('');
     setOriginalTranscription('');
@@ -737,6 +753,7 @@ export function VoiceModal({
       setIsSubmitting(true);
       setLocalError(null);
       setErrorContext(null);
+      setAnalysisWarning(null);
       setState('analyzing');
       await triggerHaptic();
       announceForAccessibility('Analyzing nutrition. Please wait.');
@@ -792,22 +809,30 @@ export function VoiceModal({
         // caused by AI being skipped for lack of consent can't be fixed by
         // re-recording, so don't tell the user to do that.
         const consentBlocked = nutritionResult?.aiSkippedForConsent === true;
-        setLocalError(
-          consentBlocked
-            ? 'Local matching couldn’t find that. Enable AI analysis in Privacy & Data for better accuracy.'
-            : "Couldn't identify any food in that. Try recording again with more detail."
-        );
-        // Not tagged 'analysis' — a zero-item result means re-analyzing this
-        // exact text won't help either way. Retry should re-record (the
-        // errorContext default), matching what the message above tells the
-        // user to do.
-        setState('error');
+
+        if (consentBlocked) {
+          // Genuinely nothing this screen can offer to fix — local matching
+          // needs the setting changed elsewhere. Keeps the existing
+          // full-screen error path.
+          setLocalError('Local matching couldn’t find that. Enable AI analysis in Privacy & Data for better accuracy.');
+          setState('error');
+          await triggerHaptic('error');
+          announceForAccessibility("Couldn't identify any food using local matching.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Stay on the transcribed screen instead of the separate error
+        // screen — the transcript is very likely fixable (a mis-heard word,
+        // trailing noise) and re-analyzing the EDITED text has a real
+        // chance of succeeding, unlike blindly resubmitting the identical
+        // text. The transcribed screen already has working Edit/Confirm
+        // controls; this just keeps the user on it with an explanation
+        // instead of forcing a full re-record.
+        setAnalysisWarning("Couldn't identify any food in that. Edit the text below to fix anything unclear, then try again.");
+        setState('transcribed');
         await triggerHaptic('error');
-        announceForAccessibility(
-          consentBlocked
-            ? "Couldn't identify any food using local matching."
-            : "Couldn't identify any food in that. Try recording again."
-        );
+        announceForAccessibility("Couldn't identify any food in that. You can edit the transcript and try again.");
         setIsSubmitting(false);
         return;
       }
@@ -849,6 +874,20 @@ export function VoiceModal({
    */
   const handleSaveReviewed = useCallback(async () => {
     if (!reviewResult || isSavingResult) return;
+
+    // Same block the text-input flow already applies (log.js's
+    // saveMealItems) — previously missing here entirely, so a voice item
+    // the backend flagged as needing confirmation (an unrecognized name
+    // resolved to a near-zero-calorie guess, or a spelling suggestion)
+    // could be saved straight through with no gate and no visible marker,
+    // purely because it arrived via voice instead of text.
+    const itemsNeedingReview = unresolvedItems(reviewResult.items);
+    if (itemsNeedingReview.length > 0) {
+      const names = itemsNeedingReview.map((item) => item.name).filter(Boolean).join(', ');
+      setLocalError(`Review ${names || 'the unresolved ingredients'} before logging this meal.`);
+      await triggerHaptic('error');
+      return;
+    }
 
     if (!onSaveNow) {
       onComplete(reviewResult);
@@ -896,6 +935,7 @@ export function VoiceModal({
     // transcript screen — recording live in the background with no visible
     // indication — until the 60s max-duration auto-stop kicked in.
     setState('idle');
+    setAnalysisWarning(null);
 
     // Reset playback and transcription state
     audioPlayback.reset();
@@ -1249,6 +1289,13 @@ export function VoiceModal({
                     </View>
                   )}
 
+                  {analysisWarning && (
+                    <View style={styles.analysisWarningContainer}>
+                      <Ionicons name="alert-circle" size={ICON_SIZES.sm} color={SEMANTIC.warning.base} />
+                      <Text style={styles.analysisWarningText}>{analysisWarning}</Text>
+                    </View>
+                  )}
+
                   {confidence !== null && (
                     <View style={styles.confidenceContainer}>
                       <Ionicons
@@ -1257,7 +1304,7 @@ export function VoiceModal({
                         color={getConfidenceColor(confidence)}
                       />
                       <Text style={[styles.confidenceText, { color: getConfidenceColor(confidence) }]}>
-                        {getConfidenceLabel(confidence)} ({Math.round(confidence * 100)}%)
+                        {getConfidenceLabel(confidence)}
                       </Text>
                     </View>
                   )}
@@ -1406,6 +1453,15 @@ export function VoiceModal({
                   Found {reviewResult.items.length} item{reviewResult.items.length === 1 ? '' : 's'}
                 </Text>
 
+                {unresolvedItems(reviewResult.items).length > 0 && (
+                  <View style={styles.analysisWarningContainer}>
+                    <Ionicons name="alert-circle" size={ICON_SIZES.sm} color={SEMANTIC.warning.base} />
+                    <Text style={styles.analysisWarningText}>
+                      {unresolvedItems(reviewResult.items).map((i) => i.name).filter(Boolean).join(', ')} — not recognized clearly. Saving is disabled until this is resolved; discard and re-record with the correct name, or log the rest via Text.
+                    </Text>
+                  </View>
+                )}
+
                 <ScrollView style={styles.reviewList} showsVerticalScrollIndicator={false}>
                   {reviewResult.items.map((item, idx) => {
                     const macros = item.macros || {};
@@ -1478,10 +1534,11 @@ export function VoiceModal({
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.primaryButton}
+                    style={[styles.primaryButton, unresolvedItems(reviewResult.items).length > 0 && styles.primaryButtonDisabled]}
                     onPress={handleSaveReviewed}
-                    disabled={isSavingResult}
+                    disabled={isSavingResult || unresolvedItems(reviewResult.items).length > 0}
                     accessibilityLabel="Save this meal to your log"
+                    accessibilityState={{ disabled: isSavingResult || unresolvedItems(reviewResult.items).length > 0 }}
                   >
                     <LinearGradient
                       colors={SURFACES.gradient.primary}
@@ -1492,9 +1549,11 @@ export function VoiceModal({
                       {isSavingResult ? (
                         <ActivityIndicator size="small" color={TEXT.white} />
                       ) : (
-                        <Ionicons name="checkmark-circle" size={ICON_SIZES.md} color={TEXT.white} />
+                        <Ionicons name={unresolvedItems(reviewResult.items).length > 0 ? 'alert-circle' : 'checkmark-circle'} size={ICON_SIZES.md} color={TEXT.white} />
                       )}
-                      <Text style={styles.primaryButtonText}>{isSavingResult ? 'Saving…' : 'Save to Log'}</Text>
+                      <Text style={styles.primaryButtonText}>
+                        {isSavingResult ? 'Saving…' : unresolvedItems(reviewResult.items).length > 0 ? 'Review Above First' : 'Save to Log'}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -2129,6 +2188,23 @@ const styles = StyleSheet.create({
   // ─────────────────────────────────────────────
   // TRANSCRIBED STATE (Standard only)
   // ─────────────────────────────────────────────
+  analysisWarningContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[2],
+    marginVertical: SPACING[4],
+    paddingHorizontal: SPACING[4],
+    paddingVertical: SPACING[3],
+    backgroundColor: SURFACES.background.tertiary,
+    borderRadius: RADIUS.md,
+  },
+  analysisWarningText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.medium,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: SEMANTIC.warning.base,
+  },
   confidenceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2279,6 +2355,9 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: RADIUS.lg,
     ...SHADOWS.md,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5,
   },
   primaryButtonGradient: {
     flexDirection: 'row',

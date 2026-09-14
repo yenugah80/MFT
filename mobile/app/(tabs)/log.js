@@ -875,6 +875,21 @@ export default function LogScreen() {
 
   const handleSaveMeal = () => saveMealItems(foodAnalysis.analysisResult);
 
+  // UnifiedMealAnalysis computes activeItems/calculatedTotals locally
+  // whenever the user excludes an item or ingredient, but previously never
+  // reported that back — handleSaveMeal read the original,
+  // pre-exclusion foodAnalysis.analysisResult regardless, so an excluded
+  // ingredient changed what the review screen displayed but not what got
+  // saved. This keeps the canonical analysisResult in sync with the
+  // screen's own post-exclusion numbers, using the same functional-updater
+  // pattern updateItemQuantity/removeIngredient already use.
+  const handleItemsChange = useCallback((activeItems, calculatedTotals) => {
+    foodAnalysis.setAnalysisResult((prev) => {
+      if (!prev) return prev;
+      return { ...prev, items: activeItems, totals: calculatedTotals };
+    });
+  }, [foodAnalysis.setAnalysisResult]);
+
   /**
    * Saves a voice analysis result directly from inside VoiceModal, without
    * requiring the user to close the modal and tap Save again on a separate
@@ -1386,6 +1401,7 @@ export default function LogScreen() {
                   mealSummary={foodAnalysis.analysisResult.mealSummary}
                   onSave={handleSaveMeal}
                   onEdit={handleCancel}
+                  onItemsChange={handleItemsChange}
                   saving={isSavingLog}
                   saveBlocked={unresolvedItems(foodAnalysis.analysisResult.items).length > 0}
                   analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
