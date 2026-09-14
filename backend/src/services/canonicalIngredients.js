@@ -40,8 +40,61 @@ const canonicalCache = new NodeCache({
 
 const COMPLEX_DISH_REGEX = /\b(curry|masala|biryani|saag|dal|gravy|fry|stew|soup|casserole|lasagna|pizza|burger|sandwich|wrap|taco|burrito|bowl|salad)\b/i;
 
+// Words that carry no food identity of their own — quantities, units, and
+// sentence glue — so they never count as "unrecognized" residue below.
+// Deliberately generic (not tied to any cuisine or dish) so this doesn't
+// become another dish-specific whitelist.
+// Built lazily (not at module-eval time) because NEGATION_MARKERS is
+// declared later in this file — spreading it into a top-level const here
+// would hit the TDZ before that declaration runs.
+let _residueStopwords = null;
+function getResidueStopwords() {
+  if (!_residueStopwords) {
+    _residueStopwords = new Set([
+      'a', 'an', 'the', 'of', 'with', 'and', 'some', 'my', 'in', 'on', 'for',
+      'instead', 'plus', 'also', 'please', 'this', 'that', 'these', 'those', 'to',
+      ...NEGATION_MARKERS,
+    ]);
+  }
+  return _residueStopwords;
+}
+
+/**
+ * True when the input contains a dish name the local ingredient dictionary
+ * doesn't recognize at all — e.g. "chole", "pad thai" — as opposed to one
+ * made entirely of individually-known ingredients and connector words.
+ *
+ * This is the general form of the old COMPLEX_DISH_REGEX whitelist: instead
+ * of hardcoding which dish *names* force an AI parse, it detects the actual
+ * failure condition — some meaningful word wasn't accounted for by anything
+ * the dictionary matched — regardless of what that word is. Without this,
+ * partial local-dictionary matches (e.g. "chole with rice" matching only
+ * "rice") silently dropped the unmatched dish entirely instead of forcing a
+ * full AI re-parse of the whole utterance.
+ */
+function hasUnrecognizedDishResidue(text) {
+  const cleaned = (text || '').toLowerCase().replace(/[^\w\s]/g, '');
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return false;
+
+  const matchedForms = extractIngredientKeywords(text);
+  const accountedWords = new Set();
+  matchedForms.forEach((form) => form.split(/\s+/).forEach((w) => accountedWords.add(w)));
+
+  const stopwords = getResidueStopwords();
+  return words.some((word) => {
+    if (accountedWords.has(word)) return false;
+    if (stopwords.has(word)) return false;
+    if (WORD_TO_NUMBER[word] !== undefined) return false;
+    if (COMMON_UNITS[word]) return false;
+    if (/^\d+(\.\d+)?$/.test(word)) return false;
+    return true;
+  });
+}
+
 export function isComplexDishInput(text) {
-  return COMPLEX_DISH_REGEX.test(text || '');
+  if (COMPLEX_DISH_REGEX.test(text || '')) return true;
+  return hasUnrecognizedDishResidue(text);
 }
 
 // ============================================================================

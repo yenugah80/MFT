@@ -15,7 +15,7 @@ import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
 import { buildImageAnalysisPrompt } from './prompts/nutritionAnalysis.js';
 import { normalizeNutritionAnalysis, normalizeMultiItemAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
-import { canonicalize, validateExtraction } from '../canonicalIngredients.js';
+import { canonicalize, validateExtraction, isComplexDishInput } from '../canonicalIngredients.js';
 
 class OpenAIClient extends BaseApiClient {
   constructor() {
@@ -258,6 +258,20 @@ class OpenAIClient extends BaseApiClient {
           return `chat:${model}:${systemId}:${userContent}`;
         })()
 
+    // Cache lookup/write is handled here, not passed into this.request(), so
+    // that only a response whose content actually parses as JSON gets
+    // cached. this.request() only sees "did the HTTP call succeed" — a 200
+    // with a truncated/malformed body (e.g. hitting a token or length limit
+    // mid-object) counts as success at that layer, and caching it there
+    // permanently freezes the broken response: every subsequent call for
+    // the same input — including an immediate retry-on-failure — would
+    // become a guaranteed cache HIT replaying the identical unparseable
+    // string for the full cache TTL, rather than a fresh model call.
+    if (cacheKey) {
+      const cached = this._getFromCache(cacheKey);
+      if (cached) return cached;
+    }
+
     try {
       const data = await this.request(
         `${this.baseURL}/chat/completions`,
@@ -268,8 +282,7 @@ class OpenAIClient extends BaseApiClient {
             'Authorization': `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify(requestBody),
-        },
-        cacheKey
+        }
       );
 
       // Extract response
@@ -288,6 +301,10 @@ class OpenAIClient extends BaseApiClient {
         console.error('[OpenAI] JSON parse failed:', parseError.message);
         console.error('[OpenAI] Raw content:', content.substring(0, 500));
         throw new Error(`OpenAI returned invalid JSON: ${parseError.message}`);
+      }
+
+      if (cacheKey) {
+        this._saveToCache(cacheKey, jsonResponse);
       }
 
       // Track usage and costs
@@ -485,7 +502,16 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     const simpleFoods = /\b(egg|eggs|rice|bread|milk|banana|apple|chicken breast|water|toast|cereal|yogurt|cheese|butter|oil)\b/i;
 
     if (regionalDishes.test(text)) return 'regional';
-    if (simpleFoods.test(text)) return 'simple';
+    // A recognized simple-food word anywhere in the text used to be enough
+    // to classify the WHOLE utterance as 'simple' (cheap model, 400-token
+    // cap) — so "chole with rice" got treated as simple because "rice"
+    // matched, even though "chole" is an entirely different, unrecognized
+    // dish sitting right next to it that then got silently dropped when the
+    // response truncated. isComplexDishInput already does the general,
+    // non-whitelist check for "is there a dish name here the local
+    // dictionary doesn't recognize" — defer to it instead of keeping a
+    // second, independently-drifting judgment call.
+    if (simpleFoods.test(text) && !isComplexDishInput(text)) return 'simple';
     const wordCount = text.split(/\s+/).length;
     return wordCount > 3 ? 'complex' : 'simple';
   }
@@ -599,7 +625,7 @@ Return JSON:
         "sodium": number,
         "micros": { "calcium": { "value": 10, "unit": "mg" }, "iron": { "value": 2, "unit": "mg" } }
       },
-      "🆕 ingredients": [
+      "ingredients": [
         { "name": "rice", "amount": "1 cup", "calories": 200, "protein": 4, "carbs": 45, "fat": 0 },
         { "name": "dal", "amount": "0.5 cup", "calories": 115, "protein": 9, "carbs": 20, "fat": 0 }
       ],
@@ -616,11 +642,25 @@ Return JSON:
       },
     ];
 
+    // A flat 1500-token ceiling was reproducibly truncating mid-response for
+    // any non-simple query naming 2+ items (e.g. "chole with rice") — each
+    // item's full nutrition/micros/ingredients/analysis breakdown is dense
+    // enough that even one extra item pushes past the limit. Scale the
+    // budget by a cheap proxy for item count (comma/"and"/"with" splits)
+    // instead of raising one flat number, which would just move the same
+    // failure to a 3-item meal.
+    const likelyItemCount = complexity === 'simple'
+      ? 1
+      : query.split(/,| and | with /i).filter((s) => s.trim().length > 0).length;
+    const maxTokens = complexity === 'simple'
+      ? 400
+      : Math.min(1500 + Math.max(0, likelyItemCount - 1) * 800, 3200);
+
     try {
       const json = await this.chatCompletionJSON(messages, {
         model, // 🆕 DYNAMIC MODEL SELECTION: Uses detectDishComplexity + chooseModel
         temperature: 0.2,
-        maxTokens: complexity === 'simple' ? 400 : 1500, // Regional/complex foods with ingredients need more tokens
+        maxTokens,
       });
 
       if (!json.foods || !Array.isArray(json.foods)) {
