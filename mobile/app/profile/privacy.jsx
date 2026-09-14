@@ -90,6 +90,7 @@ export default function PrivacyScreen() {
   const [privacy, setPrivacy] = useState(PRIVACY_DEFAULTS);
   const [aiAnalysisConsent, setAiAnalysisConsent] = useState(false);
   const [isTogglingAI, setIsTogglingAI] = useState(false);
+  const [aiConsentLoadError, setAiConsentLoadError] = useState(false);
   // App lock is enforced by BiometricLockProvider. The device (SecureStore) is
   // the source of truth for whether this phone is gated. A server flag cannot
   // be trusted to gate a cold start, and a device that can't authenticate must
@@ -111,23 +112,39 @@ export default function PrivacyScreen() {
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
-    try {
-      const data = await apiClient.get("/profile/privacy");
-      setPrivacy(normalizeApiPrivacy(data));
-    } catch (error) {
-      console.error("[PrivacyScreen] Failed to load settings", error);
+
+    // Both requests must land before the screen leaves its loading state —
+    // otherwise the AI Food Analysis toggle briefly renders its useState
+    // default (false) instead of the real saved value, which looked like the
+    // toggle "flashing" to the wrong state on every open.
+    const [privacyResult, consentResult] = await Promise.allSettled([
+      apiClient.get("/profile/privacy"),
+      apiClient.get("/consent/status"),
+    ]);
+
+    if (privacyResult.status === "fulfilled") {
+      setPrivacy(normalizeApiPrivacy(privacyResult.value));
+    } else {
+      console.error("[PrivacyScreen] Failed to load settings", privacyResult.reason);
       setLoadError("Failed to load privacy settings");
-    } finally {
-      setIsLoading(false);
     }
 
-    // Food analysis consent has its own processor-specific endpoint.
-    try {
-      const status = await apiClient.get("/consent/status");
-      setAiAnalysisConsent(status?.consent?.hasConsent === true);
-    } catch (error) {
-      console.error("[PrivacyScreen] Failed to load AI consent status", error);
+    // Food analysis consent has its own processor-specific endpoint. On
+    // failure, don't silently keep rendering whatever aiAnalysisConsent
+    // already held (its false default, or a stale value from a previous
+    // successful load) as if it were confirmed — that looked like the toggle
+    // showing an incorrect state with no indication it might be wrong. Track
+    // the failure explicitly so the UI can say so and disable the control
+    // instead of asserting a value we don't actually know is current.
+    if (consentResult.status === "fulfilled") {
+      setAiAnalysisConsent(consentResult.value?.consent?.hasConsent === true);
+      setAiConsentLoadError(false);
+    } else {
+      console.error("[PrivacyScreen] Failed to load AI consent status", consentResult.reason);
+      setAiConsentLoadError(true);
     }
+
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -263,24 +280,38 @@ export default function PrivacyScreen() {
     }
   };
 
-  const handleExportData = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const EXPORT_FORMATS = {
+    json: { extension: 'json', mimeType: 'application/json' },
+    csv: { extension: 'zip', mimeType: 'application/zip' },
+    pdf: { extension: 'pdf', mimeType: 'application/pdf' },
+  };
+
+  const runExport = async (format) => {
     setIsExporting(true);
     try {
-      const data = await apiClient.get("/profile/export");
-      const jsonString = JSON.stringify(data, null, 2);
-      const fileName = `mft-data-${new Date().toISOString().split('T')[0]}.json`;
+      const dateStamp = new Date().toISOString().split('T')[0];
+      const { extension, mimeType } = EXPORT_FORMATS[format];
+      const fileName = `mft-data-${dateStamp}.${extension}`;
       // Expo 54's expo-file-system (v19) moved writeAsStringAsync/cacheDirectory
       // behind a separate "expo-file-system/legacy" subpath — calling them from
       // the default import throws at runtime instead of writing. File/Paths.cache
       // is the current API.
       const file = new File(Paths.cache, fileName);
       file.create({ overwrite: true, intermediates: true });
-      file.write(jsonString);
+
+      if (format === 'json') {
+        const data = await apiClient.get("/profile/export");
+        file.write(JSON.stringify(data, null, 2));
+      } else {
+        // CSV and PDF are generated server-side and returned as binary —
+        // getBytes() reads the raw response instead of parsing it as JSON.
+        const bytes = await apiClient.getBytes("/profile/export", { params: { format } });
+        file.write(bytes);
+      }
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(file.uri, {
-          mimeType: 'application/json',
+          mimeType,
           dialogTitle: 'Export Your Data',
         });
       } else {
@@ -288,10 +319,27 @@ export default function PrivacyScreen() {
       }
     } catch (error) {
       console.error("[PrivacyScreen] Export failed", error);
-      Alert.alert("Export Failed", "Could not export your data. Please try again.");
+      Alert.alert(
+        "Export Failed",
+        "Could not export your data. This requires an internet connection — please check your connection and try again."
+      );
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleExportData = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      "Export Your Data",
+      "Choose a format.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "JSON — for developers or re-import", onPress: () => runExport('json') },
+        { text: "CSV — spreadsheet, one file per data type", onPress: () => runExport('csv') },
+        { text: "PDF — a readable report", onPress: () => runExport('pdf') },
+      ]
+    );
   };
 
   const handleDeleteAccount = () => {
@@ -396,11 +444,21 @@ export default function PrivacyScreen() {
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>AI food analysis</Text>
               <Text style={styles.rowSubtitle}>
-                Send food photos and voice notes to OpenAI to estimate nutrition
+                {aiConsentLoadError
+                  ? "Couldn't check your current setting — tap to retry."
+                  : "Send food photos and voice notes to OpenAI to estimate nutrition"}
               </Text>
             </View>
             {isTogglingAI ? (
               <ActivityIndicator size="small" color={BRAND.primary} />
+            ) : aiConsentLoadError ? (
+              <TouchableOpacity
+                onPress={loadSettings}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading AI food analysis setting"
+              >
+                <Ionicons name="refresh" size={20} color={SEMANTIC.warning?.base || BRAND.primary} />
+              </TouchableOpacity>
             ) : (
               <Switch
                 value={aiAnalysisConsent}
@@ -635,14 +693,14 @@ export default function PrivacyScreen() {
             accessibilityRole="button"
             accessible
             accessibilityLabel="Download my data"
-            accessibilityHint="Export wellness records and privacy history as JSON"
+            accessibilityHint="Choose JSON, CSV, or PDF to export wellness records and privacy history. Requires an internet connection."
           >
             <View style={[styles.iconCircle, { backgroundColor: SEMANTIC.success.bg }]} accessibilityElementsHidden>
               <Ionicons name="download-outline" size={18} color={SEMANTIC.success.base} />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Download my data</Text>
-              <Text style={styles.rowSubtitle}>Export wellness records and privacy history as JSON</Text>
+              <Text style={styles.rowSubtitle}>Export as JSON, CSV, or PDF — requires internet connection</Text>
             </View>
             {isExporting ? (
               <ActivityIndicator size="small" color={BRAND.primary} />

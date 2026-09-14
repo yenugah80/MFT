@@ -279,6 +279,34 @@ class ApiClient {
     return this.fetchWithRetry(endpoint, { method: 'GET', headers, ...options });
   }
 
+  /**
+   * GET a binary response (PDF/ZIP/etc.) rather than JSON. fetchWithRetry
+   * always calls response.json(), which throws on binary bodies — exports
+   * in non-JSON formats need the raw bytes instead.
+   * @returns {Promise<Uint8Array>}
+   */
+  async getBytes(endpoint, options = {}) {
+    const headers = await this.buildHeaders(options.headers);
+    const { params, _timeout, ...fetchOptions } = options;
+    const requestUrl = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
+    const fullUrl = buildUrlWithParams(requestUrl, params);
+
+    const response = await fetchWithTimeout(
+      fullUrl,
+      { method: 'GET', headers, ...fetchOptions },
+      _timeout || 60000
+    );
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}`);
+      error.response = { status: response.status, statusText: response.statusText };
+      throw error;
+    }
+
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  }
+
   async post(endpoint, data, options = {}) {
     const headers = await this.buildHeaders(options.headers);
     return this.fetchWithRetry(endpoint, {
