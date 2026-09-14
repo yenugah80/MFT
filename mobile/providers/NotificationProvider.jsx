@@ -646,6 +646,22 @@ export const NotificationProvider = ({ children }) => {
         retryPendingTokenRegistration().catch(() => {});
         fcmService.retryPendingFCMTokenRegistration().catch(() => {});
 
+        // Unconditional re-registration, not just retry-if-pending: the
+        // initial-load effect above only registers once per cold start
+        // (gated on pushStatus.initialized/fcmStatus.initialized React
+        // state, which persists across a warm background/foreground cycle
+        // rather than resetting). A user who rarely fully kills the app
+        // could go a long time without this account's token ever being
+        // re-written — which is also what makes the backend's stale-token
+        // backstop (savePushToken/saveFCMToken clearing a token from any
+        // OTHER account's row) actually self-heal promptly rather than
+        // only on the next cold start. The backend upsert is idempotent —
+        // re-sending an unchanged token is a harmless no-op write.
+        if (isSignedIn) {
+          initializePushNotifications().catch(() => {});
+          initializeFCM().catch(() => {});
+        }
+
         // Completes an offline-at-sign-out deregistration even with no
         // session at all (e.g. sitting on the sign-in screen after a fully
         // offline logout) — this fires regardless of isSignedIn, since this
@@ -681,7 +697,7 @@ export const NotificationProvider = ({ children }) => {
     return () => {
       subscription.remove();
     };
-  }, [checkPermissionStatus, checkDailyReset, fcmStatus.permissionStatus, initializeFCM]);
+  }, [checkPermissionStatus, checkDailyReset, fcmStatus.permissionStatus, initializeFCM, initializePushNotifications, isSignedIn]);
 
   // Retry pending token registration on a genuine offline -> online
   // transition, not just on app foreground — a device that stays foregrounded
