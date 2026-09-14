@@ -20,6 +20,14 @@ CREATE TABLE "push_token_ownership" (
   -- network arrival order.
   "issued_at" bigint NOT NULL,
   "claimed_at" timestamp NOT NULL DEFAULT now(),
+  -- NULL = actively claimed by user_id. Non-null = explicitly released
+  -- (deregistered) and not currently owned by anyone — distinct from no
+  -- row existing at all, which means this token never went through the
+  -- ownership model (a legacy pre-migration registration) and is treated
+  -- permissively. Deleting the row on release would have made both cases
+  -- look identical, letting a token silently fall back to "owned" again
+  -- immediately after its rightful account explicitly gave it up.
+  "released_at" timestamp,
   "created_at" timestamp NOT NULL DEFAULT now(),
   CONSTRAINT "push_token_ownership_token_unique" UNIQUE ("token")
 );

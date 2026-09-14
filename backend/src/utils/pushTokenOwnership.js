@@ -72,15 +72,24 @@ export async function claimTokenOwnership(db, { token, tokenType, userId, device
     throw new Error('claimTokenOwnership requires a numeric issuedAtSeconds (the claiming request\'s JWT iat)');
   }
 
+  // released_at is unconditionally cleared back to NULL on a winning
+  // claim — a token that was explicitly released (deregistered) and is
+  // now being claimed fresh is not "still released" anymore. The ordering
+  // WHERE clause needs no special case for this: a released row's
+  // issued_at/claimed_at still reflect its last valid claim, and any
+  // genuine new registration's issued_at only moves forward in real time,
+  // so it naturally clears the bar — while a stale request replaying an
+  // old iat is correctly still rejected, released row or not.
   const rows = await db.execute(sql`
-    INSERT INTO push_token_ownership (token, token_type, user_id, device_id, issued_at, claimed_at)
-    VALUES (${token}, ${tokenType}, ${userId}, ${deviceId}, ${issuedAtSeconds}, now())
+    INSERT INTO push_token_ownership (token, token_type, user_id, device_id, issued_at, claimed_at, released_at)
+    VALUES (${token}, ${tokenType}, ${userId}, ${deviceId}, ${issuedAtSeconds}, now(), NULL)
     ON CONFLICT (token) DO UPDATE SET
       user_id = EXCLUDED.user_id,
       token_type = EXCLUDED.token_type,
       device_id = EXCLUDED.device_id,
       issued_at = EXCLUDED.issued_at,
-      claimed_at = EXCLUDED.claimed_at
+      claimed_at = EXCLUDED.claimed_at,
+      released_at = NULL
     WHERE
       EXCLUDED.issued_at > push_token_ownership.issued_at
       OR (EXCLUDED.issued_at = push_token_ownership.issued_at AND EXCLUDED.claimed_at > push_token_ownership.claimed_at)
@@ -101,11 +110,21 @@ export async function claimTokenOwnership(db, { token, tokenType, userId, device
  * that has since lost ownership to someone else is a safe no-op: the
  * WHERE clause filters on the row's CURRENT user_id, which by then is no
  * longer this caller's, so it simply matches nothing.
+ *
+ * Marks released_at rather than deleting the row. Deleting would make
+ * "explicitly released" indistinguishable from "never claimed" (no row at
+ * all) — and isCurrentTokenOwner treats the latter permissively, as a
+ * pre-migration legacy token. Without this distinction, releasing
+ * ownership would have made the token look legacy-permissive again
+ * immediately, silently undoing the release for every account, not just
+ * the one that gave it up.
  */
 export async function releaseTokenOwnership(db, token, userId) {
   if (!token || !userId) return { released: false };
   const rows = await db.execute(sql`
-    DELETE FROM push_token_ownership WHERE token = ${token} AND user_id = ${userId}
+    UPDATE push_token_ownership
+    SET released_at = now()
+    WHERE token = ${token} AND user_id = ${userId} AND released_at IS NULL
     RETURNING id
   `);
   return { released: rows.length > 0 };
@@ -119,15 +138,20 @@ export async function releaseTokenOwnership(db, token, userId) {
  * bookkeeping isn't retroactively corrected by someone else's claim), so
  * this table is the one check that must gate actual delivery.
  *
- * No ownership row at all means this token predates the ownership model
- * (a legacy registration that never went through claimTokenOwnership) —
- * treated as owned rather than blocked, so existing installs keep
- * receiving notifications normally until their next registration call
- * populates a row.
+ * Three states:
+ *   - No row at all: this token predates the ownership model (a legacy
+ *     registration that never went through claimTokenOwnership) — treated
+ *     as owned rather than blocked, so existing installs keep receiving
+ *     notifications normally until their next registration populates a row.
+ *   - Row exists, released_at IS NULL: owned by exactly row.user_id.
+ *   - Row exists, released_at IS NOT NULL: explicitly released — owned by
+ *     no one, including the account that released it, until the next
+ *     successful claim.
  */
 export async function isCurrentTokenOwner(db, token, userId) {
   if (!token || !userId) return false;
-  const rows = await db.execute(sql`SELECT user_id FROM push_token_ownership WHERE token = ${token}`);
+  const rows = await db.execute(sql`SELECT user_id, released_at FROM push_token_ownership WHERE token = ${token}`);
   if (rows.length === 0) return true;
+  if (rows[0].released_at !== null) return false;
   return rows[0].user_id === userId;
 }

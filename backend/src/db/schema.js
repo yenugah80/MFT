@@ -1926,6 +1926,10 @@ export const pushTokenOwnershipTable = pgTable(
     // Clerk JWT `iat` (unix seconds) of the request that won this claim.
     issuedAt: bigint("issued_at", { mode: "number" }).notNull(),
     claimedAt: timestamp("claimed_at").notNull().defaultNow(),
+    // NULL = actively claimed. Non-null = explicitly released — distinct
+    // from no row existing at all (never claimed, treated permissively for
+    // pre-migration legacy tokens). See migration 0055.
+    releasedAt: timestamp("released_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
