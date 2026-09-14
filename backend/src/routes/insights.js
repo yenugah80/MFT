@@ -41,7 +41,10 @@ import {
   nutritionGoalsTable,
   moodMealCorrelationsTable,
   insightFeedbackTable,
+  accountSettingsTable,
 } from '../db/schema.js';
+import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { normalizePrivacySettings } from '../utils/privacySettings.js';
 import { generateDailyStoryLine, calculateDailyScore } from '../services/storyLineService.js';
 import { generateMoodInsights, generateBasicMoodInsights } from '../services/moodInsightService.js';
 import { errors } from '../utils/errorResponse.js';
@@ -296,10 +299,29 @@ router.get('/what-to-change', async (req, res) => {
  * OpenAI-powered deep pattern analysis - generates comprehensive insights
  * This is a premium feature that uses GPT-4o for sophisticated analysis
  */
-router.get('/ai-analysis', async (req, res) => {
+router.get('/ai-analysis', requireOpenAIConsent({ purpose: 'write AI-generated wellness insights' }), async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { days = 14 } = req.query;
+
+    // requireOpenAIConsent above covers "will you let us send data to OpenAI
+    // at all" — this is the separate, narrower "AI-written reviews" purpose
+    // toggle (Privacy & Security → Wellness insights). A user can consent to
+    // OpenAI generally (for food analysis) without wanting this specific
+    // feature; this route previously checked neither.
+    const [settingsRow] = await db
+      .select({ privacy: accountSettingsTable.privacy })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId));
+    const privacy = normalizePrivacySettings(settingsRow?.privacy);
+    if (!privacy.aiWellnessNarration) {
+      return res.status(403).json({
+        success: false,
+        code: 'AI_WELLNESS_NARRATION_DISABLED',
+        error: 'AI-written reviews are turned off in Privacy & Security.',
+        settingsEndpoint: '/api/profile/privacy',
+      });
+    }
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
