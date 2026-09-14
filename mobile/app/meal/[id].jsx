@@ -295,6 +295,17 @@ export default function MealDetailScreen() {
   const mealType = meal.timestamp ? getMealTypeFromTime(new Date(meal.timestamp)) : 'snack';
   const mealConfig = MEAL_TYPE_CONFIG[mealType] || MEAL_TYPE_CONFIG.snack;
 
+  // sourceMeta.confidenceTier is the same backend-computed signal
+  // (computeConfidenceTier in canonicalNutrition.js) already forwarded and
+  // saved per item at log time. 'high' means a record-based source (e.g.
+  // barcode/USDA match) with a non-estimated portion; 'low'/'medium' mean
+  // an AI-derived approximation. A record saved before this field existed
+  // has confidenceTier === undefined/null — show nothing rather than
+  // guessing either way, so an unlabeled older meal isn't misread as either
+  // "verified" or "estimated".
+  const confidenceTier = meal.sourceMeta?.confidenceTier ?? null;
+  const isEstimatedData = confidenceTier === 'low' || confidenceTier === 'medium';
+
   // Source info
   const source = meal.source || 'text';
   const sourceConfig = SOURCE_CONFIG[source] || SOURCE_CONFIG.text;
@@ -411,7 +422,10 @@ export default function MealDetailScreen() {
 
         {/* Macros Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Macro Breakdown</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Macro Breakdown</Text>
+            {isEstimatedData && <Text style={styles.sectionNote}>Estimated</Text>}
+          </View>
 
           {/* Macro Distribution Bar */}
           <View style={styles.macroBar}>
@@ -451,7 +465,10 @@ export default function MealDetailScreen() {
         {/* Micronutrients Section */}
         {meal.micros && Object.keys(meal.micros).length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Micronutrients</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Micronutrients</Text>
+              {isEstimatedData && <Text style={styles.sectionNote}>Estimated</Text>}
+            </View>
             <View style={styles.microList}>
               {Object.entries(meal.micros).slice(0, 8).map(([key, value]) => {
                 const amount = typeof value === 'object' ? value.value : value;
@@ -737,6 +754,17 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
+    marginBottom: SPACING[4],
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.muted,
     marginBottom: SPACING[4],
   },
 
