@@ -1215,7 +1215,18 @@ export default function UnifiedMealAnalysis({
       // pre-exclusion values.
       onItemsChange(calculatedTotals.adjustedItems, calculatedTotals);
     }
-  }, [activeItems, calculatedTotals, onItemsChange, excludedItems.size, excludedIngredients.size]);
+    // Deliberately NOT depending on `calculatedTotals`/`activeItems` (both
+    // objects/arrays that get a new reference on every render, including
+    // one caused by this very effect's own onItemsChange call — log.js's
+    // handleItemsChange calls setAnalysisResult with a new `items` array
+    // every time, which flows back down as a new `items` prop, recomputing
+    // calculatedTotals with a new reference, re-triggering this effect,
+    // forever). Confirmed live: excluding a single ingredient hung the app
+    // with "Maximum update depth exceeded." Firing only on an actual change
+    // to the exclusion sets (their .size) breaks the cycle; calculatedTotals
+    // is still read fresh from the closure when the effect does run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onItemsChange, excludedItems.size, excludedIngredients.size]);
 
   // Calculate average confidence first (needed for unified scoring)
   const avgConfidence = items.reduce((sum, i) => sum + (i.sourceEvidence?.[0]?.confidence || i.confidence || 0.7), 0) / (items.length || 1);

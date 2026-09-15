@@ -474,7 +474,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parseResult.items) {
       const resolvedItem = await resolveGenericFood(parsedFood);
       attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
-      if (resolvedItem.flags?.includes('unrecognized_food_name')) {
+      if (resolvedItem.flags?.includes('unrecognized_food_name') || resolvedItem.flags?.includes('unrecognized_food_low_estimate')) {
         resolvedItem.requiresUserConfirmation = true;
       }
       items.push(resolvedItem);
@@ -539,7 +539,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parsedFoods) {
       const resolvedItem = await resolveGenericFood(parsedFood);
       attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
-      if (resolvedItem.flags?.includes('unrecognized_food_name')) {
+      if (resolvedItem.flags?.includes('unrecognized_food_name') || resolvedItem.flags?.includes('unrecognized_food_low_estimate')) {
         resolvedItem.requiresUserConfirmation = true;
       }
       items.push(resolvedItem);
@@ -856,7 +856,7 @@ async function resolveGenericFood(parsedFood) {
               fat: ing.nutrition?.fat ?? 0,
             })));
 
-    return {
+    const resolvedItem = {
       itemId,
       name: finalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
       portion: {
@@ -965,6 +965,29 @@ async function resolveGenericFood(parsedFood) {
         validationStatus: nutrition.validationStatus,
       }
     };
+
+    // Universal final safety net — NOT gated behind nutrition.source.includes
+    // ('estimation') like the flags block above. Found via live device
+    // testing: the same query ("rasa") sometimes resolves through the AI-
+    // estimation branch (source 'openai_estimation', correctly caught above)
+    // and sometimes through a different internal candidate (e.g. a cached/
+    // USDA-labeled source) that still ends up with near-zero macros for a
+    // clearly-not-actually-zero-calorie food name — that source string
+    // doesn't contain 'estimat', so the entire flags block above never runs
+    // for it, regardless of how wrong the result is. A near-zero result is
+    // exactly as suspicious no matter which internal path produced it — this
+    // checks resolvedItem's own FINAL macros, after any reconciliation, so
+    // it can't be skipped by a source label or bypassed by adjustments made
+    // after the earlier check ran.
+    if (
+      !resolvedItem.flags.includes('unrecognized_food_low_estimate') &&
+      typeof resolvedItem.macros?.calories_kcal === 'number' &&
+      resolvedItem.macros.calories_kcal < 5
+    ) {
+      resolvedItem.flags.push('unrecognized_food_low_estimate');
+    }
+
+    return resolvedItem;
 
   } catch (error) {
     console.error(`[Resolve] Smart resolver failed for "${parsedFood.name}":`, error.message);
