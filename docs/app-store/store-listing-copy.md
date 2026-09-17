@@ -57,52 +57,103 @@ text's job isn't to inform, it's to make someone tap through mid-scroll.)
 ## Description (App Store → Description, 4000 chars max)
 
 ```
-Your meals, mood, sleep, and energy aren't separate numbers — they're one
-story your body's been trying to tell you. Most trackers only show you
-the data. MFT shows you the connections.
+Why do some days feel effortless, while others feel completely off?
 
-LOG IN SECONDS, NOT MINUTES
-Describe your meal in plain English, snap a photo, or just say it out
-loud — MFT's AI estimates calories, protein, carbs, fat, and key
-micronutrients before you've even sat down to eat. No barcodes. No
-manual macro math.
+Your meals, sleep, hydration, mood, stress, activity and daily habits all tell part of the story. MFT : My Flourish Tracker brings them together so you can track your day, understand your progress and discover patterns you might otherwise miss.
 
-SEE THE WHOLE PICTURE
-Meals, water, mood, activity, sleep, and stress — all in one dashboard,
-viewed by Day, Week, or Month. Zoom out and watch weeks of "today"
-finally add up to something.
+Because your wellness is more than one number.
 
-FIND YOUR OWN PATTERNS
-MFT's insight engine digs through your own data for real correlations —
-the way your hydration tracks your energy, or how a low-protein
-breakfast shows up in your mood hours later — and hands them to you in
-plain language. No spreadsheet required.
+YOUR DAY. ONE CONNECTED PICTURE.
 
-STAY MOTIVATED WITHOUT THE GUILT
-Streaks, levels, and achievements keep you coming back — including a
-Snapchat-style streak freeze, so one off day doesn't erase weeks of
-progress. Every recommendation MFT gives you is built from your actual
-logs, never a generic meal plan pulled off a shelf.
+A calorie tracker knows what you ate. A sleep tracker knows how you slept. A mood tracker knows how you felt.
 
-BUILT FOR PRIVACY
-Your health data is yours. Lock the app behind Face ID or Touch ID so it
-stays private even if your phone doesn't. You control what's tracked —
-and it's never sold.
+MFT connects the signals.
 
-WHAT YOU CAN TRACK
-• Meals — photo, voice, or text, with AI-estimated nutrition
-• Water — visual daily goals, plus a hydration streak
-• Mood — intensity, tags, and real food/sleep correlations
-• Activity — MET-based calorie estimates across 14+ activity types
-• Sleep — duration, quality, and what's actually affecting it (caffeine,
-  screens, and more)
-• Stress — level, triggers, physical symptoms, and what actually helps
+Track food, nutrition, mood, water, sleep, stress and activity, then explore your progress across Day, Week and Month views. Daily logs become a clearer picture of your routines over time.
 
-MFT works best daily, but life happens — miss a day and streak freezes
-plus a "fresh start" flow mean you pick back up, not start over.
+AI-POWERED FOOD & NUTRITION TRACKING
 
-Download MFT and find out what your data's been trying to tell you.
+Logging a meal shouldn't feel like homework.
+
+Snap a photo, use your voice, or simply describe what you ate. MFT analyzes your meal and estimates calories, protein, carbs, fat, fiber, sugar, sodium and other available nutrients.
+
+Explore meal items and ingredients, review macros and micronutrients, check estimated portions and edit quantities to better reflect what you actually had.
+
+Whether it's a quick bite, homemade recipe, restaurant meal, familiar favorite or something uniquely yours, MFT works around how you naturally describe your food.
+
+No manual macro math. More clarity about what's on your plate.
+
+MOOD, SLEEP & STRESS WITH CONTEXT
+
+Track mood, intensity and tags. Record sleep duration and quality. Capture stress levels, triggers and symptoms while they're fresh.
+
+See them alongside nutrition, hydration and activity so each signal has context beyond an isolated score.
+
+WATER, HYDRATION & ACTIVITY
+
+Log water, follow daily hydration progress and build consistency. Track activity and estimated energy burn while keeping movement connected to your wellness history.
+
+SEE TODAY. UNDERSTAND THE BIGGER PICTURE.
+
+One day tells you what happened.
+A week gives you context.
+A month can reveal what keeps showing up.
+
+Explore nutrition, mood, hydration, sleep, stress and activity across Day, Week and Month views.
+
+As your history grows, MFT helps surface patterns across what you log, making routines and relationships easier to notice.
+
+YOUR GOALS. YOUR PROGRESS.
+
+Set meaningful goals and follow your progress as daily habits build.
+
+Stay motivated with streaks, levels and achievements that reward consistency. Streak protection and fresh-start experiences help you return when life interrupts your routine.
+
+SMARTER INSIGHTS FROM YOUR OWN HISTORY
+
+MFT turns everyday tracking into useful context.
+
+See trends and personalized insights from the information you log. Notice how different parts of your routine appear together and decide which patterns matter to you.
+
+The more context you build, the more meaningful the picture becomes. MFT is designed to connect signals across your day, helping turn scattered wellness data into insights you can actually understand and use.
+
+ONE APP. MORE OF YOUR WELLNESS.
+
+• AI meal logging with photo, voice or text
+• Calorie and nutrition tracking
+• Protein, carbs, fat and macro tracking
+• Ingredients and editable portion estimates
+• Fiber, sugar, sodium and available micronutrients
+• Mood, intensity and tags
+• Water and hydration tracking
+• Sleep duration and quality
+• Stress levels, triggers and symptoms
+• Activity and estimated energy burn
+• Personal goals and progress
+• Day, Week and Month wellness trends
+• Personalized insights across your logs
+• Streaks, levels and achievements
+
+YOUR DATA. YOUR STORY.
+
+You choose what to track. MFT uses what you choose to log to make your experience more relevant over time, while keeping your data connected to your account and under your control.
+
+Your meals aren't separate from your day.
+Your sleep isn't just a number.
+Your mood doesn't exist in isolation.
+Your progress is bigger than a calorie goal.
+
+MFT connects the pieces.
+
+Track your day.
+Connect the signals.
+Understand your patterns.
+Flourish your way.
 ```
+
+(3,987 characters — 13 under Apple's 4,000-char cap. Supersedes the
+"connections" framing above; kept the same underlying feature claims,
+all still grounded in what the app actually does.)
 
 (Rewritten for sharper, more active copy throughout — stronger verbs
 ("digs through," "decodes," "hands them to you") in place of flatter
