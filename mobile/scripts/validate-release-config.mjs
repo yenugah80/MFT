@@ -20,6 +20,7 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 
 const app = readJson(path.join(MOBILE_ROOT, 'app.json')).expo;
 const eas = readJson(path.join(MOBILE_ROOT, 'eas.json'));
+const mobilePackage = readJson(path.join(MOBILE_ROOT, 'package.json'));
 
 const errors = [];
 const warnings = [];
@@ -40,6 +41,42 @@ const androidPermissions = app.android?.permissions ?? [];
 if (!app.ios?.bundleIdentifier) fail('app.json: ios.bundleIdentifier is missing');
 if (!app.android?.package) fail('app.json: android.package is missing');
 if (!app.version) fail('app.json: version is missing');
+
+// ─── Native authentication ──────────────────────────────────────────────────
+// Clerk marks requests from its Expo SDK with `_is_native=1`. A historical
+// patch removed that marker while Clerk Native API was disabled. Leaving the
+// patch in a release makes clean-device password and native Apple requests look
+// like browser traffic, where bot/security validation can reject them.
+
+if (app.ios?.usesAppleSignIn !== true) {
+  fail('app.json: ios.usesAppleSignIn must be true for the native Apple authentication flow');
+}
+
+const directDependencies = {
+  ...(mobilePackage.dependencies ?? {}),
+  ...(mobilePackage.devDependencies ?? {}),
+};
+
+if (!directDependencies['expo-apple-authentication']) {
+  fail('mobile/package.json: expo-apple-authentication must be a direct dependency for native Apple sign-in');
+}
+
+if (!hasPackage('expo-crypto')) {
+  fail('expo-crypto must resolve because Clerk uses it to generate the Apple sign-in nonce');
+}
+
+const patchesDirectory = path.join(REPO_ROOT, 'patches');
+if (fs.existsSync(patchesDirectory)) {
+  for (const patchName of fs.readdirSync(patchesDirectory).filter((name) => name.endsWith('.patch'))) {
+    const patch = fs.readFileSync(path.join(patchesDirectory, patchName), 'utf8');
+    if (patch.includes('_is_native')) {
+      fail(
+        `patches/${patchName}: patches Clerk's native request marker. ` +
+          'Native API is enabled for MFT, so release builds must preserve `_is_native=1`.'
+      );
+    }
+  }
+}
 
 // ─── Export compliance ───────────────────────────────────────────────────────
 // Without this key every upload prompts for export-compliance paperwork.
