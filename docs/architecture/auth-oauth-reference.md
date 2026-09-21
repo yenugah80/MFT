@@ -82,6 +82,13 @@ systems. Trust the dashboard UI for native config.
 `com.zennxt.myfoodtracker`); allowlist contains
 `my-food-tracker://oauth-native-callback` and `com.zennxt.myfoodtracker://callback`.
 
+**Release invariant:** do not patch `@clerk/clerk-expo` to remove its
+`_is_native=1` request marker. An older patch did exactly that while Native API
+was off. Once Native API was enabled, the patch became harmful: fresh-device
+email/password and native Apple requests could be evaluated as browser traffic
+and rejected by browser-oriented security checks. `validate:release` now fails
+if any committed patch touches `_is_native`.
+
 ### 4. Clerk's `transferable` status was unhandled
 
 **Symptom:** Apple authentication *succeeded* — Face ID accepted, valid token
@@ -161,6 +168,10 @@ echo "<base64 part of pk_live_...>" | base64 -d
    look identical and is undiagnosable from a device you cannot inspect.
 6. **Use `oauth_token_apple`, not `oauth_apple`,** for native Apple sign-in.
    The latter is the redirect flow and silently discards the token.
+7. **Use Clerk's `useSignInWithApple()` flow.** It generates the nonce Clerk
+   expects, validates that Apple returned an identity token, and handles the
+   sign-in-to-sign-up transfer. Never treat `missing_requirements` as success:
+   it has no usable session until the missing fields are resolved.
 
 ---
 

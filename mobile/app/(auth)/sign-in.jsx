@@ -1,12 +1,10 @@
-import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
-import * as AppleAuthentication from "expo-apple-authentication";
+import { useOAuth, useSignIn, useSignInWithApple } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { makeRedirectUri } from "expo-auth-session";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFocusEffect } from "expo-router";
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import {
   AppleButton,
@@ -22,6 +20,7 @@ import {
   AUTH_COLORS,
 } from "../../components/auth/LaunchAuthDesign";
 import { parseClerkError } from "../../utils/errors";
+import { resolveAppleAuthResult } from "../../utils/appleAuth";
 
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
@@ -38,7 +37,7 @@ export default function SignInScreen() {
   const confirmPasswordRef = useRef(null);
   const resetAttemptRef = useRef(null);
   const { signIn, setActive, isLoaded } = useSignIn();
-  const { signUp, setActive: setSignUpActive } = useSignUp();
+  const { startAppleAuthenticationFlow } = useSignInWithApple();
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const [mode, setMode] = useState("signIn");
@@ -151,92 +150,16 @@ export default function SignInScreen() {
     setAppleLoading(true);
     setMessage(null);
     try {
-      // isAvailableAsync must be inside the try: on some devices/builds it can
-      // itself reject, and with no catch around it that left the button
-      // appearing to do nothing at all — no notice, no loading state, no
-      // console trace visible outside a debugger.
-      const available = await AppleAuthentication.isAvailableAsync();
-      if (!available) {
-        setNotice("error", "Sign in with Apple is not available on this device.");
-        return;
-      }
+      console.info("[Auth][Apple] APPLE_AUTH_STARTED");
+      const result = await startAppleAuthenticationFlow();
+      const completed = resolveAppleAuthResult(result);
 
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+      if (completed.cancelled) return;
 
-      const finishSignIn = async (sessionId, activate) => {
-        await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
-        await activate({ session: sessionId });
-        router.replace("/");
-      };
-
-      try {
-        // `oauth_token_apple`, NOT `oauth_apple`. The latter is Clerk's
-        // browser-redirect flow and ignores a supplied token entirely, which
-        // is why the attempt came back `needs_identifier` — Clerk never saw
-        // an identity at all. `oauth_token_apple` is the native strategy that
-        // accepts the identityToken from expo-apple-authentication. The
-        // instance advertises both in supported_first_factors.
-        const attempt = await signIn.create({
-          strategy: "oauth_token_apple",
-          token: credential.identityToken,
-        });
-
-        if (attempt.status === "complete") {
-          await finishSignIn(attempt.createdSessionId, setActive);
-          return;
-        }
-
-        // `transferable` means Clerk recognises this person (an account with
-        // this email already exists) but has no Apple identity attached to it
-        // yet — e.g. an account created with Google or email/password. Clerk
-        // will not return `complete` until the identity is explicitly linked
-        // via a transfer. Without this branch the user authenticates with
-        // Face ID and then nothing happens at all, which is exactly the bug.
-        if (attempt.firstFactorVerification?.status === "transferable") {
-          const transferred = await signUp.create({ transfer: true });
-          if (transferred.status === "complete") {
-            await finishSignIn(transferred.createdSessionId, setSignUpActive);
-            return;
-          }
-          throw new Error(`Apple account link did not complete (status: ${transferred.status}).`);
-        }
-
-        throw new Error(`Apple sign-in did not complete (status: ${attempt.status}).`);
-      } catch (clerkErr) {
-        if (clerkErr?.errors?.[0]?.code === "external_account_not_found") {
-          const attempt = await signUp.create({
-            strategy: "oauth_token_apple",
-            token: credential.identityToken,
-            ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
-            ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
-          });
-
-          if (attempt.status === "complete" || attempt.status === "missing_requirements") {
-            await finishSignIn(attempt.createdSessionId, setSignUpActive);
-            return;
-          }
-
-          // Mirror image of the case above: signing *up* discovered the
-          // identity already belongs to an existing user, so transfer back
-          // into a sign-in rather than dead-ending.
-          if (attempt.verifications?.externalAccount?.status === "transferable") {
-            const transferred = await signIn.create({ transfer: true });
-            if (transferred.status === "complete") {
-              await finishSignIn(transferred.createdSessionId, setActive);
-              return;
-            }
-          }
-
-          throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);
-        } else {
-          throw clerkErr;
-        }
-      }
+      await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+      await completed.setActive({ session: completed.sessionId });
+      console.info("[Auth][Apple] AUTH_COMPLETE");
+      router.replace("/");
     } catch (err) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
       console.warn("[Auth] Apple sign-in failed:", err);
