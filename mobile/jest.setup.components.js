@@ -10,6 +10,8 @@ global.__DEV__ = true;
 
 jest.mock('expo/src/winter/runtime.native', () => ({}), { virtual: true });
 
+require('./jest.expoWinterShim');
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
